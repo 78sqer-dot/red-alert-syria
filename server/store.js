@@ -78,6 +78,7 @@ class Store extends EventEmitter {
       // owner <-> reporter conversation links (message -> reporter id) and open threads
       relay: s.relay && typeof s.relay === 'object' ? s.relay : {},
       threads: s.threads && typeof s.threads === 'object' ? s.threads : {},
+      convo: s.convo && typeof s.convo === 'object' ? s.convo : {},
       // compact event log for statistics (kept 35 days, independent of the map's auto-delete)
       log: Array.isArray(s.log) ? s.log.filter((e) => e && e.ty && e.ts) : null,
       maint: s.maint && typeof s.maint === 'object' ? s.maint : {},
@@ -231,6 +232,22 @@ class Store extends EventEmitter {
     const cut = Date.now() - 14 * 86400_000;
     for (const k of Object.keys(t)) if (t[k].at < cut) delete t[k];
     this.persist();
+  }
+  // chat messages of a relay conversation, per bot chat, so pressing the menu can clear them
+  convoAdd(bot, chatId, ...ids) {
+    const c = (this.state.convo ||= {});
+    const k = `${bot}:${chatId}`;
+    const cut = Date.now() - 47 * 3600_000; // Telegram lets bots delete messages for 48 h only
+    c[k] = [...(c[k] || []).filter((x) => x[1] > cut), ...ids.filter(Boolean).map((id) => [id, Date.now()])].slice(-300);
+    this.persist({ backupSoon: false });
+  }
+  convoTake(bot, chatId) {
+    const k = `${bot}:${chatId}`;
+    const list = this.state.convo?.[k];
+    if (!list || !list.length) return [];
+    delete this.state.convo[k];
+    this.persist({ backupSoon: false });
+    return list.map((x) => x[0]);
   }
   thread(uid) { const t = this.state.threads?.[uid]; return t && Date.now() - t.at < 7 * 86400_000 ? t : null; }
   // ---------- bulk actions & auto-delete ----------

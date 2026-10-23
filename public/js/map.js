@@ -173,7 +173,7 @@ export class AlertMap {
     const style = await buildStyle(this.opts);
     this.map = new M.Map({
       // phone "desktop site": the page is zoomed, so render the map canvas at the real screen resolution
-      pixelRatio: Math.min(3, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1)),
+      pixelRatio: Math.min(2, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1)),
       container: this.el,
       style,
       bounds: SYRIA_BOUNDS,
@@ -197,17 +197,21 @@ export class AlertMap {
       c.classList.toggle('zoom-detail', z >= 11);
       c.classList.toggle('zoom-far', z < 7.5);
       // small icons at every zoom, getting a little smaller as you zoom in (like the original)
-      c.style.setProperty('--mks', Math.max(0.42, Math.min(0.56, 0.56 - (z - 6) * 0.025)).toFixed(3));
+      const mks = Math.max(0.42, Math.min(0.56, 0.56 - (z - 6) * 0.025)).toFixed(2);
+      if (mks !== this._mks) { this._mks = mks; c.style.setProperty('--mks', mks); } // restyle markers only when the size step changes
     };
     this.map.on('zoom', zoomTier);
-    this.map.on('zoom', () => this._queueZones());
+    this.map.on('zoomend', () => this._queueZones());
+    // pause the marker animations while a gesture/flight is running so the map itself stays smooth
+    this.map.on('movestart', () => this.el.classList.add('is-moving'));
+    this.map.on('moveend', () => this.el.classList.remove('is-moving'));
     this.map.on('resize', () => this._queueZones());
     zoomTier();
     this.map.on('styleimagemissing', (e) => {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
     this.map.on('click', (e) => {
-      if (!e.originalEvent.target.closest('.mk')) this.onSelect(null, { fromMap: true });
+      if (!e.originalEvent.target.closest('.mk, .maplibregl-popup')) this.onSelect(null, { fromMap: true });
     });
     // Markers are DOM elements: show them as soon as the style is parsed,
     // without waiting for every basemap tile (or forever, if a tile server is down).
@@ -267,7 +271,7 @@ export class AlertMap {
     // Affected-area circles: vivid red-tinted fill + solid edge + soft pulsing glow (like the original),
     // softened slightly at very close zoom so a small circle never floods the screen.
     const A = (on, off) => ['case', ['get', 'active'], on, off];
-    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.2 : 0.16, 0.05) } });
+    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.22 : 0.17, 0.05) } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.8, 0.3), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 11, 1.6] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.85, 0.3), 'line-width': 1.8, 'line-dasharray': [3, 4] } });
     this._startGlow();
@@ -389,6 +393,9 @@ export class AlertMap {
   }
 
   _startGlow() {
+    // static soft fill (like the original): a timer animating fill-opacity forced a full map redraw
+    // 10x per second forever, which made phones lag and gestures feel stuck
+    return;
     if (this._glowTimer) return;
     const t0 = performance.now();
     this._glowTimer = setInterval(() => {
@@ -459,16 +466,21 @@ export class AlertMap {
       .setDOMContent(htmlToNode(this.popupHtml(alert)))
       .addTo(this.map);
     this.popup._alertId = alert.id;
+    // put the card inside the map's gesture layer (like the markers): pinch / drag that start on the card
+    // now zoom and pan the map instead of being swallowed (on phones the card covers the middle of the map)
+    const pe = this.popup.getElement();
+    if (pe) { pe.classList.add('pp-gest'); this.map.getCanvasContainer().appendChild(pe); }
     this.popup.on('close', () => {
       if (this.popup && this.popup._alertId === alert.id) this.popup = null;
     });
     // keep the card fully on screen: after it is laid out, and again whenever the map stops moving
+    this._fitLeft = 2; // one fit after layout, one after the opening flight lands
     requestAnimationFrame(() => requestAnimationFrame(() => this.fitPopup()));
     if (!this._fitBound) {
       this._fitBound = true;
-      this.map.on('zoomend', () => this.fitPopup());
-      this.map.on('moveend', (e) => { if (!e.originalEvent) this.fitPopup(); });
-      window.addEventListener('resize', () => this.fitPopup());
+      this.map.on('movestart', (e) => { if (e.originalEvent) this._fitLeft = 0; }); // user took over
+      this.map.on('moveend', (e) => { if (!e.originalEvent && !this._fitPanning && this._fitLeft > 0) this.fitPopup(); this._fitPanning = false; });
+      window.addEventListener('orientationchange', () => { this._fitLeft = 1; setTimeout(() => this.fitPopup(), 400); });
     }
     return this.popup;
   }
@@ -477,7 +489,9 @@ export class AlertMap {
   fitPopup() {
     const p = this.popup;
     const el = p && p.getElement && p.getElement();
-    if (!el || !this.map) return;
+    if (!el || !this.map || !(this._fitLeft > 0)) return;
+    if (this.map.isMoving()) return; // wait for the flight to land (moveend calls us again)
+    this._fitLeft = 0; // the map has settled: fit once, then leave the user's camera alone
     const c = this.map.getContainer();
     const cr = c.getBoundingClientRect();
     const scale = c.clientWidth ? cr.width / c.clientWidth : 1; // rect px per map px
@@ -507,7 +521,7 @@ export class AlertMap {
     else if (r.left < vis.l + m) dx = r.left - (vis.l + m);
     if (r.top < top + m) dy = r.top - (top + m);
     else if (r.bottom > bottom - m) dy = Math.min(r.bottom - (bottom - m), r.top - (top + m));
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) this.map.panBy([dx / scale, dy / scale], { duration: 350 });
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) { this._fitPanning = true; this._fitLeft = 0; this.map.panBy([dx / scale, dy / scale], { duration: 350 }); }
   }
 
   closePopup() {

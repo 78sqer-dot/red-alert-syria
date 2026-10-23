@@ -493,6 +493,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         const m = await relayCopy(ctx.api, TOKENS.admin, APIS.report, uid, ctx.message, header, footer);
         store.relayPut(`r:${uid}:${m.message_id}`, ctx.from.id);
         store.openThread(uid, ctx.from.id);
+        store.convoAdd('admin', ctx.chat.id, ctx.message.message_id); // staff's own reply
+        store.convoAdd('report', uid, m.message_id); // the copy the reporter received
         await sendTransient(ctx.api, ctx.chat.id, en ? '✅ Your reply was sent to the reporter.' : '✅ تم إرسال ردك إلى صاحب البلاغ.');
       } catch (e) {
         const d = String(e.description || e.message || '');
@@ -525,14 +527,24 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         try {
           const m = await relayCopy(ctx.api, TOKENS.report, api, sid, msg, header, footer);
           store.relayPut(`a:${sid}:${m.message_id}`, ctx.from.id);
+          store.convoAdd('admin', sid, m.message_id);
           ok += 1;
         } catch (e) { console.warn('[relay] to staff failed', e.description || e.message); }
       }
       store.openThread(ctx.from.id);
+      if (ok) store.convoAdd('report', ctx.chat.id, msg.message_id); // reporter's own message
       await sendTransient(ctx.api, ctx.chat.id, ok ? (en ? '✅ Your message reached the team.' : '✅ وصلت رسالتك إلى الإدارة.') : (en ? '⚠️ Could not deliver, try again later.' : '⚠️ تعذّر الإيصال، حاول لاحقاً.'));
     });
   }
+  // pressing the menu clears this chat's relay conversation (the thread itself stays open:
+  // the reporter can still write, and staff can answer his next message)
+  const clearConvo = (ctx) => {
+    if (!ctx.chat || ctx.chat.type !== 'private') return;
+    const ids = store.convoTake(role, ctx.chat.id);
+    for (const id of ids) ctx.api.deleteMessage(ctx.chat.id, id).catch(() => {});
+  };
   const home = async (ctx) => {
+    clearConvo(ctx);
     sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');
@@ -542,6 +554,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
   bot.command(['start', 'menu'], async (ctx) => {
     if (ctx.callbackQuery) return home(ctx);
+    clearConvo(ctx);
     sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');
