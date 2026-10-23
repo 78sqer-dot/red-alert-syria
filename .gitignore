@@ -3,3 +3,4 @@ data/runtime/
 *.tmp
 .env
 .DS_Store
+scripts/_*.mjs
