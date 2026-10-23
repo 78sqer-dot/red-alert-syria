@@ -113,7 +113,11 @@ function placeName(a) {
   const n = LANG === 'ar' ? p.name_ar : p.name_en;
   const g = LANG === 'ar' ? p.governorate_ar : p.governorate_en;
   const d = LANG === 'ar' ? p.district_ar : p.district_en;
-  return [n, d && d !== n ? d : null, g && g !== n ? g : null].filter(Boolean).join('، ');
+  const key = (x) => String(x || '').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/^ال/, '').replace(/[\s\-'’.]/g, '').toLowerCase();
+  const seen = new Set(); const out = [];
+  for (const x of [n, d, g]) { const k = key(x); if (!x || seen.has(k)) continue; seen.add(k); out.push(x); }
+  return out.join(LANG === 'ar' ? '، ' : ', ');
 }
 const isLive = (a) => a.is_active && Date.parse(a.expires_at) > Date.now();
 const shareUrl = (a) => `${location.origin}/${LANG}/#${a.id}`;

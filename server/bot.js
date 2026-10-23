@@ -30,19 +30,19 @@ const langOf = (ctx) => store.userLang(ctx.from?.id) === 'en' ? 'en' : 'ar';
 const typeLabel = (key, lang) => `${typeOf(key).emoji} ${lang === 'en' ? typeOf(key).en : typeOf(key).ar}`;
 const mapUrl = (id, lang = 'ar') => (config.publicUrl ? `${config.publicUrl}/${lang}/${id ? '#' + id : ''}` : '');
 
+// spelling-insensitive key: "داريّا" == "داريا", "حماه" == "حماة", "أعزاز" == "اعزاز"
+const nameKey = (x) => String(x || '').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+  .replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/^ال/, '').replace(/[\s\-'’.]/g, '').toLowerCase();
 function locName(loc, lang) {
   if (!loc) return '—';
   const n = lang === 'en' ? loc.name_en : loc.name_ar;
-  const parts = [n];
   const d = lang === 'en' ? loc.district_en : loc.district_ar;
   const g = lang === 'en' ? loc.governorate_en : loc.governorate_ar;
-  if (loc.scope === 'place' || loc.scope === 'point') {
-    if (d && d !== n) parts.push(d);
-    if (g && g !== d) parts.push(g);
-  } else if (loc.scope === 'district' && g && g !== n) parts.push(g);
-  return parts.filter(Boolean).join('، ');
+  const cand = (loc.scope === 'place' || loc.scope === 'point') ? [n, d, g] : loc.scope === 'district' ? [n, g] : [n];
+  const seen = new Set(); const parts = [];
+  for (const x of cand) { const k = nameKey(x); if (!x || seen.has(k)) continue; seen.add(k); parts.push(x); }
+  return parts.join(lang === 'en' ? ', ' : '، ');
 }
-
 // ---------------------------------------------------------------- formatting
 
 const fmtTime = (iso, lang) =>

@@ -67,3 +67,9 @@ Plus civil sub-buttons in BOTH bots: civil button opens submenu (مدني عام
 - Orbiting component: 64x64 box, inner 30px div, svg 18x18 viewBox 0 0 512 512, fill #6b7280 (dark #9ca3af), drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px ...).
 - Orbit animation (rotate(0)->rotate(-360deg) translateX(20px), 6s linear) ONLY when map container has class zoom-detail (zoom >= 11). Tiers: zoom-tier-mid 9..11, zoom-tier-far < 9.
 - Glyph `uav` = same as public/js/marker-svgs.js (fuselage ellipse, nose dome, wings path, V-tail).
+
+## QA session 2026-10-24 (perf + relay clear)
+- Perf root cause: setInterval glow (setPaintProperty 10x/s) forced constant full map redraw -> phones lag. Removed; zones rebuild on zoomend; popup fit once (not after user zoom); popup moved into canvas container so pinch on it zooms map; pixelRatio cap 2; marker animations paused while moving.
+- Relay chat messages tracked in store.convo ('admin:<chat>' / 'report:<chat>') and deleted on menu (home callback, /start, /menu).
+- Local test server: scripts/_devsrv.mjs (port 3997 web, 3996 inject: /?type=&lat=&lon=&scope=&name=, /clear). Not committed.
+- QA scripts: /tmp/perf.py, /tmp/perf_live.py, /tmp/qa.py. Render workspace tea-dbcholnf3r2c73belk8g, service srv-dbdp7459fdbs7386b3d0.
