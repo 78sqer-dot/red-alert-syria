@@ -15,6 +15,8 @@ const CAPITALS = { '13': 170654, '08': 170654, '09': 170063, '11': 169577, '10':
 for (const g of governorates) {
   const cap = placeById.get(CAPITALS[g.code]);
   if (cap) { g.lat = cap.lat; g.lon = cap.lon; }
+  // Rif Dimashq's seat is Damascus city itself; use a point in the rural belt instead (between Al-Tall and Douma).
+  if (g.code === '08') { g.lat = 33.62; g.lon = 36.45; }
 }
 // District centre = its highest-ranked place.
 for (const d of districts) {
