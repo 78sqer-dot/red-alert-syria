@@ -61,6 +61,7 @@ class Store extends EventEmitter {
       users: s.users && typeof s.users === 'object' ? s.users : {},
       stats: s.stats || { published: 0 },
       settings: { autoDeleteHours: [0, 24, 48].includes(s.settings?.autoDeleteHours) ? s.settings.autoDeleteHours : 48 },
+      maint: s.maint && typeof s.maint === 'object' ? s.maint : {},
     };
   }
 

@@ -157,6 +157,17 @@ let botUsername = null;
 async function start() {
   const backup = bot ? telegramBackupAdapter(bot.api) : null;
   await store.init(backup);
+  // One-time clean start requested by the owner: remove every alert (active and ended) from the map,
+  // the local file and the Telegram backup. Runs once (marker saved in the backup); channel posts stay.
+  const WIPE_ID = 'wipe-all-alerts-2026-10-23';
+  if (!store.state.maint?.[WIPE_ID]) {
+    const n = store.deleteMany(() => true).length;
+    store.state.maint = { ...(store.state.maint || {}), [WIPE_ID]: new Date().toISOString() };
+    store.persist();
+    store._writeLocal();
+    await store.flushBackup();
+    console.log(`[store] one-time wipe: removed ${n} alerts`);
+  }
 
   const server = app.listen(config.port, () => console.log(`[web] listening on :${config.port}`));
   server.keepAliveTimeout = 65_000;
