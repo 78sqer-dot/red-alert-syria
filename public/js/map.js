@@ -3,6 +3,15 @@ import { ALERT_TYPES, typeOf } from '/shared/types.js';
 import { icon } from './icons.js';
 
 const ml = () => window.maplibregl;
+// Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
+// so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
+function htmlToNode(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const wrap = document.createElement('div');
+  wrap.append(tpl.content);
+  return wrap;
+}
 const SYRIA_BOUNDS = [[35.45, 32.25], [42.5, 37.4]];
 const STYLE_URL = { light: 'https://tiles.openfreemap.org/styles/liberty', dark: 'https://tiles.openfreemap.org/styles/dark' };
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
@@ -11,14 +20,39 @@ const TYPE_ICON = { breaking: 'bolt', uav: 'drone', warplane: 'plane', missile: 
 export const typeIcon = (t) => TYPE_ICON[t] || 'alert';
 
 const styleCache = {};
+const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
+function fallbackStyle(kind) {
+  // Minimal offline-safe style: used when the basemap server is slow or unreachable,
+  // so the Syria overlays and alert markers always render.
+  return {
+    version: 8,
+    glyphs: GLYPHS,
+    sources: {},
+    layers: [{ id: 'bg', type: 'background', paint: { 'background-color': kind === 'dark' ? '#14161b' : '#eceef1' } }],
+  };
+}
+function fetchWithTimeout(url, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  return fetch(url, { signal: ctl.signal }).finally(() => clearTimeout(t));
+}
 async function fetchStyle(kind) {
   if (!styleCache[kind]) {
-    styleCache[kind] = fetch(STYLE_URL[kind]).then((r) => {
-      if (!r.ok) throw new Error('style ' + r.status);
-      return r.json();
-    });
+    styleCache[kind] = (async () => {
+      for (let i = 0; i < 2; i++) {
+        try {
+          const r = await fetchWithTimeout(STYLE_URL[kind], 7000);
+          if (r.ok) return await r.json();
+        } catch { /* retry */ }
+      }
+      throw new Error('style unavailable');
+    })().catch((e) => { delete styleCache[kind]; throw e; });
   }
-  return JSON.parse(JSON.stringify(await styleCache[kind]));
+  try {
+    return JSON.parse(JSON.stringify(await styleCache[kind]));
+  } catch {
+    return fallbackStyle(kind);
+  }
 }
 
 let dataCache = null;
@@ -63,10 +97,10 @@ async function buildStyle({ dark, layer, lang }) {
       });
     style = {
       version: 8,
-      glyphs: base.glyphs,
-      sprite: base.sprite,
+      glyphs: base.glyphs || GLYPHS,
+      ...(base.sprite ? { sprite: base.sprite } : {}),
       sources: {
-        openmaptiles: base.sources.openmaptiles,
+        ...(base.sources.openmaptiles ? { openmaptiles: base.sources.openmaptiles } : {}),
         esri: { type: 'raster', tiles: [ESRI], tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' },
       },
       layers: [{ id: 'esri', type: 'raster', source: 'esri', paint: { 'raster-saturation': -0.1, 'raster-contrast': 0.05 } }, ...labels],
@@ -150,10 +184,18 @@ export class AlertMap {
     this.map.on('click', (e) => {
       if (!e.originalEvent.target.closest('.mk')) this.onSelect(null, { fromMap: true });
     });
-    await new Promise((res) => this.map.once('load', res));
+    // Markers are DOM elements: show them as soon as the style is parsed,
+    // without waiting for every basemap tile (or forever, if a tile server is down).
+    await new Promise((res) => {
+      if (this.map.isStyleLoaded()) return res();
+      this.map.once('style.load', res);
+      this.map.once('load', res);
+      setTimeout(res, 6000);
+    });
     this.ready = true;
     if (window.innerWidth < 768) this.el.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
     this.render();
+    if (this._pending) { const [a, o] = this._pending; this._pending = null; this.select(a, o); }
   }
 
   padding() {
@@ -321,6 +363,7 @@ export class AlertMap {
   // ------------------------------------------------------------- selection / camera
   select(alert, { fly = true, popup = true } = {}) {
     this.selectedId = alert ? alert.id : null;
+    if (!this.ready) { this._pending = alert ? [alert, { fly, popup }] : null; return; }
     for (const [id, m] of this.markers) {
       m.getElement().classList.toggle('sel', id === this.selectedId);
       m.getElement().style.zIndex = id === this.selectedId ? 50 : 10;
@@ -342,7 +385,7 @@ export class AlertMap {
     const off = m ? m.getOffset() : { x: 0, y: 0 };
     this.popup = new M.Popup({ closeButton: true, closeOnClick: false, maxWidth: '290px', offset: { bottom: [off.x, off.y - 26], top: [off.x, off.y + 26], left: [off.x + 26, off.y], right: [off.x - 26, off.y] }, focusAfterOpen: false })
       .setLngLat([alert.location.longitude, alert.location.latitude])
-      .setHTML(this.popupHtml(alert))
+      .setDOMContent(htmlToNode(this.popupHtml(alert)))
       .addTo(this.map);
     this.popup._alertId = alert.id;
     this.popup.on('close', () => {
@@ -360,13 +403,15 @@ export class AlertMap {
   }
 
   fitSyria() {
+    if (!this.map) return;
     this.map.fitBounds(SYRIA_BOUNDS, { padding: this.padding(), duration: 900, pitch: this.opts.map3d ? 50 : 0, bearing: 0 });
   }
-  zoomIn() { this.map.zoomIn(); }
-  zoomOut() { this.map.zoomOut(); }
+  zoomIn() { this.map && this.map.zoomIn(); }
+  zoomOut() { this.map && this.map.zoomOut(); }
   resize() { this.map && this.map.resize(); }
 
   showMe(lon, lat) {
+    if (!this.map) return;
     const M = ml();
     if (!this.me) {
       const el = document.createElement('div');
