@@ -208,9 +208,10 @@ async function start() {
   if (botInfo.report) await launch(reportBot, reportWebhookPath, config.reportWebhookSecret, 'report-bot');
   // Keep the free Render instance awake (requests through the public URL count as traffic).
   if (config.keepAlive && config.publicUrl) {
-    setInterval(() => {
-      fetch(config.publicUrl + '/api/health').catch(() => {});
-    }, 9 * 60_000).unref();
+    const ping = () => fetch(`${config.publicUrl}/api/health?src=self&t=${Date.now()}`, { signal: AbortSignal.timeout(30_000) })
+      .catch((e) => console.error('[keep-alive] self-ping failed', e.message));
+    setInterval(ping, 4 * 60_000).unref();
+    setTimeout(ping, 30_000).unref();
   }
 }
 
