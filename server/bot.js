@@ -91,9 +91,9 @@ function mainKeyboard(ctx) {
     .text(`${e('uav')} ${b('uav')}`, 't:uav').text(`${e('warplane')} ${b('warplane')}`, 't:warplane').row()
     .text(`${e('artillery')} ${b('artillery')}`, 't:artillery').text(`${e('attack')} ${b('attack')}`, 't:attack').row()
     .text(`${e('civil')} ${b('civil')}`, 't:civil').text(`${e('missile')} ${b('missile')}`, 't:missile').row();
-  if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnLang, 'lang').row();
+  if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
-  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row();
+  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').row();
   if (config.publicUrl) kb.url(l.btnMap, mapUrl('', lang));
   kb.url(l.btnChannel, config.channelUrl);
   return kb;
@@ -556,6 +556,49 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     kb.text(l.btnHome, 'home');
     await show(ctx, l.activeTitle(store.activeAlerts().length), kb);
   }
+  // -------- bulk clear of active alerts (staff)
+  bot.callbackQuery('clr', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!staff(ctx)) return;
+    const l = L(ctx);
+    const n = store.activeAlerts().length;
+    if (!n) return show(ctx, l.clearNone, new InlineKeyboard().text(l.btnHome, 'home'));
+    await show(ctx, l.clearConfirm(n), new InlineKeyboard().text(l.btnEndAll, 'clr:end').row().text(l.btnDelAll, 'clr:del').row().text(l.btnBack, 'home'));
+  });
+  bot.callbackQuery(/^clr:(end|del)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const l = L(ctx);
+    if (ctx.match[1] === 'end') {
+      const ended = store.endAll();
+      await ctx.answerCallbackQuery(l.clearedEnd(ended.length));
+      await show(ctx, l.clearedEnd(ended.length), new InlineKeyboard().text(l.btnHome, 'home'));
+      for (const a of ended) {
+        try { await refreshChannelPost(ctx.api, store.getAlert(a.id), true); } catch (e) { console.error('[bot] refresh failed', e.description || e.message); }
+        await new Promise((r) => setTimeout(r, 120));
+      }
+    } else {
+      const gone = store.deleteActive();
+      await ctx.answerCallbackQuery(l.clearedDel(gone.length));
+      await show(ctx, l.clearedDel(gone.length), new InlineKeyboard().text(l.btnHome, 'home'));
+    }
+    console.log(`[bot] bulk ${ctx.match[1]} by ${ctx.from.id}`);
+  });
+  // -------- auto-delete setting (owner)
+  const autoKb = (ctx) => {
+    const l = L(ctx); const h = store.autoDeleteHours; const m = (v, t) => (h === v ? '✅ ' : '') + t;
+    return new InlineKeyboard().text(m(24, l.btnAuto24), 'auto:24').text(m(48, l.btnAuto48), 'auto:48').text(m(0, l.btnAutoOff), 'auto:0').row().text(l.btnHome, 'home');
+  };
+  bot.callbackQuery('auto', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!owner(ctx)) return;
+    await show(ctx, L(ctx).autoTitle(store.autoDeleteHours), autoKb(ctx));
+  });
+  bot.callbackQuery(/^auto:(0|24|48)$/, async (ctx) => {
+    if (!owner(ctx)) return ctx.answerCallbackQuery();
+    store.setAutoDelete(Number(ctx.match[1]));
+    await ctx.answerCallbackQuery(L(ctx).autoSaved);
+    await show(ctx, L(ctx).autoTitle(store.autoDeleteHours), autoKb(ctx));
+  });
   bot.callbackQuery('active', async (ctx) => { await ctx.answerCallbackQuery(); if (staff(ctx)) await showActive(ctx); });
 
   const manageText = (ctx, a) => {

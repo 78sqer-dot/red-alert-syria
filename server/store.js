@@ -13,7 +13,7 @@ import { ALERT_TYPES, typeOf } from '../shared/types.js';
 class Store extends EventEmitter {
   constructor() {
     super();
-    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 } };
+    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 48 } };
     this.file = path.join(config.dataDir, 'state.json');
     this.backup = null; // { save(jsonString), load() -> jsonString|null }
     this._saveTimer = null;
@@ -59,6 +59,7 @@ class Store extends EventEmitter {
       banned: Array.isArray(s.banned) ? s.banned.map(Number).filter(Number.isFinite) : [],
       users: s.users && typeof s.users === 'object' ? s.users : {},
       stats: s.stats || { published: 0 },
+      settings: { autoDeleteHours: [0, 24, 48].includes(s.settings?.autoDeleteHours) ? s.settings.autoDeleteHours : 48 },
     };
   }
 
@@ -160,17 +161,56 @@ class Store extends EventEmitter {
     return a;
   }
 
+  // ---------- bulk actions & auto-delete ----------
+  get autoDeleteHours() { return this.state.settings?.autoDeleteHours ?? 48; }
+  setAutoDelete(h) {
+    if (![0, 24, 48].includes(h)) return;
+    this.state.settings = { ...(this.state.settings || {}), autoDeleteHours: h };
+    this.persist();
+    this.autoDeleteSweep();
+  }
+  // How many hours of history the map shows (auto-delete window caps it)
+  get historyWindow() { const h = this.autoDeleteHours; return h ? Math.min(h, config.historyHours) : config.historyHours; }
+  endAll() {
+    const ended = [];
+    for (const a of this.state.alerts) {
+      if (!a.is_active) continue;
+      a.is_active = false;
+      a.ended_at = new Date().toISOString();
+      ended.push(a);
+      this.emit('update', publicAlert(a));
+    }
+    if (ended.length) this.persist();
+    return ended;
+  }
+  deleteMany(pred) {
+    const gone = this.state.alerts.filter(pred);
+    if (!gone.length) return [];
+    const ids = new Set(gone.map((a) => a.id));
+    this.state.alerts = this.state.alerts.filter((a) => !ids.has(a.id));
+    for (const a of gone) this.emit('remove', { id: a.id });
+    this.persist();
+    return gone;
+  }
+  deleteActive() { return this.deleteMany((a) => a.is_active); }
+  autoDeleteSweep() {
+    const h = this.autoDeleteHours;
+    if (!h) return [];
+    const cutoff = Date.now() - h * 3600_000;
+    return this.deleteMany((a) => Date.parse(a.timestamp) < cutoff);
+  }
   activeAlerts() {
     return this.state.alerts.filter((a) => a.is_active);
   }
 
-  recentAlerts(hours = config.historyHours) {
+  recentAlerts(hours = this.historyWindow) {
     const since = Date.now() - hours * 3600_000;
     return this.state.alerts.filter((a) => a.is_active || Date.parse(a.timestamp) >= since);
   }
 
   expireSweep() {
     const now = Date.now();
+    this.autoDeleteSweep();
     for (const a of this.state.alerts) {
       if (a.is_active && Date.parse(a.expires_at) <= now) {
         a.is_active = false;

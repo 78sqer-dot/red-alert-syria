@@ -917,10 +917,16 @@ function upsert(a, isNew) {
   if (isNew) freshIds.add(a.id);
 }
 let pollTimer = null;
+function setHistoryHours(h) {
+  h = Number(h);
+  if (!Number.isFinite(h) || h <= 0) return;
+  for (const k of ['withInactive', 'showInactiveSub']) if (typeof T[k] === 'string') T[k] = T[k].replace(/\d+/, String(h));
+}
 async function poll() {
   try {
     const r = await fetch('/api/alerts?include=inactive', { cache: 'no-store' });
     const j = await r.json();
+    setHistoryHours(j.history_hours);
     const before = new Set(state.alerts.keys());
     state.alerts = new Map();
     for (const a of j.alerts) state.alerts.set(a.id, a);
@@ -947,6 +953,7 @@ function connect() {
   });
   es.addEventListener('snapshot', (e) => {
     const j = JSON.parse(e.data);
+    setHistoryHours(j.history_hours);
     const before = new Set(state.alerts.keys());
     state.alerts = new Map();
     for (const a of j.alerts) state.alerts.set(a.id, a);
