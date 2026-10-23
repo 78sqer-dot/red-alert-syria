@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="{{LANG}}" dir="{{DIR}}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{{TITLE}}</title>
+  <meta name="description" content="{{DESC}}" />
+  <meta name="theme-color" content="#ff3b4e" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <link rel="canonical" href="{{URL}}/{{LANG}}/" />
+  <link rel="alternate" hreflang="ar" href="{{URL}}/ar/" />
+  <link rel="alternate" hreflang="en" href="{{URL}}/en/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Red Alert Syria" />
+  <meta property="og:title" content="{{TITLE}}" />
+  <meta property="og:description" content="{{DESC}}" />
+  <meta property="og:image" content="{{URL}}/img/og.png" />
+  <meta property="og:url" content="{{URL}}/{{LANG}}/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/svg+xml" href="/img/icon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/img/icon-180.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
+  <link rel="stylesheet" href="/css/app.css?v=1" />
+  <script src="/js/boot.js"></script>
+  <script src="/vendor/maplibre-gl.js" defer></script>
+  <script type="module" src="/js/app.js?v=1"></script>
+</head>
+<body>
+  <noscript><div class="noscript">يتطلب الموقع تفعيل JavaScript — This site requires JavaScript.</div></noscript>
+  <div id="app" class="app">
+    <header class="topbar" id="topbar">
+      <a class="brand" href="/{{LANG}}/" aria-label="Red Alert Syria">
+        <img src="/img/logo-wordmark.svg" alt="Red Alert Syria" width="104" height="42" />
+      </a>
+      <button class="tb-btn" id="btnSettings" data-tour="settings" type="button"><span data-icon="settings"></span><span class="lbl" data-t="settings"></span></button>
+      <button class="tb-btn icon-only theme-btn" id="btnTheme" type="button"><span data-icon="moon" class="i-moon"></span><span data-icon="sun" class="i-sun"></span></button>
+      <a class="tb-btn lang-btn" id="btnLang" href="#"><span class="lbl"></span></a>
+      <div class="spacer"></div>
+      <a class="tb-btn tg-btn" id="btnTelegram" href="https://t.me/Red_Alert_Syria" target="_blank" rel="noopener noreferrer"><span data-icon="telegram"></span><span class="lbl" data-t="followTelegram"></span></a>
+      <div class="ticker" id="ticker" aria-live="polite"><div class="ticker-inner" id="tickerInner"></div></div>
+      <a class="tb-btn report-btn" id="btnReport" href="https://t.me/Red_Alert_Syria_bot?start=report" target="_blank" rel="noopener noreferrer"><span data-icon="alert"></span><span class="lbl" data-t="report"></span></a>
+      <div class="status" id="status" data-tour="status" data-state="connecting"><span class="dot"></span><span class="lbl"></span></div>
+      <button class="tb-btn icon-only m-settings" id="btnSettingsM" type="button" aria-label="settings"><span data-icon="settings"></span></button>
+    </header>
+
+    <div class="mobile-ticker" id="mTicker"></div>
+
+    <main class="layout">
+      <section class="map-wrap" id="mapWrap">
+        <div id="map" class="map" role="region" aria-label="map"></div>
+
+        <div class="breaking-banner" id="breaking" hidden>
+          <span class="bb-tag"><span data-icon="bolt"></span><span data-t="breaking"></span></span>
+          <button class="bb-text" id="breakingText" type="button"></button>
+          <button class="bb-close" id="breakingClose" type="button" aria-label="close"><span data-icon="x"></span></button>
+        </div>
+
+        <div class="map-tools">
+          <div class="dd" id="ddFilter">
+            <button class="map-btn" id="btnFilter" data-tour="filter" type="button"><span data-icon="filter"></span><span data-t="filter"></span><span class="badge-count" id="filterCount" hidden></span></button>
+            <div class="dd-panel" id="filterPanel" hidden></div>
+          </div>
+          <div class="dd" id="ddLayers">
+            <button class="map-btn" id="btnLayers" data-tour="layers" type="button"><span data-icon="layers"></span><span data-t="layers"></span></button>
+            <div class="dd-panel" id="layersPanel" hidden></div>
+          </div>
+        </div>
+
+        <div class="map-ctrls">
+          <button class="ctrl-btn" id="zoomIn" type="button"><span data-icon="plus"></span></button>
+          <button class="ctrl-btn" id="zoomOut" type="button"><span data-icon="minus"></span></button>
+          <button class="ctrl-btn" id="resetView" type="button"><span data-icon="world"></span></button>
+          <button class="ctrl-btn" id="locateMe" type="button"><span data-icon="locate"></span></button>
+        </div>
+
+        <button class="about-pill" id="aboutPill" type="button">
+          <span data-icon="info"></span><span data-t="aboutMap"></span><span class="sep"></span><b data-t="siteName"></b><span data-icon="chevUp" class="chev"></span>
+        </button>
+
+        <button class="list-fab" id="listFab" type="button" hidden><span data-icon="list"></span><span class="lbl" data-t="listToggle"></span><span class="fab-count" id="fabCount">0</span></button>
+      </section>
+
+      <aside class="sidebar" id="sidebar" data-tour="list">
+        <div class="sheet-handle" id="sheetHandle"><span></span></div>
+        <div class="view view-list" id="viewList">
+          <div class="sb-head">
+            <div>
+              <h2 class="sb-title" id="sbTitle"></h2>
+              <p class="sb-sub" id="sbSub"></p>
+            </div>
+            <button class="sb-x" id="sbClose" type="button"><span data-icon="x"></span></button>
+          </div>
+          <div class="sb-list" id="alertList"></div>
+        </div>
+        <div class="view view-detail" id="viewDetail" hidden>
+          <div class="sb-head detail-head">
+            <h2 class="sb-title sm" data-t="alertDetails"></h2>
+            <div class="nav">
+              <button class="sb-x" id="dPrev" type="button"><span data-icon="chevRight" class="flip"></span></button>
+              <button class="sb-x" id="dNext" type="button"><span data-icon="chevLeft" class="flip"></span></button>
+              <button class="sb-x" id="dClose" type="button"><span data-icon="x"></span></button>
+            </div>
+          </div>
+          <div class="detail-body" id="detailBody"></div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Settings drawer -->
+    <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+    <aside class="drawer" id="drawer" aria-hidden="true">
+      <div class="drawer-top">
+        <div>
+          <div class="eyebrow"><span class="line"></span><span data-t="customize"></span></div>
+          <h2 class="drawer-title" data-t="settings"></h2>
+        </div>
+        <button class="sb-x lg" id="drawerClose" type="button"><span data-icon="x"></span></button>
+      </div>
+      <div class="drawer-body" id="drawerBody"></div>
+    </aside>
+
+    <!-- About sheet -->
+    <div class="sheet-backdrop" id="aboutBackdrop" hidden></div>
+    <section class="about-sheet" id="aboutSheet" aria-hidden="true">
+      <div class="about-inner" id="aboutBody"></div>
+    </section>
+
+    <!-- Modal (welcome / terms / privacy) -->
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+      <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+    </div>
+
+    <!-- Tour -->
+    <div class="tour" id="tour" hidden>
+      <div class="tour-spot" id="tourSpot"></div>
+      <div class="tour-card" id="tourCard"></div>
+    </div>
+
+    <div class="toasts" id="toasts" aria-live="assertive"></div>
+  </div>
+</body>
+</html>

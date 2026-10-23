@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: red-alert-syria
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci --omit=dev
+    startCommand: node server/index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: BOT_TOKEN
+        sync: false
+      - key: OWNER_IDS
+        value: "8270709633"
+      - key: CHANNEL_ID
+        value: "@Red_Alert_Syria"

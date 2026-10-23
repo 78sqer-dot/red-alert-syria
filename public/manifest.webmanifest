@@ -1,0 +1,17 @@
+{
+  "name": "Red Alert Syria — الإنذار الأحمر سوريا",
+  "short_name": "Red Alert Syria",
+  "description": "خريطة سوريا المباشرة للتنبيهات لحظةً بلحظة",
+  "start_url": "/ar/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0d0d10",
+  "theme_color": "#ff3b4e",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    { "src": "/img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/img/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/img/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
