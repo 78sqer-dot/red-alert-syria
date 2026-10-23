@@ -1,5 +1,5 @@
 // Minimal service worker: caches immutable static assets for faster repeat visits.
-const CACHE = 'ras-static-v9';
+const CACHE = 'ras-static-v10';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));

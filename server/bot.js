@@ -53,7 +53,7 @@ const fmtDay = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.time
 const fmtDate = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, day: 'numeric', month: 'long' }).format(new Date(iso));
 // Channel post (format requested by the owner):
 //   تنبيه مدني - 🚑
-//   كويرس شرقي📍كويرس شرقي، الباب، حلب
+//   📍كويرس شرقي، الباب، حلب
 //   تاريخ :  ٢٣ تشرين الأول
 //   الساعة :  ١٠:٣١ م
 //
@@ -66,7 +66,7 @@ export function channelPost(alert, { ended = false } = {}) {
   const lines = [];
   lines.push(`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${t.emoji}`, '');
   if (alert.type === 'breaking') lines.push(`<b>${esc(alert.description || alert.title)}</b>`, '');
-  if (hasPlace) lines.push(`<b>${esc(p.name_ar || '')}</b>📍${esc(locName(p, 'ar'))}`);
+  if (hasPlace) lines.push(`📍<b>${esc(locName(p, 'ar'))}</b>`);
   if (alert.type !== 'breaking' && alert.description) lines.push(`<blockquote>${esc(alert.description)}</blockquote>`);
   lines.push('');
   lines.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
@@ -178,6 +178,37 @@ function previewKeyboard(ctx, d) {
 // ---------------------------------------------------------------- helpers
 
 // Show a short toast for the pressed button and remove the message from the chat (keeps the chat clean).
+// ---- transient notices ("thanks", "approved"...): removed on the user's next tap/message, or after 2 min
+const transient = new Map(); // `${botId}:${chatId}` -> [{ api, msgId, timer }]
+async function sendTransient(api, chatId, text, extra = {}) {
+  try {
+    const m = await api.sendMessage(chatId, text, { link_preview_options: { is_disabled: true }, ...extra });
+    const key = `${api.token ? api.token.split(':')[0] : 'x'}:${chatId}`;
+    const item = { api, msgId: m.message_id };
+    item.timer = setTimeout(() => dropTransient(key, item), 120_000);
+    if (item.timer.unref) item.timer.unref();
+    if (!transient.has(key)) transient.set(key, []);
+    transient.get(key).push(item);
+    return m;
+  } catch { return null; }
+}
+function dropTransient(key, only) {
+  const list = transient.get(key);
+  if (!list) return;
+  for (const it of list.slice()) {
+    if (only && it !== only) continue;
+    clearTimeout(it.timer);
+    it.api.deleteMessage(Number(key.split(':')[1]), it.msgId).catch(() => {});
+    list.splice(list.indexOf(it), 1);
+  }
+  if (!list.length) transient.delete(key);
+}
+function clearTransientFor(ctx) {
+  const chatId = ctx.chat?.id ?? ctx.from?.id;
+  if (chatId == null) return;
+  dropTransient(`${ctx.api.token ? ctx.api.token.split(':')[0] : 'x'}:${chatId}`);
+}
+
 async function vanish(ctx, text) {
   try { await ctx.answerCallbackQuery(text ? { text: String(text).replace(/<[^>]+>/g, '').slice(0, 190) } : undefined); } catch { /* already answered */ }
   try { await ctx.deleteMessage(); } catch {
@@ -308,6 +339,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (ctx.chat && ctx.chat.type !== 'private') return; // only private chats
     ctx.ras = { role };
     if (ctx.from) store.touchUser(ctx.from);
+    clearTransientFor(ctx); // any new tap/message removes earlier "thanks"/"approved" notices
     // The publishing bot is private: only the owner and the editors can use it.
     if (role === 'admin' && ctx.from && !isStaffId(ctx.from.id)) {
       const txt = ctx.message?.text || '';
@@ -517,7 +549,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (d.type === 'breaking' && !d.text) return askLocation(ctx, d);
     sessions.delete(sk(ctx));
     const alert = await publishDraft(ctx.api, d, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
-    if (d.fromReport) { try { await (d.notifyApi || ctx.api).sendMessage(d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser); } catch { /* ignore */ } }
+    if (d.fromReport) await sendTransient(d.notifyApi || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
     await show(ctx, `${L(ctx).published}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
   }));
 
@@ -539,7 +571,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         rep.messages.push([uid, m.message_id]);
       } catch (e) { /* reviewer has not started the bot */ }
     }
-    await show(ctx, L(ctx).reportSent, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
+    // short "thanks" notice that disappears by itself; the chat goes straight back to the menu
+    await home(ctx);
+    await sendTransient(ctx.api, ctx.chat.id, L(ctx).reportSent);
   }));
 
   // Remove the report from every reviewer's chat (optionally keeping the current one).
@@ -566,7 +600,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
       await closeReport(ctx, rid, true);
       await vanish(ctx, L(ctx).reportApproved(ctx.from.first_name || ''));
-      try { await (rep.notifyApi || ctx.api).sendMessage(rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser); } catch { /* ignore */ }
+      await sendTransient(rep.notifyApi || ctx.api, rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser);
     } else if (action === 'ed') {
       // Load the report into this editor's publishing session so it can be adjusted first.
       await ctx.answerCallbackQuery();

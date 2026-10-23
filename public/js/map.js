@@ -130,7 +130,7 @@ function labelFont(map) {
   return ['Noto Sans Regular'];
 }
 
-function circlePolygon(lon, lat, km, steps = 64) {
+function circlePolygon(lon, lat, km, steps = 96) {
   const coords = [];
   const dLat = km / 110.574;
   const dLon = km / (111.32 * Math.cos((lat * Math.PI) / 180));
@@ -187,14 +187,15 @@ export class AlertMap {
     });
     this.map.addControl(new M.AttributionControl({ compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · GeoNames · geoBoundaries' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
     this.map.addControl(new M.ScaleControl({ maxWidth: 110, unit: 'metric' }), this.opts.lang === 'ar' ? 'bottom-right' : 'bottom-left');
+    window.__rasMap = this.map;
     this.map.on('style.load', () => this.addOverlays());
     const zoomTier = () => {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
       c.classList.toggle('zoom-detail', z >= 11);
       c.classList.toggle('zoom-far', z < 7.5);
-      // icons get smaller as you zoom in (like the original): full size at country view, ~55% close up
-      c.style.setProperty('--mks', Math.max(0.55, Math.min(0.95, 0.95 - (z - 7) * 0.075)).toFixed(3));
+      // small icons at every zoom, getting a little smaller as you zoom in (like the original)
+      c.style.setProperty('--mks', Math.max(0.42, Math.min(0.56, 0.56 - (z - 6) * 0.025)).toFixed(3));
     };
     this.map.on('zoom', zoomTier);
     this.map.on('zoom', () => this._queueZones());
@@ -215,13 +216,13 @@ export class AlertMap {
       setTimeout(res, 6000);
     });
     this.ready = true;
-    if (window.innerWidth / (window.__uiz || 1) < 768) this.el.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
+    if ((window.__viewW ? window.__viewW() : window.innerWidth) < 768) this.el.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
     this.render();
     if (this._pending) { const [a, o] = this._pending; this._pending = null; this.select(a, o); }
   }
 
   padding() {
-    const mobile = window.innerWidth / (window.__uiz || 1) < 768;
+    const mobile = (window.__viewW ? window.__viewW() : window.innerWidth) < 768;
     return mobile ? { top: 70, bottom: 120, left: 30, right: 30 } : { top: 70, bottom: 70, left: 60, right: 60 };
   }
 
@@ -264,8 +265,7 @@ export class AlertMap {
     // Affected-area circles: vivid red-tinted fill + solid edge + soft pulsing glow (like the original),
     // softened slightly at very close zoom so a small circle never floods the screen.
     const A = (on, off) => ['case', ['get', 'active'], on, off];
-    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.2 : 0.15, 0.05) } });
-    add({ id: 'ras-zones-glow', type: 'line', source: 'ras-zones', filter: ['all', ['!', ['get', 'dashed']], ['get', 'active']], paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.15, 'line-width': 4, 'line-blur': 3 } });
+    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.2 : 0.16, 0.05) } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.8, 0.3), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 11, 1.6] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.85, 0.3), 'line-width': 1.8, 'line-dasharray': [3, 4] } });
     this._startGlow();
@@ -337,26 +337,9 @@ export class AlertMap {
         el.title = a.title;
       });
     }
-    // extra drones: one orbiting inside each additional affected-area circle (like the original map)
+    // one drone per alert (like the original map); the affected places are shown by their circles
     this.sats = this.sats || new Map();
     const satSeen = new Set();
-    for (const a of this.alerts) {
-      const t = ALERT_TYPES[a.type];
-      if (!t || t.marker !== 'orbit' || !a.is_active || !Array.isArray(a.zones) || a.zones.length < 2 || !a.location) continue;
-      a.zones.forEach((z, i) => {
-        const dk = Math.hypot((z.lat - a.location.latitude) * 111, (z.lon - a.location.longitude) * 92);
-        if (dk < 1.5) return;
-        const key = `${a.id}:${i}`;
-        satSeen.add(key);
-        if (this.sats.has(key)) return;
-        const el = this.markerEl(a);
-        el.classList.add('mk-sat');
-        el.style.setProperty('--delay', `-${((i * 1.7) % 6).toFixed(1)}s`);
-        el.addEventListener('click', (e) => { e.stopPropagation(); this.onSelect(a.id, { fromMap: true }); });
-        el.style.zIndex = 9;
-        this.sats.set(key, new M.Marker({ element: el, anchor: 'center' }).setLngLat([z.lon, z.lat]).addTo(this.map));
-      });
-    }
     for (const [k, m] of this.sats) if (!satSeen.has(k)) { m.remove(); this.sats.delete(k); }
     for (const [id, m] of this.markers) {
       if (!seen.has(id)) {
@@ -402,12 +385,12 @@ export class AlertMap {
     if (this._glowTimer) return;
     const t0 = performance.now();
     this._glowTimer = setInterval(() => {
-      if (document.hidden || !this.map || !this.map.getLayer('ras-zones-glow')) return;
-      const k = (Math.sin(((performance.now() - t0) / 1800) * Math.PI * 2) + 1) / 2; // 0..1, 1.8 s period
-      this.map.setPaintProperty('ras-zones-glow', 'line-opacity', 0.06 + 0.14 * k);
-      const small = Math.min(this.map.getContainer().clientWidth, this.map.getContainer().clientHeight) < 520;
-      this.map.setPaintProperty('ras-zones-glow', 'line-width', small ? 2 + 3 * k : 3 + 4 * k);
-    }, 90);
+      if (document.hidden || !this.map || !this.map.getLayer('ras-zones-fill')) return;
+      const k = (Math.sin(((performance.now() - t0) / 2000) * Math.PI * 2) + 1) / 2; // 0..1, 2 s period
+      const dark = this.opts.dark || this.opts.layer === 'satellite';
+      const lo = dark ? 0.14 : 0.1, hi = dark ? 0.28 : 0.22;
+      this.map.setPaintProperty('ras-zones-fill', 'fill-opacity', ['case', ['get', 'active'], lo + (hi - lo) * k, 0.05]);
+    }, 100);
   }
   // Keep every affected-area circle in proportion to the screen: it follows its real size on the
   // ground, but never shrinks below a visible dot at country view nor grows past a comfortable share
@@ -416,7 +399,7 @@ export class AlertMap {
     const c = this.map.getContainer();
     const vmin = Math.max(200, Math.min(c.clientWidth, c.clientHeight) || 600);
     const mpp = (40075016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * Math.pow(2, this.map.getZoom()));
-    const px = Math.min(vmin * 0.2, Math.max(6, (km * 1000) / mpp));
+    const px = Math.min(vmin * 0.18, Math.max(5, (km * 1000) / mpp));
     return (px * mpp) / 1000;
   }
   _queueZones() {

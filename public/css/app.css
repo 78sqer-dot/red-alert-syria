@@ -251,7 +251,10 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 /* ---------------------------------------------------------------- markers */
 .mk { position: absolute; top: 0; left: 0; width: 0; height: 0; cursor: pointer; --c: #ff3b4e; }
 /* scale wrapper: icons shrink as the map zooms in (--mks set by map.js) */
-.mk-s { position: absolute; left: 0; top: 0; width: 0; height: 0; transform: scale(var(--mks, 0.95)); transform-origin: 0 0; transition: transform .2s ease; }
+.mk-s { position: absolute; left: 0; top: 0; width: 0; height: 0; transform: scale(var(--mks, 0.5)); transform-origin: 0 0; transition: transform .2s ease; }
+/* aircraft / vehicles have no disc, so they get a little more size to stay readable */
+.mk-squad .mk-s, .mk-fly .mk-s { transform: scale(calc(var(--mks, 0.5) * 1.5)); }
+.mk-orbit .mk-s { transform: scale(calc(var(--mks, 0.5) * 1.8)); }
 /* static disc — identical to the original .static-alert-icon */
 .sai { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; border-radius: 50%; border: 3px solid; display: flex; align-items: center; justify-content: center; transition: transform .18s ease; }
 .sai svg { display: block; }
@@ -290,7 +293,7 @@ html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shad
 .uav { animation: uavOrbit 6s linear infinite; }
 .mk-sat .uav { animation-delay: var(--delay, 0s); }
 /* the airframe circles the target and turns with its heading */
-@keyframes uavOrbit { from { transform: rotate(0deg) translateX(20px); } to { transform: rotate(-360deg) translateX(20px); } }
+@keyframes uavOrbit { from { transform: rotate(0deg) translateX(12px); } to { transform: rotate(-360deg) translateX(12px); } }
 .uav-svg { display: block; fill: #6b7280; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
 html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95)) drop-shadow(0 0 .5px rgba(0,0,0,.95)); }
 .mk.sel .uav-svg { fill: var(--c); }

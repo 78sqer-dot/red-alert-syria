@@ -56,3 +56,9 @@ Data: GeoNames SY (CC BY 4.0), geoBoundaries SYR ADM0/1/2 (gbOpen), raw in /work
 🗺 الخريطة المباشرة · Red Alert Syria   (link to map)
 ```
 Plus civil sub-buttons in BOTH bots: civil button opens submenu (مدني عام، حادث سير، مظاهرة، حريق، طائرة مدنية).
+
+## User feedback round (22:55) — screenshots 182404/182405/182406
+- Phone (360css wide, dark): civil disc (house glyph), breaking "!" disc (~30css px with glow ring) and orange artillery discs are FAR too big. Warplanes = 3 blue planes; drones = several crosses.
+- Drone over Damascus: several drones + small red hexagon-like blobs (low-poly circles at country zoom). User wants EXACTLY like redalert.com.lb: study live original for drone count + how affected-area circles appear on zoom.
+- All markers must be small like original at every zoom.
+- Report bot: "✅ تمت الموافقة على بلاغك ونُشر. شكراً لمساهمتك!" messages pile up, not auto-deleted -> auto-delete them (and handled report messages in publishing bot).

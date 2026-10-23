@@ -106,7 +106,7 @@ app.get('/api/stream', streamLimiter, (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.write('retry: 4000\n\n');
-  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString() })}\n\n`);
+  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString(), build: BUILD })}\n\n`);
   clients.add(res);
   req.on('close', () => clients.delete(res));
 });
@@ -128,7 +128,9 @@ app.use('/fonts', express.static(path.join(PUBLIC, 'fonts'), longCache));
 app.use('/shared', express.static(SHARED, { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 app.use(express.static(PUBLIC, { index: false, maxAge: '1h', setHeaders: (res, p) => { if (/\.(html|js|mjs|css|webmanifest)$/.test(p)) res.setHeader('Cache-Control', 'no-cache'); } }));
 
-const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
+// build id: changes on every deploy so browsers fetch fresh files and open pages reload themselves
+const BUILD = String(process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).slice(0, 10);
+const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8').replace(/\?v=\d+/g, `?v=${BUILD}`);
 function renderIndex(lang) {
   const url = config.publicUrl || '';
   return indexHtml

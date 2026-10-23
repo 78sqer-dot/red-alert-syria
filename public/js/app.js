@@ -10,45 +10,14 @@ const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
 const TZ = 'Asia/Damascus';
 const CHANNEL = 'https://t.me/Red_Alert_Syria';
-// Open Telegram links straight in the Telegram app on phones (tg:// deep link), falling back to t.me.
-const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
-function tgDeepLink(href) {
-  let u;
-  try { u = new URL(href); } catch { return null; }
-  if (u.hostname !== 't.me' && u.hostname !== 'telegram.me') return null;
-  const parts = u.pathname.split('/').filter(Boolean);
-  if (parts[0] === 'share') {
-    const q = new URLSearchParams();
-    if (u.searchParams.get('url')) q.set('url', u.searchParams.get('url'));
-    if (u.searchParams.get('text')) q.set('text', u.searchParams.get('text'));
-    return 'tg://msg_url?' + q.toString();
-  }
-  if (!parts.length || !/^[A-Za-z0-9_]{4,}$/.test(parts[0])) return null;
-  const q = new URLSearchParams({ domain: parts[0] });
-  if (parts[1] && /^\d+$/.test(parts[1])) q.set('post', parts[1]);
-  if (u.searchParams.get('start')) q.set('start', u.searchParams.get('start'));
-  return 'tg://resolve?' + q.toString();
-}
-document.addEventListener('click', (e) => {
-  const a = e.target.closest && e.target.closest('a[href]');
-  if (!a || e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey) return;
-  const deep = IS_MOBILE ? tgDeepLink(a.href) : null;
-  if (!deep) return;
-  e.preventDefault();
-  const web = a.href;
-  let left = false;
-  const onHide = () => { left = true; };
-  document.addEventListener('visibilitychange', onHide, { once: true });
-  window.addEventListener('pagehide', onHide, { once: true });
-  location.href = deep;
-  setTimeout(() => { if (!left && !document.hidden) location.href = web; }, 1500);
-}, true);
+// Telegram links are plain https://t.me/... links: Android/iOS hand them to the Telegram app
+// themselves (or open the t.me page with an "Open in Telegram" button), so no JS interception.
 let BOT = 'https://t.me/Rad_Alert_Syria1_bot';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const uiz = () => window.__uiz || 1;
-const viewW = () => window.innerWidth / uiz();
+const viewW = () => (window.__viewW ? window.__viewW() : window.innerWidth / uiz());
 const isMobile = () => viewW() < 768;
 // In phone "desktop site" mode the browser still evaluates CSS media queries at ~980px, so re-evaluate
 // every width-based @media rule against the real (zoomed) width.
@@ -990,6 +959,11 @@ function connect() {
   es.addEventListener('ping', beat);
   es.addEventListener('snapshot', (e) => {
     const j = JSON.parse(e.data);
+    // a new version of the site was deployed while this page was open: reload to get it
+    if (j.build) {
+      if (state.build && state.build !== j.build) { location.reload(); return; }
+      state.build = j.build;
+    }
     setHistoryHours(j.history_hours);
     const before = new Set(state.alerts.keys());
     state.alerts = new Map();
