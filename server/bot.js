@@ -161,6 +161,13 @@ function previewKeyboard(ctx, d) {
 
 // ---------------------------------------------------------------- helpers
 
+// Show a short toast for the pressed button and remove the message from the chat (keeps the chat clean).
+async function vanish(ctx, text) {
+  try { await ctx.answerCallbackQuery(text ? { text: String(text).replace(/<[^>]+>/g, '').slice(0, 190) } : undefined); } catch { /* already answered */ }
+  try { await ctx.deleteMessage(); } catch {
+    try { await ctx.editMessageText(text || '✔️', { parse_mode: 'HTML' }); } catch { /* ignore */ }
+  }
+}
 async function show(ctx, text, keyboard) {
   const opts = { parse_mode: 'HTML', reply_markup: keyboard, link_preview_options: { is_disabled: true } };
   const d = sessions.get(sk(ctx));
@@ -507,41 +514,45 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await show(ctx, L(ctx).reportSent, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
   }));
 
-  const closeReport = async (ctx, rid, line) => {
+  // Remove the report from every reviewer's chat (optionally keeping the current one).
+  const closeReport = async (ctx, rid, keepCurrent = false) => {
     const rep = reports.get(rid);
     if (!rep) return;
     reports.delete(rid);
+    const cur = ctx.callbackQuery?.message;
     for (const [chat, mid] of rep.messages) {
-      const lang = store.userLang(chat) === 'en' ? 'en' : 'ar';
-      try {
-        await ctx.api.editMessageText(chat, mid, `${T[lang].reportNew(who(rep.from))}\n\n${draftSummary(rep.draft, lang)}\n\n${line}`, { parse_mode: 'HTML' });
-      } catch { /* ignore */ }
+      if (cur && chat === cur.chat.id && mid === cur.message_id) { if (keepCurrent) continue; }
+      try { await ctx.api.deleteMessage(chat, mid); } catch {
+        const lang = store.userLang(chat) === 'en' ? 'en' : 'ar';
+        try { await ctx.api.editMessageText(chat, mid, `${T[lang].reportNew(who(rep.from))}\n\n${draftSummary(rep.draft, lang)}\n\n✔️`, { parse_mode: 'HTML' }); } catch { /* ignore */ }
+      }
     }
   };
   bot.callbackQuery(/^r(ap|rj|bn|ed):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return ctx.answerCallbackQuery();
     const [, action, rid] = ctx.match;
     const rep = reports.get(rid);
-    if (!rep) return ctx.answerCallbackQuery(L(ctx).notFound);
-    await ctx.answerCallbackQuery();
+    if (!rep) return vanish(ctx, L(ctx).notFound);
     const by = esc(ctx.from.first_name || String(ctx.from.id));
     if (action === 'ap') {
-      const alert = await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
-      await closeReport(ctx, rid, L(ctx).reportApproved(by));
+      await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
+      await closeReport(ctx, rid, true);
+      await vanish(ctx, L(ctx).reportApproved(ctx.from.first_name || ''));
       try { await (rep.notifyApi || ctx.api).sendMessage(rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser); } catch { /* ignore */ }
-      if (alert) await ctx.reply(L(ctx).published, { parse_mode: 'HTML', reply_markup: resultKeyboard(ctx, alert) });
     } else if (action === 'ed') {
       // Load the report into this editor's publishing session so it can be adjusted first.
-      await closeReport(ctx, rid, L(ctx).reportEditing(by));
+      await ctx.answerCallbackQuery();
+      await closeReport(ctx, rid, true);
       const d = { ...rep.draft, mode: 'publish', created: Date.now(), msgId: null, fromReport: rep.from, notifyApi: rep.notifyApi };
       sessions.set(sk(ctx), d);
       await showPreview(ctx, d);
     } else {
       if (action === 'bn') store.ban(rep.from.id);
-      await closeReport(ctx, rid, L(ctx).reportRejected(by) + (action === 'bn' ? ' · 🚫' : ''));
+      await closeReport(ctx, rid, true);
+      await vanish(ctx, L(ctx).reportRejected(ctx.from.first_name || '') + (action === 'bn' ? ' · 🚫' : ''));
     }
+    void by;
   });
-
   // -------- active alerts management
   async function showActive(ctx) {
     const l = L(ctx);
@@ -570,16 +581,14 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const l = L(ctx);
     if (ctx.match[1] === 'end') {
       const ended = store.endAll();
-      await ctx.answerCallbackQuery(l.clearedEnd(ended.length));
-      await show(ctx, l.clearedEnd(ended.length), new InlineKeyboard().text(l.btnHome, 'home'));
+      await vanish(ctx, l.clearedEnd(ended.length));
       for (const a of ended) {
         try { await refreshChannelPost(ctx.api, store.getAlert(a.id), true); } catch (e) { console.error('[bot] refresh failed', e.description || e.message); }
         await new Promise((r) => setTimeout(r, 120));
       }
     } else {
       const gone = store.deleteActive();
-      await ctx.answerCallbackQuery(l.clearedDel(gone.length));
-      await show(ctx, l.clearedDel(gone.length), new InlineKeyboard().text(l.btnHome, 'home'));
+      await vanish(ctx, l.clearedDel(gone.length));
     }
     console.log(`[bot] bulk ${ctx.match[1]} by ${ctx.from.id}`);
   });
@@ -618,15 +627,11 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!staff(ctx)) return ctx.answerCallbackQuery();
     const [, action, id] = ctx.match;
     const a = store.getAlert(id);
-    if (!a) {
-      await ctx.answerCallbackQuery(L(ctx).notFound);
-      return;
-    }
+    if (!a) return vanish(ctx, L(ctx).notFound);
     if (action === 'end') {
       store.endAlert(id);
       await refreshChannelPost(ctx.api, store.getAlert(id), true);
-      await ctx.answerCallbackQuery(L(ctx).ended);
-      await show(ctx, manageText(ctx, store.getAlert(id)), new InlineKeyboard().text(L(ctx).btnDelete, 'del:' + id).row().text(L(ctx).btnActive, 'active').text(L(ctx).btnHome, 'home'));
+      await vanish(ctx, L(ctx).ended);
     } else if (action === 'ext') {
       const base = Math.max(Date.now(), Date.parse(a.expires_at));
       store.updateAlert(id, { expires_at: new Date(base + 30 * 60_000).toISOString(), is_active: true, ended_at: undefined });
@@ -638,8 +643,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       if (removed?.channel_message_id) {
         try { await ctx.api.deleteMessage(config.channel, removed.channel_message_id); } catch (e) { console.error('[bot] delete failed', e.description); }
       }
-      await ctx.answerCallbackQuery(L(ctx).deleted);
-      await show(ctx, L(ctx).deleted, new InlineKeyboard().text(L(ctx).btnActive, 'active').text(L(ctx).btnHome, 'home'));
+      await vanish(ctx, L(ctx).deleted);
     }
   });
 

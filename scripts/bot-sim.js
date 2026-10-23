@@ -91,4 +91,14 @@ console.log('before sweep', store.state.alerts.length); store.expireSweep(); con
 const ed = user(777, 'Editor'); store.addEditor ? store.addEditor(777) : store.state.editors.push(777);
 await msg(ed, '/start'); show('editor home');
 await msg(pub, '/start'); show('public in admin bot');
+// approve a report directly -> review message must be deleted, no leftover messages
+const pub2 = user(556, 'Omar');
+await rcb(pub2, 't:uav'); await rmsg(pub2, 'إدلب'); { const b = btns(last()).find((x) => /=>p:|=>wg:/.test(x)); await rcb(pub2, b.split('=>')[1]); } await rcb(pub2, 'skip'); await rcb(pub2, 'submit');
+const rv2 = [...log].reverse().find((x) => x.method === 'sendMessage' && x.payload.chat_id === 8270709633);
+const n0 = log.length;
+await cb(owner, btns(rv2)[0].split('=>')[1]);
+console.log('\n=== after approve, calls:', log.slice(n0).map((x) => `${x.bot}:${x.method}${x.payload.text ? '(' + String(x.payload.text).slice(0, 40) + ')' : ''}${x.method === 'answerCallbackQuery' ? '[' + (x.payload.text || '') + ']' : ''}`).join(' | '));
+const n1 = log.length;
+const act = store.activeAlerts()[0]; await cb(owner, 'del:' + act.id);
+console.log('=== after del, calls:', log.slice(n1).map((x) => `${x.method}${x.method === 'answerCallbackQuery' ? '[' + (x.payload.text || '') + ']' : ''}`).join(' | '));
 process.exit(0);
