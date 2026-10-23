@@ -35,7 +35,7 @@ export const ALERT_TYPES = {
   civil: {
     ar: 'مدني', en: 'Civil alert', button_ar: 'مدني', button_en: 'Civil',
     emoji: '🚑', color: '#0891b2', ring: '#155e75', group: 'other', ttlMin: 240,
-    marker: 'icon', glyph: 'ambulance', icon: '#0891b2', disc: '#000000', zone: false, tag_ar: 'مدني', tag_en: 'Civil',
+    marker: 'fly', glyph: 'ambulance', icon: '#0891b2', disc: '#000000', zone: false, tag_ar: 'مدني', tag_en: 'Civil',
   },
 };
 

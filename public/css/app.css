@@ -279,14 +279,10 @@ html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shad
 /* drone — grey airframe that orbits only at close zoom (like the original) */
 .uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
 .uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
-.uav { animation: uavOrbit 7s linear infinite; }
-.maplibregl-map.zoom-far .uav { animation-name: uavOrbitS; }
-.maplibregl-map.zoom-detail .uav { animation-name: uavOrbitL; }
+.uav { animation: uavOrbit 6s linear infinite; }
 /* the airframe circles the target and turns with its heading */
-@keyframes uavOrbit { from { transform: rotate(0deg) translateX(16px) rotate(-90deg); } to { transform: rotate(-360deg) translateX(16px) rotate(-90deg); } }
-@keyframes uavOrbitS { from { transform: rotate(0deg) translateX(9px) rotate(-90deg); } to { transform: rotate(-360deg) translateX(9px) rotate(-90deg); } }
-@keyframes uavOrbitL { from { transform: rotate(0deg) translateX(24px) rotate(-90deg); } to { transform: rotate(-360deg) translateX(24px) rotate(-90deg); } }
-.uav-svg { display: block; fill: #374151; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
+@keyframes uavOrbit { from { transform: rotate(0deg) translateX(20px); } to { transform: rotate(-360deg) translateX(20px); } }
+.uav-svg { display: block; fill: #6b7280; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
 html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95)) drop-shadow(0 0 .5px rgba(0,0,0,.95)); }
 .mk.sel .uav-svg { fill: var(--c); }
 /* warplanes — squad of three flying across the zone */
@@ -294,6 +290,11 @@ html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95))
 .squad .sq { position: absolute; animation: squadFly 7s linear infinite; pointer-events: auto; }
 .sq-svg { display: block; transform: rotate(-45deg); filter: drop-shadow(0 0 1px rgba(0,0,0,.55)) drop-shadow(0 1px 2px rgba(255,255,255,.55)); }
 html.dark .sq-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.4)) drop-shadow(0 1px 2px rgba(0,0,0,.85)); }
+/* civil — single craft-sized icon (same size as the drone) passing across the zone like the warplanes */
+.squad.solo .sq { left: 50% !important; margin-left: -11px; }
+.fly-svg { display: block; filter: drop-shadow(0 0 1px rgba(0,0,0,.75)) drop-shadow(0 1px 2px rgba(255,255,255,.6)); }
+html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
+.fly-svg .amb-siren { animation: siren .9s steps(1) infinite; }
 @keyframes squadFly { 0% { transform: translateY(110px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-110px); opacity: 0; } }
 .mk.inactive { filter: grayscale(1); opacity: .55; }
 .mk.inactive .uav, .mk.inactive .sq { animation: none !important; }
