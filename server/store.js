@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { ALERT_TYPES, typeOf } from '../shared/types.js';
+import { zonePoints } from './places.js';
 
 /**
  * In-memory state with atomic JSON persistence on disk and an optional remote backup
@@ -295,6 +296,7 @@ export function publicAlert(a) {
     },
     areas: a.areas,
     scope: a.scope,
+    zones: typeOf(a.type).zone ? zonePoints({ ...(a.place || {}), ...(a.location || {}) }, a.scope) : undefined,
     timestamp: a.timestamp,
     expires_at: a.expires_at,
     ended_at: a.ended_at,

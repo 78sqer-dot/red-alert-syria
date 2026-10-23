@@ -33,6 +33,15 @@ try {
 } catch { /* ignore */ }
 state.filter = state.filter.filter((t) => TYPE_KEYS.includes(t));
 state.notifications.types = state.notifications.types.filter((t) => TYPE_KEYS.includes(t));
+// types added after the user saved settings start visible (and notifying) by default
+{
+  const known = Array.isArray(state.knownTypes) ? state.knownTypes : ['breaking', 'uav', 'warplane', 'missile', 'attack', 'artillery', 'civil'];
+  for (const t of TYPE_KEYS) if (!known.includes(t)) {
+    if (!state.filter.includes(t)) state.filter.push(t);
+    if (!state.notifications.types.includes(t)) state.notifications.types.push(t);
+  }
+  state.knownTypes = [...TYPE_KEYS];
+}
 
 const listeners = new Set();
 export const settings = {

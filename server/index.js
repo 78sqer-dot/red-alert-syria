@@ -125,7 +125,7 @@ setInterval(() => {
 const longCache = { maxAge: '30d', immutable: true };
 app.use('/vendor', express.static(path.join(PUBLIC, 'vendor'), longCache));
 app.use('/fonts', express.static(path.join(PUBLIC, 'fonts'), longCache));
-app.use('/shared', express.static(SHARED, { maxAge: '1h' }));
+app.use('/shared', express.static(SHARED, { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 app.use(express.static(PUBLIC, { index: false, maxAge: '1h', setHeaders: (res, p) => { if (/\.(html|js|mjs|css|webmanifest)$/.test(p)) res.setHeader('Cache-Control', 'no-cache'); } }));
 
 const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');

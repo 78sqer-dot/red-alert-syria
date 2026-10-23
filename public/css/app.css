@@ -250,6 +250,8 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 
 /* ---------------------------------------------------------------- markers */
 .mk { position: absolute; top: 0; left: 0; width: 0; height: 0; cursor: pointer; --c: #ff3b4e; }
+/* scale wrapper: icons shrink as the map zooms in (--mks set by map.js) */
+.mk-s { position: absolute; left: 0; top: 0; width: 0; height: 0; transform: scale(var(--mks, 0.95)); transform-origin: 0 0; transition: transform .2s ease; }
 /* static disc — identical to the original .static-alert-icon */
 .sai { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; border-radius: 50%; border: 3px solid; display: flex; align-items: center; justify-content: center; transition: transform .18s ease; }
 .sai svg { display: block; }
@@ -261,8 +263,6 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
 .mk:hover .ic, .mk.sel .ic { transform: translate(-50%, -50%) scale(1.25); }
 .mk.sel .ic-svg { filter: drop-shadow(0 0 1px rgba(0,0,0,.8)) drop-shadow(0 0 6px var(--ic)); }
-.maplibregl-map.zoom-far .ic { width: 27px; height: 27px; }
-.maplibregl-map.zoom-far .ic-svg { width: 27px; height: 27px; }
 .mk.inactive .ic { opacity: .55; }
 .mk.inactive .ic * { animation: none !important; }
 .ic-tank .tk-body { animation: tkRecoil 2.6s ease-out infinite; transform-box: fill-box; }
@@ -274,12 +274,21 @@ html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shad
 @keyframes msDive { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(2px, 3px); } }
 .ic-ambulance .amb-siren { animation: siren .9s steps(1) infinite; }
 @keyframes siren { 0% { fill: #ef4444; } 50% { fill: #3b82f6; } }
+.ic-fire .fire-g { animation: fireFlick 1.1s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.ic-fire .fire-in { animation: fireIn .7s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes fireFlick { 0%,100% { transform: scale(1, 1) skewX(0deg); } 30% { transform: scale(.96, 1.06) skewX(-3deg); } 60% { transform: scale(1.03, .95) skewX(2deg); } }
+@keyframes fireIn { from { transform: scale(.9, .85); opacity: .85; } to { transform: scale(1.05, 1.08); opacity: 1; } }
+.ic-car_crash .cc-burst, .ic-car_crash .cc-core { animation: ccBurst 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes ccBurst { 0%,100% { transform: scale(.8) rotate(0deg); opacity: .75; } 50% { transform: scale(1.12) rotate(12deg); opacity: 1; } }
+.ic-protest .ic-svg { animation: prBob 1.2s ease-in-out infinite; }
+@keyframes prBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 .ic-alert_tri .ic-svg { animation: brkPulse 1.6s ease-in-out infinite; }
 @keyframes brkPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
 /* drone — grey airframe that orbits only at close zoom (like the original) */
 .uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
 .uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
 .uav { animation: uavOrbit 6s linear infinite; }
+.mk-sat .uav { animation-delay: var(--delay, 0s); }
 /* the airframe circles the target and turns with its heading */
 @keyframes uavOrbit { from { transform: rotate(0deg) translateX(20px); } to { transform: rotate(-360deg) translateX(20px); } }
 .uav-svg { display: block; fill: #6b7280; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
@@ -489,3 +498,5 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
   .report-btn .lbl { display: none; }
   .report-btn { width: 36px; padding: 0; justify-content: center; }
 }
+/* civil sub-type icons: thin white halo so they stay readable over busy city maps */
+.ic-car_crash .ic-svg, .ic-protest .ic-svg, .ic-fire .ic-svg { filter: drop-shadow(0 0 1.2px #fff) drop-shadow(0 0 1.2px #fff) drop-shadow(0 1px 2px rgba(0,0,0,.25)); }

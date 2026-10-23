@@ -30,12 +30,32 @@ export const ALERT_TYPES = {
   artillery: {
     ar: 'قصف مدفعي', en: 'Artillery shelling', button_ar: 'قصف مدفعي', button_en: 'Artillery',
     emoji: '🎯', color: '#f97316', ring: '#f97316', group: 'strikes', ttlMin: 360,
-    marker: 'icon', glyph: 'tank', icon: '#f97316', disc: '#f97316', zone: false, tag_ar: 'قصف_مدفعي', tag_en: 'Artillery',
+    marker: 'static', glyph: 'artillery', disc: '#f97316', zone: false, tag_ar: 'قصف_مدفعي', tag_en: 'Artillery',
   },
   civil: {
     ar: 'مدني', en: 'Civil alert', button_ar: 'مدني', button_en: 'Civil',
-    emoji: '🚑', color: '#0891b2', ring: '#155e75', group: 'other', ttlMin: 240,
+    emoji: '🚑', color: '#0891b2', ring: '#155e75', group: 'civil', ttlMin: 240,
     marker: 'fly', glyph: 'ambulance', icon: '#0891b2', disc: '#000000', zone: false, tag_ar: 'مدني', tag_en: 'Civil',
+  },
+  accident: {
+    ar: 'حادث سير', en: 'Traffic accident', button_ar: 'حادث سير', button_en: 'Traffic accident',
+    emoji: '🚗', color: '#f59e0b', ring: '#b45309', group: 'civil', parent: 'civil', ttlMin: 120,
+    marker: 'icon', glyph: 'car_crash', icon: '#f59e0b', size: 32, zone: false, tag_ar: 'حادث_سير', tag_en: 'Accident',
+  },
+  protest: {
+    ar: 'مظاهرة', en: 'Protest', button_ar: 'مظاهرة', button_en: 'Protest',
+    emoji: '📢', color: '#7c3aed', ring: '#5b21b6', group: 'civil', parent: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'protest', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مظاهرة', tag_en: 'Protest',
+  },
+  fire: {
+    ar: 'حريق', en: 'Fire', button_ar: 'حريق', button_en: 'Fire',
+    emoji: '🔥', color: '#ea580c', ring: '#9a3412', group: 'civil', parent: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'fire', icon: '#ea580c', size: 32, zone: false, tag_ar: 'حريق', tag_en: 'Fire',
+  },
+  civil_plane: {
+    ar: 'طائرة مدنية', en: 'Civil aircraft', button_ar: 'طائرة مدنية', button_en: 'Civil aircraft',
+    emoji: '🛫', color: '#0284c7', ring: '#075985', group: 'civil', parent: 'civil', ttlMin: 60,
+    marker: 'fly', glyph: 'airliner', icon: '#0284c7', zone: false, tag_ar: 'طائرة_مدنية', tag_en: 'Civil_aircraft',
   },
 };
 
@@ -46,7 +66,8 @@ export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 export const ALERT_GROUPS = {
   aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'warplane', 'missile'] },
   strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'artillery'] },
-  other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'civil'] },
+  civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane'] },
+  other: { ar: 'أخرى', en: 'Other', types: ['breaking'] },
 };
 
 export function typeOf(key) {

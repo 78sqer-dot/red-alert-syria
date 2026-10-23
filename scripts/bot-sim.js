@@ -101,4 +101,9 @@ console.log('\n=== after approve, calls:', log.slice(n0).map((x) => `${x.bot}:${
 const n1 = log.length;
 const act = store.activeAlerts()[0]; await cb(owner, 'del:' + act.id);
 console.log('=== after del, calls:', log.slice(n1).map((x) => `${x.method}${x.method === 'answerCallbackQuery' ? '[' + (x.payload.text || '') + ']' : ''}`).join(' | '));
+// ---- civil sub-menu in both bots
+const n2 = log.length;
+await cb(owner, 'cv'); await cb(owner, 't:fire');
+const pub3 = user(557, 'Sami'); await rcb(pub3, 'cv'); await rcb(pub3, 't:accident');
+console.log('=== civil submenu:', log.slice(n2).filter((x) => x.payload.text && x.method !== 'answerCallbackQuery').map((x) => `${x.bot}:${String(x.payload.text).slice(0, 60).replace(/\n/g, ' ')} [${(x.payload.reply_markup?.inline_keyboard || []).flat().map((b) => b.text).join(', ')}]`).join('\n'));
 process.exit(0);

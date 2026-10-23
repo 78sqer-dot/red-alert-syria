@@ -90,13 +90,13 @@ export function locationFrom({ placeId, distCode, govCode, lat, lon, label }) {
     if (!p) return null;
     const d = getDist(p.dist);
     const g = getGov(p.gov);
-    return { scope: 'place', place_id: p.id, name_ar: p.ar, name_en: p.en, district_ar: d?.ar, district_en: d?.en, governorate: p.gov, governorate_ar: g?.ar, governorate_en: g?.en, latitude: p.lat, longitude: p.lon };
+    return { scope: 'place', place_id: p.id, district: p.dist, name_ar: p.ar, name_en: p.en, district_ar: d?.ar, district_en: d?.en, governorate: p.gov, governorate_ar: g?.ar, governorate_en: g?.en, latitude: p.lat, longitude: p.lon };
   }
   if (distCode) {
     const d = getDist(distCode);
     if (!d) return null;
     const g = getGov(d.gov);
-    return { scope: 'district', name_ar: d.ar, name_en: d.en, district_ar: d.ar, district_en: d.en, governorate: d.gov, governorate_ar: g?.ar, governorate_en: g?.en, latitude: d.lat, longitude: d.lon };
+    return { scope: 'district', district: d.code, name_ar: d.ar, name_en: d.en, district_ar: d.ar, district_en: d.en, governorate: d.gov, governorate_ar: g?.ar, governorate_en: g?.en, latitude: d.lat, longitude: d.lon };
   }
   if (govCode) {
     const g = getGov(govCode);
@@ -118,4 +118,44 @@ export function locationFrom({ placeId, distCode, govCode, lat, lon, label }) {
 
 export function insideSyriaBox(lat, lon) {
   return lat > 32.2 && lat < 37.5 && lon > 35.5 && lon < 42.5;
+}
+
+// ---------------------------------------------------------------- affected-area circles
+// Like the original map: several smaller circles, one over each affected locality, instead of one
+// huge disc. A single place gets one circle; a district / governorate gets circles over its most
+// important localities (by rank), spread out so they overlap only slightly.
+const kmBetween = (a, b) => {
+  const R = 6371, toR = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toR, dLon = (b.lon - a.lon) * toR;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
+const zoneCache = new Map();
+export function zonePoints(loc, scope) {
+  if (!loc || !Number.isFinite(loc.latitude)) return [];
+  const one = [{ lat: loc.latitude, lon: loc.longitude, km: 2.2 }];
+  if (scope !== 'district' && scope !== 'governorate') return one;
+  let distCode = loc.district;
+  if (scope === 'district' && !distCode) distCode = districts.find((d) => d.ar === loc.district_ar && (!loc.governorate || d.gov === loc.governorate))?.code;
+  const key = scope + ':' + (scope === 'district' ? distCode : loc.governorate);
+  if (zoneCache.has(key)) return zoneCache.get(key);
+  const pool = places
+    .filter((p) => (scope === 'district' ? p.dist === distCode : p.gov === loc.governorate))
+    .sort((a, b) => a.rank - b.rank);
+  if (!pool.length) return one;
+  const max = scope === 'governorate' ? 6 : 5;
+  let picked = [];
+  let sep = scope === 'governorate' ? 9 : 6;
+  for (; sep >= 1.2; sep *= 0.6) {
+    picked = [];
+    for (const p of pool) {
+      if (picked.every((q) => kmBetween(p, q) >= sep)) picked.push(p);
+      if (picked.length >= max) break;
+    }
+    if (picked.length >= Math.min(4, pool.length)) break;
+  }
+  const km = Math.max(1.6, Math.min(4, sep * 0.62));
+  const out = picked.map((p) => ({ lat: p.lat, lon: p.lon, km: +km.toFixed(2) }));
+  zoneCache.set(key, out);
+  return out;
 }

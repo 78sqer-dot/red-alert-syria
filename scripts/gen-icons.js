@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const base = new URL('../node_modules/@tabler/icons/icons/', import.meta.url).pathname;
 const want = {
   drone: 'outline/drone', plane: 'filled/plane', planeO: 'outline/plane-tilt', rocket: 'outline/rocket', bomb: 'filled/bomb', swords: 'outline/swords',
-  bolt: 'filled/bolt', ambulance: 'outline/ambulance', target: 'outline/target', flame: 'filled/flame', telegram: 'outline/brand-telegram',
+  bolt: 'filled/bolt', carCrash: 'outline/car-crash', planeDep: 'filled/plane-departure', ambulance: 'outline/ambulance', target: 'outline/target', flame: 'filled/flame', telegram: 'outline/brand-telegram',
   whatsapp: 'outline/brand-whatsapp', settings: 'outline/settings', moon: 'outline/moon', sun: 'outline/sun', filter: 'outline/filter', layers: 'outline/stack-2',
   map: 'outline/map', mapPin: 'outline/map-pin', share: 'outline/share', x: 'outline/x', chevUp: 'outline/chevron-up', chevDown: 'outline/chevron-down',
   chevLeft: 'outline/chevron-left', chevRight: 'outline/chevron-right', copy: 'outline/copy', bell: 'outline/bell', volume: 'outline/volume', info: 'outline/info-circle',

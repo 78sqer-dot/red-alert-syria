@@ -50,33 +50,31 @@ const fmtTime = (iso, lang) =>
 const SEP = '━━━━━━━━━━━━━━━';
 const fmtClock = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 const fmtDay = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(iso));
+const fmtDate = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, day: 'numeric', month: 'long' }).format(new Date(iso));
+// Channel post (format requested by the owner):
+//   تنبيه مدني - 🚑
+//   كويرس شرقي📍كويرس شرقي، الباب، حلب
+//   تاريخ :  ٢٣ تشرين الأول
+//   الساعة :  ١٠:٣١ م
+//
+//   🗺 الخريطة المباشرة · Red Alert Syria
 export function channelPost(alert, { ended = false } = {}) {
   const t = typeOf(alert.type);
+  const title = (TITLES[alert.type] || {}).ar || t.ar;
   const p = alert.place || {};
   const hasPlace = p.scope && p.scope !== 'country';
   const lines = [];
-  // header: brand + type, then the headline
-  lines.push(`${ended ? '✅' : '🚨'} <b>الإنذار الأحمر | ${esc(t.ar)}</b> ${t.emoji}`);
-  lines.push(SEP);
-  if (alert.type === 'breaking') {
-    lines.push(`<b>${esc(alert.description || alert.title)}</b>`);
-  } else {
-    lines.push(`<b>${esc(alert.title)}</b>`);
-  }
+  lines.push(`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${t.emoji}`, '');
+  if (alert.type === 'breaking') lines.push(`<b>${esc(alert.description || alert.title)}</b>`, '');
+  if (hasPlace) lines.push(`<b>${esc(p.name_ar || '')}</b>📍${esc(locName(p, 'ar'))}`);
+  if (alert.type !== 'breaking' && alert.description) lines.push(`<blockquote>${esc(alert.description)}</blockquote>`);
   lines.push('');
-  if (hasPlace || alert.type !== 'breaking') lines.push(`📍 <b>المكان:</b> ${esc(locName(p, 'ar'))}`);
-  lines.push(`🕒 <b>الوقت:</b> ${esc(fmtClock(alert.timestamp))} — ${esc(fmtDay(alert.timestamp))}`);
-  if (ended) lines.push(`✅ <b>الحالة:</b> انتهى التنبيه — ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
-  else lines.push(`🔴 <b>الحالة:</b> نشط الآن`);
-  if (alert.type !== 'breaking' && alert.description) lines.push('', `<blockquote>${esc(alert.description)}</blockquote>`);
-  lines.push(SEP);
-  const tags = [hashTag(t.tag_ar), ...(alert.areas || []).slice(0, 3).map(hashTag)];
-  lines.push(tags.join(' '));
+  lines.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
+  lines.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
+  if (ended) lines.push(`انتهى :  ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
+  lines.push('');
   const url = mapUrl(alert.id);
-  const links = [];
-  if (url) links.push(`🗺 <a href="${esc(url)}">الخريطة المباشرة</a>`);
-  links.push(`📢 <a href="${esc(config.channelUrl)}">Red Alert Syria</a>`);
-  lines.push(links.join('  |  '));
+  lines.push(`🗺 ${url ? `<a href="${esc(url)}">الخريطة المباشرة</a>` : 'الخريطة المباشرة'} · <a href="${esc(config.channelUrl)}">Red Alert Syria</a>`);
   return lines.join('\n');
 }
 export function channelKeyboard(alert) {
@@ -108,7 +106,7 @@ function mainKeyboard(ctx) {
     .text(`${e('breaking')} ${b('breaking')}`, 't:breaking').row()
     .text(`${e('uav')} ${b('uav')}`, 't:uav').text(`${e('warplane')} ${b('warplane')}`, 't:warplane').row()
     .text(`${e('artillery')} ${b('artillery')}`, 't:artillery').text(`${e('attack')} ${b('attack')}`, 't:attack').row()
-    .text(`${e('civil')} ${b('civil')}`, 't:civil').text(`${e('missile')} ${b('missile')}`, 't:missile').row();
+    .text(`${e('civil')} ${b('civil')}`, 'cv').text(`${e('missile')} ${b('missile')}`, 't:missile').row();
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
   if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').row();
@@ -407,6 +405,18 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await show(ctx, statsText(ctx), new InlineKeyboard().text(L(ctx).btnHome, 'home'));
   });
 
+  // civil sub-menu: general civil alert + traffic accident, protest, fire, civil aircraft
+  bot.callbackQuery('cv', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const lang = langOf(ctx);
+    const b = (k) => `${ALERT_TYPES[k].emoji} ${lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`;
+    const kb = new InlineKeyboard()
+      .text(b('accident'), 't:accident').text(b('fire'), 't:fire').row()
+      .text(b('protest'), 't:protest').text(b('civil_plane'), 't:civil_plane').row()
+      .text(`🚑 ${lang === 'en' ? 'Other civil alert' : 'تنبيه مدني آخر'}`, 't:civil').row()
+      .text(L(ctx).btnBack, 'home');
+    await show(ctx, L(ctx).askCivil, kb);
+  });
   bot.callbackQuery(/^t:(\w+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     const type = ctx.match[1];

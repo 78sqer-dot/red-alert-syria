@@ -37,3 +37,22 @@ Data: GeoNames SY (CC BY 4.0), geoBoundaries SYR ADM0/1/2 (gbOpen), raw in /work
 ## Phone "Desktop site" mode (notes)
 - Chrome Android "Request desktop site" ignores the viewport meta tag and lays out at min-width 980px (stackoverflow.com/questions/55089698). Tablets on Chrome desktop mode use window width (developer.chrome.com/blog/desktop-mode).
 - MapLibre 5.24 DOM.mousePos divides by getBoundingClientRect().width/offsetWidth, so CSS zoom on <html> keeps pointer math correct.
+
+## User feedback round (22:30) — from screenshots 182287/182288/182163
+- Original (redalert.com.lb, 182163): several translucent red circles (thin line ~1.5px, fill ~0.2, NO heavy glow), one per affected locality, overlapping; tiny drone icons (~18px) that stay small when zooming in.
+- Ours: one huge solid circle over Damascus (governorate scope) -> replace with multiple ~2.5 km circles over top-ranked localities in the area; subtle glow.
+- Civil showed old disc+house glyph on phone (stale cached /shared/types.js, maxAge 1h) -> no-cache + versioned import.
+- Revert artillery to previous static orange disc marker (no tank).
+- Add civil sub-types: حادث سير، مظاهرة، حريق، طائرة مدنية (each own icon, in both bots + channel posts).
+- places.json place row: [id, ar, en, lat, lon, govCode, districtCode, rank(0=capital..8)].
+
+## Channel post format requested by user (22:35) — replaces earlier format
+```
+تنبيه مدني - <emoji by type>
+كويرس شرقي📍كويرس شرقي ، الباب، حلب
+تاريخ :  ٢٣ تشرين الأول
+الساعة :  ١٠:٣١ م
+
+🗺 الخريطة المباشرة · Red Alert Syria   (link to map)
+```
+Plus civil sub-buttons in BOTH bots: civil button opens submenu (مدني عام، حادث سير، مظاهرة، حريق، طائرة مدنية).
