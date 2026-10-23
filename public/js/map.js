@@ -172,6 +172,8 @@ export class AlertMap {
     } catch { /* already set */ }
     const style = await buildStyle(this.opts);
     this.map = new M.Map({
+      // phone "desktop site": the page is zoomed, so render the map canvas at the real screen resolution
+      pixelRatio: Math.min(3, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1)),
       container: this.el,
       style,
       bounds: SYRIA_BOUNDS,
