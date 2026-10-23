@@ -296,17 +296,24 @@ function renderTicker() {
       continue;
     }
     const a = items[tickIdx % items.length];
-    const old = box.querySelector('.tick.on');
+    const olds = [...box.querySelectorAll('.tick')];
     const el = document.createElement('div');
     el.className = 'tick';
     el.dataset.id = a.id;
     el.innerHTML = `${badge(a)}<span class="t-title">${esc(titleOf(a))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
     box.appendChild(el);
-    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('on')));
-    if (old) {
-      old.classList.remove('on');
-      old.classList.add('out');
-      setTimeout(() => old.remove(), 500);
+    if (document.hidden) {
+      olds.forEach((o) => o.remove());
+      el.classList.add('on');
+    } else {
+      void el.offsetWidth; // commit start state, then slide in
+      el.classList.add('on');
+      olds.forEach((o, k) => {
+        if (k < olds.length - 1) return o.remove();
+        o.classList.remove('on');
+        o.classList.add('out');
+        setTimeout(() => o.remove(), 500);
+      });
     }
     $$('.tick.empty', box).forEach((e) => e.remove());
   }
@@ -945,12 +952,17 @@ function connect() {
     return;
   }
   setConn('connecting');
+  if (state.es) { try { state.es.close(); } catch { /* ignore */ } }
   const es = new EventSource('/api/stream');
+  state.es = es;
+  state.lastBeat = Date.now();
   let errors = 0;
+  const beat = () => { state.lastBeat = Date.now(); if (state.conn !== 'live') setConn('live'); };
   es.addEventListener('open', () => {
     errors = 0;
-    setConn('live');
+    beat();
   });
+  es.addEventListener('ping', beat);
   es.addEventListener('snapshot', (e) => {
     const j = JSON.parse(e.data);
     setHistoryHours(j.history_hours);
@@ -980,6 +992,7 @@ function connect() {
     }
   });
   es.addEventListener('alert', (e) => {
+    beat();
     const a = JSON.parse(e.data);
     const isNew = !state.alerts.has(a.id);
     upsert(a, isNew);
@@ -1002,16 +1015,27 @@ function connect() {
     refresh();
   });
   es.addEventListener('error', () => {
+    if (state.es !== es) return;
     errors++;
     setConn(es.readyState === EventSource.CLOSED ? 'offline' : 'connecting');
     if (es.readyState === EventSource.CLOSED || errors > 6) {
       es.close();
       setConn('offline');
-      setTimeout(connect, 8000);
+      poll();
+      setTimeout(() => { if (state.es === es) connect(); }, 8000);
     }
   });
-  window.addEventListener('offline', () => setConn('offline'), { once: true });
 }
+// Keep the live status honest: the server sends a heartbeat every 25 s; if nothing arrives for
+// 60 s (sleeping phone, network switch, proxy cut) reconnect right away.
+function reconnectIfStale(maxAge) {
+  if (!state.es) return;
+  if (state.es.readyState === EventSource.CLOSED || Date.now() - (state.lastBeat || 0) > maxAge) connect();
+}
+setInterval(() => { if (!document.hidden) reconnectIfStale(60_000); }, 10_000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { reconnectIfStale(35_000); tickIdx = 0; if (typeof renderTicker === 'function' && state.alerts) renderTicker(); } });
+window.addEventListener('online', () => connect());
+window.addEventListener('offline', () => setConn('offline'));
 
 // ------------------------------------------------------------------ boot
 async function boot() {

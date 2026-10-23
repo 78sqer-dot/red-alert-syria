@@ -256,9 +256,14 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 /* drone — grey airframe that orbits only at close zoom (like the original) */
 .uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
 .uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
-.maplibregl-map.zoom-detail .uav { animation: uavOrbit 6s linear infinite; }
-@keyframes uavOrbit { from { transform: rotate(0deg) translateX(20px); } to { transform: rotate(-360deg) translateX(20px); } }
-.uav-svg { display: block; fill: #6b7280; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
+.uav { animation: uavOrbit 7s linear infinite; }
+.maplibregl-map.zoom-far .uav { animation-name: uavOrbitS; }
+.maplibregl-map.zoom-detail .uav { animation-name: uavOrbitL; }
+/* the airframe circles the target and turns with its heading */
+@keyframes uavOrbit { from { transform: rotate(0deg) translateX(16px) rotate(-90deg); } to { transform: rotate(-360deg) translateX(16px) rotate(-90deg); } }
+@keyframes uavOrbitS { from { transform: rotate(0deg) translateX(9px) rotate(-90deg); } to { transform: rotate(-360deg) translateX(9px) rotate(-90deg); } }
+@keyframes uavOrbitL { from { transform: rotate(0deg) translateX(24px) rotate(-90deg); } to { transform: rotate(-360deg) translateX(24px) rotate(-90deg); } }
+.uav-svg { display: block; fill: #374151; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
 html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95)) drop-shadow(0 0 .5px rgba(0,0,0,.95)); }
 .mk.sel .uav-svg { fill: var(--c); }
 /* warplanes — squad of three flying across the zone */
@@ -402,7 +407,7 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-14px); } }
 @keyframes cardIn { from { opacity: 0; transform: translateY(-8px); background: color-mix(in srgb, var(--c) 18%, var(--bg-card)); } }
 @keyframes flash { 50% { filter: brightness(1.35); } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } .uav, .squad .sq { animation-duration: 7s !important; animation-iteration-count: infinite !important; } }
 
 /* ---------------------------------------------------------------- responsive */
 @media (max-width: 1180px) {

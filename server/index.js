@@ -118,7 +118,7 @@ store.on('alert', (a) => broadcast('alert', a));
 store.on('update', (a) => broadcast('update', a));
 store.on('remove', (a) => broadcast('remove', a));
 setInterval(() => {
-  for (const c of clients) c.write(`: ping ${Date.now()}\n\n`);
+  for (const c of clients) c.write(`event: ping\ndata: ${Date.now()}\n\n`);
 }, 25_000).unref();
 
 // ------------------------------------------------------------------ static site
@@ -126,7 +126,7 @@ const longCache = { maxAge: '30d', immutable: true };
 app.use('/vendor', express.static(path.join(PUBLIC, 'vendor'), longCache));
 app.use('/fonts', express.static(path.join(PUBLIC, 'fonts'), longCache));
 app.use('/shared', express.static(SHARED, { maxAge: '1h' }));
-app.use(express.static(PUBLIC, { index: false, maxAge: '1h', setHeaders: (res, p) => { if (p.endsWith('.html') || p.endsWith('sw.js') || p.endsWith('.webmanifest')) res.setHeader('Cache-Control', 'no-cache'); } }));
+app.use(express.static(PUBLIC, { index: false, maxAge: '1h', setHeaders: (res, p) => { if (/\.(html|js|mjs|css|webmanifest)$/.test(p)) res.setHeader('Cache-Control', 'no-cache'); } }));
 
 const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
 function renderIndex(lang) {

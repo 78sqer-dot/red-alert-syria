@@ -17,6 +17,7 @@ const SYRIA_BOUNDS = [[35.45, 32.25], [42.5, 37.4]];
 const STYLE_URL = { light: 'https://tiles.openfreemap.org/styles/liberty', dark: 'https://tiles.openfreemap.org/styles/dark' };
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
+const ZONE_COLOR = { uav: '#ef233c', breaking: '#ef233c' };
 const TYPE_ICON = { breaking: 'bolt', uav: 'drone', warplane: 'plane', missile: 'rocket', attack: 'flame', artillery: 'target', civil: 'ambulance' };
 export const typeIcon = (t) => TYPE_ICON[t] || 'alert';
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${SVG[glyph] || SVG.other}</svg>`;
@@ -256,9 +257,14 @@ export class AlertMap {
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
     // Affected-area circles (same look as the original: fill .14, solid line .7 / dashed for aircraft),
     // softened at close zoom so a 1.5 km circle never floods the screen.
-    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 9, ['case', ['get', 'active'], 0.14, 0.056], 12, ['case', ['get', 'active'], 0.1, 0.04], 15, ['case', ['get', 'active'], 0.04, 0.016]] } });
-    add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 9, ['case', ['get', 'active'], 0.7, 0.28], 13, ['case', ['get', 'active'], 0.5, 0.2], 15, ['case', ['get', 'active'], 0.3, 0.12]], 'line-width': 2 } });
-    add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'active'], 0.7, 0.3], 'line-width': 1.5, 'line-dasharray': [3, 4] } });
+    // Affected-area circles: vivid red-tinted fill + solid edge + soft pulsing glow (like the original),
+    // softened slightly at very close zoom so a small circle never floods the screen.
+    const A = (on, off) => ['case', ['get', 'active'], on, off];
+    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 8, A(dark ? 0.3 : 0.24, 0.07), 12, A(dark ? 0.26 : 0.2, 0.06), 15, A(dark ? 0.18 : 0.13, 0.04)] } });
+    add({ id: 'ras-zones-glow', type: 'line', source: 'ras-zones', filter: ['all', ['!', ['get', 'dashed']], ['get', 'active']], paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.35, 'line-width': 10, 'line-blur': 8 } });
+    add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, A(0.95, 0.3), 13, A(0.85, 0.25), 15, A(0.7, 0.2)], 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 11, 2.2] } });
+    add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.85, 0.3), 'line-width': 1.8, 'line-dasharray': [3, 4] } });
+    this._startGlow();
     this.applyToggles();
     this.updateZones();
   }
@@ -361,6 +367,16 @@ export class AlertMap {
     return el;
   }
 
+  _startGlow() {
+    if (this._glowTimer) return;
+    const t0 = performance.now();
+    this._glowTimer = setInterval(() => {
+      if (document.hidden || !this.map || !this.map.getLayer('ras-zones-glow')) return;
+      const k = (Math.sin(((performance.now() - t0) / 1800) * Math.PI * 2) + 1) / 2; // 0..1, 1.8 s period
+      this.map.setPaintProperty('ras-zones-glow', 'line-opacity', 0.15 + 0.45 * k);
+      this.map.setPaintProperty('ras-zones-glow', 'line-width', 6 + 12 * k);
+    }, 90);
+  }
   updateZones() {
     const src = this.map && this.map.getSource('ras-zones');
     if (!src) return;
@@ -369,7 +385,7 @@ export class AlertMap {
       const t = ALERT_TYPES[a.type];
       if (!t || !t.zone || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude)) continue;
       const km = ZONE_KM[a.scope] || ZONE_KM.place;
-      features.push({ type: 'Feature', properties: { color: t.color, active: !!a.is_active, dashed: t.zone === 'dashed' }, geometry: { type: 'Polygon', coordinates: [circlePolygon(a.location.longitude, a.location.latitude, km)] } });
+      features.push({ type: 'Feature', properties: { color: ZONE_COLOR[a.type] || t.color, active: !!a.is_active, dashed: t.zone === 'dashed' }, geometry: { type: 'Polygon', coordinates: [circlePolygon(a.location.longitude, a.location.latitude, km)] } });
     }
     src.setData({ type: 'FeatureCollection', features });
   }
