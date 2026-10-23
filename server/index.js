@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
-import { createBot, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo } from './bot.js';
+import { createBot, resyncChannelPosts, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo } from './bot.js';
 import { governorates } from './places.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -188,6 +188,7 @@ async function start() {
     }
   }
   botUsername = botInfo.report || botInfo.admin;
+  setTimeout(() => resyncChannelPosts(bot.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
   try {
     await bot.api.setMyCommands(BOT_COMMANDS.ar);
     await bot.api.setMyCommands(BOT_COMMANDS.en, { language_code: 'en' });

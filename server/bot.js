@@ -331,6 +331,16 @@ function who(u) {
 
 // ---------------------------------------------------------------- bot
 
+// Re-apply the current post layout and buttons to the channel posts of recent alerts (runs once per
+// start; Telegram answers "not modified" for posts that are already up to date). Throttled for limits.
+export async function resyncChannelPosts(api) {
+  const list = store.recentAlerts().filter((a) => a.channel_message_id);
+  for (const a of list) {
+    await refreshChannelPost(api, a, !a.is_active);
+    await new Promise((r) => setTimeout(r, 3500));
+  }
+  return list.length;
+}
 export function createBot({ role = 'admin', token = config.botToken, reviewApi = null } = {}) {
   if (!token) return null;
   const bot = new Bot(token);
