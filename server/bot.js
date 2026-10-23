@@ -3,6 +3,7 @@ import { config, isOwner } from './config.js';
 import { store, publicAlert } from './store.js';
 import { ALERT_TYPES, TYPE_KEYS, typeOf } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
+import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { governorates, getGov, getDist, districtsOf, placesOf, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
 
 const PAGE = 18;
@@ -224,6 +225,7 @@ async function show(ctx, text, keyboard) {
       return;
     } catch (e) {
       if (String(e?.description || e).includes('message is not modified')) return;
+      if (ctx.callbackQuery.message.photo) { try { await ctx.deleteMessage(); } catch { /* ignore */ } }
     }
   }
   const m = await ctx.reply(text, opts);
@@ -341,10 +343,121 @@ export async function resyncChannelPosts(api) {
   }
   return list.length;
 }
+// ---------------------------------------------------------------- owner <-> reporter relay
+// The owner/editors simply use Telegram's "Reply" on a report card or on a relayed message in the
+// publishing bot; the reporter gets it in the report bot signed as the team (staff identity hidden).
+// The reporter answers in the report bot (reply, or a plain message while a conversation is open).
+const APIS = {}; const TOKENS = {};
+const RELAY_KINDS = { photo: 'sendPhoto', video: 'sendVideo', voice: 'sendVoice', audio: 'sendAudio', document: 'sendDocument', animation: 'sendAnimation', video_note: 'sendVideoNote', sticker: 'sendSticker' };
+const relayRate = new Map();
+async function relayCopy(fromApi, fromToken, toApi, chatId, msg, header, footer) {
+  const kind = Object.keys(RELAY_KINDS).find((k) => msg[k]);
+  const body = msg.text || msg.caption || '';
+  const txt = `${header}${body ? `\n\n${esc(body)}` : ''}${footer ? `\n\n${footer}` : ''}`;
+  if (!kind) return toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+  const fileId = kind === 'photo' ? msg.photo[msg.photo.length - 1].file_id : msg[kind].file_id;
+  const f = await fromApi.getFile(fileId);
+  const res = await fetch(`https://api.telegram.org/file/bot${fromToken}/${f.file_path}`);
+  if (!res.ok) throw new Error('file download failed');
+  const file = new InputFile(Buffer.from(await res.arrayBuffer()), msg.document?.file_name || f.file_path.split('/').pop());
+  if (kind === 'video_note' || kind === 'sticker') {
+    await toApi[RELAY_KINDS[kind]](chatId, file);
+    return toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML' });
+  }
+  return toApi[RELAY_KINDS[kind]](chatId, file, { caption: txt.slice(0, 1024), parse_mode: 'HTML' });
+}
+const reviewerIds = () => [...new Set([...config.ownerIds, ...store.state.editors])];
+
+// ---------------------------------------------------------------- daily summary
+const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
+function dailyCaption(st) {
+  const p = damascusParts(st.to);
+  const top = st.byGov[0];
+  const types = Object.entries(st.byType).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([k, n]) => `${ALERT_TYPES[k].emoji} ${ALERT_TYPES[k].button_ar} ${n}`).join(' · ');
+  return `🗓 <b>الملخص اليومي — ${AR_DAYS[p.wd]} ${p.d} ${AR_MONTHS[p.m - 1]} ${p.y}</b>\n\n`
+    + `📊 إجمالي التنبيهات خلال 24 ساعة: <b>${st.total}</b>\n`
+    + (types ? `🔺 الأكثر: ${types}\n` : '')
+    + (top ? `📍 أكثر المحافظات: <b>${esc(top.ar)}</b> (${top.n})\n` : '')
+    + `\n🗺 الخريطة الحية: ${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`;
+}
+function weeklyCaption(st) {
+  const a = damascusParts(st.from + 3600_000); const b = damascusParts(st.to);
+  const range = a.m === b.m ? `من ${a.d} إلى ${b.d} ${AR_MONTHS[b.m - 1]} ${b.y}` : `من ${a.d} ${AR_MONTHS[a.m - 1]} إلى ${b.d} ${AR_MONTHS[b.m - 1]} ${b.y}`;
+  const top = st.byGov[0];
+  const types = Object.entries(st.byType).filter(([, n]) => n).sort((x, y) => y[1] - x[1]).slice(0, 3)
+    .map(([k, n]) => `${ALERT_TYPES[k].emoji} ${ALERT_TYPES[k].button_ar} ${n}`).join(' · ');
+  const diff = st.total - st.prev;
+  const cmp = st.prev ? ` (${diff > 0 ? '▲' : diff < 0 ? '▼' : '='} ${Math.abs(Math.round((diff / st.prev) * 100))}% عن الأسبوع السابق)` : '';
+  const bd = st.busiestDay; const bh = st.busiestHour;
+  const url = (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+  return `📅 <b>التقرير الأسبوعي — ${range}</b>\n\n`
+    + `📊 إجمالي التنبيهات: <b>${st.total}</b>${cmp}\n`
+    + (types ? `🔺 الأكثر: ${types}\n` : '')
+    + (top ? `📍 أكثر المحافظات: <b>${esc(top.ar)}</b> (${top.n})\n` : '')
+    + (bd ? `📆 أكثر الأيام نشاطاً: <b>${bd.label.ar} ${bd.label.d}</b> (${bd.n})\n` : '')
+    + (bh ? `⏰ ساعة الذروة: <b>${String(bh.h).padStart(2, '0')}:00</b>\n` : '')
+    + `\n🗺 الخريطة الحية: ${url}/ar/`;
+}
+/** Built-in scheduler: posts the statistics image in the channel once a day at the configured Damascus time. */
+export function startDailySummary(api) {
+  if (!api || !config.channel) return;
+  const d0 = store.daily; const p0 = damascusParts();
+  if (!d0.last && p0.hm >= d0.time) store.setDaily({ last: p0.date }); // first boot after the time: start tomorrow
+  let busy = false;
+  const tick = async () => {
+    const d = store.daily;
+    if (!d.on || busy) return;
+    const p = damascusParts();
+    if (p.hm < d.time || d.last === p.date) return;
+    busy = true;
+    store.setDaily({ last: p.date }); // mark first: never posts twice the same day
+    try {
+      const st = collectStats('day');
+      if (!st.total) { console.log(`[daily] ${p.date}: no alerts, nothing posted`); return; }
+      const kb = new InlineKeyboard();
+      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`);
+      if (config.reportBotUsername) kb.url('📝 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
+      await api.sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-${p.date}.png`), { caption: dailyCaption(st), parse_mode: 'HTML', reply_markup: kb });
+      console.log(`[daily] ${p.date}: summary posted (${st.total} alerts)`);
+    } catch (e) {
+      console.error('[daily] post failed', e.description || e.message);
+    } finally { busy = false; }
+  };
+  // weekly report: same mechanics, on the configured weekday
+  const w0 = store.weekly;
+  if (!w0.last && p0.wd === w0.day && p0.hm >= w0.time) store.setWeekly({ last: p0.date });
+  let wbusy = false;
+  const wtick = async () => {
+    const w = store.weekly;
+    if (!w.on || wbusy) return;
+    const p = damascusParts();
+    if (p.wd !== w.day || p.hm < w.time || w.last === p.date) return;
+    wbusy = true;
+    store.setWeekly({ last: p.date });
+    try {
+      const st = collectStats('week');
+      if (!st.total) { console.log(`[weekly] ${p.date}: no alerts this week, nothing posted`); return; }
+      const kb = new InlineKeyboard();
+      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`);
+      if (config.reportBotUsername) kb.url('📝 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
+      await api.sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-week-${p.date}.png`), { caption: weeklyCaption(st), parse_mode: 'HTML', reply_markup: kb });
+      console.log(`[weekly] ${p.date}: report posted (${st.total} alerts)`);
+    } catch (e) {
+      console.error('[weekly] post failed', e.description || e.message);
+    } finally { wbusy = false; }
+  };
+  setInterval(tick, 30_000).unref();
+  setTimeout(tick, 5_000).unref();
+  setInterval(wtick, 30_000).unref();
+  setTimeout(wtick, 8_000).unref();
+}
+
 export function createBot({ role = 'admin', token = config.botToken, reviewApi = null } = {}) {
   if (!token) return null;
   const bot = new Bot(token);
-
+  APIS[role] = bot.api; TOKENS[role] = token;
   bot.use(async (ctx, next) => {
     if (ctx.chat && ctx.chat.type !== 'private') return; // only private chats
     ctx.ras = { role };
@@ -364,7 +477,61 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     await next();
   });
-
+  // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
+  if (role === 'admin') {
+    bot.on('message', async (ctx, next) => {
+      const rt = ctx.message.reply_to_message;
+      if (!rt || !staff(ctx) || ctx.message.text?.startsWith('/')) return next();
+      const uid = store.relayGet(`a:${ctx.chat.id}:${rt.message_id}`);
+      if (!uid) return next();
+      const en = langOf(ctx) === 'en';
+      if (!APIS.report) return sendTransient(ctx.api, ctx.chat.id, en ? '⚠️ The report bot is not running.' : '⚠️ بوت التبليغ غير متصل حالياً.');
+      const rl = store.userLang(uid) === 'en';
+      const header = rl ? '💬 <b>Message from the Red Alert Syria team</b>' : '💬 <b>رسالة من إدارة Red Alert Syria</b>';
+      const footer = rl ? '<i>↩️ To answer, just write your message here.</i>' : '<i>↩️ للرد، اكتب رسالتك هنا مباشرة.</i>';
+      try {
+        const m = await relayCopy(ctx.api, TOKENS.admin, APIS.report, uid, ctx.message, header, footer);
+        store.relayPut(`r:${uid}:${m.message_id}`, ctx.from.id);
+        store.openThread(uid, ctx.from.id);
+        await sendTransient(ctx.api, ctx.chat.id, en ? '✅ Your reply was sent to the reporter.' : '✅ تم إرسال ردك إلى صاحب البلاغ.');
+      } catch (e) {
+        const d = String(e.description || e.message || '');
+        await sendTransient(ctx.api, ctx.chat.id, /blocked|deactivated|chat not found/i.test(d)
+          ? (en ? '⚠️ Not delivered: the reporter blocked or left the report bot.' : '⚠️ لم يصل: صاحب البلاغ حظر بوت التبليغ أو غادره.')
+          : (en ? '⚠️ Could not send the reply, please try again.' : '⚠️ تعذّر إرسال الرد، حاول مرة أخرى.'));
+      }
+    });
+  }
+  // ---- relay: reporter (report bot) -> staff (publishing bot)
+  if (role === 'report') {
+    bot.on('message', async (ctx, next) => {
+      const msg = ctx.message;
+      if (msg.text?.startsWith('/') || msg.location || store.isBanned(ctx.from.id)) return next();
+      const rt = msg.reply_to_message;
+      const linked = rt ? store.relayGet(`r:${ctx.from.id}:${rt.message_id}`) : null;
+      const th = store.thread(ctx.from.id);
+      if (!linked && (getDraft(ctx) || !th)) return next();
+      const en = langOf(ctx) === 'en';
+      const now = Date.now(); const rr = (relayRate.get(ctx.from.id) || []).filter((t) => now - t < 3600_000);
+      if (rr.length >= 20) return sendTransient(ctx.api, ctx.chat.id, en ? '⏳ Too many messages, please wait a little.' : '⏳ رسائل كثيرة، انتظر قليلاً من فضلك.');
+      rr.push(now); relayRate.set(ctx.from.id, rr);
+      const api = APIS.admin || reviewApi;
+      const targets = linked ? [linked] : th?.staff ? [th.staff] : reviewerIds();
+      let ok = 0;
+      for (const sid of targets) {
+        const sl = store.userLang(sid) === 'en';
+        const header = `${sl ? '💬 <b>Message from a reporter</b>' : '💬 <b>رسالة من صاحب بلاغ</b>'}\n${who(ctx.from)}`;
+        const footer = sl ? '<i>↩️ Use "Reply" on this message to answer.</i>' : '<i>↩️ اعمل «رد» على هذه الرسالة لتجيبه.</i>';
+        try {
+          const m = await relayCopy(ctx.api, TOKENS.report, api, sid, msg, header, footer);
+          store.relayPut(`a:${sid}:${m.message_id}`, ctx.from.id);
+          ok += 1;
+        } catch (e) { console.warn('[relay] to staff failed', e.description || e.message); }
+      }
+      store.openThread(ctx.from.id);
+      await sendTransient(ctx.api, ctx.chat.id, ok ? (en ? '✅ Your message reached the team.' : '✅ وصلت رسالتك إلى الإدارة.') : (en ? '⚠️ Could not deliver, try again later.' : '⚠️ تعذّر الإيصال، حاول لاحقاً.'));
+    });
+  }
   const home = async (ctx) => {
     sessions.delete(sk(ctx));
     const l = L(ctx);
@@ -421,7 +588,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       backup: store.lastBackupAt ? fmtTime(store.lastBackupAt, langOf(ctx)) : null,
     });
   };
-  bot.command('stats', ownerOnly((ctx) => ctx.reply(statsText(ctx), { parse_mode: 'HTML' })));
+  bot.command('stats', ownerOnly(async (ctx) => { await ctx.replyWithChatAction('upload_photo').catch(() => {}); await sendStats(ctx, '24h'); }));
   bot.command('backup', ownerOnly(async (ctx) => {
     await store.backup?.save(JSON.stringify(store.state));
     store.lastBackupAt = new Date().toISOString();
@@ -441,10 +608,131 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!owner(ctx)) return;
     await show(ctx, editorsText(ctx), new InlineKeyboard().text(L(ctx).btnHome, 'home'));
   });
+  // ---- statistics as an image (owner only): 24h / 7 days / 30 days
+  const statsKb = (ctx, kind) => {
+    const en = langOf(ctx) === 'en'; const m = (k, t) => (k === kind ? '✅ ' : '') + t;
+    return new InlineKeyboard()
+      .text(m('24h', en ? '24 hours' : '24 ساعة'), 'st:24h').text(m('7d', en ? '7 days' : '7 أيام'), 'st:7d').text(m('30d', en ? '30 days' : '30 يوماً'), 'st:30d').row()
+      .text(en ? '🗓 Daily summary' : '🗓 الملخص اليومي', 'dly').text(en ? '📅 Weekly report' : '📅 التقرير الأسبوعي', 'wkl').row()
+      .text(L(ctx).btnHome, 'home');
+  };
+  const statsCaption = (ctx) => `${statsText(ctx)}\n\n${langOf(ctx) === 'en' ? 'Generated' : 'أُنشئت'}: ${damascusParts().hm}`;
+  const sendStats = async (ctx, kind = '24h') => {
+    const lang = langOf(ctx);
+    const png = renderStatsPng(collectStats(kind), lang);
+    const file = new InputFile(png, `red-alert-syria-stats-${kind}.png`);
+    const msg = ctx.callbackQuery?.message;
+    if (msg?.photo) {
+      try {
+        await ctx.editMessageMedia(InputMediaBuilder.photo(file, { caption: statsCaption(ctx), parse_mode: 'HTML' }), { reply_markup: statsKb(ctx, kind) });
+        return;
+      } catch (e) { if (String(e?.description || e).includes('not modified')) return; }
+    }
+    if (msg) { try { await ctx.deleteMessage(); } catch { /* ignore */ } }
+    await ctx.replyWithPhoto(file, { caption: statsCaption(ctx), parse_mode: 'HTML', reply_markup: statsKb(ctx, kind) });
+  };
   bot.callbackQuery('stats', async (ctx) => {
+    if (!owner(ctx)) return ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Building the image…' : 'جارٍ تجهيز الصورة…');
+    await ctx.replyWithChatAction('upload_photo').catch(() => {});
+    await sendStats(ctx, '24h');
+  });
+  bot.callbackQuery(/^st:(24h|7d|30d)$/, async (ctx) => {
+    if (!owner(ctx)) return ctx.answerCallbackQuery();
     await ctx.answerCallbackQuery();
-    if (!owner(ctx)) return;
-    await show(ctx, statsText(ctx), new InlineKeyboard().text(L(ctx).btnHome, 'home'));
+    await sendStats(ctx, ctx.match[1]);
+  });
+  // ---- daily summary settings (owner only)
+  const DAILY_TIMES = ['20:00', '21:00', '22:00', '23:00', '23:30', '23:55'];
+  const dailyText = (ctx) => {
+    const d = store.daily; const en = langOf(ctx) === 'en';
+    return en
+      ? `🗓 <b>Daily summary</b>\n\nStatus: <b>${d.on ? '✅ On' : '⏸ Off'}</b>\nTime: <b>${d.time}</b> (Damascus time)\n\nEvery day at this time the bot posts the statistics image of the last 24 hours in the channel. Nothing is posted on a day without alerts.${d.last ? `\nLast run: ${d.last}` : ''}`
+      : `🗓 <b>الملخص اليومي</b>\n\nالحالة: <b>${d.on ? '✅ مفعّل' : '⏸ متوقف'}</b>\nالوقت: <b>${d.time}</b> بتوقيت دمشق\n\nكل يوم بهذا الوقت ينشر البوت في القناة صورة إحصاءات آخر 24 ساعة. لا يُنشر شيء في يوم بلا تنبيهات.${d.last ? `\nآخر تشغيل: ${d.last}` : ''}`;
+  };
+  const dailyKb = (ctx) => {
+    const d = store.daily; const en = langOf(ctx) === 'en';
+    const kb = new InlineKeyboard().text(d.on ? (en ? '⏸ Turn off' : '⏸ إيقاف') : (en ? '▶️ Turn on' : '▶️ تشغيل'), d.on ? 'dly:off' : 'dly:on').row();
+    DAILY_TIMES.forEach((t, i) => { kb.text((t === d.time ? '✅ ' : '') + t, `dly:t:${t}`); if (i % 3 === 2) kb.row(); });
+    return kb.text(en ? '📤 Send me a test now' : '📤 أرسل لي تجربة الآن', 'dly:test').row()
+      .text(en ? '📊 Statistics' : '📊 الإحصاءات', 'stats').text(L(ctx).btnHome, 'home');
+  };
+  // a time that already passed today starts tomorrow (never posts by surprise right after a change)
+  const markIfPassed = (time) => { const p = damascusParts(); if (p.hm >= time) store.setDaily({ last: p.date }); };
+  bot.callbackQuery('dly', async (ctx) => { await ctx.answerCallbackQuery(); if (owner(ctx)) await show(ctx, dailyText(ctx), dailyKb(ctx)); });
+  bot.callbackQuery(/^dly:(on|off)$/, async (ctx) => {
+    if (!owner(ctx)) return ctx.answerCallbackQuery();
+    const on = ctx.match[1] === 'on';
+    if (on && !store.daily.on) markIfPassed(store.daily.time);
+    store.setDaily({ on });
+    await ctx.answerCallbackQuery(on ? (langOf(ctx) === 'en' ? 'Daily summary on' : 'تم تفعيل الملخص اليومي') : (langOf(ctx) === 'en' ? 'Daily summary off' : 'تم إيقاف الملخص اليومي'));
+    await show(ctx, dailyText(ctx), dailyKb(ctx));
+  });
+  bot.callbackQuery(/^dly:t:(\d\d:\d\d)$/, async (ctx) => {
+    if (!owner(ctx)) return ctx.answerCallbackQuery();
+    const time = ctx.match[1];
+    if (!DAILY_TIMES.includes(time)) return ctx.answerCallbackQuery();
+    store.setDaily({ time });
+    markIfPassed(time);
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? `Time set to ${time}` : `تم ضبط الوقت على ${time}`);
+    await show(ctx, dailyText(ctx), dailyKb(ctx));
+  });
+  // ---- weekly report settings (owner only)
+  const WEEK_TIMES = ['20:00', '21:00', '22:00', '23:00', '23:30'];
+  const DAY_ORDER = [6, 0, 1, 2, 3, 4, 5]; // Saturday .. Friday
+  const DAY_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const weeklyText = (ctx) => {
+    const w = store.weekly; const en = langOf(ctx) === 'en';
+    return en
+      ? `📅 <b>Weekly report</b>\n\nStatus: <b>${w.on ? '✅ On' : '⏸ Off'}</b>\nDay: <b>${DAY_EN[w.day]}</b> · Time: <b>${w.time}</b> (Damascus time)\n\nEvery week at this time the bot posts the report image of the past 7 days in the channel (totals, event types, governorates, busiest day and hour, comparison with the previous week). Nothing is posted in a week without alerts.${w.last ? `\nLast run: ${w.last}` : ''}`
+      : `📅 <b>التقرير الأسبوعي</b>\n\nالحالة: <b>${w.on ? '✅ مفعّل' : '⏸ متوقف'}</b>\nاليوم: <b>${AR_DAYS[w.day]}</b> · الوقت: <b>${w.time}</b> بتوقيت دمشق\n\nكل أسبوع بهذا الموعد ينشر البوت في القناة صورة تقرير آخر 7 أيام (الإجمالي، أنواع الأحداث، المحافظات، أكثر يوم وساعة نشاطاً، والمقارنة مع الأسبوع السابق). لا يُنشر شيء في أسبوع بلا تنبيهات.${w.last ? `\nآخر تشغيل: ${w.last}` : ''}`;
+  };
+  const weeklyKb = (ctx) => {
+    const w = store.weekly; const en = langOf(ctx) === 'en';
+    const kb = new InlineKeyboard().text(w.on ? (en ? '⏸ Turn off' : '⏸ إيقاف') : (en ? '▶️ Turn on' : '▶️ تشغيل'), w.on ? 'wkl:off' : 'wkl:on').row();
+    DAY_ORDER.forEach((d, i) => { kb.text((d === w.day ? '✅ ' : '') + (en ? DAY_EN[d] : AR_DAYS[d]), `wkl:d:${d}`); if (i === 3) kb.row(); });
+    kb.row();
+    WEEK_TIMES.forEach((t) => kb.text((t === w.time ? '✅ ' : '') + t, `wkl:t:${t}`));
+    return kb.row().text(en ? '📤 Send me a test now' : '📤 أرسل لي تجربة الآن', 'wkl:test').row()
+      .text(en ? '📊 Statistics' : '📊 الإحصاءات', 'stats').text(L(ctx).btnHome, 'home');
+  };
+  const weekMarkIfPassed = () => { const w = store.weekly; const p = damascusParts(); if (p.wd === w.day && p.hm >= w.time) store.setWeekly({ last: p.date }); };
+  bot.callbackQuery('wkl', async (ctx) => { await ctx.answerCallbackQuery(); if (owner(ctx)) await show(ctx, weeklyText(ctx), weeklyKb(ctx)); });
+  bot.callbackQuery(/^wkl:(on|off)$/, async (ctx) => {
+    if (!owner(ctx)) return ctx.answerCallbackQuery();
+    const on = ctx.match[1] === 'on';
+    if (on && !store.weekly.on) weekMarkIfPassed();
+    store.setWeekly({ on });
+    await ctx.answerCallbackQuery(on ? (langOf(ctx) === 'en' ? 'Weekly report on' : 'تم تفعيل التقرير الأسبوعي') : (langOf(ctx) === 'en' ? 'Weekly report off' : 'تم إيقاف التقرير الأسبوعي'));
+    await show(ctx, weeklyText(ctx), weeklyKb(ctx));
+  });
+  bot.callbackQuery(/^wkl:d:([0-6])$/, async (ctx) => {
+    if (!owner(ctx)) return ctx.answerCallbackQuery();
+    store.setWeekly({ day: Number(ctx.match[1]) }); weekMarkIfPassed();
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Day saved' : 'تم حفظ اليوم');
+    await show(ctx, weeklyText(ctx), weeklyKb(ctx));
+  });
+  bot.callbackQuery(/^wkl:t:(\d\d:\d\d)$/, async (ctx) => {
+    if (!owner(ctx) || !WEEK_TIMES.includes(ctx.match[1])) return ctx.answerCallbackQuery();
+    store.setWeekly({ time: ctx.match[1] }); weekMarkIfPassed();
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? `Time set to ${ctx.match[1]}` : `تم ضبط الوقت على ${ctx.match[1]}`);
+    await show(ctx, weeklyText(ctx), weeklyKb(ctx));
+  });
+  bot.callbackQuery('wkl:test', async (ctx) => {
+    if (!owner(ctx)) return ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Sending a private test…' : 'جارٍ إرسال تجربة خاصة لك…');
+    await ctx.replyWithChatAction('upload_photo').catch(() => {});
+    const st = collectStats('week');
+    const head = langOf(ctx) === 'en' ? '🧪 <b>Test only — not posted in the channel.</b>\nThis is exactly what the channel will receive:' : '🧪 <b>تجربة خاصة — لم تُنشر في القناة.</b>\nهكذا سيظهر التقرير في القناة:';
+    await ctx.replyWithPhoto(new InputFile(renderStatsPng(st, 'ar'), 'weekly-report-test.png'), { caption: `${head}\n\n${weeklyCaption(st)}`, parse_mode: 'HTML', reply_markup: new InlineKeyboard().text(L(ctx).btnHome, 'home') });
+  });
+  bot.callbackQuery('dly:test', async (ctx) => {
+    if (!owner(ctx)) return ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Sending a private test…' : 'جارٍ إرسال تجربة خاصة لك…');
+    const st = collectStats('day');
+    const png = renderStatsPng(st, 'ar');
+    const head = langOf(ctx) === 'en' ? '🧪 <b>Test only — not posted in the channel.</b>\nThis is exactly what the channel will receive:' : '🧪 <b>تجربة خاصة — لم تُنشر في القناة.</b>\nهكذا سيظهر الملخص في القناة:';
+    await ctx.replyWithPhoto(new InputFile(png, 'daily-summary-test.png'), { caption: `${head}\n\n${dailyCaption(st)}`, parse_mode: 'HTML', reply_markup: new InlineKeyboard().text(L(ctx).btnHome, 'home') });
   });
 
   // civil sub-menu: general civil alert + traffic accident, protest, fire, civil aircraft
@@ -577,10 +865,13 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       const l = T[lang];
       const kb = new InlineKeyboard().text(l.btnApprove, 'rap:' + rid).row().text(l.btnEditPublish, 'red:' + rid).row().text(l.btnReject, 'rrj:' + rid).text(l.btnBan, 'rbn:' + rid);
       try {
-        const m = await api.sendMessage(uid, `${l.reportNew(who(ctx.from))}\n\n${draftSummary(d, lang)}`, { parse_mode: 'HTML', reply_markup: kb });
+        const hint = lang === 'en' ? '<i>↩️ To talk to the reporter, use "Reply" on this message.</i>' : '<i>↩️ لمراسلة صاحب البلاغ: اعمل «رد» على هذه الرسالة واكتب.</i>';
+        const m = await api.sendMessage(uid, `${l.reportNew(who(ctx.from))}\n\n${draftSummary(d, lang)}\n\n${hint}`, { parse_mode: 'HTML', reply_markup: kb });
         rep.messages.push([uid, m.message_id]);
+        store.relayPut(`a:${uid}:${m.message_id}`, ctx.from.id);
       } catch (e) { /* reviewer has not started the bot */ }
     }
+    store.openThread(ctx.from.id); // the reporter can now write to the team freely
     // short "thanks" notice that disappears by itself; the chat goes straight back to the menu
     await home(ctx);
     await sendTransient(ctx.api, ctx.chat.id, L(ctx).reportSent);

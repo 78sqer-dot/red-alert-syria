@@ -62,3 +62,8 @@ Plus civil sub-buttons in BOTH bots: civil button opens submenu (مدني عام
 - Drone over Damascus: several drones + small red hexagon-like blobs (low-poly circles at country zoom). User wants EXACTLY like redalert.com.lb: study live original for drone count + how affected-area circles appear on zoom.
 - All markers must be small like original at every zoom.
 - Report bot: "✅ تمت الموافقة على بلاغك ونُشر. شكراً لمساهمتك!" messages pile up, not auto-deleted -> auto-delete them (and handled report messages in publishing bot).
+
+## Drone marker (verified from redalert.com.lb JS bundle, chunk 3j2z45j30un6c.js)
+- Orbiting component: 64x64 box, inner 30px div, svg 18x18 viewBox 0 0 512 512, fill #6b7280 (dark #9ca3af), drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px ...).
+- Orbit animation (rotate(0)->rotate(-360deg) translateX(20px), 6s linear) ONLY when map container has class zoom-detail (zoom >= 11). Tiers: zoom-tier-mid 9..11, zoom-tier-far < 9.
+- Glyph `uav` = same as public/js/marker-svgs.js (fuselage ellipse, nose dome, wings path, V-tail).

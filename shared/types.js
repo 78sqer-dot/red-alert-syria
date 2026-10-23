@@ -35,7 +35,7 @@ export const ALERT_TYPES = {
   civil: {
     ar: 'مدني', en: 'Civil alert', button_ar: 'مدني', button_en: 'Civil',
     emoji: '🚑', color: '#0891b2', ring: '#155e75', group: 'civil', ttlMin: 240,
-    marker: 'fly', glyph: 'ambulance', icon: '#0891b2', disc: '#000000', zone: false, tag_ar: 'مدني', tag_en: 'Civil',
+    marker: 'icon', glyph: 'ambulance', icon: '#0891b2', disc: '#000000', zone: false, tag_ar: 'مدني', tag_en: 'Civil',
   },
   accident: {
     ar: 'حادث سير', en: 'Traffic accident', button_ar: 'حادث سير', button_en: 'Traffic accident',
@@ -55,7 +55,7 @@ export const ALERT_TYPES = {
   civil_plane: {
     ar: 'طائرة مدنية', en: 'Civil aircraft', button_ar: 'طائرة مدنية', button_en: 'Civil aircraft',
     emoji: '🛫', color: '#0284c7', ring: '#075985', group: 'civil', parent: 'civil', ttlMin: 60,
-    marker: 'fly', glyph: 'airliner', icon: '#0284c7', zone: false, tag_ar: 'طائرة_مدنية', tag_en: 'Civil_aircraft',
+    marker: 'icon', glyph: 'airliner', icon: '#0284c7', zone: false, tag_ar: 'طائرة_مدنية', tag_en: 'Civil_aircraft',
   },
 };
 

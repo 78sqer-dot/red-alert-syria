@@ -374,6 +374,11 @@ export class AlertMap {
       el.innerHTML = glyphDisc(a.type);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
+    // civil family: pinned to its exact place; a small tidy dot at country view, the icon from zoom 7.5 up
+    if (t.group === 'civil') {
+      el.classList.add('mk-civ');
+      el.insertAdjacentHTML('beforeend', `<span class="civ-dot" style="--ic:${t.icon || t.color}"></span>`);
+    }
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -457,7 +462,52 @@ export class AlertMap {
     this.popup.on('close', () => {
       if (this.popup && this.popup._alertId === alert.id) this.popup = null;
     });
+    // keep the card fully on screen: after it is laid out, and again whenever the map stops moving
+    requestAnimationFrame(() => requestAnimationFrame(() => this.fitPopup()));
+    if (!this._fitBound) {
+      this._fitBound = true;
+      this.map.on('zoomend', () => this.fitPopup());
+      this.map.on('moveend', (e) => { if (!e.originalEvent) this.fitPopup(); });
+      window.addEventListener('resize', () => this.fitPopup());
+    }
     return this.popup;
+  }
+  // Pan the map just enough that the open popup lies completely inside the visible part of the map
+  // (works with page zoom in phone "desktop site" mode and with the bottom sheet / top buttons).
+  fitPopup() {
+    const p = this.popup;
+    const el = p && p.getElement && p.getElement();
+    if (!el || !this.map) return;
+    const c = this.map.getContainer();
+    const cr = c.getBoundingClientRect();
+    const scale = c.clientWidth ? cr.width / c.clientWidth : 1; // rect px per map px
+    const vv = window.visualViewport;
+    const vis = { l: cr.left, t: cr.top, r: cr.right, b: cr.bottom };
+    if (vv) {
+      const z = (window.__uiz || 1) > 1 ? window.__uiz : 1;
+      vis.l = Math.max(vis.l, vv.offsetLeft / z); vis.t = Math.max(vis.t, vv.offsetTop / z);
+      vis.r = Math.min(vis.r, (vv.offsetLeft + vv.width) / z); vis.b = Math.min(vis.b, (vv.offsetTop + vv.height) / z);
+    }
+    // overlays on top of the map: floating buttons (top) and the bottom sheet (bottom)
+    let top = vis.t;
+    for (const s of document.querySelectorAll('.map-tools, .map-top, .fab-row')) {
+      const r = s.getBoundingClientRect();
+      if (r.height && r.bottom > top && r.top < vis.t + 140) top = Math.max(top, r.bottom);
+    }
+    let bottom = vis.b;
+    for (const s of document.querySelectorAll('.sidebar')) {
+      const r = s.getBoundingClientRect();
+      if (r.height && r.top < bottom && r.top > vis.t + 120) bottom = Math.min(bottom, r.top);
+    }
+    const m = 10 * scale;
+    const r = el.getBoundingClientRect();
+    let dx = 0; let dy = 0;
+    if (r.width > vis.r - vis.l - 2 * m) dx = r.left + r.width / 2 - (vis.l + vis.r) / 2;
+    else if (r.right > vis.r - m) dx = r.right - (vis.r - m);
+    else if (r.left < vis.l + m) dx = r.left - (vis.l + m);
+    if (r.top < top + m) dy = r.top - (top + m);
+    else if (r.bottom > bottom - m) dy = Math.min(r.bottom - (bottom - m), r.top - (top + m));
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) this.map.panBy([dx / scale, dy / scale], { duration: 350 });
   }
 
   closePopup() {

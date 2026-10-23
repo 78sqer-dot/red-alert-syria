@@ -14,7 +14,7 @@ import { zonePoints } from './places.js';
 class Store extends EventEmitter {
   constructor() {
     super();
-    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 48 } };
+    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 48, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null } }, log: [], relay: {}, threads: {} };
     this.file = path.join(config.dataDir, 'state.json');
     this.backup = null; // { save(jsonString), load() -> jsonString|null }
     this._saveTimer = null;
@@ -47,6 +47,7 @@ class Store extends EventEmitter {
         console.error('[store] backup restore failed', e.message);
       }
     }
+    if (!Array.isArray(this.state.log)) this.state.log = this.state.alerts.map((a) => this._logEntry(a)).reverse();
     this.expireSweep();
     setInterval(() => this.expireSweep(), 30_000).unref();
   }
@@ -60,7 +61,25 @@ class Store extends EventEmitter {
       banned: Array.isArray(s.banned) ? s.banned.map(Number).filter(Number.isFinite) : [],
       users: s.users && typeof s.users === 'object' ? s.users : {},
       stats: s.stats || { published: 0 },
-      settings: { autoDeleteHours: [0, 24, 48].includes(s.settings?.autoDeleteHours) ? s.settings.autoDeleteHours : 48 },
+      settings: {
+        autoDeleteHours: [0, 24, 48].includes(s.settings?.autoDeleteHours) ? s.settings.autoDeleteHours : 48,
+        daily: {
+          on: s.settings?.daily?.on !== false,
+          time: /^\d\d:\d\d$/.test(s.settings?.daily?.time || '') ? s.settings.daily.time : '23:00',
+          last: s.settings?.daily?.last || null,
+        },
+        weekly: {
+          on: s.settings?.weekly?.on !== false,
+          day: Number.isInteger(s.settings?.weekly?.day) && s.settings.weekly.day >= 0 && s.settings.weekly.day <= 6 ? s.settings.weekly.day : 5,
+          time: /^\d\d:\d\d$/.test(s.settings?.weekly?.time || '') ? s.settings.weekly.time : '23:00',
+          last: s.settings?.weekly?.last || null,
+        },
+      },
+      // owner <-> reporter conversation links (message -> reporter id) and open threads
+      relay: s.relay && typeof s.relay === 'object' ? s.relay : {},
+      threads: s.threads && typeof s.threads === 'object' ? s.threads : {},
+      // compact event log for statistics (kept 35 days, independent of the map's auto-delete)
+      log: Array.isArray(s.log) ? s.log.filter((e) => e && e.ty && e.ts) : null,
       maint: s.maint && typeof s.maint === 'object' ? s.maint : {},
     };
   }
@@ -125,6 +144,7 @@ class Store extends EventEmitter {
     };
     this.state.alerts.unshift(alert);
     this.state.stats.published = (this.state.stats.published || 0) + 1;
+    this._log(alert);
     this._trim();
     this.persist();
     this.emit('alert', publicAlert(alert));
@@ -158,11 +178,61 @@ class Store extends EventEmitter {
     const i = this.state.alerts.findIndex((a) => a.id === id);
     if (i < 0) return null;
     const [a] = this.state.alerts.splice(i, 1);
+    // an alert removed by hand was a mistake -> it should not count in the statistics
+    this.state.log = (this.state.log || []).filter((e) => e.id !== id);
     this.persist();
     this.emit('remove', { id });
     return a;
   }
 
+  // ---------- statistics log ----------
+  _logEntry(a) {
+    const p = a.place || {};
+    return { id: a.id, ty: a.type, ts: a.timestamp, g: p.governorate || null, ga: p.governorate_ar || null, ge: p.governorate_en || null, src: a.source || 'telegram' };
+  }
+  _log(a) {
+    if (!Array.isArray(this.state.log)) this.state.log = [];
+    this.state.log.push(this._logEntry(a));
+    const cutoff = Date.now() - 35 * 86400_000;
+    if (this.state.log.length > 100 && Date.parse(this.state.log[0].ts) < cutoff) this.state.log = this.state.log.filter((e) => Date.parse(e.ts) >= cutoff);
+    if (this.state.log.length > 20000) this.state.log = this.state.log.slice(-20000);
+  }
+  /** log entries with ts in [fromMs, toMs) */
+  logBetween(fromMs, toMs = Date.now()) {
+    return (this.state.log || []).filter((e) => { const t = Date.parse(e.ts); return t >= fromMs && t < toMs; });
+  }
+  get daily() { return this.state.settings?.daily || { on: true, time: '23:00', last: null }; }
+  setDaily(patch) {
+    this.state.settings = { ...(this.state.settings || {}), daily: { ...this.daily, ...patch } };
+    this.persist();
+  }
+  get weekly() { return this.state.settings?.weekly || { on: true, day: 5, time: '23:00', last: null }; }
+  setWeekly(patch) {
+    this.state.settings = { ...(this.state.settings || {}), weekly: { ...this.weekly, ...patch } };
+    this.persist();
+  }
+  // ---------- owner <-> reporter relay ----------
+  relayPut(key, uid) {
+    const r = (this.state.relay ||= {});
+    r[key] = [uid, Date.now()];
+    const keys = Object.keys(r);
+    if (keys.length > 4000) {
+      const cut = Date.now() - 21 * 86400_000;
+      for (const k of keys) if (r[k][1] < cut) delete r[k];
+      const left = Object.keys(r);
+      if (left.length > 4000) left.sort((a, b) => r[a][1] - r[b][1]).slice(0, left.length - 3500).forEach((k) => delete r[k]);
+    }
+    this.persist();
+  }
+  relayGet(key) { const v = this.state.relay?.[key]; return v ? v[0] : null; }
+  openThread(uid, staffId = null) {
+    const t = (this.state.threads ||= {});
+    t[uid] = { staff: staffId ?? t[uid]?.staff ?? null, at: Date.now() };
+    const cut = Date.now() - 14 * 86400_000;
+    for (const k of Object.keys(t)) if (t[k].at < cut) delete t[k];
+    this.persist();
+  }
+  thread(uid) { const t = this.state.threads?.[uid]; return t && Date.now() - t.at < 7 * 86400_000 ? t : null; }
   // ---------- bulk actions & auto-delete ----------
   get autoDeleteHours() { return this.state.settings?.autoDeleteHours ?? 48; }
   setAutoDelete(h) {

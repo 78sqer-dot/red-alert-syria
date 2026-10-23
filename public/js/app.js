@@ -10,8 +10,39 @@ const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
 const TZ = 'Asia/Damascus';
 const CHANNEL = 'https://t.me/Red_Alert_Syria';
-// Telegram links are plain https://t.me/... links: Android/iOS hand them to the Telegram app
-// themselves (or open the t.me page with an "Open in Telegram" button), so no JS interception.
+// Telegram links: on Android (Chrome, Brave, Samsung… — also in "Desktop site" mode, whose user agent
+// pretends to be a PC) a plain https://t.me link only opens the t.me web page inside the browser.
+// So on Android we open the Telegram app directly with an intent:// link (falls back to t.me when
+// Telegram is not installed); on iPhone tg:// with a t.me fallback; on computers the normal link.
+const IS_ANDROID = /Android/i.test(navigator.userAgent) || /Android/i.test(navigator.userAgentData?.platform || '')
+  || (/Linux/i.test(navigator.platform || navigator.userAgent) && !/CrOS/i.test(navigator.userAgent) && (navigator.maxTouchPoints || 0) > 0);
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && (navigator.maxTouchPoints || 0) > 1);
+function tgDeep(href) {
+  let u;
+  try { u = new URL(href); } catch { return null; }
+  if (!/^(www\.)?(t\.me|telegram\.me)$/i.test(u.hostname)) return null;
+  const parts = u.pathname.split('/').filter(Boolean);
+  if (parts[0] === 'share' && parts[1] === 'url') return `msg_url?url=${encodeURIComponent(u.searchParams.get('url') || '')}&text=${encodeURIComponent(u.searchParams.get('text') || '')}`;
+  if (!parts[0] || !/^[A-Za-z0-9_]{4,}$/.test(parts[0])) return null;
+  let q = `resolve?domain=${parts[0]}`;
+  if (u.searchParams.get('start')) q += `&start=${encodeURIComponent(u.searchParams.get('start'))}`;
+  if (parts[1] && /^\d+$/.test(parts[1])) q += `&post=${parts[1]}`;
+  return q;
+}
+document.addEventListener('click', (e) => {
+  const a = e.target.closest && e.target.closest('a[href]');
+  if (!a || e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey) return;
+  const q = (IS_ANDROID || IS_IOS) && tgDeep(a.href);
+  if (!q) return;
+  e.preventDefault();
+  if (IS_ANDROID) {
+    location.href = `intent://${q}#Intent;scheme=tg;S.browser_fallback_url=${encodeURIComponent(a.href)};end`;
+  } else {
+    const t0 = Date.now();
+    location.href = `tg://${q}`;
+    setTimeout(() => { if (!document.hidden && Date.now() - t0 < 2500) location.href = a.href; }, 1200);
+  }
+}, true);
 let BOT = 'https://t.me/Rad_Alert_Syria1_bot';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
