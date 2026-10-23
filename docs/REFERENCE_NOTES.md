@@ -25,3 +25,11 @@ Logo: red #ED1C24 rect, white arcs icon + vertical bar + RED (bold) / ALERT (thi
 Bot: @Red_Alert_Syria_bot (id 8921728574) is admin of channel @Red_Alert_Syria (id -1004387100492) with post/edit/delete rights. Owner id 8270709633.
 GitHub connector account: 78sqer-dot. Render workspace tea-dbcholnf3r2c73belk8g (2 existing free services: abu-zahraa-bot, shadow-command-center, region frankfurt).
 Data: GeoNames SY (CC BY 4.0), geoBoundaries SYR ADM0/1/2 (gbOpen), raw in /workspace/data.
+
+## Original marker system (extracted 2026-10-23 from redalert.com.lb chunks 3j2z45j30un6c.js / 3pi7y5o7ru-6i.js / 0cjnt7l_c7om_.js)
+- Glyph SVGs saved to public/js/marker-svgs.js (uav, plane, airstrike bomb, artillery crosshair, home_destroying, missile, explosion, other...).
+- Static marker: div.static-alert-icon 34x34 round, background typeDiscBackground (airstrike #dc2626, artillery #f97316, else #000000), border 3px solid typeColor (airstrike #b91c1c), svg 18x18 fill white (or typeColor when disc is black). No halos/pulses.
+- Orbiting types (uav, drone, helicopter, signal_sweep): 64x64 box, 30px inner orbiting 20px radius 6s linear only when map has class zoom-detail; svg 18px fill #6b7280 (dark #9ca3af) with drop-shadow 0 0 1px rgba(0,0,0,.85).
+- Plane: squad of 3 small plane svgs (16/14/14px, rotate -45deg, fill typeColor #3b8eff) moving translateY(110px -> -110px) 7s linear with fade.
+- Zone (AlertCircle): for non point-impact types only; point-impact = airstrike, uav_strike, artillery, explosion, missile, gunfire, home_destroying. Radius km by scope: village 1.5, multi_village 3, district 8, governorate 20 (region uses radius_km). Fill typeColor opacity .14 (no fill for plane); line opacity .7 width 2 (plane 1.5 dashed [3,4]).
+- typeColor: uav #ff6b7a, plane #3b8eff, airstrike #b91c1c, artillery #f97316, explosion #ea580c, missile #7f1d1d, home_destroying #0891b2, earthquake #ff3b4e, default #22c55e.

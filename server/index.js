@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
-import { createBot, telegramBackupAdapter, BOT_COMMANDS } from './bot.js';
+import { createBot, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo } from './bot.js';
 import { governorates } from './places.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -53,10 +53,17 @@ app.use((req, res, next) => {
 app.use(compression({ filter: (req, res) => (req.path === '/api/stream' ? false : compression.filter(req, res)) }));
 
 // ------------------------------------------------------------------ telegram webhook
-const bot = createBot();
+// Bot 1 (admin): private publishing panel for the owner + editors.
+// Bot 2 (report): public bot where anyone can send a report; reports reach the editors through bot 1.
+const bot = createBot({ role: 'admin' });
+const reportBot = createBot({ role: 'report', token: config.reportBotToken, reviewApi: bot ? bot.api : null });
 const webhookPath = config.webhookSecret ? `/tg/${config.webhookSecret.slice(0, 24)}` : null;
+const reportWebhookPath = config.reportWebhookSecret ? `/tg/${config.reportWebhookSecret.slice(0, 24)}` : null;
 if (bot && webhookPath) {
   app.post(webhookPath, express.json({ limit: '1mb' }), webhookCallback(bot, 'express', { secretToken: config.webhookSecret, onTimeout: 'return', timeoutMilliseconds: 9000 }));
+}
+if (reportBot && reportWebhookPath) {
+  app.post(reportWebhookPath, express.json({ limit: '1mb' }), webhookCallback(reportBot, 'express', { secretToken: config.reportWebhookSecret, onTimeout: 'return', timeoutMilliseconds: 9000 }));
 }
 
 // ------------------------------------------------------------------ API
@@ -157,27 +164,48 @@ async function start() {
     console.warn('[bot] BOT_TOKEN missing — running website only');
     return;
   }
+  const launch = async (b, path, secret, label) => {
+    if (config.botMode === 'webhook' && config.publicUrl) {
+      await b.api.setWebhook(config.publicUrl + path, { secret_token: secret, allowed_updates: ['message', 'callback_query'], max_connections: 20, drop_pending_updates: false });
+      console.log(`[${label}] webhook set`);
+    } else {
+      await b.api.deleteWebhook();
+      b.start({ allowed_updates: ['message', 'callback_query'], onStart: () => console.log(`[${label}] long polling started`) });
+    }
+  };
   await bot.init();
-  botUsername = bot.botInfo.username;
-  console.log(`[bot] @${botUsername} ready (${config.botMode})`);
+  botInfo.admin = bot.botInfo.username;
+  console.log(`[bot] @${botInfo.admin} ready (${config.botMode}) — private publishing bot`);
+  if (reportBot) {
+    try {
+      await reportBot.init();
+      botInfo.report = reportBot.botInfo.username;
+      console.log(`[report-bot] @${botInfo.report} ready — public report bot`);
+    } catch (e) {
+      console.warn('[report-bot] init failed', e.description || e.message);
+    }
+  }
+  botUsername = botInfo.report || botInfo.admin;
   try {
     await bot.api.setMyCommands(BOT_COMMANDS.ar);
     await bot.api.setMyCommands(BOT_COMMANDS.en, { language_code: 'en' });
-    await bot.api.setMyDescription('🔴 بوت Red Alert Syria — نشر التنبيهات العاجلة في القناة وعلى الخريطة التفاعلية المباشرة لسوريا.\n\nRed Alert Syria — live alerts for Syria: channel + interactive map.');
-    await bot.api.setMyShortDescription('الإنذار الأحمر سوريا — تنبيهات لحظية على القناة والخريطة المباشرة.');
+    await bot.api.setMyDescription('🔒 بوت النشر الخاص بإدارة Red Alert Syria (للمشرفين فقط).' + (botInfo.report ? `\n\nلإرسال بلاغ: @${botInfo.report}` : ''));
+    await bot.api.setMyShortDescription('بوت النشر الخاص — Red Alert Syria' + (botInfo.report ? ` · للبلاغات: @${botInfo.report}` : ''));
   } catch (e) {
     console.warn('[bot] could not set commands', e.description || e.message);
   }
-
-  if (config.botMode === 'webhook' && config.publicUrl) {
-    const url = config.publicUrl + webhookPath;
-    await bot.api.setWebhook(url, { secret_token: config.webhookSecret, allowed_updates: ['message', 'callback_query'], max_connections: 20 });
-    console.log('[bot] webhook set');
-  } else {
-    await bot.api.deleteWebhook();
-    bot.start({ allowed_updates: ['message', 'callback_query'], onStart: () => console.log('[bot] long polling started') });
+  if (botInfo.report) {
+    try {
+      await reportBot.api.setMyCommands(REPORT_COMMANDS.ar);
+      await reportBot.api.setMyCommands(REPORT_COMMANDS.en, { language_code: 'en' });
+      await reportBot.api.setMyDescription('📨 بوت التبليغ الخاص بـ Red Alert Syria — الإنذار الأحمر سوريا.\n\nأبلغ عن مسيّرة، طيران حربي، قصف مدفعي، هجوم، صواريخ أو حدث مدني في منطقتك. يصل بلاغك إلى الإدارة ويُنشر على القناة والخريطة بعد التحقق.\n\nReport drones, warplanes, shelling, attacks, missiles or civil events in Syria.');
+      await reportBot.api.setMyShortDescription('أرسل بلاغاً عن حدث في سوريا — Red Alert Syria');
+    } catch (e) {
+      console.warn('[report-bot] could not set commands', e.description || e.message);
+    }
   }
-
+  await launch(bot, webhookPath, config.webhookSecret, 'bot');
+  if (botInfo.report) await launch(reportBot, reportWebhookPath, config.reportWebhookSecret, 'report-bot');
   // Keep the free Render instance awake (requests through the public URL count as traffic).
   if (config.keepAlive && config.publicUrl) {
     setInterval(() => {
@@ -189,7 +217,7 @@ async function start() {
 const shutdown = async () => {
   try { store._writeLocal(); } catch { /* ignore */ }
   try { await Promise.race([store.flushBackup(), new Promise((r) => setTimeout(r, 5000))]); } catch { /* ignore */ }
-  try { if (bot && config.botMode !== 'webhook') await bot.stop(); } catch { /* ignore */ }
+  try { if (config.botMode !== 'webhook') { if (bot) await bot.stop(); if (reportBot && botInfo.report) await reportBot.stop(); } } catch { /* ignore */ }
   process.exit(0);
 };
 process.on('SIGTERM', shutdown);

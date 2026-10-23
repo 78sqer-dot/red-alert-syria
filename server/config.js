@@ -14,7 +14,11 @@ const derivedSecret = token
   ? crypto.createHash('sha256').update('ras-webhook:' + token).digest('hex').slice(0, 48)
   : '';
 
+const reportToken = process.env.REPORT_BOT_TOKEN || '';
+const reportSecret = reportToken ? crypto.createHash('sha256').update('ras-report-webhook:' + reportToken).digest('hex').slice(0, 48) : '';
 export const config = {
+  reportBotToken: reportToken,
+  reportWebhookSecret: process.env.REPORT_WEBHOOK_SECRET || reportSecret,
   port: Number(process.env.PORT || 3000),
   publicUrl: (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, ''),
   botToken: token,

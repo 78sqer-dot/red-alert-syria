@@ -8,19 +8,27 @@ const { store } = await import('../server/store.js');
 await store.init(null);
 const { createBot } = await import('../server/bot.js');
 const bot = createBot();
+const rbot = createBot({ role: 'report', token: '654321:TEST', reviewApi: bot.api });
+const { botInfo } = await import('../server/bot.js');
+botInfo.admin = 'Red_Alert_Syria_bot'; botInfo.report = 'Rad_Alert_Syria1_bot';
+rbot.botInfo = { id: 2, is_bot: true, first_name: 'RAS report', username: 'Rad_Alert_Syria1_bot', can_join_groups: false, can_read_all_group_messages: false, supports_inline_queries: false };
 bot.botInfo = { id: 1, is_bot: true, first_name: 'RAS', username: 'Red_Alert_Syria_bot', can_join_groups: false, can_read_all_group_messages: false, supports_inline_queries: false };
 const log = [];
 let mid = 100;
-bot.api.config.use(async (prev, method, payload) => {
-  log.push({ method, payload });
+const mock = (tag) => async (prev, method, payload) => {
+  log.push({ method, payload, bot: tag });
   if (method === 'sendMessage' || method === 'sendPhoto') return { ok: true, result: { message_id: ++mid, chat: { id: payload.chat_id, type: 'private' }, date: 0, text: payload.text } };
   if (method === 'editMessageText') return { ok: true, result: { message_id: payload.message_id, chat: { id: payload.chat_id }, date: 0, text: payload.text } };
   return { ok: true, result: true };
-});
+};
+bot.api.config.use(mock('admin'));
+rbot.api.config.use(mock('report'));
 let uid = 1;
 const user = (id, name = 'Sqer') => ({ id, is_bot: false, first_name: name, language_code: 'ar' });
-const msg = (from, text) => bot.handleUpdate({ update_id: uid++, message: { message_id: ++mid, date: Math.floor(Date.now() / 1000), chat: { id: from.id, type: 'private' }, from, text, ...(text.startsWith('/') ? { entities: [{ type: 'bot_command', offset: 0, length: text.split(' ')[0].length }] } : {}) } });
-const cb = (from, data) => bot.handleUpdate({ update_id: uid++, callback_query: { id: String(uid), from, chat_instance: '1', data, message: { message_id: mid, date: 0, chat: { id: from.id, type: 'private' }, from: bot.botInfo, text: 'x' } } });
+const msgB = (B, from, text) => B.handleUpdate({ update_id: uid++, message: { message_id: ++mid, date: Math.floor(Date.now() / 1000), chat: { id: from.id, type: 'private' }, from, text, ...(text.startsWith('/') ? { entities: [{ type: 'bot_command', offset: 0, length: text.split(' ')[0].length }] } : {}) } });
+const cbB = (B, from, data) => B.handleUpdate({ update_id: uid++, callback_query: { id: String(uid), from, chat_instance: '1', data, message: { message_id: mid, date: 0, chat: { id: from.id, type: 'private' }, from: B.botInfo, text: 'x' } } });
+const msg = (f, t) => msgB(bot, f, t);
+const cb = (f, d) => cbB(bot, f, d);
 const last = () => { const l = [...log].reverse().find((x) => /sendMessage|editMessageText/.test(x.method)); return l; };
 const btns = (l) => (l.payload.reply_markup?.inline_keyboard || []).flat().map((b) => `${b.text}=>${b.callback_data || b.url}`);
 const show = (title) => { const l = last(); console.log(`\n=== ${title} [${l.method}]\n${l.payload.text}\n  buttons: ${btns(l).slice(0, 18).join(' | ')}${btns(l).length > 18 ? ` ... (+${btns(l).length - 18})` : ''}`); };
@@ -44,20 +52,26 @@ await msg(owner, 'دمشق'); show('typed place search');
 const sb = btns(last()).find((b) => /=>p:|=>wg:/.test(b));
 if (sb) { await cb(owner, sb.split('=>')[1]); show('search result chosen'); }
 const lp = last(); if (/publish/.test(btns(lp).join())) { await cb(owner, 'publish'); show('breaking published'); } else { await cb(owner, 'skip'); show('skip'); await cb(owner, 'publish'); show('breaking published'); }
-// public user report
+// public user in the PRIVATE bot -> refused
 const pub = user(555, 'Ali');
-await msg(pub, '/start'); show('public /start');
-await cb(pub, 't:artillery'); show('public artillery');
-await msg(pub, 'حلب'); show('public search');
-const pb = btns(last()).find((b) => /=>p:|=>wg:/.test(b)); await cb(pub, pb.split('=>')[1]); show('public chose');
-await cb(pub, 'skip'); show('public preview');
-await cb(pub, 'submit'); show('public submitted');
+await msg(pub, '/start'); show('public /start in admin bot (must be refused)');
+await cb(pub, 't:uav'); show('public pressing a type in admin bot (refused)');
+// public user in the REPORT bot
+const rmsg = (f, t) => msgB(rbot, f, t);
+const rcb = (f, d) => cbB(rbot, f, d);
+await rmsg(pub, '/start report'); show('report bot /start report');
+await rcb(pub, 't:artillery'); show('report artillery');
+await rmsg(pub, 'حلب'); show('report search');
+const pb = btns(last()).find((b) => /=>p:|=>wg:/.test(b)); await rcb(pub, pb.split('=>')[1]); show('report chose');
+await rmsg(pub, 'سماع أصوات قصف'); show('report details → preview');
+await rcb(pub, 'submit'); show('report submitted');
 const rv = [...log].reverse().find((x) => x.method === 'sendMessage' && x.payload.chat_id === 8270709633);
-console.log('\n=== review msg to owner:\n' + rv.payload.text + '\n  ' + btns(rv).join(' | '));
-await cb(owner, btns(rv)[0].split('=>')[1]); show('owner approved');
+console.log('\n=== review msg to owner via', rv.bot, 'bot:\n' + rv.payload.text + '\n  ' + btns(rv).join(' | '));
+await cb(owner, btns(rv).find((b) => b.includes('red:')).split('=>')[1]); show('owner chose edit-then-publish');
+await cb(owner, 'publish'); show('owner published edited report');
+const note = [...log].reverse().find((x) => x.method === 'sendMessage' && x.payload.chat_id === 555);
+console.log('\n=== reporter notified via', note.bot, 'bot:', note.payload.text);
+await rmsg(owner, '/start'); show('owner /start in report bot');
+await rmsg(pub, '/help'); show('report /help');
 await msg(owner, '/active'); show('/active');
-await cb(owner, 'lang'); show('lang toggled');
 console.log('\nstore active:', store.activeAlerts().map((a) => `${a.type}:${a.title}`));
-const errs = log.filter((x) => x.method === 'sendMessage' && /error|خطأ/i.test(x.payload.text || ''));
-console.log('error msgs:', errs.length);
-process.exit(0);

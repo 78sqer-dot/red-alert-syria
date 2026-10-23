@@ -1,5 +1,6 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, typeOf } from '/shared/types.js';
+import { ALERT_TYPES, ZONE_KM, typeOf } from '/shared/types.js';
+import { SVG } from './marker-svgs.js';
 import { icon } from './icons.js';
 
 const ml = () => window.maplibregl;
@@ -18,6 +19,14 @@ const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 const TYPE_ICON = { breaking: 'bolt', uav: 'drone', warplane: 'plane', missile: 'rocket', attack: 'flame', artillery: 'target', civil: 'ambulance' };
 export const typeIcon = (t) => TYPE_ICON[t] || 'alert';
+const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${SVG[glyph] || SVG.other}</svg>`;
+// Round coloured disc with the original glyph (used by the map, the legend and toasts).
+export function glyphDisc(type, size = 34, iconSize = 18, cls = 'sai') {
+  const t = typeOf(type);
+  const bg = t.disc || '#000000';
+  const fg = bg === '#000000' ? t.color : '#ffffff';
+  return `<span class="${cls}" style="width:${size}px;height:${size}px;background:${bg};border-color:${t.color};color:${fg}">${svgTag(t.glyph, iconSize, `fill="${fg}"`)}</span>`;
+}
 
 const styleCache = {};
 const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
@@ -58,10 +67,10 @@ async function fetchStyle(kind) {
 let dataCache = null;
 async function loadData() {
   if (!dataCache) {
-    dataCache = Promise.all(['syria-border', 'syria-governorates', 'syria-peaks'].map((n) => fetch(`/data/${n}.geojson`).then((r) => r.json())));
+    dataCache = Promise.all(['syria-border', 'syria-governorates'].map((n) => fetch(`/data/${n}.geojson`).then((r) => r.json())));
   }
-  const [border, govs, peaks] = await dataCache;
-  return { border, govs, peaks };
+  const [border, govs] = await dataCache;
+  return { border, govs };
 }
 
 function labelExpr(lang) {
@@ -178,6 +187,14 @@ export class AlertMap {
     this.map.addControl(new M.AttributionControl({ compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · GeoNames · geoBoundaries' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
     this.map.addControl(new M.ScaleControl({ maxWidth: 110, unit: 'metric' }), this.opts.lang === 'ar' ? 'bottom-right' : 'bottom-left');
     this.map.on('style.load', () => this.addOverlays());
+    const zoomTier = () => {
+      const z = this.map.getZoom();
+      const c = this.map.getContainer();
+      c.classList.toggle('zoom-detail', z >= 11);
+      c.classList.toggle('zoom-far', z < 7.5);
+    };
+    this.map.on('zoom', zoomTier);
+    zoomTier();
     this.map.on('styleimagemissing', (e) => {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
@@ -218,7 +235,7 @@ export class AlertMap {
 
   async addOverlays() {
     const map = this.map;
-    const { border, govs, peaks } = await loadData();
+    const { border, govs } = await loadData();
     const before = firstSymbolId(map);
     const dark = this.opts.dark || this.opts.layer === 'satellite';
     const font = labelFont(map);
@@ -228,7 +245,6 @@ export class AlertMap {
     if (!map.getSource('ras-border')) map.addSource('ras-border', { type: 'geojson', data: border });
     if (!map.getSource('ras-mask')) map.addSource('ras-mask', { type: 'geojson', data: maskFeature(border) });
     if (!map.getSource('ras-govs')) map.addSource('ras-govs', { type: 'geojson', data: govs });
-    if (!map.getSource('ras-peaks')) map.addSource('ras-peaks', { type: 'geojson', data: peaks });
     if (!map.getSource('ras-zones')) map.addSource('ras-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
 
     if (this.opts.layer !== 'satellite') {
@@ -238,14 +254,11 @@ export class AlertMap {
     add({ id: 'ras-gov-line', type: 'line', source: 'ras-govs', paint: { 'line-color': dark ? 'rgba(240,240,245,0.35)' : 'rgba(26,26,46,0.35)', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.6, 10, 1.4], 'line-dasharray': [3, 2] } });
     add({ id: 'ras-border-glow', type: 'line', source: 'ras-border', paint: { 'line-color': '#ff3b4e', 'line-opacity': 0.22, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 10], 'line-blur': 3 } });
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
-    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['case', ['get', 'active'], 0.12, 0.05] } });
-    add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'active'], 0.6, 0.25], 'line-width': 1.5, 'line-dasharray': [2, 1.5] } });
-    add({ id: 'ras-peaks-dot', type: 'circle', source: 'ras-peaks', minzoom: 6, paint: { 'circle-radius': 3.2, 'circle-color': '#8b5e34', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.2 } }, undefined);
-    add({
-      id: 'ras-peaks-label', type: 'symbol', source: 'ras-peaks', minzoom: 6.5,
-      layout: { 'text-field': ['concat', ['get', this.opts.lang === 'ar' ? 'ar' : 'en'], '\n', ['to-string', ['get', 'ele']], this.opts.lang === 'ar' ? ' م' : ' m'], 'text-font': font, 'text-size': 11, 'text-offset': [0, 0.9], 'text-anchor': 'top', 'text-max-width': 8 },
-      paint: { 'text-color': dark ? '#f1d9c0' : '#6b4423', 'text-halo-color': dark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.3 },
-    }, undefined);
+    // Affected-area circles (same look as the original: fill .14, solid line .7 / dashed for aircraft),
+    // softened at close zoom so a 1.5 km circle never floods the screen.
+    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 9, ['case', ['get', 'active'], 0.14, 0.056], 12, ['case', ['get', 'active'], 0.1, 0.04], 15, ['case', ['get', 'active'], 0.04, 0.016]] } });
+    add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 9, ['case', ['get', 'active'], 0.7, 0.28], 13, ['case', ['get', 'active'], 0.5, 0.2], 15, ['case', ['get', 'active'], 0.3, 0.12]], 'line-width': 2 } });
+    add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'active'], 0.7, 0.3], 'line-width': 1.5, 'line-dasharray': [3, 4] } });
     this.applyToggles();
     this.updateZones();
   }
@@ -254,8 +267,6 @@ export class AlertMap {
     const map = this.map;
     if (!map || !map.getLayer('ras-border')) return;
     const vis = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
-    vis('ras-peaks-dot', this.opts.showPeaks);
-    vis('ras-peaks-label', this.opts.showPeaks);
     vis('ras-gov-line', this.opts.showGov);
     vis('ras-mask', this.opts.focusSyria);
     if (this.opts.map3d) {
@@ -329,15 +340,17 @@ export class AlertMap {
   markerEl(a) {
     const t = typeOf(a.type);
     const el = document.createElement('div');
-    el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'}${t.marker === 'orbit' ? ' mk-orbit' : ' mk-static'}`;
+    el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${t.marker}`;
     el.style.setProperty('--c', t.color);
-    el.style.setProperty('--r', t.ring);
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
     if (t.marker === 'orbit') {
-      el.innerHTML = `<span class="zone"></span><span class="pulse"></span><span class="ring"></span><span class="core"></span><div class="orbit"><span class="craft">${icon(a.type === 'warplane' ? 'plane' : 'drone', 26)}</span></div>`;
+      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 22, 'class="uav-svg"')}</div></div>`;
+    } else if (t.marker === 'squad') {
+      const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
+      el.innerHTML = `<div class="squad">${pl(16, 22, -8, 1)}${pl(14, 6, 12, 0.85)}${pl(14, 38, 12, 0.85)}</div>`;
     } else {
-      el.innerHTML = `<span class="pulse"></span><span class="ring"></span><span class="disc">${icon(typeIcon(a.type), 18)}</span>`;
+      el.innerHTML = glyphDisc(a.type);
     }
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -354,8 +367,9 @@ export class AlertMap {
     const features = [];
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
-      if (!t || !t.radiusKm || !a.location || !Number.isFinite(a.location.latitude)) continue;
-      features.push({ type: 'Feature', properties: { color: t.color, active: !!a.is_active }, geometry: { type: 'Polygon', coordinates: [circlePolygon(a.location.longitude, a.location.latitude, t.radiusKm)] } });
+      if (!t || !t.zone || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude)) continue;
+      const km = ZONE_KM[a.scope] || ZONE_KM.place;
+      features.push({ type: 'Feature', properties: { color: t.color, active: !!a.is_active, dashed: t.zone === 'dashed' }, geometry: { type: 'Polygon', coordinates: [circlePolygon(a.location.longitude, a.location.latitude, km)] } });
     }
     src.setData({ type: 'FeatureCollection', features });
   }

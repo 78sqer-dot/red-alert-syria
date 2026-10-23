@@ -247,31 +247,29 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .bb-close { width: 36px; display: grid; place-content: center; color: var(--text-muted); }
 
 /* ---------------------------------------------------------------- markers */
-.mk { position: absolute; top: 0; left: 0; width: 0; height: 0; cursor: pointer; --c: #ff3b4e; --r: #c81e2f; }
-.mk .disc { position: absolute; width: 34px; height: 34px; left: -17px; top: -17px; border-radius: 50%; background: var(--c); border: 3px solid var(--r); display: grid; place-content: center; color: #fff; box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--c) 60%, transparent), 0 0 0 2px #fff; transition: transform .2s cubic-bezier(.2, .8, .2, 1); z-index: 2; }
-html.dark .mk .disc { box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--c) 60%, transparent), 0 0 0 2px #0d0d10; }
-.mk .disc svg { width: 18px; height: 18px; }
-.mk:hover .disc, .mk.sel .disc { transform: scale(1.18); }
-.mk .pulse { position: absolute; width: 34px; height: 34px; left: -17px; top: -17px; border-radius: 50%; background: var(--c); opacity: .0; z-index: 1; }
-.mk.fresh .pulse { animation: mkPulse 1.8s cubic-bezier(0, 0, .2, 1) infinite; }
-.mk.t-breaking .pulse { animation: mkPulse 1.4s cubic-bezier(0, 0, .2, 1) infinite; }
-.mk.sel .ring { position: absolute; width: 50px; height: 50px; left: -25px; top: -25px; border-radius: 50%; border: 2px solid var(--c); animation: spinRing 6s linear infinite; border-style: dashed; }
-/* orbiting craft (drone / warplane) */
-.mk-orbit .core { position: absolute; width: 14px; height: 14px; left: -7px; top: -7px; border-radius: 50%; background: var(--c); border: 2px solid #fff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 30%, transparent), 0 2px 8px #0005; z-index: 2; }
-.mk-orbit .zone { position: absolute; width: 56px; height: 56px; left: -28px; top: -28px; border-radius: 50%; background: color-mix(in srgb, var(--c) 16%, transparent); border: 1.5px solid color-mix(in srgb, var(--c) 55%, transparent); z-index: 0; }
-.mk-orbit .zone::after { content: ''; position: absolute; inset: -1.5px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 270deg, color-mix(in srgb, var(--c) 45%, transparent) 360deg); animation: spin 3.2s linear infinite; }
-.mk-orbit .orbit { position: absolute; width: 0; height: 0; left: 0; top: 0; animation: spin 6s linear infinite; z-index: 3; }
-.mk-orbit.t-warplane .orbit { animation-duration: 3.6s; }
-.mk-orbit .craft { position: absolute; left: -13px; top: -41px; width: 26px; height: 26px; display: grid; place-content: center; color: #4b5563; filter: drop-shadow(0 2px 3px #0006); }
-html.dark .mk-orbit .craft { color: #d1d5db; }
-.mk-orbit .craft svg { width: 26px; height: 26px; }
-.mk-orbit.t-warplane .craft { color: #1e3a8a; transform: rotate(-90deg); }
-html.dark .mk-orbit.t-warplane .craft { color: #bfdbfe; }
-html[dir='rtl'] .mk-orbit.t-warplane .craft { transform: rotate(-90deg); }
-.mk-orbit .craft { animation: none; }
+.mk { position: absolute; top: 0; left: 0; width: 0; height: 0; cursor: pointer; --c: #ff3b4e; }
+/* static disc — identical to the original .static-alert-icon */
+.sai { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; border-radius: 50%; border: 3px solid; display: flex; align-items: center; justify-content: center; transition: transform .18s ease; }
+.sai svg { display: block; }
+.mk:hover .sai, .mk.sel .sai { transform: translate(-50%, -50%) scale(1.15); }
+.mk.sel .sai { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent); }
+/* drone — grey airframe that orbits only at close zoom (like the original) */
+.uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
+.uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
+.maplibregl-map.zoom-detail .uav { animation: uavOrbit 6s linear infinite; }
+@keyframes uavOrbit { from { transform: rotate(0deg) translateX(20px); } to { transform: rotate(-360deg) translateX(20px); } }
+.uav-svg { display: block; fill: #6b7280; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
+html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95)) drop-shadow(0 0 .5px rgba(0,0,0,.95)); }
+.mk.sel .uav-svg { fill: var(--c); }
+/* warplanes — squad of three flying across the zone */
+.squad { position: absolute; width: 60px; height: 200px; left: -30px; top: -100px; pointer-events: none; }
+.squad .sq { position: absolute; animation: squadFly 7s linear infinite; pointer-events: auto; }
+.sq-svg { display: block; transform: rotate(-45deg); filter: drop-shadow(0 0 1px rgba(0,0,0,.55)) drop-shadow(0 1px 2px rgba(255,255,255,.55)); }
+html.dark .sq-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.4)) drop-shadow(0 1px 2px rgba(0,0,0,.85)); }
+@keyframes squadFly { 0% { transform: translateY(110px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-110px); opacity: 0; } }
 .mk.inactive { filter: grayscale(1); opacity: .55; }
-.mk.inactive .orbit, .mk.inactive .zone::after, .mk.inactive .pulse { animation: none !important; }
-.mk.inactive .pulse { display: none; }
+.mk.inactive .uav, .mk.inactive .sq { animation: none !important; }
+.mk.inactive .sq { opacity: 1 !important; }
 .mk.dim { opacity: .25; }
 
 /* popup */
@@ -332,8 +330,8 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
 .about-inner p { color: var(--text-secondary); line-height: 1.85; margin: 0 0 12px; }
 .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 8px 0 16px; }
 .lg-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border-subtle); font-weight: 700; font-size: 12.5px; }
-.lg-dot { width: 26px; height: 26px; border-radius: 50%; background: var(--c); border: 2px solid var(--r); color: #fff; display: grid; place-content: center; flex: none; }
-.lg-dot svg { width: 14px; height: 14px; }
+.lg-dot { position: relative; width: 26px; height: 26px; flex: none; }
+.lg-dot .sai { left: 50%; top: 50%; border-width: 2px; }
 .sources { font-size: 12px; color: var(--text-muted); line-height: 1.9; }
 .sources a { text-decoration: underline; color: var(--text-secondary); }
 .disclaimer { font-size: 12px; background: color-mix(in srgb, var(--orange) 10%, transparent); border: 1px solid color-mix(in srgb, var(--orange) 30%, transparent); border-radius: 10px; padding: 10px 12px; color: var(--text-secondary); margin: 12px 0; }
@@ -380,7 +378,8 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
 .toasts { position: fixed; top: calc(var(--header-h) + 12px); left: 50%; transform: translateX(-50%); z-index: 70; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; width: min(420px, calc(100% - 24px)); }
 .toast { pointer-events: auto; width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 10px 12px; display: flex; gap: 10px; align-items: center; animation: slideDown .4s cubic-bezier(.2, .8, .2, 1); cursor: pointer; position: relative; overflow: hidden; }
 .toast::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; width: 4px; background: var(--c, var(--red)); }
-.toast .ti { width: 34px; height: 34px; border-radius: 50%; background: var(--c, var(--red)); color: #fff; display: grid; place-content: center; flex: none; }
+.toast .ti { position: relative; width: 34px; height: 34px; flex: none; }
+.toast .ti .sai { left: 50%; top: 50%; }
 .toast .ti svg { width: 17px; height: 17px; }
 .toast .tt { flex: 1; min-width: 0; }
 .toast .tt small { display: block; font-size: 11px; color: var(--text-muted); font-weight: 700; }

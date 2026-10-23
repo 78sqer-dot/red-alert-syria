@@ -4,13 +4,46 @@ import { DICT } from './i18n.js';
 import { icon } from './icons.js';
 import { settings } from './settings.js';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon } from './map.js';
+import { AlertMap, typeIcon, glyphDisc } from './map.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
 const TZ = 'Asia/Damascus';
 const CHANNEL = 'https://t.me/Red_Alert_Syria';
-let BOT = 'https://t.me/Red_Alert_Syria_bot';
+// Open Telegram links straight in the Telegram app on phones (tg:// deep link), falling back to t.me.
+const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+function tgDeepLink(href) {
+  let u;
+  try { u = new URL(href); } catch { return null; }
+  if (u.hostname !== 't.me' && u.hostname !== 'telegram.me') return null;
+  const parts = u.pathname.split('/').filter(Boolean);
+  if (parts[0] === 'share') {
+    const q = new URLSearchParams();
+    if (u.searchParams.get('url')) q.set('url', u.searchParams.get('url'));
+    if (u.searchParams.get('text')) q.set('text', u.searchParams.get('text'));
+    return 'tg://msg_url?' + q.toString();
+  }
+  if (!parts.length || !/^[A-Za-z0-9_]{4,}$/.test(parts[0])) return null;
+  const q = new URLSearchParams({ domain: parts[0] });
+  if (parts[1] && /^\d+$/.test(parts[1])) q.set('post', parts[1]);
+  if (u.searchParams.get('start')) q.set('start', u.searchParams.get('start'));
+  return 'tg://resolve?' + q.toString();
+}
+document.addEventListener('click', (e) => {
+  const a = e.target.closest && e.target.closest('a[href]');
+  if (!a || e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey) return;
+  const deep = IS_MOBILE ? tgDeepLink(a.href) : null;
+  if (!deep) return;
+  e.preventDefault();
+  const web = a.href;
+  let left = false;
+  const onHide = () => { left = true; };
+  document.addEventListener('visibilitychange', onHide, { once: true });
+  window.addEventListener('pagehide', onHide, { once: true });
+  location.href = deep;
+  setTimeout(() => { if (!left && !document.hidden) location.href = web; }, 1500);
+}, true);
+let BOT = 'https://t.me/Rad_Alert_Syria1_bot';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -320,7 +353,7 @@ function renderLayersPanel() {
     <label class="radio"><input type="radio" name="ml" value="satellite" ${s.mapLayer === 'satellite' ? 'checked' : ''}/><span class="thumb sat"></span>${esc(T.satellite)}</label>
     <div class="grp" style="margin-top:6px">${tg('map3d', T.terrain3d)}</div>
     <div class="dd-sec">${esc(T.extraLayers)}</div>
-    ${tg('showPeaks', T.peaks)}${tg('showGov', T.govBorders)}${tg('focusSyria', T.focusSyria)}`;
+    ${tg('showGov', T.govBorders)}${tg('focusSyria', T.focusSyria)}`;
 }
 function closeDropdowns(except) {
   for (const [btn, panel] of [['#btnFilter', '#filterPanel'], ['#btnLayers', '#layersPanel']]) {
@@ -390,7 +423,7 @@ function closeDrawer() {
 
 // ------------------------------------------------------------------ about sheet & modals
 function renderAbout() {
-  const legend = TYPE_KEYS.map((t) => `<div class="lg-item"><span class="lg-dot" style="--c:${ALERT_TYPES[t].color};--r:${ALERT_TYPES[t].ring}">${icon(typeIcon(t), 14)}</span>${esc(typeName(t))}</div>`).join('');
+  const legend = TYPE_KEYS.map((t) => `<div class="lg-item"><span class="lg-dot">${glyphDisc(t, 26, 14)}</span>${esc(typeName(t))}</div>`).join('');
   $('#aboutBody').innerHTML = `<div class="sheet-grab"></div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-top:10px">
       <div><div class="eyebrow"><span class="line"></span>${esc(T.siteName)}</div><h2>${esc(T.aboutTitle)}</h2></div>
@@ -491,7 +524,7 @@ function alertToast(a) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.style.setProperty('--c', t.color);
-  el.innerHTML = `<span class="ti">${icon(typeIcon(a.type), 17)}</span><span class="tt"><small>${esc(T.newAlert)} · ${esc(typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
+  el.innerHTML = `<span class="ti">${glyphDisc(a.type, 34, 17)}</span><span class="tt"><small>${esc(T.newAlert)} · ${esc(typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
   el.addEventListener('click', () => {
     select(a.id);
     el.remove();
@@ -1008,7 +1041,6 @@ async function boot() {
     dark: document.documentElement.classList.contains('dark'),
     layer: s.mapLayer,
     map3d: s.map3d,
-    showPeaks: s.showPeaks,
     showGov: s.showGov,
     focusSyria: s.focusSyria,
     onSelect: (id, o) => select(id, o),

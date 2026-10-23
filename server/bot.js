@@ -17,7 +17,13 @@ const sessions = new Map(); // userId -> draft
 const reports = new Map(); // reportId -> { draft, from, messages: [[chatId, msgId]] }
 const lastReport = new Map();
 
-const isStaff = (id) => isOwner(id) || store.isEditor(id);
+const isStaffId = (id) => isOwner(id) || store.isEditor(id);
+// Two bots share this module: role 'admin' (private publishing panel) and role 'report' (public reports).
+const roleOf = (ctx) => ctx.ras?.role || 'admin';
+const staff = (ctx) => roleOf(ctx) === 'admin' && isStaffId(ctx.from?.id);
+const owner = (ctx) => roleOf(ctx) === 'admin' && isOwner(ctx.from?.id);
+const sk = (ctx) => `${roleOf(ctx)}:${ctx.from?.id}`;
+export const botInfo = { admin: null, report: null }; // usernames, filled at start
 const L = (ctx) => T[store.userLang(ctx.from?.id)] || T.ar;
 const langOf = (ctx) => store.userLang(ctx.from?.id) === 'en' ? 'en' : 'ar';
 const typeLabel = (key, lang) => `${typeOf(key).emoji} ${lang === 'en' ? typeOf(key).en : typeOf(key).ar}`;
@@ -85,9 +91,9 @@ function mainKeyboard(ctx) {
     .text(`${e('uav')} ${b('uav')}`, 't:uav').text(`${e('warplane')} ${b('warplane')}`, 't:warplane').row()
     .text(`${e('artillery')} ${b('artillery')}`, 't:artillery').text(`${e('attack')} ${b('attack')}`, 't:attack').row()
     .text(`${e('civil')} ${b('civil')}`, 't:civil').text(`${e('missile')} ${b('missile')}`, 't:missile').row();
-  if (isStaff(ctx.from.id)) kb.text(l.btnActive, 'active').text(l.btnLang, 'lang').row();
+  if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
-  if (isOwner(ctx.from.id)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row();
+  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row();
   if (config.publicUrl) kb.url(l.btnMap, mapUrl('', lang));
   kb.url(l.btnChannel, config.channelUrl);
   return kb;
@@ -157,7 +163,7 @@ function previewKeyboard(ctx, d) {
 
 async function show(ctx, text, keyboard) {
   const opts = { parse_mode: 'HTML', reply_markup: keyboard, link_preview_options: { is_disabled: true } };
-  const d = sessions.get(ctx.from.id);
+  const d = sessions.get(sk(ctx));
   if (ctx.callbackQuery?.message) {
     try {
       await ctx.editMessageText(text, opts);
@@ -173,7 +179,7 @@ async function show(ctx, text, keyboard) {
 function newDraft(ctx, type) {
   const d = {
     type,
-    mode: isStaff(ctx.from.id) ? 'publish' : 'report',
+    mode: staff(ctx) ? 'publish' : 'report',
     step: type === 'breaking' ? 'text' : 'gov',
     ttlMin: typeOf(type).ttlMin,
     location: null,
@@ -181,13 +187,13 @@ function newDraft(ctx, type) {
     text: '',
     created: Date.now(),
   };
-  sessions.set(ctx.from.id, d);
+  sessions.set(sk(ctx), d);
   return d;
 }
 
 const getDraft = (ctx) => {
-  const d = sessions.get(ctx.from.id);
-  if (d && Date.now() - d.created > 6 * 3600_000) { sessions.delete(ctx.from.id); return null; }
+  const d = sessions.get(sk(ctx));
+  if (d && Date.now() - d.created > 6 * 3600_000) { sessions.delete(sk(ctx)); return null; }
   return d;
 };
 
@@ -271,43 +277,56 @@ function who(u) {
 
 // ---------------------------------------------------------------- bot
 
-export function createBot() {
-  if (!config.botToken) return null;
-  const bot = new Bot(config.botToken);
+export function createBot({ role = 'admin', token = config.botToken, reviewApi = null } = {}) {
+  if (!token) return null;
+  const bot = new Bot(token);
 
   bot.use(async (ctx, next) => {
     if (ctx.chat && ctx.chat.type !== 'private') return; // only private chats
+    ctx.ras = { role };
     if (ctx.from) store.touchUser(ctx.from);
+    // The publishing bot is private: only the owner and the editors can use it.
+    if (role === 'admin' && ctx.from && !isStaffId(ctx.from.id)) {
+      const txt = ctx.message?.text || '';
+      if (/^\/id\b/.test(txt)) return ctx.reply(L(ctx).yourId(ctx.from.id), { parse_mode: 'HTML' });
+      if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
+      const l = L(ctx);
+      const kb = new InlineKeyboard();
+      if (botInfo.report) kb.url(l.btnReportBot, `https://t.me/${botInfo.report}?start=report`).row();
+      kb.url(l.btnChannel, config.channelUrl);
+      if (config.publicUrl) kb.url(l.btnMap, mapUrl('', langOf(ctx)));
+      return ctx.reply(l.privateBot(botInfo.report || 'Red_Alert_Syria'), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
+    }
     await next();
   });
 
   const home = async (ctx) => {
-    sessions.delete(ctx.from.id);
+    sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');
-    const text = isStaff(ctx.from.id) ? `${l.welcomeAdmin(name)}\n\n${l.mainMenu}` : `${l.welcomePublic(name)}\n\n${l.publicMenu}`;
+    const text = staff(ctx) ? `${l.welcomeAdmin(name)}\n\n${l.mainMenu}` : `${l.welcomeReport(name)}\n\n${l.publicMenu}`;
     await show(ctx, text, mainKeyboard(ctx));
   };
 
   bot.command(['start', 'menu'], async (ctx) => {
     if (ctx.callbackQuery) return home(ctx);
-    sessions.delete(ctx.from.id);
+    sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');
-    const text = isStaff(ctx.from.id) ? `${l.welcomeAdmin(name)}\n\n${l.mainMenu}` : `${l.welcomePublic(name)}\n\n${l.publicMenu}`;
+    const text = staff(ctx) ? `${l.welcomeAdmin(name)}\n\n${l.mainMenu}` : `${l.welcomeReport(name)}\n\n${l.publicMenu}`;
     await ctx.reply(text, { parse_mode: 'HTML', reply_markup: mainKeyboard(ctx), link_preview_options: { is_disabled: true } });
   });
-  bot.command('help', (ctx) => ctx.reply(L(ctx).help, { parse_mode: 'HTML' }));
+  bot.command('help', (ctx) => ctx.reply(staff(ctx) ? L(ctx).help : L(ctx).helpReport, { parse_mode: 'HTML' }));
   bot.command('id', (ctx) => ctx.reply(L(ctx).yourId(ctx.from.id), { parse_mode: 'HTML' }));
   bot.command('lang', async (ctx) => {
     store.setUserLang(ctx.from.id, langOf(ctx) === 'ar' ? 'en' : 'ar');
     await ctx.reply(L(ctx).langSet);
     await ctx.reply(L(ctx).mainMenu, { reply_markup: mainKeyboard(ctx) });
   });
-  bot.command('active', (ctx) => (isStaff(ctx.from.id) ? showActive(ctx) : null));
+  bot.command('active', (ctx) => (staff(ctx) ? showActive(ctx) : null));
 
   // Owner commands
-  const ownerOnly = (fn) => async (ctx) => (isOwner(ctx.from.id) ? fn(ctx) : ctx.reply(L(ctx).onlyOwner));
+  const ownerOnly = (fn) => async (ctx) => (owner(ctx) ? fn(ctx) : ctx.reply(L(ctx).onlyOwner));
   const editorsText = (ctx) => {
     const list = store.state.editors.map((id) => {
       const u = store.state.users[id];
@@ -354,12 +373,12 @@ export function createBot() {
   });
   bot.callbackQuery('editors', async (ctx) => {
     await ctx.answerCallbackQuery();
-    if (!isOwner(ctx.from.id)) return;
+    if (!owner(ctx)) return;
     await show(ctx, editorsText(ctx), new InlineKeyboard().text(L(ctx).btnHome, 'home'));
   });
   bot.callbackQuery('stats', async (ctx) => {
     await ctx.answerCallbackQuery();
-    if (!isOwner(ctx.from.id)) return;
+    if (!owner(ctx)) return;
     await show(ctx, statsText(ctx), new InlineKeyboard().text(L(ctx).btnHome, 'home'));
   });
 
@@ -367,7 +386,7 @@ export function createBot() {
     await ctx.answerCallbackQuery();
     const type = ctx.match[1];
     if (!ALERT_TYPES[type]) return;
-    if (!isStaff(ctx.from.id)) {
+    if (!staff(ctx)) {
       if (store.isBanned(ctx.from.id)) return show(ctx, L(ctx).banned, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
       if (Date.now() - (lastReport.get(ctx.from.id) || 0) < REPORT_COOLDOWN_MS) return show(ctx, L(ctx).reportRate, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
     }
@@ -459,27 +478,29 @@ export function createBot() {
   bot.callbackQuery('preview', needDraft((ctx, d) => showPreview(ctx, d)));
 
   bot.callbackQuery('publish', needDraft(async (ctx, d) => {
-    if (!isStaff(ctx.from.id)) return;
+    if (!staff(ctx)) return;
     if (d.type === 'breaking' && !d.text) return askLocation(ctx, d);
-    sessions.delete(ctx.from.id);
-    const alert = await publishDraft(ctx.api, d, { id: ctx.from.id, name: ctx.from.first_name });
+    sessions.delete(sk(ctx));
+    const alert = await publishDraft(ctx.api, d, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
+    if (d.fromReport) { try { await (d.notifyApi || ctx.api).sendMessage(d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser); } catch { /* ignore */ } }
     await show(ctx, `${L(ctx).published}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
   }));
 
   bot.callbackQuery('submit', needDraft(async (ctx, d) => {
     if (store.isBanned(ctx.from.id)) return;
-    sessions.delete(ctx.from.id);
+    sessions.delete(sk(ctx));
     lastReport.set(ctx.from.id, Date.now());
     const rid = Math.random().toString(36).slice(2, 10);
-    const rep = { draft: d, from: { id: ctx.from.id, first_name: ctx.from.first_name, last_name: ctx.from.last_name, username: ctx.from.username }, messages: [], created: Date.now() };
+    const rep = { draft: d, from: { id: ctx.from.id, first_name: ctx.from.first_name, last_name: ctx.from.last_name, username: ctx.from.username }, messages: [], created: Date.now(), notifyApi: ctx.api };
+    const api = reviewApi || ctx.api;
     reports.set(rid, rep);
     const reviewers = [...new Set([...config.ownerIds, ...store.state.editors])];
     for (const uid of reviewers) {
       const lang = store.userLang(uid) === 'en' ? 'en' : 'ar';
       const l = T[lang];
-      const kb = new InlineKeyboard().text(l.btnApprove, 'rap:' + rid).row().text(l.btnReject, 'rrj:' + rid).text(l.btnBan, 'rbn:' + rid);
+      const kb = new InlineKeyboard().text(l.btnApprove, 'rap:' + rid).row().text(l.btnEditPublish, 'red:' + rid).row().text(l.btnReject, 'rrj:' + rid).text(l.btnBan, 'rbn:' + rid);
       try {
-        const m = await ctx.api.sendMessage(uid, `${l.reportNew(who(ctx.from))}\n\n${draftSummary(d, lang)}`, { parse_mode: 'HTML', reply_markup: kb });
+        const m = await api.sendMessage(uid, `${l.reportNew(who(ctx.from))}\n\n${draftSummary(d, lang)}`, { parse_mode: 'HTML', reply_markup: kb });
         rep.messages.push([uid, m.message_id]);
       } catch (e) { /* reviewer has not started the bot */ }
     }
@@ -497,8 +518,8 @@ export function createBot() {
       } catch { /* ignore */ }
     }
   };
-  bot.callbackQuery(/^r(ap|rj|bn):(\w+)$/, async (ctx) => {
-    if (!isStaff(ctx.from.id)) return ctx.answerCallbackQuery();
+  bot.callbackQuery(/^r(ap|rj|bn|ed):(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
     const [, action, rid] = ctx.match;
     const rep = reports.get(rid);
     if (!rep) return ctx.answerCallbackQuery(L(ctx).notFound);
@@ -507,8 +528,14 @@ export function createBot() {
     if (action === 'ap') {
       const alert = await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
       await closeReport(ctx, rid, L(ctx).reportApproved(by));
-      try { await ctx.api.sendMessage(rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser); } catch { /* ignore */ }
+      try { await (rep.notifyApi || ctx.api).sendMessage(rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser); } catch { /* ignore */ }
       if (alert) await ctx.reply(L(ctx).published, { parse_mode: 'HTML', reply_markup: resultKeyboard(ctx, alert) });
+    } else if (action === 'ed') {
+      // Load the report into this editor's publishing session so it can be adjusted first.
+      await closeReport(ctx, rid, L(ctx).reportEditing(by));
+      const d = { ...rep.draft, mode: 'publish', created: Date.now(), msgId: null, fromReport: rep.from, notifyApi: rep.notifyApi };
+      sessions.set(sk(ctx), d);
+      await showPreview(ctx, d);
     } else {
       if (action === 'bn') store.ban(rep.from.id);
       await closeReport(ctx, rid, L(ctx).reportRejected(by) + (action === 'bn' ? ' · 🚫' : ''));
@@ -529,7 +556,7 @@ export function createBot() {
     kb.text(l.btnHome, 'home');
     await show(ctx, l.activeTitle(store.activeAlerts().length), kb);
   }
-  bot.callbackQuery('active', async (ctx) => { await ctx.answerCallbackQuery(); if (isStaff(ctx.from.id)) await showActive(ctx); });
+  bot.callbackQuery('active', async (ctx) => { await ctx.answerCallbackQuery(); if (staff(ctx)) await showActive(ctx); });
 
   const manageText = (ctx, a) => {
     const lang = langOf(ctx);
@@ -538,14 +565,14 @@ export function createBot() {
   };
   bot.callbackQuery(/^m:([\w-]{36})$/, async (ctx) => {
     await ctx.answerCallbackQuery();
-    if (!isStaff(ctx.from.id)) return;
+    if (!staff(ctx)) return;
     const a = store.getAlert(ctx.match[1]);
     if (!a) return show(ctx, L(ctx).notFound, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
     const kb = resultKeyboard(ctx, a).row().text(L(ctx).btnBack, 'active');
     await show(ctx, manageText(ctx, a), kb);
   });
   bot.callbackQuery(/^(end|del|ext):([\w-]{36})$/, async (ctx) => {
-    if (!isStaff(ctx.from.id)) return ctx.answerCallbackQuery();
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
     const [, action, id] = ctx.match;
     const a = store.getAlert(id);
     if (!a) {
@@ -628,7 +655,7 @@ export function createBot() {
   });
 
   // When alerts expire automatically, mark the channel post as ended.
-  store.on('expired', (a) => refreshChannelPost(bot.api, a, true));
+  if (role === 'admin') store.on('expired', (a) => refreshChannelPost(bot.api, a, true));
 
   // Clean old pending reports
   setInterval(() => {
@@ -693,3 +720,15 @@ export const BOT_COMMANDS = {
 };
 
 export { TYPE_KEYS };
+export const REPORT_COMMANDS = {
+  ar: [
+    { command: 'start', description: 'إرسال بلاغ جديد' },
+    { command: 'lang', description: 'English / العربية' },
+    { command: 'help', description: 'المساعدة' },
+  ],
+  en: [
+    { command: 'start', description: 'Send a new report' },
+    { command: 'lang', description: 'العربية / English' },
+    { command: 'help', description: 'Help' },
+  ],
+};
