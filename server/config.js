@@ -26,6 +26,7 @@ export const config = {
   webhookSecret: process.env.WEBHOOK_SECRET || derivedSecret,
   channel: process.env.CHANNEL_ID || '@Red_Alert_Syria',
   channelUrl: process.env.CHANNEL_URL || 'https://t.me/Red_Alert_Syria',
+  reportBotUsername: (process.env.REPORT_BOT_USERNAME || 'Rad_Alert_Syria1_bot').replace(/^@/, ''),
   ownerIds: list(process.env.OWNER_IDS || process.env.ADMIN_ID).map(Number).filter(Number.isFinite),
   dataDir: process.env.DATA_DIR || new URL('../data/runtime', import.meta.url).pathname,
   telegramBackup: process.env.TELEGRAM_BACKUP !== 'false',

@@ -195,6 +195,8 @@ export class AlertMap {
       c.classList.toggle('zoom-far', z < 7.5);
     };
     this.map.on('zoom', zoomTier);
+    this.map.on('zoom', () => this._queueZones());
+    this.map.on('resize', () => this._queueZones());
     zoomTier();
     this.map.on('styleimagemissing', (e) => {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
@@ -211,13 +213,13 @@ export class AlertMap {
       setTimeout(res, 6000);
     });
     this.ready = true;
-    if (window.innerWidth < 768) this.el.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
+    if (window.innerWidth / (window.__uiz || 1) < 768) this.el.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
     this.render();
     if (this._pending) { const [a, o] = this._pending; this._pending = null; this.select(a, o); }
   }
 
   padding() {
-    const mobile = window.innerWidth < 768;
+    const mobile = window.innerWidth / (window.__uiz || 1) < 768;
     return mobile ? { top: 70, bottom: 120, left: 30, right: 30 } : { top: 70, bottom: 70, left: 60, right: 60 };
   }
 
@@ -260,7 +262,7 @@ export class AlertMap {
     // Affected-area circles: vivid red-tinted fill + solid edge + soft pulsing glow (like the original),
     // softened slightly at very close zoom so a small circle never floods the screen.
     const A = (on, off) => ['case', ['get', 'active'], on, off];
-    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 8, A(dark ? 0.3 : 0.24, 0.07), 12, A(dark ? 0.26 : 0.2, 0.06), 15, A(dark ? 0.18 : 0.13, 0.04)] } });
+    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 8, A(dark ? 0.3 : 0.24, 0.07), 12, A(dark ? 0.27 : 0.21, 0.06), 15, A(dark ? 0.24 : 0.19, 0.05)] } });
     add({ id: 'ras-zones-glow', type: 'line', source: 'ras-zones', filter: ['all', ['!', ['get', 'dashed']], ['get', 'active']], paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.35, 'line-width': 10, 'line-blur': 8 } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, A(0.95, 0.3), 13, A(0.85, 0.25), 15, A(0.7, 0.2)], 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 11, 2.2] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.85, 0.3), 'line-width': 1.8, 'line-dasharray': [3, 4] } });
@@ -355,6 +357,8 @@ export class AlertMap {
     } else if (t.marker === 'squad') {
       const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(16, 22, -8, 1)}${pl(14, 6, 12, 0.85)}${pl(14, 38, 12, 0.85)}</div>`;
+    } else if (t.marker === 'icon') {
+      el.innerHTML = `<div class="ic ic-${t.glyph}" style="--ic:${t.icon || t.color}">${svgTag(t.glyph, 30, 'class="ic-svg"')}</div>`;
     } else {
       el.innerHTML = glyphDisc(a.type);
     }
@@ -374,8 +378,25 @@ export class AlertMap {
       if (document.hidden || !this.map || !this.map.getLayer('ras-zones-glow')) return;
       const k = (Math.sin(((performance.now() - t0) / 1800) * Math.PI * 2) + 1) / 2; // 0..1, 1.8 s period
       this.map.setPaintProperty('ras-zones-glow', 'line-opacity', 0.15 + 0.45 * k);
-      this.map.setPaintProperty('ras-zones-glow', 'line-width', 6 + 12 * k);
+      const small = Math.min(this.map.getContainer().clientWidth, this.map.getContainer().clientHeight) < 520;
+      this.map.setPaintProperty('ras-zones-glow', 'line-width', small ? 4 + 8 * k : 6 + 12 * k);
     }, 90);
+  }
+  // Keep every affected-area circle in proportion to the screen: it follows its real size on the
+  // ground, but never shrinks below a visible dot at country view nor grows past a comfortable share
+  // of the screen when zoomed in (laptop, phone and phone "desktop site" alike).
+  _screenKm(km, lat, scope) {
+    const c = this.map.getContainer();
+    const vmin = Math.max(200, Math.min(c.clientWidth, c.clientHeight) || 600);
+    const mpp = (40075016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * Math.pow(2, this.map.getZoom()));
+    const minPx = Math.max(14, vmin * 0.035);
+    const maxPx = vmin * (scope === 'governorate' ? 0.26 : scope === 'district' ? 0.2 : 0.13);
+    const px = Math.min(maxPx, Math.max(minPx, (km * 1000) / mpp));
+    return (px * mpp) / 1000;
+  }
+  _queueZones() {
+    if (this._zq) return;
+    this._zq = requestAnimationFrame(() => { this._zq = 0; this.updateZones(); });
   }
   updateZones() {
     const src = this.map && this.map.getSource('ras-zones');
@@ -384,7 +405,7 @@ export class AlertMap {
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
       if (!t || !t.zone || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude)) continue;
-      const km = ZONE_KM[a.scope] || ZONE_KM.place;
+      const km = this._screenKm(ZONE_KM[a.scope] || ZONE_KM.place, a.location.latitude, a.scope);
       features.push({ type: 'Feature', properties: { color: ZONE_COLOR[a.type] || t.color, active: !!a.is_active, dashed: t.zone === 'dashed' }, geometry: { type: 'Polygon', coordinates: [circlePolygon(a.location.longitude, a.location.latitude, km)] } });
     }
     src.setData({ type: 'FeatureCollection', features });

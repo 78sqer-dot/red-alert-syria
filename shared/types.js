@@ -5,7 +5,7 @@ export const ALERT_TYPES = {
   breaking: {
     ar: 'خبر عاجل', en: 'Breaking news', button_ar: 'خبر عاجل', button_en: 'Breaking',
     emoji: '🔴', color: '#ff3b4e', ring: '#c81e2f', group: 'other', ttlMin: 120,
-    marker: 'static', glyph: 'other', disc: '#000000', zone: true, tag_ar: 'عاجل', tag_en: 'Breaking',
+    marker: 'icon', glyph: 'alert_tri', icon: '#e11d2e', disc: '#000000', zone: true, tag_ar: 'عاجل', tag_en: 'Breaking',
   },
   uav: {
     ar: 'مسيّرة', en: 'UAV / Drone', button_ar: 'مسيّرة', button_en: 'Drone',
@@ -20,7 +20,7 @@ export const ALERT_TYPES = {
   missile: {
     ar: 'صواريخ', en: 'Missiles', button_ar: 'صواريخ', button_en: 'Missiles',
     emoji: '🚀', color: '#7f1d1d', ring: '#450a0a', group: 'aerial', ttlMin: 180,
-    marker: 'static', glyph: 'missile', disc: '#000000', zone: false, tag_ar: 'صواريخ', tag_en: 'Missiles',
+    marker: 'icon', glyph: 'missile_ic', icon: '#c0262d', disc: '#000000', zone: false, tag_ar: 'صواريخ', tag_en: 'Missiles',
   },
   attack: {
     ar: 'هجوم', en: 'Attack', button_ar: 'هجوم', button_en: 'Attack',
@@ -30,12 +30,12 @@ export const ALERT_TYPES = {
   artillery: {
     ar: 'قصف مدفعي', en: 'Artillery shelling', button_ar: 'قصف مدفعي', button_en: 'Artillery',
     emoji: '🎯', color: '#f97316', ring: '#f97316', group: 'strikes', ttlMin: 360,
-    marker: 'static', glyph: 'artillery', disc: '#f97316', zone: false, tag_ar: 'قصف_مدفعي', tag_en: 'Artillery',
+    marker: 'icon', glyph: 'tank', icon: '#f97316', disc: '#f97316', zone: false, tag_ar: 'قصف_مدفعي', tag_en: 'Artillery',
   },
   civil: {
     ar: 'مدني', en: 'Civil alert', button_ar: 'مدني', button_en: 'Civil',
     emoji: '🚑', color: '#0891b2', ring: '#155e75', group: 'other', ttlMin: 240,
-    marker: 'static', glyph: 'home_destroying', disc: '#000000', zone: false, tag_ar: 'مدني', tag_en: 'Civil',
+    marker: 'icon', glyph: 'ambulance', icon: '#0891b2', disc: '#000000', zone: false, tag_ar: 'مدني', tag_en: 'Civil',
   },
 };
 

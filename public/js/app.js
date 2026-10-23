@@ -47,7 +47,32 @@ let BOT = 'https://t.me/Rad_Alert_Syria1_bot';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const isMobile = () => window.innerWidth < 768;
+const uiz = () => window.__uiz || 1;
+const viewW = () => window.innerWidth / uiz();
+const isMobile = () => viewW() < 768;
+// In phone "desktop site" mode the browser still evaluates CSS media queries at ~980px, so re-evaluate
+// every width-based @media rule against the real (zoomed) width.
+const mediaOrig = new Map();
+function syncMediaRules() {
+  const w = viewW();
+  for (const sheet of document.styleSheets) {
+    let rules;
+    try { rules = sheet.cssRules; } catch { continue; }
+    for (const r of rules) {
+      if (!(r instanceof CSSMediaRule)) continue;
+      if (!mediaOrig.has(r)) mediaOrig.set(r, r.media.mediaText);
+      const txt = mediaOrig.get(r);
+      if (!/(max|min)-width/.test(txt) || /prefers|hover|pointer/.test(txt)) continue;
+      if (uiz() === 1) { if (r.media.mediaText !== txt) r.media.mediaText = txt; continue; }
+      const mx = /max-width:\s*(\d+)px/.exec(txt);
+      const mn = /min-width:\s*(\d+)px/.exec(txt);
+      const ok = (!mx || w <= +mx[1]) && (!mn || w >= +mn[1]);
+      r.media.mediaText = ok ? 'all' : 'not all';
+    }
+  }
+}
+syncMediaRules();
+window.addEventListener('resize', () => { if (window.__applyUiz) window.__applyUiz(); syncMediaRules(); });
 
 // ------------------------------------------------------------------ state
 const state = {
@@ -582,7 +607,7 @@ function renderTour() {
   let sel = TOUR_TARGETS[tourStep];
   if (typeof sel === 'function') sel = sel();
   const target = sel && $(sel);
-  const vw = window.innerWidth;
+  const vw = viewW();
   const vh = window.innerHeight;
   const cw = Math.min(340, vw - 24);
   const ch = card.offsetHeight || 170;

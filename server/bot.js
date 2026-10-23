@@ -47,27 +47,45 @@ function locName(loc, lang) {
 const fmtTime = (iso, lang) =>
   new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-SY', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' }).format(new Date(iso));
 
+const SEP = '━━━━━━━━━━━━━━━';
+const fmtClock = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+const fmtDay = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(iso));
 export function channelPost(alert, { ended = false } = {}) {
   const t = typeOf(alert.type);
   const p = alert.place || {};
+  const hasPlace = p.scope && p.scope !== 'country';
   const lines = [];
-  lines.push(`${t.emoji} <b>${esc(alert.title)}</b>`);
-  if (alert.type === 'breaking' && alert.description) {
-    lines.push('', esc(alert.description));
-    if (p.scope && p.scope !== 'country') lines.push('', `📍 ${esc(locName(p, 'ar'))}`);
+  // header: brand + type, then the headline
+  lines.push(`${ended ? '✅' : '🚨'} <b>الإنذار الأحمر | ${esc(t.ar)}</b> ${t.emoji}`);
+  lines.push(SEP);
+  if (alert.type === 'breaking') {
+    lines.push(`<b>${esc(alert.description || alert.title)}</b>`);
   } else {
-    lines.push(`📍 ${esc(locName(p, 'ar'))}`);
-    if (alert.description) lines.push('', `📝 ${esc(alert.description)}`);
+    lines.push(`<b>${esc(alert.title)}</b>`);
   }
-  lines.push('', `🕒 ${esc(fmtTime(alert.timestamp, 'ar'))}`);
+  lines.push('');
+  if (hasPlace || alert.type !== 'breaking') lines.push(`📍 <b>المكان:</b> ${esc(locName(p, 'ar'))}`);
+  lines.push(`🕒 <b>الوقت:</b> ${esc(fmtClock(alert.timestamp))} — ${esc(fmtDay(alert.timestamp))}`);
+  if (ended) lines.push(`✅ <b>الحالة:</b> انتهى التنبيه — ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
+  else lines.push(`🔴 <b>الحالة:</b> نشط الآن`);
+  if (alert.type !== 'breaking' && alert.description) lines.push('', `<blockquote>${esc(alert.description)}</blockquote>`);
+  lines.push(SEP);
   const tags = [hashTag(t.tag_ar), ...(alert.areas || []).slice(0, 3).map(hashTag)];
   lines.push(tags.join(' '));
-  if (ended) lines.push('', `✅ <b>انتهى التنبيه</b> — ${esc(fmtTime(alert.ended_at || new Date().toISOString(), 'ar'))}`);
   const url = mapUrl(alert.id);
-  if (url) lines.push('', `🗺 <a href="${esc(url)}">الخريطة المباشرة</a> · <a href="${esc(config.channelUrl)}">Red Alert Syria</a>`);
+  const links = [];
+  if (url) links.push(`🗺 <a href="${esc(url)}">الخريطة المباشرة</a>`);
+  links.push(`📢 <a href="${esc(config.channelUrl)}">Red Alert Syria</a>`);
+  lines.push(links.join('  |  '));
   return lines.join('\n');
 }
-
+export function channelKeyboard(alert) {
+  const url = mapUrl(alert.id);
+  const kb = new InlineKeyboard();
+  if (url) kb.url('🗺 عرض على الخريطة', url);
+  if (config.reportBotUsername) kb.url('📨 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
+  return kb;
+}
 function draftSummary(d, lang) {
   const l = T[lang];
   const loc = d.location;
@@ -249,7 +267,7 @@ export async function publishDraft(api, d, author) {
   const alert = store.addAlert(buildAlertInput(d, author));
   try {
     const url = mapUrl(alert.id);
-    const m = await api.sendMessage(config.channel, channelPost(alert), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...(url ? { reply_markup: new InlineKeyboard().url('🗺 عرض على الخريطة المباشرة', url) } : {}) });
+    const m = await api.sendMessage(config.channel, channelPost(alert), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(alert) });
     store.updateAlert(alert.id, { channel_message_id: m.message_id });
   } catch (e) {
     console.error('[bot] channel post failed:', e.description || e.message);
@@ -271,7 +289,7 @@ async function refreshChannelPost(api, alert, ended) {
   if (!alert?.channel_message_id) return;
   try {
     const url = mapUrl(alert.id);
-    await api.editMessageText(config.channel, alert.channel_message_id, channelPost(alert, { ended }), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...(url ? { reply_markup: new InlineKeyboard().url('🗺 عرض على الخريطة المباشرة', url) } : {}) });
+    await api.editMessageText(config.channel, alert.channel_message_id, channelPost(alert, { ended }), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(alert) });
   } catch (e) {
     if (!String(e.description || '').includes('not modified')) console.error('[bot] edit channel failed:', e.description || e.message);
   }

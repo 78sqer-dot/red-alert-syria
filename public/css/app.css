@@ -53,6 +53,8 @@ html[dir='ltr'] .flip svg { transform: scaleX(-1); }
 :focus-visible { outline: 2px solid var(--red); outline-offset: 2px; border-radius: 6px; }
 
 .app { display: flex; flex-direction: column; height: 100%; height: 100dvh; }
+html.rds .app { height: calc(100dvh / var(--uiz, 1)); }
+html.rds, html.rds body { overflow: hidden; }
 
 /* ---------------------------------------------------------------- top bar */
 .topbar { height: var(--header-h); flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); position: relative; z-index: 30; }
@@ -253,6 +255,27 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .sai svg { display: block; }
 .mk:hover .sai, .mk.sel .sai { transform: translate(-50%, -50%) scale(1.15); }
 .mk.sel .sai { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent); }
+/* small silhouette icons (artillery tank, missile, ambulance, breaking) — same clean style as the drone/warplanes */
+.ic { position: absolute; left: 0; top: 0; width: 30px; height: 30px; transform: translate(-50%, -50%); transition: transform .15s; }
+.ic-svg { display: block; fill: var(--ic); overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.75)) drop-shadow(0 1px 2px rgba(255,255,255,.6)); }
+html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
+.mk:hover .ic, .mk.sel .ic { transform: translate(-50%, -50%) scale(1.25); }
+.mk.sel .ic-svg { filter: drop-shadow(0 0 1px rgba(0,0,0,.8)) drop-shadow(0 0 6px var(--ic)); }
+.maplibregl-map.zoom-far .ic { width: 27px; height: 27px; }
+.maplibregl-map.zoom-far .ic-svg { width: 27px; height: 27px; }
+.mk.inactive .ic { opacity: .55; }
+.mk.inactive .ic * { animation: none !important; }
+.ic-tank .tk-body { animation: tkRecoil 2.6s ease-out infinite; transform-box: fill-box; }
+.ic-tank .tk-flash { fill: #facc15; opacity: 0; animation: tkFlash 2.6s ease-out infinite; transform-box: fill-box; transform-origin: left center; }
+@keyframes tkRecoil { 0%, 100% { transform: none; } 4% { transform: translateX(-6%); } 14% { transform: none; } }
+@keyframes tkFlash { 0% { opacity: 0; transform: scale(.4); } 3% { opacity: 1; transform: scale(1.15); } 12% { opacity: 0; transform: scale(.9); } 100% { opacity: 0; } }
+.ic-missile_ic .ic-svg { animation: msDive 1.8s ease-in-out infinite; }
+.ic-missile_ic .ms-flame { fill: #fb923c; animation: blink .25s linear infinite; }
+@keyframes msDive { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(2px, 3px); } }
+.ic-ambulance .amb-siren { animation: siren .9s steps(1) infinite; }
+@keyframes siren { 0% { fill: #ef4444; } 50% { fill: #3b82f6; } }
+.ic-alert_tri .ic-svg { animation: brkPulse 1.6s ease-in-out infinite; }
+@keyframes brkPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
 /* drone — grey airframe that orbits only at close zoom (like the original) */
 .uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
 .uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
@@ -407,7 +430,7 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-14px); } }
 @keyframes cardIn { from { opacity: 0; transform: translateY(-8px); background: color-mix(in srgb, var(--c) 18%, var(--bg-card)); } }
 @keyframes flash { 50% { filter: brightness(1.35); } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } .uav, .squad .sq { animation-duration: 7s !important; animation-iteration-count: infinite !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } .uav, .squad .sq { animation-duration: 7s !important; animation-iteration-count: infinite !important; } .ic-tank .tk-body, .ic-tank .tk-flash { animation-duration: 2.6s !important; animation-iteration-count: infinite !important; } .ic-alert_tri .ic-svg { animation-duration: 1.6s !important; animation-iteration-count: infinite !important; } .ic-ambulance .amb-siren { animation-duration: .9s !important; animation-iteration-count: infinite !important; } .ic-missile_ic .ic-svg { animation-duration: 1.8s !important; animation-iteration-count: infinite !important; } }
 
 /* ---------------------------------------------------------------- responsive */
 @media (max-width: 1180px) {
