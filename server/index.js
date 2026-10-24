@@ -4,10 +4,11 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
-import { createBot, resyncChannelPosts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo } from './bot.js';
 import { governorates } from './places.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -89,6 +90,18 @@ app.get('/api/alerts/:id', apiLimiter, (req, res) => {
   res.json({ alert: publicAlert(a) });
 });
 
+// Token-protected self-test of the channel image on this server: renders samples and sends them to the
+// owner's private chat only. key = sha256(BOT_TOKEN + ':imgtest').
+app.get('/api/imgtest', apiLimiter, async (req, res) => {
+  const want = config.botToken ? crypto.createHash('sha256').update(`${config.botToken}:imgtest`).digest('hex') : null;
+  const key = String(req.query.key || '');
+  if (!want || !bot || key.length !== want.length || !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(404).end();
+  const owner = config.ownerIds[0];
+  if (!owner) return res.status(400).json({ error: 'no owner' });
+  try {
+    res.json(await imageTest(bot.api, owner, { type: String(req.query.type || 'uav'), q: String(req.query.q || ''), lang: req.query.lang === 'en' ? 'en' : 'ar' }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get('/api/meta', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=3600');
   res.json({ governorates: governorates.map(({ code, ar, en, lat, lon }) => ({ code, ar, en, lat, lon })), channel: config.channelUrl, bot: botUsername ? `https://t.me/${botUsername}` : null });

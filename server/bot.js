@@ -320,6 +320,32 @@ export async function alertImage(alert, lang = 'ar') {
   const placeLabel = alert.scope === 'country' || !p.name_ar ? undefined : locName(p, lang);
   return renderAlertPng(alert, { lang, placeLabel });
 }
+// Render sample channel images on this server and send them to a private chat (never the channel).
+// Used by the owner's /imgtest command and the token-protected /api/imgtest check.
+export async function imageTest(api, chatId, { type = 'uav', q = '', lang = 'ar' } = {}) {
+  const query = q || 'دوما';
+  const hits = searchPlaces(query, 8);
+  const hit = hits.find((x) => !x.scope) || hits[0];
+  const loc = hit ? (hit.scope === 'governorate' ? locationFrom({ govCode: hit.gov }) : hit.scope === 'district' ? locationFrom({ distCode: hit.code || hit.dist }) : locationFrom({ placeId: hit.id })) : locationFrom({});
+  const types = type === 'all' ? TYPE_KEYS : [ALERT_TYPES[type] ? type : 'uav'];
+  const results = [];
+  for (const t of types) {
+    const fake = { id: 'imgtest-' + Math.random().toString(16).slice(2).padEnd(28, '0'), type: t, scope: loc?.scope || 'country', location: loc?.latitude != null ? { latitude: loc.latitude, longitude: loc.longitude } : null, place: loc, timestamp: new Date().toISOString(), description: t === 'breaking' ? 'معاينة خبر عاجل' : '' };
+    const t0 = Date.now(); const c0 = process.cpuUsage();
+    try {
+      const png = await withDeadline(alertImage(fake, lang === 'en' ? 'en' : 'ar'), IMAGE_DEADLINE_MS);
+      const cpu = process.cpuUsage(c0); const ms = Date.now() - t0;
+      const cpuMs = Math.round((cpu.user + cpu.system) / 1000);
+      const note = `\n\n🧪 <i>معاينة فقط — لم تُنشر في القناة · ${ms} ms (CPU ${cpuMs} ms) · ${Math.round(png.length / 1024)} KB</i>`;
+      await api.sendPhoto(chatId, new InputFile(png, `imgtest-${t}.png`), { caption: channelCaption(fake, {}).slice(0, CAPTION_MAX - note.length) + note, parse_mode: 'HTML', reply_markup: channelKeyboard(fake) });
+      results.push({ type: t, ok: true, ms, cpuMs, kb: Math.round(png.length / 1024), sentMs: Date.now() - t0 });
+    } catch (e) {
+      results.push({ type: t, ok: false, error: e.description || e.message, ms: Date.now() - t0 });
+      try { await api.sendMessage(chatId, `⚠️ imgtest ${t}: ${esc(e.description || e.message)} — كان سيُنشر نصاً.`, { parse_mode: 'HTML' }); } catch { /* ignore */ }
+    }
+  }
+  return { place: loc?.name_ar || 'سوريا', scope: loc?.scope || 'country', results };
+}
 export async function publishDraft(api, d, author) {
   const alert = store.addAlert(buildAlertInput(d, author));
   const text = channelPost(alert);
@@ -639,23 +665,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   // (never to the channel). /imgtest [type] [place name] — e.g. "/imgtest uav دوما", "/imgtest all".
   bot.command('imgtest', ownerOnly(async (ctx) => {
     const args = String(ctx.match || '').trim().split(/\s+/).filter(Boolean);
-    const want = args[0] && (ALERT_TYPES[args[0]] || args[0] === 'all') ? args.shift() : 'uav';
-    const q = args.join(' ') || 'دوما';
-    const hit = searchPlaces(q, 8).find((x) => !x.scope) || searchPlaces(q, 8)[0];
-    const loc = hit ? (hit.scope === 'governorate' ? locationFrom({ govCode: hit.gov }) : hit.scope === 'district' ? locationFrom({ distCode: hit.code || hit.dist }) : locationFrom({ placeId: hit.id })) : locationFrom({});
-    const types = want === 'all' ? TYPE_KEYS : [want];
-    for (const type of types) {
-      const fake = { id: 'imgtest-' + Math.random().toString(16).slice(2).padEnd(28, '0'), type, scope: loc?.scope || 'country', location: loc?.latitude != null ? { latitude: loc.latitude, longitude: loc.longitude } : null, place: loc, timestamp: new Date().toISOString(), description: type === 'breaking' ? 'معاينة خبر عاجل' : '' };
-      const t0 = Date.now(); const c0 = process.cpuUsage();
-      try {
-        const png = await withDeadline(alertImage(fake, langOf(ctx) === 'en' ? 'en' : 'ar'), IMAGE_DEADLINE_MS);
-        const cpu = process.cpuUsage(c0);
-        const note = `\n\n🧪 <i>معاينة فقط — لم تُنشر في القناة · ${Date.now() - t0} ms (CPU ${Math.round((cpu.user + cpu.system) / 1000)} ms) · ${Math.round(png.length / 1024)} KB</i>`;
-        await ctx.replyWithPhoto(new InputFile(png, `imgtest-${type}.png`), { caption: channelCaption(fake, {}).slice(0, CAPTION_MAX - note.length) + note, parse_mode: 'HTML', reply_markup: channelKeyboard(fake) });
-      } catch (e) {
-        await ctx.reply(`⚠️ imgtest ${type}: ${esc(e.message)} (${Date.now() - t0} ms) — كان سيُنشر نصاً.`, { parse_mode: 'HTML' });
-      }
-    }
+    const type = args[0] && (ALERT_TYPES[args[0]] || args[0] === 'all') ? args.shift() : 'uav';
+    await imageTest(ctx.api, ctx.chat.id, { type, q: args.join(' '), lang: langOf(ctx) });
   }));
   bot.command('editors', ownerOnly((ctx) => ctx.reply(editorsText(ctx), { parse_mode: 'HTML' })));
   bot.command('addeditor', ownerOnly(async (ctx) => {

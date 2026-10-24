@@ -81,3 +81,4 @@ Plus civil sub-buttons in BOTH bots: civil button opens submenu (مدني عام
 - CPU: ~260 ms locally at 820px output (Render free = 0.1 CPU -> ~2.5 s). Deadline 12 s then text fallback. ALERT_IMAGES=false disables. Logo: public/img/logo-wordmark.svg or ALERT_IMAGE_LOGO.
 - Stored alert: location {latitude,longitude}; names in alert.place; alert.scope; channel_media 'photo'|'text' -> refreshChannelPost uses editMessageCaption for photos.
 - Owner Telegram id 8270709633 (test images go there only, never @Red_Alert_Syria).
+- /api/imgtest?key=sha256(BOT_TOKEN+':imgtest')&type=uav|all&q=place -> renders on Render, sends to owner chat only. Render service srv-dbdp7459fdbs7386b3d0, workspace tea-dbcholnf3r2c73belk8g.
