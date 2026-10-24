@@ -169,7 +169,8 @@ class Store extends EventEmitter {
       extra: Array.isArray(input.extra) ? input.extra.filter((x) => x && Number.isFinite(x.latitude)).slice(0, 20) : [],
       scope: input.location?.scope || 'country',
       timestamp: now.toISOString(),
-      expires_at: new Date(now.getTime() + ttl * 60_000).toISOString(),
+      // an alert never outlives the auto-delete window (default 1 h), so "ends at" matches when it leaves the map
+      expires_at: new Date(now.getTime() + Math.min(ttl, this.autoDeleteHours ? this.autoDeleteHours * 60 : Infinity) * 60_000).toISOString(),
       source: input.source || 'telegram',
       is_active: true,
       author: input.author || null,
