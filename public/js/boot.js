@@ -20,3 +20,9 @@
   window.__applyUiz = function () {};
   window.__viewW = function () { return window.innerWidth; };
 })();
+// The browser's "install app" event can fire before the main module loads: keep it for install.js.
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();
+  window.__bip = e;
+  try { window.dispatchEvent(new Event('ras-bip')); } catch (x) { /* ignore */ }
+});

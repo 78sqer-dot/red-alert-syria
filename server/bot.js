@@ -1,3 +1,4 @@
+import { installTracker, cleanChat, setKeep } from './ui-clean.js';
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
 import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
@@ -7,6 +8,7 @@ import { ALERT_TYPES, TYPE_KEYS, typeOf } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
+import { registerContactTools } from './contact-tools.js';
 import { governorates, getGov, getDist, districtsOf, placesOf, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
 
 const PAGE = 18;
@@ -113,7 +115,7 @@ function mainKeyboard(ctx) {
     .text(`${e('civil')} ${b('civil')}`, 'cv').text(`${e('missile')} ${b('missile')}`, 't:missile').row();
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
-  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row();
+  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row().text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').row();
   if (config.publicUrl) kb.url(l.btnMap, mapUrl('', lang));
   kb.url(l.btnChannel, config.channelUrl);
   return kb;
@@ -439,17 +441,17 @@ async function relayCopy(fromApi, fromToken, toApi, chatId, msg, header, footer)
   const kind = Object.keys(RELAY_KINDS).find((k) => msg[k]);
   const body = msg.text || msg.caption || '';
   const txt = `${header}${body ? `\n\n${esc(body)}` : ''}${footer ? `\n\n${footer}` : ''}`;
-  if (!kind) return toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+  if (!kind) return toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, _keep: 'r' });
   const fileId = kind === 'photo' ? msg.photo[msg.photo.length - 1].file_id : msg[kind].file_id;
   const f = await fromApi.getFile(fileId);
   const res = await fetch(`https://api.telegram.org/file/bot${fromToken}/${f.file_path}`);
   if (!res.ok) throw new Error('file download failed');
   const file = new InputFile(Buffer.from(await res.arrayBuffer()), msg.document?.file_name || f.file_path.split('/').pop());
   if (kind === 'video_note' || kind === 'sticker') {
-    await toApi[RELAY_KINDS[kind]](chatId, file);
-    return toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML' });
+    await toApi[RELAY_KINDS[kind]](chatId, file, { _keep: 'r' });
+    return toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML', _keep: 'r' });
   }
-  return toApi[RELAY_KINDS[kind]](chatId, file, { caption: txt.slice(0, 1024), parse_mode: 'HTML' });
+  return toApi[RELAY_KINDS[kind]](chatId, file, { caption: txt.slice(0, 1024), parse_mode: 'HTML', _keep: 'r' });
 }
 const reviewerIds = () => [...new Set([...config.ownerIds, ...store.state.editors])];
 
@@ -553,11 +555,14 @@ const OH = {
   mainKeyboard: (ctx) => mainKeyboard(ctx),
   dropSessions: (id) => { sessions.delete(`admin:${id}`); },
   resync: () => resyncChannelPosts(APIS.admin).catch(() => {}),
+  sendTransient: (api, chat, text, o) => sendTransient(api, chat, text, o),
 };
 export function createBot({ role = 'admin', token = config.botToken, reviewApi = null } = {}) {
   if (!token) return null;
   const bot = new Bot(token);
   APIS[role] = bot.api; TOKENS[role] = token;
+  installTracker(bot.api, role); // records every message the bot sends (clean chats)
+  bot.use(cleanChat(role)); // after each tap/message: only the current screen stays
   bot.use(async (ctx, next) => {
     if (ctx.chat && ctx.chat.type !== 'private') return; // only private chats
     ctx.ras = { role };
@@ -577,7 +582,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     await next();
   });
-  if (role === 'admin') registerOwnerTools(bot, OH); else registerReportOwnerCommands(bot, OH);
+  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {
@@ -595,6 +600,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         store.relayPut(`r:${uid}:${m.message_id}`, ctx.from.id);
         store.openThread(uid, ctx.from.id);
         store.convoAdd('admin', ctx.chat.id, ctx.message.message_id); // staff's own reply
+        ctx.ras.keepInput = true;
         store.convoAdd('report', uid, m.message_id); // the copy the reporter received
         await sendTransient(ctx.api, ctx.chat.id, en ? '✅ Your reply was sent to the reporter.' : '✅ تم إرسال ردك إلى صاحب البلاغ.');
       } catch (e) {
@@ -633,7 +639,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         } catch (e) { console.warn('[relay] to staff failed', e.description || e.message); }
       }
       store.openThread(ctx.from.id);
-      if (ok) store.convoAdd('report', ctx.chat.id, msg.message_id); // reporter's own message
+      if (ok) { store.convoAdd('report', ctx.chat.id, msg.message_id); ctx.ras.keepInput = true; } // reporter's own message
       await sendTransient(ctx.api, ctx.chat.id, ok ? (en ? '✅ Your message reached the team.' : '✅ وصلت رسالتك إلى الإدارة.') : (en ? '⚠️ Could not deliver, try again later.' : '⚠️ تعذّر الإيصال، حاول لاحقاً.'));
     });
   }
@@ -982,7 +988,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       const kb = new InlineKeyboard().text(l.btnApprove, 'rap:' + rid).row().text(l.btnEditPublish, 'red:' + rid).row().text(l.btnReject, 'rrj:' + rid).text(l.btnBan, 'rbn:' + rid);
       try {
         const hint = lang === 'en' ? '<i>↩️ To talk to the reporter, use "Reply" on this message.</i>' : '<i>↩️ لمراسلة صاحب البلاغ: اعمل «رد» على هذه الرسالة واكتب.</i>';
-        const m = await api.sendMessage(uid, `${l.reportNew(who(ctx.from))}\n\n${draftSummary(d, lang)}\n\n${hint}`, { parse_mode: 'HTML', reply_markup: kb });
+        const m = await api.sendMessage(uid, `${l.reportNew(who(ctx.from))}\n\n${draftSummary(d, lang)}\n\n${hint}`, { parse_mode: 'HTML', reply_markup: kb, _keep: 'c' }); // stays until handled
         rep.messages.push([uid, m.message_id]);
         store.relayPut(`a:${uid}:${m.message_id}`, ctx.from.id);
       } catch (e) { /* reviewer has not started the bot */ }
@@ -998,6 +1004,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const rep = reports.get(rid);
     if (!rep) return;
     reports.delete(rid);
+    for (const [chat, mid] of rep.messages) setKeep('admin', chat, mid, false); // handled: normal screen now
     const cur = ctx.callbackQuery?.message;
     for (const [chat, mid] of rep.messages) {
       if (cur && chat === cur.chat.id && mid === cur.message_id) { if (keepCurrent) continue; }
@@ -1207,7 +1214,7 @@ export function telegramBackupAdapter(api0) {
         if (/not modified/i.test(e.description || '')) return;
       }
     }
-    const m = await api.sendDocument(chat, file(), { caption, disable_notification: true });
+    const m = await api.sendDocument(chat, file(), { caption, disable_notification: true, _keep: 'b' });
     try { await api.pinChatMessage(chat, m.message_id, { disable_notification: true }); } catch { /* ignore */ }
     if (prev) { try { await api.deleteMessage(chat, prev); } catch { /* ignore */ } }
     last.set(key, m.message_id);

@@ -1,5 +1,11 @@
 // Tabler Icons (MIT) — https://tabler.io/icons
 export const ICONS = {
+  whatsapp: { filled: false, body: "<path d=\"M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9\" /><path d=\"M9 10a.5 .5 0 0 0 1 0v-1a.5 .5 0 0 0 -1 0v1a5 5 0 0 0 5 5h1a.5 .5 0 0 0 0 -1h-1a.5 .5 0 0 0 0 1\" />" },
+  phone: { filled: false, body: "<path d=\"M5 4h4l2 5l-2.5 1.5a11 11 0 0 0 5 5l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a16 16 0 0 1 -15 -15a2 2 0 0 1 2 -2\" />" },
+  headset: { filled: false, body: "<path d=\"M4 14v-3a8 8 0 1 1 16 0v3\" /><path d=\"M18 19c0 1.657 -2.686 3 -6 3\" /><path d=\"M4 14a2 2 0 0 1 2 -2h1a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-1a2 2 0 0 1 -2 -2v-3z\" /><path d=\"M15 14a2 2 0 0 1 2 -2h1a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-1a2 2 0 0 1 -2 -2v-3z\" />" },
+  download: { filled: false, body: "<path d=\"M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2\" /><path d=\"M7 11l5 5l5 -5\" /><path d=\"M12 4l0 12\" />" },
+  share: { filled: false, body: "<path d=\"M8 9h-1a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-8a2 2 0 0 0 -2 -2h-1\" /><path d=\"M12 14v-11\" /><path d=\"M9 6l3 -3l3 3\" />" },
+  squarePlus: { filled: false, body: "<path d=\"M9 12h6\" /><path d=\"M12 9v6\" /><path d=\"M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14z\" />" },
   drone: { filled: false, body: "<path d=\"M10 10h4v4h-4l0 -4\" /><path d=\"M10 10l-3.5 -3.5\" /><path d=\"M9.96 6a3.5 3.5 0 1 0 -3.96 3.96\" /><path d=\"M14 10l3.5 -3.5\" /><path d=\"M18 9.96a3.5 3.5 0 1 0 -3.96 -3.96\" /><path d=\"M14 14l3.5 3.5\" /><path d=\"M14.04 18a3.5 3.5 0 1 0 3.96 -3.96\" /><path d=\"M10 14l-3.5 3.5\" /><path d=\"M6 14.04a3.5 3.5 0 1 0 3.96 3.96\" />" },
   plane: { filled: true, body: "<path d=\"M12.868 2.504l3.712 6.496h3.42a3 3 0 0 1 0 6h-3.42l-3.712 6.496a1 1 0 0 1 -.868 .504h-3a1 1 0 0 1 -.962 -1.275l1.636 -5.725h-2.26l-1.707 1.707a1 1 0 0 1 -.707 .293h-3a1 1 0 0 1 -.894 -1.447l1.776 -3.553l-1.776 -3.553a1 1 0 0 1 .894 -1.447h3a1 1 0 0 1 .707 .293l1.707 1.707h2.26l-1.636 -5.725a1 1 0 0 1 .962 -1.275h3a1 1 0 0 1 .868 .504\" />" },
   planeO: { filled: false, body: "<path d=\"M14.5 6.5l3 -2.9a2.05 2.05 0 0 1 2.9 2.9l-2.9 3l2.5 7.5l-2.5 2.55l-3.5 -6.55l-3 3v3l-2 2l-1.5 -4.5l-4.5 -1.5l2 -2h3l3 -3l-6.5 -3.5l2.5 -2.5l7.5 2.5\" />" },

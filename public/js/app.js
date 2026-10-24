@@ -5,6 +5,7 @@ import { icon } from './icons.js';
 import { settings } from './settings.js';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
 import { AlertMap, typeIcon, glyphDisc } from './map.js';
+import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
@@ -81,6 +82,7 @@ const state = {
   view: 'list',
   conn: 'connecting',
   firstSnapshot: true,
+  contacts: {},
 };
 let amap = null;
 
@@ -156,6 +158,8 @@ function hydrateStatic() {
   });
   $('#btnTheme').title = T.darkMode;
   $('#btnReport').title = T.reportTitle;
+  $('#btnWa').title = T.waChannel; $('#btnWa').setAttribute('aria-label', T.waChannel);
+  $('#btnContact').title = T.contactUs; $('#btnContact').setAttribute('aria-label', T.contactUs);
   $('#zoomIn').title = T.zoomIn;
   $('#zoomOut').title = T.zoomOut;
   $('#resetView').title = T.resetView;
@@ -408,26 +412,65 @@ function toggleDropdown(btnSel, panelSel, render) {
 }
 
 // ------------------------------------------------------------------ settings drawer
+// ------------------------------------------------------------------ contact links (set by the owner in the bot)
+function contactRows() {
+  const c = state.contacts || {};
+  const num = c.phone ? `<span dir="ltr" class="mono">${esc(c.phone)}</span>` : '';
+  const rows = [];
+  if (c.wa) rows.push({ href: c.wa, cls: 'wa', ic: 'whatsapp', t: T.waChannel, d: esc(T.waChannelSub) });
+  if (c.waChat) rows.push({ href: c.waChat, cls: 'wa', ic: 'whatsapp', t: T.waChat, d: num });
+  if (c.tel) rows.push({ href: c.tel, cls: 'tel', ic: 'phone', t: T.callUs, d: num, self: true });
+  if (c.tg) rows.push({ href: c.tg, cls: 'tgs', ic: 'headset', t: T.tgSupport, d: `<span dir="ltr">@${esc(c.tg.split('/').pop())}</span>` });
+  return rows;
+}
+function contactListHtml() {
+  return `<div class="ct-list">${contactRows().map((r) => `<a class="ct-row ${r.cls}" href="${esc(r.href)}" ${r.self ? '' : 'target="_blank" rel="noopener noreferrer"'}><span class="ct-ic">${icon(r.ic, 18)}</span><span class="ct-txt"><b>${esc(r.t)}</b><small>${r.d}</small></span></a>`).join('')}</div>`;
+}
+function showContactModal() {
+  if (!contactRows().length) return;
+  openModal(`<div class="page-modal ct-modal"><div class="eyebrow"><span class="line"></span>${esc(T.siteName)}</div><h2>${esc(T.contactUs)}</h2><p>${esc(T.contactSub)}</p>${contactListHtml()}<button class="btn-text" data-m="close">${esc(T.close)}</button></div>`);
+}
+function renderContacts() {
+  const c = state.contacts || {};
+  const wa = $('#btnWa');
+  if (wa) { wa.hidden = !c.wa; if (c.wa) wa.href = c.wa; }
+  const ct = $('#btnContact');
+  if (ct) ct.hidden = !(c.waChat || c.tel || c.tg);
+  if ($('#drawer')?.classList.contains('open')) renderDrawer();
+  if ($('#aboutSheet')?.classList.contains('open')) renderAbout();
+}
+function setContacts(c) {
+  state.contacts = c && typeof c === 'object' ? c : {};
+  renderContacts();
+}
 function renderDrawer() {
   const s = settings.get();
   const n = s.notifications;
   const dark = document.documentElement.classList.contains('dark');
   const tg = (attr, on, label, sub) => `<label class="tgl"><span class="txt">${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ''}</span><input class="switch" type="checkbox" ${attr} ${on ? 'checked' : ''}/></label>`;
+  let k = 0;
+  const num = () => String(++k).padStart(2, '0');
+  const im = installMode();
+  const instSec = im ? `<section class="s-card" id="sInstall"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.instTitle)}</h3><p>${esc(im === 'ios' ? T.instIosIntro : T.instSub)}</p></div></div>
+    ${im === 'prompt' ? `<button class="btn-red inst-go" data-s="install">${icon('download', 18)}${esc(T.instBtn)}</button>` : stepsHtml(im, { T, icon, esc })}
+  </section>` : '';
+  const cts = contactRows().length ? `<span class="field-label">${esc(T.contactUs)}</span>${contactListHtml()}` : '';
   $('#drawerBody').innerHTML = `
-  <section class="s-card"><div class="s-head"><span class="s-num">01</span><div><h3>${esc(T.appearance)}</h3><p>${esc(T.appearanceSub)}</p></div></div>
+  <section class="s-card"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.appearance)}</h3><p>${esc(T.appearanceSub)}</p></div></div>
     <span class="field-label">${esc(T.language)}</span>
     <div class="seg"><button data-s="lang" data-v="ar" class="${LANG === 'ar' ? 'on' : ''}">العربية</button><button data-s="lang" data-v="en" class="${LANG === 'en' ? 'on' : ''}">English</button></div>
     <span class="field-label">${esc(T.theme)}</span>
     <div class="seg"><button data-s="theme" data-v="light" class="${!dark ? 'on' : ''}">${icon('sun', 16)}${esc(T.lightMode)}</button><button data-s="theme" data-v="dark" class="${dark ? 'on' : ''}">${icon('moon', 16)}${esc(T.darkMode)}</button></div>
     <div style="margin-top:10px">${tg('data-s="showInactive"', s.showInactive, T.showInactive, T.showInactiveSub)}</div>
   </section>
-  <section class="s-card"><div class="s-head"><span class="s-num">02</span><div><h3>${esc(T.notifications)}</h3><p>${esc(T.notificationsSub)}</p></div></div>
+  <section class="s-card"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.notifications)}</h3><p>${esc(T.notificationsSub)}</p></div></div>
     ${tg('data-s="notif"', n.enabled, T.enableNotifications, T.enableNotificationsSub)}
     ${tg('data-s="vibration"', n.vibration, T.vibration, T.vibrationSub)}
     <span class="field-label">${esc(T.alertTypes)} — <span style="font-weight:500">${esc(T.alertTypesSub)}</span></span>
     <div class="types-grid">${TYPE_KEYS.map((t) => `<label class="chk"><input type="checkbox" data-nt="${t}" ${n.types.includes(t) ? 'checked' : ''}/><span class="sw" style="--c:${ALERT_TYPES[t].color}"></span><span class="name">${esc(typeName(t))}</span></label>`).join('')}</div>
   </section>
-  <section class="s-card"><div class="s-head"><span class="s-num">03</span><div><h3>${esc(T.sound)}</h3><p>${esc(T.soundSub)}</p></div></div>
+  ${instSec}
+  <section class="s-card"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.sound)}</h3><p>${esc(T.soundSub)}</p></div></div>
     ${tg('data-s="sound"', n.sound, T.playSound)}
     <span class="field-label">${esc(T.ringtone)}</span>
     <div class="sel-wrap"><select class="sel" data-s="ringtone">${RINGTONES.map((r) => `<option value="${r}" ${n.ringtone === r ? 'selected' : ''}>${esc(T.ringtones[r])}</option>`).join('')}</select>
@@ -435,12 +478,13 @@ function renderDrawer() {
     <span class="field-label">${esc(T.volume)} <span class="mono">${Math.round(n.volume * 100)}%</span></span>
     <input class="range" type="range" min="0" max="1" step="0.05" value="${n.volume}" data-s="volume"/>
   </section>
-  <section class="s-card"><div class="s-head"><span class="s-num">04</span><div><h3>${esc(T.tour)}</h3><p>${esc(T.tourSub)}</p></div></div>
+  <section class="s-card"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.tour)}</h3><p>${esc(T.tourSub)}</p></div></div>
     <button class="btn-sm" data-s="tour">${icon('route', 15)}${esc(T.startTour)}</button>
   </section>
-  <section class="s-card about-us"><div class="s-head"><span class="s-num">05</span><div><h3>${esc(T.about)}</h3><p>${esc(T.aboutSub)}</p></div></div>
+  <section class="s-card about-us"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.about)}</h3><p>${esc(T.aboutSub)}</p></div></div>
     <p>${esc(T.aboutText)}</p>
     <div class="about-links"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a></div>
+    ${cts}
   </section>
   <div class="drawer-foot"><button class="link-btn" data-s="terms" style="color:inherit;text-decoration:underline">${esc(T.terms)}</button> · <button class="link-btn" data-s="privacy" style="color:inherit;text-decoration:underline">${esc(T.privacy)}</button><br/>© ${new Date().getFullYear()} Red Alert Syria — ${esc(T.madeFor)}</div>`;
 }
@@ -469,6 +513,7 @@ function renderAbout() {
     <div class="legend">${legend}</div>
     <div class="disclaimer">${esc(T.disclaimer)}</div>
     <div class="about-links" style="margin-bottom:14px"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><button class="btn-sm" data-a="terms">${esc(T.terms)}</button><button class="btn-sm" data-a="privacy">${esc(T.privacy)}</button></div>
+    ${contactRows().length ? `<div class="sec-label">${esc(T.contactUs)}</div>${contactListHtml()}` : ''}
     <div class="sec-label">${esc(T.sources)}</div>
     <p class="sources"><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a> · <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames (CC BY 4.0)</a> · <a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a> · Esri World Imagery · Mapzen Terrain (AWS Open Data) · Tabler Icons</p>`;
 }
@@ -600,6 +645,7 @@ function startTour() {
 function endTour() {
   $('#tour').hidden = true;
   settings.set({ hasSeenTour: true });
+  scheduleInstallCard(6000);
 }
 function renderTour() {
   const steps = T.tourSteps;
@@ -861,7 +907,9 @@ function bindEvents() {
       const n = settings.get().notifications;
       playRingtone(n.ringtone, n.volume);
     } else if (k === 'tour') startTour();
-    else if (k === 'terms') pageModal(T.terms, T.termsText);
+    else if (k === 'install') {
+      promptInstall().then((r) => { if (r === 'accepted') toast(T.instDone); renderDrawer(); });
+    } else if (k === 'terms') pageModal(T.terms, T.termsText);
     else if (k === 'privacy') pageModal(T.privacy, T.privacyText);
   });
   db.addEventListener('change', async (e) => {
@@ -895,6 +943,7 @@ function bindEvents() {
     }
   });
 
+  $('#btnContact').addEventListener('click', showContactModal);
   // about sheet
   $('#aboutBody').addEventListener('click', (e) => {
     const a = e.target.closest('[data-a]')?.dataset.a;
@@ -1000,6 +1049,7 @@ function connect() {
       state.build = j.build;
     }
     setHistoryHours(j.history_hours);
+    if (j.contacts) setContacts(j.contacts);
     const before = new Set(state.alerts.keys());
     state.alerts = new Map();
     for (const a of j.alerts) state.alerts.set(a.id, a);
@@ -1032,11 +1082,13 @@ function connect() {
     upsert(a, isNew);
     refresh();
     if (isNew) {
+      state.lastAlertAt = Date.now();
       tickIdx = 0;
       renderTicker();
       notify(a);
     }
   });
+  es.addEventListener('contacts', (e) => { beat(); try { setContacts(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('update', (e) => {
     const a = JSON.parse(e.data);
     upsert(a, false);
@@ -1092,8 +1144,16 @@ async function boot() {
       $('#btnReport').href = `${m.bot}?start=report`;
     }
   }).catch(() => {});
+  initInstall({
+    T, icon, esc, toast,
+    isBusy: () => !$('#modalBackdrop').hidden || !$('#tour').hidden || $('#drawer').classList.contains('open')
+      || $('#aboutSheet').classList.contains('open') || document.hidden || Date.now() - (state.lastAlertAt || 0) < 20_000,
+  });
+  onInstallChange(() => { if ($('#drawer').classList.contains('open')) renderDrawer(); });
   if (!s.hasSeenWelcome) showWelcome();
   else if (!s.hasSeenTour) setTimeout(startTour, 800);
+  else scheduleInstallCard(8000);
+  window.__rasInstall = { show: () => showInstallCard(true), mode: installMode };
 
   // wait for maplibre (deferred script)
   const waitML = () => new Promise((res) => {

@@ -22,7 +22,12 @@
   <link rel="icon" type="image/svg+xml" href="/img/icon.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
   <link rel="apple-touch-icon" href="/img/icon-180.png" />
-  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="manifest" href="/manifest-{{LANG}}.webmanifest" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Red Alert Syria" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="application-name" content="Red Alert Syria" />
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
@@ -42,6 +47,8 @@
       <button class="tb-btn icon-only theme-btn" id="btnTheme" type="button"><span data-icon="moon" class="i-moon"></span><span data-icon="sun" class="i-sun"></span></button>
       <a class="tb-btn lang-btn" id="btnLang" href="#"><span class="lbl"></span></a>
       <div class="spacer"></div>
+      <a class="tb-btn icon-only ct-btn wa-btn" id="btnWa" href="#" target="_blank" rel="noopener noreferrer" hidden data-tip="wa"><span data-icon="whatsapp"></span></a>
+      <button class="tb-btn icon-only ct-btn" id="btnContact" type="button" hidden data-tip="contact"><span data-icon="headset"></span></button>
       <a class="tb-btn tg-btn" id="btnTelegram" href="https://t.me/Red_Alert_Syria" target="_blank" rel="noopener noreferrer"><span data-icon="telegram"></span><span class="lbl" data-t="followTelegram"></span></a>
       <div class="ticker" id="ticker" aria-live="polite"><div class="ticker-inner" id="tickerInner"></div></div>
       <a class="tb-btn report-btn" id="btnReport" href="https://t.me/Rad_Alert_Syria1_bot?start=report" target="_blank" rel="noopener noreferrer"><span data-icon="alert"></span><span class="lbl" data-t="report"></span></a>

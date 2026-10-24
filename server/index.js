@@ -123,7 +123,7 @@ app.get('/api/stream', streamLimiter, (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.write('retry: 4000\n\n');
-  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString(), build: BUILD })}\n\n`);
+  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString(), build: BUILD, contacts: store.publicContacts })}\n\n`);
   clients.add(res);
   req.on('close', () => clients.delete(res));
 });
@@ -134,6 +134,7 @@ const broadcast = (event, data) => {
 store.on('alert', (a) => broadcast('alert', a));
 store.on('update', (a) => broadcast('update', a));
 store.on('remove', (a) => broadcast('remove', a));
+store.on('contacts', (c) => broadcast('contacts', c)); // website contact links change instantly
 setInterval(() => {
   for (const c of clients) c.write(`event: ping\ndata: ${Date.now()}\n\n`);
 }, 25_000).unref();
@@ -157,6 +158,22 @@ function renderIndex(lang) {
     .replaceAll('{{TITLE}}', lang === 'ar' ? 'الإنذار الأحمر سوريا — خريطة سوريا المباشرة للتنبيهات لحظةً بلحظة' : 'Red Alert Syria — Live map of alerts across Syria')
     .replaceAll('{{DESC}}', lang === 'ar' ? 'خريطة تفاعلية مباشرة لتنبيهات المسيّرات والطيران الحربي والصواريخ والقصف في سوريا، تُحدَّث لحظةً بلحظة. مجاني، بدون تطبيق، للجميع.' : 'Real-time interactive map of drone, warplane, missile and shelling alerts across Syria. Free, no app, for everyone.');
 }
+// Installable app (PWA) manifest per language: same app id, so /ar/ and /en/ are one app.
+const manifestBase = JSON.parse(fs.readFileSync(path.join(PUBLIC, 'manifest.webmanifest'), 'utf8'));
+const manifestFor = (lang) => JSON.stringify({
+  ...manifestBase,
+  id: '/?app=red-alert-syria',
+  name: lang === 'en' ? 'Red Alert Syria — Live alerts map' : 'Red Alert Syria — الإنذار الأحمر سوريا',
+  description: lang === 'en' ? 'Live map of alerts across Syria, moment by moment' : manifestBase.description,
+  start_url: `/${lang}/?source=pwa`,
+  lang,
+  dir: lang === 'en' ? 'ltr' : 'rtl',
+});
+const MANIFEST = { ar: manifestFor('ar'), en: manifestFor('en') };
+app.get(['/manifest-ar.webmanifest', '/manifest-en.webmanifest', '/manifest.webmanifest'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('application/manifest+json').send(MANIFEST[req.path.includes('-en') ? 'en' : 'ar']);
+});
 app.get('/', (req, res) => {
   const pref = String(req.headers['accept-language'] || '').toLowerCase();
   res.redirect(302, pref.startsWith('en') ? '/en/' : '/ar/');
@@ -313,7 +330,7 @@ async function start() {
 
 const shutdown = async () => {
   try { store._writeLocal(); } catch { /* ignore */ }
-  try { await Promise.race([store.flushBackup(), new Promise((r) => setTimeout(r, 5000))]); } catch { /* ignore */ }
+  try { await Promise.race([store.flushBackup(true), new Promise((r) => setTimeout(r, 5000))]); } catch { /* ignore */ }
   try { if (config.botMode !== 'webhook') { for (const b of Object.values(bots)) if (b) await b.stop(); } } catch { /* ignore */ }
   process.exit(0);
 };

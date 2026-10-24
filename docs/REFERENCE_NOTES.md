@@ -94,3 +94,27 @@ Design:
 - Durable via Render env vars when owner links a Render API key in the bot (server PUTs /v1/services/$RENDER_SERVICE_ID/env-vars/KEY; key stored only as env RENDER_API_KEY). Env keys: OWNER_IDS, BOT_TOKEN, REPORT_BOT_TOKEN, CHANNEL_ID, CHANNEL_URL, REPORT_BOT_USERNAME.
 - Backup pinned in owner's private chat with publishing bot -> after owner change mirror to env owner chat (tokens stripped) until env updated.
 - Editors: button screen with list + per-editor remove, add by ID / forward / @username (known users) / request_users contact picker.
+
+## Session 2026-10-24 morning: clean chat + contact links + PWA install popup
+DONE (not yet deployed):
+- server/ui-clean.js: installTracker(api, role) + cleanChat(role) middleware (wired first in createBot).
+  Tracks every bot msg per private chat in store.state.ui (persist backupSoon:false; flushBackup(true) on shutdown).
+  New screen (msg with inline kb / media / edit-in-place) => delete all older tracked msgs; plain notices don't count;
+  user msgs tracked (u:1) unless ctx.ras.keepInput (relay). _keep:'c' report cards (setKeep false in closeReport),
+  'r' relay copies, 'b' pinned backup. >48h: delete refused -> edit to '▫️' & drop keyboard.
+  Sim: scripts/_clean.mjs (621 pass) — needs installTracker re-installed after mock. _xf.mjs 65 pass, bot-sim ok.
+- Contacts: store.settings.contacts {wa, phone(+E164), phoneMode both|wa|tel, tg}; store.publicContacts
+  {wa, phone, waChat, tel, tg}; SSE snapshot.contacts + 'contacts' event. server/contact-tools.js
+  registerContactTools(bot,h) (callbacks ct, ct:set:*, ct:rm:*, ct:mode:*, /contacts).
+TODO: register contact tools in createBot after registerOwnerTools + main menu owner button '📞 روابط التواصل' 'ct';
+  site UI: header buttons (#btnWa green whatsapp, #btnContact -> modal with waChat/tel/tg), drawer + about sheet links,
+  hidden until set, mobile in drawer/about only; icons brand-whatsapp/phone/headset (Tabler);
+  then PWA install popup like redalert.com.lb (study original), manifest/maskable icons, beforeinstallprompt, iOS hint,
+  snooze days, sequence after welcome; sw no stale. Then sim, deploy, live QA screenshots (phone/dsite/laptop).
+- 07:14 DONE locally: contact-tools registered + menu btn 'ct'; site contacts UI (#btnWa,#btnContact, modal, drawer about-us, about sheet; live SSE);
+  PWA: public/js/install.js (+boot.js early bip capture), manifest-{lang}.webmanifest route, maskable-192/512 regenerated (80% scale),
+  sw v15 (img/data network-first). redalert.com.lb findings: site.webmanifest (Red Alert Lebanon, start_url /, theme #ff3b4e,
+  icon-512 'any maskable'); code has settings 'installApp' section (beforeinstallprompt captured+preventDefault, iOS Share→Add steps,
+  androidNoPromptIntro); first visit shows 6-step tour; no own timed popup found → entry popup = browser's native install prompt.
+  QA: scripts/_pwa_qa.py (needs devsrv :3997/:3996, /contacts ctl) 36 checks; shots /tmp/pwa-qa. TODO: screenshots shot-narrow/wide for manifest,
+  bot sim for contact-tools, deploy, live QA.

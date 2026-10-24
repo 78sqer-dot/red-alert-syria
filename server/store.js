@@ -74,6 +74,17 @@ class Store extends EventEmitter {
           time: /^\d\d:\d\d$/.test(s.settings?.weekly?.time || '') ? s.settings.weekly.time : '23:00',
           last: s.settings?.weekly?.last || null,
         },
+        // public contact links shown on the website (set by the owner from the publishing bot)
+        contacts: (() => {
+          const c = s.settings?.contacts;
+          if (!c || typeof c !== 'object') return {};
+          const o = {};
+          if (typeof c.wa === 'string' && /^https:\/\/whatsapp\.com\/channel\/[A-Za-z0-9]{10,40}$/.test(c.wa)) o.wa = c.wa;
+          if (typeof c.phone === 'string' && /^\+[1-9]\d{7,14}$/.test(c.phone)) o.phone = c.phone;
+          if (['both', 'wa', 'tel'].includes(c.phoneMode)) o.phoneMode = c.phoneMode;
+          if (typeof c.tg === 'string' && /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(c.tg)) o.tg = c.tg;
+          return o;
+        })(),
         project: (() => {
           const pr = s.settings?.project;
           if (!pr || typeof pr !== 'object') return {};
@@ -90,6 +101,8 @@ class Store extends EventEmitter {
       // compact event log for statistics (kept 35 days, independent of the map's auto-delete)
       log: Array.isArray(s.log) ? s.log.filter((e) => e && e.ty && e.ts) : null,
       maint: s.maint && typeof s.maint === 'object' ? s.maint : {},
+      // bot messages per private chat (clean-chat tracker): { 'role:chat': [{ id, t, s, m, u, k }] }
+      ui: s.ui && typeof s.ui === 'object' ? s.ui : {},
     };
   }
 
@@ -106,16 +119,17 @@ class Store extends EventEmitter {
   persist({ backupSoon = true } = {}) {
     clearTimeout(this._saveTimer);
     this._saveTimer = setTimeout(() => this._writeLocal(), 300);
+    if (!backupSoon) this._backupLazy = true; // saved with the next backup / on shutdown
     if (backupSoon && this.backup && config.telegramBackup) {
       clearTimeout(this._backupTimer);
       this._backupPending = true;
       this._backupTimer = setTimeout(() => this.flushBackup(), 15_000);
     }
   }
-  async flushBackup() {
+  async flushBackup(force = false) {
     clearTimeout(this._backupTimer);
-    if (!this._backupPending || !this.backup) return;
-    this._backupPending = false;
+    if (!this.backup || !(this._backupPending || (force && this._backupLazy && config.telegramBackup))) return;
+    this._backupPending = false; this._backupLazy = false;
     try {
       await this.backup.save(JSON.stringify(this.state));
       this.lastBackupAt = new Date().toISOString();
@@ -348,6 +362,29 @@ class Store extends EventEmitter {
   }
 
   // ---------- project hand-over overrides (owner / tokens / channel) ----------
+  get contacts() { return this.state.settings?.contacts || {}; }
+  /** Public view for the website: only what is set; phone split into WhatsApp chat / call by mode. */
+  get publicContacts() {
+    const c = this.contacts;
+    const mode = c.phoneMode || 'both';
+    const o = {};
+    if (c.wa) o.wa = c.wa;
+    if (c.phone) {
+      o.phone = c.phone;
+      if (mode !== 'tel') o.waChat = 'https://wa.me/' + c.phone.slice(1);
+      if (mode !== 'wa') o.tel = 'tel:' + c.phone;
+    }
+    if (c.tg) o.tg = 'https://t.me/' + c.tg;
+    return o;
+  }
+  setContacts(patch) {
+    const cur = { ...this.contacts };
+    for (const [k, v] of Object.entries(patch)) { if (v === null || v === undefined || v === '') delete cur[k]; else cur[k] = v; }
+    if (!cur.phone) delete cur.phoneMode;
+    this.state.settings = { ...(this.state.settings || {}), contacts: cur };
+    this.persist();
+    this.emit('contacts', this.publicContacts);
+  }
   get project() {
     return this.state.settings.project || (this.state.settings.project = {});
   }
