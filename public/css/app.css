@@ -304,10 +304,13 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 .uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
 .uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
 /* original: the drone sits still at country view and only circles its target from zoom 11 up */
-.maplibregl-map.zoom-detail .uav { animation: uavOrbit 6s linear infinite; }
+.maplibregl-map.zoom-detail .uav { animation: uavOrbit 9s linear infinite; }
+/* original (redalert.com.lb): .zoom-tier-far/.zoom-tier-mid .uav-svg { visibility: hidden } -> below zoom 11
+   only the glowing circle is shown; the tap target stays so the alert can still be opened */
+.maplibregl-map:not(.zoom-detail) .mk-orbit .uav { visibility: hidden; animation: none; }
 .mk-sat .uav { animation-delay: var(--delay, 0s); }
 /* the airframe circles the target and turns with its heading */
-@keyframes uavOrbit { from { transform: rotate(0deg) translateX(20px); } to { transform: rotate(-360deg) translateX(20px); } }
+@keyframes uavOrbit { from { transform: rotate(0deg) translateX(var(--orb, 20px)); } to { transform: rotate(-360deg) translateX(var(--orb, 20px)); } }
 .uav-svg { display: block; fill: #6b7280; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
 html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95)) drop-shadow(0 0 .5px rgba(0,0,0,.95)); }
 .mk.sel .uav-svg { fill: var(--c); }

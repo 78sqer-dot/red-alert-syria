@@ -195,7 +195,12 @@ export class AlertMap {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
       c.classList.toggle('zoom-detail', z >= 11);
+      c.classList.toggle('zoom-tier-mid', z >= 9 && z < 11);
+      c.classList.toggle('zoom-tier-far', z < 9);
       c.classList.toggle('zoom-far', z < 7.5);
+      // like the original: below zoom 11 only the glowing circle shows; from 11 up the drone appears
+      // and flies along the circle's edge, so its orbit follows the ring while pinching
+      if (z >= 11) this._orbitPx();
       // small icons at every zoom, getting a little smaller as you zoom in (like the original)
       const mks = Math.max(0.42, Math.min(0.56, 0.56 - (z - 6) * 0.025)).toFixed(2);
       if (mks !== this._mks) { this._mks = mks; c.style.setProperty('--mks', mks); } // restyle markers only when the size step changes
@@ -424,18 +429,40 @@ export class AlertMap {
     const src = this.map && this.map.getSource('ras-zones');
     if (!src) return;
     const features = [];
+    const orb = (this._orb = new Map());
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
       if (!t || !t.zone || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude)) continue;
       const props = { color: ZONE_COLOR[a.type] || t.color, active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
+      if (t.marker === 'orbit') {
+        // the drone circles the ring nearest to its own position (the alert's main place)
+        let best = zs[0], bd = Infinity;
+        for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
+        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat });
+      }
       for (const z of zs) {
         const km = this._screenKm(z.km, z.lat);
         features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [circlePolygon(z.lon, z.lat, km)] } });
       }
     }
     src.setData({ type: 'FeatureCollection', features });
+    this._orbitPx();
+  }
+  // orbit radius (px) of each drone = the on-screen radius of its glowing ring at the current zoom
+  _orbitPx() {
+    if (!this._orb || !this.map) return;
+    const z = this.map.getZoom();
+    if (z < 11) return;
+    for (const [id, o] of this._orb) {
+      const m = this.markers.get(id);
+      if (!m) continue;
+      const mpp = (40075016.686 * Math.cos((o.lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
+      const px = Math.max(14, Math.round((o.km * 1000) / mpp));
+      const el = m.getElement();
+      if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
+    }
   }
 
   // ------------------------------------------------------------- selection / camera
