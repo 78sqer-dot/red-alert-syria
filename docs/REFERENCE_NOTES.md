@@ -82,3 +82,15 @@ Plus civil sub-buttons in BOTH bots: civil button opens submenu (مدني عام
 - Stored alert: location {latitude,longitude}; names in alert.place; alert.scope; channel_media 'photo'|'text' -> refreshChannelPost uses editMessageCaption for photos.
 - Owner Telegram id 8270709633 (test images go there only, never @Red_Alert_Syria).
 - /api/imgtest?key=sha256(BOT_TOKEN+':imgtest')&type=uav|all&q=place -> renders on Render, sends to owner chat only. Render service srv-dbdp7459fdbs7386b3d0, workspace tea-dbcholnf3r2c73belk8g.
+
+## Project transfer + editors (2026-10-24)
+Facts (sources):
+- Render FAQ https://render.com/docs/faq : "No, it is not currently possible to transfer existing services between workspaces." -> invite member to workspace, or recreate service in buyer's workspace. Filesystem is ephemeral (lost on redeploy/restart).
+- BotFather transfer: /mybots -> bot -> Transfer Ownership -> Choose recipient -> confirm; requires 2-step verification enabled >= 7 days (https://help.bothelp.io/en/smena-vladelcza-telegram-bota/).
+- Telegram channel ownership: Channel -> Edit -> Administrators -> new admin (all rights) -> "Transfer Channel Ownership"; needs 2FA enabled > 7 days and session > 24h (reddit/timothyreed snippets).
+- GitHub: repo Settings -> General -> Danger Zone -> Transfer ownership.
+Design:
+- Overrides in store.state.settings.project {ownerId, botToken, reportBotToken, channel, channelUrl, reportBotUsername}; applied to mutable config at startup + hot-swap bots at runtime (no restart).
+- Durable via Render env vars when owner links a Render API key in the bot (server PUTs /v1/services/$RENDER_SERVICE_ID/env-vars/KEY; key stored only as env RENDER_API_KEY). Env keys: OWNER_IDS, BOT_TOKEN, REPORT_BOT_TOKEN, CHANNEL_ID, CHANNEL_URL, REPORT_BOT_USERNAME.
+- Backup pinned in owner's private chat with publishing bot -> after owner change mirror to env owner chat (tokens stripped) until env updated.
+- Editors: button screen with list + per-editor remove, add by ID / forward / @username (known users) / request_users contact picker.

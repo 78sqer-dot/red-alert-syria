@@ -1,5 +1,7 @@
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
-import { config, isOwner } from './config.js';
+import { config, isOwner, envDefaults, applyProject } from './config.js';
+import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
+export { runtimeHooks };
 import { store, publicAlert } from './store.js';
 import { ALERT_TYPES, TYPE_KEYS, typeOf } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
@@ -111,7 +113,7 @@ function mainKeyboard(ctx) {
     .text(`${e('civil')} ${b('civil')}`, 'cv').text(`${e('missile')} ${b('missile')}`, 't:missile').row();
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
-  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').row();
+  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row();
   if (config.publicUrl) kb.url(l.btnMap, mapUrl('', lang));
   kb.url(l.btnChannel, config.channelUrl);
   return kb;
@@ -430,6 +432,7 @@ export async function resyncChannelPosts(api) {
 // publishing bot; the reporter gets it in the report bot signed as the team (staff identity hidden).
 // The reporter answers in the report bot (reply, or a plain message while a conversation is open).
 const APIS = {}; const TOKENS = {};
+runtimeHooks.restoreApi = (role, old) => { APIS[role] = old.api; TOKENS[role] = old.token; };
 const RELAY_KINDS = { photo: 'sendPhoto', video: 'sendVideo', voice: 'sendVoice', audio: 'sendAudio', document: 'sendDocument', animation: 'sendAnimation', video_note: 'sendVideoNote', sticker: 'sendSticker' };
 const relayRate = new Map();
 async function relayCopy(fromApi, fromToken, toApi, chatId, msg, header, footer) {
@@ -483,8 +486,10 @@ function weeklyCaption(st) {
     + `\n🗺 الخريطة الحية: ${url}/ar/`;
 }
 /** Built-in scheduler: posts the statistics image in the channel once a day at the configured Damascus time. */
-export function startDailySummary(api) {
-  if (!api || !config.channel) return;
+export function startDailySummary(api0) {
+  if (!api0 || !config.channel) return;
+  // always the current publishing bot (it can be switched at runtime from 🔁 Project hand-over)
+  const apiNow = () => APIS.admin || api0;
   const d0 = store.daily; const p0 = damascusParts();
   if (!d0.last && p0.hm >= d0.time) store.setDaily({ last: p0.date }); // first boot after the time: start tomorrow
   let busy = false;
@@ -501,7 +506,7 @@ export function startDailySummary(api) {
       const kb = new InlineKeyboard();
       kb.url('🗺 الخريطة الحية', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`);
       if (config.reportBotUsername) kb.url('📝 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
-      await api.sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-${p.date}.png`), { caption: dailyCaption(st), parse_mode: 'HTML', reply_markup: kb });
+      await apiNow().sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-${p.date}.png`), { caption: dailyCaption(st), parse_mode: 'HTML', reply_markup: kb });
       console.log(`[daily] ${p.date}: summary posted (${st.total} alerts)`);
     } catch (e) {
       console.error('[daily] post failed', e.description || e.message);
@@ -524,7 +529,7 @@ export function startDailySummary(api) {
       const kb = new InlineKeyboard();
       kb.url('🗺 الخريطة الحية', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`);
       if (config.reportBotUsername) kb.url('📝 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
-      await api.sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-week-${p.date}.png`), { caption: weeklyCaption(st), parse_mode: 'HTML', reply_markup: kb });
+      await apiNow().sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-week-${p.date}.png`), { caption: weeklyCaption(st), parse_mode: 'HTML', reply_markup: kb });
       console.log(`[weekly] ${p.date}: report posted (${st.total} alerts)`);
     } catch (e) {
       console.error('[weekly] post failed', e.description || e.message);
@@ -536,6 +541,19 @@ export function startDailySummary(api) {
   setTimeout(wtick, 8_000).unref();
 }
 
+// shared helpers for owner-tools (editors + project hand-over)
+const OH = {
+  show: (ctx, text, kb) => show(ctx, text, kb),
+  langOf: (ctx) => langOf(ctx),
+  L: (ctx) => L(ctx),
+  owner: (ctx) => owner(ctx),
+  isOwnerId: (id) => isOwner(id),
+  botInfo,
+  apis: () => APIS,
+  mainKeyboard: (ctx) => mainKeyboard(ctx),
+  dropSessions: (id) => { sessions.delete(`admin:${id}`); },
+  resync: () => resyncChannelPosts(APIS.admin).catch(() => {}),
+};
 export function createBot({ role = 'admin', token = config.botToken, reviewApi = null } = {}) {
   if (!token) return null;
   const bot = new Bot(token);
@@ -555,10 +573,11 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       if (botInfo.report) kb.url(l.btnReportBot, `https://t.me/${botInfo.report}?start=report`).row();
       kb.url(l.btnChannel, config.channelUrl);
       if (config.publicUrl) kb.url(l.btnMap, mapUrl('', langOf(ctx)));
-      return ctx.reply(l.privateBot(botInfo.report || 'Red_Alert_Syria'), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
+      return ctx.reply(l.privateBot(botInfo.report || 'Red_Alert_Syria') + '\n\n' + l.yourId(ctx.from.id), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     }
     await next();
   });
+  if (role === 'admin') registerOwnerTools(bot, OH); else registerReportOwnerCommands(bot, OH);
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {
@@ -668,7 +687,6 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const type = args[0] && (ALERT_TYPES[args[0]] || args[0] === 'all') ? args.shift() : 'uav';
     await imageTest(ctx.api, ctx.chat.id, { type, q: args.join(' '), lang: langOf(ctx) });
   }));
-  bot.command('editors', ownerOnly((ctx) => ctx.reply(editorsText(ctx), { parse_mode: 'HTML' })));
   bot.command('addeditor', ownerOnly(async (ctx) => {
     const id = Number(String(ctx.match || '').trim());
     if (!Number.isFinite(id) || id <= 0) return ctx.reply('/addeditor 123456789');
@@ -704,11 +722,6 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     store.setUserLang(ctx.from.id, langOf(ctx) === 'ar' ? 'en' : 'ar');
     await ctx.answerCallbackQuery(L(ctx).langSet);
     await home(ctx);
-  });
-  bot.callbackQuery('editors', async (ctx) => {
-    await ctx.answerCallbackQuery();
-    if (!owner(ctx)) return;
-    await show(ctx, editorsText(ctx), new InlineKeyboard().text(L(ctx).btnHome, 'home'));
   });
   // ---- statistics as an image (owner only): 24h / 7 days / 30 days
   const statsKb = (ctx, kind) => {
@@ -960,7 +973,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     lastReport.set(ctx.from.id, Date.now());
     const rid = Math.random().toString(36).slice(2, 10);
     const rep = { draft: d, from: { id: ctx.from.id, first_name: ctx.from.first_name, last_name: ctx.from.last_name, username: ctx.from.username }, messages: [], created: Date.now(), notifyApi: ctx.api };
-    const api = reviewApi || ctx.api;
+    const api = APIS.admin || reviewApi || ctx.api;
     reports.set(rid, rep);
     const reviewers = [...new Set([...config.ownerIds, ...store.state.editors])];
     for (const uid of reviewers) {
@@ -1180,33 +1193,47 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
 // ---------------------------------------------------------------- backup adapter (pinned JSON in owner chat)
 
-export function telegramBackupAdapter(api) {
-  const owner = config.ownerIds[0];
-  if (!owner) return null;
-  let lastMsgId = null;
+export function telegramBackupAdapter(api0) {
+  if (!config.ownerIds[0]) return null;
   const NAME = 'red-alert-syria-backup.json';
+  const last = new Map(); // `${token}|${chat}` -> pinned message id
+  const caption = '🗄 نسخة احتياطية تلقائية لبيانات Red Alert Syria — لا تحذفها ولا تلغِ تثبيتها.\nAutomatic backup — keep pinned.';
+  const put = async (api, token, chat, json) => {
+    const key = `${token}|${chat}`;
+    const file = () => new InputFile(Buffer.from(json), NAME);
+    const prev = last.get(key);
+    if (prev) {
+      try { await api.editMessageMedia(chat, prev, InputMediaBuilder.document(file(), { caption })); return; } catch (e) {
+        if (/not modified/i.test(e.description || '')) return;
+      }
+    }
+    const m = await api.sendDocument(chat, file(), { caption, disable_notification: true });
+    try { await api.pinChatMessage(chat, m.message_id, { disable_notification: true }); } catch { /* ignore */ }
+    if (prev) { try { await api.deleteMessage(chat, prev); } catch { /* ignore */ } }
+    last.set(key, m.message_id);
+  };
   return {
     async save(json) {
-      const file = () => new InputFile(Buffer.from(json), NAME);
-      const caption = '🗄 نسخة احتياطية تلقائية لبيانات Red Alert Syria — لا تحذفها ولا تلغِ تثبيتها.\nAutomatic backup — keep pinned.';
-      if (lastMsgId) {
+      const api = APIS.admin || api0;
+      const owner = config.ownerIds[0];
+      await put(api, config.botToken, owner, json);
+      // After an in-bot hand-over (owner changed, same publishing bot) and until the Render env vars are
+      // updated, a restart reads the backup from the env owner's chat: keep a copy there, without tokens.
+      const envOwner = envDefaults.ownerIds[0];
+      if (envOwner && envOwner !== owner && config.botToken === envDefaults.botToken) {
         try {
-          await api.editMessageMedia(owner, lastMsgId, InputMediaBuilder.document(file(), { caption }));
-          return;
-        } catch (e) {
-          if (/not modified/i.test(e.description || '')) return;
-        }
+          const st = JSON.parse(json);
+          if (st?.settings?.project) { delete st.settings.project.botToken; delete st.settings.project.reportBotToken; }
+          await put(api, config.botToken, envOwner, JSON.stringify(st));
+        } catch (e) { console.error('[store] mirror backup failed', e.description || e.message); }
       }
-      const m = await api.sendDocument(owner, file(), { caption, disable_notification: true });
-      try { await api.pinChatMessage(owner, m.message_id, { disable_notification: true }); } catch { /* ignore */ }
-      if (lastMsgId) { try { await api.deleteMessage(owner, lastMsgId); } catch { /* ignore */ } }
-      lastMsgId = m.message_id;
     },
     async load() {
-      const chat = await api.getChat(owner);
+      const api = APIS.admin || api0;
+      const chat = await api.getChat(config.ownerIds[0]);
       const pm = chat.pinned_message;
       if (!pm?.document || pm.document.file_name !== NAME) return null;
-      lastMsgId = pm.message_id;
+      last.set(`${config.botToken}|${config.ownerIds[0]}`, pm.message_id);
       const f = await api.getFile(pm.document.file_id);
       const res = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${f.file_path}`);
       if (!res.ok) return null;
@@ -1214,7 +1241,6 @@ export function telegramBackupAdapter(api) {
     },
   };
 }
-
 export const BOT_COMMANDS = {
   ar: [
     { command: 'start', description: 'القائمة الرئيسية' },

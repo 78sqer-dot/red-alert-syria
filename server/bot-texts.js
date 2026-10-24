@@ -16,7 +16,7 @@ export const T = {
     btnLang: '🌐 English',
     btnMap: '🗺 الخريطة المباشرة',
     btnChannel: '📣 القناة',
-    btnEditors: '👥 المحررون',
+    btnEditors: '👥 المشرفون',
     btnStats: '📊 إحصاءات',
     btnClear: '🗑 حذف التنبيهات النشطة',
     btnAuto: (h) => (h ? `♻️ الحذف التلقائي: كل ${h} ساعة` : '♻️ الحذف التلقائي: متوقف'),

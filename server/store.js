@@ -74,6 +74,14 @@ class Store extends EventEmitter {
           time: /^\d\d:\d\d$/.test(s.settings?.weekly?.time || '') ? s.settings.weekly.time : '23:00',
           last: s.settings?.weekly?.last || null,
         },
+        project: (() => {
+          const pr = s.settings?.project;
+          if (!pr || typeof pr !== 'object') return {};
+          const o = {};
+          for (const k of ['ownerId', 'botToken', 'reportBotToken', 'channel', 'channelUrl', 'reportBotUsername', 'prevOwnerId', 'changedAt'])
+            if (pr[k] !== undefined && pr[k] !== null && pr[k] !== '') o[k] = pr[k];
+          return o;
+        })(),
       },
       // owner <-> reporter conversation links (message -> reporter id) and open threads
       relay: s.relay && typeof s.relay === 'object' ? s.relay : {},
@@ -339,6 +347,20 @@ class Store extends EventEmitter {
     this.persist();
   }
 
+  // ---------- project hand-over overrides (owner / tokens / channel) ----------
+  get project() {
+    return this.state.settings.project || (this.state.settings.project = {});
+  }
+  setProject(patch) {
+    const cur = { ...this.project };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined || v === null || v === '') delete cur[k]; else cur[k] = v;
+    }
+    cur.changedAt = new Date().toISOString();
+    this.state.settings.project = cur;
+    this.persist();
+    return cur;
+  }
   isEditor(id) {
     return this.state.editors.includes(Number(id));
   }

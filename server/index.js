@@ -8,13 +8,18 @@ import crypto from 'node:crypto';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
-import { createBot, imageTest, resyncChannelPosts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks } from './bot.js';
+import { applyProject } from './config.js';
 import { governorates } from './places.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
 const SHARED = path.join(ROOT, 'shared');
 
+const ADMIN_DESC = '🔒 بوت النشر الخاص بإدارة Red Alert Syria (للمشرفين فقط).';
+const ADMIN_SHORT = 'بوت النشر الخاص — Red Alert Syria';
+const REPORT_DESC = '📨 بوت التبليغ الخاص بـ Red Alert Syria — الإنذار الأحمر سوريا.\n\nأبلغ عن مسيّرة، طيران حربي، قصف مدفعي، هجوم، صواريخ أو حدث مدني في منطقتك. يصل بلاغك إلى الإدارة ويُنشر على القناة والخريطة بعد التحقق.\n\nReport drones, warplanes, shelling, attacks, missiles or civil events in Syria.';
+const REPORT_SHORT = 'أرسل بلاغاً عن حدث في سوريا — Red Alert Syria';
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -56,16 +61,15 @@ app.use(compression({ filter: (req, res) => (req.path === '/api/stream' ? false 
 // ------------------------------------------------------------------ telegram webhook
 // Bot 1 (admin): private publishing panel for the owner + editors.
 // Bot 2 (report): public bot where anyone can send a report; reports reach the editors through bot 1.
-const bot = createBot({ role: 'admin' });
-const reportBot = createBot({ role: 'report', token: config.reportBotToken, reviewApi: bot ? bot.api : null });
-const webhookPath = config.webhookSecret ? `/tg/${config.webhookSecret.slice(0, 24)}` : null;
-const reportWebhookPath = config.reportWebhookSecret ? `/tg/${config.reportWebhookSecret.slice(0, 24)}` : null;
-if (bot && webhookPath) {
-  app.post(webhookPath, express.json({ limit: '1mb' }), webhookCallback(bot, 'express', { secretToken: config.webhookSecret, onTimeout: 'return', timeoutMilliseconds: 9000 }));
-}
-if (reportBot && reportWebhookPath) {
-  app.post(reportWebhookPath, express.json({ limit: '1mb' }), webhookCallback(reportBot, 'express', { secretToken: config.reportWebhookSecret, onTimeout: 'return', timeoutMilliseconds: 9000 }));
-}
+// Both can be switched at runtime (🔁 Project hand-over), so webhooks are routed through a lookup table.
+const bots = { admin: null, report: null };
+const hooks = new Map(); // webhook key -> grammY express handler
+const hookKey = (secret) => String(secret || '').slice(0, 24);
+app.post('/tg/:k', express.json({ limit: '1mb' }), (req, res, next) => {
+  const h = hooks.get(req.params.k);
+  if (!h) return res.status(404).end();
+  return h(req, res, next);
+});
 
 // ------------------------------------------------------------------ API
 const apiLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false });
@@ -95,16 +99,16 @@ app.get('/api/alerts/:id', apiLimiter, (req, res) => {
 app.get('/api/imgtest', apiLimiter, async (req, res) => {
   const want = config.botToken ? crypto.createHash('sha256').update(`${config.botToken}:imgtest`).digest('hex') : null;
   const key = String(req.query.key || '');
-  if (!want || !bot || key.length !== want.length || !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(404).end();
+  if (!want || !bots.admin || key.length !== want.length || !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want))) return res.status(404).end();
   const owner = config.ownerIds[0];
   if (!owner) return res.status(400).json({ error: 'no owner' });
   try {
-    res.json(await imageTest(bot.api, owner, { type: String(req.query.type || 'uav'), q: String(req.query.q || ''), lang: req.query.lang === 'en' ? 'en' : 'ar' }));
+    res.json(await imageTest(bots.admin.api, owner, { type: String(req.query.type || 'uav'), q: String(req.query.q || ''), lang: req.query.lang === 'en' ? 'en' : 'ar' }));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/meta', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=3600');
-  res.json({ governorates: governorates.map(({ code, ar, en, lat, lon }) => ({ code, ar, en, lat, lon })), channel: config.channelUrl, bot: botUsername ? `https://t.me/${botUsername}` : null });
+  res.json({ governorates: governorates.map(({ code, ar, en, lat, lon }) => ({ code, ar, en, lat, lon })), channel: config.channelUrl, bot: (botInfo.report || botInfo.admin) ? `https://t.me/${botInfo.report || botInfo.admin}` : null });
 });
 
 // ------------------------------------------------------------------ Server-Sent Events
@@ -166,10 +170,78 @@ app.get(['/ar', '/en', '/ar/', '/en/'], (req, res) => {
 app.use((req, res) => res.status(404).type('text').send('Not found'));
 
 // ------------------------------------------------------------------ start
-let botUsername = null;
+const UPD = ['message', 'callback_query'];
+const secretOf = (role) => (role === 'admin' ? config.webhookSecret : config.reportWebhookSecret);
+const tokenOf = (role) => (role === 'admin' ? config.botToken : config.reportBotToken);
+async function describe(role, b) {
+  try {
+    if (role === 'admin') {
+      await b.api.setMyCommands(BOT_COMMANDS.ar);
+      await b.api.setMyCommands(BOT_COMMANDS.en, { language_code: 'en' });
+      await b.api.setMyDescription(ADMIN_DESC + (botInfo.report ? `\n\nلإرسال بلاغ: @${botInfo.report}` : ''));
+      await b.api.setMyShortDescription(ADMIN_SHORT + (botInfo.report ? ` · للبلاغات: @${botInfo.report}` : ''));
+    } else {
+      await b.api.setMyCommands(REPORT_COMMANDS.ar);
+      await b.api.setMyCommands(REPORT_COMMANDS.en, { language_code: 'en' });
+      await b.api.setMyDescription(REPORT_DESC);
+      await b.api.setMyShortDescription(REPORT_SHORT);
+    }
+  } catch (e) { console.warn(`[${role}] could not set commands`, e.description || e.message); }
+}
+async function launch(role, b) {
+  const label = role === 'admin' ? 'bot' : 'report-bot';
+  if (config.botMode === 'webhook' && config.publicUrl) {
+    const secret = secretOf(role);
+    hooks.set(hookKey(secret), webhookCallback(b, 'express', { secretToken: secret, onTimeout: 'return', timeoutMilliseconds: 9000 }));
+    await b.api.setWebhook(`${config.publicUrl}/tg/${hookKey(secret)}`, { secret_token: secret, allowed_updates: UPD, max_connections: 20, drop_pending_updates: false });
+    console.log(`[${label}] webhook set`);
+  } else {
+    await b.api.deleteWebhook();
+    b.start({ allowed_updates: UPD, onStart: () => console.log(`[${label}] long polling started`) });
+  }
+}
+async function retire(role, b, secret) {
+  if (!b) return;
+  hooks.delete(hookKey(secret));
+  try { if (config.botMode === 'webhook' && config.publicUrl) await b.api.deleteWebhook(); else await b.stop(); } catch { /* old token may be revoked */ }
+}
+// Bring up (or swap) bots from the live config. Throws if a new bot cannot start; the old one is kept then.
+async function bringUp(roles, reuse = {}) {
+  for (const role of roles) {
+    const token = tokenOf(role);
+    const old = bots[role];
+    const oldSecret = old ? old.__secret : null;
+    if (old && old.token === token) continue;
+    if (!token) { await retire(role, old, oldSecret); bots[role] = null; botInfo[role] = null; continue; }
+    const b = reuse[role] && reuse[role].token === token ? reuse[role] : createBot({ role, token });
+    try {
+      await b.init();
+      b.__secret = secretOf(role);
+      botInfo[role] = b.botInfo.username;
+      await launch(role, b);
+    } catch (e) {
+      hooks.delete(hookKey(secretOf(role)));
+      if (old) { createBotRestore(role, old); botInfo[role] = old.botInfo?.username || null; }
+      throw e;
+    }
+    bots[role] = b;
+    if (old) await retire(role, old, oldSecret);
+    console.log(`[${role}] @${botInfo[role]} ready (${config.botMode})`);
+    describe(role, b);
+    if (role === 'report' && bots.admin) describe('admin', bots.admin);
+  }
+}
+// createBot() registers the bot's api for the shared helpers; put the old one back after a failed swap.
+function createBotRestore(role, old) { runtimeHooks.restoreApi?.(role, old); }
+runtimeHooks.reloadBots = (roles) => bringUp(roles);
+
 async function start() {
-  const backup = bot ? telegramBackupAdapter(bot.api) : null;
+  // 1) restore state with the bot from the environment (the backup lives in its chat with the owner)
+  const envBot = createBot({ role: 'admin' });
+  const backup = envBot ? telegramBackupAdapter(envBot.api) : null;
   await store.init(backup);
+  // 2) apply hand-over overrides saved from the bot (owner / tokens / channel)
+  applyProject(store.project);
   // One-time clean start requested by the owner: remove every alert (active and ended) from the map,
   // the local file and the Telegram backup. Runs once (marker saved in the backup); channel posts stay.
   const WIPE_ID = 'wipe-all-alerts-2026-10-23';
@@ -186,54 +258,33 @@ async function start() {
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 66_000;
 
-  if (!bot) {
+  if (!config.botToken) {
     console.warn('[bot] BOT_TOKEN missing — running website only');
     return;
   }
-  const launch = async (b, path, secret, label) => {
-    if (config.botMode === 'webhook' && config.publicUrl) {
-      await b.api.setWebhook(config.publicUrl + path, { secret_token: secret, allowed_updates: ['message', 'callback_query'], max_connections: 20, drop_pending_updates: false });
-      console.log(`[${label}] webhook set`);
-    } else {
-      await b.api.deleteWebhook();
-      b.start({ allowed_updates: ['message', 'callback_query'], onStart: () => console.log(`[${label}] long polling started`) });
+  const afterAdmin = async () => {
+    try { await bringUp(['report']); } catch (e) { console.warn('[report-bot] init failed', e.description || e.message); }
+    startDailySummary(bots.admin.api);
+    setTimeout(() => resyncChannelPosts(bots.admin.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
+  };
+  const upAdmin = async (attempt = 1) => {
+    try {
+      await bringUp(['admin'], { admin: envBot });
+      return afterAdmin();
+    } catch (e) {
+      // a token saved from the bot was rejected by Telegram (revoked): fall back to the environment's bot
+      if (e.error_code === 401 && store.project.botToken) {
+        console.error('[bot] saved publishing token rejected, falling back to env token');
+        store.setProject({ botToken: null }); applyProject(store.project);
+        return upAdmin(attempt);
+      }
+      // network hiccup / Telegram down: keep the website running and retry
+      const wait = Math.min(300, 15 * attempt);
+      console.error(`[bot] init failed (${e.description || e.message}); retry in ${wait}s`);
+      setTimeout(() => upAdmin(attempt + 1), wait * 1000).unref();
     }
   };
-  await bot.init();
-  botInfo.admin = bot.botInfo.username;
-  console.log(`[bot] @${botInfo.admin} ready (${config.botMode}) — private publishing bot`);
-  if (reportBot) {
-    try {
-      await reportBot.init();
-      botInfo.report = reportBot.botInfo.username;
-      console.log(`[report-bot] @${botInfo.report} ready — public report bot`);
-    } catch (e) {
-      console.warn('[report-bot] init failed', e.description || e.message);
-    }
-  }
-  botUsername = botInfo.report || botInfo.admin;
-  startDailySummary(bot.api);
-  setTimeout(() => resyncChannelPosts(bot.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
-  try {
-    await bot.api.setMyCommands(BOT_COMMANDS.ar);
-    await bot.api.setMyCommands(BOT_COMMANDS.en, { language_code: 'en' });
-    await bot.api.setMyDescription('🔒 بوت النشر الخاص بإدارة Red Alert Syria (للمشرفين فقط).' + (botInfo.report ? `\n\nلإرسال بلاغ: @${botInfo.report}` : ''));
-    await bot.api.setMyShortDescription('بوت النشر الخاص — Red Alert Syria' + (botInfo.report ? ` · للبلاغات: @${botInfo.report}` : ''));
-  } catch (e) {
-    console.warn('[bot] could not set commands', e.description || e.message);
-  }
-  if (botInfo.report) {
-    try {
-      await reportBot.api.setMyCommands(REPORT_COMMANDS.ar);
-      await reportBot.api.setMyCommands(REPORT_COMMANDS.en, { language_code: 'en' });
-      await reportBot.api.setMyDescription('📨 بوت التبليغ الخاص بـ Red Alert Syria — الإنذار الأحمر سوريا.\n\nأبلغ عن مسيّرة، طيران حربي، قصف مدفعي، هجوم، صواريخ أو حدث مدني في منطقتك. يصل بلاغك إلى الإدارة ويُنشر على القناة والخريطة بعد التحقق.\n\nReport drones, warplanes, shelling, attacks, missiles or civil events in Syria.');
-      await reportBot.api.setMyShortDescription('أرسل بلاغاً عن حدث في سوريا — Red Alert Syria');
-    } catch (e) {
-      console.warn('[report-bot] could not set commands', e.description || e.message);
-    }
-  }
-  await launch(bot, webhookPath, config.webhookSecret, 'bot');
-  if (botInfo.report) await launch(reportBot, reportWebhookPath, config.reportWebhookSecret, 'report-bot');
+  await upAdmin();
   // Keep the free Render instance awake (requests through the public URL count as traffic).
   if (config.keepAlive && config.publicUrl) {
     const ping = () => fetch(`${config.publicUrl}/api/health?src=self&t=${Date.now()}`, { signal: AbortSignal.timeout(30_000) })
@@ -246,7 +297,7 @@ async function start() {
 const shutdown = async () => {
   try { store._writeLocal(); } catch { /* ignore */ }
   try { await Promise.race([store.flushBackup(), new Promise((r) => setTimeout(r, 5000))]); } catch { /* ignore */ }
-  try { if (config.botMode !== 'webhook') { if (bot) await bot.stop(); if (reportBot && botInfo.report) await reportBot.stop(); } } catch { /* ignore */ }
+  try { if (config.botMode !== 'webhook') { for (const b of Object.values(bots)) if (b) await b.stop(); } } catch { /* ignore */ }
   process.exit(0);
 };
 process.on('SIGTERM', shutdown);
