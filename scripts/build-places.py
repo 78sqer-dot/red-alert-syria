@@ -6,6 +6,9 @@ ar = {}
 for l in open(f'{SRC}/syalt/SY.txt', encoding='utf8'):
     p = l.rstrip('\n').split('\t')
     if p[2] == 'ar' and p[7] != '1':  # skip historic
+        # GeoNames sometimes tags a Latin transliteration as 'ar' (e.g. "‘Arān" before "عران"):
+        # only Arabic-script names count, otherwise the village was dropped altogether
+        if not re.search('[\u0600-\u06FF]', p[3]): continue
         gid = p[1]
         if gid not in ar or p[4] == '1':
             ar[gid] = p[3].strip()
@@ -57,13 +60,33 @@ for k, (a, e) in DFIX.items():
     if k in dists: dists[k]['ar'] = a; dists[k]['en'] = e
 print('poly matched', len(poly2dist), 'of', len(polys), file=sys.stderr)
 
+AR_FALLBACK_GOVS = {'09'}  # Aleppo
+# GeoNames Arabic names that are misspelled / an old alias for well-known places (Aleppo countryside)
+NAME_FIX = {
+    '173068': ('عران', 'Aran'),
+    '170857': ('دارة عزة', 'Darat Izza'),
+    '170137': ('الحاضر', 'Al-Hader'),
+    '166458': ('الزهراء', 'Al-Zahraa'),
+    '171064': ('بزاعة', "Bza'a"),
+    '163465': ('تل شغيب', 'Tal Shgheib'),
+    '167615': ('معارة الأرتيق', 'Maarat al-Artiq'),
+    '169402': ('أبزمو', 'Abzimo'),
+    '165298': ('رتيان', 'Ratyan'),
+}
 RANK = {'PPLC': 0, 'PPLA': 1, 'PPLA2': 2, 'PPLA3': 3, 'PPLA4': 4, 'PPL': 5, 'PPLX': 6, 'PPLL': 7, 'PPLF': 8, 'PPLS': 8, 'PPLQ': 9, 'PPLW': 9, 'PPLH': 9, 'PPLR': 8}
 places = []
 for r in rows:
-    if r[6] != 'P' or r[0] not in ar: continue
+    if r[6] != 'P': continue
     fcode = r[7]
     if fcode in ('PPLQ', 'PPLW', 'PPLH'): continue
-    a = clean_ar(ar[r[0]])
+    if r[0] in ar: a = clean_ar(ar[r[0]])
+    elif r[10] in AR_FALLBACK_GOVS:
+        # some villages (e.g. عران near al-Bab) carry their Arabic name only in the main file's
+        # alternate-names column, not in the per-language file: use the first purely Arabic one
+        alt = [clean_ar(x) for x in r[3].split(',') if re.fullmatch(r'[\u0621-\u063A\u0641-\u064A\u0671-\u06D3 ]{2,}', clean_ar(x))]
+        if not alt: continue
+        a = alt[0]
+    else: continue
     if not re.search('[\u0600-\u06FF]', a): continue
     pop = int(r[14] or 0)
     rank = RANK.get(fcode, 8)
@@ -73,7 +96,9 @@ for r in rows:
     if pi is None: continue  # outside Syria
     dcode = poly2dist.get(pi, '')
     gcode = dists[dcode]['gov'] if dcode in dists else r[10]
-    places.append({'id': int(r[0]), 'ar': a, 'en': r[2] or r[1], 'lat': round(float(r[4]), 5), 'lon': round(float(r[5]), 5),
+    en = (r[2] or r[1]).replace('`', '').strip()
+    if r[0] in NAME_FIX: a, en = NAME_FIX[r[0]]
+    places.append({'id': int(r[0]), 'ar': a, 'en': en, 'lat': round(float(r[4]), 5), 'lon': round(float(r[5]), 5),
                    'gov': gcode, 'dist': dcode, 'rank': rank, 'pop': pop})
 
 def km(a, b):
