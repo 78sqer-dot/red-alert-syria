@@ -6,7 +6,7 @@ BASE = sys.argv[1] if len(sys.argv) > 1 else 'http://localhost:3997'
 OUT = sys.argv[2] if len(sys.argv) > 2 else '/tmp/uav-qa'
 LAT, LON = float(os.environ.get('LAT', '33.487')), float(os.environ.get('LON', '36.352'))
 os.makedirs(OUT, exist_ok=True)
-SEEN = "try{localStorage.setItem('ras-settings', JSON.stringify({hasSeenWelcome:true,hasSeenTour:true,darkMode:%s}));localStorage.setItem('ras-install', JSON.stringify({installed:Date.now()}));}catch(e){}"
+SEEN = "try{localStorage.setItem('ras-settings', JSON.stringify({hasSeenWelcome:true,hasSeenTour:true,darkMode:%s}));localStorage.setItem('ras-install', JSON.stringify({until:Date.now()+86400000*30}));}catch(e){}"
 DESK_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 res = []
 def ok(n, c, x=''):
@@ -97,10 +97,11 @@ async def run(b, pw, name, dark=False, **kw):
 async def main():
     async with async_playwright() as pw:
         b = await pw.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox'])
-        await run(b, pw, 'phone', **pw.devices['Pixel 7'])
+        DEV = os.environ.get('DEV', 'all')
+        if DEV in ('all', 'phone'): await run(b, pw, 'phone', **pw.devices['Pixel 7'])
         d = dict(pw.devices['Pixel 7']); d.update(user_agent=DESK_UA, viewport={'width': 980, 'height': 1860}, device_scale_factor=1.1)
-        await run(b, pw, 'desktop-site', dark=True, **d)
-        await run(b, pw, 'laptop', viewport={'width': 1440, 'height': 900}, user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
+        if DEV in ('all', 'dsite'): await run(b, pw, 'desktop-site', dark=True, **d)
+        if DEV in ('all', 'laptop'): await run(b, pw, 'laptop', viewport={'width': 1440, 'height': 900}, user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
         await b.close()
     print(f'=== {sum(res)}/{len(res)} passed')
 asyncio.run(main())
