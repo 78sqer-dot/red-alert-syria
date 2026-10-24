@@ -30,6 +30,8 @@ export const config = {
   ownerIds: list(process.env.OWNER_IDS || process.env.ADMIN_ID).map(Number).filter(Number.isFinite),
   dataDir: process.env.DATA_DIR || new URL('../data/runtime', import.meta.url).pathname,
   telegramBackup: process.env.TELEGRAM_BACKUP !== 'false',
+  // channel posts as a map image (set ALERT_IMAGES=false to post text only)
+  alertImages: process.env.ALERT_IMAGES !== 'false',
   keepAlive: process.env.KEEP_ALIVE ? process.env.KEEP_ALIVE !== 'false' : Boolean(process.env.RENDER),
   siteName: 'Red Alert Syria',
   timezone: 'Asia/Damascus',

@@ -4,6 +4,7 @@ import { store, publicAlert } from './store.js';
 import { ALERT_TYPES, TYPE_KEYS, typeOf } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
+import { renderAlertPng } from './alert-image.js';
 import { governorates, getGov, getDist, districtsOf, placesOf, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
 
 const PAGE = 18;
@@ -294,15 +295,55 @@ function buildAlertInput(d, author) {
   };
 }
 
+// ---- channel post as a map image (like redalert.com.lb): photo + the usual text as caption + buttons.
+// Falls back to the plain text post when the image can't be made in time or the text is too long.
+const CAPTION_MAX = 1024;
+const IMAGE_DEADLINE_MS = Number(process.env.ALERT_IMAGE_DEADLINE_MS) || 12000;
+const visibleLen = (html) => html.replace(/<[^>]+>/g, '').replace(/&(lt|gt|amp|quot|#39);/g, 'x').length;
+// Caption for an existing photo post; trims a long description if an edit (e.g. "ended") pushes it over.
+function channelCaption(alert, opts) {
+  let s = channelPost(alert, opts);
+  if (visibleLen(s) <= CAPTION_MAX) return s;
+  const desc = String(alert.description || alert.title || '');
+  for (let keep = desc.length - (visibleLen(s) - CAPTION_MAX) - 4; keep > 0; keep -= 40) {
+    s = channelPost({ ...alert, description: desc.slice(0, keep).trimEnd() + '…' }, opts);
+    if (visibleLen(s) <= CAPTION_MAX) return s;
+  }
+  return channelPost({ ...alert, description: '' }, opts).slice(0, CAPTION_MAX);
+}
+function withDeadline(promise, ms) {
+  let t;
+  return Promise.race([promise, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`timed out after ${ms} ms`)), ms); })]).finally(() => clearTimeout(t));
+}
+export async function alertImage(alert, lang = 'ar') {
+  const p = alert.place || {};
+  const placeLabel = alert.scope === 'country' || !p.name_ar ? undefined : locName(p, lang);
+  return renderAlertPng(alert, { lang, placeLabel });
+}
 export async function publishDraft(api, d, author) {
   const alert = store.addAlert(buildAlertInput(d, author));
-  try {
-    const url = mapUrl(alert.id);
-    const m = await api.sendMessage(config.channel, channelPost(alert), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(alert) });
-    store.updateAlert(alert.id, { channel_message_id: m.message_id });
-  } catch (e) {
-    console.error('[bot] channel post failed:', e.description || e.message);
+  const text = channelPost(alert);
+  const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
+  let m = null; let media = 'text';
+  if (config.alertImages && visibleLen(text) <= CAPTION_MAX) {
+    const t0 = Date.now();
+    try {
+      const png = await withDeadline(alertImage(alert, 'ar'), IMAGE_DEADLINE_MS);
+      m = await api.sendPhoto(config.channel, new InputFile(png, `red-alert-syria-${alert.id.slice(0, 8)}.png`), { caption: text, ...extra });
+      media = 'photo';
+      console.log(`[img] channel image sent in ${Date.now() - t0} ms (${Math.round(png.length / 1024)} KB)`);
+    } catch (e) {
+      console.error(`[img] image post failed after ${Date.now() - t0} ms, falling back to text:`, e.description || e.message);
+    }
   }
+  if (!m) {
+    try {
+      m = await api.sendMessage(config.channel, text, { ...extra, link_preview_options: { is_disabled: true } });
+    } catch (e) {
+      console.error('[bot] channel post failed:', e.description || e.message);
+    }
+  }
+  if (m) store.updateAlert(alert.id, { channel_message_id: m.message_id, channel_media: media });
   return store.getAlert(alert.id);
 }
 
@@ -318,14 +359,29 @@ function resultKeyboard(ctx, alert) {
 
 async function refreshChannelPost(api, alert, ended) {
   if (!alert?.channel_message_id) return;
+  const editText = () => api.editMessageText(config.channel, alert.channel_message_id, channelPost(alert, { ended }), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(alert) });
+  const editCaption = () => api.editMessageCaption(config.channel, alert.channel_message_id, { caption: channelCaption(alert, { ended }), parse_mode: 'HTML', reply_markup: channelKeyboard(alert) });
+  const photo = alert.channel_media === 'photo';
   try {
-    const url = mapUrl(alert.id);
-    await api.editMessageText(config.channel, alert.channel_message_id, channelPost(alert, { ended }), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(alert) });
+    await (photo ? editCaption() : editText());
   } catch (e) {
-    if (!String(e.description || '').includes('not modified')) console.error('[bot] edit channel failed:', e.description || e.message);
+    const msg = String(e.description || e.message || '');
+    if (msg.includes('not modified')) return;
+    // stored kind missing or wrong: Telegram says so explicitly -> edit the other way and remember it
+    if (/there is no (text|caption) in the message/i.test(msg)) {
+      try {
+        await (photo ? editText() : editCaption());
+        store.updateAlert(alert.id, { channel_media: photo ? 'text' : 'photo' });
+        return;
+      } catch (e2) {
+        if (String(e2.description || '').includes('not modified')) return;
+        console.error('[bot] edit channel failed:', e2.description || e2.message);
+        return;
+      }
+    }
+    console.error('[bot] edit channel failed:', msg);
   }
 }
-
 function who(u) {
   const name = esc([u.first_name, u.last_name].filter(Boolean).join(' ') || 'user');
   return `<a href="tg://user?id=${u.id}">${name}</a>${u.username ? ' @' + esc(u.username) : ''} (<code>${u.id}</code>)`;
@@ -579,6 +635,28 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }).join('\n');
     return L(ctx).editorsTitle(list);
   };
+  // Owner-only: render sample channel images on this server and send them to the owner's private chat
+  // (never to the channel). /imgtest [type] [place name] — e.g. "/imgtest uav دوما", "/imgtest all".
+  bot.command('imgtest', ownerOnly(async (ctx) => {
+    const args = String(ctx.match || '').trim().split(/\s+/).filter(Boolean);
+    const want = args[0] && (ALERT_TYPES[args[0]] || args[0] === 'all') ? args.shift() : 'uav';
+    const q = args.join(' ') || 'دوما';
+    const hit = searchPlaces(q, 8).find((x) => !x.scope) || searchPlaces(q, 8)[0];
+    const loc = hit ? (hit.scope === 'governorate' ? locationFrom({ govCode: hit.gov }) : hit.scope === 'district' ? locationFrom({ distCode: hit.code || hit.dist }) : locationFrom({ placeId: hit.id })) : locationFrom({});
+    const types = want === 'all' ? TYPE_KEYS : [want];
+    for (const type of types) {
+      const fake = { id: 'imgtest-' + Math.random().toString(16).slice(2).padEnd(28, '0'), type, scope: loc?.scope || 'country', location: loc?.latitude != null ? { latitude: loc.latitude, longitude: loc.longitude } : null, place: loc, timestamp: new Date().toISOString(), description: type === 'breaking' ? 'معاينة خبر عاجل' : '' };
+      const t0 = Date.now(); const c0 = process.cpuUsage();
+      try {
+        const png = await withDeadline(alertImage(fake, langOf(ctx) === 'en' ? 'en' : 'ar'), IMAGE_DEADLINE_MS);
+        const cpu = process.cpuUsage(c0);
+        const note = `\n\n🧪 <i>معاينة فقط — لم تُنشر في القناة · ${Date.now() - t0} ms (CPU ${Math.round((cpu.user + cpu.system) / 1000)} ms) · ${Math.round(png.length / 1024)} KB</i>`;
+        await ctx.replyWithPhoto(new InputFile(png, `imgtest-${type}.png`), { caption: channelCaption(fake, {}).slice(0, CAPTION_MAX - note.length) + note, parse_mode: 'HTML', reply_markup: channelKeyboard(fake) });
+      } catch (e) {
+        await ctx.reply(`⚠️ imgtest ${type}: ${esc(e.message)} (${Date.now() - t0} ms) — كان سيُنشر نصاً.`, { parse_mode: 'HTML' });
+      }
+    }
+  }));
   bot.command('editors', ownerOnly((ctx) => ctx.reply(editorsText(ctx), { parse_mode: 'HTML' })));
   bot.command('addeditor', ownerOnly(async (ctx) => {
     const id = Number(String(ctx.match || '').trim());
@@ -859,6 +937,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!staff(ctx)) return;
     if (d.type === 'breaking' && !d.text) return askLocation(ctx, d);
     sessions.delete(sk(ctx));
+    if (config.alertImages) { try { await show(ctx, L(ctx).publishing, new InlineKeyboard()); } catch { /* ignore */ } }
     const alert = await publishDraft(ctx.api, d, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
     if (d.fromReport) await sendTransient(d.notifyApi || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
     await show(ctx, `${L(ctx).published}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));

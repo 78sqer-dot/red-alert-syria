@@ -73,3 +73,11 @@ Plus civil sub-buttons in BOTH bots: civil button opens submenu (مدني عام
 - Relay chat messages tracked in store.convo ('admin:<chat>' / 'report:<chat>') and deleted on menu (home callback, /start, /menu).
 - Local test server: scripts/_devsrv.mjs (port 3997 web, 3996 inject: /?type=&lat=&lon=&scope=&name=, /clear). Not committed.
 - QA scripts: /tmp/perf.py, /tmp/perf_live.py, /tmp/qa.py. Render workspace tea-dbcholnf3r2c73belk8g, service srv-dbdp7459fdbs7386b3d0.
+
+## Channel alert image (2026-10-24)
+- Reference: /home/ubuntu/upload/182515.jpg (redalert.com.lb channel card 1024x988: navy header #0f172a + 6px orange bar, title right, severity dot+text "حيطة وحذر", logo+domain left, light map w/ red circle, grey note footer "ملاحظة: عدد الدوائر يدلّ على عدد المناطق لا على عدد المسيّرات").
+- server/alert-image.js renders it (resvg). CARTO raster now returns "API KEY REQUIRED" -> use tile.openstreetmap.org (fallback openstreetmap.fr/hot), muted with feColorMatrix saturate .42 + white .18 overlay. Attribution "© OpenStreetMap contributors" required.
+- Noto Kufi Arabic lacks : · - ( ) etc.; resvg doesn't fall back per glyph and mixed-font tspans in RTL vanish -> glyphs were merged from Noto Sans into the Kufi TTFs (fontTools).
+- CPU: ~260 ms locally at 820px output (Render free = 0.1 CPU -> ~2.5 s). Deadline 12 s then text fallback. ALERT_IMAGES=false disables. Logo: public/img/logo-wordmark.svg or ALERT_IMAGE_LOGO.
+- Stored alert: location {latitude,longitude}; names in alert.place; alert.scope; channel_media 'photo'|'text' -> refreshChannelPost uses editMessageCaption for photos.
+- Owner Telegram id 8270709633 (test images go there only, never @Red_Alert_Syria).
