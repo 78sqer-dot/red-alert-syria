@@ -209,7 +209,9 @@ async function launch(role, b) {
   const label = role === 'admin' ? 'bot' : 'report-bot';
   if (config.botMode === 'webhook' && config.publicUrl) {
     const secret = secretOf(role);
-    hooks.set(hookKey(secret), webhookCallback(b, 'express', { secretToken: secret, onTimeout: 'return', timeoutMilliseconds: 9000 }));
+    hooks.set(hookKey(secret), webhookCallback(b, 'express', { secretToken: secret, timeoutMilliseconds: 9000,
+      // answer Telegram anyway (no re-delivery storm) but leave a trace: the update is still being handled
+      onTimeout: () => console.warn(`[${label}] update still running after 9 s (Telegram API slow?) — continuing in background`) }));
     const set = b.api.setWebhook(`${config.publicUrl}/tg/${hookKey(secret)}`, { secret_token: secret, allowed_updates: UPD, max_connections: 20, drop_pending_updates: false });
     const slow = new Promise((r) => setTimeout(() => r('slow'), 20_000).unref());
     const r = await Promise.race([set, slow]);

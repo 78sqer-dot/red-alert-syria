@@ -1,4 +1,5 @@
 import { installTracker, cleanChat, setKeep } from './ui-clean.js';
+import { installResilience } from './tg-net.js';
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
 import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
@@ -597,6 +598,7 @@ const OH = {
 export function createBot({ role = 'admin', token = config.botToken, reviewApi = null } = {}) {
   if (!token) return null;
   const bot = new Bot(token);
+  installResilience(bot.api, role); // first = closest to the network: short deadlines + retries
   APIS[role] = bot.api; TOKENS[role] = token;
   installTracker(bot.api, role); // records every message the bot sends (clean chats)
   // A tap that reaches us late ("query is too old" after a slow start/network) must still do its
@@ -1285,6 +1287,9 @@ export function telegramBackupAdapter(api0) {
     if (prev) {
       try { await api.editMessageMedia(chat, prev, InputMediaBuilder.document(file(), { caption })); return; } catch (e) {
         if (/not modified/i.test(e.description || '')) return;
+        // Telegram slow / 5xx / network: the edit may still land. Do not post a second backup file now;
+        // the store keeps the backup pending and retries on its next save.
+        if (!(e instanceof GrammyError) || e.error_code >= 500 || e.error_code === 429) throw e;
       }
     }
     const m = await api.sendDocument(chat, file(), { caption, disable_notification: true, _keep: 'b' });
