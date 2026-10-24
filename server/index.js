@@ -193,8 +193,11 @@ async function launch(role, b) {
   if (config.botMode === 'webhook' && config.publicUrl) {
     const secret = secretOf(role);
     hooks.set(hookKey(secret), webhookCallback(b, 'express', { secretToken: secret, onTimeout: 'return', timeoutMilliseconds: 9000 }));
-    await b.api.setWebhook(`${config.publicUrl}/tg/${hookKey(secret)}`, { secret_token: secret, allowed_updates: UPD, max_connections: 20, drop_pending_updates: false });
-    console.log(`[${label}] webhook set`);
+    const set = b.api.setWebhook(`${config.publicUrl}/tg/${hookKey(secret)}`, { secret_token: secret, allowed_updates: UPD, max_connections: 20, drop_pending_updates: false });
+    const slow = new Promise((r) => setTimeout(() => r('slow'), 20_000).unref());
+    const r = await Promise.race([set, slow]);
+    if (r === 'slow') { console.warn(`[${label}] setWebhook slow — handler attached, continuing`); set.then(() => console.log(`[${label}] webhook set (late)`)).catch((e) => console.error(`[${label}] setWebhook failed`, e.description || e.message)); }
+    else console.log(`[${label}] webhook set`);
   } else {
     await b.api.deleteWebhook();
     b.start({ allowed_updates: UPD, onStart: () => console.log(`[${label}] long polling started`) });
@@ -215,7 +218,8 @@ async function bringUp(roles, reuse = {}) {
     if (!token) { await retire(role, old, oldSecret); bots[role] = null; botInfo[role] = null; continue; }
     const b = reuse[role] && reuse[role].token === token ? reuse[role] : createBot({ role, token });
     try {
-      await b.init();
+      // Telegram can stall for minutes on a single bot: never wait more than 20 s, the caller retries
+      await Promise.race([b.init(), new Promise((_, rej) => setTimeout(() => rej(new Error('getMe timeout (20s)')), 20_000).unref())]);
       b.__secret = secretOf(role);
       botInfo[role] = b.botInfo.username;
       await launch(role, b);
@@ -263,7 +267,20 @@ async function start() {
     return;
   }
   const afterAdmin = async () => {
-    try { await bringUp(['report']); } catch (e) { console.warn('[report-bot] init failed', e.description || e.message); }
+    const upReport = async (attempt = 1) => {
+      try { await bringUp(['report']); } catch (e) {
+        if (e.error_code === 401 && store.project.reportBotToken) {
+          console.error('[report-bot] saved token rejected, falling back to env token');
+          store.setProject({ reportBotToken: null }); applyProject(store.project);
+          return upReport(attempt);
+        }
+        if (e.error_code === 401) return console.error('[report-bot] token rejected by Telegram');
+        const wait = Math.min(300, 15 * attempt);
+        console.warn(`[report-bot] init failed (${e.description || e.message}); retry in ${wait}s`);
+        setTimeout(() => upReport(attempt + 1), wait * 1000).unref();
+      }
+    };
+    upReport();
     startDailySummary(bots.admin.api);
     setTimeout(() => resyncChannelPosts(bots.admin.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
   };
