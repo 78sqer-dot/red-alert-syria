@@ -20,7 +20,7 @@ const clean = (s, max = 900) => String(s || '').replace(/[\u0000-\u0008\u000B-\u
 const hashTag = (s) => '#' + String(s || '').replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '');
 
 const sessions = new Map(); // userId -> draft
-const reports = new Map(); // reportId -> { draft, from, messages: [[chatId, msgId]] }
+// pending reports live in the store (store.reportPut/Take): they survive restarts and deploys
 const lastReport = new Map();
 
 const isStaffId = (id) => isOwner(id) || store.isEditor(id);
@@ -562,6 +562,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   const bot = new Bot(token);
   APIS[role] = bot.api; TOKENS[role] = token;
   installTracker(bot.api, role); // records every message the bot sends (clean chats)
+  // A tap that reaches us late ("query is too old" after a slow start/network) must still do its
+  // job: only the little button spinner is lost, never the action itself.
+  bot.api.config.use(async (prev, method, payload, signal) => {
+    if (method !== 'answerCallbackQuery') return prev(method, payload, signal);
+    let res;
+    try { res = await prev(method, payload, signal); } catch (e) { res = { ok: false, description: e.description || e.message }; }
+    if (res && res.ok === false) { console.warn('[bot] answerCallbackQuery ignored:', res.description); return { ok: true, result: true }; }
+    return res;
+  });
   bot.use(cleanChat(role)); // after each tap/message: only the current screen stays
   bot.use(async (ctx, next) => {
     if (ctx.chat && ctx.chat.type !== 'private') return; // only private chats
@@ -969,7 +978,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     sessions.delete(sk(ctx));
     if (config.alertImages) { try { await show(ctx, L(ctx).publishing, new InlineKeyboard()); } catch { /* ignore */ } }
     const alert = await publishDraft(ctx.api, d, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
-    if (d.fromReport) await sendTransient(d.notifyApi || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
+    if (d.fromReport) await sendTransient(APIS[d.notifyVia] || APIS.report || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
     await show(ctx, `${L(ctx).published}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
   }));
 
@@ -978,9 +987,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     sessions.delete(sk(ctx));
     lastReport.set(ctx.from.id, Date.now());
     const rid = Math.random().toString(36).slice(2, 10);
-    const rep = { draft: d, from: { id: ctx.from.id, first_name: ctx.from.first_name, last_name: ctx.from.last_name, username: ctx.from.username }, messages: [], created: Date.now(), notifyApi: ctx.api };
+    const { msgId: _m, ...draft } = d;
+    const rep = { draft, from: { id: ctx.from.id, first_name: ctx.from.first_name, last_name: ctx.from.last_name, username: ctx.from.username }, messages: [], created: Date.now(), via: roleOf(ctx) };
     const api = APIS.admin || reviewApi || ctx.api;
-    reports.set(rid, rep);
+    store.reportPut(rid, rep);
     const reviewers = [...new Set([...config.ownerIds, ...store.state.editors])];
     for (const uid of reviewers) {
       const lang = store.userLang(uid) === 'en' ? 'en' : 'ar';
@@ -990,6 +1000,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         const hint = lang === 'en' ? '<i>↩️ To talk to the reporter, use "Reply" on this message.</i>' : '<i>↩️ لمراسلة صاحب البلاغ: اعمل «رد» على هذه الرسالة واكتب.</i>';
         const m = await api.sendMessage(uid, `${l.reportNew(who(ctx.from))}\n\n${draftSummary(d, lang)}\n\n${hint}`, { parse_mode: 'HTML', reply_markup: kb, _keep: 'c' }); // stays until handled
         rep.messages.push([uid, m.message_id]);
+        store.reportPut(rid, rep); // saved with every card, so a decision always finds it
         store.relayPut(`a:${uid}:${m.message_id}`, ctx.from.id);
       } catch (e) { /* reviewer has not started the bot */ }
     }
@@ -1000,10 +1011,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
 
   // Remove the report from every reviewer's chat (optionally keeping the current one).
-  const closeReport = async (ctx, rid, keepCurrent = false) => {
-    const rep = reports.get(rid);
+  const closeReport = async (ctx, rep, keepCurrent = false) => {
     if (!rep) return;
-    reports.delete(rid);
     for (const [chat, mid] of rep.messages) setKeep('admin', chat, mid, false); // handled: normal screen now
     const cur = ctx.callbackQuery?.message;
     for (const [chat, mid] of rep.messages) {
@@ -1017,27 +1026,42 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery(/^r(ap|rj|bn|ed):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return ctx.answerCallbackQuery();
     const [, action, rid] = ctx.match;
-    const rep = reports.get(rid);
-    if (!rep) return vanish(ctx, L(ctx).notFound);
-    const by = esc(ctx.from.first_name || String(ctx.from.id));
+    const en = langOf(ctx) === 'en';
+    // a card sent by the previous instance during a deploy: pull its final state first
+    if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
+    const rep = store.reportTake(rid); // claimed once: a second tap / a second reviewer can't publish it again
+    if (!rep) {
+      if (store.reportDone(rid)) return vanish(ctx, en ? 'This report was already handled ✔️' : 'تمت معالجة هذا البلاغ مسبقاً ✔️');
+      // truly unknown (older than 48 h or lost): keep the card visible so its content can be published by hand
+      try { await ctx.answerCallbackQuery({ text: en ? 'This report is no longer available — publish it from the menu.' : 'هذا البلاغ لم يعد متاحاً — انشره يدوياً من القائمة.', show_alert: true }); } catch { /* ignore */ }
+      try { await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(en ? '🏠 Menu' : '🏠 القائمة', 'home') }); } catch { /* ignore */ }
+      return;
+    }
+    const notify = APIS[rep.via] || APIS.report || ctx.api;
     if (action === 'ap') {
-      await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
-      await closeReport(ctx, rid, true);
+      try {
+        await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
+      } catch (e) {
+        store.reportRestore(rid, rep); // nothing lost: the reviewer can tap again
+        console.error('[bot] report publish failed', e.description || e.message);
+        try { await ctx.answerCallbackQuery({ text: en ? '⚠️ Publishing failed — tap Approve again.' : '⚠️ تعذّر النشر — اضغط «موافقة» مرة ثانية.', show_alert: true }); } catch { /* ignore */ }
+        return;
+      }
+      await closeReport(ctx, rep, true);
       await vanish(ctx, L(ctx).reportApproved(ctx.from.first_name || ''));
-      await sendTransient(rep.notifyApi || ctx.api, rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser);
+      await sendTransient(notify, rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser);
     } else if (action === 'ed') {
       // Load the report into this editor's publishing session so it can be adjusted first.
       await ctx.answerCallbackQuery();
-      await closeReport(ctx, rid, true);
-      const d = { ...rep.draft, mode: 'publish', created: Date.now(), msgId: null, fromReport: rep.from, notifyApi: rep.notifyApi };
+      await closeReport(ctx, rep, true);
+      const d = { ...rep.draft, mode: 'publish', created: Date.now(), msgId: null, fromReport: rep.from, notifyVia: rep.via };
       sessions.set(sk(ctx), d);
       await showPreview(ctx, d);
     } else {
       if (action === 'bn') store.ban(rep.from.id);
-      await closeReport(ctx, rid, true);
+      await closeReport(ctx, rep, true);
       await vanish(ctx, L(ctx).reportRejected(ctx.from.first_name || '') + (action === 'bn' ? ' · 🚫' : ''));
     }
-    void by;
   });
   // -------- active alerts management
   async function showActive(ctx) {
@@ -1191,9 +1215,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   if (role === 'admin') store.on('expired', (a) => refreshChannelPost(bot.api, a, true));
 
   // Clean old pending reports
-  setInterval(() => {
-    for (const [k, r] of reports) if (Date.now() - r.created > 12 * 3600_000) reports.delete(k);
-  }, 3600_000).unref();
+  if (role === 'admin') setInterval(() => store.reportsPrune(), 3600_000).unref();
 
   return bot;
 }

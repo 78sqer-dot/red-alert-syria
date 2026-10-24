@@ -118,3 +118,9 @@ TODO: register contact tools in createBot after registerOwnerTools + main menu o
   androidNoPromptIntro); first visit shows 6-step tour; no own timed popup found → entry popup = browser's native install prompt.
   QA: scripts/_pwa_qa.py (needs devsrv :3997/:3996, /contacts ctl) 36 checks; shots /tmp/pwa-qa. TODO: screenshots shot-narrow/wide for manifest,
   bot sim for contact-tools, deploy, live QA.
+
+## 2026-10-24 08:5x incident: approved report not published
+- Pushed fcbe46e 08:52 (token secret red_alert_syria_github.token via http extraheader; remote URL clean). Deploy dep-dbe4f23m8hqs73d5kujg live.
+- Render log: new instance restored backup 05:52:43.72Z; relay key a:8270709633:89 written 05:52:43.465Z by OLD instance (card sent during overlap). Approve hit new instance -> reports Map (memory only) empty -> vanish(notFound). Reporter = owner himself (8270709633). Content unrecoverable (memory only).
+- Fix (uncommitted at 09:00): store.state.reports/reportsDone/gone; reportPut/Get/Take/Restore/Prune; mergeFromBackup() at +20/60/180 s after boot and on approve miss; answerCallbackQuery errors non-fatal; unknown card -> popup + keep card. Sim: scripts/_rp.mjs.
+- Still TODO after: live checks (contacts test values then remove, phone/dsite/laptop screenshots), _clean.mjs had 1 failure after answerCallbackQuery transformer ("prompt still visible after a wrong input") -> investigate.

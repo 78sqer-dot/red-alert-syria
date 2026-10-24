@@ -278,6 +278,11 @@ async function start() {
   const server = app.listen(config.port, () => console.log(`[web] listening on :${config.port}`));
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 66_000;
+  // Deploy hand-off: the previous instance keeps answering for a few seconds after this one loaded
+  // its data, then saves its final state to the backup as it stops. Pick up what it received.
+  if (store.backup && config.telegramBackup) {
+    for (const sec of [20, 60, 180]) setTimeout(() => store.mergeFromBackup().catch(() => {}), sec * 1000).unref();
+  }
 
   if (!config.botToken) {
     console.warn('[bot] BOT_TOKEN missing — running website only');

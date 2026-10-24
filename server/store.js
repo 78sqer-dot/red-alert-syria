@@ -47,6 +47,7 @@ class Store extends EventEmitter {
         console.error('[store] backup restore failed', e.message);
       }
     }
+    this._restoredAt = Date.now();
     if (!Array.isArray(this.state.log)) this.state.log = this.state.alerts.map((a) => this._logEntry(a)).reverse();
     this.expireSweep();
     setInterval(() => this.expireSweep(), 30_000).unref();
@@ -103,6 +104,11 @@ class Store extends EventEmitter {
       maint: s.maint && typeof s.maint === 'object' ? s.maint : {},
       // bot messages per private chat (clean-chat tracker): { 'role:chat': [{ id, t, s, m, u, k }] }
       ui: s.ui && typeof s.ui === 'object' ? s.ui : {},
+      // public reports waiting for a decision (survive restarts/deploys) and decided report ids
+      reports: s.reports && typeof s.reports === 'object' ? s.reports : {},
+      reportsDone: s.reportsDone && typeof s.reportsDone === 'object' ? s.reportsDone : {},
+      // ids of alerts removed by hand / auto-delete (so a late copy from an old instance can't bring them back)
+      gone: s.gone && typeof s.gone === 'object' ? s.gone : {},
     };
   }
 
@@ -201,11 +207,90 @@ class Store extends EventEmitter {
     const i = this.state.alerts.findIndex((a) => a.id === id);
     if (i < 0) return null;
     const [a] = this.state.alerts.splice(i, 1);
+    this._tomb([id]);
     // an alert removed by hand was a mistake -> it should not count in the statistics
     this.state.log = (this.state.log || []).filter((e) => e.id !== id);
     this.persist();
     this.emit('remove', { id });
     return a;
+  }
+
+  _tomb(ids) {
+    const g = (this.state.gone ||= {});
+    const now = Date.now();
+    for (const id of ids) g[id] = now;
+    for (const [k, t] of Object.entries(g)) if (now - t > 3 * 86400_000) delete g[k];
+  }
+
+  // ---------- pending public reports (persisted: a restart/deploy must never lose one) ----------
+  reportPut(rid, rep) {
+    (this.state.reports ||= {})[rid] = rep;
+    this.persist();
+  }
+  reportGet(rid) { return this.state.reports?.[rid] || null; }
+  reportDone(rid) { return !!this.state.reportsDone?.[rid]; }
+  /** Claim a report for a decision: returns it once, then it is gone (no double publishing). */
+  reportTake(rid) {
+    const rep = this.state.reports?.[rid];
+    if (!rep) return null;
+    delete this.state.reports[rid];
+    (this.state.reportsDone ||= {})[rid] = Date.now();
+    this.persist();
+    return rep;
+  }
+  /** Undo a claim when publishing failed, so the reviewer can try again. */
+  reportRestore(rid, rep) {
+    delete this.state.reportsDone?.[rid];
+    this.reportPut(rid, rep);
+  }
+  reportsPrune(maxAgeMs = 48 * 3600_000) {
+    const now = Date.now();
+    let n = 0;
+    for (const [k, r] of Object.entries(this.state.reports || {})) if (!r || now - (r.created || 0) > maxAgeMs) { delete this.state.reports[k]; n++; }
+    for (const [k, t] of Object.entries(this.state.reportsDone || {})) if (now - t > 4 * 86400_000) { delete this.state.reportsDone[k]; n++; }
+    if (n) this.persist({ backupSoon: false });
+  }
+
+  /**
+   * During a deploy Render keeps the old instance serving for a few seconds after the new one has
+   * loaded its data; the old one saves its final state to the Telegram backup when it stops.
+   * Pull in what it received in that window (reports, alerts, reply links) - additions only.
+   */
+  async mergeFromBackup() {
+    if (!this.backup) return { reports: 0, alerts: 0 };
+    let o;
+    try { const json = await this.backup.load(); if (!json) return { reports: 0, alerts: 0 }; o = JSON.parse(json); } catch (e) {
+      console.error('[store] merge: backup read failed', e.message); return { reports: 0, alerts: 0 };
+    }
+    let reports = 0, alerts = 0;
+    const st = this.state;
+    st.reports ||= {}; st.reportsDone ||= {}; st.gone ||= {};
+    for (const [rid, t] of Object.entries(o.reportsDone || {})) {
+      if (!st.reportsDone[rid]) st.reportsDone[rid] = t;
+      if (st.reports[rid]) { delete st.reports[rid]; reports++; }
+    }
+    for (const [rid, r] of Object.entries(o.reports || {})) {
+      if (!r || st.reports[rid] || st.reportsDone[rid]) continue;
+      st.reports[rid] = r; reports++;
+    }
+    const since = (this._restoredAt || Date.now()) - 10 * 60_000;
+    const known = new Set(st.alerts.map((a) => a.id));
+    for (const a of Array.isArray(o.alerts) ? o.alerts : []) {
+      if (!a || !a.id || !ALERT_TYPES[a.type] || known.has(a.id) || st.gone[a.id] || o.gone?.[a.id]) continue;
+      if (Date.parse(a.timestamp) < since) continue; // only what arrived around the switch
+      st.alerts.push(a); known.add(a.id); alerts++;
+      if (!(st.log || []).some((e) => e.id === a.id)) (st.log ||= []).push(this._logEntry(a));
+      this.emit('alert', publicAlert(a));
+    }
+    if (alerts) {
+      st.alerts.sort((x, y) => Date.parse(y.timestamp) - Date.parse(x.timestamp));
+      st.log.sort((x, y) => Date.parse(x.ts) - Date.parse(y.ts));
+    }
+    for (const [k, v] of Object.entries(o.relay || {})) if (!st.relay[k]) st.relay[k] = v;
+    for (const [k, v] of Object.entries(o.threads || {})) if (!st.threads[k]) st.threads[k] = v;
+    if (reports || alerts) console.log(`[store] merged from the previous instance: ${reports} report change(s), ${alerts} alert(s)`);
+    this.persist(); // the pinned backup becomes the merged state again
+    return { reports, alerts };
   }
 
   // ---------- statistics log ----------
@@ -299,6 +384,7 @@ class Store extends EventEmitter {
     if (!gone.length) return [];
     const ids = new Set(gone.map((a) => a.id));
     this.state.alerts = this.state.alerts.filter((a) => !ids.has(a.id));
+    this._tomb([...ids]);
     for (const a of gone) this.emit('remove', { id: a.id });
     this.persist();
     return gone;
