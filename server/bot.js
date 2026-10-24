@@ -72,7 +72,7 @@ export function channelPost(alert, { ended = false } = {}) {
   const lines = [];
   lines.push(`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${t.emoji}`, '');
   if (alert.type === 'breaking') lines.push(`<b>${esc(alert.description || alert.title)}</b>`, '');
-  if (hasPlace) lines.push(`📍<b>${esc(locName(p, 'ar'))}</b>`);
+  if (hasPlace) for (const x of [p, ...(alert.extra || [])]) lines.push(`📍<b>${esc(locName(x, 'ar'))}</b>`);
   if (alert.type !== 'breaking' && alert.description) lines.push(`<blockquote>${esc(alert.description)}</blockquote>`);
   lines.push('');
   lines.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
@@ -95,7 +95,10 @@ function draftSummary(d, lang) {
   const loc = d.location;
   const lines = [`<b>${esc(typeLabel(d.type, lang))}</b>`];
   if (d.type === 'breaking') lines.push('', esc(d.text || ''));
-  lines.push('', `📍 <b>${l.locLabel}:</b> ${esc(loc ? locName(loc, lang) : (lang === 'en' ? 'Syria' : 'سوريا'))}`);
+  if (d.extra?.length) {
+    lines.push('', `📍 <b>${lang === 'en' ? `Areas (${d.extra.length + 1})` : `المناطق (${d.extra.length + 1})`}:</b>`);
+    for (const x of [loc, ...d.extra]) lines.push(`• ${esc(locName(x, lang))}`);
+  } else lines.push('', `📍 <b>${l.locLabel}:</b> ${esc(loc ? locName(loc, lang) : (lang === 'en' ? 'Syria' : 'سوريا'))}`);
   if (d.type !== 'breaking' && d.details) lines.push(`📝 <b>${l.detailsLabel}:</b> ${esc(d.details)}`);
   lines.push(`⏱ <b>${l.durLabel}:</b> ${fmtDur(d.ttlMin, lang)}`);
   return lines.join('\n');
@@ -130,6 +133,7 @@ function govKeyboard(ctx, d) {
     if (i % 3 === 2) kb.row();
   });
   kb.row();
+  if (d.adding) return kb.text(langOf(ctx) === 'en' ? '↩️ Back to preview' : '↩️ رجوع للمعاينة', 'addback');
   if (d.type === 'breaking') kb.text(l.btnNoLocation, 'noloc').row();
   kb.text(l.btnCancel, 'cancel');
   return kb;
@@ -177,6 +181,13 @@ function previewKeyboard(ctx, d) {
   else kb.text(l.btnPublish, 'publish').row();
   kb.text(l.btnDuration(d.ttlMin), 'dur').row();
   kb.text(l.btnEditDetails, 'editdetails').text(l.btnChangeLoc, 'back:gov').row();
+  // publishing bot only: one alert can cover several areas, each with its own circle on the map
+  if (d.mode !== 'report' && d.location && d.location.scope !== 'country') {
+    const en = langOf(ctx) === 'en';
+    kb.text(en ? '➕ Add another area' : '➕ إضافة منطقة أخرى', 'addloc');
+    if (d.extra?.length) kb.text(en ? '➖ Remove an area' : '➖ حذف منطقة', 'rmloc');
+    kb.row();
+  }
   kb.text(l.btnCancel, 'cancel');
   return kb;
 }
@@ -244,6 +255,7 @@ function newDraft(ctx, type) {
     step: type === 'breaking' ? 'text' : 'gov',
     ttlMin: typeOf(type).ttlMin,
     location: null,
+    extra: [], // further areas of the same alert (publishing bot)
     details: '',
     text: '',
     created: Date.now(),
@@ -260,7 +272,24 @@ const getDraft = (ctx) => {
 
 async function askLocation(ctx, d) {
   d.step = 'gov';
-  await show(ctx, L(ctx).askGov(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`), govKeyboard(ctx, d));
+  const en = langOf(ctx) === 'en';
+  const head = d.adding ? (en ? `➕ <b>Add another area</b> (${(d.extra?.length || 0) + 1} selected so far)\n\n` : `➕ <b>إضافة منطقة أخرى</b> (المحدد حتى الآن: ${(d.extra?.length || 0) + 1})\n\n`) : '';
+  await show(ctx, head + L(ctx).askGov(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`), govKeyboard(ctx, d));
+}
+const locKey = (x) => (x ? `${x.scope}:${x.place_id || x.district || x.governorate || ''}:${Number(x.latitude).toFixed(3)},${Number(x.longitude).toFixed(3)}` : '');
+// a picked location: either the alert's (first) area, or one more area added from the preview
+async function pickLocation(ctx, d, loc) {
+  if (!loc) return;
+  if (d.adding) {
+    d.adding = false;
+    if (!Array.isArray(d.extra)) d.extra = [];
+    const k = locKey(loc);
+    if (loc.scope !== 'country' && k !== locKey(d.location) && !d.extra.some((x) => locKey(x) === k) && d.extra.length < 19) d.extra.push(loc);
+    return showPreview(ctx, d);
+  }
+  d.location = loc;
+  if (loc.scope === 'country') d.extra = [];
+  return afterLocation(ctx, d);
 }
 
 async function afterLocation(ctx, d) {
@@ -286,10 +315,14 @@ function buildAlertInput(d, author) {
     if (loc.district_ar && loc.district_ar !== loc.name_ar) areas.push(loc.district_ar);
     if (loc.governorate_ar && !areas.includes(loc.governorate_ar)) areas.push(loc.governorate_ar);
   }
+  const extra = named && Array.isArray(d.extra) ? d.extra.filter((x) => x && x.scope !== 'country') : [];
+  for (const x of extra) if (x.name_ar && !areas.includes(x.name_ar)) areas.push(x.name_ar);
+  const more = (n, en) => (!n ? '' : en ? ` +${n} more` : n === 1 ? ' ومنطقة أخرى' : n === 2 ? ' ومنطقتان أخريان' : n <= 10 ? ` و${n} مناطق أخرى` : ` و${n} منطقة أخرى`);
   return {
     type: d.type,
-    title: named ? `${titles.ar} — ${loc.name_ar}` : titles.ar,
-    title_en: named ? `${titles.en} — ${loc.name_en}` : titles.en,
+    title: named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar,
+    title_en: named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en,
+    extra,
     description: d.type === 'breaking' ? d.text : d.details,
     location: loc,
     areas,
@@ -321,7 +354,11 @@ function withDeadline(promise, ms) {
 }
 export async function alertImage(alert, lang = 'ar') {
   const p = alert.place || {};
-  const placeLabel = alert.scope === 'country' || !p.name_ar ? undefined : locName(p, lang);
+  const n = (alert.extra || []).length;
+  const en = lang === 'en';
+  const placeLabel = alert.scope === 'country' || !p.name_ar ? undefined
+    : !n ? locName(p, lang)
+    : `${en ? p.name_en || p.name_ar : p.name_ar}${en ? ` +${n} more` : n === 1 ? ' ومنطقة أخرى' : n === 2 ? ' ومنطقتان أخريان' : n <= 10 ? ` و${n} مناطق أخرى` : ` و${n} منطقة أخرى`}`;
   return renderAlertPng(alert, { lang, placeLabel });
 }
 // Render sample channel images on this server and send them to a private chat (never the channel).
@@ -910,10 +947,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const lang = langOf(ctx);
     await show(ctx, L(ctx).askDist(`<b>${esc(typeLabel(d.type, lang))}</b>`, esc(lang === 'en' ? getGov(gov).en : getGov(gov).ar)), distKeyboard(ctx, gov));
   }));
-  bot.callbackQuery(/^wg:(\d+)$/, needDraft(async (ctx, d) => {
-    d.location = locationFrom({ govCode: ctx.match[1] });
-    await afterLocation(ctx, d);
-  }));
+  bot.callbackQuery(/^wg:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ govCode: ctx.match[1] }))));
   const showPlaces = async (ctx, d, dist, page) => {
     d.dist = dist; d.step = 'place';
     const lang = langOf(ctx);
@@ -923,19 +957,37 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   };
   bot.callbackQuery(/^d:(\d+)$/, needDraft((ctx, d) => (getDist(ctx.match[1]) ? showPlaces(ctx, d, ctx.match[1], 0) : null)));
   bot.callbackQuery(/^pg:(\d+):(\d+)$/, needDraft((ctx, d) => showPlaces(ctx, d, ctx.match[1], Number(ctx.match[2]))));
-  bot.callbackQuery(/^wd:(\d+)$/, needDraft(async (ctx, d) => {
-    d.location = locationFrom({ distCode: ctx.match[1] });
-    await afterLocation(ctx, d);
-  }));
-  bot.callbackQuery(/^p:(\d+)$/, needDraft(async (ctx, d) => {
-    const loc = locationFrom({ placeId: Number(ctx.match[1]) });
-    if (!loc) return;
-    d.location = loc;
-    await afterLocation(ctx, d);
-  }));
+  bot.callbackQuery(/^wd:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ distCode: ctx.match[1] }))));
+  bot.callbackQuery(/^p:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ placeId: Number(ctx.match[1]) }))));
   bot.callbackQuery('noloc', needDraft(async (ctx, d) => {
+    if (d.adding) { d.adding = false; return showPreview(ctx, d); }
     d.location = locationFrom({});
+    d.extra = [];
     await showPreview(ctx, d);
+  }));
+  // ---- several areas for one alert (publishing bot only)
+  bot.callbackQuery('addloc', needDraft(async (ctx, d) => {
+    if (!staff(ctx) || d.mode === 'report' || !d.location || d.location.scope === 'country') return showPreview(ctx, d);
+    if ((d.extra?.length || 0) >= 19) return showPreview(ctx, d);
+    d.adding = true;
+    return askLocation(ctx, d);
+  }));
+  bot.callbackQuery('addback', needDraft((ctx, d) => { d.adding = false; return showPreview(ctx, d); }));
+  bot.callbackQuery('rmloc', needDraft(async (ctx, d) => {
+    if (!d.extra?.length) return showPreview(ctx, d);
+    const lang = langOf(ctx);
+    const kb = new InlineKeyboard();
+    [d.location, ...d.extra].forEach((x, i) => kb.text(`🗑 ${locName(x, lang)}`.slice(0, 60), 'rml:' + i).row());
+    kb.text(L(ctx).btnBack, 'preview');
+    await show(ctx, lang === 'en' ? '➖ <b>Remove an area</b>\n\nTap the area to remove from this alert:' : '➖ <b>حذف منطقة</b>\n\nاضغط على المنطقة اللي بدك تشيلها من هالتنبيه:', kb);
+  }));
+  bot.callbackQuery(/^rml:(\d+)$/, needDraft(async (ctx, d) => {
+    const i = Number(ctx.match[1]);
+    if (d.extra?.length) {
+      if (i === 0) d.location = d.extra.shift();
+      else if (i - 1 < d.extra.length) d.extra.splice(i - 1, 1);
+    }
+    return showPreview(ctx, d);
   }));
   bot.callbackQuery('skip', needDraft((ctx, d) => showPreview(ctx, d)));
   bot.callbackQuery(/^back:(gov|dist)$/, needDraft(async (ctx, d) => {
@@ -1105,14 +1157,14 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   // -------- auto-delete setting (owner)
   const autoKb = (ctx) => {
     const l = L(ctx); const h = store.autoDeleteHours; const m = (v, t) => (h === v ? '✅ ' : '') + t;
-    return new InlineKeyboard().text(m(24, l.btnAuto24), 'auto:24').text(m(48, l.btnAuto48), 'auto:48').text(m(0, l.btnAutoOff), 'auto:0').row().text(l.btnHome, 'home');
+    return new InlineKeyboard().text(m(1, l.btnAuto1), 'auto:1').text(m(24, l.btnAuto24), 'auto:24').text(m(48, l.btnAuto48), 'auto:48').text(m(0, l.btnAutoOff), 'auto:0').row().text(l.btnHome, 'home');
   };
   bot.callbackQuery('auto', async (ctx) => {
     await ctx.answerCallbackQuery();
     if (!owner(ctx)) return;
     await show(ctx, L(ctx).autoTitle(store.autoDeleteHours), autoKb(ctx));
   });
-  bot.callbackQuery(/^auto:(0|24|48)$/, async (ctx) => {
+  bot.callbackQuery(/^auto:(0|1|24|48)$/, async (ctx) => {
     if (!owner(ctx)) return ctx.answerCallbackQuery();
     store.setAutoDelete(Number(ctx.match[1]));
     await ctx.answerCallbackQuery(L(ctx).autoSaved);
@@ -1163,9 +1215,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!d || !['gov', 'dist', 'place', 'details'].includes(d.step)) return;
     const { latitude: lat, longitude: lon } = ctx.message.location;
     if (!insideSyriaBox(lat, lon)) return ctx.reply(L(ctx).outside);
-    d.location = locationFrom({ lat, lon });
     d.msgId = null;
-    await afterLocation(ctx, d);
+    await pickLocation(ctx, d, locationFrom({ lat, lon }));
   });
 
   bot.on('message:text', async (ctx) => {

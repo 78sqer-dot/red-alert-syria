@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
 import { ALERT_TYPES } from '../shared/types.js';
 import { SVG as GLYPHS } from '../public/js/marker-svgs.js';
-import { zonePoints } from './places.js';
+import { zonePoints, alertZones } from './places.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FONT_DIR = path.join(ROOT, 'assets', 'fonts');
@@ -140,10 +140,10 @@ async function fetchTile(z, x, y, timeoutMs) {
 }
 
 // ------------------------------------------------------------------ marker for point alerts
-function markerSvg(type, cx, cy) {
+function markerSvg(type, cx, cy, k = 1) {
   const t = ALERT_TYPES[type] || ALERT_TYPES.breaking;
   const g = GLYPHS[t.glyph] || GLYPHS.other || '';
-  const r = 30; const s = r * 1.2;
+  const r = 30 * k; const s = r * 1.2;
   const bg = t.marker === 'static' ? (t.disc || t.color) : (t.icon || t.color);
   return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${t.color}" opacity="0.16"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="#ffffff" opacity="0.95"/>`
@@ -160,17 +160,16 @@ export async function alertImageSvg(alert, opts = {}) {
   const loc = alert.location || {};
   const country = alert.scope === 'country' || !Number.isFinite(loc.latitude);
   const center = country ? { lat: 34.85, lon: 38.6 } : { lat: loc.latitude, lon: loc.longitude };
-  const zoned = !!t.zone && !country;
+  // every alert type: a glowing circle over each affected area (main area + extra areas)
+  const zoned = !country;
   let zones = [];
   if (zoned) {
-    zones = Array.isArray(alert.zones) && alert.zones.length ? alert.zones : zonePoints({ ...(alert.place || {}), ...loc }, alert.scope);
+    zones = Array.isArray(alert.zones) && alert.zones.length ? alert.zones : alertZones({ ...alert, location: loc });
     if (!zones.length) zones = [{ lat: center.lat, lon: center.lon, km: 2.2 }];
   }
   const view = chooseView(zoned ? zones : [{ lat: center.lat, lon: center.lon, km: 1.6 }], center);
   if (country) view.z = 7;
-  else if (!zoned && alert.scope === 'governorate') view.z = Math.min(view.z, 10);
-  else if (!zoned && alert.scope === 'district') view.z = Math.min(view.z, 11);
-  else if (!zoned) view.z = Math.min(view.z, 12);
+  else if (zones.length === 1) view.z = Math.min(view.z, 12);
   const { z } = view;
   const cx = lon2x(view.lon, z); const cy = lat2y(view.lat, z);
   const left = cx - W / 2; const top = cy - MAP_H / 2;
@@ -200,12 +199,15 @@ export async function alertImageSvg(alert, opts = {}) {
     const dashed = t.zone === 'dashed';
     const col = dashed ? '#2563eb' : '#dc2626';
     const fill = dashed ? '#3b82f6' : '#ef4444';
+    o.push(`<defs><radialGradient id="zglow"><stop offset="0.5" stop-color="${fill}" stop-opacity="0.38"/><stop offset="0.75" stop-color="${fill}" stop-opacity="0.14"/><stop offset="1" stop-color="${fill}" stop-opacity="0"/></radialGradient></defs>`);
     for (const zn of zones) {
       const [x, y] = px(zn.lat, zn.lon);
       const r = Math.max(14, (zn.km * 1000) / mPerPx(zn.lat, z));
+      o.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 2).toFixed(1)}" fill="url(#zglow)"/>`); // soft glow
       o.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" fill-opacity="0.2" stroke="${col}" stroke-width="${r > 40 ? 4.5 : 3}"${dashed ? ' stroke-dasharray="14 9"' : ''}/>`);
     }
-    if (type === 'breaking') { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y)); }
+    // a single area keeps its type icon; several areas show just their glowing circles (the title names the type)
+    if ((type === 'breaking' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y)); }
   } else if (!country) {
     const [x, y] = px(center.lat, center.lon);
     o.push(markerSvg(type, x, y));

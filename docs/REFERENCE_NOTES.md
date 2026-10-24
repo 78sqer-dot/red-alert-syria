@@ -127,3 +127,15 @@ TODO: register contact tools in createBot after registerOwnerTools + main menu o
 - 09:08 DONE: 7816112 live; sims _rp 17/0, _clean 627/0 (clean data), _xf 65/0, _ct 45/0; live contacts set->verified (laptop, dsite, phone About sheet)->removed (contacts {}); webhooks ok. Shots /home/ubuntu/ras-live-qa/
 - 10:06 DONE f9fa791 live: drone hidden <z11 (orig CSS .zoom-tier-far/mid .uav-svg{visibility:hidden}), orbit radius = ring px (--orb), 9s. Live QA scripts/_uav_qa.py FAKE=1 (browser-only fake alert) 27/27. Shots /home/ubuntu/ras-drone-qa/
 - 11:19 DONE 994dea1 live: places +416 (GeoNames ar list w/ Latin first was dropping villages; عران 173068 now in الباب), NAME_FIX for 9 Aleppo names, en backticks stripped. QA scripts/_places_qa.mjs; live /api/imgtest q=عران ok (owner chat only). Not added: منغ (GeoNames merges it into معرين, coords unreliable).
+
+## 2026-10-24 13:5x task: multi-area + pulsing circles + 1h auto-removal
+User asks (publishing bot @Red_Alert_Syria_bot ONLY, report bot unchanged):
+1. Publish ONCE for real to channel+map: protest (مظاهرة) infographic /home/ubuntu/upload/182725.jpg
+   Title: «أبرز نقاط التظاهر الرافضة لانتهاكات الاحتلال الإسرائيلي في الجنوب السوري، خلال مظاهرات الجمعة 23 تشرين الأول»
+   Places (ids in data/places.json): درعا #170905 (ساحة 18 آذار) · مصياف #167046 · سلمية #164947 (حماة) · المزة #173470 (stored «مزة» → NAME_FIX 'المزة') ·
+   خان أرنبة #168355 · غويران #165622 (stored «قويران» → NAME_FIX 'غويران','Ghuwayran') · الرقة #172955 · حمص #169577 (ساحة الساعة الجديدة) · دوما #170592 · سعسع #164773 · سقبا #164828
+2. Future: pick several areas per alert; each area its own glowing PULSING circle sized to place; keep zoom behaviour (drone hidden <z11, orbits main circle >=z11). Clean chat.
+3. Every alert disappears from map 1h after publish (default auto-cleanup = 1h, keep other choices), stats still count removed alerts, survives restarts. Applies to the protest post too.
+Return: channel post link + screenshots (post image, map with circles). Push w/ token secret red_alert_syria_github.token.
+Done so far: places.js placeKm(rank)+alertZones(); locationFrom adds rank; store.addAlert extra[], publicAlert zones=alertZones (all types), more[]; alert-image zones all types + glow halo + smaller icon when multi.
+TODO: bot (d.extra, addloc/rmloc buttons, summary, channelPost multi 📍 lines, buildAlertInput extra/title/areas, alertImage placeLabel), map.js zones all types + DOM pulse (hide during zoom), select fitBounds, app.js placeName multi, 1h auto-delete, NAME_FIX rebuild, tests, live publish via webhook (scripts/_live_ct.mjs pattern).

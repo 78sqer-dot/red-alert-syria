@@ -206,7 +206,9 @@ export class AlertMap {
       if (mks !== this._mks) { this._mks = mks; c.style.setProperty('--mks', mks); } // restyle markers only when the size step changes
     };
     this.map.on('zoom', zoomTier);
-    this.map.on('zoomend', () => this._queueZones());
+    this.map.on('zoomend', () => { this._queueZones(); });
+    // pulse rings are re-sized when the zoom settles; hidden meanwhile so they never look out of scale
+    this.map.on('zoomstart', () => this.el.classList.add('is-zooming'));
     // pause the marker animations while a gesture/flight is running so the map itself stays smooth
     this.map.on('movestart', () => this.el.classList.add('is-moving'));
     this.map.on('moveend', () => this.el.classList.remove('is-moving'));
@@ -429,11 +431,13 @@ export class AlertMap {
     const src = this.map && this.map.getSource('ras-zones');
     if (!src) return;
     const features = [];
+    const pulses = [];
     const orb = (this._orb = new Map());
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
-      if (!t || !t.zone || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude)) continue;
-      const props = { color: ZONE_COLOR[a.type] || t.color, active: !!a.is_active, dashed: t.zone === 'dashed' };
+      // every alert type gets a glowing circle over each affected area (aircraft keep their dashed blue ring)
+      if (!t || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude)) continue;
+      const props = { color: t.zone === 'dashed' ? t.color : ZONE_COLOR[a.type] || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
       if (t.marker === 'orbit') {
@@ -442,13 +446,42 @@ export class AlertMap {
         for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
         orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat });
       }
-      for (const z of zs) {
+      zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);
         features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [circlePolygon(z.lon, z.lat, km)] } });
-      }
+        if (a.is_active && pulses.length < 80) pulses.push({ key: `${a.id}:${i}`, lon: z.lon, lat: z.lat, km, color: props.color });
+      });
     }
     src.setData({ type: 'FeatureCollection', features });
+    this._syncPulses(pulses);
     this._orbitPx();
+  }
+  // Pulsing glow over every circle of a live alert. Plain DOM rings animated with transform/opacity
+  // only (GPU compositor), so the map itself never has to redraw for the animation — phones stay smooth.
+  _syncPulses(list) {
+    const M = ml();
+    if (!this._pulses) this._pulses = new Map();
+    const z = this.map.getZoom();
+    const keep = new Set();
+    for (const p of list) {
+      keep.add(p.key);
+      const mpp = (40075016.686 * Math.cos((p.lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
+      const d = Math.max(16, Math.round((2 * p.km * 1000) / mpp));
+      let m = this._pulses.get(p.key);
+      if (!m) {
+        const el = document.createElement('div');
+        el.className = 'zp';
+        el.setAttribute('aria-hidden', 'true');
+        m = new M.Marker({ element: el, anchor: 'center' }).setLngLat([p.lon, p.lat]).addTo(this.map);
+        el.style.zIndex = '1';
+        this._pulses.set(p.key, m);
+      }
+      const el = m.getElement();
+      if (el._d !== d) { el._d = d; el.style.setProperty('--d', d + 'px'); }
+      if (el._c !== p.color) { el._c = p.color; el.style.setProperty('--c', p.color); }
+    }
+    for (const [k, m] of this._pulses) if (!keep.has(k)) { m.remove(); this._pulses.delete(k); }
+    if (!this.map.isZooming()) this.el.classList.remove('is-zooming');
   }
   // orbit radius (px) of each drone = the on-screen radius of its glowing ring at the current zoom
   _orbitPx() {
@@ -476,7 +509,13 @@ export class AlertMap {
     if (!alert) return this.closePopup();
     if (!alert.location || !Number.isFinite(alert.location.latitude)) return this.closePopup();
     const ll = [alert.location.longitude, alert.location.latitude];
-    if (fly) {
+    const zs = Array.isArray(alert.zones) ? alert.zones : [];
+    if (fly && alert.more && alert.more.length && zs.length > 1) {
+      // several areas: frame all of their circles
+      let w = 180, e = -180, s = 90, n = -90;
+      for (const q of zs) { const dl = q.km / 111, dn = q.km / (111 * Math.cos((q.lat * Math.PI) / 180)); w = Math.min(w, q.lon - dn); e = Math.max(e, q.lon + dn); s = Math.min(s, q.lat - dl); n = Math.max(n, q.lat + dl); }
+      this.map.fitBounds([[w, s], [e, n]], { padding: this.padding(), maxZoom: 11, duration: 1100, essential: true });
+    } else if (fly) {
       const z = { place: 11, point: 11.5, district: 9.5, governorate: 8 }[alert.scope] || 9;
       this.map.flyTo({ center: ll, zoom: Math.max(this.map.getZoom(), z), padding: this.padding(), speed: 1.4, essential: true });
     }

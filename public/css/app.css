@@ -577,3 +577,27 @@ html.dark .wa-btn svg { color: #2fe079; }
   .ct-btn { display: none !important; }
   .inst-card { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); padding: 14px 16px 10px; }
 }
+
+/* ---- pulsing glow over every affected area of a live alert (one ring set per circle) ----
+   transform + opacity only -> runs on the compositor; the map canvas is never redrawn for it */
+.zp { width: var(--d, 16px); height: var(--d, 16px); pointer-events: none !important; contain: layout style; }
+.zp::before, .zp::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid var(--c, #ef233c);
+  background: radial-gradient(circle, transparent 52%, color-mix(in srgb, var(--c, #ef233c) 30%, transparent) 100%);
+  opacity: 0; transform: scale(1);
+  animation: zpulse 2.6s cubic-bezier(.2, .6, .35, 1) infinite;
+  will-change: transform, opacity;
+}
+.zp::after { animation-delay: 1.3s; }
+@keyframes zpulse {
+  0% { transform: scale(1); opacity: .8; }
+  100% { transform: scale(2.15); opacity: 0; }
+}
+.map-wrap.is-zooming .zp, .is-zooming .zp { visibility: hidden; }
+.is-moving .zp::before, .is-moving .zp::after { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .zp::before { animation: none; opacity: .55; transform: scale(1.25); }
+  .zp::after { display: none; }
+}
+.pp-areas { font-size: 12px; font-weight: 700; line-height: 1.55; margin: 3px 0 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

@@ -90,7 +90,7 @@ export function locationFrom({ placeId, distCode, govCode, lat, lon, label }) {
     if (!p) return null;
     const d = getDist(p.dist);
     const g = getGov(p.gov);
-    return { scope: 'place', place_id: p.id, district: p.dist, name_ar: p.ar, name_en: p.en, district_ar: d?.ar, district_en: d?.en, governorate: p.gov, governorate_ar: g?.ar, governorate_en: g?.en, latitude: p.lat, longitude: p.lon };
+    return { scope: 'place', place_id: p.id, rank: p.rank, district: p.dist, name_ar: p.ar, name_en: p.en, district_ar: d?.ar, district_en: d?.en, governorate: p.gov, governorate_ar: g?.ar, governorate_en: g?.en, latitude: p.lat, longitude: p.lon };
   }
   if (distCode) {
     const d = getDist(distCode);
@@ -131,9 +131,28 @@ const kmBetween = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 const zoneCache = new Map();
+// circle radius sized to the place: big city > town > village > neighbourhood
+export function placeKm(loc) {
+  const r = Number.isFinite(loc?.rank) ? loc.rank : null;
+  if (r == null) return 2.2;
+  return r <= 1 ? 4.5 : r === 2 ? 3.2 : r === 3 ? 2.4 : r <= 5 ? 1.8 : 1.3;
+}
+// every circle of an alert: its main area + each extra area picked in the bot (one or more circles each)
+export function alertZones(a) {
+  const out = [];
+  const add = (loc, scope) => {
+    for (const z of zonePoints(loc, scope)) {
+      if (out.some((q) => kmBetween(q, z) < Math.max(0.6, Math.min(q.km, z.km) * 0.5))) continue; // same spot twice
+      out.push(z);
+    }
+  };
+  if (a.location && Number.isFinite(a.location.latitude)) add({ ...(a.place || {}), ...a.location }, a.scope);
+  for (const x of a.extra || []) if (x && Number.isFinite(x.latitude)) add(x, x.scope);
+  return out;
+}
 export function zonePoints(loc, scope) {
   if (!loc || !Number.isFinite(loc.latitude)) return [];
-  const one = [{ lat: loc.latitude, lon: loc.longitude, km: 2.2 }];
+  const one = [{ lat: loc.latitude, lon: loc.longitude, km: placeKm(loc) }];
   if (scope !== 'district' && scope !== 'governorate') return one;
   let distCode = loc.district;
   if (scope === 'district' && !distCode) distCode = districts.find((d) => d.ar === loc.district_ar && (!loc.governorate || d.gov === loc.governorate))?.code;

@@ -72,6 +72,8 @@ NAME_FIX = {
     '167615': ('معارة الأرتيق', 'Maarat al-Artiq'),
     '169402': ('أبزمو', 'Abzimo'),
     '165298': ('رتيان', 'Ratyan'),
+    '165622': ('غويران', 'Ghuwayran'),
+    '173470': ('المزة', 'Al-Mazzeh'),
 }
 RANK = {'PPLC': 0, 'PPLA': 1, 'PPLA2': 2, 'PPLA3': 3, 'PPLA4': 4, 'PPL': 5, 'PPLX': 6, 'PPLL': 7, 'PPLF': 8, 'PPLS': 8, 'PPLQ': 9, 'PPLW': 9, 'PPLH': 9, 'PPLR': 8}
 places = []

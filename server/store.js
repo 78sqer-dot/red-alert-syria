@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { ALERT_TYPES, typeOf } from '../shared/types.js';
-import { zonePoints } from './places.js';
+import { alertZones } from './places.js';
 
 /**
  * In-memory state with atomic JSON persistence on disk and an optional remote backup
@@ -14,7 +14,7 @@ import { zonePoints } from './places.js';
 class Store extends EventEmitter {
   constructor() {
     super();
-    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 48, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null } }, log: [], relay: {}, threads: {} };
+    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 1, autoDel1h: true, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null } }, log: [], relay: {}, threads: {} };
     this.file = path.join(config.dataDir, 'state.json');
     this.backup = null; // { save(jsonString), load() -> jsonString|null }
     this._saveTimer = null;
@@ -63,7 +63,9 @@ class Store extends EventEmitter {
       users: s.users && typeof s.users === 'object' ? s.users : {},
       stats: s.stats || { published: 0 },
       settings: {
-        autoDeleteHours: [0, 24, 48].includes(s.settings?.autoDeleteHours) ? s.settings.autoDeleteHours : 48,
+        // owner's request (24 Oct): every alert leaves the map 1 hour after publishing -> one-time switch to 1 h
+        autoDeleteHours: !s.settings?.autoDel1h ? 1 : [0, 1, 24, 48].includes(s.settings?.autoDeleteHours) ? s.settings.autoDeleteHours : 1,
+        autoDel1h: true,
         daily: {
           on: s.settings?.daily?.on !== false,
           time: /^\d\d:\d\d$/.test(s.settings?.daily?.time || '') ? s.settings.daily.time : '23:00',
@@ -163,6 +165,8 @@ class Store extends EventEmitter {
       location: input.location?.latitude != null ? { latitude: input.location.latitude, longitude: input.location.longitude } : null,
       place: input.location || null,
       areas: input.areas || [],
+      // further affected areas of the same alert (publishing bot "➕ add area"); each gets its own circle(s)
+      extra: Array.isArray(input.extra) ? input.extra.filter((x) => x && Number.isFinite(x.latitude)).slice(0, 20) : [],
       scope: input.location?.scope || 'country',
       timestamp: now.toISOString(),
       expires_at: new Date(now.getTime() + ttl * 60_000).toISOString(),
@@ -358,9 +362,9 @@ class Store extends EventEmitter {
   }
   thread(uid) { const t = this.state.threads?.[uid]; return t && Date.now() - t.at < 7 * 86400_000 ? t : null; }
   // ---------- bulk actions & auto-delete ----------
-  get autoDeleteHours() { return this.state.settings?.autoDeleteHours ?? 48; }
+  get autoDeleteHours() { return this.state.settings?.autoDeleteHours ?? 1; }
   setAutoDelete(h) {
-    if (![0, 24, 48].includes(h)) return;
+    if (![0, 1, 24, 48].includes(h)) return;
     this.state.settings = { ...(this.state.settings || {}), autoDeleteHours: h };
     this.persist();
     this.autoDeleteSweep();
@@ -394,7 +398,10 @@ class Store extends EventEmitter {
     const h = this.autoDeleteHours;
     if (!h) return [];
     const cutoff = Date.now() - h * 3600_000;
-    return this.deleteMany((a) => Date.parse(a.timestamp) < cutoff);
+    const gone = this.deleteMany((a) => Date.parse(a.timestamp) < cutoff);
+    // still-active alerts removed by the timer: mark their channel post as ended (the post itself stays)
+    for (const a of gone) if (a.is_active && a.channel_message_id) { a.ended_at = new Date().toISOString(); this.emit('expired', a); }
+    return gone;
   }
   activeAlerts() {
     return this.state.alerts.filter((a) => a.is_active);
@@ -529,7 +536,9 @@ export function publicAlert(a) {
     },
     areas: a.areas,
     scope: a.scope,
-    zones: typeOf(a.type).zone ? zonePoints({ ...(a.place || {}), ...(a.location || {}) }, a.scope) : undefined,
+    // every alert type now shows a glowing circle over each affected area (main + extra areas)
+    zones: a.location ? alertZones(a) : undefined,
+    more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
     expires_at: a.expires_at,
     ended_at: a.ended_at,

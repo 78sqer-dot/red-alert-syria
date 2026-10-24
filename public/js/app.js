@@ -110,8 +110,12 @@ function tagsOf(a) {
 }
 const hasLoc = (a) => !!(a.location && Number.isFinite(a.location.latitude) && Number.isFinite(a.location.longitude));
 function placeName(a) {
-  const p = a.place || {};
   if (!hasLoc(a) || a.scope === 'country') return T.noLocation;
+  // several areas in one alert: list them all
+  if (Array.isArray(a.more) && a.more.length) return [a.place || {}, ...a.more].map((x) => onePlace(x)).join(LANG === 'ar' ? ' · ' : ' · ');
+  return onePlace(a.place || {});
+}
+function onePlace(p) {
   const n = LANG === 'ar' ? p.name_ar : p.name_en;
   const g = LANG === 'ar' ? p.governorate_ar : p.governorate_en;
   const d = LANG === 'ar' ? p.district_ar : p.district_en;
@@ -277,6 +281,7 @@ function popupHtml(a) {
   return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">
     <div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <p class="pp-title">${esc(titleOf(a))}</p>
+    ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">📍 ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
     ${a.description ? `<p class="pp-desc">${esc(a.description)}</p>` : ''}
     <div class="tags" style="margin-top:6px">${tagsOf(a).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
