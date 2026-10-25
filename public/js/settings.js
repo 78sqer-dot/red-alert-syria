@@ -17,6 +17,7 @@ const DEFAULTS = {
   filter: [...TYPE_KEYS],
   sidebarHidden: false,
   showRoads: true,
+  showBorders: true,
   svcLayers: [],
 };
 

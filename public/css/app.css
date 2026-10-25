@@ -614,7 +614,7 @@ html.dark .wa-btn svg { color: #2fe079; }
 .svc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-top: 10px; }
 .svc-head h2 { margin: 2px 0 4px; font-size: 22px; font-weight: 900; }
 .svc-head p { margin: 0; font-size: 13px; }
-.svc-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 14px 0 12px; position: sticky; top: -6px; background: var(--bg-primary); padding: 6px 0; z-index: 2; }
+.svc-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 14px 0 12px; position: sticky; top: -6px; background: var(--bg-primary); padding: 6px 0; z-index: 2; }
 .svc-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-card); font-weight: 800; font-size: 12.5px; color: var(--text-secondary); }
 .svc-tab.on { background: var(--red); border-color: var(--red); color: #fff; }
 .px-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
@@ -672,3 +672,12 @@ html.dark .wa-btn svg { color: #2fe079; }
 .card.near .card-title::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-inline-end: 6px; vertical-align: middle; animation: nearPulse 1.4s ease-in-out infinite; }
 @keyframes nearPulse { 50% { opacity: .25; } }
 .svc-forget { background: none; border: 0; color: var(--muted, #94a3b8); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; padding: 4px 0; margin: 2px 0 6px; }
+
+/* border crossings */
+.bd-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.bd-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: start; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font: inherit; color: inherit; cursor: pointer; }
+.bd-row:hover { border-color: #94a3b8; }
+.bd-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.bd-main small { color: var(--text-secondary); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-st { display: flex; flex-direction: column; align-items: flex-end; font-size: 12.5px; font-weight: 700; color: var(--c); white-space: nowrap; }
+.bd-st small { font-weight: 400; color: var(--text-secondary); font-size: 11px; }

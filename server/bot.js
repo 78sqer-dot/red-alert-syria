@@ -15,6 +15,7 @@ import { ROAD_DURATIONS, roadLabel, addRoad, activeRoads, endRoad, roadWhere, po
 import { registerPriceTools } from './prices.js';
 import { registerQuakeTools } from './quakes.js';
 import { registerWeatherTools } from './weather.js';
+import { registerBorderTools } from './borders.js';
 import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
 import { cleanAlertText } from './clean-text.js';
 
@@ -127,7 +128,7 @@ function mainKeyboard(ctx) {
     .text(`${e('uav')} ${b('uav')}`, 't:uav').text(`${e('warplane')} ${b('warplane')}`, 't:warplane').row()
     .text(`${e('artillery')} ${b('artillery')}`, 't:artillery').text(`${e('attack')} ${b('attack')}`, 't:attack').row()
     .text(`${e('civil')} ${b('civil')}`, 'cv').text(`${e('missile')} ${b('missile')}`, 't:missile').row()
-    .text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd').row();
+    .text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd').text(lang === 'en' ? '🛂 Border crossings' : '🛂 المعابر', 'bd').row();
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
   if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row().text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').text(lang === 'en' ? '📡 News monitor' : '📡 الرصد الإخباري', 'nws').row()
@@ -669,6 +670,7 @@ const OH = {
   langOf: (ctx) => langOf(ctx),
   L: (ctx) => L(ctx),
   owner: (ctx) => owner(ctx),
+  staff: (ctx) => staff(ctx),
   isOwnerId: (id) => isOwner(id),
   botInfo,
   apis: () => APIS,
@@ -716,7 +718,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     await next();
   });
-  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerNewsTools(bot, OH); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerPowerTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
+  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerNewsTools(bot, OH); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerBorderTools(bot, OH); registerPowerTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {

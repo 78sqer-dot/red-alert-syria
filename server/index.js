@@ -16,6 +16,7 @@ import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
 import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
 import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
 import { weatherDebug, checkWeather } from './weather.js';
+import { publicBorders } from './borders.js';
 import { startServices, publicRoads, publicPower } from './services.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -129,7 +130,7 @@ app.get('/api/newstest', apiLimiter, async (req, res) => {
 // 💱 prices / 🛣 roads / ⚡ electricity for the website
 app.get('/api/services', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=60');
-  res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), server_time: new Date().toISOString() });
+  res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), borders: publicBorders(), server_time: new Date().toISOString() });
 });
 // Token-protected prices tools: status JSON, and a clearly marked preview of the bulletin sent to the
 // owner's private chat only (never the channel). key = sha256(BOT_TOKEN + ':prices').
@@ -188,7 +189,8 @@ store.on('alert', (a) => broadcast('alert', a));
 store.on('update', (a) => broadcast('update', a));
 store.on('remove', (a) => broadcast('remove', a));
 store.on('roads', (r) => broadcast('roads', r)); // 🛣 road status layer
-store.on('power', (p) => broadcast('power', p)); // ⚡ electricity updates
+store.on('power', (p) => broadcast('power', p));
+store.on('borders', (b) => broadcast('borders', b)); // 🛂 border crossings // ⚡ electricity updates
 store.on('contacts', (c) => broadcast('contacts', c)); // website contact links change instantly
 setInterval(() => {
   for (const c of clients) c.write(`event: ping\ndata: ${Date.now()}\n\n`);

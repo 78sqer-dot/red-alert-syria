@@ -13,6 +13,7 @@ import { ALERT_TYPES, typeOf } from '../shared/types.js';
 import { locationFrom, normalizeArabic } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText, parseUsername } from './news-sources.js';
 import { onNewsPost as onPowerPost } from './services.js';
+import { onBorderNews } from './borders.js';
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
@@ -441,7 +442,9 @@ async function rescanIfFilterChanged() {
         const key = `${src.u}/${p.id}`;
         if (n.handled[key] || drafted.has(p.url)) continue;
         const c = cleanPostText(p.text);
-        const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
+        // 🛂 border crossing open/closed news -> owner suggestion card (server/borders.js)
+    try { if (onBorderNews(it)) note(it, 'border crossing update -> owner card'); } catch (e) { console.warn('[news] border hook failed', e.message); }
+    const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
         if (!f.ok) continue;
         const h = textHash(c.text);
         n.seen[h] = Date.now(); n.handled[key] = Date.now();

@@ -1122,6 +1122,7 @@ function connect() {
     setHistoryHours(j.history_hours);
     if (j.contacts) setContacts(j.contacts);
     if (j.roads && svc) svc.setRoads(j.roads);
+    if (j.borders && svc) svc.setBorders(j.borders);
     const before = new Set(state.alerts.keys());
     state.alerts = new Map();
     for (const a of j.alerts) state.alerts.set(a.id, a);
@@ -1162,6 +1163,7 @@ function connect() {
   });
   es.addEventListener('roads', (e) => { beat(); try { svc && svc.setRoads(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('power', (e) => { beat(); try { svc && svc.setPower(JSON.parse(e.data)); } catch { /* ignore */ } });
+  es.addEventListener('borders', (e) => { beat(); try { svc && svc.setBorders(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('contacts', (e) => { beat(); try { setContacts(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('update', (e) => {
     const a = JSON.parse(e.data);

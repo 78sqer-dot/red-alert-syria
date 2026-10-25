@@ -38,3 +38,6 @@
 - DONE (local) server/weather.js: Open-Meteo forecast+dust, 7:30/17:30 slots, drafts to owner (wx:c/m/x), severe auto-post, undo (wx:d), owner menu 'wx', /api/weatherdebug.
 - types.js: quake + weather types, group 'nature'; marker-svgs quake/storm glyphs; alert-image head/short/level/note per type; places.alertZones honours place.zone_km.
 - NEXT: frontend check (dev server scripts/_qkdev.mjs), push stage 1; then distance (distChip exists in app.js ~289, extend nearby highlight 25 km), borders, review.
+- 14:27 PUSHED fe03363 stage 1 (quakes, weather, alert distance/nearby 25 km, forget-my-location in Near me tab, icons quake/storm).
+- 14:30 server/borders.js written (16 crossings LB/JO/TR/IQ, statuses open/busy/partial/closed/unknown, stale 72h, bot menu 'bd' for staff, news hook -> owner card bs:*, /api/services borders, SSE 'borders'). NEXT: frontend borders tab + map layer, then push stage 2, then review pass.
+- Weather source: Open-Meteo forecast https://api.open-meteo.com/v1/forecast (daily) + air-quality dust https://air-quality-api.open-meteo.com/v1/air-quality (hourly dust). Quakes: EMSC FDSN + USGS FDSN.

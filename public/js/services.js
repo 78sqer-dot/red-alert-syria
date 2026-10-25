@@ -5,8 +5,8 @@ import { settings } from './settings.js';
 
 const S = {
   ar: {
-    services: 'الخدمات', prices: 'الأسعار', power: 'الكهرباء', roads: 'الطرق', nearby: 'قريب مني',
-    sheetTitle: 'خدمات يومية', sheetSub: 'أسعار اليوم، الكهرباء، حالة الطرق، وأقرب مشفى وصيدلية وكازية وفرن.',
+    services: 'الخدمات', prices: 'الأسعار', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', nearby: 'قريب مني',
+    sheetTitle: 'خدمات يومية', sheetSub: 'أسعار اليوم، الكهرباء، حالة الطرق والمعابر، وأقرب مشفى وصيدلية وكازية وفرن.',
     market: 'سعر السوق الموازي (عام)', official: 'نشرة مصرف سورية المركزي', buy: 'شراء', sell: 'مبيع',
     usd: 'دولار', eur: 'يورو', try: 'ليرة تركية', sar: 'ريال سعودي', aed: 'درهم إماراتي',
     gold: 'الذهب (للغرام)', k24: 'عيار 24', k21: 'عيار 21', k18: 'عيار 18', ounce: 'الأونصة عالمياً',
@@ -15,7 +15,7 @@ const S = {
     priceNote: 'الأسعار استرشادية وقد تختلف بين المحلات والمدن. الليرة الجديدة = 100 ليرة قديمة.',
     powerEmpty: 'ما في تحديثات كهرباء منشورة حالياً.', allSyria: 'عموم سوريا', allGovs: 'كل المحافظات',
     roadsEmpty: 'ما في حالات طرق مسجّلة حالياً.', roadsSub: 'حالات الطرق يلي نشرها فريق الرصد أو وصلتنا ببلاغات وتأكدنا منها، وبتنشال لحالها لما تخلص مدتها.',
-    showRoads: 'عرض الطرق على الخريطة', until: 'لحد', reportRoad: 'بلّغ عن طريق',
+    showRoads: 'عرض الطرق على الخريطة', showBorders: 'عرض المعابر على الخريطة', bordersSub: 'حالة المعابر الحدودية الرئيسية مع دول الجوار، يحدّثها فريق الرصد. الحالة اللي صار لها أكتر من 3 أيام بلا تحديث بتظهر «غير معروف».', bst: { open: 'مفتوح', busy: 'مفتوح مع ازدحام', partial: 'مفتوح جزئياً', closed: 'مغلق', unknown: 'غير معروف' }, updated: 'آخر تحديث', withC: 'مع', crossing: 'معبر', until: 'لحد', reportRoad: 'بلّغ عن طريق',
     road: { closed: 'طريق مسكّر', danger: 'طريق خطر', open: 'طريق سالك' },
     cats: { health: 'مشافي ومراكز صحية', pharmacy: 'صيدليات', fuel: 'كازيات', bakery: 'أفران' },
     cat1: { hospital: 'مشفى', clinic: 'مركز صحي', pharmacy: 'صيدلية', fuel: 'كازية', bakery: 'فرن' },
@@ -33,7 +33,7 @@ const S = {
     youHere: 'إنت هون', ok: 'تمام', retry: 'جرّب مرة تانية', close: 'إغلاق', ago: 'من',
   },
   en: {
-    services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', nearby: 'Near me',
+    services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me',
     sheetTitle: 'Daily services', sheetSub: 'Today\'s prices, electricity, road status, and the nearest hospital, pharmacy, fuel station and bakery.',
     market: 'Parallel market (Syria, general)', official: 'Central Bank of Syria bulletin', buy: 'Buy', sell: 'Sell',
     usd: 'US dollar', eur: 'Euro', try: 'Turkish lira', sar: 'Saudi riyal', aed: 'UAE dirham',
@@ -43,7 +43,7 @@ const S = {
     priceNote: 'Indicative prices; they can differ between shops and cities. 1 new lira = 100 old lira.',
     powerEmpty: 'No electricity updates published right now.', allSyria: 'All Syria', allGovs: 'All governorates',
     roadsEmpty: 'No road statuses right now.', roadsSub: 'Road statuses published by our desk or confirmed from reports; they disappear when their time ends.',
-    showRoads: 'Show roads on the map', until: 'until', reportRoad: 'Report a road',
+    showRoads: 'Show roads on the map', showBorders: 'Show crossings on the map', bordersSub: 'Status of the main border crossings with neighbouring countries, updated by our desk. A status not updated for 3 days shows as “unknown”.', bst: { open: 'Open', busy: 'Open – heavy traffic', partial: 'Partially open', closed: 'Closed', unknown: 'Unknown' }, updated: 'Updated', withC: 'with', crossing: 'Crossing', until: 'until', reportRoad: 'Report a road',
     road: { closed: 'Road closed', danger: 'Dangerous road', open: 'Road open' },
     cats: { health: 'Hospitals & clinics', pharmacy: 'Pharmacies', fuel: 'Fuel stations', bakery: 'Bakeries' },
     cat1: { hospital: 'Hospital', clinic: 'Clinic', pharmacy: 'Pharmacy', fuel: 'Fuel station', bakery: 'Bakery' },
@@ -64,7 +64,8 @@ const S = {
 const CAT_COLORS = { hospital: '#e11d48', clinic: '#db2777', pharmacy: '#059669', fuel: '#d97706', bakery: '#a16207' };
 const GROUPS = { health: ['hospital', 'clinic'], pharmacy: ['pharmacy'], fuel: ['fuel'], bakery: ['bakery'] };
 const ROAD_COLORS = { closed: '#ef4444', danger: '#f59e0b', open: '#22c55e' };
-const SVC_LAYERS = ['svc-poi-pt', 'svc-poi-cl', 'svc-road-pt', 'svc-road-ln'];
+const SVC_LAYERS = ['svc-poi-pt', 'svc-poi-cl', 'svc-road-pt', 'svc-road-ln', 'svc-bd-c'];
+const BD_COLORS = { open: '#16a34a', busy: '#eab308', partial: '#f97316', closed: '#dc2626', unknown: '#94a3b8' };
 const ME_KEY = 'ras-me';
 
 const norm = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '')
@@ -78,7 +79,7 @@ function km(a, b) {
 
 export function createServices({ LANG, esc, icon, toast, openModal, closeModal, getMap, botUrl }) {
   const L = S[LANG] || S.ar;
-  const st = { prices: null, roads: [], power: [], poi: null, poiLoading: null, tab: 'prices', q: '', cat: 'all', gov: 'all', me: null, popup: null };
+  const st = { prices: null, roads: [], power: [], borders: [], poi: null, poiLoading: null, tab: 'prices', q: '', cat: 'all', gov: 'all', me: null, popup: null };
   try { const m = JSON.parse(localStorage.getItem(ME_KEY) || 'null'); if (m && Date.now() - m.t < 6 * 3600_000) st.me = m; } catch { /* ignore */ }
   window.__rasMe = st.me;
   const map = () => getMap()?.map || null;
@@ -95,8 +96,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     try {
       const r = await fetch('/api/services', { cache: 'no-store' });
       const j = await r.json();
-      st.prices = j.prices; st.roads = j.roads || []; st.power = j.power || [];
-      paintRoads(); if (isOpen()) render();
+      st.prices = j.prices; st.roads = j.roads || []; st.power = j.power || []; st.borders = j.borders || [];
+      paintRoads(); paintBorders(); if (isOpen()) render();
     } catch { /* offline: keep what we have */ }
   }
   function loadPoi() {
@@ -158,6 +159,11 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     }
     return { type: 'FeatureCollection', features: feats };
   }
+  const bdName = (b) => (LANG === 'en' ? b.name_en : b.name_ar);
+  function bordersGeo() {
+    return { type: 'FeatureCollection', features: st.borders.map((b) => ({ type: 'Feature', properties: { id: b.id, status: b.status, name: bdName(b), known: b.status !== 'unknown' ? 1 : 0 }, geometry: { type: 'Point', coordinates: [b.lon, b.lat] } })) };
+  }
+  function paintBorders() { const src = map()?.getSource?.('svc-bd'); if (src) src.setData(bordersGeo()); }
   const enabledCats = () => { const on = s0().svcLayers || []; return Object.entries(GROUPS).filter(([g]) => on.includes(g)).flatMap(([, c]) => c); };
   function poiGeo() {
     const cats = new Set(enabledCats());
@@ -180,6 +186,11 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         m.addLayer({ id: 'svc-road-ln', type: 'line', source: 'svc-roads', filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['match', ['get', 'status'], 'closed', ROAD_COLORS.closed, 'open', ROAD_COLORS.open, ROAD_COLORS.danger], 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 3, 12, 6], 'line-dasharray': [1.6, 1.2], 'line-opacity': 0.9 } });
         m.addLayer({ id: 'svc-road-pt', type: 'symbol', source: 'svc-roads', filter: ['==', ['geometry-type'], 'Point'], layout: { 'icon-image': ['get', 'icon'], 'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 1, 12, 1.25], 'icon-allow-overlap': true } });
       }
+      if (!m.getSource('svc-bd')) {
+        m.addSource('svc-bd', { type: 'geojson', data: bordersGeo() });
+        m.addLayer({ id: 'svc-bd-c', type: 'circle', source: 'svc-bd', paint: { 'circle-color': ['match', ['get', 'status'], 'open', BD_COLORS.open, 'busy', BD_COLORS.busy, 'partial', BD_COLORS.partial, 'closed', BD_COLORS.closed, BD_COLORS.unknown], 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['==', ['get', 'known'], 1], 5.5, 3.5], 10, ['case', ['==', ['get', 'known'], 1], 9, 6]], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } });
+        m.addLayer({ id: 'svc-bd-t', type: 'symbol', source: 'svc-bd', minzoom: 7, layout: { 'text-field': ['get', 'name'], 'text-font': f, 'text-size': 11, 'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-optional': true }, paint: { 'text-color': '#0f172a', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 } });
+      }
       if (!m.getSource('svc-me')) {
         m.addSource('svc-me', { type: 'geojson', data: meGeo() });
         m.addLayer({ id: 'svc-me-acc', type: 'fill', source: 'svc-me', paint: { 'fill-color': '#3b8eff', 'fill-opacity': 0.12 } });
@@ -192,6 +203,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const m = map(); if (!m) return;
     const roads = s0().showRoads !== false ? 'visible' : 'none';
     for (const id of ['svc-road-ln', 'svc-road-pt']) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', roads);
+    const bd = s0().showBorders !== false ? 'visible' : 'none';
+    for (const id of ['svc-bd-c', 'svc-bd-t']) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', bd);
     const poi = enabledCats().length ? 'visible' : 'none';
     for (const id of ['svc-poi-cl', 'svc-poi-cn', 'svc-poi-pt']) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', poi);
   }
@@ -226,6 +239,17 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       ${r.note ? `<p class="pp-desc">${esc(r.note)}</p>` : ''}
       <p class="pp-areas">⏳ ${esc(L.until)} ${esc(fmtH.format(new Date(r.expires)))}</p>`;
   }
+  function borderHtml(b) {
+    return `<div class="pp-top"><span class="badge live" style="--c:${BD_COLORS[b.status]}">${esc(L.bst[b.status])}</span>${b.ts && b.status !== 'unknown' ? `<span class="time">${esc(when(b.ts))}</span>` : ''}</div>
+      <p class="pp-title">🛂 ${esc(L.crossing)} ${esc(bdName(b))}</p>
+      <p class="pp-areas">${esc(L.withC)} ${esc(LANG === 'en' ? b.country_en : b.country_ar)}${LANG === 'ar' && b.other_ar ? ` (${esc(b.other_ar)})` : ''}</p>
+      ${b.note ? `<p class="pp-desc">${esc(b.note)}</p>` : ''}`;
+  }
+  function focusBorder(b) {
+    const m = map(); if (!m) return;
+    m.flyTo({ center: [b.lon, b.lat], zoom: 10, essential: true });
+    setTimeout(() => popup([b.lon, b.lat], borderHtml(b)), 950);
+  }
   function bindMap() {
     const m = map(); if (!m || m.__svcBound) return; m.__svcBound = true;
     m.on('style.load', addLayers);
@@ -240,6 +264,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       m.getSource('svc-poi').getClusterExpansionZoom(f.properties.cluster_id).then((z) => m.easeTo({ center: f.geometry.coordinates, zoom: z + 0.3 })).catch(() => m.easeTo({ center: f.geometry.coordinates, zoom: m.getZoom() + 2 }));
     });
     const roadClick = (e) => { const f = e.features?.[0]; const r = f && st.roads.find((x) => x.id === f.properties.id); if (r) popup(e.lngLat, roadHtml(r)); };
+    m.on('click', 'svc-bd-c', (e) => { const f = e.features?.[0]; const b = f && st.borders.find((x) => x.id === f.properties.id); if (b) popup([b.lon, b.lat], borderHtml(b)); });
     m.on('click', 'svc-road-pt', roadClick); m.on('click', 'svc-road-ln', roadClick);
     for (const id of SVC_LAYERS) {
       m.on('mouseenter', id, () => { m.getCanvas().style.cursor = 'pointer'; });
@@ -278,15 +303,15 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   function close() {
     if (!sheet) return;
     sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); back.hidden = true;
-    if (/^#(prices|power|roads|services)$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+    if (/^#(prices|power|roads|borders|services)$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
   }
   const tabBtn = (k, ic, label) => `<button class="svc-tab${st.tab === k ? ' on' : ''}" data-tab="${k}">${icon(ic, 16)}<span>${esc(label)}</span></button>`;
   function render() {
     const b = sheet.querySelector('#svcBody');
     b.innerHTML = `<div class="sheet-grab"></div>
       <div class="svc-head"><div><h2>${esc(L.sheetTitle)}</h2><p>${esc(L.sheetSub)}</p></div><button class="sb-x lg" data-a="close" aria-label="${esc(L.close)}">${icon('x', 18)}</button></div>
-      <div class="svc-tabs">${tabBtn('prices', 'coin', L.prices)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('nearby', 'mapPin', L.nearby)}</div>
-      <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : nearbyHtml()}</div>`;
+      <div class="svc-tabs">${tabBtn('prices', 'coin', L.prices)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}</div>
+      <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : st.tab === 'borders' ? bordersHtml() : nearbyHtml()}</div>`;
     if (st.tab === 'nearby') renderResults();
   }
   const row = (label, a, b2, ch) => `<div class="px-row"><span class="px-k">${esc(label)}</span><span class="px-v">${a}</span>${b2 != null ? `<span class="px-v">${b2}</span>` : ''}${ch != null ? `<span class="px-ch ${ch > 0 ? 'up' : ch < 0 ? 'dn' : ''}">${ch ? (ch > 0 ? '▲' : '▼') : '•'}</span>` : ''}</div>`;
@@ -340,6 +365,19 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (bot) h += `<a class="btn-sm svc-report" href="${esc(bot)}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(L.reportRoad)}</a>`;
     return h;
   }
+  function bordersHtml() {
+    const on = s0().showBorders !== false;
+    let h = `<p class="svc-note" style="margin-top:0">${esc(L.bordersSub)}</p>
+      <label class="tgl"><span class="txt">${esc(L.showBorders)}</span><input class="switch" type="checkbox" data-sl="borders" ${on ? 'checked' : ''}/></label>`;
+    const groups = [...new Map(st.borders.map((b) => [b.country, LANG === 'en' ? b.country_en : b.country_ar])).entries()];
+    for (const [c, cname] of groups) {
+      h += `<div class="dd-sec">${esc(cname)}</div><div class="bd-list">`;
+      h += st.borders.filter((b) => b.country === c).map((b) => `<button class="bd-row" data-bd="${esc(b.id)}"><i class="svc-dot" style="--c:${BD_COLORS[b.status]}"></i><span class="bd-main"><b>${esc(bdName(b))}</b>${b.note ? `<small>${esc(b.note)}</small>` : ''}</span><span class="bd-st" style="--c:${BD_COLORS[b.status]}">${esc(L.bst[b.status])}${b.ts && b.status !== 'unknown' ? `<small>${esc(when(b.ts))}</small>` : ''}</span></button>`).join('');
+      h += '</div>';
+    }
+    if (!st.borders.length) h += `<div class="svc-empty">${esc(L.loading)}</div>`;
+    return h;
+  }
   function nearbyHtml() {
     const on = s0().svcLayers || [];
     const chip = (k, label) => `<button class="svc-chip${st.cat === k ? ' on' : ''}" data-cat="${k}">${esc(label)}</button>`;
@@ -365,6 +403,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   }
   function toggleLayer(k, on) {
     if (k === 'roads') { settings.set({ showRoads: on }); applyVisibility(); return; }
+    if (k === 'borders') { settings.set({ showBorders: on }); applyVisibility(); return; }
     const cur = new Set(s0().svcLayers || []);
     if (on) cur.add(k); else cur.delete(k);
     settings.set({ svcLayers: [...cur] });
@@ -388,6 +427,12 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       map()?.flyTo({ center: [p.lon, p.lat], zoom: 15, essential: true });
       setTimeout(() => popup([p.lon, p.lat], poiHtml(p)), 900);
       return;
+    }
+    const bdr = t.closest('[data-bd]');
+    if (bdr) {
+      const b = st.borders.find((x) => x.id === bdr.dataset.bd); if (!b) return;
+      if (s0().showBorders === false) toggleLayer('borders', true);
+      close(); focusBorder(b); return;
     }
     const rd = t.closest('[data-road]');
     if (rd) {
@@ -465,7 +510,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   // ------------------------------------------------------------ hash links & public API
   function fromHash() {
     const h = location.hash.slice(1);
-    if (h === 'prices' || h === 'power') open(h);
+    if (h === 'prices' || h === 'power' || h === 'borders') open(h);
     else if (h === 'services' || h === 'nearby') open('nearby');
     else if (h === 'roads') {
       if (s0().showRoads === false) toggleLayer('roads', true);
@@ -482,11 +527,13 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     },
     open, close, isOpen, locate, distanceTo, kmTo, fmtAway, forgetMe, hasMe: () => !!st.me,
     setRoads(r) { st.roads = Array.isArray(r) ? r : []; paintRoads(); if (isOpen() && st.tab === 'roads') render(); },
+    setBorders(b) { st.borders = Array.isArray(b) ? b : []; paintBorders(); if (isOpen() && st.tab === 'borders') render(); },
     setPower(p) { st.power = Array.isArray(p) ? p : []; if (isOpen() && st.tab === 'power') render(); },
     layersHtml(tg) {
       const s = s0(); const on = s.svcLayers || [];
       return `<div class="dd-sec">${esc(L.svcLayers)}</div>
         <label class="tgl"><span class="txt"><span class="svc-lbl"><i class="svc-dot" style="--c:#ef4444"></i>${esc(L.roads)}</span></span><input class="switch" type="checkbox" data-sl="roads" ${s.showRoads !== false ? 'checked' : ''}/></label>
+        <label class="tgl"><span class="txt"><span class="svc-lbl"><i class="svc-dot" style="--c:#16a34a"></i>${esc(L.borders)}</span></span><input class="switch" type="checkbox" data-sl="borders" ${s.showBorders !== false ? 'checked' : ''}/></label>
         ${Object.keys(GROUPS).map((g) => `<label class="tgl"><span class="txt"><span class="svc-lbl"><i class="svc-dot" style="--c:${CAT_COLORS[GROUPS[g][0]]}"></i>${esc(L.cats[g])}</span></span><input class="switch" type="checkbox" data-sl="${g}" ${on.includes(g) ? 'checked' : ''}/></label>`).join('')}`;
     },
     toggleLayer,
