@@ -74,6 +74,11 @@ export function newsState() {
   if (!n.seen || typeof n.seen !== 'object') n.seen = {};
   if (!n.drafts || typeof n.drafts !== 'object') n.drafts = {};
   if (!Array.isArray(n.alerts)) n.alerts = [];
+  // 🌙 night auto-publish (owner request 26 Oct 2026: «قبول تلقائي من الساعة 12 للساعة 8 الصبح»), Damascus time
+  if (!n.night || typeof n.night !== 'object') n.night = { on: true, from: '00:00', to: '08:00', summary: true, sumDay: null, sumAt: 0 };
+  if (!NIGHT_FROM.includes(n.night.from)) n.night.from = '00:00';
+  if (!NIGHT_TO.includes(n.night.to)) n.night.to = '08:00';
+  if (typeof n.night.summary !== 'boolean') n.night.summary = true;
   if (!n.stats || n.stats.day !== dayKey()) n.stats = { day: dayKey(), posts: 0, drafts: 0, merged: 0, dupes: 0, published: 0, ignored: 0 };
   return n;
 }
@@ -93,6 +98,22 @@ const note = (it, decision) => {
 };
 const api = () => R.H?.apis().admin || null;
 const reviewerIds = () => [...new Set([...config.ownerIds, ...store.state.editors])];
+const ownerIdsU = () => [...new Set(config.ownerIds)];
+
+// ---------------------------------------------------------------- 🌙 night window (Asia/Damascus)
+export const NIGHT_FROM = ['22:00', '23:00', '00:00', '01:00'];
+export const NIGHT_TO = ['06:00', '07:00', '08:00', '09:00'];
+const hmNow = (t = Date.now()) => new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(t));
+const hhmm = (t) => new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(t));
+export function inNightWindow(g, hm) { return g.from <= g.to ? hm >= g.from && hm < g.to : hm >= g.from || hm < g.to; }
+export function nightActive(t = Date.now()) { const g = newsState().night; return Boolean(g.on) && inNightWindow(g, hmNow(t)); }
+const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
+/** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
+export function nightEligible(d) {
+  if (!d || d.test || d.rule) return false;
+  const ss = d.srcs || [];
+  return ss.length >= 2 || ss.some((x) => !isLocalSrc(x));
+}
 const langOfId = (id) => (store.userLang(id) === 'en' ? 'en' : 'ar');
 const tr = (lang, ar, en) => (lang === 'en' ? en : ar);
 
@@ -236,7 +257,7 @@ async function sendCards(d, only = null) {
   for (const uid of only ? [only] : reviewerIds()) {
     const lang = langOfId(uid);
     try {
-      const m = await a.sendMessage(uid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang), link_preview_options: { is_disabled: true }, _keep: 'c' });
+      const m = await a.sendMessage(uid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang), link_preview_options: { is_disabled: true }, disable_notification: nightActive(), _keep: 'c' });
       d.cards.push([uid, m.message_id]); n++;
     } catch (e) { console.warn('[news] card not delivered to', uid, e.description || e.message); }
   }
@@ -262,6 +283,84 @@ async function closeCards(d, keep = null) {
   }
   d.cards = keep ? (d.cards || []).filter(([c, m]) => c === keep[0] && m === keep[1]) : [];
 }
+// ---------------------------------------------------------------- 🌙 night auto-publish + owner notice (undo)
+const postUrl = (mid) => (mid && String(config.channel || '').startsWith('@') ? `https://t.me/${config.channel.slice(1)}/${mid}` : '');
+function noticeText(d, lang = 'ar') {
+  const head = d.undone
+    ? tr(lang, '↩️ <b>تم التراجع — حُذف من القناة والخريطة</b>', '↩️ <b>Undone — removed from the channel and the map</b>')
+    : tr(lang, `🌙 <b>نُشر تلقائياً (النشر الليلي)</b> · ${esc(hhmm(d.autoAt || Date.now()))}`, `🌙 <b>Auto-published (night mode)</b> · ${esc(hhmm(d.autoAt || Date.now()))}`);
+  return [head, ...cardText(d, lang).split('\n').slice(1)].join('\n');
+}
+function noticeKb(d, lang = 'ar') {
+  if (d.undone) return undefined;
+  const kb = new InlineKeyboard();
+  const u = postUrl(d.postId);
+  if (u) kb.url(tr(lang, '📣 المنشور', '📣 Post'), u);
+  if (R.H?.mapUrl && d.alertId) kb.url(tr(lang, '🗺 على الخريطة', '🗺 On the map'), R.H.mapUrl(d.alertId, lang));
+  return kb.row().text(tr(lang, '↩️ تراجع (حذف من القناة والخريطة)', '↩️ Undo (remove from channel + map)'), 'nw:u:' + d.id);
+}
+async function nightPublish(d) {
+  const a = api();
+  if (!a || !R.H?.publishDraft || d.status !== 'pending') return false;
+  const n = newsState();
+  d.status = 'publishing'; save();
+  let alert;
+  try {
+    alert = await R.H.publishDraft(a, toBotDraft(d), { id: 0, name: 'رصد تلقائي', via: 'news-night' });
+  } catch (e) {
+    d.status = 'pending'; save();
+    console.error('[news] night publish failed', e.description || e.message);
+    return false;
+  }
+  d.status = 'published'; d.auto = true; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null;
+  n.stats.published++; n.stats.auto = (n.stats.auto || 0) + 1;
+  save();
+  await closeCards(d); // a draft that was waiting (single local source, then confirmed) leaves the chat
+  d.notices = [];
+  for (const uid of ownerIdsU()) {
+    const lang = langOfId(uid);
+    try {
+      const m = await a.sendMessage(uid, noticeText(d, lang), { parse_mode: 'HTML', reply_markup: noticeKb(d, lang), link_preview_options: { is_disabled: true }, disable_notification: true, _keep: 'c' });
+      d.notices.push([uid, m.message_id]);
+    } catch (e) { console.warn('[news] night notice not delivered to', uid, e.description || e.message); }
+  }
+  save();
+  console.log(`[news] NIGHT auto-published ${d.id}: ${d.type} -> alert ${d.alertId} post ${d.postId}`);
+  return true;
+}
+async function nightSummaryTick() {
+  const n = newsState(); const g = n.night;
+  if (!g.on || !g.summary) return;
+  const a = api(); if (!a) return;
+  const hm = hmNow(); const day = dayKey();
+  const late = `${String(Math.min(23, Number(g.to.slice(0, 2)) + 4)).padStart(2, '0')}${g.to.slice(2)}`;
+  if (g.sumDay === day || hm < g.to || hm >= late) return;
+  g.sumDay = day; save();
+  const since = Math.max(g.sumAt || 0, Date.now() - 16 * H_MS);
+  const all = Object.values(n.drafts).filter((d) => !d.test);
+  const items = all.filter((d) => d.auto && d.autoAt > since).sort((x, y) => x.autoAt - y.autoAt);
+  const held = all.filter((d) => !d.auto && d.created > since && inNightWindow(g, hhmm(d.created)) && d.status !== 'published').length;
+  g.sumAt = Date.now(); save();
+  for (const uid of ownerIdsU()) {
+    const lang = langOfId(uid);
+    const win = `${g.from}–${g.to}`;
+    const lines = [];
+    if (!items.length) lines.push(tr(lang, `🌙 <b>النشر الليلي (${win})</b>: ما نُشر شي تلقائياً هالليلة.`, `🌙 <b>Night mode (${win})</b>: nothing was auto-published tonight.`));
+    else {
+      lines.push(tr(lang, `🌙 <b>ملخص النشر الليلي (${win})</b> — نُشر تلقائياً ${items.length}:`, `🌙 <b>Night summary (${win})</b> — ${items.length} auto-published:`), '');
+      for (const d of items) {
+        const ty = typeOf(d.type); const u = postUrl(d.postId);
+        const where = esc(whereOf(locsOf(d.loc, d.extra)));
+        const link = d.undone ? tr(lang, ' <i>(تراجعت عنه)</i>', ' <i>(undone)</i>') : u ? ` · <a href="${esc(u)}">${tr(lang, 'المنشور', 'post')}</a>` : '';
+        lines.push(`• ${esc(hhmm(d.autoAt))} — ${ty.emoji} ${esc(lang === 'en' ? ty.en : ty.ar)} — ${where}${link}`);
+      }
+    }
+    if (held) lines.push('', tr(lang, `📝 ووصلك ${held} مسودة ما انتشرت تلقائياً (مصدر محلي واحد أو تصنيف غير مؤكد) — راجعها إذا لسا بوقتها.`, `📝 ${held} draft(s) were held for you (single local source or unsure classification).`));
+    try { await a.sendMessage(uid, lines.join('\n'), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, _keep: 'c' }); } catch (e) { console.warn('[news] night summary not delivered', e.description || e.message); }
+  }
+  console.log(`[news] night summary sent: ${items.length} item(s), ${held} held`);
+}
+
 /** the bot's normal draft (same as a hand-made alert) from a news draft */
 export function toBotDraft(d) {
   const n = newsState();
@@ -345,6 +444,7 @@ async function mergeInto(d, it, locs = []) {
   n.stats.merged++;
   save();
   await refreshCards(d);
+  if (d.status === 'pending' && nightActive() && nightEligible(d)) await nightPublish(d); // confirmed by a 2nd source at night
   return true;
 }
 async function handleResult(it, r, known, pmap) {
@@ -381,6 +481,11 @@ async function handleResult(it, r, known, pmap) {
   const ev = { kind: 'draft', status: 'pending', draftId: d.id, type: d.type, ts: d.ts, headline, where: whereOf(locs), geo: cand.geo };
   known.unshift(ev); pmap.set(it.i, ev);
   save();
+  if (nightActive() && nightEligible(d) && await nightPublish(d)) {
+    note(it, `NIGHT auto-published ${d.id} (${d.type} @ ${ev.where})`);
+    ev.status = 'published';
+    return;
+  }
   const sent = await sendCards(d);
   save();
   note(it, `NEW draft ${d.id} (${d.type} @ ${ev.where}) -> ${sent} reviewer(s)`);
@@ -577,6 +682,7 @@ export function startNewsMonitor() {
     console.log(`[news] monitor started: ${n.on ? 'ON' : 'paused'} · ${n.sources.filter((s) => s.on).length} sources · AI ${NEWS_CFG.aiKey() ? NEWS_CFG.models()[0] : 'OFF (rules only)'} · every ${NEWS_CFG.pollSec}s`);
     loop();
   };
+  setInterval(() => { nightSummaryTick().catch((e) => console.warn('[news] night summary', e.message)); }, 60_000).unref?.();
   const t = setTimeout(first, NEWS_CFG.startDelaySec * 1000);
   t.unref?.();
 }
@@ -585,7 +691,7 @@ export function newsDebug() {
   const n = newsState();
   return {
     on: n.on, started: R.started, lastPollAt: R.lastPollAt ? new Date(R.lastPollAt).toISOString() : null, queue: R.queue.length, aiOk: R.aiOk,
-    ai: { ...aiStats, key: Boolean(NEWS_CFG.aiKey()), models: NEWS_CFG.models() }, stats: n.stats,
+    ai: { ...aiStats, key: Boolean(NEWS_CFG.aiKey()), models: NEWS_CFG.models() }, stats: n.stats, night: { ...n.night, active: nightActive() },
     sources: n.sources.map((s) => ({ ...s, last: n.last[s.u] ?? null, status: R.src[s.u] || null })),
     types: n.types,
     drafts: Object.values(n.drafts).sort((a, b) => b.created - a.created).slice(0, 30).map((d) => ({ id: d.id, test: !!d.test, status: d.status, type: d.type, where: whereOf(locsOf(d.loc, d.extra)), headline: d.headline, sources: d.srcs.map((s) => s.u), created: new Date(d.created).toISOString() })),
@@ -698,6 +804,26 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, `${ALERT_TYPES[type].emoji} ${en(ctx) ? ALERT_TYPES[type].en : ALERT_TYPES[type].ar}`);
     await refreshCards(d);
   });
+  // 🌙 undo an overnight auto-published alert (owner only): removed from the map and its channel post deleted
+  bot.callbackQuery(/^nw:u:(\w+)$/, async (ctx) => {
+    if (!h.owner(ctx)) return toast(ctx, t(ctx, 'للمالك فقط', 'Owner only'));
+    const d = await findDraft(ctx.match[1]);
+    if (!d || !d.auto) return vanish(ctx, t(ctx, 'هذا المنشور لم يعد متاحاً', 'No longer available'));
+    if (d.undone) return toast(ctx, t(ctx, 'تم التراجع مسبقاً ✔️', 'Already undone ✔️'));
+    try {
+      const { deleteAlertEverywhere } = await import('./bot.js');
+      if (d.alertId) await deleteAlertEverywhere(ctx.api, d.alertId);
+    } catch (e) {
+      console.error('[news] night undo failed', e.description || e.message);
+      return toast(ctx, t(ctx, '⚠️ تعذّر الحذف — جرّب مرة ثانية', '⚠️ Could not remove — try again'), true);
+    }
+    d.undone = Date.now(); d.status = 'ignored'; d.by = ctx.from.id; save(); // stays known: the same event won't come back
+    for (const [chat, mid] of d.notices || []) {
+      const lang = langOfId(chat);
+      try { await ctx.api.editMessageText(chat, mid, noticeText(d, lang), { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }); } catch { /* gone */ }
+    }
+    await toast(ctx, t(ctx, '↩️ حُذف من القناة والخريطة', '↩️ Removed from the channel and the map'));
+  });
   bot.callbackQuery('noop', (ctx) => toast(ctx, ''));
 
   // ---- owner settings: 📡 الرصد الإخباري
@@ -718,11 +844,12 @@ export function registerNewsTools(bot, h) {
     return [
       t(ctx, '📡 <b>الرصد الإخباري التلقائي</b>', '📡 <b>Automatic news monitor</b>'),
       '',
-      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>لا يُنشر شيء إلا بعد ضغطك ✅ نشر</b>، والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
-        'The server watches Syrian news channels around the clock; each new incident in Syria arrives here as a ready draft (type, place, sources). <b>Nothing is published until you tap ✅ Publish</b>, and a repeated incident never comes twice.'),
+      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>لا يُنشر شيء إلا بعد ضغطك ✅ نشر</b> (إلا بساعات النشر الليلي إذا مفعّل)، والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
+        'The server watches Syrian news channels around the clock; each new incident in Syria arrives here as a ready draft (type, place, sources). <b>Nothing is published until you tap ✅ Publish</b> (except during night auto-publish, if on), and a repeated incident never comes twice.'),
       '',
       `${t(ctx, 'الحالة', 'Status')}: ${n.on ? t(ctx, '✅ يعمل', '✅ running') : t(ctx, '⏸ متوقف', '⏸ paused')}${n.on ? ` · ${t(ctx, 'آخر فحص', 'last check')} ${ago(R.lastPollAt, ctx)}` : ''}`,
       `${t(ctx, 'التصنيف', 'Classification')}: ${ai}`,
+      `🌙 ${t(ctx, 'النشر الليلي', 'Night auto-publish')}: ${n.night.on ? `✅ ${n.night.from}–${n.night.to}${nightActive() ? t(ctx, ' (فعّال الآن)', ' (active now)') : ''}` : t(ctx, '⏸ متوقف', '⏸ off')}`,
       `📰 ${t(ctx, 'المصادر المفعّلة', 'Active sources')}: ${on} / ${n.sources.length}${bad ? t(ctx, ` (⚠️ ${bad} لا يُقرأ حالياً)`, ` (⚠️ ${bad} unreadable now)`) : ''}`,
       `🏷 ${t(ctx, 'الأنواع المرصودة', 'Watched types')}: ${ty} / ${NEWS_TYPES.length}`,
       `📊 ${t(ctx, 'اليوم (بتوقيت دمشق)', 'Today (Damascus time)')}: ${t(ctx, 'مسودات', 'drafts')} ${n.stats.drafts} · ${t(ctx, 'نُشر', 'published')} ${n.stats.published} · ${t(ctx, 'تُجوهل', 'ignored')} ${n.stats.ignored} · ${t(ctx, 'تكرار مُنع', 'duplicates stopped')} ${n.stats.merged + n.stats.dupes}${pending ? ` · ${t(ctx, 'بانتظارك', 'waiting')} ${pending}` : ''}`,
@@ -733,6 +860,7 @@ export function registerNewsTools(bot, h) {
     return new InlineKeyboard()
       .text(n.on ? t(ctx, '⏸ إيقاف الرصد', '⏸ Pause monitoring') : t(ctx, '▶️ تشغيل الرصد', '▶️ Resume monitoring'), n.on ? 'nws:off' : 'nws:on').row()
       .text(t(ctx, '📰 المصادر', '📰 Sources'), 'nws:src').text(t(ctx, '🏷 الأنواع', '🏷 Types'), 'nws:ty').row()
+      .text(`🌙 ${t(ctx, 'النشر الليلي', 'Night auto-publish')}: ${n.night.on ? `✅ ${n.night.from}–${n.night.to}` : '⏸'}`, 'nws:ng').row()
       .text(t(ctx, '🧪 إرسال مسودة تجريبية', '🧪 Send a test draft'), 'nws:test').row()
       .text(t(ctx, '🔄 تحديث', '🔄 Refresh'), 'nws').text(t(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
   };
@@ -762,6 +890,36 @@ export function registerNewsTools(bot, h) {
     NEWS_TYPES.forEach((k, i) => { kb.text(`${n.types[k] ? '✅' : '⏸'} ${ALERT_TYPES[k].emoji} ${en(ctx) ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`, 'nws:tt:' + k); if (i % 2 === 1) kb.row(); });
     return kb.row().text(t(ctx, '↩️ رجوع', '↩️ Back'), 'nws');
   };
+  const ngText = (ctx) => {
+    const g = newsState().night;
+    return [
+      t(ctx, '🌙 <b>النشر الليلي التلقائي</b>', '🌙 <b>Night auto-publish</b>'),
+      '',
+      t(ctx, 'بهالساعات (بتوقيت دمشق) مسودات الرصد بتنزل لحالها عالقناة والخريطة بنفس القالب وصورة الخريطة، ومن دون أي مصدر أو رابط. المكرر (منشور، أو بانتظارك، أو متجاهَل، أو نفس الحدث من مصدر تاني) ما بينزل، والتنبيه بينشال من الخريطة بوقته العادي.',
+        'During these hours (Damascus time) monitor drafts are published to the channel and the map by themselves, same template and map image, no source or link. Duplicates never go out, and alerts leave the map on their normal timer.'),
+      '',
+      t(ctx, '• بينشر بس الخبر المؤكد من مصدر رئيسي أو من مصدرين. خبر من مصدر محلي/ناشط وحيد، أو تصنيف بسيط بدون Gemini، بيضل مسودة إلك (بدون صوت).', '• Only drafts backed by a main source or two sources. A single local/activist source, or a rules-only classification, stays a (silent) draft for you.'),
+      t(ctx, '• كل منشور تلقائي بيوصلك إشعار صامت فيه زر ↩️ تراجع (بيحذفه من القناة والخريطة).', '• Each auto-post sends you a silent notice with ↩️ Undo (removes it from the channel and map).'),
+      t(ctx, '• بلاغات بوت التبليغ ما بتنتشر تلقائياً — بتضل لمراجعتك.', '• Report-bot reports are never auto-published — they stay for your review.'),
+      '',
+      `${t(ctx, 'الحالة', 'Status')}: <b>${g.on ? t(ctx, '✅ مفعّل', '✅ on') : t(ctx, '⏸ متوقف', '⏸ off')}</b>${g.on && nightActive() ? t(ctx, ' · فعّال الآن', ' · active now') : ''}`,
+      `${t(ctx, 'الساعات', 'Hours')}: <b>${g.from} – ${g.to}</b> ${t(ctx, 'بتوقيت دمشق', 'Damascus time')}`,
+      `☀️ ${t(ctx, 'ملخص الصبح', 'Morning summary')} (${g.to}): <b>${g.summary ? t(ctx, '✅ مفعّل', '✅ on') : t(ctx, '⏸ متوقف', '⏸ off')}</b>`,
+    ].join('\n');
+  };
+  const ngKb = (ctx) => {
+    const g = newsState().night;
+    const kb = new InlineKeyboard()
+      .text(g.on ? t(ctx, '⏸ إيقاف النشر الليلي', '⏸ Turn off') : t(ctx, '▶️ تشغيل النشر الليلي', '▶️ Turn on'), g.on ? 'nws:ng:off' : 'nws:ng:on').row();
+    kb.text(t(ctx, 'من:', 'From:'), 'noop');
+    for (const x of NIGHT_FROM) kb.text(`${g.from === x ? '• ' : ''}${x}`, 'nws:ngf:' + x.replace(':', ''));
+    kb.row().text(t(ctx, 'لـ:', 'To:'), 'noop');
+    for (const x of NIGHT_TO) kb.text(`${g.to === x ? '• ' : ''}${x}`, 'nws:ngt:' + x.replace(':', ''));
+    return kb.row()
+      .text(`☀️ ${t(ctx, 'ملخص الصبح', 'Morning summary')}: ${g.summary ? '✅' : '⏸'}`, 'nws:ngs').row()
+      .text(t(ctx, '↩️ رجوع', '↩️ Back'), 'nws');
+  };
+  const showNg = (ctx) => h.show(ctx, ngText(ctx), ngKb(ctx));
   const showMain = (ctx) => h.show(ctx, mainText(ctx), mainKb(ctx));
   const onlyOwner = async (ctx, fn) => { if (!h.owner(ctx)) { await toast(ctx, t(ctx, 'للمالك فقط', 'Owner only')); return; } return fn(); };
 
@@ -774,6 +932,23 @@ export function registerNewsTools(bot, h) {
     save();
     await toast(ctx, n.on ? t(ctx, '▶️ عاد الرصد للعمل', '▶️ Monitoring resumed') : t(ctx, '⏸ تم إيقاف الرصد', '⏸ Monitoring paused'));
     await showMain(ctx);
+  }));
+  bot.callbackQuery('nws:ng', (ctx) => onlyOwner(ctx, async () => { await toast(ctx, ''); await showNg(ctx); }));
+  bot.callbackQuery(/^nws:ng:(on|off)$/, (ctx) => onlyOwner(ctx, async () => {
+    newsState().night.on = ctx.match[1] === 'on'; save();
+    await toast(ctx, ctx.match[1] === 'on' ? t(ctx, '🌙 النشر الليلي مفعّل', '🌙 Night auto-publish on') : t(ctx, '⏸ النشر الليلي متوقف', '⏸ Night auto-publish off'));
+    await showNg(ctx);
+  }));
+  bot.callbackQuery(/^nws:ng([ft]):(\d{4})$/, (ctx) => onlyOwner(ctx, async () => {
+    const v = `${ctx.match[2].slice(0, 2)}:${ctx.match[2].slice(2)}`;
+    const g = newsState().night;
+    if (ctx.match[1] === 'f' && NIGHT_FROM.includes(v)) g.from = v;
+    if (ctx.match[1] === 't' && NIGHT_TO.includes(v)) g.to = v;
+    save(); await toast(ctx, `${g.from} – ${g.to}`); await showNg(ctx);
+  }));
+  bot.callbackQuery('nws:ngs', (ctx) => onlyOwner(ctx, async () => {
+    const g = newsState().night; g.summary = !g.summary; save();
+    await toast(ctx, g.summary ? '☀️ ✅' : '☀️ ⏸'); await showNg(ctx);
   }));
   bot.callbackQuery('nws:attr', (ctx) => onlyOwner(ctx, async () => { await toast(ctx, ''); await showMain(ctx); })); // old button (removed)
   bot.callbackQuery('nws:test', (ctx) => onlyOwner(ctx, async () => {
@@ -852,4 +1027,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, govCodeOf };
+export const _test = { nightPublish, nightSummaryTick, noticeText, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, govCodeOf };
