@@ -9,7 +9,7 @@ import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
-import { createBot, imageTest, resyncChannelPosts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -370,6 +370,23 @@ async function start() {
     startPrices(() => bots.admin?.api); // 💱 morning prices bulletin (in-app scheduler, Damascus time)
     startServices(); // 🛣 road statuses expiry
     startQuakes(() => bots.admin?.api); // 🌍 earthquake alerts (EMSC + USGS, auto-posted)
+    // one-time owner request (2026-10-25): 3 explosions published as "civil" -> "explosion" (edit posts in place)
+    {
+      const RT_ID = 'retype-explosion-2026-10-25';
+      const RT_IDS = ['459b76e6-f4a8-4466-a929-deb3e75753a0', 'a3c2e253-8664-43c2-a06c-3f73b37d0277', '61f9bf0b-52ab-4517-a507-48d9e7a75d2e'];
+      setTimeout(async () => {
+        if (store.state.maint?.[RT_ID]) return;
+        store.state.maint = { ...(store.state.maint || {}), [RT_ID]: { started: new Date().toISOString() } };
+        store.persist();
+        try {
+          const res = await retypeAlerts(bots.admin.api, RT_IDS, 'explosion');
+          store.state.maint[RT_ID] = { done: new Date().toISOString(), res };
+          console.log('[retype] done', JSON.stringify(res));
+        } catch (e) { console.error('[retype] failed', e.message); }
+        store.persist();
+        try { await store.flushBackup(); } catch { /* ignore */ }
+      }, 200_000).unref();
+    }
     startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (never auto-published)
     setTimeout(() => resyncChannelPosts(bots.admin.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
   };

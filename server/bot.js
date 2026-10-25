@@ -437,6 +437,49 @@ function withDeadline(promise, ms) {
   let t;
   return Promise.race([promise, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`timed out after ${ms} ms`)), ms); })]).finally(() => clearTimeout(t));
 }
+/**
+ * Change the type of already-published alerts (owner request): map + stored alert + statistics log,
+ * and EDIT (never delete/repost) the existing channel post: new title/emoji, new map image, same buttons.
+ */
+export async function retypeAlerts(api, ids, type, { gapMs = 4000 } = {}) {
+  const out = [];
+  const nt = TITLES[type];
+  if (!nt) return [{ ok: false, why: 'unknown type ' + type }];
+  for (const id of ids) {
+    const a = store.getAlert(id);
+    if (!a) { out.push({ id, ok: false, why: 'alert not found' }); continue; }
+    const ot = TITLES[a.type];
+    const patch = { type };
+    if (ot && a.type !== type) {
+      if (typeof a.title === 'string' && a.title.startsWith(ot.ar)) patch.title = nt.ar + a.title.slice(ot.ar.length);
+      if (typeof a.title_en === 'string' && a.title_en.startsWith(ot.en)) patch.title_en = nt.en + a.title_en.slice(ot.en.length);
+    }
+    store.updateAlert(id, patch); // live map update
+    store._logPatch(id, { ty: type }); // statistics / area pages
+    store.persist();
+    const b = store.getAlert(id);
+    if (!b.channel_message_id || !api || !config.channel) { out.push({ id, ok: true, post: null }); continue; }
+    const opts = { ended: !b.is_active };
+    try {
+      if (b.channel_media === 'photo') {
+        const png = await withDeadline(alertImage(b, 'ar'), 30000);
+        await api.editMessageMedia(config.channel, b.channel_message_id,
+          InputMediaBuilder.photo(new InputFile(png, `red-alert-syria-${b.id.slice(0, 8)}.png`), { caption: channelCaption(b, opts), parse_mode: 'HTML' }),
+          { reply_markup: channelKeyboard(b) });
+      } else {
+        await api.editMessageText(config.channel, b.channel_message_id, channelPost(b, opts), { parse_mode: 'HTML', reply_markup: channelKeyboard(b), link_preview_options: { is_disabled: true } });
+      }
+      out.push({ id, ok: true, post: b.channel_message_id });
+    } catch (e) {
+      const msg = String(e.description || e.message || e);
+      const soft = /not modified|not found|message to edit/i.test(msg);
+      out.push({ id, ok: soft, post: b.channel_message_id, why: msg });
+      console.error(`[retype] channel edit ${b.channel_message_id}: ${msg}`);
+    }
+    await new Promise((r) => setTimeout(r, gapMs));
+  }
+  return out;
+}
 export async function alertImage(alert, lang = 'ar') {
   const p = alert.place || {};
   const n = (alert.extra || []).length;
