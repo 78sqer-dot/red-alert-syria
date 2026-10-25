@@ -1,3 +1,4 @@
+import { startTranslations } from './translate.js';
 import express from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -401,7 +402,8 @@ async function start() {
         try { await store.flushBackup(); } catch { /* ignore */ }
       }, 200_000).unref();
     }
-    startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (never auto-published)
+    startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
+    startTranslations(); // 🌐 English descriptions for /en/
     setTimeout(() => resyncChannelPosts(bots.admin.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
   };
   const upAdmin = async (attempt = 1) => {

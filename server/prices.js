@@ -490,11 +490,11 @@ async function readyData() {
   if (bad) return { ok: false, why: bad };
   return { ok: true, st };
 }
-export async function postBulletin(api, { chatId = config.channel, test = false } = {}) {
+export async function postBulletin(api, { chatId = config.channel, test = false, en = false } = {}) {
   const r = await readyData();
   if (!r.ok) return r;
   const png = renderPricesPng(r.st);
-  const head = test ? '🧪 <b>معاينة خاصة — لم تُنشر في القناة.</b>\nهكذا ستظهر نشرة الأسعار:\n\n' : '';
+  const head = test ? (en ? '🧪 <b>Private preview — not posted in the channel.</b>\nThis is how the price bulletin will look (in Arabic, as in the channel):\n\n' : '🧪 <b>معاينة خاصة — لم تُنشر في القناة.</b>\nهكذا ستظهر نشرة الأسعار:\n\n') : '';
   const m = await api.sendPhoto(chatId, new InputFile(png, `prices-${damascusParts().date}.png`), { caption: (head + pricesCaption(r.st)).slice(0, 1024), parse_mode: 'HTML', reply_markup: test ? undefined : postKb() });
   return { ok: true, message_id: m.message_id, official: !!r.st.official };
 }
@@ -562,7 +562,7 @@ export function registerPriceTools(bot, h) {
     const c = pricesState().cfg; const on = ctx.match[1] === 'on';
     if (on && !c.on) { const p = damascusParts(); if (p.hm >= c.time) c.last = p.date; }
     c.on = on; save();
-    await ctx.answerCallbackQuery(on ? 'تم التشغيل' : 'تم الإيقاف');
+    await ctx.answerCallbackQuery(en(ctx) ? (on ? 'Turned on' : 'Turned off') : (on ? 'تم التشغيل' : 'تم الإيقاف'));
     await h.show(ctx, txt(ctx), kb(ctx));
   }));
   bot.callbackQuery(/^px:t:(\d\d:\d\d)$/, (ctx) => onlyOwner(ctx, async () => {
@@ -575,7 +575,7 @@ export function registerPriceTools(bot, h) {
     await ctx.answerCallbackQuery(en(ctx) ? 'Preparing…' : 'جارٍ التجهيز…');
     await ctx.replyWithChatAction('upload_photo').catch(() => {});
     try {
-      const r = await postBulletin(ctx.api, { chatId: ctx.chat.id, test: true });
+      const r = await postBulletin(ctx.api, { chatId: ctx.chat.id, test: true, en: en(ctx) });
       if (!r.ok) await ctx.reply(`⚠️ ما في بيانات مؤكدة حالياً: ${esc(r.why)}`, { parse_mode: 'HTML' });
     } catch (e) { await ctx.reply(`⚠️ ${esc(e.description || e.message)}`, { parse_mode: 'HTML' }); }
   }));

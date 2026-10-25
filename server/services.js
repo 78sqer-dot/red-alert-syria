@@ -223,30 +223,38 @@ async function closePowerCards(api, p, keep) {
 export function registerPowerTools(bot, h) {
   R.H = h;
   const onlyOwner = async (ctx, fn) => { if (!h.owner(ctx)) return ctx.answerCallbackQuery().catch(() => {}); return fn(); };
+  const E = (ctx) => h.langOf?.(ctx) === 'en';
+  const T = (ctx, ar, en) => (E(ctx) ? en : ar);
+  const gName = (ctx, code) => { if (!E(ctx)) return govName(code); if (!code) return 'All of Syria'; const g = governorates.find((x) => x.code === code); return g?.en || g?.name_en || govName(code); };
   const find = async (id) => {
     let p = powerArr().find((x) => x.id === id);
     if (!p && store.backup) { await store.mergeFromBackup().catch(() => {}); p = powerArr().find((x) => x.id === id); }
     return p || null;
   };
-  const govKb = (prefix, back) => {
-    const kb = new InlineKeyboard().text('🇸🇾 عموم سوريا', `${prefix}:all`).row();
-    governorates.forEach((g, i) => { kb.text(g.ar, `${prefix}:${g.code}`); if (i % 3 === 2) kb.row(); });
-    return kb.row().text('↩️ رجوع', back);
+  const govKb = (prefix, back, ctx) => {
+    const en = ctx && E(ctx);
+    const kb = new InlineKeyboard().text(en ? '🇸🇾 All of Syria' : '🇸🇾 عموم سوريا', `${prefix}:all`).row();
+    governorates.forEach((g, i) => { kb.text(en ? g.en || g.name_en || g.ar : g.ar, `${prefix}:${g.code}`); if (i % 3 === 2) kb.row(); });
+    return kb.row().text(en ? '↩️ Back' : '↩️ رجوع', back);
   };
-  const mainText = () => {
+  const mainText = (ctx) => {
     const n = (svc().powerNews ||= { on: true });
     const pub = publicPower(5);
+    if (ctx && E(ctx)) {
+      const l = pub.length ? pub.map((p) => `• <b>${esc(gName(ctx, p.gov))}</b> — ${esc(p.text.slice(0, 70))}${p.text.length > 70 ? '…' : ''}`).join('\n') : '— Nothing published yet.';
+      return `⚡ <b>Electricity</b>\n\nPower and rationing news is shown on the website in the “⚡ Electricity” section, by governorate.\n\n📡 Pick up electricity news from the monitor: <b>${n.on ? '✅ On' : '⏸ Off'}</b>\n(each item reaches you as a card; nothing is posted without your approval)\n\n<b>Latest published:</b>\n${l}`;
+    }
     const list = pub.length ? pub.map((p) => `• <b>${esc(p.gov_ar)}</b> — ${esc(p.text.slice(0, 70))}${p.text.length > 70 ? '…' : ''}`).join('\n') : '— ما في تحديثات منشورة بعد.';
     return `⚡ <b>الكهرباء</b>\n\nأخبار الكهرباء والتقنين بتنعرض على الموقع بقسم «⚡ الكهرباء» حسب المحافظة.\n\n📡 التقاط أخبار الكهرباء من الرصد: <b>${n.on ? '✅ مفعّل' : '⏸ متوقف'}</b>\n(كل خبر بيوصلك كبطاقة، وما بينشر شي إلا بموافقتك)\n\n<b>آخر المنشور:</b>\n${list}`;
   };
   const mainKb = (ctx) => {
     const n = (svc().powerNews ||= { on: true });
-    const kb = new InlineKeyboard().text('➕ أضف تحديث كهرباء', 'pwr:add').row();
-    if (publicPower(1).length) kb.text('🗑 حذف تحديث منشور', 'pwr:del').row();
-    return kb.text(n.on ? '⏸ إيقاف الالتقاط من الرصد' : '▶️ تشغيل الالتقاط من الرصد', n.on ? 'pwr:off' : 'pwr:on').row()
-      .url('🌐 القسم على الموقع', `${siteUrl()}/ar/#power`).row().text(h.L(ctx).btnHome, 'home');
+    const kb = new InlineKeyboard().text(T(ctx, '➕ أضف تحديث كهرباء', '➕ Add an electricity update'), 'pwr:add').row();
+    if (publicPower(1).length) kb.text(T(ctx, '🗑 حذف تحديث منشور', '🗑 Remove a published update'), 'pwr:del').row();
+    return kb.text(n.on ? T(ctx, '⏸ إيقاف الالتقاط من الرصد', '⏸ Stop picking up from the monitor') : T(ctx, '▶️ تشغيل الالتقاط من الرصد', '▶️ Pick up from the monitor'), n.on ? 'pwr:off' : 'pwr:on').row()
+      .url(T(ctx, '🌐 القسم على الموقع', '🌐 Section on the website'), `${siteUrl()}/${E(ctx) ? 'en' : 'ar'}/#power`).row().text(h.L(ctx).btnHome, 'home');
   };
-  const showMain = (ctx) => h.show(ctx, mainText(), mainKb(ctx));
+  const showMain = (ctx) => h.show(ctx, mainText(ctx), mainKb(ctx));
   bot.on('callback_query:data', async (ctx, next) => { pend.delete(ctx.from?.id); return next(); });
   bot.callbackQuery('pwr', (ctx) => onlyOwner(ctx, async () => { await ctx.answerCallbackQuery(); await showMain(ctx); }));
   bot.callbackQuery(/^pwr:(on|off)$/, (ctx) => onlyOwner(ctx, async () => {
@@ -255,49 +263,49 @@ export function registerPowerTools(bot, h) {
   }));
   bot.callbackQuery('pwr:add', (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery();
-    await h.show(ctx, '⚡ <b>تحديث كهرباء جديد</b>\n\nلأي محافظة؟', govKb('pwr:g', 'pwr'));
+    await h.show(ctx, T(ctx, '⚡ <b>تحديث كهرباء جديد</b>\n\nلأي محافظة؟', '⚡ <b>New electricity update</b>\n\nFor which governorate?'), govKb('pwr:g', 'pwr', ctx));
   }));
   bot.callbackQuery(/^pwr:g:(\w+)$/, (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery();
     const gov = ctx.match[1] === 'all' ? null : ctx.match[1];
     pend.set(ctx.from.id, { k: 'text', gov, exp: Date.now() + 10 * 60_000 });
-    await h.show(ctx, `⚡ <b>${esc(govName(gov))}</b>\n\nاكتب نص التحديث، مثلاً:\n<i>برنامج التقنين الجديد: 4 ساعات وصل مقابل ساعتين قطع اعتباراً من اليوم.</i>`, new InlineKeyboard().text('↩️ رجوع', 'pwr:add'));
+    await h.show(ctx, E(ctx) ? `⚡ <b>${esc(gName(ctx, gov))}</b>\n\nType the update (it is published as you write it, so Arabic is best), e.g.:\n<i>برنامج التقنين الجديد: 4 ساعات وصل مقابل ساعتين قطع اعتباراً من اليوم.</i>` : `⚡ <b>${esc(govName(gov))}</b>\n\nاكتب نص التحديث، مثلاً:\n<i>برنامج التقنين الجديد: 4 ساعات وصل مقابل ساعتين قطع اعتباراً من اليوم.</i>`, new InlineKeyboard().text(T(ctx, '↩️ رجوع', '↩️ Back'), 'pwr:add'));
   }));
   bot.callbackQuery('pwr:del', (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery();
     const kb = new InlineKeyboard();
-    for (const p of publicPower(12)) kb.text(`🗑 ${p.gov_ar} · ${p.text.slice(0, 34)}`, `pwr:dx:${p.id}`).row();
-    await h.show(ctx, '🗑 اختر التحديث يلي بدك تشيله من الموقع:', kb.text('↩️ رجوع', 'pwr'));
+    for (const p of publicPower(12)) kb.text(`🗑 ${E(ctx) ? gName(ctx, p.gov) : p.gov_ar} · ${p.text.slice(0, 34)}`, `pwr:dx:${p.id}`).row();
+    await h.show(ctx, T(ctx, '🗑 اختر التحديث يلي بدك تشيله من الموقع:', '🗑 Pick the update to remove from the website:'), kb.text(T(ctx, '↩️ رجوع', '↩️ Back'), 'pwr'));
   }));
   bot.callbackQuery(/^pwr:dx:(\w+)$/, (ctx) => onlyOwner(ctx, async () => {
     const p = await find(ctx.match[1]);
     if (p) { p.pub = false; p.ts = Date.now() - 47 * H_MS; save(); emitPower(); }
-    await ctx.answerCallbackQuery('🗑 انشال من الموقع'); await showMain(ctx);
+    await ctx.answerCallbackQuery(T(ctx, '🗑 انشال من الموقع', '🗑 Removed from the website')); await showMain(ctx);
   }));
   // review cards (from the news monitor) and the owner's own preview
   bot.callbackQuery(/^pw:(s|c|e|g|x|gg):(\w+)(?::(\w+))?$/, (ctx) => onlyOwner(ctx, async () => {
     const [, a, id, extra] = ctx.match;
     const p = await find(id);
     const cur = ctx.callbackQuery.message ? [ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id] : null;
-    if (!p) { await ctx.answerCallbackQuery({ text: 'هذا التحديث لم يعد متاحاً', show_alert: true }); try { await ctx.deleteMessage(); } catch { /* ignore */ } return; }
-    if (a === 'x') { p.cards = p.cards || []; await closePowerCards(ctx.api, p); powerArr().splice(powerArr().indexOf(p), 1); save(); await ctx.answerCallbackQuery('تم التجاهل'); try { await ctx.deleteMessage(); } catch { /* ignore */ } return; }
+    if (!p) { await ctx.answerCallbackQuery({ text: T(ctx, 'هذا التحديث لم يعد متاحاً', 'This update is no longer available'), show_alert: true }); try { await ctx.deleteMessage(); } catch { /* ignore */ } return; }
+    if (a === 'x') { p.cards = p.cards || []; await closePowerCards(ctx.api, p); powerArr().splice(powerArr().indexOf(p), 1); save(); await ctx.answerCallbackQuery(T(ctx, 'تم التجاهل', 'Ignored')); try { await ctx.deleteMessage(); } catch { /* ignore */ } return; }
     if (a === 'e') {
       await ctx.answerCallbackQuery();
       pend.set(ctx.from.id, { k: 'edit', id, exp: Date.now() + 10 * 60_000, card: cur });
-      return ctx.reply('✏️ أرسل النص الجديد للتحديث (رح يحل محل النص الحالي):', { _keep: 'c' }).then((m) => { pend.get(ctx.from.id).ask = [m.chat.id, m.message_id]; }).catch(() => {});
+      return ctx.reply(T(ctx, '✏️ أرسل النص الجديد للتحديث (رح يحل محل النص الحالي):', '✏️ Send the new text for this update (it replaces the current text):'), { _keep: 'c' }).then((m) => { pend.get(ctx.from.id).ask = [m.chat.id, m.message_id]; }).catch(() => {});
     }
-    if (a === 'g') { await ctx.answerCallbackQuery(); return ctx.editMessageReplyMarkup({ reply_markup: govKb(`pw:gg:${id}`, `pw:back:${id}`) }).catch(() => {}); }
+    if (a === 'g') { await ctx.answerCallbackQuery(); return ctx.editMessageReplyMarkup({ reply_markup: govKb(`pw:gg:${id}`, `pw:back:${id}`, ctx) }).catch(() => {}); }
     if (a === 'gg') {
       p.gov = extra === 'all' ? null : extra; save();
       await ctx.answerCallbackQuery('✔️');
       return ctx.editMessageText(powerCardText(p), { parse_mode: 'HTML', reply_markup: powerCardKb(p), link_preview_options: { is_disabled: true } }).catch(() => {});
     }
-    if (p.pub && a !== 'c') { await ctx.answerCallbackQuery('منشور مسبقاً ✔️'); return; }
-    await ctx.answerCallbackQuery('جارٍ النشر…');
+    if (p.pub && a !== 'c') { await ctx.answerCallbackQuery(T(ctx, 'منشور مسبقاً ✔️', 'Already published ✔️')); return; }
+    await ctx.answerCallbackQuery(T(ctx, 'جارٍ النشر…', 'Publishing…'));
     try { await publishPower(ctx.api, p, a === 'c'); } catch (e) { return ctx.reply(`⚠️ ${esc(e.description || e.message)}`); }
     await closePowerCards(ctx.api, p, cur);
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
-    await h.sendTransient(ctx.api, ctx.chat.id, a === 'c' ? '✅ نُشر التحديث على الموقع وبالقناة.' : '✅ نُشر التحديث على الموقع (قسم الكهرباء).');
+    await h.sendTransient(ctx.api, ctx.chat.id, a === 'c' ? T(ctx, '✅ نُشر التحديث على الموقع وبالقناة.', '✅ Published on the website and in the channel.') : T(ctx, '✅ نُشر التحديث على الموقع (قسم الكهرباء).', '✅ Published on the website (Electricity section).'));
   }));
   bot.callbackQuery(/^pw:back:(\w+)$/, (ctx) => onlyOwner(ctx, async () => {
     const p = await find(ctx.match[1]); await ctx.answerCallbackQuery();
@@ -309,11 +317,11 @@ export function registerPowerTools(bot, h) {
     if (!h.owner(ctx) || Date.now() > q.exp) { pend.delete(ctx.from.id); return next(); }
     const txt = String(ctx.message.text || '').trim();
     if (txt.startsWith('/')) { pend.delete(ctx.from.id); return next(); }
-    if (txt.length < 8) return ctx.reply('⚠️ النص قصير كتير، اكتب التحديث كامل.');
+    if (txt.length < 8) return ctx.reply(T(ctx, '⚠️ النص قصير كتير، اكتب التحديث كامل.', '⚠️ That text is too short — please write the full update.'));
     pend.delete(ctx.from.id);
     if (q.k === 'edit') {
       const p = await find(q.id);
-      if (!p) return ctx.reply('هذا التحديث لم يعد متاحاً');
+      if (!p) return ctx.reply(T(ctx, 'هذا التحديث لم يعد متاحاً', 'This update is no longer available'));
       p.text = cleanPowerText(txt) || txt.slice(0, 700); save();
       if (p.pub) emitPower();
       if (q.ask) { try { await ctx.api.deleteMessage(q.ask[0], q.ask[1]); } catch { /* ignore */ } }
@@ -326,7 +334,7 @@ export function registerPowerTools(bot, h) {
     }
     const p = { id: rid(), gov: q.gov, text: txt.slice(0, 700), ts: Date.now(), src: null, pub: false, manual: true };
     powerArr().push(p); save();
-    const m = await ctx.reply(`👀 <b>معاينة</b> — هيك رح يظهر على الموقع:\n\n${powerCardText(p)}`, { parse_mode: 'HTML', reply_markup: powerCardKb(p), _keep: 'c' });
+    const m = await ctx.reply(`${T(ctx, '👀 <b>معاينة</b> — هيك رح يظهر على الموقع:', '👀 <b>Preview</b> — this is how it will appear on the website:')}\n\n${powerCardText(p)}`, { parse_mode: 'HTML', reply_markup: powerCardKb(p), _keep: 'c' });
     p.cards = [[m.chat.id, m.message_id]]; save();
   });
 }

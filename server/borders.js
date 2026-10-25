@@ -135,19 +135,24 @@ export function onBorderNews(it) {
   sendSuggestion(sg).catch(() => {});
   return true;
 }
-const suggKb = (sg) => new InlineKeyboard()
-  .text('✅ اعتمد على الموقع', `bs:s:${sg.id}`).row()
-  .text('📢 الموقع + القناة', `bs:c:${sg.id}`).row()
-  .text('🔁 غيّر الحالة', `bs:e:${sg.id}`).text('❌ تجاهل', `bs:x:${sg.id}`);
-function suggText(sg) {
+const whenL = (t, en) => new Intl.DateTimeFormat(en ? 'en-GB' : 'ar-SY', { timeZone: config.timezone, weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(t));
+const cName = (c, en) => (en ? c.en || c.ar : c.ar);
+const sName = (S, en) => (en ? S.en : S.ar);
+const suggKb = (sg, en) => new InlineKeyboard()
+  .text(en ? '✅ Approve on the website' : '✅ اعتمد على الموقع', `bs:s:${sg.id}`).row()
+  .text(en ? '📢 Website + channel' : '📢 الموقع + القناة', `bs:c:${sg.id}`).row()
+  .text(en ? '🔁 Change status' : '🔁 غيّر الحالة', `bs:e:${sg.id}`).text(en ? '❌ Ignore' : '❌ تجاهل', `bs:x:${sg.id}`);
+function suggText(sg, en) {
   const c = byId(sg.cid); const S = BORDER_STATUS[sg.st];
+  if (en) return `🛂 <b>Crossing update from the monitor</b> — awaiting your decision\n\nCrossing: <b>${esc(cName(c, true))}</b> ${COUNTRIES[c.country].flag}\nSuggested status: ${S.emoji} <b>${esc(S.en)}</b>\n\n<blockquote>${esc(sg.text.slice(0, 500))}</blockquote>\n<i>Source (for review only): ${esc(sg.src)}</i>`;
   return `🛂 <b>تحديث معبر من الرصد</b> — بانتظار قرارك\n\nالمعبر: <b>${esc(c.ar)}</b> ${COUNTRIES[c.country].flag}\nالحالة المقترحة: ${S.emoji} <b>${esc(S.ar)}</b>\n\n<blockquote>${esc(sg.text.slice(0, 500))}</blockquote>\n<i>المصدر (للمراجعة فقط): ${esc(sg.src)}</i>`;
 }
 async function sendSuggestion(sg) {
   const api = R.H?.apis().admin; if (!api) return;
   sg.cards = [];
   for (const uid of new Set(config.ownerIds)) {
-    try { const m = await api.sendMessage(uid, suggText(sg), { parse_mode: 'HTML', reply_markup: suggKb(sg), _keep: 'c' }); sg.cards.push([uid, m.message_id]); } catch { /* */ }
+    const en = store.userLang?.(uid) === 'en';
+    try { const m = await api.sendMessage(uid, suggText(sg, en), { parse_mode: 'HTML', reply_markup: suggKb(sg, en), _keep: 'c' }); sg.cards.push([uid, m.message_id]); } catch { /* */ }
   }
   save();
 }
@@ -157,64 +162,69 @@ const pend = new Map(); // uid -> { id, st }
 export function registerBorderTools(bot, h) {
   R.H = h;
   (store.mergeHooks ||= []).push(mergeBordersFromBackup);
+  const E = (ctx) => h.langOf?.(ctx) === 'en';
+  const T = (ctx, ar, en) => (E(ctx) ? en : ar);
   const only = async (ctx, fn) => { if (!h.staff(ctx)) return ctx.answerCallbackQuery().catch(() => {}); return fn(); };
-  const listText = () => {
-    const pb = publicBorders();
-    const lines = Object.entries(COUNTRIES).map(([k, co]) => `${co.flag} <b>${co.ar}</b>\n${pb.filter((x) => x.country === k).map((x) => `${BORDER_STATUS[x.status].emoji} ${esc(x.name_ar)}${x.status !== 'unknown' ? ` — ${esc(BORDER_STATUS[x.status].ar)}` : ''}`).join('\n')}`);
-    return `🛂 <b>المعابر الحدودية</b>\n\nاختار المعبر لتحدّث حالته. التحديث بيظهر على الموقع فوراً، وفيك تنشره بالقناة كمان.\nالحالة اللي ما بتتحدّث 3 أيام بترجع «غير معروف».\n\n${lines.join('\n\n')}`;
+  const listText = (ctx) => {
+    const en = E(ctx); const pb = publicBorders();
+    const lines = Object.entries(COUNTRIES).map(([k, co]) => `${co.flag} <b>${en ? co.en : co.ar}</b>\n${pb.filter((x) => x.country === k).map((x) => `${BORDER_STATUS[x.status].emoji} ${esc(en ? x.name_en || x.name_ar : x.name_ar)}${x.status !== 'unknown' ? ` — ${esc(sName(BORDER_STATUS[x.status], en))}` : ''}`).join('\n')}`);
+    return en
+      ? `🛂 <b>Border crossings</b>\n\nPick a crossing to update its status. Updates appear on the website instantly, and you can post them to the channel too.\nA status not updated for 3 days goes back to “Unknown”.\n\n${lines.join('\n\n')}`
+      : `🛂 <b>المعابر الحدودية</b>\n\nاختار المعبر لتحدّث حالته. التحديث بيظهر على الموقع فوراً، وفيك تنشره بالقناة كمان.\nالحالة اللي ما بتتحدّث 3 أيام بترجع «غير معروف».\n\n${lines.join('\n\n')}`;
   };
   const listKb = (ctx) => {
-    const kb = new InlineKeyboard();
+    const en = E(ctx); const kb = new InlineKeyboard();
     for (const k of Object.keys(COUNTRIES)) {
       const cs = CROSSINGS.filter((c) => c.country === k);
-      cs.forEach((c, i) => { kb.text(`${COUNTRIES[k].flag} ${c.ar}`, `bd:c:${c.id}`); if (i % 2 === 1) kb.row(); });
+      cs.forEach((c, i) => { kb.text(`${COUNTRIES[k].flag} ${cName(c, en)}`, `bd:c:${c.id}`); if (i % 2 === 1) kb.row(); });
       if (cs.length % 2) kb.row();
     }
-    if (h.owner(ctx)) kb.text(bstate().borderNews ? '⏸ إيقاف الالتقاط من الرصد' : '▶️ تشغيل الالتقاط من الرصد', 'bd:news').row();
-    return kb.url('🌐 الصفحة على الموقع', `${siteUrl()}/ar/#borders`).row().text('🏠 القائمة', 'home');
+    if (h.owner(ctx)) kb.text(bstate().borderNews ? T(ctx, '⏸ إيقاف الالتقاط من الرصد', '⏸ Stop picking up from the monitor') : T(ctx, '▶️ تشغيل الالتقاط من الرصد', '▶️ Pick up from the monitor'), 'bd:news').row();
+    return kb.url(T(ctx, '🌐 الصفحة على الموقع', '🌐 Page on the website'), `${siteUrl()}/${en ? 'en' : 'ar'}/#borders`).row().text(T(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
   };
-  const stKb = (id) => {
-    const kb = new InlineKeyboard();
-    ['open', 'busy', 'partial', 'closed'].forEach((s, i) => { kb.text(`${BORDER_STATUS[s].emoji} ${BORDER_STATUS[s].ar}`, `bd:s:${id}:${s}`); if (i % 2) kb.row(); });
-    return kb.text('⚪ مسح الحالة', `bd:s:${id}:unknown`).row().text('↩️ رجوع', 'bd');
+  const stKb = (ctx, id) => {
+    const en = E(ctx); const kb = new InlineKeyboard();
+    ['open', 'busy', 'partial', 'closed'].forEach((s, i) => { kb.text(`${BORDER_STATUS[s].emoji} ${sName(BORDER_STATUS[s], en)}`, `bd:s:${id}:${s}`); if (i % 2) kb.row(); });
+    return kb.text(T(ctx, '⚪ مسح الحالة', '⚪ Clear status'), `bd:s:${id}:unknown`).row().text(T(ctx, '↩️ رجوع', '↩️ Back'), 'bd');
   };
-  const doneKb = (id) => new InlineKeyboard().text('📢 انشر بالقناة', `bd:p:${id}`).row().text('✏️ أضف/عدّل ملاحظة', `bd:n:${id}`).row().text('↩️ كل المعابر', 'bd').text('🏠 القائمة', 'home');
-  const curText = (id, extra = '') => {
-    const c = byId(id); const s = bstate().borders[id];
+  const doneKb = (ctx, id) => new InlineKeyboard().text(T(ctx, '📢 انشر بالقناة', '📢 Post to the channel'), `bd:p:${id}`).row().text(T(ctx, '✏️ أضف/عدّل ملاحظة', '✏️ Add/edit a note'), `bd:n:${id}`).row().text(T(ctx, '↩️ كل المعابر', '↩️ All crossings'), 'bd').text(T(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
+  const curText = (ctx, id, extra = '') => {
+    const en = E(ctx); const c = byId(id); const s = bstate().borders[id];
     const S = BORDER_STATUS[s?.st || 'unknown'];
+    if (en) return `🛂 <b>${esc(cName(c, true))} crossing</b> ${COUNTRIES[c.country].flag}\n\nCurrent status: ${S.emoji} <b>${esc(S.en)}</b>${s?.note ? `\nNote: ${esc(s.note)}` : ''}${s?.ts ? `\n<i>Last update: ${esc(whenL(s.ts, true))}</i>` : ''}${extra}`;
     return `🛂 <b>معبر ${esc(c.ar)}</b> ${COUNTRIES[c.country].flag} — ${esc(c.other)}\n\nالحالة الحالية: ${S.emoji} <b>${esc(S.ar)}</b>${s?.note ? `\nملاحظة: ${esc(s.note)}` : ''}${s?.ts ? `\n<i>آخر تحديث: ${esc(when(s.ts))}</i>` : ''}${extra}`;
   };
   bot.on('callback_query:data', async (ctx, next) => { if (!/^bd:n:/.test(ctx.callbackQuery.data)) pend.delete(ctx.from?.id); return next(); });
-  bot.callbackQuery('bd', (ctx) => only(ctx, async () => { await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, listText(), listKb(ctx)); }));
+  bot.callbackQuery('bd', (ctx) => only(ctx, async () => { await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, listText(ctx), listKb(ctx)); }));
   bot.callbackQuery('bd:news', (ctx) => only(ctx, async () => {
     if (!h.owner(ctx)) return ctx.answerCallbackQuery().catch(() => {});
     const s = bstate(); s.borderNews = !s.borderNews; save();
-    await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, listText(), listKb(ctx));
+    await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, listText(ctx), listKb(ctx));
   }));
   bot.callbackQuery(/^bd:c:(\w+)$/, (ctx) => only(ctx, async () => {
     await ctx.answerCallbackQuery().catch(() => {});
     const id = ctx.match[1]; if (!byId(id)) return;
-    await h.show(ctx, curText(id, '\n\nاختار الحالة الجديدة 👇'), stKb(id));
+    await h.show(ctx, curText(ctx, id, T(ctx, '\n\nاختار الحالة الجديدة 👇', '\n\nPick the new status 👇')), stKb(ctx, id));
   }));
   bot.callbackQuery(/^bd:s:(\w+):(\w+)$/, (ctx) => only(ctx, async () => {
     const [, id, st] = ctx.match;
     if (!setBorder(id, st, '', ctx.from.id)) return ctx.answerCallbackQuery().catch(() => {});
     await ctx.answerCallbackQuery({ text: '✅' }).catch(() => {});
-    await h.show(ctx, curText(id, '\n\n✅ انحفظت على الموقع.'), doneKb(id));
+    await h.show(ctx, curText(ctx, id, T(ctx, '\n\n✅ انحفظت على الموقع.', '\n\n✅ Saved on the website.')), doneKb(ctx, id));
   }));
   bot.callbackQuery(/^bd:n:(\w+)$/, (ctx) => only(ctx, async () => {
     await ctx.answerCallbackQuery().catch(() => {});
     const id = ctx.match[1]; if (!bstate().borders[id]) return;
     pend.set(ctx.from.id, { id, exp: Date.now() + 10 * 60_000 });
-    await h.show(ctx, curText(id, '\n\n✏️ اكتب الملاحظة برسالة (مثلاً: «ازدحام كبير باتجاه لبنان، الانتظار حوالي 3 ساعات»).'), new InlineKeyboard().text('↩️ رجوع', `bd:c:${id}`));
+    await h.show(ctx, curText(ctx, id, T(ctx, '\n\n✏️ اكتب الملاحظة برسالة (مثلاً: «ازدحام كبير باتجاه لبنان، الانتظار حوالي 3 ساعات»).', '\n\n✏️ Send the note as a message (e.g. “Heavy traffic towards Lebanon, about a 3-hour wait”).')), new InlineKeyboard().text(T(ctx, '↩️ رجوع', '↩️ Back'), `bd:c:${id}`));
   }));
   bot.callbackQuery(/^bd:p:(\w+)$/, (ctx) => only(ctx, async () => {
     const id = ctx.match[1]; const s = bstate().borders[id];
     if (!s) return ctx.answerCallbackQuery().catch(() => {});
-    if (s.posted && Date.now() - s.posted < 60_000) return ctx.answerCallbackQuery({ text: '✅ منشور' }).catch(() => {});
+    if (s.posted && Date.now() - s.posted < 60_000) return ctx.answerCallbackQuery({ text: T(ctx, '✅ منشور', '✅ Already posted') }).catch(() => {});
     try { await postToChannel(ctx.api, id); s.posted = Date.now(); save(); } catch (e) { return ctx.answerCallbackQuery({ text: '⚠️ ' + String(e.description || e.message).slice(0, 80), show_alert: true }).catch(() => {}); }
-    await ctx.answerCallbackQuery({ text: '📢 انتشر بالقناة' }).catch(() => {});
-    await h.show(ctx, curText(id, '\n\n📢 انتشر بالقناة.'), doneKb(id));
+    await ctx.answerCallbackQuery({ text: T(ctx, '📢 انتشر بالقناة', '📢 Posted to the channel') }).catch(() => {});
+    await h.show(ctx, curText(ctx, id, T(ctx, '\n\n📢 انتشر بالقناة.', '\n\n📢 Posted to the channel.')), doneKb(ctx, id));
   }));
   bot.on('message:text', async (ctx, next) => {
     const p = pend.get(ctx.from?.id);
@@ -223,16 +233,16 @@ export function registerBorderTools(bot, h) {
     const s = bstate().borders[p.id];
     setBorder(p.id, s?.st || 'open', ctx.message.text.trim(), ctx.from.id);
     try { await ctx.deleteMessage(); } catch { /* */ }
-    await h.show(ctx, curText(p.id, '\n\n✅ انحفظت الملاحظة.'), doneKb(p.id));
+    await h.show(ctx, curText(ctx, p.id, T(ctx, '\n\n✅ انحفظت الملاحظة.', '\n\n✅ Note saved.')), doneKb(ctx, p.id));
   });
   // owner: suggestions from the news monitor
   bot.callbackQuery(/^bs:(s|c|e|x):(\w+)$/, (ctx) => only(ctx, async () => {
     const [, act, id] = ctx.match;
     const s = bstate(); const sg = s.borderSugg.find((x) => x.id === id);
-    if (!sg) return ctx.answerCallbackQuery({ text: 'انتهت صلاحية الاقتراح' }).catch(() => {});
+    if (!sg) return ctx.answerCallbackQuery({ text: T(ctx, 'انتهت صلاحية الاقتراح', 'This suggestion has expired') }).catch(() => {});
     const close = async () => { for (const [c, m] of sg.cards || []) { try { await ctx.api.deleteMessage(c, m); } catch { /* */ } } sg.cards = []; save(); };
     if (act === 'x') { await ctx.answerCallbackQuery({ text: '✖️' }).catch(() => {}); return close(); }
-    if (act === 'e') { await ctx.answerCallbackQuery().catch(() => {}); return h.show(ctx, curText(sg.cid, '\n\nاختار الحالة الصحيحة 👇'), stKb(sg.cid)); }
+    if (act === 'e') { await ctx.answerCallbackQuery().catch(() => {}); return h.show(ctx, curText(ctx, sg.cid, T(ctx, '\n\nاختار الحالة الصحيحة 👇', '\n\nPick the correct status 👇')), stKb(ctx, sg.cid)); }
     setBorder(sg.cid, sg.st, '', ctx.from.id);
     if (act === 'c') { try { await postToChannel(ctx.api, sg.cid); } catch { /* */ } }
     await ctx.answerCallbackQuery({ text: '✅' }).catch(() => {});

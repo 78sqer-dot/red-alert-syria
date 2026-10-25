@@ -564,6 +564,7 @@ export function publicAlert(a) {
     title: a.title,
     title_en: a.title_en,
     description: cleanAlertText(a.description) || undefined,
+    description_en: a.description_en || undefined,
     location: a.location,
     place: {
       name_ar: p.name_ar, name_en: p.name_en,

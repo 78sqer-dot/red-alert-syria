@@ -294,7 +294,7 @@ function alertInfo(id) {
   const a = store.getAlert(id);
   if (a) {
     const p = a.place || {};
-    return { a, ty: a.type, ts: Date.parse(a.timestamp), pa: p.scope === 'governorate' ? p.governorate_ar : (p.name_ar || p.governorate_ar), pe: p.scope === 'governorate' ? p.governorate_en : (p.name_en || p.governorate_en), ga: p.governorate_ar, ge: p.governorate_en, desc: a.description || '' };
+    return { a, ty: a.type, ts: Date.parse(a.timestamp), pa: p.scope === 'governorate' ? p.governorate_ar : (p.name_ar || p.governorate_ar), pe: p.scope === 'governorate' ? p.governorate_en : (p.name_en || p.governorate_en), ga: p.governorate_ar, ge: p.governorate_en, desc: a.description || '', desc_en: a.description_en || '' };
   }
   const e = (store.state.log || []).findLast?.((x) => x.id === id) || [...(store.state.log || [])].reverse().find((x) => x.id === id);
   if (e) return { ty: e.ty, ts: Date.parse(e.ts), pa: e.pa || e.ga, pe: e.pe || e.ge, ga: e.ga, ge: e.ge, desc: '', m: e.m };
@@ -311,7 +311,8 @@ function alertSharePage(id, lang) {
   const placeLine = [place, gov].filter((x, i, arr) => x && arr.indexOf(x) === i).join(en ? ', ' : '، ');
   const title = `🔴 ${typeLabel(info.ty, lang)}${placeLine ? ` — ${placeLine}` : ''} | ${en ? 'Red Alert Syria' : 'الإنذار الأحمر سوريا'}`;
   const when = fmtWhen(info.ts, lang);
-  const desc = `${info.desc ? info.desc.slice(0, 160) + ' · ' : ''}${when} (${en ? 'Damascus time' : 'بتوقيت دمشق'}). ${en ? 'Live map of alerts across Syria — follow t.me/Red_Alert_Syria' : 'خريطة سوريا المباشرة للتنبيهات — تابعنا t.me/Red_Alert_Syria'}`;
+  const dtx = (en && info.desc_en) || info.desc;
+  const desc = `${dtx ? dtx.slice(0, 160) + ' · ' : ''}${when} (${en ? 'Damascus time' : 'بتوقيت دمشق'}). ${en ? 'Live map of alerts across Syria — follow t.me/Red_Alert_Syria' : 'خريطة سوريا المباشرة للتنبيهات — تابعنا t.me/Red_Alert_Syria'}`;
   const og = info.a ? `${site}/og/a/${encodeURIComponent(id)}-${lang}.png` : `${site}/og/site-${lang}.png`;
   const body = `<h1>${esc(typeLabel(info.ty, lang))}${placeLine ? ` — ${esc(placeLine)}` : ''}</h1><p class="lead">${esc(when)}</p>
 <div class="cta"><a class="btn red" href="${target}">${en ? 'Open on the live map' : 'افتح على الخريطة المباشرة'}</a><a class="btn tg" href="${CHANNEL_URL}">${en ? 'Follow on Telegram' : 'تابعنا على تيليغرام'}</a></div>`;

@@ -103,6 +103,7 @@ function ago(ts) {
 const timeLine = (ts) => `<b>${esc(ago(ts))}</b> · ${esc(fmtDay.format(new Date(ts)))} · ${esc(fmtTime.format(new Date(ts)))}`;
 const typeName = (t) => (ALERT_TYPES[t] ? ALERT_TYPES[t][LANG] : t);
 const titleOf = (a) => (LANG === 'en' && a.title_en ? a.title_en : a.title);
+const descOf = (a) => (LANG === 'en' && a.description_en ? a.description_en : a.description) || '';
 // Published alerts show no hashtags (the owner's choice); kept as an empty list for the card layout.
 function tagsOf(a) {
   if (a) return [];
@@ -134,7 +135,7 @@ const isLive = (a) => a.is_active && Date.parse(a.expires_at) > Date.now();
 const shareUrl = (a) => `${location.origin}/${LANG}/a/${encodeURIComponent(a.id)}`;
 const siteUrl = () => `${location.origin}/${LANG}/`;
 const fbShare = (u) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`;
-const shareText = (a) => `🔴 ${titleOf(a)}${a.description ? '\n' + a.description : ''}`;
+const shareText = (a) => `🔴 ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}`;
 
 // ------------------------------------------------------------------ alerts selection
 function visibleAlerts() {
@@ -200,7 +201,7 @@ function cardHtml(a, fresh) {
     <div class="card-top">${badge(a)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <h3 class="card-title">${esc(titleOf(a))}</h3>
     ${distChip(a)}
-    ${a.description ? `<p class="card-desc">${esc(a.description)}</p>` : ''}
+    ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
     <div class="card-foot"><div class="tags">${tagsOf(a).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
       <div class="card-actions">${hasLoc ? `<button class="ic-btn" data-act="map" title="${esc(T.showOnMap)}">${icon('map', 16)}</button>` : ''}<button class="ic-btn" data-act="share" title="${esc(T.share)}">${icon('share', 16)}</button></div>
     </div></article>`;
@@ -248,7 +249,7 @@ function detailHtml(a) {
   return `<div class="d-card" style="--c:${t.color}">
       <div class="card-top">${badge(a, live)}<span class="time">${timeLine(a.timestamp)}</span></div>
       <h3 class="card-title">${esc(titleOf(a))}</h3>
-      ${a.description ? `<p class="card-desc">${esc(a.description)}</p>` : ''}
+      ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
       <span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span>
     </div>
     <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
@@ -320,7 +321,7 @@ function popupHtml(a) {
     <p class="pp-title">${esc(titleOf(a))}</p>
     ${distChip(a)}
     ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">📍 ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
-    ${a.description ? `<p class="pp-desc">${esc(a.description)}</p>` : ''}
+    ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
     <a class="pp-share" href="https://wa.me/?text=${encodeURIComponent(shareText(a) + '\n' + shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.share)}</a></div></div>`;
 }
@@ -645,7 +646,7 @@ function notify(a) {
   if (n.vibration && navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
     try {
-      const notif = new Notification(`${alertEmoji(a)} ${typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (a.description ? '\n' + a.description : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr' });
+      const notif = new Notification(`${alertEmoji(a)} ${typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (descOf(a) ? '\n' + descOf(a) : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr' });
       notif.onclick = () => {
         window.focus();
         select(a.id);
@@ -685,7 +686,7 @@ function alertToast(a) {
 let breakingTimer = null;
 function showBreaking(a) {
   const b = $('#breaking');
-  $('#breakingText').textContent = a.description || titleOf(a);
+  $('#breakingText').textContent = descOf(a) || titleOf(a);
   $('#breakingText').dataset.id = a.id;
   b.hidden = false;
   b.style.animation = 'none';

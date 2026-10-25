@@ -179,25 +179,28 @@ async function publish(item, toChannel) {
 
 // ---------------------------------------------------------------- owner cards
 const reviewers = () => [...new Set(config.ownerIds)];
-const cardKb = (it) => (it.pub
-  ? new InlineKeyboard().text('🗑 حذف التحذير', `wx:d:${it.id}`)
-  : new InlineKeyboard().text('📢 الخريطة + القناة', `wx:c:${it.id}`).row().text('🗺 الخريطة فقط', `wx:m:${it.id}`).text('❌ تجاهل', `wx:x:${it.id}`));
-function cardText(it) {
-  const head = it.pub === 'channel' && it.auto ? '✅ <b>نُشر تلقائياً (تحذير شديد)</b>\n\n' : it.pub ? `✅ <b>منشور${it.pub === 'map' ? ' على الخريطة' : ''}</b>\n\n` : '📝 <b>مسودة تحذير جوي</b> — بتنتظر قرارك\n\n';
-  return head + warningText(it.w) + '\n\n<i>المصدر: توقعات Open-Meteo (للمراجعة)</i>';
+const isEnUid = (uid) => store.userLang?.(uid) === 'en';
+const cardKb = (it, en = false) => (it.pub
+  ? new InlineKeyboard().text(en ? '🗑 Delete the warning' : '🗑 حذف التحذير', `wx:d:${it.id}`)
+  : new InlineKeyboard().text(en ? '📢 Map + channel' : '📢 الخريطة + القناة', `wx:c:${it.id}`).row().text(en ? '🗺 Map only' : '🗺 الخريطة فقط', `wx:m:${it.id}`).text(en ? '❌ Ignore' : '❌ تجاهل', `wx:x:${it.id}`));
+function cardText(it, en = false) {
+  const head = en
+    ? (it.pub === 'channel' && it.auto ? '✅ <b>Auto-posted (severe warning)</b>\n\n' : it.pub ? `✅ <b>Published${it.pub === 'map' ? ' on the map' : ''}</b>\n\n` : '📝 <b>Weather warning draft</b> — awaiting your decision\n\n')
+    : (it.pub === 'channel' && it.auto ? '✅ <b>نُشر تلقائياً (تحذير شديد)</b>\n\n' : it.pub ? `✅ <b>منشور${it.pub === 'map' ? ' على الخريطة' : ''}</b>\n\n` : '📝 <b>مسودة تحذير جوي</b> — بتنتظر قرارك\n\n');
+  return head + warningText(it.w) + (en ? '\n\n<i>Source: Open-Meteo forecast (for review)</i>' : '\n\n<i>المصدر: توقعات Open-Meteo (للمراجعة)</i>');
 }
 async function sendCards(it) {
   const api = R.H?.apis().admin; if (!api) return;
   it.cards = [];
   for (const uid of reviewers()) {
-    try { const m = await api.sendMessage(uid, cardText(it), { parse_mode: 'HTML', reply_markup: cardKb(it), _keep: 'c' }); it.cards.push([uid, m.message_id]); } catch { /* owner never opened the bot */ }
+    try { const m = await api.sendMessage(uid, cardText(it, isEnUid(uid)), { parse_mode: 'HTML', reply_markup: cardKb(it, isEnUid(uid)), _keep: 'c' }); it.cards.push([uid, m.message_id]); } catch { /* owner never opened the bot */ }
   }
   save();
 }
 async function refreshCards(it) {
   const api = R.H?.apis().admin; if (!api) return;
   for (const [chat, mid] of it.cards || []) {
-    try { await api.editMessageText(chat, mid, cardText(it), { parse_mode: 'HTML', reply_markup: it.pub || it.ignored ? (it.pub ? cardKb(it) : undefined) : cardKb(it) }); } catch { /* gone */ }
+    const en = isEnUid(chat); try { await api.editMessageText(chat, mid, cardText(it, en), { parse_mode: 'HTML', reply_markup: it.pub || it.ignored ? (it.pub ? cardKb(it, en) : undefined) : cardKb(it, en) }); } catch { /* gone */ }
   }
 }
 
@@ -262,42 +265,50 @@ export function registerWeatherTools(bot, h) {
   startWeather(h);
   const only = async (ctx, fn) => { if (!h.owner(ctx)) return ctx.answerCallbackQuery().catch(() => {}); return fn(); };
   const find = (id) => wxState().items.find((i) => i.id === id);
-  const mainText = () => {
-    const st = wxState();
-    const recent = st.items.slice(-5).reverse().map((i) => `• ${HAZARDS[i.w.hazard].emoji} ${HAZARDS[i.w.hazard].ar} — ${esc(dayName(i.w.day))} (${i.w.govs.length} محافظة)${i.pub ? ' ✅' : i.ignored ? ' ✖️' : ' 📝'}`).join('\n');
+  const E = (ctx) => h.langOf?.(ctx) === 'en';
+  const T = (ctx, ar, en) => (E(ctx) ? en : ar);
+  const dayEn = (d) => { try { return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'short' }).format(new Date(d + 'T12:00:00Z')); } catch { return d; } };
+  const mainText = (ctx) => {
+    const st = wxState(); const en = E(ctx);
+    const recent = st.items.slice(-5).reverse().map((i) => `• ${HAZARDS[i.w.hazard].emoji} ${en ? HAZARDS[i.w.hazard].en : HAZARDS[i.w.hazard].ar} — ${esc(en ? dayEn(i.w.day) : dayName(i.w.day))} (${i.w.govs.length} ${en ? (i.w.govs.length === 1 ? 'governorate' : 'governorates') : 'محافظة'})${i.pub ? ' ✅' : i.ignored ? ' ✖️' : ' 📝'}`).join('\n');
+    if (en) return `⛈ <b>Weather warnings</b>\n\nStatus: <b>${st.on ? '✅ On' : '⏸ Paused'}</b>\nAuto-post severe warnings: <b>${st.autoSevere ? '✅ Yes' : '⏸ No, all are drafts'}</b>\n\n`
+      + 'The forecast is checked twice a day (7:30 am and 5:30 pm) for every governorate: heavy rain, snow, wind, thunderstorms, heat waves, frost and dust storms.\nOrdinary warnings reach you as drafts; severe ones go to the channel and the map on their own.\n\n'
+      + `<b>Latest warnings:</b>\n${recent || '— No warnings right now'}`;
     return `⛈ <b>تحذيرات الطقس</b>\n\nالحالة: <b>${st.on ? '✅ مفعّلة' : '⏸ موقوفة'}</b>\nالنشر التلقائي للتحذيرات الشديدة: <b>${st.autoSevere ? '✅ نعم' : '⏸ لا، كلها مسودات'}</b>\n\n`
       + 'فحص التوقعات مرتين باليوم (7:30 الصبح و5:30 المسا) لكل المحافظات: أمطار غزيرة، ثلوج، رياح، عواصف رعدية، موجات حر، صقيع، وعواصف غبار.\nالتحذير العادي بيوصلك مسودة، والشديد بينزل لحاله بالقناة وعلى الخريطة.\n\n'
       + `<b>آخر التحذيرات:</b>\n${recent || '— ما في تحذيرات حالياً'}`;
   };
-  const mainKb = () => {
+  const mainKb = (ctx) => {
     const st = wxState();
-    return new InlineKeyboard().text('🔎 افحص التوقعات الآن', 'wx:now').row().text('🌤 نشرة الطقس الصباحية', 'wxb').row()
-      .text(st.on ? '⏸ إيقاف' : '▶️ تشغيل', 'wx:on').text(st.autoSevere ? '📝 الشديد كمان مسودة' : '⚡ انشر الشديد تلقائياً', 'wx:auto').row()
-      .text('🏠 القائمة', 'home');
+    return new InlineKeyboard().text(T(ctx, '🔎 افحص التوقعات الآن', '🔎 Check the forecast now'), 'wx:now').row().text(T(ctx, '🌤 نشرة الطقس الصباحية', '🌤 Morning weather bulletin'), 'wxb').row()
+      .text(st.on ? T(ctx, '⏸ إيقاف', '⏸ Pause') : T(ctx, '▶️ تشغيل', '▶️ Turn on'), 'wx:on').text(st.autoSevere ? T(ctx, '📝 الشديد كمان مسودة', '📝 Severe as drafts too') : T(ctx, '⚡ انشر الشديد تلقائياً', '⚡ Auto-post severe'), 'wx:auto').row()
+      .text(T(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
   };
-  bot.callbackQuery('wx', (ctx) => only(ctx, async () => { await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(), mainKb()); }));
-  bot.callbackQuery('wx:on', (ctx) => only(ctx, async () => { const st = wxState(); st.on = !st.on; save(); await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(), mainKb()); }));
-  bot.callbackQuery('wx:auto', (ctx) => only(ctx, async () => { const st = wxState(); st.autoSevere = !st.autoSevere; save(); await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(), mainKb()); }));
+  bot.callbackQuery('wx', (ctx) => only(ctx, async () => { await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(ctx), mainKb(ctx)); }));
+  bot.callbackQuery('wx:on', (ctx) => only(ctx, async () => { const st = wxState(); st.on = !st.on; save(); await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(ctx), mainKb(ctx)); }));
+  bot.callbackQuery('wx:auto', (ctx) => only(ctx, async () => { const st = wxState(); st.autoSevere = !st.autoSevere; save(); await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(ctx), mainKb(ctx)); }));
   bot.callbackQuery('wx:now', (ctx) => only(ctx, async () => {
     await ctx.answerCallbackQuery({ text: '⏳' }).catch(() => {});
     let n = 0; let err = '';
     try { n = (await checkWeather()).length; } catch (e) { err = e.message; }
     await ctx.answerCallbackQuery?.().catch(() => {});
-    await h.show(ctx, mainText() + `\n\n${err ? `⚠️ ما قدرت جيب التوقعات: ${esc(err)}` : n ? `🆕 ${n} تحذير جديد — وصلتك البطاقات.` : '✅ ما في تحذيرات جديدة.'}`, mainKb());
+    const msg = E(ctx) ? (err ? `⚠️ Couldn't fetch the forecast: ${esc(err)}` : n ? `🆕 ${n} new warning(s) — the cards were sent to you.` : '✅ No new warnings.')
+      : (err ? `⚠️ ما قدرت جيب التوقعات: ${esc(err)}` : n ? `🆕 ${n} تحذير جديد — وصلتك البطاقات.` : '✅ ما في تحذيرات جديدة.');
+    await h.show(ctx, mainText(ctx) + `\n\n${msg}`, mainKb(ctx));
   }));
   // test cards (🧪): their buttons never publish anything — they only answer, «تجاهل» removes the card
   bot.callbackQuery(/^wx:t:(c|m|x)$/, async (ctx) => {
     if (ctx.match[1] === 'x') {
-      await ctx.answerCallbackQuery({ text: '🧪 هذه تجربة — انحذفت البطاقة' }).catch(() => {});
+      await ctx.answerCallbackQuery({ text: T(ctx, '🧪 هذه تجربة — انحذفت البطاقة', '🧪 Test only — card removed') }).catch(() => {});
       try { await ctx.deleteMessage(); } catch { /* */ }
       return;
     }
-    await ctx.answerCallbackQuery({ text: '🧪 هذه تجربة — ما رح ينشر شي على القناة أو الخريطة', show_alert: true }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: T(ctx, '🧪 هذه تجربة — ما رح ينشر شي على القناة أو الخريطة', '🧪 Test only — nothing will be posted to the channel or the map'), show_alert: true }).catch(() => {});
   });
   bot.callbackQuery(/^wx:(c|m|x|d):(\w+)$/, (ctx) => only(ctx, async () => {
     const [, act, id] = ctx.match;
     const it = find(id);
-    if (!it) return ctx.answerCallbackQuery({ text: 'انتهت صلاحية المسودة' }).catch(() => {});
+    if (!it) return ctx.answerCallbackQuery({ text: T(ctx, 'انتهت صلاحية المسودة', 'This draft has expired') }).catch(() => {});
     if (act === 'x') { it.ignored = true; save(); await ctx.answerCallbackQuery({ text: '✖️' }).catch(() => {}); for (const [c, m] of it.cards || []) { try { await ctx.api.deleteMessage(c, m); } catch { /* */ } } return; }
     if (act === 'd') {
       const { deleteAlertEverywhere } = await import('./bot.js');

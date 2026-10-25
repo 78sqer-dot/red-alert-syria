@@ -263,11 +263,11 @@ export async function renderWxBulletin(now = Date.now()) {
   const warns = activeWarnings();
   return { ok: true, png: svgToPng(wxBulletinSvg(r.pts, warns, now), 1080), caption: wxBulletinCaption(r.pts, warns, now) };
 }
-export async function postWxBulletin(api, { chatId = config.channel, test = false } = {}) {
+export async function postWxBulletin(api, { chatId = config.channel, test = false, en = false } = {}) {
   const r = await renderWxBulletin();
   if (!r.ok) return r;
-  const head = test ? '🧪 <b>معاينة</b> — خاصة إلك، ما نُشرت بالقناة.\nهيك رح تطلع نشرة الطقس كل صبح:\n\n' : '';
-  const tail = test ? `\n\n▶️ <i>النشرة متوقفة لحد ما تشغّلها: القائمة ← 🌤 نشرة الطقس ← «تشغيل».</i>` : '';
+  const head = test ? (en ? '🧪 <b>Preview</b> — private to you, not posted in the channel.\nThis is how the weather bulletin will look every morning (in Arabic, as in the channel):\n\n' : '🧪 <b>معاينة</b> — خاصة إلك، ما نُشرت بالقناة.\nهيك رح تطلع نشرة الطقس كل صبح:\n\n') : '';
+  const tail = test ? (en ? '\n\n▶️ <i>The bulletin is off until you turn it on: Menu → 🌤 Weather bulletin → “Turn on”.</i>' : `\n\n▶️ <i>النشرة متوقفة لحد ما تشغّلها: القائمة ← 🌤 نشرة الطقس ← «تشغيل».</i>`) : '';
   const m = await api.sendPhoto(chatId, new InputFile(r.png, `weather-${damascusParts().date}.png`), { caption: (head + r.caption + (wxbState().cfg.on ? '' : tail)).slice(0, 1024), parse_mode: 'HTML', reply_markup: test ? undefined : postKb() });
   return { ok: true, message_id: m.message_id };
 }
@@ -338,7 +338,7 @@ export function registerWxBulletinTools(bot, h) {
   bot.callbackQuery('wxb:test', (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery(en(ctx) ? 'Preparing…' : 'عم جهّزها…').catch(() => {});
     try {
-      const r = await postWxBulletin(ctx.api, { chatId: ctx.chat.id, test: true });
+      const r = await postWxBulletin(ctx.api, { chatId: ctx.chat.id, test: true, en: en(ctx) });
       if (!r.ok) await ctx.reply(`⚠️ ${esc(r.why)}`, { parse_mode: 'HTML' });
     } catch (e) { await ctx.reply(`⚠️ ${esc(e.description || e.message)}`, { parse_mode: 'HTML' }).catch(() => {}); }
   }));
