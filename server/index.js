@@ -28,6 +28,10 @@ const ADMIN_DESC = '🔒 بوت النشر الخاص بإدارة Red Alert Syr
 const ADMIN_SHORT = 'بوت النشر الخاص — Red Alert Syria';
 const REPORT_DESC = '📨 بوت التبليغ الخاص بـ Red Alert Syria — الإنذار الأحمر سوريا.\n\nأبلغ عن مسيّرة، طيران حربي، قصف مدفعي، هجوم، صواريخ أو حدث مدني في منطقتك. يصل بلاغك إلى الإدارة ويُنشر على القناة والخريطة بعد التحقق.\n\nReport drones, warplanes, shelling, attacks, missiles or civil events in Syria.';
 const REPORT_SHORT = 'أرسل بلاغاً عن حدث في سوريا — Red Alert Syria';
+const ADMIN_DESC_EN = '🔒 Private publishing bot of the Red Alert Syria team (moderators only).';
+const ADMIN_SHORT_EN = 'Private publishing bot — Red Alert Syria';
+const REPORT_DESC_EN = '📨 The reporting bot of Red Alert Syria.\n\nReport a drone, warplane, shelling, attack, missiles or a civil event in your area. Your report reaches the team and is posted on the channel and the map after it is checked.';
+const REPORT_SHORT_EN = 'Report an event in Syria — Red Alert Syria';
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -263,11 +267,15 @@ async function describe(role, b) {
       await b.api.setMyCommands(BOT_COMMANDS.en, { language_code: 'en' });
       await b.api.setMyDescription(ADMIN_DESC + (botInfo.report ? `\n\nلإرسال بلاغ: @${botInfo.report}` : ''));
       await b.api.setMyShortDescription(ADMIN_SHORT + (botInfo.report ? ` · للبلاغات: @${botInfo.report}` : ''));
+      await b.api.setMyDescription(ADMIN_DESC_EN + (botInfo.report ? `\n\nTo send a report: @${botInfo.report}` : ''), { language_code: 'en' });
+      await b.api.setMyShortDescription(ADMIN_SHORT_EN + (botInfo.report ? ` · Reports: @${botInfo.report}` : ''), { language_code: 'en' });
     } else {
       await b.api.setMyCommands(REPORT_COMMANDS.ar);
       await b.api.setMyCommands(REPORT_COMMANDS.en, { language_code: 'en' });
       await b.api.setMyDescription(REPORT_DESC);
       await b.api.setMyShortDescription(REPORT_SHORT);
+      await b.api.setMyDescription(REPORT_DESC_EN, { language_code: 'en' });
+      await b.api.setMyShortDescription(REPORT_SHORT_EN, { language_code: 'en' });
     }
   } catch (e) { console.warn(`[${role}] could not set commands`, e.description || e.message); }
 }

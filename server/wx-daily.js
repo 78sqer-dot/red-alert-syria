@@ -130,6 +130,8 @@ export function wxbState() {
   const b = (s.wxb ||= {});
   b.cfg ||= { on: false, time: '08:00', last: null }; // off until the owner turns it on from the menu
   if (!WXB_TIMES.includes(b.cfg.time)) b.cfg.time = '08:00';
+  // the very first build switched it on by default before the owner saw a preview: off once, then the owner decides
+  if (b.cfg.v !== 2) { b.cfg.on = false; b.cfg.v = 2; }
   return b;
 }
 const save = (soon = true) => store.persist({ backupSoon: soon });
@@ -259,7 +261,8 @@ export async function postWxBulletin(api, { chatId = config.channel, test = fals
   const r = await renderWxBulletin();
   if (!r.ok) return r;
   const head = test ? '🧪 <b>معاينة</b> — خاصة إلك، ما نُشرت بالقناة.\nهيك رح تطلع نشرة الطقس كل صبح:\n\n' : '';
-  const m = await api.sendPhoto(chatId, new InputFile(r.png, `weather-${damascusParts().date}.png`), { caption: (head + r.caption).slice(0, 1024), parse_mode: 'HTML', reply_markup: test ? undefined : postKb() });
+  const tail = test ? `\n\n▶️ <i>النشرة متوقفة لحد ما تشغّلها: القائمة ← 🌤 نشرة الطقس ← «تشغيل».</i>` : '';
+  const m = await api.sendPhoto(chatId, new InputFile(r.png, `weather-${damascusParts().date}.png`), { caption: (head + r.caption + (wxbState().cfg.on ? '' : tail)).slice(0, 1024), parse_mode: 'HTML', reply_markup: test ? undefined : postKb() });
   return { ok: true, message_id: m.message_id };
 }
 async function notifyOwners(api, text) {

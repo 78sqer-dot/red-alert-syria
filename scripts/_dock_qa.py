@@ -36,7 +36,7 @@ async def run(b, name, lang='ar', dark=False, dock=True, **kw):
     await p.goto(f'{BASE}/{lang}/#weather', wait_until='domcontentloaded')
     await p.wait_for_function("() => window.__rasMap && window.__rasMap.getLayer('svc-wx-i') && window.__rasMap.queryRenderedFeatures({ layers: ['svc-wx-i'] }).length > 10", timeout=30000)
     await p.wait_for_timeout(2500)
-    sel = '.pp-dock' if dock else '.maplibregl-popup'
+    sel = '.pp-dock' if dock else '.maplibregl-popup .maplibregl-popup-content'
     pts = await p.evaluate(PTS)
     # the edge ones first (Aleppo / Hasakah / Latakia / Deir ez-Zor): left-most, right-most, top-most
     pts.sort(key=lambda q: q['x'])
@@ -74,6 +74,10 @@ async def run(b, name, lang='ar', dark=False, dock=True, **kw):
         for z in (12, 7, 14):
             await p.evaluate(f"() => window.__rasMap.zoomTo({z}, {{ duration: 0 }})"); await p.wait_for_timeout(800)
             rs.append(await p.evaluate(CHECK, sel))
+        for dx, dy in ((700, 0), (-1400, 0), (700, -600), (0, 1200)):
+            await p.evaluate(f"() => window.__rasMap.panBy([{dx}, {dy}], {{ duration: 0 }})"); await p.wait_for_timeout(700)
+            rs.append(await p.evaluate(CHECK, sel))
+        if not dock: await p.screenshot(path=f'{OUT}/{name}-news-panned.png')
         good = all((not x.get('none')) and x['inside'] and not x['over'] and not x['cut'] for x in rs)
         ok(f'{name}: news card inside screen while zooming', good, [x for x in rs if x.get('none') or not x['inside'] or x['over'] or x['cut']][:1])
         await p.screenshot(path=f'{OUT}/{name}-news.png')
@@ -85,6 +89,11 @@ async def run(b, name, lang='ar', dark=False, dock=True, **kw):
 async def main():
     async with async_playwright() as pw:
         b = await pw.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox'])
+        import os
+        if os.environ.get('ONLY') == 'laptop':
+            await run(b, 'laptop', dock=False, viewport={'width': 1440, 'height': 900})
+            await run(b, 'laptop-small-en', lang='en', dock=False, viewport={'width': 1280, 'height': 680})
+            await b.close(); print(f'=== {sum(res)}/{len(res)} passed'); return
         await run(b, 'phone', **pw.devices['Pixel 7'])
         await run(b, 'phone-dark-en', lang='en', dark=True, **pw.devices['iPhone 12'])
         d = dict(pw.devices['Pixel 7']); d.update(user_agent=DESK_UA, viewport={'width': 980, 'height': 1860}, screen={'width': 412, 'height': 915}, device_scale_factor=1.1)

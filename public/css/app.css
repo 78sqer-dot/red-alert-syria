@@ -769,3 +769,6 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .pp-dock.svc-dock .svc-pp { width: auto; max-width: none; }
 .pp-dock.svc-dock .pp-dock-body { padding-top: 10px; }
 .pp-dock.svc-dock .pp-top { padding-inline-end: 34px; }
+/* desktop popup slid back inside the map while zooming / panning: the tip no longer points at its spot */
+.maplibregl-popup.pp-clamped .maplibregl-popup-tip { opacity: 0; }
+.maplibregl-popup .maplibregl-popup-content { transition: none; }

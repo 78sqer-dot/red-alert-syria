@@ -699,6 +699,7 @@ export class AlertMap {
       .setDOMContent(htmlToNode(this.popupHtml(alert)))
       .addTo(this.map);
     this.popup._alertId = alert.id;
+    this.bindClamp();
     // put the card inside the map's gesture layer (like the markers): pinch / drag that start on the card
     // now zoom and pan the map instead of being swallowed (on phones the card covers the middle of the map)
     const pe = this.popup.getElement();
@@ -719,12 +720,8 @@ export class AlertMap {
   }
   // Pan the map just enough that the open popup lies completely inside the visible part of the map
   // (works with page zoom in phone "desktop site" mode and with the bottom sheet / top buttons).
-  fitPopup() {
-    const p = this.popup;
-    const el = p && p.getElement && p.getElement();
-    if (!el || !this.map || !(this._fitLeft > 0) || p._dock) return;
-    if (this.map.isMoving()) return; // wait for the flight to land (moveend calls us again)
-    this._fitLeft = 0; // the map has settled: fit once, then leave the user's camera alone
+  // visible part of the map in client px, minus the floating buttons (top) and the list sheet (bottom)
+  visBox() {
     const c = this.map.getContainer();
     const cr = c.getBoundingClientRect();
     const scale = c.clientWidth ? cr.width / c.clientWidth : 1; // rect px per map px
@@ -746,6 +743,16 @@ export class AlertMap {
       const r = s.getBoundingClientRect();
       if (r.height && r.top < bottom && r.top > vis.t + 120) bottom = Math.min(bottom, r.top);
     }
+    return { vis, top, bottom, scale };
+  }
+  fitPopup() {
+    const p = this.popup;
+    const el = p && p.getElement && p.getElement();
+    if (!el || !this.map || !(this._fitLeft > 0) || p._dock) return;
+    if (this.map.isMoving()) return; // wait for the flight to land (moveend calls us again)
+    this._fitLeft = 0; // the map has settled: fit once, then leave the user's camera alone
+    this.clampPopups(true);
+    const { vis, top, bottom, scale } = this.visBox();
     const m = 10 * scale;
     const r = el.getBoundingClientRect();
     let dx = 0; let dy = 0;
@@ -755,6 +762,42 @@ export class AlertMap {
     if (r.top < top + m) dy = r.top - (top + m);
     else if (r.bottom > bottom - m) dy = Math.min(r.bottom - (bottom - m), r.top - (top + m));
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) { this._fitPanning = true; this._fitLeft = 0; this.map.panBy([dx / scale, dy / scale], { duration: 350 }); }
+  }
+
+  // laptop / desktop: while the user zooms or pans, a popup whose point drifts toward (or past) the edge slides
+  // back inside the visible map instead of leaving the screen; its tip hides while it is shifted
+  clampPopups(reset = false) {
+    if (!this.map) return;
+    const pops = this.el.querySelectorAll('.maplibregl-popup');
+    if (!pops.length) return;
+    const { vis, top, bottom, scale } = this.visBox();
+    const m = 10 * scale;
+    for (const pe of pops) {
+      const ct = pe.querySelector('.maplibregl-popup-content');
+      if (!ct) continue;
+      const sx = reset ? 0 : (+ct.dataset.sx || 0); const sy = reset ? 0 : (+ct.dataset.sy || 0);
+      const r = ct.getBoundingClientRect();
+      const L = r.left - sx * scale; const R = r.right - sx * scale; const Tp = r.top - sy * scale; const B = r.bottom - sy * scale;
+      let dx = 0; let dy = 0;
+      if (R - L > vis.r - vis.l - 2 * m) dx = (vis.l + vis.r) / 2 - (L + R) / 2;
+      else if (L < vis.l + m) dx = vis.l + m - L;
+      else if (R > vis.r - m) dx = vis.r - m - R;
+      if (Tp < top + m) dy = top + m - Tp;
+      else if (B > bottom - m) dy = Math.max(bottom - m - B, top + m - Tp);
+      const nx = Math.round(dx / scale); const ny = Math.round(dy / scale);
+      ct.dataset.sx = nx; ct.dataset.sy = ny;
+      const moved = Math.abs(nx) > 2 || Math.abs(ny) > 2;
+      ct.style.transform = moved ? `translate(${nx}px, ${ny}px)` : '';
+      pe.classList.toggle('pp-clamped', moved);
+    }
+  }
+  bindClamp() {
+    if (this._clampBound || !this.map) return;
+    this._clampBound = true;
+    let raf = 0;
+    const go = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; this.clampPopups(); }); };
+    this.map.on('move', go); this.map.on('resize', go);
+    window.addEventListener('resize', go);
   }
 
   closePopup() {

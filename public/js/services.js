@@ -420,6 +420,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       return;
     }
     st.popup = new M.Popup({ closeButton: true, closeOnClick: true, maxWidth: '290px', offset: 16, focusAfterOpen: false }).setLngLat(ll).setHTML(inner).addTo(m);
+    if (gm?.bindClamp) { gm.bindClamp(); requestAnimationFrame(() => gm.clampPopups()); }
   }
   const dirUrl = (lat, lon) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
   function poiHtml(p) {

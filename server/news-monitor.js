@@ -21,7 +21,7 @@ import { setSourceNames, cleanAlertText } from './clean-text.js';
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
 // that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
-export const FILTER_VER = 2;
+export const FILTER_VER = 3;
 const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
@@ -209,10 +209,13 @@ function cardText(d, lang = 'ar') {
   return lines.join('\n');
 }
 function cardKb(d, lang = 'ar') {
-  return new InlineKeyboard()
+  const kb = new InlineKeyboard()
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
     .text(tr(lang, '🏷 تغيير النوع', '🏷 Change type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id)
-    .row().text(...(d.type === 'uav' ? [intenseLabel(d, lang), 'nw:i:' + d.id] : ['', 'noop']));
+  ;
+  // Telegram refuses a whole message when one button has an empty text: the extra row only for drones
+  if (d.type === 'uav') kb.row().text(intenseLabel(d, lang), 'nw:i:' + d.id);
+  return kb;
 }
 const intenseOn = (d) => (typeof d.intense === 'boolean' ? d.intense : droneAuto(d.headline) > 1);
 const intenseLabel = (d, lang) => (lang === 'en' ? `🛸 Intensive flight: ${intenseOn(d) ? '✅ on' : '⬜ off'}` : `🛸 تحليق مكثف: ${intenseOn(d) ? '✅ مفعّل' : '⬜ لا'}`);
@@ -447,9 +450,7 @@ async function rescanIfFilterChanged() {
         const key = `${src.u}/${p.id}`;
         if (n.handled[key] || drafted.has(p.url)) continue;
         const c = cleanPostText(p.text);
-        // 🛂 border crossing open/closed news -> owner suggestion card (server/borders.js)
-    try { if (onBorderNews(it)) note(it, 'border crossing update -> owner card'); } catch (e) { console.warn('[news] border hook failed', e.message); }
-    const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
+        const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
         if (!f.ok) continue;
         const h = textHash(c.text);
         n.seen[h] = Date.now(); n.handled[key] = Date.now();
@@ -496,6 +497,8 @@ async function pollOnce() {
     if (n.seen[h]) { n.stats.dupes++; note(it, 'same text already seen'); continue; }
     // ⚡ electricity / rationing updates -> a separate owner card (server/services.js), never an alert
     try { if (onPowerPost(it)) { note(it, 'electricity update -> owner card'); continue; } } catch (e) { console.warn('[news] power hook failed', e.message); }
+    // 🛂 border crossing open/closed news -> owner suggestion card (server/borders.js); the post still goes on as news
+    try { if (onBorderNews(it)) note(it, 'border crossing update -> owner card'); } catch (e) { console.warn('[news] border hook failed', e.message); }
     const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
     if (!f.ok) { note(it, 'skipped: ' + f.why); continue; }
     // "seen" only once it really goes to the desk: a skipped post can be looked at again after a rule fix
