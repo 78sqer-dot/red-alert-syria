@@ -285,6 +285,15 @@ export function registerWeatherTools(bot, h) {
     await ctx.answerCallbackQuery?.().catch(() => {});
     await h.show(ctx, mainText() + `\n\n${err ? `⚠️ ما قدرت جيب التوقعات: ${esc(err)}` : n ? `🆕 ${n} تحذير جديد — وصلتك البطاقات.` : '✅ ما في تحذيرات جديدة.'}`, mainKb());
   }));
+  // test cards (🧪): their buttons never publish anything — they only answer, «تجاهل» removes the card
+  bot.callbackQuery(/^wx:t:(c|m|x)$/, async (ctx) => {
+    if (ctx.match[1] === 'x') {
+      await ctx.answerCallbackQuery({ text: '🧪 هذه تجربة — انحذفت البطاقة' }).catch(() => {});
+      try { await ctx.deleteMessage(); } catch { /* */ }
+      return;
+    }
+    await ctx.answerCallbackQuery({ text: '🧪 هذه تجربة — ما رح ينشر شي على القناة أو الخريطة', show_alert: true }).catch(() => {});
+  });
   bot.callbackQuery(/^wx:(c|m|x|d):(\w+)$/, (ctx) => only(ctx, async () => {
     const [, act, id] = ctx.match;
     const it = find(id);
