@@ -55,7 +55,7 @@ class Store extends EventEmitter {
       let fixed = 0;
       for (const a of this.state.alerts) {
         if (!a.is_active || !a.location || a.location.region) continue;
-        const loc = regionFix(a.location, `${a.title || ''} ${a.description || ''}`);
+        const loc = regionFix({ name_ar: a.place?.name_ar, governorate_ar: a.place?.governorate_ar, ...a.location }, `${a.title || ''} ${a.description || ''}`);
         if (!loc) continue;
         a.location = loc; a.place = { ...(a.place || {}), name_ar: loc.name_ar, name_en: loc.name_en, district_ar: loc.district_ar, district_en: loc.district_en, governorate_ar: loc.governorate_ar, governorate_en: loc.governorate_en };
         a.title = String(a.title || '').replace(/ — .*$/, ` — ${loc.name_ar}`); a.title_en = String(a.title_en || '').replace(/ — .*$/, ` — ${loc.name_en}`);
