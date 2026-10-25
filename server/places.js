@@ -274,12 +274,15 @@ export function regionFix(loc, text) {
   if (!loc || loc.scope === 'country' || loc.region) return null;
   const t = ' ' + normalizeArabic(text) + ' ';
   for (const p of places) {
-    if (!p.region || (loc.governorate && p.gov !== loc.governorate)) continue;
+    if (!p.region) continue;
+    const gc = loc.governorate != null && loc.governorate !== '' ? String(loc.governorate).padStart(2, '0') : '';
+    if (gc ? gc !== p.gov : loc.governorate_ar && normalizeArabic(getGov(p.gov)?.ar || '') !== normalizeArabic(loc.governorate_ar)) continue;
     const names = [p.ar, ...(p.alt || [])].map(normalizeArabic).filter((n) => n.includes(' ')); // full names only ("حوض اليرموك")
     if (!names.some((n) => t.includes(' ' + n + ' '))) continue;
-    const cur = loc.place_id ? getPlace(loc.place_id) : null;
+    const cur = loc.place_id ? getPlace(Number(loc.place_id)) : null;
+    const curName = normalizeArabic(cur?.ar || loc.name_ar || '');
     // only when the current place is near the region or shares a word with it (اليرموك / حوض اليرموك)
-    const share = cur && normalizeArabic(p.ar).split(' ').some((w) => w.length > 3 && normalizeArabic(cur.ar).includes(w));
+    const share = !!curName && normalizeArabic(p.ar).split(' ').some((w) => w.length > 3 && curName.includes(w));
     if (!share && kmBetween({ lat: loc.latitude, lon: loc.longitude }, p) > p.km * 3) continue;
     return locationFrom({ placeId: p.id });
   }
