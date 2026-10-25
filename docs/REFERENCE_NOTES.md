@@ -25,6 +25,8 @@ Logo: red #ED1C24 rect, white arcs icon + vertical bar + RED (bold) / ALERT (thi
 Bot: @Red_Alert_Syria_bot (id 8921728574) is admin of channel @Red_Alert_Syria (id -1004387100492) with post/edit/delete rights. Owner id 8270709633.
 GitHub connector account: 78sqer-dot. Render workspace tea-dbcholnf3r2c73belk8g (2 existing free services: abu-zahraa-bot, shadow-command-center, region frankfurt).
 Data: GeoNames SY (CC BY 4.0), geoBoundaries SYR ADM0/1/2 (gbOpen), raw in /workspace/data.
++ OCHA COD-AB Syria (HDX cod-ab-syr: syr_admin_boundaries.geojson.zip -> data/cod/: populated places 7,593 communities + 414 neighbourhoods, admin2/admin3 polygons)
++ HOT OSM populated places SYR (production-raw-data-api.s3.amazonaws.com/ISO3/SYR/populated_places/hotosm_syr_populated_places_osm_geojson.zip -> data/osm/). Merge: scripts/places_merge.py (needs shapely).
 
 ## Original marker system (extracted 2026-10-23 from redalert.com.lb chunks 3j2z45j30un6c.js / 3pi7y5o7ru-6i.js / 0cjnt7l_c7om_.js)
 - Glyph SVGs saved to public/js/marker-svgs.js (uav, plane, airstrike bomb, artillery crosshair, home_destroying, missile, explosion, other...).
@@ -44,7 +46,8 @@ Data: GeoNames SY (CC BY 4.0), geoBoundaries SYR ADM0/1/2 (gbOpen), raw in /work
 - Civil showed old disc+house glyph on phone (stale cached /shared/types.js, maxAge 1h) -> no-cache + versioned import.
 - Revert artillery to previous static orange disc marker (no tank).
 - Add civil sub-types: حادث سير، مظاهرة، حريق، طائرة مدنية (each own icon, in both bots + channel posts).
-- places.json place row: [id, ar, en, lat, lon, govCode, districtCode, rank(0=capital..8)].
+- places.json place row: [id, ar, en, lat, lon, govCode, districtCode, rank(0=capital..8), subCode(ناحية, OCHA SYxxxxxx w/o SY), [alt Arabic names for search]]. ids >= 20,000,000 = OCHA, >= 30e9 = OSM.
+- Bots: governorate -> district -> (ناحية when district > 40 places) -> (letter index when list > 72) -> town. Callbacks d:, s:dist:sub, pg:dist[:sub]:n, lt:dist:sub[:letter:n], back:sub.
 
 ## Channel post format requested by user (22:35) — replaces earlier format
 ```
@@ -142,3 +145,5 @@ TODO: bot (d.extra, addloc/rmloc buttons, summary, channelPost multi 📍 lines,
 - 14:22 DONE: 0ff5a67+e4bff61 pushed. Live protest post https://t.me/Red_Alert_Syria/50 (alert 21670dec, 11 zones, published 11:12Z, auto-removed ~12:12Z). Live web QA 27/27 (scripts/_multi_web.py FAKE=0), shots /home/ubuntu/ras-multi-live/*.png + channel-post-50.jpg. Sims: _multi 29/0, _clean 624/0 (mv /tmp/ras-clean first), _xf 65, _ct 45, _rp 17. Pending: confirm e4bff61 deployed + alert survived restart.
 
 - 25 Oct 2026 00:15–00:20 (Damascus): Telegram's Bot API answered slowly / 504 for a few minutes. grammY's default 500 s per-call timeout made the publishing bot look dead (no reply to /start, /active; no error logged) and a 504'd backup upload landed 3 times. Fix: `server/tg-net.js` (installed first on both bots) — 15 s per call (45 s uploads), up to 4 attempts with backoff for private-chat sends/edits/deletes, 429 honoured; channel posts and the backup file are never blindly re-sent (no duplicates); callback answers 8 s, never retried. Backup edit failing with 5xx no longer posts a second file. Slow updates (> 9 s) are now logged. Test: `node scripts/_net_test.mjs`.
+
+- 2026-10-25 places completion: 10,774 -> 13,936 places (OCHA+OSM merge, 272 نواحي), 1,351 spellings fixed to the official OCHA name (old name kept as search alias / in brackets). بصرى -> بصرى الشام (درعا › بصرى الشام); الحانوتة (تل حواصيد) added in جبل سمعان › تل الضمان; الحانوتة in السلمية › عقيربات; ربسة -> ربيعة الحانوتة (السفيرة › الحاجب). Search: aliases, space-insensitive (كفرنبل), 'town district' queries (عران الباب). Sim: scripts/_places_nav.mjs (mock API).

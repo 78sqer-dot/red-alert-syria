@@ -4,11 +4,14 @@ const raw = JSON.parse(fs.readFileSync(new URL('../data/places.json', import.met
 
 export const governorates = raw.governorates; // [{code, ar, en, lat, lon}]
 export const districts = raw.districts; // [{code, gov, ar, en}]
-export const places = raw.places.map(([id, ar, en, lat, lon, gov, dist, rank]) => ({ id, ar, en, lat, lon, gov, dist, rank }));
+export const subdistricts = raw.subdistricts || []; // [{code, dist, gov, ar, en}] (ناحية, OCHA COD-AB)
+// alt: other Arabic spellings / old names, used by the search only
+export const places = raw.places.map(([id, ar, en, lat, lon, gov, dist, rank, sub = '', alt = []]) => ({ id, ar, en, lat, lon, gov, dist, rank, sub, alt }));
 
 const govByCode = new Map(governorates.map((g) => [g.code, g]));
 const distByCode = new Map(districts.map((d) => [d.code, d]));
 const placeById = new Map(places.map((p) => [p.id, p]));
+const subByCode = new Map(subdistricts.map((x) => [x.code, x]));
 
 // Use the governorate capital as the governorate "centre".
 const CAPITALS = { '13': 170654, '08': 170654, '09': 170063, '11': 169577, '10': 170017, '02': 173576, '14': 163345, '12': 169389, '06': 170905, '05': 172408, '03': 173334, '07': 170794, '04': 172955, '01': 173811 };
@@ -28,7 +31,18 @@ export const getGov = (code) => govByCode.get(code);
 export const getDist = (code) => distByCode.get(code);
 export const getPlace = (id) => placeById.get(Number(id));
 export const districtsOf = (gov) => districts.filter((d) => d.gov === gov && places.some((p) => p.dist === d.code));
-export const placesOf = (dist) => places.filter((p) => p.dist === dist).sort((a, b) => a.rank - b.rank || a.ar.localeCompare(b.ar, 'ar'));
+// towns first (by size), then every village / hamlet / neighbourhood in alphabetical order
+const byMenu = (a, b) => (a.rank <= 4 || b.rank <= 4 ? a.rank - b.rank : 0) || a.ar.localeCompare(b.ar, 'ar');
+export const placesOf = (dist) => places.filter((p) => p.dist === dist).sort(byMenu);
+export const getSub = (code) => subByCode.get(code);
+// sub-districts of a district that actually hold places (in the district's own order: its centre first)
+export function subsOf(dist) {
+  const n = new Map();
+  for (const p of places) if (p.dist === dist && p.sub) n.set(p.sub, (n.get(p.sub) || 0) + 1);
+  return [...n.keys()].map((c) => subByCode.get(c)).filter(Boolean)
+    .sort((a, b) => (b.ar.startsWith('مركز') - a.ar.startsWith('مركز')) || a.ar.localeCompare(b.ar, 'ar'));
+}
+export const placesOfSub = (dist, sub) => places.filter((p) => p.dist === dist && p.sub === sub).sort(byMenu);
 
 export function normalizeArabic(s) {
   return String(s || '')
@@ -45,24 +59,51 @@ export function normalizeArabic(s) {
 }
 const stripAl = (s) => s.split(' ').map((w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w)).join(' ');
 
+// loose key: no spaces, no article, final ا / ه / ي alike (كفرنبل = كفر نبل, عامودا = عامودة)
+const loose = (n) => stripAl(n).replace(/\s+/g, '').replace(/[اهي]$/, 'ه');
 const index = places.map((p) => {
-  const n = normalizeArabic(p.ar);
-  return { p, n, n2: stripAl(n), en: normalizeArabic(p.en) };
+  const names = [p.ar, ...(p.alt || [])].map(normalizeArabic).filter(Boolean);
+  return { p, names, n2s: names.map(stripAl), ls: names.map(loose), en: normalizeArabic(p.en) };
 });
 
 export function searchPlaces(query, limit = 10) {
+  const res = searchNames(query, limit);
+  if (res.some((p) => !p.scope)) return res;
+  // "عران الباب" / "الحانوتة، حلب": town + its district / governorate / ناحية
+  const w = normalizeArabic(query).replace(/[،,\-–]/g, ' ').split(/\s+/).filter(Boolean);
+  for (let k = Math.min(3, w.length - 1); k >= 1; k--) {
+    const tail = stripAl(w.slice(-k).join(' '));
+    const inArea = (p) => [getDist(p.dist)?.ar, getGov(p.gov)?.ar, subByCode.get(p.sub)?.ar].some((x) => x && stripAl(normalizeArabic(x).replace(/^مركز /, '')) === tail);
+    const hits = searchNames(w.slice(0, -k).join(' '), 200).filter((p) => !p.scope && inArea(p));
+    if (hits.length) return hits.slice(0, limit);
+  }
+  return res;
+}
+function searchNames(query, limit) {
   const q = normalizeArabic(query);
   if (q.length < 2) return [];
   const q2 = stripAl(q);
+  const ql = loose(q);
   const scored = [];
   for (const it of index) {
     let s = -1;
-    if (it.n === q || it.n2 === q2) s = 100;
-    else if (it.n.startsWith(q) || it.n2.startsWith(q2)) s = 70;
-    else if (it.en === q) s = 90;
-    else if (it.en.startsWith(q)) s = 60;
-    else if (it.n.includes(q) || it.n2.includes(q2)) s = 40;
-    else if (it.en.includes(q)) s = 30;
+    for (let i = 0; i < it.names.length; i++) {
+      const n = it.names[i], n2 = it.n2s[i], l = it.ls[i];
+      const bonus = i === 0 ? 0 : -3; // the shown name before an alternative spelling
+      let t = -1;
+      if (n === q || n2 === q2) t = 100;
+      else if (l === ql) t = 95;
+      else if (n.startsWith(q) || n2.startsWith(q2)) t = 70;
+      else if (ql.length >= 3 && l.startsWith(ql)) t = 65;
+      else if (n.includes(q) || n2.includes(q2)) t = 40;
+      else if (ql.length >= 4 && l.includes(ql)) t = 35;
+      if (t >= 0 && t + bonus > s) s = t + bonus;
+    }
+    if (s < 0) {
+      if (it.en === q) s = 90;
+      else if (it.en.startsWith(q)) s = 60;
+      else if (it.en.includes(q)) s = 30;
+    }
     if (s >= 0) scored.push([s - it.p.rank * 2, it.p]);
   }
   // Governorates & districts can be matched too.

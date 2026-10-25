@@ -10,9 +10,10 @@ import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
 import { registerContactTools } from './contact-tools.js';
-import { governorates, getGov, getDist, districtsOf, placesOf, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
+import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
 
-const PAGE = 18;
+const PAGE = 24;
+const SUB_MENU_MIN = 40; // districts with more towns than this get a ناحية (sub-district) step first
 const DURATIONS = [15, 30, 60, 90, 120, 180, 360, 720];
 const REPORT_COOLDOWN_MS = 2 * 60_000;
 
@@ -153,28 +154,72 @@ function distKeyboard(ctx, gov) {
   return kb;
 }
 
-function placeKeyboard(ctx, dist, page) {
+// sub-districts (نواحي) of a big district: keeps every village a couple of taps away instead of 20 pages
+const useSubs = (dist) => placesOf(dist).length > SUB_MENU_MIN && subsOf(dist).length > 1;
+function subKeyboard(ctx, dist) {
   const l = L(ctx);
   const lang = langOf(ctx);
   const d = getDist(dist);
-  const all = placesOf(dist);
+  const kb = new InlineKeyboard().text(l.btnWholeDist(lang === 'en' ? d.en : d.ar), 'wd:' + dist).row();
+  subsOf(dist).forEach((x, i) => {
+    kb.text((lang === 'en' ? x.en : x.ar).slice(0, 30), `s:${dist}:${x.code}`);
+    if (i % 2 === 1) kb.row();
+  });
+  kb.row().text(l.btnBack, 'back:dist').text(l.btnCancel, 'cancel');
+  return kb;
+}
+// long lists (> 3 pages) start with an A-Z / ا-ي index: first letter of the name without "ال"
+const LETTER_MIN = PAGE * 3;
+const firstLetter = (p, lang) => {
+  if (lang === 'en') return ((p.en || '').replace(/^(al|el|as|ad|ar|at|az|ash|an)[-\s]/i, '').match(/[a-z]/i)?.[0] || '#').toUpperCase();
+  const n = (p.ar || '').replace(/[\u064B-\u065F\u0670\u0640(]/g, '').replace(/^ال(?=\S{2})/, '');
+  return ({ 'أ': 'ا', 'إ': 'ا', 'آ': 'ا', 'ٱ': 'ا', 'ؤ': 'و', 'ئ': 'ي', 'ى': 'ي', 'ة': 'ه', 'چ': 'ج', 'ڤ': 'ف', 'گ': 'ك', 'پ': 'ب', 'ک': 'ك', 'ی': 'ي' })[n[0]] || n[0] || '#';
+};
+function letterKeyboard(ctx, dist, sub, all) {
+  const l = L(ctx);
+  const lang = langOf(ctx);
+  const d = getDist(dist);
+  const n = new Map();
+  for (const p of all) { const c = firstLetter(p, lang); n.set(c, (n.get(c) || 0) + 1); }
+  const letters = [...n.keys()].sort((a, b) => a.localeCompare(b, lang === 'en' ? 'en' : 'ar'));
+  const kb = new InlineKeyboard().text(l.btnWholeDist(lang === 'en' ? d.en : d.ar), 'wd:' + dist).row();
+  // the big towns of the area stay one tap away
+  all.filter((p) => p.rank <= 4).slice(0, 9).forEach((p, i) => {
+    kb.text((lang === 'en' ? p.en || p.ar : p.ar).slice(0, 28), 'p:' + p.id);
+    if (i % 3 === 2) kb.row();
+  });
+  kb.row();
+  letters.forEach((c, i) => {
+    kb.text(`${c} (${n.get(c)})`, `lt:${dist}:${sub || 0}:${encodeURIComponent(c)}:0`);
+    if (i % 5 === 4) kb.row();
+  });
+  kb.row().text(l.btnBack, sub ? 'back:sub' : 'back:dist').text(l.btnCancel, 'cancel');
+  return kb;
+}
+function placeKeyboard(ctx, dist, page, sub = '', letter = '') {
+  const l = L(ctx);
+  const lang = langOf(ctx);
+  const d = getDist(dist);
+  let all = sub ? placesOfSub(dist, sub) : placesOf(dist);
+  if (!letter && all.length > LETTER_MIN) return { kb: letterKeyboard(ctx, dist, sub, all), page: 0, pages: 0, letters: true };
+  if (letter) all = all.filter((p) => firstLetter(p, lang) === letter).sort((a, b) => a.ar.localeCompare(b.ar, 'ar'));
   const pages = Math.max(1, Math.ceil(all.length / PAGE));
   page = Math.min(Math.max(0, page), pages - 1);
   const kb = new InlineKeyboard().text(l.btnWholeDist(lang === 'en' ? d.en : d.ar), 'wd:' + dist).row();
   all.slice(page * PAGE, page * PAGE + PAGE).forEach((p, i) => {
-    kb.text((lang === 'en' ? p.en : p.ar).slice(0, 28), 'p:' + p.id);
+    kb.text((lang === 'en' ? p.en || p.ar : p.ar).slice(0, 28), 'p:' + p.id);
     if (i % 3 === 2) kb.row();
   });
   kb.row();
   if (pages > 1) {
-    if (page > 0) kb.text(l.btnPrev, `pg:${dist}:${page - 1}`);
-    if (page < pages - 1) kb.text(l.btnNext, `pg:${dist}:${page + 1}`);
+    const pg = (n) => (letter ? `lt:${dist}:${sub || 0}:${encodeURIComponent(letter)}:${n}` : sub ? `pg:${dist}:${sub}:${n}` : `pg:${dist}:${n}`);
+    if (page > 0) kb.text(l.btnPrev, pg(page - 1));
+    if (page < pages - 1) kb.text(l.btnNext, pg(page + 1));
     kb.row();
   }
-  kb.text(l.btnBack, 'back:dist').text(l.btnCancel, 'cancel');
+  kb.text(l.btnBack, letter ? `lt:${dist}:${sub || 0}` : sub ? 'back:sub' : 'back:dist').text(l.btnCancel, 'cancel');
   return { kb, page: page + 1, pages };
 }
-
 function previewKeyboard(ctx, d) {
   const l = L(ctx);
   const kb = new InlineKeyboard();
@@ -950,15 +995,33 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await show(ctx, L(ctx).askDist(`<b>${esc(typeLabel(d.type, lang))}</b>`, esc(lang === 'en' ? getGov(gov).en : getGov(gov).ar)), distKeyboard(ctx, gov));
   }));
   bot.callbackQuery(/^wg:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ govCode: ctx.match[1] }))));
-  const showPlaces = async (ctx, d, dist, page) => {
-    d.dist = dist; d.step = 'place';
+  const showPlaces = async (ctx, d, dist, page, sub = '', letter = '') => {
+    d.dist = dist; d.sub = sub; d.step = 'place';
     const lang = langOf(ctx);
-    const { kb, page: p, pages } = placeKeyboard(ctx, dist, page);
+    const { kb, page: p, pages, letters } = placeKeyboard(ctx, dist, page, sub, letter);
     const dd = getDist(dist);
-    await show(ctx, L(ctx).askPlace(`<b>${esc(typeLabel(d.type, lang))}</b>`, esc(lang === 'en' ? dd.en : dd.ar), p, pages), kb);
+    const ss = sub && getSub(sub);
+    const where = (lang === 'en' ? dd.en : dd.ar) + (ss ? ' › ' + (lang === 'en' ? ss.en : ss.ar) : '') + (letter ? ` › ${letter}` : '');
+    const head = `<b>${esc(typeLabel(d.type, lang))}</b>`;
+    await show(ctx, letters ? L(ctx).askLetter(head, esc(where)) : L(ctx).askPlace(head, esc(where), p, pages), kb);
   };
-  bot.callbackQuery(/^d:(\d+)$/, needDraft((ctx, d) => (getDist(ctx.match[1]) ? showPlaces(ctx, d, ctx.match[1], 0) : null)));
+  const showSubs = async (ctx, d, dist) => {
+    d.dist = dist; d.sub = ''; d.step = 'place';
+    const lang = langOf(ctx);
+    const dd = getDist(dist);
+    await show(ctx, L(ctx).askSub(`<b>${esc(typeLabel(d.type, lang))}</b>`, esc(lang === 'en' ? dd.en : dd.ar)), subKeyboard(ctx, dist));
+  };
+  bot.callbackQuery(/^d:(\d+)$/, needDraft((ctx, d) => (!getDist(ctx.match[1]) ? null : useSubs(ctx.match[1]) ? showSubs(ctx, d, ctx.match[1]) : showPlaces(ctx, d, ctx.match[1], 0))));
+  bot.callbackQuery(/^s:(\d+):(\d+)$/, needDraft((ctx, d) => (getDist(ctx.match[1]) && getSub(ctx.match[2]) ? showPlaces(ctx, d, ctx.match[1], 0, ctx.match[2]) : null)));
   bot.callbackQuery(/^pg:(\d+):(\d+)$/, needDraft((ctx, d) => showPlaces(ctx, d, ctx.match[1], Number(ctx.match[2]))));
+  bot.callbackQuery(/^lt:(\d+):(\d+)(?::([^:]+):(\d+))?$/, needDraft((ctx, d) => {
+    const [, dist, sub, letter, page] = ctx.match;
+    if (!getDist(dist)) return null;
+    let c = '';
+    try { c = letter ? decodeURIComponent(letter) : ''; } catch { c = ''; }
+    return showPlaces(ctx, d, dist, Number(page) || 0, sub === '0' ? '' : sub, c);
+  }));
+  bot.callbackQuery(/^pg:(\d+):(\d+):(\d+)$/, needDraft((ctx, d) => showPlaces(ctx, d, ctx.match[1], Number(ctx.match[3]), ctx.match[2])));
   bot.callbackQuery(/^wd:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ distCode: ctx.match[1] }))));
   bot.callbackQuery(/^p:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ placeId: Number(ctx.match[1]) }))));
   bot.callbackQuery('noloc', needDraft(async (ctx, d) => {
@@ -992,7 +1055,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return showPreview(ctx, d);
   }));
   bot.callbackQuery('skip', needDraft((ctx, d) => showPreview(ctx, d)));
-  bot.callbackQuery(/^back:(gov|dist)$/, needDraft(async (ctx, d) => {
+  bot.callbackQuery(/^back:(gov|dist|sub)$/, needDraft(async (ctx, d) => {
+    if (ctx.match[1] === 'sub' && d.dist && getDist(d.dist)) return showSubs(ctx, d, d.dist);
     if (ctx.match[1] === 'dist' && d.gov) {
       d.step = 'dist';
       const lang = langOf(ctx);
@@ -1248,7 +1312,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         else {
           const dd = getDist(p.dist);
           const g = getGov(p.gov);
-          kb.text(`${lang === 'en' ? p.en : p.ar} — ${lang === 'en' ? dd?.en || g?.en : dd?.ar || g?.ar}`.slice(0, 60), 'p:' + p.id).row();
+          const ss = p.sub && getSub(p.sub);
+          const subTxt = ss && !/^مركز/.test(ss.ar) && ss.ar !== p.ar ? ` › ${lang === 'en' ? ss.en : ss.ar}` : ''; // same name in two areas: say which
+          kb.text(`${lang === 'en' ? p.en || p.ar : p.ar} — ${lang === 'en' ? dd?.en || g?.en : dd?.ar || g?.ar}${subTxt}`.slice(0, 60), 'p:' + p.id).row();
         }
       }
       kb.text(l.btnBack, 'back:gov').text(l.btnCancel, 'cancel');

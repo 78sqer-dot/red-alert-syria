@@ -3,8 +3,11 @@ import json, math, re, collections, sys
 SRC = sys.argv[1] if len(sys.argv) > 1 else '/workspace/data'
 rows = [l.rstrip('\n').split('\t') for l in open(f'{SRC}/sy/SY.txt', encoding='utf8')]
 ar = {}
+ar_all = collections.defaultdict(list)  # every Arabic name of a place (search aliases, see places_merge.py)
 for l in open(f'{SRC}/syalt/SY.txt', encoding='utf8'):
     p = l.rstrip('\n').split('\t')
+    if p[2] in ('ar', '') and p[7] != '1' and re.fullmatch(r'[\u0621-\u063A\u0641-\u064A\u0671-\u06D3 ]{2,}', p[3].strip()):
+        ar_all[p[1]].append(re.sub(r'\s+', ' ', p[3]).strip())
     if p[2] == 'ar' and p[7] != '1':  # skip historic
         # GeoNames sometimes tags a Latin transliteration as 'ar' (e.g. "‘Arān" before "عران"):
         # only Arabic-script names count, otherwise the village was dropped altogether
@@ -100,7 +103,8 @@ for r in rows:
     gcode = dists[dcode]['gov'] if dcode in dists else r[10]
     en = (r[2] or r[1]).replace('`', '').strip()
     if r[0] in NAME_FIX: a, en = NAME_FIX[r[0]]
-    places.append({'id': int(r[0]), 'ar': a, 'en': en, 'lat': round(float(r[4]), 5), 'lon': round(float(r[5]), 5),
+    alt = ar_all.get(r[0], []) + [clean_ar(x) for x in r[3].split(',') if re.fullmatch(r'[\u0621-\u063A\u0641-\u064A\u0671-\u06D3 ]{2,}', clean_ar(x))]
+    places.append({'id': int(r[0]), 'ar': a, 'en': en, 'alt': list(dict.fromkeys(x for x in alt if x != a)), 'lat': round(float(r[4]), 5), 'lon': round(float(r[5]), 5),
                    'gov': gcode, 'dist': dcode, 'rank': rank, 'pop': pop})
 
 def km(a, b):
@@ -123,10 +127,20 @@ for p in out:
     if p['dist'] not in dists: p['dist'] = ''
     if p['gov'] not in govs: p['gov'] = ''
 out = [p for p in out if p['gov']]
-print('govs', len(govs), 'dists', len(dists), 'places', len(out), file=sys.stderr)
-json.dump({'source': 'GeoNames (CC BY 4.0) — geonames.org', 'governorates': [govs[c] for c in GOV_ORDER if c in govs],
+print('govs', len(govs), 'dists', len(dists), 'geonames places', len(out), file=sys.stderr)
+# stage 2: complete with the OCHA community list + OpenStreetMap, attach sub-districts (scripts/places_merge.py)
+sys.path.insert(0, __import__('os').path.dirname(__file__))
+from places_merge import merge
+out, subs, dists = merge(out, dists, govs, SRC)
+out.sort(key=lambda p: (p['gov'], p['dist'], p['rank'], p['ar']))
+print('places', len(out), 'subdistricts', len(subs), file=sys.stderr)
+json.dump({'source': 'GeoNames (CC BY 4.0) · OCHA COD-AB Syria (CC BY-IGO) · © OpenStreetMap contributors (ODbL)',
+           'governorates': [govs[c] for c in GOV_ORDER if c in govs],
            'districts': sorted(dists.values(), key=lambda d: (d['gov'], d['ar'])),
-           'places': [[p['id'], p['ar'], p['en'], p['lat'], p['lon'], p['gov'], p['dist'], p['rank']] for p in out]},
+           'subdistricts': sorted(subs.values(), key=lambda d: (d['gov'], d['dist'], d['ar'])),
+           # [id, ar, en, lat, lon, gov, dist, rank, sub, [alternative Arabic names]]
+           'places': [[p['id'], p['ar'], p['en'], p['lat'], p['lon'], p['gov'], p['dist'], p['rank'], p.get('sub', '')]
+                      + ([p['alias']] if p.get('alias') else []) for p in out]},
           open('data/places.json', 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
 
 # peaks layer

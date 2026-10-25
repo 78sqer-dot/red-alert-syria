@@ -4,3 +4,4 @@ data/runtime/
 .env
 .DS_Store
 scripts/_*.mjs
+__pycache__/

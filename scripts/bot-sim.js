@@ -39,6 +39,8 @@ const govBtn = btns(last()).find((b) => b.startsWith('درعا') || b.includes('
 await cb(owner, govBtn.split('=>')[1]); show('gov chosen → districts');
 const distBtn = btns(last()).find((b) => b.includes('=>d:'));
 await cb(owner, distBtn.split('=>')[1]); show('district → places');
+const subBtn = btns(last()).find((b) => b.includes('=>s:')); // big districts: ناحية step first
+if (subBtn) { await cb(owner, subBtn.split('=>')[1]); show('sub-district → places'); }
 const placeBtn = btns(last()).find((b) => b.includes('=>p:'));
 await cb(owner, placeBtn.split('=>')[1]); show('place chosen → details');
 await msg(owner, 'مسيّرة تحلق على علو منخفض'); show('details typed → preview');
