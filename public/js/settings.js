@@ -46,6 +46,8 @@ state.notifications.types = state.notifications.types.filter((t) => TYPE_KEYS.in
   state.knownTypes = [...TYPE_KEYS];
 }
 
+// services are a temporary "map mode" now: old saved always-on service layers are dropped once
+if ((state.svcVer || 0) < 2) { state.svcLayers = []; state.svcVer = 2; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* ignore */ } }
 const listeners = new Set();
 export const settings = {
   get: () => state,

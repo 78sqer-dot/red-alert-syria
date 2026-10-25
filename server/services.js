@@ -94,7 +94,18 @@ export function isPowerNews(text) {
   // a strike that hit a power station is an alert, not a service update
   if (NOISE.some((k) => t.includes(N(k)))) return { ok: false };
   const g = govOfText(text);
+  // Syria only: a post about another country's electricity (Saudi, Lebanon, Iraq …) is not ours
+  if (FOREIGN.some((k) => t.includes(N(k))) && !g && !SYRIA.some((k) => t.includes(N(k)))) return { ok: false };
   return { ok: true, gov: g ? g.code : null };
+}
+const SYRIA = ['سوريا', 'سورية', 'السوري', 'السورية', 'السوريين', 'وزارة الطاقة', 'المؤسسة العامة لنقل وتوزيع الكهرباء', 'الشركة السورية', 'دمشق'];
+const FOREIGN = ['السعودية', 'السعودي', 'الملك سلمان', 'ولي العهد', 'المملكة', 'لبنان', 'اللبنانية', 'العراق', 'العراقية', 'الأردن', 'الاردن', 'الأردنية', 'مصر', 'المصرية', 'تركيا', 'التركية', 'إيران', 'الإمارات', 'الكويت', 'قطر', 'اليمن', 'ليبيا', 'غزة', 'إسرائيل'];
+// drop stored items that fail the Syria-only filter (e.g. a Saudi tariff post caught before the filter)
+export function purgeForeignPower() {
+  const arr = powerArr(); let n = 0;
+  for (let i = arr.length - 1; i >= 0; i--) if (!isPowerNews(arr[i].text || '').ok && !arr[i].manual) { arr.splice(i, 1); n++; }
+  if (n) { save(); emitPower(); }
+  return n;
 }
 const govName = (code, lang = 'ar') => { const g = governorates.find((x) => x.code === code); return g ? (lang === 'en' ? g.en : g.ar) : (lang === 'en' ? 'All Syria' : 'عموم سوريا'); };
 export function publicPower(limit = 60) {
@@ -139,6 +150,7 @@ export function startServices() {
   swept = activeRoads().length;
   (store.mergeHooks ||= []).push(mergeServicesFromBackup);
   setInterval(sweep, 60_000).unref();
+  setTimeout(() => { try { const n = purgeForeignPower(); if (n) console.log('[power] removed non-Syrian items:', n); } catch { /* ignore */ } }, 5000).unref();
 }
 export function mergeServicesFromBackup(o) {
   const os = o?.svc; if (!os) return;
@@ -312,7 +324,7 @@ export function registerPowerTools(bot, h) {
       p.cards = [[m.chat.id, m.message_id]]; save();
       return;
     }
-    const p = { id: rid(), gov: q.gov, text: txt.slice(0, 700), ts: Date.now(), src: null, pub: false };
+    const p = { id: rid(), gov: q.gov, text: txt.slice(0, 700), ts: Date.now(), src: null, pub: false, manual: true };
     powerArr().push(p); save();
     const m = await ctx.reply(`👀 <b>معاينة</b> — هيك رح يظهر على الموقع:\n\n${powerCardText(p)}`, { parse_mode: 'HTML', reply_markup: powerCardKb(p), _keep: 'c' });
     p.cards = [[m.chat.id, m.message_id]]; save();

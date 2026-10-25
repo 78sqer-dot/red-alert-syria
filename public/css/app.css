@@ -681,3 +681,55 @@ html.dark .wa-btn svg { color: #2fe079; }
 .bd-main small { color: var(--text-secondary); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bd-st { display: flex; flex-direction: column; align-items: flex-end; font-size: 12.5px; font-weight: 700; color: var(--c); white-space: nowrap; }
 .bd-st small { font-weight: 400; color: var(--text-secondary); font-size: 11px; }
+
+/* phones: filter / layers panels as a bottom sheet (above the list sheet and pills, scrollable) */
+.dd-back { z-index: 62; }
+.dd-panel.dd-sheet { position: fixed; top: auto; bottom: 0; left: 0; right: 0; inset-inline-start: 0; width: 100%; max-width: 100%; max-height: min(80vh, calc(100dvh - 72px)); z-index: 63; border-radius: 18px 18px 0 0; border-bottom: 0; padding: 6px 16px calc(18px + env(safe-area-inset-bottom, 0px)); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; animation: ddUp .22s cubic-bezier(.2, .8, .2, 1); box-sizing: border-box; }
+.dd-panel.dd-sheet::before { content: ''; display: block; width: 42px; height: 5px; border-radius: 3px; background: var(--border); margin: 4px auto 10px; }
+.dd-panel.dd-sheet .tgl, .dd-panel.dd-sheet .radio { min-height: 44px; }
+@keyframes ddUp { from { transform: translateY(40%); opacity: .4; } }
+/* services map mode: the news markers and their circles are hidden until "back to the news" */
+.news-off .mk, .news-off .zp { display: none !important; }
+
+/* services map mode */
+.svc-bar { position: absolute; z-index: 16; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; max-width: calc(100% - 24px); padding: 5px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--border); box-shadow: var(--shadow-lg); animation: pop .18s; }
+.svc-bar[hidden] { display: none; }
+.svc-bar button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.svc-bar-main { padding: 0 8px 0 4px; min-width: 0; text-align: start; }
+.svc-bar-main > span { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.svc-bar-main b { font-size: 13px; font-weight: 800; white-space: nowrap; }
+.svc-bar-main small { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svc-bar-ic { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1.5px solid var(--c); }
+.svc-bar-x { height: 34px; padding: 0 12px; border-radius: 999px !important; background: var(--c) !important; color: #fff !important; font-size: 12.5px; font-weight: 800; white-space: nowrap; flex: none; }
+@media (max-width: 767px) { .svc-bar { top: 56px; } .breaking-banner ~ .svc-bar { top: 110px; } }
+body.svc-on .breaking-banner { display: none; }
+.svc-mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 8px; }
+.svc-mbtn { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; text-align: start; }
+.svc-mbtn.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--bg-secondary)); box-shadow: inset 0 0 0 1px var(--c); }
+.svc-mbtn .svc-dot { --c: inherit; }
+.svc-mexit { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; border-radius: 10px; border: 1px dashed var(--border); background: none; color: var(--text-secondary); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; margin-bottom: 4px; }
+.svc-mwide { width: 100%; justify-content: center; margin: 8px 0 12px; border-color: var(--c) !important; color: var(--c) !important; }
+.svc-mwide.on { background: color-mix(in srgb, var(--c) 12%, transparent) !important; }
+
+/* phones: alert card docked at the bottom of the map (never follows the point off screen) */
+.pp-dock { position: absolute; z-index: 17; left: 10px; right: 10px; bottom: 10px; max-width: 520px; margin: 0 auto; overflow-y: auto; overscroll-behavior: contain; border-radius: 14px; box-shadow: var(--shadow-lg); animation: ddUp .2s cubic-bezier(.2, .8, .2, 1); }
+.pp-dock .pp-dock-body { border-radius: 14px; padding: 12px 12px 10px; }
+.pp-dock .pp-dock-x { position: absolute; top: 6px; inset-inline-end: 6px; z-index: 2; width: 30px; height: 30px; border-radius: 8px; border: 0; background: var(--bg-subtle); color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer; }
+
+body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp-docked .maplibregl-ctrl-bottom-right { visibility: hidden; }
+.pp-dock .pp-dock-body.maplibregl-popup-content { width: auto; max-width: none; box-shadow: none; }
+.pp-dock { background: var(--bg-elevated); border: 1px solid var(--border); }
+.pp-dock .pp-dock-body.maplibregl-popup-content { border: 0; }
+
+/* warplanes: flight path follows the ring size while zooming (set from JS: --fy = ring radius px, --sqi = plane scale) */
+.mk-squad .mk-s { transform: none; }
+.mk-squad .squad { height: calc(var(--fy, 100px) * 2 + 20px); top: calc(var(--fy, 100px) * -1 - 10px); }
+.mk-squad .squad .sq { scale: var(--sqi, .8); animation-name: squadFlyZ; }
+@keyframes squadFlyZ { 0% { transform: translateY(calc(var(--fy, 100px) * 1.05)); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(calc(var(--fy, 100px) * -1.05)); opacity: 0; } }
+.mk-squad.sq-tiny .squad .sq { animation: none; opacity: 1 !important; transform: translateY(-50%); }
+.mk-squad.sq-tiny .squad .sq:not(:first-child) { display: none; }
+.mk-squad.sq-tiny .squad .sq:first-child { left: 50% !important; margin-left: -8px; }
+
+/* 3D terrain: flat DOM pulse rings cannot tilt with the ground (the drawn circles do), so they are hidden */
+.is-3d .zp { display: none !important; }
+.is-3d.is-moving .mk { will-change: transform; }

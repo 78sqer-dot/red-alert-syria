@@ -116,8 +116,8 @@ async function buildStyle({ dark, layer, lang }) {
       layers: [{ id: 'esri', type: 'raster', source: 'esri', paint: { 'raster-saturation': -0.1, 'raster-contrast': 0.05 } }, ...labels],
     };
   }
-  style.sources['ras-dem'] = { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 14, attribution: 'Terrain: Mapzen / AWS Open Data' };
-  style.sources['ras-dem-hs'] = { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 12 };
+  // one DEM source for both hillshade and 3D terrain (was two -> every tile downloaded and decoded twice)
+  style.sources['ras-dem-hs'] = { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 11, attribution: 'Terrain: Mapzen / AWS Open Data' };
   return localize(style, lang);
 }
 
@@ -173,7 +173,7 @@ export class AlertMap {
     const style = await buildStyle(this.opts);
     this.map = new M.Map({
       // phone "desktop site": the page is zoomed, so render the map canvas at the real screen resolution
-      pixelRatio: Math.min(2, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1)),
+      pixelRatio: (this._pr = Math.min(2, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1))),
       container: this.el,
       style,
       bounds: SYRIA_BOUNDS,
@@ -200,7 +200,7 @@ export class AlertMap {
       c.classList.toggle('zoom-far', z < 7.5);
       // like the original: below zoom 11 only the glowing circle shows; from 11 up the drone appears
       // and flies along the circle's edge, so its orbit follows the ring while pinching
-      if (z >= 11) this._orbitPx();
+      this._orbitPx(); // drones from zoom 11, warplane flight path at every zoom
       // small icons at every zoom, getting a little smaller as you zoom in (like the original)
       const mks = Math.max(0.42, Math.min(0.56, 0.56 - (z - 6) * 0.025)).toFixed(2);
       if (mks !== this._mks) { this._mks = mks; c.style.setProperty('--mks', mks); } // restyle markers only when the size step changes
@@ -220,6 +220,7 @@ export class AlertMap {
     this.map.on('click', (e) => {
       if (e.originalEvent.target.closest('.mk, .maplibregl-popup')) return;
       if (window.__svcHit && window.__svcHit(e)) return; // a road / service icon (public/js/services.js)
+      if (this.newsHidden) return; // services map mode: the news is hidden
       // a tap inside any circle of an alert (main or extra affected area) opens that same alert
       const hit = this.zoneAt(e.lngLat);
       if (hit) { this._popupAt = { id: hit.id, ll: [hit.lon, hit.lat] }; return this.onSelect(hit.id, { fromMap: true, fly: false }); }
@@ -296,17 +297,34 @@ export class AlertMap {
     this.updateZones();
   }
 
+  /** services map mode (public/js/services.js): hide the news markers and circles until the user goes back */
+  setNewsHidden(on) {
+    this.newsHidden = !!on;
+    this.el.classList.toggle('news-off', this.newsHidden);
+    if (on) this.closePopup();
+    const map = this.map; if (!map) return;
+    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'none' : 'visible');
+  }
   applyToggles() {
     const map = this.map;
     if (!map || !map.getLayer('ras-border')) return;
     const vis = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash']) vis(id, !this.newsHidden);
     vis('ras-gov-line', this.opts.showGov);
     vis('ras-mask', this.opts.focusSyria);
+    // 3D kept light so it stays smooth: one shared low-zoom DEM, gentle exaggeration and tilt, and on phones
+    // the canvas is drawn at a lower resolution while terrain is on (the 3D pass costs ~2x per frame)
+    const phone = this.dockMode();
     if (this.opts.map3d) {
-      map.setTerrain({ source: 'ras-dem', exaggeration: 1.4 });
-      if (map.getPitch() < 30) map.easeTo({ pitch: 55, duration: 900 });
+      map.setTerrain({ source: 'ras-dem-hs', exaggeration: phone ? 1.0 : 1.2 });
+      if (map.setPixelRatio) map.setPixelRatio(phone ? Math.min(1.25, this._pr || 1) : Math.min(1.5, this._pr || 1));
+      map.setMaxPitch(phone ? 50 : 60);
+      this.el.classList.add('is-3d');
+      if (map.getPitch() < 30) map.easeTo({ pitch: phone ? 40 : 50, duration: 800 });
     } else {
       map.setTerrain(null);
+      if (map.setPixelRatio && this._pr && map.getPixelRatio() !== this._pr) map.setPixelRatio(this._pr);
+      this.el.classList.remove('is-3d');
       if (map.getPitch() > 0) map.easeTo({ pitch: 0, bearing: 0, duration: 700 });
     }
   }
@@ -451,11 +469,11 @@ export class AlertMap {
       const props = { color: t.zone === 'dashed' ? t.color : ZONE_COLOR[a.type] || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
-      if (t.marker === 'orbit') {
+      if (t.marker === 'orbit' || t.marker === 'squad') {
         // the drone circles the ring nearest to its own position (the alert's main place)
         let best = zs[0], bd = Infinity;
         for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
-        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat });
+        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, squad: t.marker === 'squad' });
       }
       zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);
@@ -499,13 +517,26 @@ export class AlertMap {
   _orbitPx() {
     if (!this._orb || !this.map) return;
     const z = this.map.getZoom();
-    if (z < 11) return;
     for (const [id, o] of this._orb) {
       const m = this.markers.get(id);
       if (!m) continue;
       const mpp = (40075016.686 * Math.cos((o.lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
-      const px = Math.max(14, Math.round((o.km * 1000) / mpp));
       const el = m.getElement();
+      if (o.squad) {
+        // warplanes fly across their ring: the path is the ring's on-screen diameter, the planes shrink a bit
+        // when the ring gets small, and a tiny ring (far zoom-out) shows one still plane in its middle
+        const r = Math.round((o.km * 1000) / mpp);
+        const fy = Math.max(10, Math.min(130, r));
+        if (el._fy !== fy) {
+          el._fy = fy;
+          el.style.setProperty('--fy', fy + 'px');
+          el.style.setProperty('--sqi', Math.max(0.65, Math.min(0.95, r / 70)).toFixed(2));
+          el.classList.toggle('sq-tiny', r < 18);
+        }
+        continue;
+      }
+      if (z < 11) continue;
+      const px = Math.max(14, Math.round((o.km * 1000) / mpp));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
   }
@@ -546,9 +577,69 @@ export class AlertMap {
     }
     return best;
   }
+  // phones (also a phone in "desktop site" mode): the alert opens as a card docked at the bottom of the map,
+  // above the list sheet, so zooming / panning can never push it off screen
+  dockMode() {
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    return window.innerWidth < 768 || (coarse && Math.min(screen.width || 9999, screen.height || 9999) < 768);
+  }
+  openDock(alert) {
+    const card = document.createElement('div');
+    card.className = 'pp-dock';
+    card.setAttribute('role', 'dialog');
+    const x = document.createElement('button'); x.className = 'pp-dock-x'; x.type = 'button'; x.setAttribute('aria-label', document.documentElement.lang === 'en' ? 'Close' : 'إغلاق'); x.textContent = '×';
+    const body = document.createElement('div'); body.className = 'pp-dock-body maplibregl-popup-content'; body.append(htmlToNode(this.popupHtml(alert)));
+    card.append(x, body);
+    this.el.append(card);
+    document.body.classList.add('pp-docked');
+    let tm = 0;
+    const place = () => this.placeDock(card);
+    const tick = () => { place(); tm = setTimeout(tick, 300); };
+    const pp = {
+      _alertId: alert.id, _dock: true,
+      getElement: () => card,
+      on() { return pp; },
+      remove: () => { clearTimeout(tm); card.remove(); document.body.classList.remove('pp-docked'); for (const c of document.querySelectorAll('.map-ctrls')) c.style.transform = ''; },
+    };
+    x.addEventListener('click', (e) => { e.stopPropagation(); this.closePopup(); });
+    requestAnimationFrame(() => { tick(); this.showAboveDock(alert, card); });
+    return pp;
+  }
+  // bottom of the dock = top of the list sheet (when it covers the map), the zoom buttons move up above the card
+  placeDock(card) {
+    if (!card.isConnected) return;
+    const mr = this.el.getBoundingClientRect();
+    let b = 10;
+    for (const sh of document.querySelectorAll('.sidebar')) {
+      const r = sh.getBoundingClientRect();
+      if (r.height && r.top > mr.top + 120 && r.top < mr.bottom) b = Math.max(b, mr.bottom - r.top + 10);
+    }
+    card.style.bottom = b + 'px';
+    card.style.maxHeight = Math.max(140, mr.height - b - 76) + 'px';
+    const cr = card.getBoundingClientRect();
+    for (const c of document.querySelectorAll('.map-ctrls')) {
+      c.style.transform = '';
+      const r = c.getBoundingClientRect();
+      if (r.height && r.bottom > cr.top - 8 && r.top < cr.bottom) c.style.transform = `translateY(${-(r.bottom - cr.top + 10)}px)`;
+    }
+  }
+  // after the flight: if the alert's point ends up behind the card, nudge the map so it sits in the free area above
+  showAboveDock(alert, card) {
+    const go = () => {
+      if (!card.isConnected || !this.map) return;
+      const ll = [alert.location.longitude, alert.location.latitude];
+      const pt = this.map.project(ll);
+      const mr = this.el.getBoundingClientRect(); const cr = card.getBoundingClientRect();
+      const freeTop = 70; const freeBot = cr.top - mr.top - 16;
+      if (freeBot - freeTop < 60) return;
+      if (pt.y > freeBot || pt.y < freeTop) this.map.panBy([0, pt.y - (freeTop + freeBot) / 2], { duration: 350 });
+    };
+    if (this.map.isMoving()) this.map.once('moveend', () => setTimeout(go, 30)); else go();
+  }
   openPopup(alert) {
     const M = ml();
     this.closePopup();
+    if (this.dockMode()) { this._popupAt = null; this.popup = this.openDock(alert); return this.popup; }
     const at = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
     this._popupAt = null;
     const m = at ? null : this.markers.get(alert.id);
@@ -581,7 +672,7 @@ export class AlertMap {
   fitPopup() {
     const p = this.popup;
     const el = p && p.getElement && p.getElement();
-    if (!el || !this.map || !(this._fitLeft > 0)) return;
+    if (!el || !this.map || !(this._fitLeft > 0) || p._dock) return;
     if (this.map.isMoving()) return; // wait for the flight to land (moveend calls us again)
     this._fitLeft = 0; // the map has settled: fit once, then leave the user's camera alone
     const c = this.map.getContainer();
@@ -626,7 +717,7 @@ export class AlertMap {
 
   fitSyria() {
     if (!this.map) return;
-    this.map.fitBounds(SYRIA_BOUNDS, { padding: this.padding(), duration: 900, pitch: this.opts.map3d ? 50 : 0, bearing: 0 });
+    this.map.fitBounds(SYRIA_BOUNDS, { padding: this.padding(), duration: 900, pitch: this.opts.map3d ? (this.dockMode() ? 40 : 50) : 0, bearing: 0 });
   }
   zoomIn() { this.map && this.map.zoomIn(); }
   zoomOut() { this.map && this.map.zoomOut(); }

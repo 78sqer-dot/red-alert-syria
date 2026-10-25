@@ -23,7 +23,9 @@ const S = {
     noResults: 'ما لقينا نتائج.', locFirst: 'حدّد موقعك لنرتّب لك الأقرب', loading: 'عم نحمّل البيانات…',
     dataErr: 'تعذّر تحميل البيانات، جرّب بعد شوي.', directions: 'الاتجاهات', call: 'اتصال', hours: 'الدوام',
     osmNote: 'البيانات من OpenStreetMap وقد لا تكون كاملة أو محدّثة. تأكد بالاتصال قبل ما تروح.',
-    svcLayers: 'طبقات الخدمات', away: (d) => `يبعد ${d}`, km: 'كم', m: 'م',
+    svcLayers: 'الخدمات على الخريطة', modes: { pharmacy: 'الصيدليات', health: 'المشافي والمراكز الصحية', fuel: 'الكازيات', bakery: 'الأفران', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر' },
+    backNews: 'رجوع للأخبار', zoomHint: (n) => `قرّب الخريطة لتشوف ${n}`, h24: 'مفتوحة 24 ساعة', showOnMap: 'اعرض على الخريطة', modeHint: 'الأخبار مخفية مؤقتاً', pwLvl: { cut: 'تقنين أشد / انقطاع', ok: 'تحسّن', mid: 'تحديث', none: 'لا يوجد تحديث' }, pwNat: 'تحديث عام لكل سوريا', mapPower: 'اعرض حالة الكهرباء على الخريطة',
+    away: (d) => `يبعد ${d}`, km: 'كم', m: 'م',
     locTitle: 'تحديد موقعك', locWhy: 'منستخدم موقعك بس على جهازك لنوريك وين إنت على الخريطة، وكم تبعد عنك التنبيهات والخدمات. ما منرسله ولا منخزّنه عندنا.',
     locGo: 'حدّد موقعي', locCancel: 'مو هلق', locWait: 'عم نحدّد موقعك…',
     locDenied: 'إذن الموقع مرفوض', locDeniedTxt: 'فعّل إذن الموقع لهذا الموقع من إعدادات المتصفح (رمز القفل جنب العنوان ← الموقع ← سماح)، وتأكد إن خدمة الموقع (GPS) شغّالة بالجهاز، وبعدين جرّب مرة تانية.',
@@ -51,7 +53,9 @@ const S = {
     noResults: 'No results.', locFirst: 'Set your location to sort by distance', loading: 'Loading data…',
     dataErr: 'Could not load the data, try again shortly.', directions: 'Directions', call: 'Call', hours: 'Hours',
     osmNote: 'Data from OpenStreetMap; it may be incomplete or outdated. Call before you go.',
-    svcLayers: 'Service layers', away: (d) => `${d} away`, km: 'km', m: 'm',
+    svcLayers: 'Services on the map', modes: { pharmacy: 'Pharmacies', health: 'Hospitals & clinics', fuel: 'Fuel stations', bakery: 'Bakeries', power: 'Electricity', roads: 'Roads', borders: 'Border crossings' },
+    backNews: 'Back to the news', zoomHint: (n) => `Zoom in to see ${n.toLowerCase()}`, h24: 'Open 24 hours', showOnMap: 'Show on the map', modeHint: 'News hidden for now', pwLvl: { cut: 'More rationing / outage', ok: 'Improving', mid: 'Update', none: 'No update' }, pwNat: 'Nation-wide update', mapPower: 'Show electricity on the map',
+    away: (d) => `${d} away`, km: 'km', m: 'm',
     locTitle: 'Your location', locWhy: 'Your location is used only on your device to show where you are and how far alerts and services are. It is never sent to us or stored.',
     locGo: 'Find me', locCancel: 'Not now', locWait: 'Finding your location…',
     locDenied: 'Location permission denied', locDeniedTxt: 'Allow location for this site in your browser settings (the lock icon next to the address → Location → Allow), make sure the device location (GPS) is on, then try again.',
@@ -64,7 +68,15 @@ const S = {
 const CAT_COLORS = { hospital: '#e11d48', clinic: '#db2777', pharmacy: '#059669', fuel: '#d97706', bakery: '#a16207' };
 const GROUPS = { health: ['hospital', 'clinic'], pharmacy: ['pharmacy'], fuel: ['fuel'], bakery: ['bakery'] };
 const ROAD_COLORS = { closed: '#ef4444', danger: '#f59e0b', open: '#22c55e' };
-const SVC_LAYERS = ['svc-poi-pt', 'svc-poi-cl', 'svc-road-pt', 'svc-road-ln', 'svc-bd-c'];
+const SVC_LAYERS = ['svc-poi-pt', 'svc-poi-cl', 'svc-road-pt', 'svc-road-ln', 'svc-bd-c', 'svc-pw-c', 'svc-pw-i'];
+// one service category at a time on the map ("map mode"); the news is hidden meanwhile
+const MODES = { pharmacy: { color: CAT_COLORS.pharmacy, icon: 'pharmacy' }, health: { color: CAT_COLORS.hospital, icon: 'hospital' }, fuel: { color: CAT_COLORS.fuel, icon: 'fuel' }, bakery: { color: CAT_COLORS.bakery, icon: 'bakery' }, power: { color: '#ca8a04', icon: 'bolt' }, roads: { color: '#ef4444', icon: 'route' }, borders: { color: '#16a34a', icon: 'door' } };
+const PW_COLORS = { cut: '#dc2626', mid: '#f59e0b', ok: '#16a34a', none: '#94a3b8' };
+// governorate centres for the electricity circles (Rif Dimashq drawn east of the city so the two don't overlap)
+const GOV_C = { '01': [36.52, 40.75, 'الحسكة', 'Al-Hasakah'], '02': [35.53, 35.79, 'اللاذقية', 'Latakia'], '03': [33.12, 35.82, 'القنيطرة', 'Quneitra'], '04': [35.95, 39.01, 'الرقة', 'Raqqa'], '05': [32.71, 36.57, 'السويداء', 'As-Suwayda'], '06': [32.62, 36.10, 'درعا', 'Daraa'], '07': [35.33, 40.14, 'دير الزور', 'Deir ez-Zor'], '08': [33.62, 36.62, 'ريف دمشق', 'Rif Dimashq'], '09': [36.20, 37.16, 'حلب', 'Aleppo'], '10': [35.13, 36.75, 'حماة', 'Hama'], '11': [34.73, 36.71, 'حمص', 'Homs'], '12': [35.93, 36.63, 'إدلب', 'Idlib'], '13': [33.51, 36.29, 'دمشق', 'Damascus'], '14': [34.89, 35.89, 'طرطوس', 'Tartus'] };
+const pwLevel = (t) => (/(زياد|ارتفاع|تمديد).{0,20}(التقنين|تقنين|القطع|قطع)|انقطاع|عطل|خروج.{0,12}عن الخدمة|توقف|تخفيض.{0,15}(ساعات )?(الوصل|التغذية)|outage|cut/i.test(t) ? 'cut'
+  : /تحسن|تحسّن|زيادة.{0,12}(ساعات )?(الوصل|التغذية)|تخفيض.{0,15}التقنين|تخفيف.{0,15}التقنين|عودة.{0,10}(التيار|الكهرباء)|إعادة.{0,10}(التيار|التغذية)|improv/i.test(t) ? 'ok' : 'mid');
+const is24 = (h) => /24\/7|00:00-24:00|24 ?(ساعة|h)/i.test(h || '');
 const BD_COLORS = { open: '#16a34a', busy: '#eab308', partial: '#f97316', closed: '#dc2626', unknown: '#94a3b8' };
 const ME_KEY = 'ras-me';
 
@@ -79,7 +91,7 @@ function km(a, b) {
 
 export function createServices({ LANG, esc, icon, toast, openModal, closeModal, getMap, botUrl }) {
   const L = S[LANG] || S.ar;
-  const st = { prices: null, roads: [], power: [], borders: [], poi: null, poiLoading: null, tab: 'prices', q: '', cat: 'all', gov: 'all', me: null, popup: null };
+  const st = { mode: null, prices: null, roads: [], power: [], borders: [], poi: null, poiLoading: null, tab: 'prices', q: '', cat: 'all', gov: 'all', me: null, popup: null };
   try { const m = JSON.parse(localStorage.getItem(ME_KEY) || 'null'); if (m && Date.now() - m.t < 6 * 3600_000) st.me = m; } catch { /* ignore */ }
   window.__rasMe = st.me;
   const map = () => getMap()?.map || null;
@@ -118,33 +130,39 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   const poiName = (p) => (LANG === 'en' ? p.en || p.ar : p.ar || (GENERIC.test(p.en.trim()) ? '' : p.en)) || L.cat1[p.cat];
 
   // ------------------------------------------------------------ map layers
+  // small line-style icons (white disc, coloured ring and strokes) in the spirit of the drone / warplane markers
   function drawIcon(kind, color) {
-    const s = 44; const c = document.createElement('canvas'); c.width = s; c.height = s;
+    const s = 52; const c = document.createElement('canvas'); c.width = s; c.height = s;
     const g = c.getContext('2d'); const m = s / 2;
-    g.beginPath(); g.arc(m, m, m - 3, 0, Math.PI * 2); g.fillStyle = color; g.fill();
-    g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke();
-    g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineCap = 'round'; g.lineJoin = 'round';
-    if (kind === 'hospital' || kind === 'clinic') { g.fillRect(m - 3.5, m - 11, 7, 22); g.fillRect(m - 11, m - 3.5, 22, 7); }
-    else if (kind === 'pharmacy') {
+    g.shadowColor = 'rgba(15,23,42,.28)'; g.shadowBlur = 4; g.shadowOffsetY = 1;
+    g.beginPath(); g.arc(m, m, m - 5, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
+    g.shadowColor = 'transparent';
+    g.lineWidth = 2.6; g.strokeStyle = color; g.stroke();
+    g.fillStyle = color; g.strokeStyle = color; g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 2.6;
+    const rr = (x, y, w, h, r) => { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); };
+    if (kind === 'hospital' || kind === 'clinic') {
+      g.beginPath(); g.moveTo(m - 3.5, m - 10); g.lineTo(m + 3.5, m - 10); g.lineTo(m + 3.5, m - 3.5); g.lineTo(m + 10, m - 3.5); g.lineTo(m + 10, m + 3.5); g.lineTo(m + 3.5, m + 3.5); g.lineTo(m + 3.5, m + 10); g.lineTo(m - 3.5, m + 10); g.lineTo(m - 3.5, m + 3.5); g.lineTo(m - 10, m + 3.5); g.lineTo(m - 10, m - 3.5); g.lineTo(m - 3.5, m - 3.5); g.closePath(); g.stroke();
+    } else if (kind === 'pharmacy') {
       g.save(); g.translate(m, m); g.rotate(-Math.PI / 4);
-      g.beginPath(); g.roundRect ? g.roundRect(-12, -5.5, 24, 11, 5.5) : g.rect(-12, -5.5, 24, 11); g.lineWidth = 2.6; g.stroke();
-      g.beginPath(); g.roundRect ? g.roundRect(-12, -5.5, 12, 11, [5.5, 0, 0, 5.5]) : g.rect(-12, -5.5, 12, 11); g.fill(); g.restore();
+      rr(-11, -5, 22, 10, 5); g.stroke(); rr(-11, -5, 11, 10, [5, 0, 0, 5]); g.fill(); g.restore();
     } else if (kind === 'fuel') {
-      g.fillRect(m - 10, m - 10, 12, 20); g.fillStyle = color; g.fillRect(m - 7.5, m - 7, 7, 5); g.fillStyle = '#fff';
-      g.lineWidth = 2.4; g.beginPath(); g.moveTo(m + 2, m - 4); g.lineTo(m + 7, m - 4); g.lineTo(m + 9, m - 1); g.lineTo(m + 9, m + 7); g.lineTo(m + 6, m + 7); g.lineTo(m + 6, m + 2); g.stroke();
-      g.fillRect(m - 12, m + 9, 16, 2.6);
+      rr(m - 9, m - 10, 11, 19, 2); g.stroke(); g.beginPath(); g.moveTo(m - 6.5, m - 5); g.lineTo(m - 0.5, m - 5); g.stroke();
+      g.beginPath(); g.moveTo(m + 2, m - 6); g.lineTo(m + 6, m - 2); g.lineTo(m + 6, m + 6); g.quadraticCurveTo(m + 6, m + 8, m + 8, m + 6); g.lineTo(m + 8, m - 4); g.stroke();
+      g.beginPath(); g.moveTo(m - 11, m + 10); g.lineTo(m + 4, m + 10); g.stroke();
     } else if (kind === 'bakery') {
-      g.beginPath(); g.ellipse(m, m + 1, 12, 7.5, 0, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = color; g.lineWidth = 2.2;
-      for (const dx of [-6, 0, 6]) { g.beginPath(); g.moveTo(m + dx - 2, m - 4); g.lineTo(m + dx + 2, m + 5); g.stroke(); }
-    } else if (kind === 'closed') { g.fillRect(m - 11, m - 3.5, 22, 7); }
-    else if (kind === 'danger') { g.fillRect(m - 2.6, m - 12, 5.2, 15); g.beginPath(); g.arc(m, m + 8, 3, 0, Math.PI * 2); g.fill(); }
-    else if (kind === 'open') { g.lineWidth = 4.5; g.beginPath(); g.moveTo(m - 9, m + 1); g.lineTo(m - 3, m + 7); g.lineTo(m + 10, m - 7); g.stroke(); }
+      g.beginPath(); g.ellipse(m, m + 1, 11, 7, 0, 0, Math.PI * 2); g.stroke();
+      for (const dx of [-5, 0, 5]) { g.beginPath(); g.moveTo(m + dx - 1.8, m - 3); g.lineTo(m + dx + 1.8, m + 4); g.stroke(); }
+    } else if (kind === 'bolt') {
+      g.beginPath(); g.moveTo(m + 2, m - 12); g.lineTo(m - 7, m + 2); g.lineTo(m - 0.5, m + 2); g.lineTo(m - 2, m + 12); g.lineTo(m + 7, m - 2); g.lineTo(m + 0.5, m - 2); g.closePath(); g.fill();
+    } else if (kind === 'closed') { g.lineWidth = 3.4; g.beginPath(); g.moveTo(m - 9, m); g.lineTo(m + 9, m); g.stroke(); }
+    else if (kind === 'danger') { g.lineWidth = 3.2; g.beginPath(); g.moveTo(m, m - 10); g.lineTo(m, m + 3); g.stroke(); g.beginPath(); g.arc(m, m + 8.5, 2, 0, Math.PI * 2); g.fill(); }
+    else if (kind === 'open') { g.lineWidth = 3.4; g.beginPath(); g.moveTo(m - 8, m + 1); g.lineTo(m - 2.5, m + 6.5); g.lineTo(m + 9, m - 6); g.stroke(); }
     return g.getImageData(0, 0, s, s);
   }
   function ensureImages(m) {
     for (const [k, col] of Object.entries(CAT_COLORS)) if (!m.hasImage('svc-' + k)) m.addImage('svc-' + k, drawIcon(k, col), { pixelRatio: 2 });
     for (const [k, col] of Object.entries(ROAD_COLORS)) if (!m.hasImage('svc-road-' + k)) m.addImage('svc-road-' + k, drawIcon(k, col), { pixelRatio: 2 });
+    for (const [k, col] of Object.entries(PW_COLORS)) if (!m.hasImage('svc-pw-' + k)) m.addImage('svc-pw-' + k, drawIcon('bolt', col), { pixelRatio: 2 });
   }
   function font(m) {
     for (const l of m.getStyle().layers) if (l.type === 'symbol' && l['source-layer'] === 'place' && l.layout?.['text-font']) return l.layout['text-font'];
@@ -164,23 +182,48 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     return { type: 'FeatureCollection', features: st.borders.map((b) => ({ type: 'Feature', properties: { id: b.id, status: b.status, name: bdName(b), known: b.status !== 'unknown' ? 1 : 0 }, geometry: { type: 'Point', coordinates: [b.lon, b.lat] } })) };
   }
   function paintBorders() { const src = map()?.getSource?.('svc-bd'); if (src) src.setData(bordersGeo()); }
-  const enabledCats = () => { const on = s0().svcLayers || []; return Object.entries(GROUPS).filter(([g]) => on.includes(g)).flatMap(([, c]) => c); };
+  const enabledCats = () => (GROUPS[st.mode] || []);
   function poiGeo() {
     const cats = new Set(enabledCats());
-    const feats = !st.poi || !cats.size ? [] : st.poi.filter((p) => cats.has(p.cat)).map((p) => ({ type: 'Feature', properties: { i: p.i, icon: 'svc-' + p.cat, name: poiName(p) }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } }));
+    const feats = !st.poi || !cats.size ? [] : st.poi.filter((p) => cats.has(p.cat)).map((p) => ({ type: 'Feature', properties: { i: p.i, icon: 'svc-' + p.cat, name: poiName(p), h24: is24(p.hours) ? 1 : 0 }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } }));
     return { type: 'FeatureCollection', features: feats };
   }
+  // electricity: one soft circle per governorate, coloured by its latest update (or the latest nation-wide one)
+  function powerByGov() {
+    const nat = st.power.find((p) => !p.gov);
+    return Object.entries(GOV_C).map(([code, c]) => {
+      const own = st.power.filter((p) => p.gov === code);
+      const top = own[0] || nat || null;
+      return { code, lat: c[0], lon: c[1], name: LANG === 'en' ? c[3] : c[2], items: own, nat: !own.length && !!nat, level: top ? pwLevel(top.text) : 'none' };
+    });
+  }
+  function powerGeo() {
+    return { type: 'FeatureCollection', features: powerByGov().map((g) => ({ type: 'Feature', properties: { code: g.code, level: g.level, name: g.name, own: g.items.length ? 1 : 0 }, geometry: { type: 'Point', coordinates: [g.lon, g.lat] } })) };
+  }
+  function paintPower() { const src = map()?.getSource?.('svc-pw'); if (src) src.setData(powerGeo()); }
   function addLayers() {
     const m = map(); if (!m || !m.isStyleLoaded?.() && !m.getStyle()) return;
     try {
       ensureImages(m);
-      if (!m.getSource('svc-poi')) m.addSource('svc-poi', { type: 'geojson', data: poiGeo(), cluster: true, clusterMaxZoom: 12, clusterRadius: 42 });
+      if (!m.getSource('svc-poi')) m.addSource('svc-poi', { type: 'geojson', data: poiGeo(), cluster: true, clusterMaxZoom: 12, clusterRadius: 38 });
       if (!m.getSource('svc-roads')) m.addSource('svc-roads', { type: 'geojson', data: roadsGeo() });
       const f = font(m);
       if (!m.getLayer('svc-poi-cl')) {
-        m.addLayer({ id: 'svc-poi-cl', type: 'circle', source: 'svc-poi', filter: ['has', 'point_count'], paint: { 'circle-color': '#334155', 'circle-opacity': 0.88, 'circle-stroke-color': '#fff', 'circle-stroke-width': 2, 'circle-radius': ['step', ['get', 'point_count'], 13, 20, 16, 100, 20] } });
-        m.addLayer({ id: 'svc-poi-cn', type: 'symbol', source: 'svc-poi', filter: ['has', 'point_count'], layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-font': f, 'text-size': 12, 'text-allow-overlap': true }, paint: { 'text-color': '#fff' } });
-        m.addLayer({ id: 'svc-poi-pt', type: 'symbol', source: 'svc-poi', filter: ['!', ['has', 'point_count']], layout: { 'icon-image': ['get', 'icon'], 'icon-size': 1, 'icon-allow-overlap': true, 'text-field': ['step', ['zoom'], '', 14, ['get', 'name']], 'text-font': f, 'text-size': 11.5, 'text-offset': [0, 1.5], 'text-anchor': 'top', 'text-optional': true, 'text-max-width': 9 }, paint: { 'text-color': '#1f2937', 'text-halo-color': '#fff', 'text-halo-width': 1.4 } });
+        const col = (MODES[st.mode] || MODES.pharmacy).color;
+        const pt = ['!', ['has', 'point_count']];
+        // soft transparent circle under each place, and a glowing pulse for the ones open 24 hours
+        m.addLayer({ id: 'svc-poi-halo', type: 'circle', source: 'svc-poi', filter: pt, minzoom: 11, paint: { 'circle-color': col, 'circle-opacity': 0.12, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 9, 16, 30], 'circle-stroke-color': col, 'circle-stroke-opacity': 0.25, 'circle-stroke-width': 1 } });
+        m.addLayer({ id: 'svc-poi-glow', type: 'circle', source: 'svc-poi', filter: ['all', pt, ['==', ['get', 'h24'], 1]], paint: { 'circle-color': col, 'circle-opacity': 0.3, 'circle-blur': 0.6, 'circle-radius': 16 } });
+        // light, small clusters (white with a thin coloured ring) instead of heavy dark bubbles
+        m.addLayer({ id: 'svc-poi-cl', type: 'circle', source: 'svc-poi', filter: ['has', 'point_count'], paint: { 'circle-color': '#ffffff', 'circle-opacity': 0.94, 'circle-stroke-color': col, 'circle-stroke-width': 1.6, 'circle-stroke-opacity': 0.85, 'circle-radius': ['step', ['get', 'point_count'], 10, 10, 12, 50, 14, 200, 16] } });
+        m.addLayer({ id: 'svc-poi-cn', type: 'symbol', source: 'svc-poi', filter: ['has', 'point_count'], layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-font': f, 'text-size': 10.5, 'text-allow-overlap': true }, paint: { 'text-color': col } });
+        m.addLayer({ id: 'svc-poi-pt', type: 'symbol', source: 'svc-poi', filter: pt, layout: { 'icon-image': ['get', 'icon'], 'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 14, 1], 'icon-allow-overlap': true, 'text-field': ['step', ['zoom'], '', 14, ['get', 'name']], 'text-font': f, 'text-size': 11.5, 'text-offset': [0, 1.4], 'text-anchor': 'top', 'text-optional': true, 'text-max-width': 9 }, paint: { 'text-color': '#1f2937', 'text-halo-color': '#fff', 'text-halo-width': 1.4 } });
+      }
+      if (!m.getSource('svc-pw')) {
+        m.addSource('svc-pw', { type: 'geojson', data: powerGeo() });
+        const lc = ['match', ['get', 'level'], 'cut', PW_COLORS.cut, 'ok', PW_COLORS.ok, 'mid', PW_COLORS.mid, PW_COLORS.none];
+        m.addLayer({ id: 'svc-pw-c', type: 'circle', source: 'svc-pw', paint: { 'circle-color': lc, 'circle-opacity': ['case', ['==', ['get', 'own'], 1], 0.2, 0.1], 'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 5, 18, 8, 70, 10, 200], 'circle-stroke-color': lc, 'circle-stroke-width': 1.4, 'circle-stroke-opacity': 0.55 } });
+        m.addLayer({ id: 'svc-pw-i', type: 'symbol', source: 'svc-pw', layout: { 'icon-image': ['concat', 'svc-pw-', ['get', 'level']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 5, 0.8, 9, 1], 'icon-allow-overlap': true, 'text-field': ['get', 'name'], 'text-font': f, 'text-size': 11, 'text-offset': [0, 1.5], 'text-anchor': 'top', 'text-optional': true }, paint: { 'text-color': '#1f2937', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
       }
       if (!m.getLayer('svc-road-ln')) {
         m.addLayer({ id: 'svc-road-ln', type: 'line', source: 'svc-roads', filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['match', ['get', 'status'], 'closed', ROAD_COLORS.closed, 'open', ROAD_COLORS.open, ROAD_COLORS.danger], 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 3, 12, 6], 'line-dasharray': [1.6, 1.2], 'line-opacity': 0.9 } });
@@ -201,15 +244,97 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   }
   function applyVisibility() {
     const m = map(); if (!m) return;
-    const roads = s0().showRoads !== false ? 'visible' : 'none';
-    for (const id of ['svc-road-ln', 'svc-road-pt']) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', roads);
-    const bd = s0().showBorders !== false ? 'visible' : 'none';
-    for (const id of ['svc-bd-c', 'svc-bd-t']) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', bd);
-    const poi = enabledCats().length ? 'visible' : 'none';
-    for (const id of ['svc-poi-cl', 'svc-poi-cn', 'svc-poi-pt']) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', poi);
+    const v = (ids, on) => { for (const id of ids) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); };
+    v(['svc-road-ln', 'svc-road-pt'], st.mode === 'roads');
+    v(['svc-bd-c', 'svc-bd-t'], st.mode === 'borders');
+    v(['svc-pw-c', 'svc-pw-i'], st.mode === 'power');
+    const poi = !!GROUPS[st.mode];
+    v(['svc-poi-halo', 'svc-poi-cl', 'svc-poi-cn', 'svc-poi-pt'], poi);
+    v(['svc-poi-glow'], poi && (st.mode === 'pharmacy' || st.mode === 'health'));
+    if (poi) {
+      const col = MODES[st.mode].color;
+      for (const [id, prop] of [['svc-poi-halo', 'circle-color'], ['svc-poi-halo', 'circle-stroke-color'], ['svc-poi-glow', 'circle-color'], ['svc-poi-cl', 'circle-stroke-color'], ['svc-poi-cn', 'text-color']]) if (m.getLayer(id)) m.setPaintProperty(id, prop, col);
+    }
+    glow(poi && (st.mode === 'pharmacy' || st.mode === 'health'));
   }
+  // gentle pulse for 24-hour pharmacies / hospitals (only while that mode is on)
+  let glowT = 0;
+  function glow(on) {
+    if (!on) { if (glowT) cancelAnimationFrame(glowT); glowT = 0; return; }
+    if (glowT) return;
+    let last = 0;
+    const tick = (t) => {
+      glowT = requestAnimationFrame(tick);
+      if (t - last < 60 || document.hidden) return; last = t;
+      const m = map(); if (!m || !m.getLayer('svc-poi-glow')) return;
+      const k = (Math.sin(t / 450) + 1) / 2;
+      const z = m.getZoom(); const base = z < 10 ? 10 : z < 13 ? 14 : 20;
+      m.setPaintProperty('svc-poi-glow', 'circle-radius', base + k * base * 0.8);
+      m.setPaintProperty('svc-poi-glow', 'circle-opacity', 0.38 - k * 0.26);
+    };
+    glowT = requestAnimationFrame(tick);
+  }
+  // ------------------------------------------------------------ map mode
+  let bar;
+  function modeBar() {
+    const el = getMap()?.el || document.querySelector('.map')?.parentElement;
+    if (!bar) {
+      bar = document.createElement('div'); bar.className = 'svc-bar'; bar.hidden = true;
+      bar.addEventListener('click', (e) => {
+        if (e.target.closest('[data-a="exit"]')) { e.stopPropagation(); exitMode(); }
+        else if (e.target.closest('[data-a="list"]')) { e.stopPropagation(); open(st.mode === 'power' ? 'power' : st.mode === 'roads' ? 'roads' : st.mode === 'borders' ? 'borders' : 'nearby'); }
+      });
+    }
+    if (el && bar.parentElement !== el) el.append(bar);
+    return bar;
+  }
+  function renderBar() {
+    const b = modeBar();
+    if (!st.mode) { b.hidden = true; return; }
+    const md = MODES[st.mode]; const name = L.modes[st.mode];
+    const z = map()?.getZoom?.() || 0;
+    const hint = GROUPS[st.mode] && z < 9.5 ? L.zoomHint(name) : L.modeHint;
+    b.style.setProperty('--c', md.color);
+    b.innerHTML = `<button class="svc-bar-main" data-a="list"><i class="svc-bar-ic">${icon(md.icon === 'hospital' || md.icon === 'pharmacy' || md.icon === 'fuel' || md.icon === 'bakery' ? 'mapPin' : md.icon, 15)}</i><span><b>${esc(name)}</b><small>${esc(hint)}</small></span></button><button class="svc-bar-x" data-a="exit">${icon('x', 14)}<span>${esc(L.backNews)}</span></button>`;
+    b.hidden = false;
+  }
+  function enterMode(k, { fly = true } = {}) {
+    if (!MODES[k]) return;
+    st.mode = k;
+    close();
+    const am0 = getMap(); am0?.setNewsHidden?.(true);
+    if (st.popup) { st.popup.remove(); st.popup = null; }
+    document.body.classList.add('svc-on');
+    if (GROUPS[k]) loadPoi().then(() => { if (st.mode === k) paintPoi(); }).catch(() => toast(L.dataErr));
+    paintPower(); applyVisibility(); renderBar();
+    const m = map();
+    if (fly && m) {
+      if (GROUPS[k] && st.me) m.flyTo({ center: [st.me.lon, st.me.lat], zoom: Math.max(m.getZoom(), 12.5), essential: true });
+      else if (k === 'power' || k === 'borders') am0?.fitSyria?.();
+    }
+  }
+  function exitMode() {
+    if (!st.mode) return;
+    st.mode = null;
+    if (st.popup) { st.popup.remove(); st.popup = null; }
+    getMap()?.setNewsHidden?.(false);
+    document.body.classList.remove('svc-on');
+    applyVisibility(); renderBar();
+  }
+  document.addEventListener('click', (e) => {
+    if (e.target.closest?.('[data-a="svc-exit"]')) { e.stopPropagation(); document.getElementById('ddBack')?.click(); const lp = document.getElementById('layersPanel'); if (lp) lp.hidden = true; return exitMode(); }
+    const b = e.target.closest?.('[data-svcmode]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    document.getElementById('ddBack')?.click();
+    for (const id of ['layersPanel', 'filterPanel']) { const p = document.getElementById(id); if (p) p.hidden = true; }
+    const k = b.dataset.svcmode;
+    if (st.mode === k && b.closest('.dd-panel')) return exitMode();
+    enterMode(k);
+  }, true);
   function paintRoads() { const src = map()?.getSource?.('svc-roads'); if (src) src.setData(roadsGeo()); }
   function paintPoi() { const src = map()?.getSource?.('svc-poi'); if (src) src.setData(poiGeo()); applyVisibility(); }
+  const modeBtnWide = (k, label) => `<button class="btn-sm svc-mwide${st.mode === k ? ' on' : ''}" data-svcmode="${k}" style="--c:${MODES[k].color}">${icon('mapPin', 15)}${esc(label)}</button>`;
+  const modeBtn = (k) => `<button class="svc-mbtn${st.mode === k ? ' on' : ''}" data-svcmode="${k}" style="--c:${MODES[k].color}"><i class="svc-dot"></i>${esc(L.modes[k])}</button>`;
   function meGeo() {
     const me = st.me; if (!me) return { type: 'FeatureCollection', features: [] };
     const r = Math.min(Math.max(me.acc || 50, 15), 5000) / 1000; const ring = [];
@@ -245,6 +370,14 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       <p class="pp-areas">${esc(L.withC)} ${esc(LANG === 'en' ? b.country_en : b.country_ar)}${LANG === 'ar' && b.other_ar ? ` (${esc(b.other_ar)})` : ''}</p>
       ${b.note ? `<p class="pp-desc">${esc(b.note)}</p>` : ''}`;
   }
+  function powerPopHtml(g) {
+    const top = g.items[0] || (g.nat ? st.power.find((p) => !p.gov) : null);
+    const lv = g.level;
+    let h = `<div class="pp-top"><span class="badge live" style="--c:${PW_COLORS[lv]}">${esc(L.pwLvl[lv])}</span>${top ? `<span class="time">${esc(when(top.ts))}</span>` : ''}</div><p class="pp-title">⚡ ${esc(g.name)}</p>`;
+    if (top) h += `<p class="pp-desc">${esc(top.text.length > 260 ? top.text.slice(0, 257) + '…' : top.text)}</p>${g.nat ? `<p class="pp-areas">${esc(L.pwNat)}</p>` : ''}`;
+    else h += `<p class="pp-areas">${esc(L.powerEmpty)}</p>`;
+    return h;
+  }
   function focusBorder(b) {
     const m = map(); if (!m) return;
     m.flyTo({ center: [b.lon, b.lat], zoom: 10, essential: true });
@@ -266,6 +399,9 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const roadClick = (e) => { const f = e.features?.[0]; const r = f && st.roads.find((x) => x.id === f.properties.id); if (r) popup(e.lngLat, roadHtml(r)); };
     m.on('click', 'svc-bd-c', (e) => { const f = e.features?.[0]; const b = f && st.borders.find((x) => x.id === f.properties.id); if (b) popup([b.lon, b.lat], borderHtml(b)); });
     m.on('click', 'svc-road-pt', roadClick); m.on('click', 'svc-road-ln', roadClick);
+    const pwClick = (e) => { const f = e.features?.[0]; const g = f && powerByGov().find((x) => x.code === f.properties.code); if (g) popup([g.lon, g.lat], powerPopHtml(g)); };
+    m.on('click', 'svc-pw-i', pwClick); m.on('click', 'svc-pw-c', pwClick);
+    let zt = 0; m.on('zoomend', () => { if (st.mode && GROUPS[st.mode]) { clearTimeout(zt); zt = setTimeout(renderBar, 120); } });
     for (const id of SVC_LAYERS) {
       m.on('mouseenter', id, () => { m.getCanvas().style.cursor = 'pointer'; });
       m.on('mouseleave', id, () => { m.getCanvas().style.cursor = ''; });
@@ -349,16 +485,15 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const items = st.power.filter((p) => st.gov === 'all' || (p.gov || 'all') === st.gov || !p.gov);
     const govs = [...new Map(st.power.filter((p) => p.gov).map((p) => [p.gov, LANG === 'en' ? p.gov_en : p.gov_ar])).entries()];
     const tariffs = st.prices?.power?.items || [];
-    let h = govs.length ? `<div class="sel-wrap svc-sel"><select class="sel" id="svcGov"><option value="all">${esc(L.allGovs)}</option>${govs.map(([c, n]) => `<option value="${esc(c)}" ${st.gov === c ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : '';
+    let h = modeBtnWide('power', L.mapPower);
+    h += govs.length ? `<div class="sel-wrap svc-sel"><select class="sel" id="svcGov"><option value="all">${esc(L.allGovs)}</option>${govs.map(([c, n]) => `<option value="${esc(c)}" ${st.gov === c ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : '';
     h += items.length ? items.map((p) => `<article class="svc-item"><div class="svc-it-top"><span class="badge" style="--c:#eab308">${icon('bolt', 13)}${esc(LANG === 'en' ? p.gov_en : p.gov_ar)}</span><span class="time">${esc(when(p.ts))}</span></div><p>${esc(p.text)}</p></article>`).join('')
       : `<div class="svc-empty">${esc(L.powerEmpty)}</div>`;
     if (tariffs.length) h += `<div class="px-card"><div class="px-h"><b>${esc(L.tariffs)}</b><span>${esc(L.newLira)}</span></div>${tariffs.map((t) => `<div class="px-row"><span class="px-k">${esc(t.name)}${unitOf(t)}</span><span class="px-v">${lira(t.price)}${old(t.price)}</span></div>`).join('')}</div>`;
     return h;
   }
   function roadsHtml() {
-    const on = s0().showRoads !== false;
-    let h = `<p class="svc-note" style="margin-top:0">${esc(L.roadsSub)}</p>
-      <label class="tgl"><span class="txt">${esc(L.showRoads)}</span><input class="switch" type="checkbox" data-sl="roads" ${on ? 'checked' : ''}/></label>`;
+    let h = `<p class="svc-note" style="margin-top:0">${esc(L.roadsSub)}</p>${modeBtnWide('roads', L.showRoads)}`;
     h += st.roads.length ? st.roads.map((r) => `<article class="svc-item" data-road="${esc(r.id)}" tabindex="0"><div class="svc-it-top"><span class="badge live" style="--c:${ROAD_COLORS[r.status]}">${esc(L.road[r.status] || '')}</span><span class="time">${esc(when(r.ts))}</span></div><b>📍 ${esc(roadWhere(r))}</b>${r.note ? `<p>${esc(r.note)}</p>` : ''}<small class="svc-dim">⏳ ${esc(L.until)} ${esc(fmtH.format(new Date(r.expires)))}</small></article>`).join('')
       : `<div class="svc-empty">${esc(L.roadsEmpty)}</div>`;
     const bot = botUrl();
@@ -366,9 +501,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     return h;
   }
   function bordersHtml() {
-    const on = s0().showBorders !== false;
-    let h = `<p class="svc-note" style="margin-top:0">${esc(L.bordersSub)}</p>
-      <label class="tgl"><span class="txt">${esc(L.showBorders)}</span><input class="switch" type="checkbox" data-sl="borders" ${on ? 'checked' : ''}/></label>`;
+    let h = `<p class="svc-note" style="margin-top:0">${esc(L.bordersSub)}</p>${modeBtnWide('borders', L.showBorders)}`;
     const groups = [...new Map(st.borders.map((b) => [b.country, LANG === 'en' ? b.country_en : b.country_ar])).entries()];
     for (const [c, cname] of groups) {
       h += `<div class="dd-sec">${esc(cname)}</div><div class="bd-list">`;
@@ -379,14 +512,13 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     return h;
   }
   function nearbyHtml() {
-    const on = s0().svcLayers || [];
     const chip = (k, label) => `<button class="svc-chip${st.cat === k ? ' on' : ''}" data-cat="${k}">${esc(label)}</button>`;
     return `<input class="svc-q" id="svcQ" type="search" placeholder="${esc(L.searchPh)}" value="${esc(st.q)}" autocomplete="off"/>
       <div class="svc-chips">${chip('all', LANG === 'en' ? 'All' : 'الكل')}${Object.keys(GROUPS).map((g) => chip(g, L.cats[g])).join('')}</div>
       ${st.me ? `<button class="svc-forget" data-a="forget">${esc(LANG === 'en' ? 'Forget my location on this device' : 'احذف موقعي من هذا الجهاز')}</button>` : `<button class="btn-sm svc-loc" data-a="locate">${icon('locate', 15)}${esc(L.locFirst)}</button>`}
       <div id="svcRes" class="svc-res"></div>
       <div class="dd-sec">${esc(L.svcLayers)}</div>
-      ${Object.keys(GROUPS).map((g) => `<label class="tgl"><span class="txt"><span class="svc-lbl"><i class="svc-dot" style="--c:${CAT_COLORS[GROUPS[g][0]]}"></i>${esc(L.cats[g])}</span></span><input class="switch" type="checkbox" data-sl="${g}" ${on.includes(g) ? 'checked' : ''}/></label>`).join('')}
+      <div class="svc-mgrid">${Object.keys(GROUPS).map(modeBtn).join('')}</div>
       <p class="svc-note">${esc(L.osmNote)} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a></p>`;
   }
   function renderResults(failed) {
@@ -401,14 +533,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (!list.length) { box.innerHTML = st.me || q ? `<div class="svc-empty">${esc(L.noResults)}</div>` : ''; return; }
     box.innerHTML = `<div class="dd-sec">${esc(st.me && !q ? L.nearest : L.results)}</div>` + list.map((p) => `<button class="svc-poi" data-poi="${p.i}"><i class="svc-dot" style="--c:${CAT_COLORS[p.cat]}"></i><span class="svc-pn"><b>${esc(poiName(p))}</b><small>${esc(L.cat1[p.cat])}${p.phone ? ' · ☎' : ''}</small></span>${st.me ? `<span class="svc-d">${esc(dist(p.d))}</span>` : ''}</button>`).join('');
   }
-  function toggleLayer(k, on) {
-    if (k === 'roads') { settings.set({ showRoads: on }); applyVisibility(); return; }
-    if (k === 'borders') { settings.set({ showBorders: on }); applyVisibility(); return; }
-    const cur = new Set(s0().svcLayers || []);
-    if (on) cur.add(k); else cur.delete(k);
-    settings.set({ svcLayers: [...cur] });
-    if (on) loadPoi().then(paintPoi).catch(() => toast(L.dataErr)); else paintPoi();
-  }
+  // kept for old callers: a layer "on" now means its map mode
+  function toggleLayer(k, on) { if (on) enterMode(k); else if (st.mode === k) exitMode(); }
   function onClick(e) {
     const t = e.target;
     if (t.closest('[data-a="close"]')) return close();
@@ -422,8 +548,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (pe) {
       const p = st.poi[+pe.dataset.poi]; if (!p) return;
       const g = Object.keys(GROUPS).find((k) => GROUPS[k].includes(p.cat));
-      if (!(s0().svcLayers || []).includes(g)) toggleLayer(g, true);
-      close();
+      if (st.mode !== g) enterMode(g, { fly: false }); else close();
       map()?.flyTo({ center: [p.lon, p.lat], zoom: 15, essential: true });
       setTimeout(() => popup([p.lon, p.lat], poiHtml(p)), 900);
       return;
@@ -431,14 +556,14 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const bdr = t.closest('[data-bd]');
     if (bdr) {
       const b = st.borders.find((x) => x.id === bdr.dataset.bd); if (!b) return;
-      if (s0().showBorders === false) toggleLayer('borders', true);
-      close(); focusBorder(b); return;
+      if (st.mode !== 'borders') enterMode('borders', { fly: false }); else close();
+      focusBorder(b); return;
     }
     const rd = t.closest('[data-road]');
     if (rd) {
       const r = st.roads.find((x) => x.id === rd.dataset.road); if (!r) return;
-      if (s0().showRoads === false) toggleLayer('roads', true);
-      close(); focusRoad(r);
+      if (st.mode !== 'roads') enterMode('roads', { fly: false }); else close();
+      focusRoad(r);
     }
   }
   function focusRoad(r) {
@@ -513,29 +638,27 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (h === 'prices' || h === 'power' || h === 'borders') open(h);
     else if (h === 'services' || h === 'nearby') open('nearby');
     else if (h === 'roads') {
-      if (s0().showRoads === false) toggleLayer('roads', true);
-      if (st.roads.length) { if (st.roads.length === 1) focusRoad(st.roads[0]); else open('roads'); } else open('roads');
-    }
+      if (st.roads.length === 1) { enterMode('roads', { fly: false }); focusRoad(st.roads[0]); } else open('roads');
+    } else if (['pharmacy', 'pharmacies', 'health', 'fuel', 'bakery'].includes(h)) enterMode(h === 'pharmacies' ? 'pharmacy' : h);
   }
   window.addEventListener('hashchange', fromHash);
   return {
     L,
     init() {
       bindMap();
-      load().then(() => { if ((s0().svcLayers || []).length) loadPoi().then(paintPoi).catch(() => {}); fromHash(); });
+      load().then(() => { paintPower(); fromHash(); });
       setInterval(load, 10 * 60_000);
     },
     open, close, isOpen, locate, distanceTo, kmTo, fmtAway, forgetMe, hasMe: () => !!st.me,
     setRoads(r) { st.roads = Array.isArray(r) ? r : []; paintRoads(); if (isOpen() && st.tab === 'roads') render(); },
     setBorders(b) { st.borders = Array.isArray(b) ? b : []; paintBorders(); if (isOpen() && st.tab === 'borders') render(); },
-    setPower(p) { st.power = Array.isArray(p) ? p : []; if (isOpen() && st.tab === 'power') render(); },
-    layersHtml(tg) {
-      const s = s0(); const on = s.svcLayers || [];
+    setPower(p) { st.power = Array.isArray(p) ? p : []; paintPower(); if (isOpen() && st.tab === 'power') render(); },
+    layersHtml() {
       return `<div class="dd-sec">${esc(L.svcLayers)}</div>
-        <label class="tgl"><span class="txt"><span class="svc-lbl"><i class="svc-dot" style="--c:#ef4444"></i>${esc(L.roads)}</span></span><input class="switch" type="checkbox" data-sl="roads" ${s.showRoads !== false ? 'checked' : ''}/></label>
-        <label class="tgl"><span class="txt"><span class="svc-lbl"><i class="svc-dot" style="--c:#16a34a"></i>${esc(L.borders)}</span></span><input class="switch" type="checkbox" data-sl="borders" ${s.showBorders !== false ? 'checked' : ''}/></label>
-        ${Object.keys(GROUPS).map((g) => `<label class="tgl"><span class="txt"><span class="svc-lbl"><i class="svc-dot" style="--c:${CAT_COLORS[GROUPS[g][0]]}"></i>${esc(L.cats[g])}</span></span><input class="switch" type="checkbox" data-sl="${g}" ${on.includes(g) ? 'checked' : ''}/></label>`).join('')}`;
+        <div class="svc-mgrid">${Object.keys(MODES).map(modeBtn).join('')}</div>
+        ${st.mode ? `<button class="svc-mexit" data-a="svc-exit">${icon('x', 13)}${esc(L.backNews)}</button>` : ''}`;
     },
+    exitMode, enterMode, mode: () => st.mode,
     toggleLayer,
   };
 }

@@ -327,6 +327,7 @@ function popupHtml(a) {
 
 // ------------------------------------------------------------------ selection
 function select(id, { fromMap = false, fly = true } = {}) {
+  if (id && svc?.mode?.()) svc.exitMode(); // a news item was chosen: leave the services map mode
   if (!id) {
     state.selectedId = null;
     amap && amap.select(null);
@@ -443,12 +444,33 @@ function closeDropdowns(except) {
     $(panel).hidden = true;
     $(btn).setAttribute('aria-expanded', 'false');
   }
+  if (!except) { const b = document.getElementById('ddBack'); if (b) b.hidden = true; }
+}
+// phones: the filter / layers panels open as a bottom sheet on top of everything (list sheet, pills),
+// scrollable, full width; on wider screens they stay a dropdown under their button
+const PHONE = matchMedia('(max-width: 767px)');
+const ddHome = new Map();
+function placeDropdown(p, open) {
+  if (!ddHome.has(p)) ddHome.set(p, p.parentElement);
+  const sheet = open && PHONE.matches;
+  let back = document.getElementById('ddBack');
+  if (!back) {
+    back = document.createElement('div'); back.id = 'ddBack'; back.className = 'sheet-backdrop dd-back'; back.hidden = true;
+    back.addEventListener('click', (e) => { e.stopPropagation(); closeDropdowns(); });
+    document.body.append(back);
+  }
+  if (sheet && p.parentElement !== document.body) document.body.append(p);
+  if (!sheet && p.parentElement !== ddHome.get(p)) ddHome.get(p).append(p);
+  p.classList.toggle('dd-sheet', sheet);
+  back.hidden = !sheet;
+  if (sheet) p.scrollTop = 0;
 }
 function toggleDropdown(btnSel, panelSel, render) {
   const p = $(panelSel);
   const open = p.hidden;
   closeDropdowns(panelSel);
   if (open) render();
+  placeDropdown(p, open);
   p.hidden = !open;
   $(btnSel).setAttribute('aria-expanded', String(open));
 }
@@ -812,7 +834,7 @@ function bindEvents() {
     toggleDropdown('#btnLayers', '#layersPanel', renderLayersPanel);
   });
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.dd')) closeDropdowns();
+    if (!e.target.closest('.dd, .dd-panel')) closeDropdowns();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
