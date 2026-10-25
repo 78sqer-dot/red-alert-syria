@@ -76,8 +76,10 @@ export function parseSpToday(html) {
   const chunks = [...String(html).matchAll(/self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)/g)]
     .map((m) => { try { return JSON.parse(m[1]); } catch { return ''; } }).join('');
   const home = pickJson(chunks, '{"lang":"ar","data":{', true);
-  const data = home?.data || {};
-  const energy = pickJson(chunks, '"energy":{') || {};
+  return parseSpData(home?.data || {}, pickJson(chunks, '"energy":{') || {});
+}
+/** sp-today data objects (home page embed, or api-v2 overview + energy) -> normalized prices (new lira) */
+export function parseSpData(data, energy) {
   const rate = (code) => {
     const r = (data.rates || []).find((x) => x.code === code);
     const c = r?.cities?.damascus;
@@ -122,11 +124,29 @@ export async function fetchSpToday() {
   // that returns the same raw HTML (same embedded data, parsed and sanity-checked the same way).
   const tries = [
     ['direct', 'https://sp-today.com/', { 'User-Agent': UA, 'Accept-Language': 'ar,en;q=0.8' }],
+    ['api', null, null],
     ['proxy', 'https://r.jina.ai/https://sp-today.com/', { 'X-Return-Format': 'html', 'X-Engine': 'direct', 'X-No-Cache': 'true' }],
   ];
   const errs = [];
   for (const [how, url, headers] of tries) {
     try {
+      if (how === 'api') {
+        // the site's own JSON API (the browser calls it from https://sp-today.com)
+        const h = { 'User-Agent': UA, Origin: 'https://sp-today.com', Referer: 'https://sp-today.com/', Accept: 'application/json' };
+        const get = async (path) => {
+          const r = await fetch(`https://api-v2.sp-today.com/api/v1/${path}`, { headers: h, signal: AbortSignal.timeout(25_000) });
+          if (!r.ok) throw new Error(`api ${path.split('?')[0]} HTTP ${r.status}`);
+          const j = await r.json();
+          if (!j?.ok || !j.data) throw new Error(`api ${path.split('?')[0]} not ok`);
+          return j.data;
+        };
+        const data = await get('overview?lang=ar&city=damascus');
+        const energy = await get('energy?lang=ar').catch(() => ({}));
+        const out = parseSpData(data, energy);
+        if (!out?.usd?.buy) throw new Error('no rates in api');
+        out.via = how;
+        return out;
+      }
       const r = await fetch(url, { headers, signal: AbortSignal.timeout(how === 'proxy' ? 45_000 : 25_000) });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const out = parseSpToday(await r.text());

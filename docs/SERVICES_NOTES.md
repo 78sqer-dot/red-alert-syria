@@ -25,3 +25,10 @@
 
 ## Weather
 - Open-Meteo forecast API (free, no key): https://api.open-meteo.com/v1/forecast?latitude=..&longitude=..&daily=...
+## Render access (found 13:58)
+- From Render, `https://sp-today.com/` returns HTTP 403 (CDN blocks datacenter IP); r.jina.ai proxy gives 429 there.
+- The site's own JSON API works without key when sent with `Origin: https://sp-today.com` + `Referer`:
+  `https://api-v2.sp-today.com/api/v1/overview?lang=ar&city=damascus` -> {ok,data:{cities,rates,gold:{karats,ounce},global_fx,updated_at,currencies_updated_at,gold_updated_at}}
+  `https://api-v2.sp-today.com/api/v1/energy?lang=ar` -> {ok,data:{fuel_types,electricity_tiers,fuel_updated_at,electricity_updated_at}}
+  (without Origin -> 401 MISSING_API_KEY). Also /api/v1/gold/international, /api/v1/crypto, /api/v1/silver.
+- sp-today Telegram channel: t.me/syp2day (rate posts are images only).
