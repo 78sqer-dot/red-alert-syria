@@ -325,7 +325,7 @@ export function pricesSvg(st, now = Date.now()) {
   const rowH = 96; const th = 64 + rows.length * rowH + (official ? 132 : 0);
   o.push(card(P, y, W - 2 * P, th));
   const cBuy = P + 380; const cSell = P + 150; const cName = R - 32;
-  o.push(text(cName, y + 44, 'السوق الموازية (دمشق)', { size: 22, weight: 700, fill: '#9ca3af' }));
+  o.push(text(cName, y + 44, 'السوق الموازية (سوريا - عام)', { size: 22, weight: 700, fill: '#9ca3af' }));
   o.push(text(cBuy, y + 44, 'شراء', { size: 22, weight: 700, fill: '#9ca3af', anchor: 'middle' }));
   o.push(text(cSell, y + 44, 'مبيع', { size: 22, weight: 700, fill: '#9ca3af', anchor: 'middle' }));
   let ry = y + 64;
@@ -402,7 +402,7 @@ export function pricesCaption(st, now = Date.now()) {
   const { sp, official } = st;
   const L = [];
   L.push(`💱 <b>نشرة الأسعار — ${dayLabel(now)}</b>`, '');
-  L.push('<b>السوق الموازية (دمشق)</b> — شراء / مبيع:');
+  L.push('<b>السوق الموازية (سوريا - عام)</b> — شراء / مبيع:');
   if (sp.usd) L.push(`🇺🇸 الدولار: <b>${fmtNew(sp.usd.buy)}</b> / <b>${fmtNew(sp.usd.sell)}</b>`);
   if (sp.eur) L.push(`🇪🇺 اليورو: <b>${fmtNew(sp.eur.buy)}</b> / <b>${fmtNew(sp.eur.sell)}</b>`);
   if (sp.try) L.push(`🇹🇷 التركية: <b>${fmtNew(sp.try.buy)}</b> / <b>${fmtNew(sp.try.sell)}</b>`);

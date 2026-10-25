@@ -7,7 +7,7 @@ const S = {
   ar: {
     services: 'الخدمات', prices: 'الأسعار', power: 'الكهرباء', roads: 'الطرق', nearby: 'قريب مني',
     sheetTitle: 'خدمات يومية', sheetSub: 'أسعار اليوم، الكهرباء، حالة الطرق، وأقرب مشفى وصيدلية وكازية وفرن.',
-    market: 'سعر السوق (دمشق)', official: 'نشرة مصرف سورية المركزي', buy: 'شراء', sell: 'مبيع',
+    market: 'سعر السوق الموازي (عام)', official: 'نشرة مصرف سورية المركزي', buy: 'شراء', sell: 'مبيع',
     usd: 'دولار', eur: 'يورو', try: 'ليرة تركية', sar: 'ريال سعودي', aed: 'درهم إماراتي',
     gold: 'الذهب (للغرام)', k24: 'عيار 24', k21: 'عيار 21', k18: 'عيار 18', ounce: 'الأونصة عالمياً',
     fuel: 'المحروقات', tariffs: 'تعرفة الكهرباء', newLira: 'بالليرة الجديدة', oldLira: 'بالقديمة',
@@ -35,7 +35,7 @@ const S = {
   en: {
     services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', nearby: 'Near me',
     sheetTitle: 'Daily services', sheetSub: 'Today\'s prices, electricity, road status, and the nearest hospital, pharmacy, fuel station and bakery.',
-    market: 'Market rate (Damascus)', official: 'Central Bank of Syria bulletin', buy: 'Buy', sell: 'Sell',
+    market: 'Parallel market (Syria, general)', official: 'Central Bank of Syria bulletin', buy: 'Buy', sell: 'Sell',
     usd: 'US dollar', eur: 'Euro', try: 'Turkish lira', sar: 'Saudi riyal', aed: 'UAE dirham',
     gold: 'Gold (per gram)', k24: '24K', k21: '21K', k18: '18K', ounce: 'World ounce',
     fuel: 'Fuel', tariffs: 'Electricity tariffs', newLira: 'new lira', oldLira: 'old',
