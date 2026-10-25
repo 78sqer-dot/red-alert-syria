@@ -23,8 +23,8 @@ for (const g of governorates) {
 }
 // District centre = its highest-ranked place.
 for (const d of districts) {
-  const best = places.filter((p) => p.dist === d.code).sort((a, b) => a.rank - b.rank)[0];
-  if (best) { d.lat = best.lat; d.lon = best.lon; }
+  const best = places.filter((p) => p.dist === d.code && p.rank < 9).sort((a, b) => a.rank - b.rank)[0];
+  if (best) { d.lat = best.lat; d.lon = best.lon; d.center = best.id; }
 }
 
 export const getGov = (code) => govByCode.get(code);
@@ -33,7 +33,8 @@ export const getPlace = (id) => placeById.get(Number(id));
 export const districtsOf = (gov) => districts.filter((d) => d.gov === gov && places.some((p) => p.dist === d.code));
 // towns first (by size), then every village / hamlet / neighbourhood in alphabetical order
 const byMenu = (a, b) => (a.rank <= 4 || b.rank <= 4 ? a.rank - b.rank : 0) || a.ar.localeCompare(b.ar, 'ar');
-export const placesOf = (dist) => places.filter((p) => p.dist === dist).sort(byMenu);
+// camps (rank 9) are search-only: never listed in the district menus
+export const placesOf = (dist) => places.filter((p) => p.dist === dist && p.rank < 9).sort(byMenu);
 export const getSub = (code) => subByCode.get(code);
 // sub-districts of a district that actually hold places (in the district's own order: its centre first)
 export function subsOf(dist) {
@@ -42,7 +43,7 @@ export function subsOf(dist) {
   return [...n.keys()].map((c) => subByCode.get(c)).filter(Boolean)
     .sort((a, b) => (b.ar.startsWith('مركز') - a.ar.startsWith('مركز')) || a.ar.localeCompare(b.ar, 'ar'));
 }
-export const placesOfSub = (dist, sub) => places.filter((p) => p.dist === dist && p.sub === sub).sort(byMenu);
+export const placesOfSub = (dist, sub) => places.filter((p) => p.dist === dist && p.sub === sub && p.rank < 9).sort(byMenu);
 
 export function normalizeArabic(s) {
   return String(s || '')
@@ -229,4 +230,28 @@ export function zonePoints(loc, scope) {
   const out = [{ lat: loc.latitude, lon: loc.longitude, km }];
   zoneCache.set(key, out);
   return out;
+}
+
+// "📍 مركز منبج": the main city of a district / governorate (a single place, one circle on the map)
+export const centerOfDist = (code) => { const d = getDist(code); return d && d.center ? getPlace(d.center) : null; };
+export const capitalOf = (gov) => getPlace(CAPITALS[gov]) || null;
+export const centerOfSub = (dist, sub) => places.filter((p) => p.dist === dist && p.sub === sub && p.rank < 9).sort((a, b) => a.rank - b.rank)[0] || null;
+// Nothing found for "مخيم الرسم منبج" / "مخيمات الرسم": suggest the centres of the areas named in the
+// text (city / district / governorate), plus the area already picked in the menu.
+export function centerSuggestions(text, { gov = '', dist = '', sub = '' } = {}, limit = 4) {
+  const out = [];
+  const push = (p) => { if (p && !out.some((x) => x.id === p.id)) out.push(p); };
+  const w = normalizeArabic(text).replace(/[،,\-–()]/g, ' ').split(/\s+/).filter((x) => x.length >= 2 && !FILL.has(x) && !/^مخيم/.test(x));
+  const grams = [];
+  for (let i = 0; i < w.length; i++) { grams.push(w[i]); if (w[i + 1]) grams.push(w[i] + ' ' + w[i + 1]); }
+  for (const g of grams.sort((a, b) => b.length - a.length)) {
+    const k = stripAl(g.replace(/^ب(?=\S{3})/, ''));
+    for (const d of districts) if (stripAl(normalizeArabic(d.ar)) === k) push(centerOfDist(d.code));
+    for (const v of governorates) if (stripAl(normalizeArabic(v.ar)) === k) push(capitalOf(v.code));
+    for (const p of searchNames(g, 6)) if (!p.scope && p.rank <= 4 && stripAl(normalizeArabic(p.ar)) === k) push(p);
+  }
+  if (sub && dist) push(centerOfSub(dist, sub));
+  if (dist) push(centerOfDist(dist));
+  if (gov) push(capitalOf(gov));
+  return out.filter(Boolean).slice(0, limit);
 }

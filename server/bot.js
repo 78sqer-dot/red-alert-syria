@@ -16,7 +16,14 @@ import { registerPriceTools } from './prices.js';
 import { registerQuakeTools } from './quakes.js';
 import { registerWeatherTools } from './weather.js';
 import { registerBorderTools } from './borders.js';
-import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
+import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox, centerOfDist, capitalOf, centerOfSub, centerSuggestions, getPlace } from './places.js';
+// publishing bot: a custom name for the pinned spot ("مخيم الرسم الجديد") while the pin stays on the chosen centre
+function withLabel(loc, label) {
+  const base = loc.custom_label ? loc.base : { name_ar: loc.name_ar, name_en: loc.name_en, short_ar: loc.short_ar, short_en: loc.short_en };
+  if (!label) return { ...loc, ...base, custom_label: undefined, base: undefined };
+  return { ...loc, name_ar: label, name_en: label, short_ar: label, short_en: label, custom_label: true, base };
+}
+const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
 import { cleanAlertText } from './clean-text.js';
 
 const PAGE = 24;
@@ -161,6 +168,8 @@ function distKeyboard(ctx, gov) {
   const lang = langOf(ctx);
   const g = getGov(gov);
   const kb = new InlineKeyboard().text(l.btnWholeGov(lang === 'en' ? g.en : g.ar), 'wg:' + gov).row();
+  const cap = staff(ctx) && gov !== '08' && capitalOf(gov);
+  if (cap) kb.text(centerBtn(cap, lang), 'p:' + cap.id).row();
   districtsOf(gov).forEach((d, i) => {
     kb.text(lang === 'en' ? d.en : d.ar, 'd:' + d.code);
     if (i % 2 === 1) kb.row();
@@ -176,6 +185,8 @@ function subKeyboard(ctx, dist) {
   const lang = langOf(ctx);
   const d = getDist(dist);
   const kb = new InlineKeyboard().text(l.btnWholeDist(lang === 'en' ? d.en : d.ar), 'wd:' + dist).row();
+  const c0 = staff(ctx) && centerOfDist(dist);
+  if (c0) kb.text(centerBtn(c0, lang), 'p:' + c0.id).row();
   subsOf(dist).forEach((x, i) => {
     kb.text((lang === 'en' ? x.en : x.ar).slice(0, 30), `s:${dist}:${x.code}`);
     if (i % 2 === 1) kb.row();
@@ -198,6 +209,8 @@ function letterKeyboard(ctx, dist, sub, all) {
   for (const p of all) { const c = firstLetter(p, lang); n.set(c, (n.get(c) || 0) + 1); }
   const letters = [...n.keys()].sort((a, b) => a.localeCompare(b, lang === 'en' ? 'en' : 'ar'));
   const kb = new InlineKeyboard().text(l.btnWholeDist(lang === 'en' ? d.en : d.ar), 'wd:' + dist).row();
+  const c1 = staff(ctx) && (sub ? centerOfSub(dist, sub) : centerOfDist(dist));
+  if (c1) kb.text(centerBtn(c1, lang), 'p:' + c1.id).row();
   // the big towns of the area stay one tap away
   all.filter((p) => p.rank <= 4).slice(0, 9).forEach((p, i) => {
     kb.text((lang === 'en' ? p.en || p.ar : p.ar).slice(0, 28), 'p:' + p.id);
@@ -221,6 +234,8 @@ function placeKeyboard(ctx, dist, page, sub = '', letter = '') {
   const pages = Math.max(1, Math.ceil(all.length / PAGE));
   page = Math.min(Math.max(0, page), pages - 1);
   const kb = new InlineKeyboard().text(l.btnWholeDist(lang === 'en' ? d.en : d.ar), 'wd:' + dist).row();
+  const c2 = staff(ctx) && !page && !letter && (sub ? centerOfSub(dist, sub) : centerOfDist(dist));
+  if (c2) kb.text(centerBtn(c2, lang), 'p:' + c2.id).row();
   all.slice(page * PAGE, page * PAGE + PAGE).forEach((p, i) => {
     kb.text((lang === 'en' ? p.en || p.ar : p.ar).slice(0, 28), 'p:' + p.id);
     if (i % 3 === 2) kb.row();
@@ -247,6 +262,7 @@ function previewKeyboard(ctx, d) {
   // publishing bot only: one alert can cover several areas, each with its own circle on the map
   if (d.mode !== 'report' && d.location && d.location.scope !== 'country') {
     const en = langOf(ctx) === 'en';
+    kb.text(en ? (d.location.custom_label ? '🏷 Edit place name' : '🏷 Custom place name') : (d.location.custom_label ? '🏷 تعديل اسم المكان' : '🏷 اسم مخصص للمكان'), 'lbl').row();
     kb.text(en ? '➕ Add another area' : '➕ إضافة منطقة أخرى', 'addloc');
     if (d.extra?.length) kb.text(en ? '➖ Remove an area' : '➖ حذف منطقة', 'rmloc');
     kb.row();
@@ -1117,6 +1133,24 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery(/^pg:(\d+):(\d+):(\d+)$/, needDraft((ctx, d) => showPlaces(ctx, d, ctx.match[1], Number(ctx.match[3]), ctx.match[2])));
   bot.callbackQuery(/^wd:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ distCode: ctx.match[1] }))));
   bot.callbackQuery(/^p:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ placeId: Number(ctx.match[1]) }))));
+  // nothing found by name -> pin on a nearby centre and keep the typed name ("مخيم الرسم الجديد")
+  bot.callbackQuery(/^pl:(\d+)$/, needDraft((ctx, d) => {
+    if (d.mode === 'report' || !getPlace(ctx.match[1])) return null;
+    const loc = locationFrom({ placeId: Number(ctx.match[1]) });
+    return pickLocation(ctx, d, d.labelQ ? withLabel(loc, d.labelQ) : loc);
+  }));
+  bot.callbackQuery('lbl', needDraft(async (ctx, d) => {
+    if (d.mode === 'report' || !d.location || d.location.scope === 'country') return;
+    d.step = 'label';
+    const en = langOf(ctx) === 'en';
+    const kb = new InlineKeyboard();
+    if (d.location.custom_label) kb.text(en ? '↩️ Use the original name' : '↩️ الرجوع للاسم الأصلي', 'lblx').row();
+    kb.text(L(ctx).btnBack, 'lblb');
+    const at = esc(d.location.custom_label ? d.location.base?.name_ar || '' : d.location.name_ar || '');
+    await show(ctx, en ? `🏷 Send the name to show for this spot (e.g. <i>New Al-Rasm camp</i>).\nThe pin stays on <b>${at}</b>.` : `🏷 اكتب الاسم الذي سيظهر في الخبر لهذا الموقع (مثلاً: <i>مخيم الرسم الجديد</i>).\nيبقى الدبوس على <b>${at}</b>.`, kb);
+  }));
+  bot.callbackQuery('lblx', needDraft((ctx, d) => { if (d.location) d.location = withLabel(d.location, ''); return showPreview(ctx, d); }));
+  bot.callbackQuery('lblb', needDraft((ctx, d) => showPreview(ctx, d)));
   bot.callbackQuery('noloc', needDraft(async (ctx, d) => {
     if (d.adding) { d.adding = false; return showPreview(ctx, d); }
     d.location = locationFrom({});
@@ -1409,10 +1443,27 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       d.details = text;
       return showPreview(ctx, d);
     }
+    if (d.step === 'label' && d.mode !== 'report') {
+      const t = text.replace(/\s+/g, ' ').trim();
+      if (!t || t.length > 60) return ctx.reply(langOf(ctx) === 'en' ? 'Please send a short name (up to 60 characters).' : 'اكتب اسماً قصيراً (حتى 60 حرفاً).');
+      d.location = withLabel(d.location, t);
+      return showPreview(ctx, d);
+    }
     if (['gov', 'dist', 'place'].includes(d.step)) {
       const res = searchPlaces(text, 12);
       const lang = langOf(ctx);
-      if (!res.length) return ctx.reply(l.searchNone(esc(text.slice(0, 40))), { parse_mode: 'HTML' });
+      const sugg = !res.length && d.mode !== 'report' ? centerSuggestions(text, { gov: d.gov, dist: d.step !== 'dist' ? d.dist : '', sub: d.sub }) : [];
+      if (sugg.length) {
+        const q = text.replace(/\s+/g, ' ').trim().slice(0, 60);
+        d.labelQ = q;
+        const kb = new InlineKeyboard();
+        for (const p of sugg) kb.text(`${centerBtn(p, lang)} — «${q}»`.slice(0, 64), 'pl:' + p.id).row();
+        kb.text(l.btnBack, 'back:gov').text(l.btnCancel, 'cancel');
+        const qq = esc(q);
+        return ctx.reply(lang === 'en' ? `No place named “${qq}” in the list.\nPin it on a nearby centre — the post will show the name <b>${qq}</b>:` : `«${qq}» غير موجود في القائمة.\nثبّت الدبوس على مركز قريب، وسيظهر في الخبر باسم <b>${qq}</b>:`, { parse_mode: 'HTML', reply_markup: kb });
+      }
+      const hint = !res.length && d.mode !== 'report' ? (lang === 'en' ? '\n\n💡 Pick the governorate and district first, then send the name again — or add the town, e.g. <i>Al-Rasm camp Manbij</i> — to pin it on that centre with your name.' : '\n\n💡 اختر المحافظة ثم المنطقة وأرسل الاسم مرة ثانية، أو أضف اسم المدينة مثل <i>مخيم الرسم منبج</i>، لتثبيت الدبوس على مركزها مع الاسم الذي كتبته.') : '';
+      if (!res.length) return ctx.reply(l.searchNone(esc(text.slice(0, 40))) + hint, { parse_mode: 'HTML' });
       const kb = new InlineKeyboard();
       for (const p of res) {
         if (p.scope === 'governorate') kb.text(`📍 ${lang === 'en' ? p.en : p.ar}`, 'wg:' + p.gov).row();

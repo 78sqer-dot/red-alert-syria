@@ -38,3 +38,5 @@
 - USGS FDSN: https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=..&minlatitude..&minmagnitude=2.8 ; coords [lon,lat,depth], properties {mag, place (English), time ms}.
 - Recent swarm near Feke (Türkiye) lat 37.7–37.8 lon 36.1, M4.2–5.0 (late Oct 2026).
 - Module server/quakes.js; rules: inside Syria M3+, ≤100 km M4+, ≤250 km M5+, ≤600 km M6+; dedup across sources (±120 s, <120 km).
+## Camps (14:44)
+- OSM camps extracted from Geofabrik syria-latest.osm.pbf (/tmp/syria.pbf) -> /tmp/camps.json -> scripts/add-camps.py (rank 9, ids >= 9e11, search-only). HDX "Syria IDP Sites" is only a 2016 HIU dataset (outdated); no recent CCCM coordinates list found on HDX API. Al-Rasm camps (Manbij) not in OSM -> handled by "📍 مركز منبج" + custom label.
