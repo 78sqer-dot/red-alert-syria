@@ -128,7 +128,9 @@ function mainKeyboard(ctx) {
     .text(`${e('uav')} ${b('uav')}`, 't:uav').text(`${e('warplane')} ${b('warplane')}`, 't:warplane').row()
     .text(`${e('artillery')} ${b('artillery')}`, 't:artillery').text(`${e('attack')} ${b('attack')}`, 't:attack').row()
     .text(`${e('civil')} ${b('civil')}`, 'cv').text(`${e('missile')} ${b('missile')}`, 't:missile').row()
-    .text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd').text(lang === 'en' ? '🛂 Border crossings' : '🛂 المعابر', 'bd').row();
+    .text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd');
+  if (staff(ctx)) kb.text(lang === 'en' ? '🛂 Border crossings' : '🛂 المعابر', 'bd').row();
+  else kb.url(lang === 'en' ? '🛂 Border crossings' : '🛂 حالة المعابر', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/${lang === 'en' ? 'en' : 'ar'}/#borders`).row();
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
   if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row().text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').text(lang === 'en' ? '📡 News monitor' : '📡 الرصد الإخباري', 'nws').row()

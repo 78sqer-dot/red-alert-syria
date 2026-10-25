@@ -213,29 +213,20 @@ export function alertZones(a) {
 }
 export function zonePoints(loc, scope) {
   if (!loc || !Number.isFinite(loc.latitude)) return [];
-  const one = [{ lat: loc.latitude, lon: loc.longitude, km: placeKm(loc) }];
-  if (scope !== 'district' && scope !== 'governorate') return one;
+  if (scope !== 'district' && scope !== 'governorate') return [{ lat: loc.latitude, lon: loc.longitude, km: placeKm(loc) }];
+  // A whole district / governorate is shown as ONE circle on its main city, sized to that city
+  // (not spread over the surrounding villages). More circles appear only for areas added with ➕.
   let distCode = loc.district;
   if (scope === 'district' && !distCode) distCode = districts.find((d) => d.ar === loc.district_ar && (!loc.governorate || d.gov === loc.governorate))?.code;
-  const key = scope + ':' + (scope === 'district' ? distCode : loc.governorate);
+  const key = scope + ':' + (scope === 'district' ? distCode : loc.governorate) + ':' + loc.latitude + ',' + loc.longitude;
   if (zoneCache.has(key)) return zoneCache.get(key);
-  const pool = places
-    .filter((p) => (scope === 'district' ? p.dist === distCode : p.gov === loc.governorate))
-    .sort((a, b) => a.rank - b.rank);
-  if (!pool.length) return one;
-  const max = scope === 'governorate' ? 6 : 5;
-  let picked = [];
-  let sep = scope === 'governorate' ? 9 : 6;
-  for (; sep >= 1.2; sep *= 0.6) {
-    picked = [];
-    for (const p of pool) {
-      if (picked.every((q) => kmBetween(p, q) >= sep)) picked.push(p);
-      if (picked.length >= max) break;
-    }
-    if (picked.length >= Math.min(4, pool.length)) break;
-  }
-  const km = Math.max(1.6, Math.min(4, sep * 0.62));
-  const out = picked.map((p) => ({ lat: p.lat, lon: p.lon, km: +km.toFixed(2) }));
+  let center = null;
+  if (scope === 'governorate') center = placeById.get(CAPITALS[loc.governorate]);
+  else center = places.filter((p) => p.dist === distCode).sort((a, b) => a.rank - b.rank)[0];
+  // keep the alert's own point; take the size from the centre city's rank when it is that city
+  const near = center && kmBetween({ lat: center.lat, lon: center.lon }, { lat: loc.latitude, lon: loc.longitude }) < 3;
+  const km = near ? Math.max(3.2, placeKm(center)) : 3.2;
+  const out = [{ lat: loc.latitude, lon: loc.longitude, km }];
   zoneCache.set(key, out);
   return out;
 }
