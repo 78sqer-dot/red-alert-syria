@@ -134,7 +134,8 @@ function mainKeyboard(ctx) {
     .text(`${e('breaking')} ${b('breaking')}`, 't:breaking').row()
     .text(`${e('uav')} ${b('uav')}`, 't:uav').text(`${e('warplane')} ${b('warplane')}`, 't:warplane').row()
     .text(`${e('artillery')} ${b('artillery')}`, 't:artillery').text(`${e('attack')} ${b('attack')}`, 't:attack').row()
-    .text(`${e('civil')} ${b('civil')}`, 'cv').text(`${e('missile')} ${b('missile')}`, 't:missile').row()
+    .text(`${e('explosion')} ${b('explosion')}`, 't:explosion').text(`${e('missile')} ${b('missile')}`, 't:missile').row()
+    .text(`${e('civil')} ${b('civil')}`, 'cv').row()
     .text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd');
   if (staff(ctx)) kb.text(lang === 'en' ? '🛂 Border crossings' : '🛂 المعابر', 'bd').row();
   else kb.url(lang === 'en' ? '🛂 Border crossings' : '🛂 حالة المعابر', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/${lang === 'en' ? 'en' : 'ar'}/#borders`).row();

@@ -6,7 +6,7 @@
 import { ALERT_TYPES } from '../shared/types.js';
 import { governorates, districts, searchPlaces, normalizeArabic, getGov, getDist, places } from './places.js';
 
-export const NEWS_TYPES = ['breaking', 'uav', 'warplane', 'missile', 'attack', 'artillery', 'civil', 'accident', 'protest', 'fire', 'civil_plane'];
+export const NEWS_TYPES = ['breaking', 'uav', 'warplane', 'missile', 'attack', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane'];
 const N = normalizeArabic;
 const stripAl = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w);
 
@@ -15,7 +15,8 @@ const KW = {
   uav: ['مسيره', 'مسيرات', 'المسيره', 'درون', 'طائره مسيره', 'طائرات مسيره', 'انتحاريه'],
   warplane: ['طيران حربي', 'الطيران الحربي', 'طائرات حربيه', 'طائره حربيه', 'غاره', 'غارات', 'قصف جوي', 'الطيران الاسرائيلي', 'تحليق'],
   missile: ['صاروخ', 'صواريخ', 'صاروخي', 'صاروخيه', 'قذيفه صاروخيه'],
-  attack: ['هجوم', 'اعتداء', 'استهداف', 'استهدف', 'اطلاق نار', 'اطلاق النار', 'رصاص', 'انفجار', 'تفجير', 'عبوه', 'لغم', 'اشتباك', 'اشتباكات', 'اغتيال', 'مسلحين', 'مسلحون', 'مسلح', 'كمين', 'مقتل', 'استشهاد', 'قتلى', 'قتيل', 'جرحى', 'اصابه', 'اصابات', 'توغل', 'اقتحام', 'حاجز', 'خطف', 'اختطاف', 'جريمه'],
+  attack: ['هجوم', 'اعتداء', 'استهداف', 'استهدف', 'اطلاق نار', 'اطلاق النار', 'رصاص', 'اشتباك', 'اشتباكات', 'اغتيال', 'مسلحين', 'مسلحون', 'مسلح', 'كمين', 'مقتل', 'استشهاد', 'قتلى', 'قتيل', 'جرحى', 'اصابه', 'اصابات', 'توغل', 'اقتحام', 'حاجز', 'خطف', 'اختطاف', 'جريمه'],
+  explosion: ['انفجار', 'انفجارات', 'تفجير', 'تفجيرات', 'عبوه ناسفه', 'عبوه', 'لغم', 'الغام', 'مخلفات الحرب', 'مخلفات حرب', 'مخلفات حربيه', 'ذخائر', 'مفخخه', 'انتحاري', 'قنبله', 'دوي'],
   artillery: ['قصف', 'مدفعي', 'مدفعيه', 'قذائف', 'قذيفه', 'هاون'],
   accident: ['حادث سير', 'حوادث سير', 'انقلاب', 'تصادم', 'دهس', 'حادث مروري'],
   fire: ['حريق', 'حرائق', 'اندلاع', 'النيران', 'اشتعال', 'اخماد'],
@@ -25,7 +26,7 @@ const KW = {
     // foreign (mostly Israeli) army ground activity in the south: incursions, patrols, bulldozing, berms, new positions
     'الاحتلال', 'قوات الاحتلال', 'جيش الاحتلال', 'الجيش الإسرائيلي', 'القوات الإسرائيلية', 'قوة إسرائيلية', 'دورية إسرائيلية', 'آليات إسرائيلية', 'آليات عسكرية', 'دبابات', 'ميركافا',
     'جرافات', 'جرافة', 'أعمال حفر', 'أعمال الحفر', 'عمليات الحفر', 'حفر خندق', 'خنادق', 'ساتر ترابي', 'سواتر', 'تجريف', 'جرف', 'تحصينات', 'نقطة عسكرية', 'قاعدة عسكرية', 'تمركز', 'نصب حاجز', 'حاجزا', 'اعتقال', 'اعتقلت', 'رتل', 'تعزيزات عسكرية', 'انتشار عسكري', 'تفجير منزل', 'نسف'],
-  civil: ['انهيار', 'غرق', 'فيضان', 'سيول', 'زلزال', 'هزه ارضيه', 'مخلفات الحرب', 'الدفاع المدني', 'انقاذ', 'تسمم', 'عاصفه'],
+  civil: ['انهيار', 'غرق', 'فيضان', 'سيول', 'زلزال', 'هزه ارضيه', 'الدفاع المدني', 'انقاذ', 'تسمم', 'عاصفه'],
 };
 const KW_N = Object.fromEntries(Object.entries(KW).map(([k, a]) => [k, a.map(N)]));
 const has = (nt, w) => nt.includes(w);
@@ -161,13 +162,14 @@ export function nameInText(name, text) {
 const TYPE_HELP = `- uav: drone (مسيّرة) seen / striking / shot down over a Syrian area
 - warplane: military aircraft activity or air strike (طيران حربي، غارة جوية)
 - missile: missiles/rockets launched at, falling on or intercepted over a Syrian area
-- attack: armed attack, shooting at people/checkpoint, explosion, IED, car bomb, assassination, clashes, armed kidnapping, a military incursion/raid by a foreign army into a Syrian village (e.g. Israeli forces storming/raiding a village, searching homes, arresting or shooting at people, blowing up a house)
+- attack: armed attack by people: shooting / gunfire at people or a checkpoint, killing by gunfire, stabbing, assassination by gunmen, armed clashes, armed robbery, armed kidnapping, a military incursion/raid by a foreign army into a Syrian village (e.g. Israeli forces storming/raiding a village, searching homes, arresting or shooting at people, blowing up a house)
 - artillery: artillery / mortar / rocket-launcher shelling (قصف مدفعي، قذائف هاون)
 - accident: traffic accident (حادث سير، انقلاب، تصادم، دهس)
 - fire: fire (حريق) of a building, forest, crops, market…
 - protest: demonstration, protest, sit-in (مظاهرة، وقفة احتجاجية)
 - civil_plane: civil aircraft incident (emergency landing, crash)
-- civil: other civil emergency: building collapse, drowning, flood, earthquake, landmine/war-remnant explosion hurting civilians, mass poisoning
+- explosion: ANY explosion or blast (انفجار، تفجير، دوي انفجار): landmine (لغم), war remnants / unexploded ordnance (مخلفات حرب، ذخائر), IED / explosive device (عبوة ناسفة), car bomb (سيارة مفخخة), suicide bomber, gas cylinder / fuel tank / ammunition depot blowing up, controlled detonation of ordnance, a loud explosion heard, blowing up a house
+- civil: ONLY when no other type fits: building collapse, drowning, flood, electrocution, poisoning, a body found without a known cause, a person found hanged, a missing person found dead
 - breaking: another urgent, major security or humanitarian event in Syria that people need to know right now and that has none of the types above (e.g. curfew, road closed for security, major security operation starting, foreign forces setting up a checkpoint inside Syria). Israeli army ground activity inside Syria WITHOUT a raid or shooting IS an event of this type: vehicles/tanks/a patrol advancing near or into an area, bulldozing land or uprooting trees, digging trenches, building earth berms (سواتر ترابية) or fortifications, resuming excavation, setting up a new position — mostly in Quneitra / Daraa countryside / Mount Hermon (جبل الشيخ). It counts even when it is an ongoing or resumed activity, as long as the post reports it now.`;
 export function buildPrompt(items, known, nowIso) {
   const sys = `You are the news desk of "Red Alert Syria", a live alert map of Syria. You read short posts from Syrian news channels and decide which ones should become a map alert.
@@ -178,7 +180,7 @@ For EACH post return one object. Rules:
 2. Follow-ups are NOT new events: casualty updates ("ارتفاع حصيلة"), someone dying of wounds from an earlier incident, "the perpetrators were arrested", the hospital receiving the wounded of an incident already reported, a reporter's details/video of an incident already reported, re-posts, "again/مجدداً" reports of the same ongoing incident. For those: event=true, new_incident=false and same_as = the known event id (E…) or earlier post (P…) it follows up. Use new_incident=false only for a follow-up of an incident in KNOWN EVENTS / an earlier post, or a clear aftermath (casualty update, funeral, arrest of perpetrators) of an earlier incident; an activity that starts again after a pause ("يستأنف … بعد توقف") is a NEW incident. If a post is the same incident as a known event or an earlier post in this batch (same kind of incident, same area, close in time — even if described with different nearby village names, e.g. "حاجز مفرق خربا" = "قرب بلدة معربة" = "بصرى الشام" for one checkpoint attack in eastern Daraa countryside), set same_as to it.
 3. type: the most specific of:
 ${TYPE_HELP}
-Use "breaking" only when nothing else fits. Shooting by unknown gunmen = attack. Israeli army shelling = artillery; Israeli air strike = warplane.
+Pick the type of the core incident; it must be the most specific one. An explosion of any kind = explosion (never civil or attack), even when it hurts civilians. Any fire = fire (never civil), a road/vehicle crash = accident, a demonstration = protest, a civil aircraft incident = civil_plane — use civil only when none of these fits. Use "breaking" only when nothing else fits. Shooting by unknown gunmen = attack. Israeli army shelling = artillery; Israeli air strike = warplane.
 4. places: where it happened, most specific first, max 4 — list every named village/town of the incident in the post (e.g. both villages of a road "طريق عين البيضة - جباتا الخشب"). name = the Arabic place name exactly as a Syrian would write it (town/village/neighbourhood; without words like "بلدة/مدينة/قرية/ريف/حي"), gov = its Syrian governorate in Arabic (one of: دمشق، ريف دمشق، حلب، حمص، حماة، اللاذقية، طرطوس، إدلب، درعا، السويداء، القنيطرة، دير الزور، الرقة، الحسكة). For a road between two cities ("أوتوستراد دمشق درعا") give the nearest named place in the post (e.g. "خبب") or the governorate. If only the governorate is known, give name = the governorate.
 5. headline: rewrite the news as ONE clean, neutral Arabic news sentence (max 140 characters) saying what happened and where — only the news itself. Never include: the channel/source/reporter name ("مراسل …", "أفاد مراسلنا", "درعا 24", "الجزيرة"…), calls to follow/subscribe/click, links, @usernames, hashtags, emojis, "متداول", greetings, or the poster's opinion.
 Return a JSON array, one object per post, same order.`;
@@ -238,7 +240,7 @@ export async function callGemini({ sys, user }, { key, models, timeoutMs = 40_00
 }
 
 // ---------------------------------------------------------------- rule-based fallback (AI unavailable)
-const RULE_ORDER = ['uav', 'warplane', 'missile', 'artillery', 'accident', 'fire', 'protest', 'civil_plane', 'attack', 'civil'];
+const RULE_ORDER = ['uav', 'warplane', 'missile', 'artillery', 'explosion', 'accident', 'fire', 'protest', 'civil_plane', 'attack', 'civil'];
 const FOLLOW_UP = ['ارتفاع حصيله', 'ارتفاع عدد', 'القبض علي', 'قبضنا', 'القت القبض', 'تقبض علي', 'منفذي الهجوم', 'تفاصيل', 'ينقل', 'نتابع وصول', 'وصول اكثر من', 'وصول جثث'].map(N);
 export function ruleClassify(text, { breaking = false } = {}) {
   const nt = N(text);
@@ -268,3 +270,25 @@ export function ruleClassify(text, { breaking = false } = {}) {
 }
 export const typeLabelAr = (k) => `${ALERT_TYPES[k]?.emoji || ''} ${ALERT_TYPES[k]?.ar || k}`.trim();
 export { getGov, getDist };
+
+// ---------------------------------------------------------------- type safety net
+// The AI sometimes falls back to the generic "civil" (or "attack") although the post names a more
+// specific type. Correct it from the post text so every draft gets its own button.
+const RX = (a) => a.map(N);
+const EXPL_W = RX(['انفجار', 'انفجارات', 'تفجير', 'تفجيرات', 'عبوه ناسفه', 'لغم', 'الغام', 'مخلفات حرب', 'مخلفات الحرب', 'مخلفات حربيه', 'مفخخه', 'انتحاري', 'قنبله']);
+const GUN_W = RX(['اطلاق نار', 'اطلاق النار', 'اطلاق الرصاص', 'رصاص', 'اشتباك', 'اشتباكات', 'طعن', 'مسلحين', 'مسلحون', 'مسلح']);
+const FIRE_W = RX(['حريق', 'حرائق', 'احتراق', 'اشتعال', 'اشتعلت', 'التهمت النيران', 'النيران']);
+const ACC_W = RX(['حادث سير', 'حوادث سير', 'حادث مروري', 'انقلاب سياره', 'انقلاب حافله', 'تصادم', 'دهس']);
+const PROT_W = RX(['مظاهره', 'مظاهرات', 'وقفه احتجاجيه', 'اعتصام', 'احتجاج']);
+export function refineType(type, text) {
+  const nt = ' ' + N(text) + ' ';
+  const any = (ws) => ws.some((w) => nt.includes(w));
+  if (type === 'civil') {
+    if (any(EXPL_W)) return 'explosion';
+    if (any(FIRE_W)) return 'fire';
+    if (any(ACC_W)) return 'accident';
+    if (any(PROT_W)) return 'protest';
+  }
+  if (type === 'attack' && any(EXPL_W) && !any(GUN_W)) return 'explosion';
+  return type;
+}

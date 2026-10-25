@@ -1,5 +1,5 @@
 // Minimal service worker: caches immutable static assets for faster repeat visits.
-const CACHE = 'ras-static-v21';
+const CACHE = 'ras-static-v22';
 // Pages, app code and styles are never cached here (always fresh from the server).
 // vendor/ and fonts/ never change → cache first. img/ and data/ (logo, place lists) → network first,
 // cache only as an offline fallback, so a new logo or data file shows up on the very next visit.

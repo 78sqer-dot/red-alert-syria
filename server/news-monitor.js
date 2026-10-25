@@ -14,7 +14,7 @@ import { locationFrom, normalizeArabic } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText, parseUsername } from './news-sources.js';
 import { onNewsPost as onPowerPost } from './services.js';
 import { onBorderNews } from './borders.js';
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
 
@@ -113,9 +113,9 @@ function geoOf(locs) {
 }
 const whereOf = (locs) => (locs.length ? locs.map((l) => [l.name_ar, l.scope !== 'governorate' ? l.governorate_ar : ''].filter(Boolean).join('، ')).join(' + ') : 'سوريا');
 const AIR = new Set(['uav', 'warplane', 'missile']);
-const STRIKE = new Set(['attack', 'artillery']);
-const CIVIL = new Set(['civil', 'accident', 'fire', 'civil_plane']);
-const WINDOW_MIN = { uav: 120, warplane: 120, missile: 180, attack: 360, artillery: 360, civil: 360, accident: 360, fire: 360, civil_plane: 240, protest: 480, breaking: 360 };
+const STRIKE = new Set(['attack', 'artillery', 'explosion']);
+const CIVIL = new Set(['civil', 'accident', 'fire', 'civil_plane', 'explosion']);
+const WINDOW_MIN = { uav: 120, warplane: 120, missile: 180, attack: 360, artillery: 360, explosion: 360, civil: 360, accident: 360, fire: 360, civil_plane: 240, protest: 480, breaking: 360 };
 const sameFamily = (a, b) => a === b || (AIR.has(a) && AIR.has(b)) || (STRIKE.has(a) && STRIKE.has(b)) || ((a === 'civil' || b === 'civil') && CIVIL.has(a) && CIVIL.has(b));
 const tokens = (s) => new Set(N(s).split(' ').filter((w) => w.length >= 3).map((w) => (w.startsWith('ال') && w.length > 4 ? w.slice(2) : w)));
 function textSim(a, b) {
@@ -339,6 +339,7 @@ async function mergeInto(d, it, locs = []) {
 async function handleResult(it, r, known, pmap) {
   const n = newsState();
   if (!r || !r.event || !NEWS_TYPES.includes(r.type)) { note(it, 'not an event'); return; }
+  { const t2 = refineType(r.type, `${r.headline || ''}\n${it.text}`); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
   // the AI linked it to a known incident / an earlier post of this batch
   let target = null;
   const m = String(r.same_as || '').trim().match(/^([EP])(\d+)$/i);
@@ -551,6 +552,15 @@ export function startNewsMonitor() {
     if (store.backup && config.telegramBackup) { try { await store.mergeFromBackup(); } catch { /* ignore */ } }
     const n = newsState();
     try { await rescanIfFilterChanged(); } catch (e) { console.error('[news] rescan failed', e.message); }
+    // re-tag drafts still waiting for review (e.g. explosions typed as the generic "civil")
+    for (const d of Object.values(n.drafts)) {
+      if (d.status !== 'pending' || d.test) continue;
+      const t2 = refineType(d.type, d.headline || '');
+      if (t2 === d.type) continue;
+      console.log(`[news] draft ${d.id} re-tagged ${d.type} -> ${t2}`);
+      d.type = t2; save();
+      try { await refreshCards(d); } catch { /* ignore */ }
+    }
     console.log(`[news] monitor started: ${n.on ? 'ON' : 'paused'} · ${n.sources.filter((s) => s.on).length} sources · AI ${NEWS_CFG.aiKey() ? NEWS_CFG.models()[0] : 'OFF (rules only)'} · every ${NEWS_CFG.pollSec}s`);
     loop();
   };
@@ -821,4 +831,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, govCodeOf };
+export const _test = { rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, govCodeOf };

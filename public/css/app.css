@@ -307,6 +307,10 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 @keyframes prBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 .ic-alert_tri .ic-svg { animation: brkPulse 1.6s ease-in-out infinite; }
 @keyframes brkPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+.ic-explosion .ic-svg { animation: exBurst 1.3s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.ic-explosion .ex-in, .ic-explosion .ex-core { animation: exCore .65s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+@keyframes exCore { from { transform: scale(.8); opacity: .85; } to { transform: scale(1.06); opacity: 1; } }
+@keyframes exBurst { 0%, 100% { transform: scale(.88) rotate(0deg); } 45% { transform: scale(1.1) rotate(8deg); } }
 /* drone — grey airframe that orbits only at close zoom (like the original) */
 .uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
 .uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
@@ -527,7 +531,7 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
   .report-btn { width: 36px; padding: 0; justify-content: center; }
 }
 /* civil sub-type icons: thin white halo so they stay readable over busy city maps */
-.ic-car_crash .ic-svg, .ic-protest .ic-svg, .ic-fire .ic-svg { filter: drop-shadow(0 0 1.2px #fff) drop-shadow(0 0 1.2px #fff) drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
+.ic-car_crash .ic-svg, .ic-protest .ic-svg, .ic-fire .ic-svg, .ic-explosion .ic-svg { filter: drop-shadow(0 0 1.2px #fff) drop-shadow(0 0 1.2px #fff) drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
 
 /* performance: animations pause while the map moves; animated parts get their own layer */
 .is-moving .mk *, .is-moving .mk::before, .is-moving .mk::after { animation-play-state: paused !important; }

@@ -24,13 +24,18 @@ export const ALERT_TYPES = {
   },
   attack: {
     ar: 'هجوم', en: 'Attack', button_ar: 'هجوم', button_en: 'Attack',
-    emoji: '💥', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
+    emoji: '⚔️', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
     marker: 'static', glyph: 'airstrike', disc: '#dc2626', zone: false, tag_ar: 'هجوم', tag_en: 'Attack',
   },
   artillery: {
     ar: 'قصف مدفعي', en: 'Artillery shelling', button_ar: 'قصف مدفعي', button_en: 'Artillery',
     emoji: '🎯', color: '#f97316', ring: '#f97316', group: 'strikes', ttlMin: 360,
     marker: 'static', glyph: 'artillery', disc: '#f97316', zone: false, tag_ar: 'قصف_مدفعي', tag_en: 'Artillery',
+  },
+  explosion: {
+    ar: 'انفجار', en: 'Explosion', button_ar: 'انفجار', button_en: 'Explosion',
+    emoji: '💥', color: '#d6336c', ring: '#a61e4d', group: 'strikes', ttlMin: 240,
+    marker: 'icon', glyph: 'explosion', icon: '#d6336c', size: 34, zone: false, tag_ar: 'انفجار', tag_en: 'Explosion',
   },
   civil: {
     ar: 'مدني', en: 'Civil alert', button_ar: 'مدني', button_en: 'Civil',
@@ -75,7 +80,7 @@ export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 
 export const ALERT_GROUPS = {
   aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'warplane', 'missile'] },
-  strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'artillery'] },
+  strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'artillery', 'explosion'] },
   civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   other: { ar: 'أخرى', en: 'Other', types: ['breaking'] },
