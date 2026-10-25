@@ -16,6 +16,10 @@ import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInTex
 import { setKeep } from './ui-clean.js';
 
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
+// bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
+// that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
+export const FILTER_VER = 2;
+const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
   maxAgeMin: env('NEWS_MAX_AGE_MIN', 45), // older posts are history, not alerts
@@ -262,6 +266,13 @@ function buildLocations(r, it) {
     }
     if (loc) { add(loc); if (loc.governorate) govs.add(loc.governorate); }
   }
+  // "اعتداءات في القنيطرة … منطقة المعكر": the city named like its governorate is just the governorate
+  // when the post also names a more precise place of that governorate
+  const cityLikeGov = (l) => l.scope === 'place' && l.governorate_ar && N(l.name_ar) === N(l.governorate_ar);
+  for (let i = out.length - 1; i >= 0; i--) {
+    const l = out[i];
+    if (cityLikeGov(l) && out.some((o) => o !== l && !cityLikeGov(o) && (o.scope === 'place' || o.scope === 'district') && o.governorate === l.governorate)) out.splice(i, 1);
+  }
   // only a governorate: look for an exact village/town of it in the text
   if (!out.some((l) => l.scope === 'place' || l.scope === 'district')) {
     for (const g of govs) for (const id of scanTextPlaces(it.text, g, 2)) add(locationFrom({ placeId: id }));
@@ -287,10 +298,21 @@ function capReached() {
   const since = Date.now() - H_MS;
   return Object.values(n.drafts).filter((d) => !d.test && d.created > since).length >= NEWS_CFG.maxPerHour;
 }
-async function mergeInto(d, it) {
+async function mergeInto(d, it, locs = []) {
   const n = newsState();
   if ((d.srcs || []).some((s) => s.u === it.src.u)) return false;
   d.srcs.push({ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts });
+  // another channel names a more precise nearby place (e.g. "المعكر" next to "مزرعة الحانوت"): add it as an extra area
+  const main = d.loc && Number.isFinite(d.loc.latitude) ? { lat: d.loc.latitude, lon: d.loc.longitude } : null;
+  for (const l of locs) {
+    if (!l || l.scope !== 'place' || !Number.isFinite(l.latitude) || (d.extra || []).length >= 3) continue;
+    const same = (x) => x && x.scope === 'place' && x.place_id === l.place_id;
+    if (same(d.loc) || (d.extra || []).some(same)) continue;
+    if (d.loc?.scope === 'place' && main && km(main, { lat: l.latitude, lon: l.longitude }) > 20) continue;
+    if (d.loc?.scope !== 'place' && d.loc?.governorate && l.governorate !== d.loc.governorate) continue;
+    if (d.loc?.scope !== 'place') { d.extra = [...(d.extra || []), ...(d.loc?.scope === 'country' ? [] : [d.loc])].filter(Boolean).slice(0, 3); d.loc = l; }
+    else (d.extra ||= []).push(l);
+  }
   n.stats.merged++;
   save();
   await refreshCards(d);
@@ -312,7 +334,7 @@ async function handleResult(it, r, known, pmap) {
   if (target) {
     pmap.set(it.i, target);
     const d = target.draftId ? n.drafts[target.draftId] : null;
-    if (d && d.status === 'pending') { const added = await mergeInto(d, it); note(it, added ? `merged into draft ${d.id}` : `same source, already in draft ${d.id}`); return; }
+    if (d && d.status === 'pending') { const added = await mergeInto(d, it, locs); note(it, added ? `merged into draft ${d.id}` : `same source, already in draft ${d.id}`); return; }
     n.stats.dupes++; note(it, `duplicate of ${target.kind} (${target.status})`); return;
   }
   if (!n.types[r.type]) { note(it, `type ${r.type} switched off`); return; }
@@ -342,7 +364,7 @@ async function processQueue() {
   if (R.busy || !R.queue.length) return;
   R.busy = true;
   try {
-    R.queue = R.queue.filter((x) => Date.now() - x.ts < (NEWS_CFG.maxAgeMin + 30) * 60_000);
+    R.queue = R.queue.filter((x) => Date.now() - x.ts < ((x.rescan ? RESCAN_MIN : NEWS_CFG.maxAgeMin) + 30) * 60_000);
     R.queue.sort((a, b) => a.ts - b.ts);
     const batch = R.queue.splice(0, 20);
     if (!batch.length) return;
@@ -380,6 +402,42 @@ async function processQueue() {
     }
   } finally { R.busy = false; }
 }
+const textHash = (t) => crypto.createHash('sha1').update(N(t).slice(0, 400)).digest('base64').slice(0, 16);
+/** once per FILTER_VER: re-read the channels and send the recent posts the old rules skipped to the desk */
+async function rescanIfFilterChanged() {
+  const n = newsState();
+  if (n.fver === FILTER_VER) return;
+  if (!n.on) { n.fver = FILTER_VER; save(false); return; }
+  n.handled ||= {};
+  const drafted = new Set(Object.values(n.drafts).flatMap((d) => (d.srcs || []).map((x) => x.url)).filter(Boolean));
+  let queued = 0;
+  for (const src of n.sources.filter((s) => s.on)) {
+    if (R.stopped) return;
+    try {
+      const r = await fetchChannel(src.u);
+      const last = n.last[src.u];
+      for (const p of r.posts) {
+        if (last == null || p.id > last) continue; // newer posts: the normal poll handles them
+        if (!p.ts || Date.now() - p.ts > RESCAN_MIN * 60_000) continue;
+        const key = `${src.u}/${p.id}`;
+        if (n.handled[key] || drafted.has(p.url)) continue;
+        const c = cleanPostText(p.text);
+        const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
+        if (!f.ok) continue;
+        const h = textHash(c.text);
+        n.seen[h] = Date.now(); n.handled[key] = Date.now();
+        const it = { src: { u: src.u, name: src.name }, url: p.url, ts: p.ts, qAt: Date.now(), text: c.text, breaking: c.breaking, rescan: true };
+        note(it, 'rescan: queued');
+        R.queue.push(it); queued++;
+      }
+    } catch (e) { console.warn('[news] rescan', src.u, e.message); }
+    await sleep(700);
+  }
+  n.fver = FILTER_VER;
+  save(false);
+  console.log(`[news] filter v${FILTER_VER}: rescan queued ${queued} recent post(s)`);
+  if (R.queue.length) await processQueue();
+}
 async function pollOnce() {
   const n = newsState();
   if (!n.on || R.stopped) return;
@@ -407,11 +465,13 @@ async function pollOnce() {
     if (!p.ts || Date.now() - p.ts > NEWS_CFG.maxAgeMin * 60_000) { it.text = p.text; note(it, 'too old'); continue; }
     const c = cleanPostText(p.text);
     it.text = c.text; it.breaking = c.breaking;
-    const h = crypto.createHash('sha1').update(N(c.text).slice(0, 400)).digest('base64').slice(0, 16);
+    const h = textHash(c.text);
     if (n.seen[h]) { n.stats.dupes++; note(it, 'same text already seen'); continue; }
-    n.seen[h] = Date.now();
     const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
     if (!f.ok) { note(it, 'skipped: ' + f.why); continue; }
+    // "seen" only once it really goes to the desk: a skipped post can be looked at again after a rule fix
+    n.seen[h] = Date.now();
+    (n.handled ||= {})[`${src.u}/${p.id}`] = Date.now();
     R.queue.push(it);
   }
   if (R.queue.length) await processQueue();
@@ -428,6 +488,7 @@ async function sweep() {
   const before = n.alerts.length;
   n.alerts = n.alerts.filter((a) => now - a.ts < 26 * H_MS);
   for (const [h, t] of Object.entries(n.seen)) if (now - t > 48 * H_MS) { delete n.seen[h]; changed = true; }
+  for (const [k, t] of Object.entries(n.handled || {})) if (now - t > 48 * H_MS) { delete n.handled[k]; changed = true; }
   if (changed || before !== n.alerts.length) save(false);
 }
 
@@ -443,6 +504,9 @@ export function mergeNewsFromBackup(o) {
   }
   for (const [u, id] of Object.entries(on.last || {})) if (!(n.last[u] >= id)) n.last[u] = id;
   for (const [h, t] of Object.entries(on.seen || {})) if (!n.seen[h]) n.seen[h] = t;
+  n.handled ||= {};
+  for (const [k, t] of Object.entries(on.handled || {})) if (!n.handled[k]) n.handled[k] = t;
+  if (Number(on.fver) > Number(n.fver || 0)) n.fver = on.fver;
   for (const a of on.alerts || []) if (a?.id && !n.alerts.some((x) => x.id === a.id)) n.alerts.push(a);
 }
 export function startNewsMonitor() {
@@ -462,6 +526,7 @@ export function startNewsMonitor() {
   const first = async () => {
     if (store.backup && config.telegramBackup) { try { await store.mergeFromBackup(); } catch { /* ignore */ } }
     const n = newsState();
+    try { await rescanIfFilterChanged(); } catch (e) { console.error('[news] rescan failed', e.message); }
     console.log(`[news] monitor started: ${n.on ? 'ON' : 'paused'} · ${n.sources.filter((s) => s.on).length} sources · AI ${NEWS_CFG.aiKey() ? NEWS_CFG.models()[0] : 'OFF (rules only)'} · every ${NEWS_CFG.pollSec}s`);
     loop();
   };
@@ -727,4 +792,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, govCodeOf };
+export const _test = { rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, govCodeOf };

@@ -70,7 +70,20 @@ export function searchPlaces(query, limit = 10) {
   const res = searchNames(query, limit);
   if (res.some((p) => !p.scope)) return res;
   // "عران الباب" / "الحانوتة، حلب": town + its district / governorate / ناحية
-  const w = normalizeArabic(query).replace(/[،,\-–]/g, ' ').split(/\s+/).filter(Boolean);
+  // also "المعكر ريف القنيطرة" / "المعكر بريف القنيطرة الجنوبي" / "المعكر في القنيطرة": filler words dropped
+  // ("ريف دمشق" stays: it is a governorate's name)
+  let w = normalizeArabic(query).replace(/[،,\-–]/g, ' ').split(/\s+/).filter(Boolean);
+  if (w.length >= 2) {
+    const f = [w[0]];
+    for (let i = 1; i < w.length; i++) {
+      let x = w[i];
+      if ((x === 'ريف' || x === 'بريف') && w[i + 1] === 'دمشق') { f.push('ريف'); continue; }
+      if (FILL.has(x)) continue;
+      if (/^ب(?=ال\S{2})/.test(x) && i === w.length - 1) x = x.slice(1); // "بالقنيطرة"
+      f.push(x);
+    }
+    if (f.length >= 2) w = f;
+  }
   for (let k = Math.min(3, w.length - 1); k >= 1; k--) {
     const tail = stripAl(w.slice(-k).join(' '));
     const inArea = (p) => [getDist(p.dist)?.ar, getGov(p.gov)?.ar, subByCode.get(p.sub)?.ar].some((x) => x && stripAl(normalizeArabic(x).replace(/^مركز /, '')) === tail);
@@ -79,6 +92,7 @@ export function searchPlaces(query, limit = 10) {
   }
   return res;
 }
+const FILL = new Set(['ريف', 'بريف', 'في', 'محافظه', 'بمحافظه', 'منطقه', 'بمنطقه', 'ناحيه', 'الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'الاوسط']);
 function searchNames(query, limit) {
   const q = normalizeArabic(query);
   if (q.length < 2) return [];

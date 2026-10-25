@@ -19,3 +19,10 @@ Non-Syria items in Syrian channels: Houthi missiles at Riyadh, Trump/Iran, Tel A
 Gemini (key works): gemini-2.5-flash / -lite are "no longer available to new users" (404).
 Working: gemini-flash-lite-latest (tested OK). Also listed: gemini-3.5-flash-lite, gemini-flash-latest, gemini-3.8-flash.
 Render MCP has update_environment_variables (merge) but no list-env tool.
+
+## Incident 2026-10-25: المعكر (Quneitra) post not drafted
+- Posts: https://t.me/ajasyr/122320 (09:24 UTC) and https://t.me/TelevisionSyria/96939 — both fetched live, dropped by keyword prefilter ("skipped: no-keywords"): no terms for Israeli ground activity (الاحتلال، حفر، سواتر…).
+- Location (syria.tv 2026-10-25): "منطقة المعكر، جنوب غربي مزرعة الحانوت بريف القنيطرة الجنوبي، بالقرب من قاعدة تل أبو الغيثار" — 6 m earth berm. https://www.syria.tv/ (article "الاحتلال الإسرائيلي يستأنف أعمال الحفر قرب مزرعة الحانوت في القنيطرة")
+- OSM Nominatim: صيدا (Saida al-Hanout / صيدا الجولان), ناحية مركز فيق, Quneitra: 32.8756, 35.8774. DB: id 10312031 صيدا (dist 172039).
+- Other recent Quneitra names in news: العجرف، الأصبح، الحميدية، مفرق الكسارات (northern Quneitra), العشة, تل الأحمر الشرقي, مشروع "سوفا 53".
+- Added to data/places.json by hand (ids 31000001-3): المعكر (32.8665,35.8665, ~1.5 km SW of صيدا الحانوت, approximate from the report), تل أبو الغيثار (approx.), تل الأحمر (Quneitra, OSM peak 33.21404,35.88031). Aliases: صيدا 10312031 += صيدا الحانوت/صيدا الجولان/مزرعة الحانوت/الحانوت; القنيطرة 173334 += القنيطرة المهدمة. Re-apply if build-places.py is ever re-run.
