@@ -14,6 +14,7 @@ import { applyProject } from './config.js';
 import { governorates } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
 import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
+import { publicWeather, startWxBulletin, weatherNowDebug } from './wx-daily.js';
 import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
 import { weatherDebug, checkWeather } from './weather.js';
 import { publicBorders } from './borders.js';
@@ -128,6 +129,10 @@ app.get('/api/newstest', apiLimiter, async (req, res) => {
   try { res.json(await sendTestDraft(owner)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // 💱 prices / 🛣 roads / ⚡ electricity for the website
+app.get('/api/weather', apiLimiter, async (req, res) => {
+  try { res.set('Cache-Control', 'public, max-age=300'); res.json(await publicWeather()); } catch (e) { res.set('Cache-Control', 'no-store'); res.status(503).json({ ok: false, error: 'weather unavailable' }); }
+});
+app.get('/api/weathernow', apiLimiter, (req, res) => res.json(weatherNowDebug()));
 app.get('/api/services', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=60');
   res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), borders: publicBorders(), server_time: new Date().toISOString() });
@@ -367,6 +372,7 @@ async function start() {
     };
     upReport();
     startDailySummary(bots.admin.api);
+    startWxBulletin(() => bots.admin?.api); // 🌤 morning weather bulletin (separate post, default 08:00)
     startPrices(() => bots.admin?.api); // 💱 morning prices bulletin (in-app scheduler, Damascus time)
     startServices(); // 🛣 road statuses expiry
     startQuakes(() => bots.admin?.api); // 🌍 earthquake alerts (EMSC + USGS, auto-posted)

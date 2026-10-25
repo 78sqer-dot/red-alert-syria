@@ -22,11 +22,11 @@ export function wxState() {
 const save = () => store.persist();
 
 // extra forecast points where the hazard (snow on the mountains, coastal storms) differs from the capital
-const EXTRA_POINTS = [
-  { gov: '08', lat: 33.72, lon: 36.1, label: 'الزبداني' },
-  { gov: '02', lat: 35.6, lon: 36.19, label: 'صلنفة' },
-  { gov: '10', lat: 34.85, lon: 36.11, label: 'تلكلخ' },
-  { gov: '05', lat: 32.6, lon: 36.73, label: 'جبل العرب' },
+export const EXTRA_POINTS = [
+  { gov: '08', lat: 33.72, lon: 36.1, label: 'الزبداني', en: 'Zabadani' },
+  { gov: '02', lat: 35.6, lon: 36.19, label: 'صلنفة', en: 'Slinfah' },
+  { gov: '10', lat: 34.85, lon: 36.11, label: 'تلكلخ', en: 'Talkalakh' },
+  { gov: '05', lat: 32.6, lon: 36.73, label: 'جبل العرب', en: 'Jabal al-Arab' },
 ];
 
 // ---------------------------------------------------------------- hazards & thresholds
@@ -271,7 +271,7 @@ export function registerWeatherTools(bot, h) {
   };
   const mainKb = () => {
     const st = wxState();
-    return new InlineKeyboard().text('🔎 افحص التوقعات الآن', 'wx:now').row()
+    return new InlineKeyboard().text('🔎 افحص التوقعات الآن', 'wx:now').row().text('🌤 نشرة الطقس الصباحية', 'wxb').row()
       .text(st.on ? '⏸ إيقاف' : '▶️ تشغيل', 'wx:on').text(st.autoSevere ? '📝 الشديد كمان مسودة' : '⚡ انشر الشديد تلقائياً', 'wx:auto').row()
       .text('🏠 القائمة', 'home');
   };

@@ -738,3 +738,28 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .is-3d .zp { display: none !important; }
 .is-3d.is-moving .mk { will-change: transform; }
 .badge .bemo { font-size: 13px; line-height: 1; font-family: 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif; }
+
+/* ---------- weather mode (services) ---------- */
+.svc-tabs { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 420px) { .svc-tab { font-size: 11px; padding: 7px 1px; } .svc-tabs { gap: 4px; } }
+.wx-ic { display: inline-block; flex: none; vertical-align: middle; }
+.wx-now { display: flex; align-items: center; gap: 10px; margin: 6px 0 8px; }
+.wx-now > b { font-size: 30px; font-weight: 800; line-height: 1; white-space: nowrap; flex: none; }
+.wx-now > span { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.wx-now em { font-style: normal; font-weight: 800; font-size: 14px; }
+.wx-now small { color: var(--text-muted); font-size: 12px; }
+.wx-days { border-top: 1px solid var(--border); padding-top: 6px; }
+.wx-d { display: flex; align-items: center; gap: 7px; font-size: 13px; margin-top: 4px; }
+.wx-dn { font-weight: 800; min-width: 42px; }
+.wx-dl { flex: 1; min-width: 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-t { font-weight: 800; white-space: nowrap; }
+.wx-t small { color: var(--text-muted); font-weight: 700; }
+.wx-dx { font-size: 11.5px; color: var(--text-muted); padding-inline-start: 49px; margin-bottom: 2px; }
+.wx-warn { margin-top: 8px; padding: 7px 10px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 12%, transparent); }
+.wx-warn small { display: block; color: var(--text-muted); font-size: 11.5px; }
+.wx-row .wx-ic { width: 30px; height: 30px; }
+.wx-rt { margin-inline-start: auto; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+.wx-rt b { font-size: 16px; font-weight: 800; white-space: nowrap; }
+.wx-rt small, .wx-t { unicode-bidi: isolate; }
+.wx-rt small { font-size: 11.5px; color: var(--text-muted); }
+.wx-row .svc-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); vertical-align: middle; }

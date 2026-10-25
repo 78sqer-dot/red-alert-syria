@@ -2,11 +2,13 @@
 // (hospitals, pharmacies, fuel stations, bakeries from OpenStreetMap) · 📍 better "my location".
 // Everything here is additive: the alert map keeps working even if this module fails.
 import { settings } from './settings.js';
+import { WX_ICONS, WX_LABEL } from '/shared/wx-icons.js';
 
 const S = {
   ar: {
-    services: 'الخدمات', prices: 'الأسعار', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', nearby: 'قريب مني',
-    sheetTitle: 'خدمات يومية', sheetSub: 'أسعار اليوم، الكهرباء، حالة الطرق والمعابر، وأقرب مشفى وصيدلية وكازية وفرن.',
+    services: 'الخدمات', prices: 'الأسعار', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', nearby: 'قريب مني', weather: 'الطقس',
+    sheetTitle: 'خدمات يومية', sheetSub: 'أسعار اليوم، الطقس، الكهرباء، حالة الطرق والمعابر، وأقرب مشفى وصيدلية وكازية وفرن.',
+    showWx: 'اعرض الطقس على الخريطة', wxSub: 'الطقس الحالي وتوقعات اليوم وبكرا لكل محافظة وبعض المناطق الجبلية. البيانات من Open-Meteo وبتتحدث كل نص ساعة.', wxNow: 'الطقس الآن', today: 'اليوم', tomorrow: 'بكرا', wind: 'رياح', hum: 'رطوبة', kmh: 'كم/س', mm: 'ملم', rainP: 'احتمال المطر', gusts: 'هبّات', mountains: 'مناطق جبلية', wxErr: 'تعذّر تحميل الطقس، جرّب بعد شوي.', wxWarn: 'تحذيرات فعّالة', snowCm: 'ثلج', cm: 'سم',
     market: 'سعر السوق الموازي (عام)', official: 'نشرة مصرف سورية المركزي', buy: 'شراء', sell: 'مبيع',
     usd: 'دولار', eur: 'يورو', try: 'ليرة تركية', sar: 'ريال سعودي', aed: 'درهم إماراتي',
     gold: 'الذهب (للغرام)', k24: 'عيار 24', k21: 'عيار 21', k18: 'عيار 18', ounce: 'الأونصة عالمياً',
@@ -23,7 +25,7 @@ const S = {
     noResults: 'ما لقينا نتائج.', locFirst: 'حدّد موقعك لنرتّب لك الأقرب', loading: 'عم نحمّل البيانات…',
     dataErr: 'تعذّر تحميل البيانات، جرّب بعد شوي.', directions: 'الاتجاهات', call: 'اتصال', hours: 'الدوام',
     osmNote: 'البيانات من OpenStreetMap وقد لا تكون كاملة أو محدّثة. تأكد بالاتصال قبل ما تروح.',
-    svcLayers: 'الخدمات على الخريطة', modes: { pharmacy: 'الصيدليات', health: 'المشافي والمراكز الصحية', fuel: 'الكازيات', bakery: 'الأفران', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر' },
+    svcLayers: 'الخدمات على الخريطة', modes: { pharmacy: 'الصيدليات', health: 'المشافي والمراكز الصحية', fuel: 'الكازيات', bakery: 'الأفران', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', weather: 'الطقس' },
     backNews: 'رجوع للأخبار', zoomHint: (n) => `قرّب الخريطة لتشوف ${n}`, h24: 'مفتوحة 24 ساعة', showOnMap: 'اعرض على الخريطة', modeHint: 'الأخبار مخفية مؤقتاً', pwLvl: { cut: 'تقنين أشد / انقطاع', ok: 'تحسّن', mid: 'تحديث', none: 'لا يوجد تحديث' }, pwNat: 'تحديث عام لكل سوريا', mapPower: 'اعرض حالة الكهرباء على الخريطة',
     away: (d) => `يبعد ${d}`, km: 'كم', m: 'م',
     locTitle: 'تحديد موقعك', locWhy: 'منستخدم موقعك بس على جهازك لنوريك وين إنت على الخريطة، وكم تبعد عنك التنبيهات والخدمات. ما منرسله ولا منخزّنه عندنا.',
@@ -35,8 +37,9 @@ const S = {
     youHere: 'إنت هون', ok: 'تمام', retry: 'جرّب مرة تانية', close: 'إغلاق', ago: 'من',
   },
   en: {
-    services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me',
-    sheetTitle: 'Daily services', sheetSub: 'Today\'s prices, electricity, road status, and the nearest hospital, pharmacy, fuel station and bakery.',
+    services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me', weather: 'Weather',
+    sheetTitle: 'Daily services', sheetSub: 'Today\'s prices, weather, electricity, road status, and the nearest hospital, pharmacy, fuel station and bakery.',
+    showWx: 'Show the weather on the map', wxSub: 'Current weather and the forecast for today and tomorrow in every governorate and a few mountain areas. Data from Open-Meteo, refreshed every 30 minutes.', wxNow: 'Weather now', today: 'Today', tomorrow: 'Tomorrow', wind: 'Wind', hum: 'Humidity', kmh: 'km/h', mm: 'mm', rainP: 'Chance of rain', gusts: 'Gusts', mountains: 'Mountain areas', wxErr: 'Could not load the weather, try again shortly.', wxWarn: 'Active warnings', snowCm: 'Snow', cm: 'cm',
     market: 'Parallel market (Syria, general)', official: 'Central Bank of Syria bulletin', buy: 'Buy', sell: 'Sell',
     usd: 'US dollar', eur: 'Euro', try: 'Turkish lira', sar: 'Saudi riyal', aed: 'UAE dirham',
     gold: 'Gold (per gram)', k24: '24K', k21: '21K', k18: '18K', ounce: 'World ounce',
@@ -53,7 +56,7 @@ const S = {
     noResults: 'No results.', locFirst: 'Set your location to sort by distance', loading: 'Loading data…',
     dataErr: 'Could not load the data, try again shortly.', directions: 'Directions', call: 'Call', hours: 'Hours',
     osmNote: 'Data from OpenStreetMap; it may be incomplete or outdated. Call before you go.',
-    svcLayers: 'Services on the map', modes: { pharmacy: 'Pharmacies', health: 'Hospitals & clinics', fuel: 'Fuel stations', bakery: 'Bakeries', power: 'Electricity', roads: 'Roads', borders: 'Border crossings' },
+    svcLayers: 'Services on the map', modes: { pharmacy: 'Pharmacies', health: 'Hospitals & clinics', fuel: 'Fuel stations', bakery: 'Bakeries', power: 'Electricity', roads: 'Roads', borders: 'Border crossings', weather: 'Weather' },
     backNews: 'Back to the news', zoomHint: (n) => `Zoom in to see ${n.toLowerCase()}`, h24: 'Open 24 hours', showOnMap: 'Show on the map', modeHint: 'News hidden for now', pwLvl: { cut: 'More rationing / outage', ok: 'Improving', mid: 'Update', none: 'No update' }, pwNat: 'Nation-wide update', mapPower: 'Show electricity on the map',
     away: (d) => `${d} away`, km: 'km', m: 'm',
     locTitle: 'Your location', locWhy: 'Your location is used only on your device to show where you are and how far alerts and services are. It is never sent to us or stored.',
@@ -68,9 +71,10 @@ const S = {
 const CAT_COLORS = { hospital: '#e11d48', clinic: '#db2777', pharmacy: '#059669', fuel: '#d97706', bakery: '#a16207' };
 const GROUPS = { health: ['hospital', 'clinic'], pharmacy: ['pharmacy'], fuel: ['fuel'], bakery: ['bakery'] };
 const ROAD_COLORS = { closed: '#ef4444', danger: '#f59e0b', open: '#22c55e' };
-const SVC_LAYERS = ['svc-poi-pt', 'svc-poi-cl', 'svc-road-pt', 'svc-road-ln', 'svc-bd-c', 'svc-pw-c', 'svc-pw-i'];
+const SVC_LAYERS = ['svc-poi-pt', 'svc-poi-cl', 'svc-road-pt', 'svc-road-ln', 'svc-bd-c', 'svc-pw-c', 'svc-pw-i', 'svc-wx-i', 'svc-wx-x'];
 // one service category at a time on the map ("map mode"); the news is hidden meanwhile
-const MODES = { pharmacy: { color: CAT_COLORS.pharmacy, icon: 'pharmacy' }, health: { color: CAT_COLORS.hospital, icon: 'hospital' }, fuel: { color: CAT_COLORS.fuel, icon: 'fuel' }, bakery: { color: CAT_COLORS.bakery, icon: 'bakery' }, power: { color: '#ca8a04', icon: 'bolt' }, roads: { color: '#ef4444', icon: 'route' }, borders: { color: '#16a34a', icon: 'door' } };
+const MODES = { pharmacy: { color: CAT_COLORS.pharmacy, icon: 'pharmacy' }, health: { color: CAT_COLORS.hospital, icon: 'hospital' }, fuel: { color: CAT_COLORS.fuel, icon: 'fuel' }, bakery: { color: CAT_COLORS.bakery, icon: 'bakery' }, power: { color: '#ca8a04', icon: 'bolt' }, roads: { color: '#ef4444', icon: 'route' }, borders: { color: '#16a34a', icon: 'door' }, weather: { color: '#0284c7', icon: 'sun' } };
+const WARN_C = (lv) => (lv === 2 ? '#dc2626' : '#f59e0b');
 const PW_COLORS = { cut: '#dc2626', mid: '#f59e0b', ok: '#16a34a', none: '#94a3b8' };
 // governorate centres for the electricity circles (Rif Dimashq drawn east of the city so the two don't overlap)
 const GOV_C = { '01': [36.52, 40.75, 'الحسكة', 'Al-Hasakah'], '02': [35.53, 35.79, 'اللاذقية', 'Latakia'], '03': [33.12, 35.82, 'القنيطرة', 'Quneitra'], '04': [35.95, 39.01, 'الرقة', 'Raqqa'], '05': [32.71, 36.57, 'السويداء', 'As-Suwayda'], '06': [32.62, 36.10, 'درعا', 'Daraa'], '07': [35.33, 40.14, 'دير الزور', 'Deir ez-Zor'], '08': [33.62, 36.62, 'ريف دمشق', 'Rif Dimashq'], '09': [36.20, 37.16, 'حلب', 'Aleppo'], '10': [35.13, 36.75, 'حماة', 'Hama'], '11': [34.73, 36.71, 'حمص', 'Homs'], '12': [35.93, 36.63, 'إدلب', 'Idlib'], '13': [33.51, 36.29, 'دمشق', 'Damascus'], '14': [34.89, 35.89, 'طرطوس', 'Tartus'] };
@@ -91,7 +95,7 @@ function km(a, b) {
 
 export function createServices({ LANG, esc, icon, toast, openModal, closeModal, getMap, botUrl }) {
   const L = S[LANG] || S.ar;
-  const st = { mode: null, prices: null, roads: [], power: [], borders: [], poi: null, poiLoading: null, tab: 'prices', q: '', cat: 'all', gov: 'all', me: null, popup: null };
+  const st = { mode: null, prices: null, roads: [], power: [], borders: [], poi: null, poiLoading: null, tab: 'prices', q: '', cat: 'all', gov: 'all', me: null, popup: null, wx: null, wxAt: 0, wxLoading: null, wxErr: false };
   try { const m = JSON.parse(localStorage.getItem(ME_KEY) || 'null'); if (m && Date.now() - m.t < 6 * 3600_000) st.me = m; } catch { /* ignore */ }
   window.__rasMe = st.me;
   const map = () => getMap()?.map || null;
@@ -111,6 +115,20 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       st.prices = j.prices; st.roads = j.roads || []; st.power = j.power || []; st.borders = j.borders || [];
       paintRoads(); paintBorders(); if (isOpen()) render();
     } catch { /* offline: keep what we have */ }
+  }
+  // weather: fetched only when the weather mode / tab is used, kept 10 min on the device (server caches 30 min)
+  function loadWx(force) {
+    if (st.wx && !force && Date.now() - st.wxAt < 10 * 60_000) return Promise.resolve(st.wx);
+    if (!st.wxLoading) {
+      st.wxLoading = fetch('/api/weather').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((j) => {
+        if (!j.ok || !Array.isArray(j.points)) throw new Error('bad');
+        for (const p of j.points) if (p.main && GOV_C[p.gov]) { p.lat = GOV_C[p.gov][0]; p.lon = GOV_C[p.gov][1]; }
+        st.wx = j; st.wxAt = Date.now(); st.wxErr = false; paintWx();
+        if (isOpen() && st.tab === 'weather') render();
+        return j;
+      }).catch((e) => { st.wxErr = true; if (isOpen() && st.tab === 'weather') render(); throw e; }).finally(() => { st.wxLoading = null; });
+    }
+    return st.wxLoading;
   }
   function loadPoi() {
     if (st.poi) return Promise.resolve(st.poi);
@@ -159,7 +177,24 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     else if (kind === 'open') { g.lineWidth = 3.4; g.beginPath(); g.moveTo(m - 8, m + 1); g.lineTo(m - 2.5, m + 6.5); g.lineTo(m + 9, m - 6); g.stroke(); }
     return g.getImageData(0, 0, s, s);
   }
+  // weather markers: same white disc + thin coloured ring, the condition drawn as a line icon (Path2D)
+  function drawWx(kind) {
+    const ic = WX_ICONS[kind] || WX_ICONS.cloud;
+    const s = 52; const c = document.createElement('canvas'); c.width = s; c.height = s;
+    const g = c.getContext('2d'); const m = s / 2;
+    g.shadowColor = 'rgba(15,23,42,.28)'; g.shadowBlur = 4; g.shadowOffsetY = 1;
+    g.beginPath(); g.arc(m, m, m - 5, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
+    g.shadowColor = 'transparent'; g.lineWidth = 2.2; g.strokeStyle = ic.color; g.stroke();
+    const sc = 26 / 24; g.save(); g.translate(m - 13, m - 13); g.scale(sc, sc);
+    g.lineWidth = 2.1; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = ic.color;
+    for (const d of ic.paths) { try { g.stroke(new Path2D(d)); } catch { /* old browser */ } }
+    g.restore();
+    return c;
+  }
+  const wxUrl = {};
+  const wxImg = (k, sz = 26) => { if (!wxUrl[k]) wxUrl[k] = drawWx(k).toDataURL('image/png'); return `<img class="wx-ic" src="${wxUrl[k]}" width="${sz}" height="${sz}" alt="">`; };
   function ensureImages(m) {
+    for (const k of Object.keys(WX_ICONS)) if (!m.hasImage('svc-wx-' + k)) { const c = drawWx(k); m.addImage('svc-wx-' + k, c.getContext('2d').getImageData(0, 0, c.width, c.height), { pixelRatio: 2 }); }
     for (const [k, col] of Object.entries(CAT_COLORS)) if (!m.hasImage('svc-' + k)) m.addImage('svc-' + k, drawIcon(k, col), { pixelRatio: 2 });
     for (const [k, col] of Object.entries(ROAD_COLORS)) if (!m.hasImage('svc-road-' + k)) m.addImage('svc-road-' + k, drawIcon(k, col), { pixelRatio: 2 });
     for (const [k, col] of Object.entries(PW_COLORS)) if (!m.hasImage('svc-pw-' + k)) m.addImage('svc-pw-' + k, drawIcon('bolt', col), { pixelRatio: 2 });
@@ -200,6 +235,16 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   function powerGeo() {
     return { type: 'FeatureCollection', features: powerByGov().map((g) => ({ type: 'Feature', properties: { code: g.code, level: g.level, name: g.name, own: g.items.length ? 1 : 0 }, geometry: { type: 'Point', coordinates: [g.lon, g.lat] } })) };
   }
+  const wxName = (p) => (LANG === 'en' ? p.en || p.ar : p.ar);
+  const wxWarns = (p) => (st.wx?.warnings || []).filter((w) => w.govs.includes(p.gov));
+  function wxGeo() {
+    const pts = st.wx?.points || [];
+    return { type: 'FeatureCollection', features: pts.filter((p) => p.now && Number.isFinite(p.now.t)).map((p) => {
+      const ws = wxWarns(p);
+      return { type: 'Feature', properties: { id: p.id, main: p.main, icon: 'svc-wx-' + p.now.k, tt: `${p.now.t}°`, name: wxName(p), warn: ws.length ? Math.max(...ws.map((w) => w.level)) : 0 }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } };
+    }) };
+  }
+  function paintWx() { const src = map()?.getSource?.('svc-wx'); if (src) src.setData(wxGeo()); }
   function paintPower() { const src = map()?.getSource?.('svc-pw'); if (src) src.setData(powerGeo()); }
   function addLayers() {
     const m = map(); if (!m || !m.isStyleLoaded?.() && !m.getStyle()) return;
@@ -225,6 +270,15 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         m.addLayer({ id: 'svc-pw-c', type: 'circle', source: 'svc-pw', paint: { 'circle-color': lc, 'circle-opacity': ['case', ['==', ['get', 'own'], 1], 0.2, 0.1], 'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 5, 18, 8, 70, 10, 200], 'circle-stroke-color': lc, 'circle-stroke-width': 1.4, 'circle-stroke-opacity': 0.55 } });
         m.addLayer({ id: 'svc-pw-i', type: 'symbol', source: 'svc-pw', layout: { 'icon-image': ['concat', 'svc-pw-', ['get', 'level']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 5, 0.8, 9, 1], 'icon-allow-overlap': true, 'text-field': ['get', 'name'], 'text-font': f, 'text-size': 11, 'text-offset': [0, 1.5], 'text-anchor': 'top', 'text-optional': true }, paint: { 'text-color': '#1f2937', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
       }
+      if (!m.getSource('svc-wx')) {
+        m.addSource('svc-wx', { type: 'geojson', data: wxGeo() });
+        const lbl = ['step', ['zoom'], ['get', 'tt'], 7, ['concat', ['get', 'tt'], '  ', ['get', 'name']]];
+        const sym = (id, filter, minzoom) => ({ id, type: 'symbol', source: 'svc-wx', filter, minzoom, layout: { 'icon-image': ['get', 'icon'], 'icon-size': ['interpolate', ['linear'], ['zoom'], 5, 0.78, 9, 1], 'icon-allow-overlap': true, 'text-field': lbl, 'text-font': f, 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 11.5, 9, 13], 'text-offset': [0, 1.45], 'text-anchor': 'top', 'text-optional': true, 'text-allow-overlap': false }, paint: { 'text-color': '#0f172a', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
+        // a soft ring under governorates that have an active weather warning
+        m.addLayer({ id: 'svc-wx-w', type: 'circle', source: 'svc-wx', filter: ['>', ['get', 'warn'], 0], paint: { 'circle-color': ['case', ['==', ['get', 'warn'], 2], '#dc2626', '#f59e0b'], 'circle-opacity': 0.16, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 17, 9, 26], 'circle-stroke-color': ['case', ['==', ['get', 'warn'], 2], '#dc2626', '#f59e0b'], 'circle-stroke-width': 1.6, 'circle-stroke-opacity': 0.7 } });
+        m.addLayer(sym('svc-wx-i', ['==', ['get', 'main'], 1], 0));
+        m.addLayer(sym('svc-wx-x', ['==', ['get', 'main'], 0], 7));
+      }
       if (!m.getLayer('svc-road-ln')) {
         m.addLayer({ id: 'svc-road-ln', type: 'line', source: 'svc-roads', filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['match', ['get', 'status'], 'closed', ROAD_COLORS.closed, 'open', ROAD_COLORS.open, ROAD_COLORS.danger], 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 3, 12, 6], 'line-dasharray': [1.6, 1.2], 'line-opacity': 0.9 } });
         m.addLayer({ id: 'svc-road-pt', type: 'symbol', source: 'svc-roads', filter: ['==', ['geometry-type'], 'Point'], layout: { 'icon-image': ['get', 'icon'], 'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 1, 12, 1.25], 'icon-allow-overlap': true } });
@@ -248,6 +302,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     v(['svc-road-ln', 'svc-road-pt'], st.mode === 'roads');
     v(['svc-bd-c', 'svc-bd-t'], st.mode === 'borders');
     v(['svc-pw-c', 'svc-pw-i'], st.mode === 'power');
+    v(['svc-wx-w', 'svc-wx-i', 'svc-wx-x'], st.mode === 'weather');
     const poi = !!GROUPS[st.mode];
     v(['svc-poi-halo', 'svc-poi-cl', 'svc-poi-cn', 'svc-poi-pt'], poi);
     v(['svc-poi-glow'], poi && (st.mode === 'pharmacy' || st.mode === 'health'));
@@ -282,7 +337,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       bar = document.createElement('div'); bar.className = 'svc-bar'; bar.hidden = true;
       bar.addEventListener('click', (e) => {
         if (e.target.closest('[data-a="exit"]')) { e.stopPropagation(); exitMode(); }
-        else if (e.target.closest('[data-a="list"]')) { e.stopPropagation(); open(st.mode === 'power' ? 'power' : st.mode === 'roads' ? 'roads' : st.mode === 'borders' ? 'borders' : 'nearby'); }
+        else if (e.target.closest('[data-a="list"]')) { e.stopPropagation(); open(st.mode === 'power' ? 'power' : st.mode === 'roads' ? 'roads' : st.mode === 'borders' ? 'borders' : st.mode === 'weather' ? 'weather' : 'nearby'); }
       });
     }
     if (el && bar.parentElement !== el) el.append(bar);
@@ -306,16 +361,18 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (st.popup) { st.popup.remove(); st.popup = null; }
     document.body.classList.add('svc-on');
     if (GROUPS[k]) loadPoi().then(() => { if (st.mode === k) paintPoi(); }).catch(() => toast(L.dataErr));
+    clearInterval(st.wxT);
+    if (k === 'weather') { loadWx().catch(() => toast(L.wxErr)); st.wxT = setInterval(() => { if (st.mode === 'weather' && !document.hidden) loadWx().catch(() => {}); }, 15 * 60_000); }
     paintPower(); applyVisibility(); renderBar();
     const m = map();
     if (fly && m) {
       if (GROUPS[k] && st.me) m.flyTo({ center: [st.me.lon, st.me.lat], zoom: Math.max(m.getZoom(), 12.5), essential: true });
-      else if (k === 'power' || k === 'borders') am0?.fitSyria?.();
+      else if (k === 'power' || k === 'borders' || k === 'weather') am0?.fitSyria?.();
     }
   }
   function exitMode() {
     if (!st.mode) return;
-    st.mode = null;
+    st.mode = null; clearInterval(st.wxT);
     if (st.popup) { st.popup.remove(); st.popup = null; }
     getMap()?.setNewsHidden?.(false);
     document.body.classList.remove('svc-on');
@@ -378,6 +435,30 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     else h += `<p class="pp-areas">${esc(L.powerEmpty)}</p>`;
     return h;
   }
+  const fmtHM = new Intl.DateTimeFormat(LANG === 'ar' ? 'ar-SY' : 'en-GB', { timeZone: 'Asia/Damascus', hour: 'numeric', minute: '2-digit' });
+  const T = (v) => (v == null ? '—' : `${v}°`);
+  const wxDayRow = (d, label) => {
+    const bits = [];
+    if (d.rain >= 0.5 || d.pop >= 20) bits.push(`🌧 ${d.rain >= 0.5 ? `${num(d.rain, 1)} ${L.mm} · ` : ''}${d.pop ?? 0}%`);
+    if (d.snow >= 0.5) bits.push(`❄️ ${num(d.snow, 1)} ${L.cm}`);
+    if (d.gust != null) bits.push(`💨 ${d.gust} ${L.kmh}`);
+    return `<div class="wx-d"><span class="wx-dn">${esc(label)}</span>${wxImg(d.k, 22)}<span class="wx-dl">${esc(WX_LABEL[LANG]?.[d.k] || '')}</span><span class="wx-t" dir="ltr">${T(d.max)} <small>/ ${T(d.min)}</small></span></div><div class="wx-dx">${bits.map(esc).join(' · ')}</div>`;
+  };
+  function wxPopHtml(p) {
+    const n = p.now; const ws = wxWarns(p);
+    const lbl = WX_LABEL[LANG] || WX_LABEL.ar;
+    let h = `<div class="pp-top"><span class="badge" style="--c:${MODES.weather.color}">${esc(L.wxNow)}</span>${st.wx?.at ? `<span class="time">${esc(L.updated)} ${esc(fmtHM.format(new Date(st.wx.at)))}</span>` : ''}</div>
+      <p class="pp-title">${esc(wxName(p))}</p>
+      <div class="wx-now">${wxImg(n.k, 40)}<b dir="ltr">${T(n.t)}</b><span><em>${esc(lbl[n.k] || '')}</em><small>${esc(L.wind)} ${n.wind ?? '—'} ${esc(L.kmh)}${n.hum != null ? ` · ${esc(L.hum)} <bdi>${n.hum}%</bdi>` : ''}</small></span></div>
+      <div class="wx-days">${(p.days || []).slice(0, 2).map((d, i) => wxDayRow(d, i ? L.tomorrow : L.today)).join('')}</div>`;
+    for (const w of ws) h += `<div class="wx-warn" style="--c:${WARN_C(w.level)}">${esc(w.emoji)} <b>${esc(LANG === 'en' ? w.en : w.ar)}</b></div>`;
+    return h;
+  }
+  function focusWx(p) {
+    const m = map(); if (!m) return;
+    m.flyTo({ center: [p.lon, p.lat], zoom: Math.max(m.getZoom(), p.main ? 7.6 : 9), essential: true });
+    setTimeout(() => popup([p.lon, p.lat], wxPopHtml(p)), 900);
+  }
   function focusBorder(b) {
     const m = map(); if (!m) return;
     m.flyTo({ center: [b.lon, b.lat], zoom: 10, essential: true });
@@ -401,6 +482,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     m.on('click', 'svc-road-pt', roadClick); m.on('click', 'svc-road-ln', roadClick);
     const pwClick = (e) => { const f = e.features?.[0]; const g = f && powerByGov().find((x) => x.code === f.properties.code); if (g) popup([g.lon, g.lat], powerPopHtml(g)); };
     m.on('click', 'svc-pw-i', pwClick); m.on('click', 'svc-pw-c', pwClick);
+    const wxClick = (e) => { const f = e.features?.[0]; const p = f && st.wx?.points.find((x) => x.id === f.properties.id); if (p) popup([p.lon, p.lat], wxPopHtml(p)); };
+    m.on('click', 'svc-wx-i', wxClick); m.on('click', 'svc-wx-x', wxClick);
     let zt = 0; m.on('zoomend', () => { if (st.mode && GROUPS[st.mode]) { clearTimeout(zt); zt = setTimeout(renderBar, 120); } });
     for (const id of SVC_LAYERS) {
       m.on('mouseenter', id, () => { m.getCanvas().style.cursor = 'pointer'; });
@@ -439,16 +522,17 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   function close() {
     if (!sheet) return;
     sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); back.hidden = true;
-    if (/^#(prices|power|roads|borders|services)$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+    if (/^#(prices|power|roads|borders|services|weather)$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
   }
   const tabBtn = (k, ic, label) => `<button class="svc-tab${st.tab === k ? ' on' : ''}" data-tab="${k}">${icon(ic, 16)}<span>${esc(label)}</span></button>`;
   function render() {
     const b = sheet.querySelector('#svcBody');
     b.innerHTML = `<div class="sheet-grab"></div>
       <div class="svc-head"><div><h2>${esc(L.sheetTitle)}</h2><p>${esc(L.sheetSub)}</p></div><button class="sb-x lg" data-a="close" aria-label="${esc(L.close)}">${icon('x', 18)}</button></div>
-      <div class="svc-tabs">${tabBtn('prices', 'coin', L.prices)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}</div>
-      <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : st.tab === 'borders' ? bordersHtml() : nearbyHtml()}</div>`;
+      <div class="svc-tabs">${tabBtn('prices', 'coin', L.prices)}${tabBtn('weather', 'sun', L.weather)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}</div>
+      <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'weather' ? weatherHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : st.tab === 'borders' ? bordersHtml() : nearbyHtml()}</div>`;
     if (st.tab === 'nearby') renderResults();
+    if (st.tab === 'weather' && (!st.wx || Date.now() - st.wxAt > 10 * 60_000) && !st.wxLoading) loadWx().catch(() => {});
   }
   const row = (label, a, b2, ch) => `<div class="px-row"><span class="px-k">${esc(label)}</span><span class="px-v">${a}</span>${b2 != null ? `<span class="px-v">${b2}</span>` : ''}${ch != null ? `<span class="px-ch ${ch > 0 ? 'up' : ch < 0 ? 'dn' : ''}">${ch ? (ch > 0 ? '▲' : '▼') : '•'}</span>` : ''}</div>`;
   const old = (v) => (v == null ? '' : `<small>${num(v * 100)} ${esc(L.oldLira)}</small>`);
@@ -479,6 +563,26 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         ${fuel.map((f) => `<div class="px-row"><span class="px-k">${esc(f.name)}${unitOf(f)}</span><span class="px-v">${lira(f.price)}${old(f.price)}</span>${f.usd ? `<span class="px-v" dir="ltr">$${num(f.usd, 2)}</span>` : ''}</div>`).join('')}</div>`;
     }
     h += `<p class="svc-note">${esc(L.priceNote)}</p>`;
+    return h;
+  }
+  function weatherHtml() {
+    let h = `<p class="svc-note" style="margin-top:0">${esc(L.wxSub)}</p>${modeBtnWide('weather', L.showWx)}`;
+    const j = st.wx;
+    if (!j) return h + `<div class="svc-empty">${esc(st.wxErr ? L.wxErr : L.loading)}</div>`;
+    if (j.warnings?.length) {
+      h += `<div class="dd-sec">${esc(L.wxWarn)}</div>`;
+      h += j.warnings.map((w) => `<div class="wx-warn" style="--c:${WARN_C(w.level)}">${esc(w.emoji)} <b>${esc(LANG === 'en' ? w.en : w.ar)}</b><small>${esc(w.govs.map((c) => GOV_C[c]?.[LANG === 'en' ? 3 : 2]).filter(Boolean).join(LANG === 'en' ? ', ' : '، '))}</small></div>`).join('');
+    }
+    const row = (p) => {
+      const d = p.days?.[0] || {}; const ws = wxWarns(p);
+      return `<button class="bd-row wx-row" data-wx="${esc(p.id)}">${wxImg(p.now.k, 30)}<span class="bd-main"><b>${esc(wxName(p))}${ws.length ? ` <i class="svc-dot" style="--c:${WARN_C(Math.max(...ws.map((w) => w.level)))}"></i>` : ''}</b><small>${esc((WX_LABEL[LANG] || WX_LABEL.ar)[p.now.k] || '')}</small></span><span class="wx-rt"><b dir="ltr">${T(p.now.t)}</b><small dir="ltr">${T(d.max)} / ${T(d.min)}</small></span></button>`;
+    };
+    const order = ['02', '14', '09', '12', '11', '10', '13', '08', '06', '05', '03', '04', '07', '01']; // coast → north → centre → south → east
+    const mains = j.points.filter((p) => p.main && p.now).sort((a, b) => order.indexOf(a.gov) - order.indexOf(b.gov));
+    h += `<div class="dd-sec">${esc(L.allGovs)}</div><div class="bd-list">${mains.map(row).join('')}</div>`;
+    const ex = j.points.filter((p) => !p.main && p.now);
+    if (ex.length) h += `<div class="dd-sec">${esc(L.mountains)}</div><div class="bd-list">${ex.map(row).join('')}</div>`;
+    h += `<p class="svc-note">${esc(L.updated)}: ${esc(when(j.at))} · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>`;
     return h;
   }
   function powerHtml() {
@@ -552,6 +656,12 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       map()?.flyTo({ center: [p.lon, p.lat], zoom: 15, essential: true });
       setTimeout(() => popup([p.lon, p.lat], poiHtml(p)), 900);
       return;
+    }
+    const wr = t.closest('[data-wx]');
+    if (wr) {
+      const p = st.wx?.points.find((x) => x.id === wr.dataset.wx); if (!p) return;
+      if (st.mode !== 'weather') enterMode('weather', { fly: false }); else close();
+      focusWx(p); return;
     }
     const bdr = t.closest('[data-bd]');
     if (bdr) {
@@ -636,6 +746,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   function fromHash() {
     const h = location.hash.slice(1);
     if (h === 'prices' || h === 'power' || h === 'borders') open(h);
+    else if (h === 'weather') enterMode('weather');
     else if (h === 'services' || h === 'nearby') open('nearby');
     else if (h === 'roads') {
       if (st.roads.length === 1) { enterMode('roads', { fly: false }); focusRoad(st.roads[0]); } else open('roads');
