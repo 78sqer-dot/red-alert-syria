@@ -12,7 +12,7 @@ const S = {
     market: 'سعر السوق الموازي (عام)', official: 'نشرة مصرف سورية المركزي', buy: 'شراء', sell: 'مبيع',
     usd: 'دولار', eur: 'يورو', try: 'ليرة تركية', sar: 'ريال سعودي', aed: 'درهم إماراتي',
     gold: 'الذهب (للغرام)', k24: 'عيار 24', k21: 'عيار 21', k18: 'عيار 18', ounce: 'الأونصة عالمياً',
-    fuel: 'المحروقات', tariffs: 'تعرفة الكهرباء', newLira: 'بالليرة الجديدة', oldLira: 'بالقديمة',
+    fuel: 'المحروقات', fuelSince: 'سارية منذ', fuelChecked: 'آخر تحقق', fuelSrc: 'المصدر', fuelStale: 'لم نتمكن من التحقق من أسعار المحروقات منذ أكثر من 3 أيام، قد تكون تغيّرت.', fuelTiers: 'أصناف المازوت حسب وزارة الطاقة', tariffs: 'تعرفة الكهرباء', newLira: 'بالليرة الجديدة', oldLira: 'بالقديمة',
     updated: 'آخر تحديث', noPrices: 'الأسعار مو متوفرة هلق، جرّب بعد شوي.',
     priceNote: 'الأسعار استرشادية وقد تختلف بين المحلات والمدن. الليرة الجديدة = 100 ليرة قديمة.',
     powerEmpty: 'ما في تحديثات كهرباء منشورة حالياً.', allSyria: 'عموم سوريا', allGovs: 'كل المحافظات',
@@ -43,7 +43,7 @@ const S = {
     market: 'Parallel market (Syria, general)', official: 'Central Bank of Syria bulletin', buy: 'Buy', sell: 'Sell',
     usd: 'US dollar', eur: 'Euro', try: 'Turkish lira', sar: 'Saudi riyal', aed: 'UAE dirham',
     gold: 'Gold (per gram)', k24: '24K', k21: '21K', k18: '18K', ounce: 'World ounce',
-    fuel: 'Fuel', tariffs: 'Electricity tariffs', newLira: 'new lira', oldLira: 'old',
+    fuel: 'Fuel', fuelSince: 'In force since', fuelChecked: 'Last checked', fuelSrc: 'Source', fuelStale: 'We could not confirm the fuel prices for more than 3 days; they may have changed.', fuelTiers: 'Diesel grades per the Ministry of Energy', tariffs: 'Electricity tariffs', newLira: 'new lira', oldLira: 'old',
     updated: 'Updated', noPrices: 'Prices are not available right now, try again shortly.',
     priceNote: 'Indicative prices; they can differ between shops and cities. 1 new lira = 100 old lira.',
     powerEmpty: 'No electricity updates published right now.', allSyria: 'All Syria', allGovs: 'All governorates',
@@ -553,7 +553,10 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   const row = (label, a, b2, ch) => `<div class="px-row"><span class="px-k">${esc(label)}</span><span class="px-v">${a}</span>${b2 != null ? `<span class="px-v">${b2}</span>` : ''}${ch != null ? `<span class="px-ch ${ch > 0 ? 'up' : ch < 0 ? 'dn' : ''}">${ch ? (ch > 0 ? '▲' : '▼') : '•'}</span>` : ''}</div>`;
   const old = (v) => (v == null ? '' : `<small>${num(v * 100)} ${esc(L.oldLira)}</small>`);
   // the price sources give Arabic names / units: English labels for the English site
-  const FUEL_EN = { benzin: 'Gasoline 90', 'gasoline-95': 'Gasoline 95', diesel: 'Diesel', gas: 'Cooking gas', kerosene: 'Kerosene' };
+  const FUEL_EN = { benzin: 'Gasoline 90', 'gasoline-95': 'Gasoline 95', diesel: 'Diesel', gas: 'Cooking gas', kerosene: 'Kerosene', 'diesel-150': 'Diesel, 2nd grade', 'diesel-115': 'Subsidised diesel (heating, farming)' };
+  const NOTE_EN = { 'حسب التوزيع': 'as distributed' };
+  const fmtD = new Intl.DateTimeFormat(LANG === 'en' ? 'en-GB' : 'ar-SY-u-nu-latn', { day: 'numeric', month: 'long', timeZone: 'Asia/Damascus' });
+  const dayOf = (iso) => { const t = Date.parse(`${String(iso).slice(0, 10)}T12:00:00+03:00`); return Number.isFinite(t) ? fmtD.format(t) : ''; };
   const UNIT_EN = [[/^لتر$/, 'litre'], [/^أسطوانة\s*\((\d+)\s*كيلو\)$/, 'cylinder ($1 kg)'], [/^أسطوانة$/, 'cylinder'], [/^كيلو$/, 'kg'], [/^طن$/, 'ton'], [/^ك\.و\.س$/, 'kWh']];
   const TARIFF_EN = { 'houses-under-300kwh': 'Homes (under 300 kWh)', 'houses-above-300kwh': 'Homes (over 300 kWh)', industrial: 'Industrial', commercial: 'Commercial', agricultural: 'Agricultural' };
   const tariffName = (t) => (LANG === 'en' ? TARIFF_EN[t.slug] || t.name_en || t.name : t.name);
@@ -582,8 +585,15 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         ${g.ounce ? `<div class="px-row"><span class="px-k">${esc(L.ounce)}</span><span class="px-v" dir="ltr">$${num(g.ounce, 0)}</span></div>` : ''}</div>`;
     }
     if (fuel.length) {
-      h += `<div class="px-card"><div class="px-h"><b>${esc(L.fuel)}</b><span>${esc(when(p.fuel.at || fuel[0]?.at))}</span></div>
-        ${fuel.map((f) => `<div class="px-row"><span class="px-k">${esc(fuelName(f.key, f))}${unitOf(f)}</span><span class="px-v">${lira(f.price)}${old(f.price)}</span>${f.usd ? `<span class="px-v" dir="ltr">$${num(f.usd, 2)}</span>` : ''}</div>`).join('')}</div>`;
+      const F = p.fuel;
+      const frow = (f) => `<div class="px-row"><span class="px-k">${esc(fuelName(f.key, f))}${unitOf(f)}${f.note ? ` <small>· ${esc(LANG === 'en' ? NOTE_EN[f.note] || f.note : f.note)}</small>` : ''}</span><span class="px-v">${lira(f.price)}${old(f.price)}</span>${f.usd ? `<span class="px-v" dir="ltr">$${num(f.usd, 2)}</span>` : ''}</div>`;
+      const main = fuel.filter((f) => !f.tier); const tiers = fuel.filter((f) => f.tier);
+      const since = F.since || F.at || fuel[0]?.at;
+      h += `<div class="px-card px-fuel"><div class="px-h"><b>${esc(L.fuel)}</b><span>${since ? `${esc(L.fuelSince)} ${esc(dayOf(since))}` : ''}</span></div>
+        ${F.stale ? `<p class="px-warn">⚠️ ${esc(L.fuelStale)}</p>` : ''}
+        ${main.map(frow).join('')}
+        ${tiers.length ? `<div class="px-sub">${esc(L.fuelTiers)}</div>${tiers.map(frow).join('')}` : ''}
+        ${F.checked ? `<div class="px-foot">${esc(L.fuelChecked)}: ${esc(when(F.checked))}${F.srcs?.length ? ` · ${esc(L.fuelSrc)}: <span dir="ltr">${esc(F.srcs.join(' + '))}</span>` : ''}</div>` : ''}</div>`;
     }
     h += `<p class="svc-note">${esc(L.priceNote)}</p>`;
     return h;

@@ -772,3 +772,11 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 /* desktop popup slid back inside the map while zooming / panning: the tip no longer points at its spot */
 .maplibregl-popup.pp-clamped .maplibregl-popup-tip { opacity: 0; }
 .maplibregl-popup .maplibregl-popup-content { transition: none; }
+
+/* ⛽ fuel card: since / last-checked / staleness / diesel grades */
+.px-fuel .px-warn { margin: 6px 0 4px; padding: 6px 8px; border-radius: 8px; background: rgba(245, 158, 11, .12); color: #b45309; font-size: 12.5px; line-height: 1.5; }
+html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbbf24; }
+.px-fuel .px-sub { margin: 8px 0 2px; font-size: 12px; font-weight: 700; opacity: .7; }
+.px-fuel .px-foot { margin-top: 6px; font-size: 11.5px; opacity: .65; line-height: 1.5; }
+.px-fuel .px-k small { white-space: nowrap; }
+.px-fuel .px-foot span[dir="ltr"] { white-space: nowrap; display: inline-block; }

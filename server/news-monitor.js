@@ -14,6 +14,10 @@ import { locationFrom, normalizeArabic } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText, parseUsername } from './news-sources.js';
 import { onNewsPost as onPowerPost } from './services.js';
 import { onBorderNews } from './borders.js';
+import { FUEL_NEWS_RE } from './fuel.js';
+import { fuelRecheckSoon } from './prices.js';
+const FUEL_HOOK = { at: 0 };
+const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
@@ -499,6 +503,8 @@ async function pollOnce() {
     try { if (onPowerPost(it)) { note(it, 'electricity update -> owner card'); continue; } } catch (e) { console.warn('[news] power hook failed', e.message); }
     // 🛂 border crossing open/closed news -> owner suggestion card (server/borders.js); the post still goes on as news
     try { if (onBorderNews(it)) note(it, 'border crossing update -> owner card'); } catch (e) { console.warn('[news] border hook failed', e.message); }
+    // ⛽ official fuel pricing decision -> re-check the fuel sources soon (server/prices.js); the post still goes on
+    try { if (FUEL_NEWS_RE.test(normalizeFuelText(c.text)) && Date.now() - (FUEL_HOOK.at || 0) > 3 * 3600_000) { FUEL_HOOK.at = Date.now(); fuelRecheckSoon(); note(it, 'fuel pricing news -> fuel re-check scheduled'); } } catch (e) { console.warn('[news] fuel hook failed', e.message); }
     const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
     if (!f.ok) { note(it, 'skipped: ' + f.why); continue; }
     // "seen" only once it really goes to the desk: a skipped post can be looked at again after a rule fix

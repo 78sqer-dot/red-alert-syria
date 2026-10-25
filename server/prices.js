@@ -15,6 +15,7 @@ import { config } from './config.js';
 import { store } from './store.js';
 import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge, badgeWidth } from './alert-image.js';
+import { fetchSypNow, fromSpToday, mergeFuel, fuelView, STALE_H } from './fuel.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -238,6 +239,42 @@ export async function fetchOfficial(sp) {
 
 // ---------------------------------------------------------------- refresh loop
 const R = { busy: false, lastSpTry: 0, lastOffTry: 0, spErr: '', offErr: '' };
+// ⛽ fuel: sp-today (read above) + SyPNow every 6 h (sooner while sp-today has no fuel, or on demand)
+async function refreshFuel(st, { force = false } = {}) {
+  const now = Date.now();
+  const sp = R.spFuel && now - (st.spAt || 0) < 2 * H_MS ? R.spFuel : null;
+  R.spFuel = null;
+  let syp = null;
+  const every = sp ? 6 * H_MS : 30 * 60_000;
+  if (force || R.fuelDue || now - (R.lastSypTry || 0) > every) {
+    R.lastSypTry = now; R.fuelDue = false;
+    try { syp = await fetchSypNow(); R.sypErr = ''; } catch (e) { R.sypErr = e.message; console.warn('[prices] SyPNow failed:', e.message); }
+  }
+  if (!sp && !syp) return;
+  const f = (st.fuel ||= {});
+  const hadConflict = f.conflict;
+  // sp-today alone, same numbers as stored -> just confirm (keeps the last cross-check result)
+  if (!syp && f.items && Object.keys(sp.items).every((k) => f.items[k]?.price === sp.items[k].price)) { f.checked = now; save(false); return; }
+  const { changed, conflict } = mergeFuel(f, [sp, syp], now);
+  save(false);
+  const api = typeof R2.api === 'function' ? R2.api() : R2.api;
+  if (!api) return;
+  if (changed) {
+    console.log('[prices] fuel prices changed', JSON.stringify(f.items));
+    const L = Object.entries(f.items).map(([k, v]) => `• ${v.name}: <b>${fmtNew(f.prev?.items?.[k]?.price)}</b> ← <b>${fmtNew(v.price)}</b>`);
+    await notifyOwners(api, `⛽ <b>تغيّرت أسعار المحروقات الرسمية</b> (سارية منذ ${dateLabel(f.since)})\n\n${L.join('\n')}\n\nالمصدر: ${f.srcs.join(' + ')}\nالموقع ونشرة الصباح يأخذون الأسعار الجديدة تلقائياً.`).catch(() => {});
+  }
+  if (conflict && conflict !== hadConflict && conflict !== f.conflictSent) {
+    f.conflictSent = conflict; save(false);
+    await notifyOwners(api, `⚠️ <b>اختلاف بين مصدري أسعار المحروقات</b>\n\n${conflict}\n\nاعتمدتُ الأحدث تاريخاً. إذا الرقم غلط، قلّي وبصلّحه.`).catch(() => {});
+  }
+}
+/** an official pricing decision showed up in the news: re-check fuel soon (sources update a bit later) */
+export function fuelRecheckSoon() {
+  for (const ms of [20 * 60_000, 2 * H_MS]) {
+    setTimeout(() => { R.fuelDue = true; R.lastSpTry = 0; refreshPrices().catch(() => {}); }, ms).unref?.();
+  }
+}
 export async function refreshPrices({ force = false } = {}) {
   if (R.busy) return pricesState();
   R.busy = true;
@@ -249,9 +286,10 @@ export async function refreshPrices({ force = false } = {}) {
         const sp = await fetchSpToday();
         const bad = checkSp(sp);
         if (bad) { R.spErr = bad; console.warn('[prices] sp-today rejected:', bad); }
-        else { st.sp = sp; st.spAt = Date.now(); R.spErr = ''; save(false); }
+        else { st.sp = sp; st.spAt = Date.now(); R.spErr = ''; save(false); R.spFuel = fromSpToday(sp); }
       } catch (e) { R.spErr = e.message; console.warn('[prices] sp-today failed:', e.message); }
     }
+    await refreshFuel(st, { force });
     const p = damascusParts();
     const haveToday = st.official?.date === p.date;
     // the official bulletin appears ~13:00 Damascus on working days: look for it from 12:30, every 30 min
@@ -266,8 +304,18 @@ export async function refreshPrices({ force = false } = {}) {
   } finally { R.busy = false; }
   return st;
 }
-export function pricesDebug() { const st = pricesState(); return { cfg: st.cfg, spAt: st.spAt, spErr: R.spErr, offErr: R.offErr, official: st.official ? { date: st.official.date, usd: st.official.usd } : null, usd: st.sp?.usd }; }
+export function pricesDebug() { const st = pricesState(); return { cfg: st.cfg, spAt: st.spAt, spErr: R.spErr, offErr: R.offErr, sypErr: R.sypErr, fuel: st.fuel ? { since: st.fuel.since, checked: st.fuel.checked, srcs: st.fuel.srcs, conflict: st.fuel.conflict, items: Object.fromEntries(Object.entries(st.fuel.items || {}).map(([k, v]) => [k, v.price])) } : null, official: st.official ? { date: st.official.date, usd: st.official.usd } : null, usd: st.sp?.usd }; }
 
+/** fuel for the site/bulletin: stored cross-checked prices, else sp-today's own reading */
+function fuelOf(st, now = Date.now()) {
+  if (st.fuel?.items) return fuelView(st.fuel, now);
+  const r = fromSpToday(st.sp);
+  return r ? fuelView({ items: r.items, since: r.since, checked: st.spAt, srcs: [r.src] }, now) : null;
+}
+function fuelPublic(st) {
+  const v = fuelOf(st);
+  return v ? { at: v.since, since: v.since, checked: v.checked, stale: v.stale, staleH: STALE_H, srcs: v.srcs, items: v.items } : { items: {} };
+}
 /** public JSON for the website */
 export function publicPrices() {
   const st = pricesState();
@@ -278,7 +326,7 @@ export function publicPrices() {
     market: { at: sp.at, src: 'sp-today.com', usd: sp.usd, eur: sp.eur, try: sp.try, sar: sp.sar, aed: sp.aed },
     official: official ? { date: official.date, url: official.url, usd: official.usd, eur: official.eur, try: official.try } : null,
     gold: { at: sp.goldAt, ...sp.gold },
-    fuel: { at: sp.fuelAt, items: sp.fuel },
+    fuel: fuelPublic(st),
     power: { at: sp.powerAt, items: sp.power },
   };
 }
@@ -367,11 +415,12 @@ export function pricesSvg(st, now = Date.now()) {
     y += ch + 34;
   }
   // fuel
-  const F = sp.fuel || {};
+  const FV = fuelOf(st, now);
+  const F = FV && !FV.stale ? FV.items : {}; // unconfirmed for STALE_H hours -> no fuel section at all
   const fl = [['بنزين 90', F.benzin, 'لتر'], ['بنزين 95', F['gasoline-95'], 'لتر'], ['مازوت', F.diesel, 'لتر'], ['غاز منزلي', F.gas, 'أسطوانة']].filter((x) => x[1]?.price);
   if (fl.length) {
     o.push(text(R, y + 34, 'المحروقات — السعر الرسمي', { size: 34, weight: 800, fill: '#ffffff' }));
-    if (sp.fuelAt) o.push(text(P, y + 34, `منذ ${dateLabel(String(sp.fuelAt).slice(0, 10))}`, { size: 20, weight: 600, fill: '#9ca3af', anchor: 'start' }));
+    if (FV.since) o.push(text(P, y + 34, `سارية منذ ${dateLabel(FV.since)}`, { size: 20, weight: 600, fill: '#9ca3af', anchor: 'start' }));
     y += 56;
     const gap = 16; const cw = (W - 2 * P - gap * (fl.length - 1)) / fl.length; const ch = 140;
     fl.forEach(([lbl, f, unit], i) => {
@@ -382,12 +431,18 @@ export function pricesSvg(st, now = Date.now()) {
       o.push(text(x + cw / 2, y + 124, `لكل ${unit} · ${fmtOld(f.price)} قديمة`, { size: 16, weight: 500, fill: '#6b7280', anchor: 'middle' }));
     });
     y += ch + 30;
+    const t150 = F['diesel-150']; const t115 = F['diesel-115'];
+    if (t150 || t115) {
+      const parts = [t150 && `مازوت صنف ثاني ${fmtNew(t150.price)}`, t115 && `مازوت مدعوم للتدفئة والزراعة ${fmtNew(t115.price)}`].filter(Boolean);
+      o.push(text(R, y + 6, `${parts.join(' · ')} ل.س لكل لتر (وزارة الطاقة)`, { size: 19, weight: 600, fill: '#9ca3af' }));
+      y += 34;
+    }
   }
   // footer
   H = Math.round(y + 150);
   const fy = H - 40;
-  o.push(text(R, fy - 74, 'السوق الموازية: متوسط أسعار دمشق · المحروقات: التسعيرة الرسمية · الذهب: سعر المبيع', { size: 17, weight: 500, fill: '#6b7280' }));
-  o.push(text(R, fy - 48, 'الأسعار للاطلاع وقد تختلف بين المحافظات والمحلات · كل 1 ليرة جديدة = 100 ليرة قديمة', { size: 17, weight: 500, fill: '#6b7280' }));
+  o.push(text(R, fy - 74, `السوق الموازية: متوسط أسعار دمشق${fl.length ? ' · المحروقات: التسعيرة الرسمية' : ''} · الذهب: سعر المبيع`, { size: 17, weight: 500, fill: '#6b7280' }));
+  o.push(text(R, fy - 48, 'الأسعار للاطلاع وقد تختلف بين المحافظات والمحلات · كل 1 ليرة جديدة تعادل 100 ليرة قديمة', { size: 17, weight: 500, fill: '#6b7280' }));
   o.push(`<rect x="${P}" y="${fy - 32}" width="${W - 2 * P}" height="1" fill="#1f2937"/>`);
   o.push(text(R, fy + 6, 'red-alert-syria.onrender.com', { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
   const bh = 40; const bw = badgeWidth(bh);
@@ -409,8 +464,13 @@ export function pricesCaption(st, now = Date.now()) {
   if (official) L.push(`🏦 الرسمي (المركزي، نشرة ${dateLabel(official.date)}): الدولار <b>${fmtNew(official.usd.buy)}</b> / <b>${fmtNew(official.usd.sell)}</b>`);
   const g = sp.gold || {};
   if (g.k21) L.push('', `🟡 ذهب عيار 21: <b>${fmtNew(g.k21.sell || g.k21.buy)}</b> · عيار 18: <b>${fmtNew(g.k18?.sell || g.k18?.buy)}</b> ل.س للغرام`);
-  const F = sp.fuel || {};
-  if (F.benzin || F.diesel) L.push(`⛽ بنزين 90: <b>${fmtNew(F.benzin?.price)}</b> · مازوت: <b>${fmtNew(F.diesel?.price)}</b> · غاز: <b>${fmtNew(F.gas?.price)}</b>`);
+  const FV = fuelOf(st, now);
+  const F = FV && !FV.stale ? FV.items : {};
+  if (F.benzin || F.diesel) {
+    const t = F['diesel-150'] ? ` (صنف ثاني ${fmtNew(F['diesel-150'].price)})` : '';
+    L.push(`⛽ بنزين 90: <b>${fmtNew(F.benzin?.price)}</b> · مازوت: <b>${fmtNew(F.diesel?.price)}</b>${t} · غاز: <b>${fmtNew(F.gas?.price)}</b>`);
+    if (FV.since) L.push(`<i>المحروقات: التسعيرة الرسمية سارية منذ ${dateLabel(FV.since)}</i>`);
+  }
   L.push('', '<i>بالليرة الجديدة · القديمة = ×100</i>');
   L.push(`📊 كل الأسعار على الموقع: ${siteUrl()}/ar/#prices`);
   return L.join('\n');
