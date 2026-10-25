@@ -132,6 +132,12 @@ export function wxbState() {
   if (!WXB_TIMES.includes(b.cfg.time)) b.cfg.time = '08:00';
   // the very first build switched it on by default before the owner saw a preview: off once, then the owner decides
   if (b.cfg.v !== 2) { b.cfg.on = false; b.cfg.v = 2; }
+  // owner approved the preview and said «أي شغلها» (2026-10-25): switch on once, first run the next 08:00
+  if (b.cfg.v === 2) {
+    b.cfg.on = true; b.cfg.v = 3;
+    const p = damascusParts(); if (p.hm >= b.cfg.time) b.cfg.last = p.date; // a time already passed today starts tomorrow
+    else if (b.cfg.last === p.date) b.cfg.last = null;
+  }
   return b;
 }
 const save = (soon = true) => store.persist({ backupSoon: soon });
@@ -274,6 +280,7 @@ export function startWxBulletin(getApi) {
   started = true;
   const c0 = wxbState().cfg; const p0 = damascusParts();
   if (!c0.last && p0.hm >= c0.time) { c0.last = p0.date; save(false); } // first boot after the time: start tomorrow
+  save(false); // persist the one-time switch/migrations right away
   let busy = false;
   const tick = async () => {
     const c = wxbState().cfg;
@@ -347,4 +354,16 @@ export function registerWxBulletinTools(bot, h) {
       await h.show(ctx, r.ok ? '✅ نُشرت نشرة الطقس بالقناة.' : `⚠️ ما نُشرت: ${esc(r.why)}`, new InlineKeyboard().text('🌤 نشرة الطقس', 'wxb').text(h.L(ctx).btnHome, 'home'));
     } catch (e) { await h.show(ctx, `⚠️ ${esc(e.description || e.message)}`, new InlineKeyboard().text(h.L(ctx).btnHome, 'home')); }
   }));
+}
+
+/** Owner-key diagnostics: bulletin switch + the next scheduled run (Damascus time). */
+export function wxBulletinDebug() {
+  const c = wxbState().cfg; const p = damascusParts();
+  let next = null;
+  if (c.on) {
+    const today = !(p.hm >= c.time || c.last === p.date);
+    const d = new Date(Date.UTC(p.y, p.m - 1, p.d + (today ? 0 : 1)));
+    next = `${d.toISOString().slice(0, 10)} ${c.time} Asia/Damascus`;
+  }
+  return { on: c.on, time: c.time, last: c.last, v: c.v, nowDamascus: `${p.date} ${p.hm}`, next, channel: Boolean(config.channel) };
 }

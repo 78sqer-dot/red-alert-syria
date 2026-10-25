@@ -14,7 +14,7 @@ import { applyProject } from './config.js';
 import { governorates } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
 import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
-import { publicWeather, startWxBulletin, weatherNowDebug } from './wx-daily.js';
+import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug } from './wx-daily.js';
 import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
 import { weatherDebug, checkWeather } from './weather.js';
 import { publicBorders } from './borders.js';
@@ -156,7 +156,7 @@ app.get('/api/pricesdebug', apiLimiter, async (req, res) => {
 app.get('/api/weatherdebug', apiLimiter, async (req, res) => {
   if (!pricesKeyOk(req)) return res.status(404).end();
   if (req.query.dry) return res.json({ dry: await checkWeather({ dry: true }).catch((e) => ({ error: e.message })), ...weatherDebug() });
-  res.json(weatherDebug());
+  res.json({ ...weatherDebug(), bulletin: wxBulletinDebug() });
 });
 app.get('/api/quakesdebug', apiLimiter, async (req, res) => {
   if (!pricesKeyOk(req)) return res.status(404).end();
