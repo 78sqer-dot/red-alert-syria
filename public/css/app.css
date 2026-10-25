@@ -737,3 +737,4 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 /* 3D terrain: flat DOM pulse rings cannot tilt with the ground (the drawn circles do), so they are hidden */
 .is-3d .zp { display: none !important; }
 .is-3d.is-moving .mk { will-change: transform; }
+.badge .bemo { font-size: 13px; line-height: 1; font-family: 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif; }

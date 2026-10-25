@@ -5,7 +5,7 @@ import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert } from './store.js';
-import { ALERT_TYPES, TYPE_KEYS, typeOf } from '../shared/types.js';
+import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
@@ -88,7 +88,7 @@ export function channelPost(alert, { ended = false } = {}) {
   const p = alert.place || {};
   const hasPlace = p.scope && p.scope !== 'country';
   const lines = [];
-  lines.push(`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${t.emoji}`, '');
+  lines.push(`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${alertEmoji(alert)}`, '');
   const desc = cleanAlertText(alert.description || '');
   if (alert.type === 'breaking') lines.push(`<b>${esc(desc || alert.title)}</b>`, '');
   if (hasPlace) for (const x of [p, ...(alert.extra || [])]) lines.push(`📍<b>${esc(locName(x, 'ar'))}</b>`);
@@ -1375,7 +1375,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const kb = new InlineKeyboard();
     for (const a of act) {
       const t = new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit' }).format(new Date(a.timestamp));
-      kb.text(`${typeOf(a.type).emoji} ${t} · ${(lang === 'en' ? a.title_en : a.title) || ''}`.slice(0, 60), 'm:' + a.id).row();
+      kb.text(`${alertEmoji(a)} ${t} · ${(lang === 'en' ? a.title_en : a.title) || ''}`.slice(0, 60), 'm:' + a.id).row();
     }
     kb.text(l.btnHome, 'home');
     await show(ctx, l.activeTitle(store.activeAlerts().length), kb);
@@ -1426,7 +1426,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   const manageText = (ctx, a) => {
     const lang = langOf(ctx);
     const exp = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-SY', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit' }).format(new Date(a.expires_at));
-    return `${L(ctx).manageTitle}\n\n${typeOf(a.type).emoji} <b>${esc(lang === 'en' ? a.title_en : a.title)}</b>\n${a.description ? esc(a.description) + '\n' : ''}🕒 ${esc(fmtTime(a.timestamp, lang))}\n⌛ ${lang === 'en' ? 'Expires' : 'ينتهي'}: ${exp}${a.is_active ? '' : '\n\n' + L(ctx).ended}`;
+    return `${L(ctx).manageTitle}\n\n${alertEmoji(a)} <b>${esc(lang === 'en' ? a.title_en : a.title)}</b>\n${a.description ? esc(a.description) + '\n' : ''}🕒 ${esc(fmtTime(a.timestamp, lang))}\n⌛ ${lang === 'en' ? 'Expires' : 'ينتهي'}: ${exp}${a.is_active ? '' : '\n\n' + L(ctx).ended}`;
   };
   bot.callbackQuery(/^m:([\w-]{36})$/, async (ctx) => {
     await ctx.answerCallbackQuery();

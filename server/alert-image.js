@@ -61,6 +61,17 @@ const LEVELS = {
   notice: { ar: 'تنبيه', en: 'Notice', color: '#fcd34d' },
   info: { ar: 'للعلم', en: 'For information', color: '#7dd3fc' },
 };
+// line icons (Lucide, ISC) for weather hazards in the image title — resvg has no emoji font
+const HAZARD_ICON = {
+  rain: ['M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242', 'M16 14v6', 'M8 14v6', 'M12 16v6'],
+  snow: ['M2 12h20', 'M12 2v20', 'm20 16-4-4 4-4', 'm4 8 4 4-4 4', 'm16 4-4 4-4-4', 'm8 20 4-4 4 4'],
+  wind: ['M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2', 'M9.6 4.6A2 2 0 1 1 11 8H2', 'M12.6 19.4A2 2 0 1 0 14 16H2'],
+  storm: ['M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973', 'm13 12-3 5h4l-3 5'],
+  heat: ['M12 9a4 4 0 0 0-2 7.5', 'M12 3v2', 'm6.6 18.4-1.4 1.4', 'M20 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z', 'M4 13H2', 'M6.34 7.34 4.93 5.93'],
+  frost: ['M2 12h10', 'M9 4v16', 'm3 9 3 3-3 3', 'M12 6 9 9 6 6', 'm6 18 3-3 1.5 1.5', 'M20 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z'],
+  dust: ['M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242', 'M16 17H7', 'M17 21H9'],
+};
+const hazardIconSvg = (k, x, y, size, color) => `<g transform="translate(${x} ${y}) scale(${size / 24})" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${HAZARD_ICON[k].map((d) => `<path d="${d}"/>`).join('')}</g>`;
 const LEVEL_OF = { breaking: 'urgent', uav: 'caution', warplane: 'caution', missile: 'danger', attack: 'danger', artillery: 'danger', explosion: 'danger', civil: 'notice', accident: 'notice', protest: 'notice', fire: 'notice', civil_plane: 'info', quake: 'notice', weather: 'caution' };
 const NOTE = {
   ar: { uav: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق لا على عدد المسيّرات', warplane: 'ملاحظة: الدائرة تدلّ على منطقة التحليق التقريبية', multi: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق المتأثرة', quake: 'ملاحظة: الدائرة تقريبية لمنطقة الشعور بالهزة، والمصدر مراصد الزلازل الدولية', weather: 'ملاحظة: الدائرة تقريبية للمنطقة المشمولة بالتحذير' },
@@ -229,7 +240,10 @@ export async function alertImageSvg(alert, opts = {}) {
   const short = en ? alert.place?.short_en : alert.place?.short_ar;
   const place = opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
   const titleSize = head.length > 16 ? 44 : 52;
-  const tx = en ? 36 : W - 36; const anchor = en ? 'start' : 'end';
+  const hz = type === 'weather' && HAZARD_ICON[alert.meta?.hazard] ? alert.meta.hazard : '';
+  const IC = titleSize; // icon box, same height as the title
+  if (hz) o.push(hazardIconSvg(hz, en ? 36 : W - 36 - IC, 74 - IC * 0.86, IC, '#ffffff'));
+  const tx = en ? 36 + (hz ? IC + 14 : 0) : W - 36 - (hz ? IC + 14 : 0); const anchor = en ? 'start' : 'end';
   o.push(`<text x="${tx}" y="74" font-family="${FF}" font-size="${titleSize}" font-weight="800" fill="#ffffff" text-anchor="${anchor}"${en ? '' : ' direction="rtl"'}>${ttx(head)}</text>`);
   // severity dot + label + place
   const sub = `${en ? lvl.en : lvl.ar}`;

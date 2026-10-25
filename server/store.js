@@ -545,6 +545,7 @@ export function publicAlert(a) {
   return {
     id: a.id,
     type: a.type,
+    hazard: a.type === 'weather' ? a.meta?.hazard || undefined : undefined,
     title: a.title,
     title_en: a.title_en,
     description: cleanAlertText(a.description) || undefined,

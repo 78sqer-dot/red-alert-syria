@@ -1,6 +1,6 @@
 // Red Alert Syria — front-end application
 import { createServices } from './services.js';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, typeOf } from '/shared/types.js';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, typeOf, HAZARD_EMOJI, alertEmoji } from '/shared/types.js';
 import { DICT } from './i18n.js';
 import { icon } from './icons.js';
 import { settings } from './settings.js';
@@ -191,7 +191,7 @@ function setConn(s) {
 // ------------------------------------------------------------------ list & detail
 function badge(a, live = false) {
   const t = typeOf(a.type);
-  return `<span class="badge${live ? ' live' : ''}" style="--c:${t.color}">${icon(typeIcon(a.type), 13)}${esc(typeName(a.type))}</span>`;
+  return `<span class="badge${live ? ' live' : ''}" style="--c:${t.color}">${a.type === 'weather' && HAZARD_EMOJI[a.hazard] ? `<span class="bemo" aria-hidden="true">${HAZARD_EMOJI[a.hazard]}</span>` : icon(typeIcon(a.type), 13)}${esc(typeName(a.type))}</span>`;
 }
 function cardHtml(a, fresh) {
   const t = typeOf(a.type);
@@ -645,7 +645,7 @@ function notify(a) {
   if (n.vibration && navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
     try {
-      const notif = new Notification(`${t.emoji} ${typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (a.description ? '\n' + a.description : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr' });
+      const notif = new Notification(`${alertEmoji(a)} ${typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (a.description ? '\n' + a.description : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr' });
       notif.onclick = () => {
         window.focus();
         select(a.id);

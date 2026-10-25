@@ -95,3 +95,7 @@ export function dimColor(hex, alpha = 0.12) {
   const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
+
+// Weather warnings: the emoji follows the hazard (⛈ stays only as the generic type label)
+export const HAZARD_EMOJI = { rain: '🌧', snow: '❄️', wind: '💨', storm: '⛈', heat: '🌡', frost: '🥶', dust: '🌫' };
+export const alertEmoji = (a) => (a?.type === 'weather' && HAZARD_EMOJI[a.hazard || a.meta?.hazard]) || typeOf(a?.type).emoji;
