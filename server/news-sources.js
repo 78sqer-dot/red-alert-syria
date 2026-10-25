@@ -13,6 +13,17 @@ export const DEFAULT_SOURCES = [
   { u: 'ALMHARAR', name: 'شبكة أخبار سوريا الحرة', general: true },
   { u: 'HalabTodayTV', name: 'حلب اليوم', general: true },
   { u: 'alarabiyaBr', name: 'العربية عاجل', general: true },
+  // local / activist channels (fast regional coverage, less reliable): `local: true` = shown as
+  // "محلي" in the draft card, never classified by the simple no-AI rules, and the AI is stricter with them.
+  { u: 'zainaldinmaham1', name: 'زينو ياسر محاميد', general: true, local: true },
+  { u: 'HoranFreeMedia', name: 'تجمع أحرار حوران', general: true, local: true },
+  { u: 'daraa24_org', name: 'درعا 24', general: true, local: true },
+  { u: 'D24net', name: 'دير الزور 24', general: true, local: true },
+  { u: 'AbomosaabSharkea', name: 'مراسل الشرقية', general: true, local: true },
+  { u: 'suhebb0', name: 'صهيب اليعربي', general: true, local: true },
+  { u: 'alkhabour', name: 'الخابور', general: true, local: true },
+  { u: 'syriancoast24', name: 'الساحل السوري 24', general: true, local: true },
+  { u: 'SweidaGov1', name: 'محافظة السويداء', general: true, local: true },
 ];
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -74,11 +85,18 @@ export async function fetchChannel(u, { timeoutMs = 15_000, fetchImpl = fetch } 
 
 // Remove channel signatures, "subscribe" footers, links and hashtag decoration; keep the news itself.
 const SIGNATURE = /(اشترك|تابعونا|انضموا|لمتابعة|للمزيد من التفاصيل|التفاصيل على الرابط|لمشاهدة الحلقة|على تلغرام|على تيليغرام|على التلغرام|على التيليجرام|قناة التليغرام|قناة التيليجرام|t\.me\/|@[A-Za-z]\w{3,}\s*$|خدمة شبكة|👇)/;
+// A channel's promo block ("🔻لمتابعة زينو🔻 اضغط على الرابط 👇", "تابع قناة التلغرام", "للتواصل مع الإدارة")
+// ends the news: everything from its first line on is dropped.
+const PROMO_START = /^[\s\p{Extended_Pictographic}\uFE0F🔻🔺•▪️*_~-]*(لمتابعة|للمتابعة|تابعونا|تابعوا|تابع قناة|تابع صفحة|تابعو|اشترك|اشتركوا|للاشتراك|انضم|انضموا|للانضمام|للتواصل|للإعلان|للاعلان|لإعلاناتكم|رابط القناة|رابط اليوتيوب|رابط الفيسبوك|رابط الصفحة|قناتنا|صفحتنا|أخبار أكثر|اخبار اكثر|أخــبـــار|ادعم|لدعم القناة|شاركونا|راسلونا)/u;
+const PROMO_LINE = /(اضغط|الرابط|على الرابط|فيسبوك|فيس بوك|يوتيوب|انستغرام|انستقرام|واتساب|تيك توك|Facebook|YouTube|Instagram|WhatsApp|TikTok|تفاصيل أكثر حال ورودها|التفاصيل تباعاً|بالسلامة للجميع|تابعونا)/iu;
 export function cleanPostText(raw) {
   const lines = String(raw || '').split('\n').map((l) => l.replace(/https?:\/\/\S+/g, '').trim());
   const keep = [];
   for (const l of lines) {
     if (!l) { keep.push(''); continue; }
+    if (keep.some((x) => x) && PROMO_START.test(l)) break; // promo block: the rest is not news
+    if (PROMO_LINE.test(l) && l.length < 90) continue;
+    if (!/[\p{L}\p{N}]/u.test(l)) continue; // emoji / arrows / symbols only
     if (SIGNATURE.test(l) && l.length < 160) continue;
     if (/^(https?:\/\/|www\.)\S+$/.test(l)) continue;
     if (/^[-ـ_—=•.]{3,}$/.test(l)) continue;
@@ -89,8 +107,10 @@ export function cleanPostText(raw) {
   const breaking = /(^|[\s#|])عاجل/.test(t.slice(0, 40));
   t = t.replace(/^[\s#|🔴🚨⚡️⭕️❗️]*عاجل[\s|:：\-–—]*/u, '').trim();
   // "#بصرى_الشام" -> "بصرى الشام", "#درعا" -> "درعا"
+  t = t.replace(/^#?(?:د\s?24|د24)\s*[:：]\s*/u, ''); // "#د24:" channel tag
   t = t.replace(/#([\p{L}\p{N}_]+)/gu, (_, w) => w.replace(/_/g, ' '));
-  t = t.replace(/(\p{L})\.\.ـ?(\p{L})/gu, '$1$2').replace(/ـ+/g, ''); // "الإسـ..ـرائيلي" anti-filter spelling
+  // anti-filter spellings: "الإسـ..ـرائيلي", "مقت.ل", "جثم.ان", "م.ش.ن.و.ق،اً", "حـ.ـ.ـ.ـ،،زب" -> plain words
+  t = t.replace(/(\p{Script=Arabic})(?:[.*ـ،]*[.*ـ][.*ـ،]*|،+(?=[اى]|ً))(?=\p{Script=Arabic})/gu, '$1').replace(/ـ+/g, '');
   t = t.replace(/[📌🔹🔸▪️•●◾️✅🔻🔺]+/gu, '•').replace(/[ \t]+/g, ' ').trim();
   return { text: t, breaking };
 }

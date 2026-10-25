@@ -101,7 +101,9 @@ function ago(ts) {
 const timeLine = (ts) => `<b>${esc(ago(ts))}</b> · ${esc(fmtDay.format(new Date(ts)))} · ${esc(fmtTime.format(new Date(ts)))}`;
 const typeName = (t) => (ALERT_TYPES[t] ? ALERT_TYPES[t][LANG] : t);
 const titleOf = (a) => (LANG === 'en' && a.title_en ? a.title_en : a.title);
+// Published alerts show no hashtags (the owner's choice); kept as an empty list for the card layout.
 function tagsOf(a) {
+  if (a) return [];
   const t = typeOf(a.type);
   const p = a.place || {};
   const areas = LANG === 'ar' ? a.areas || [] : [p.name_en, p.district_en, p.governorate_en].filter(Boolean);
@@ -242,7 +244,6 @@ function detailHtml(a) {
       <div class="card-top">${badge(a, live)}<span class="time">${timeLine(a.timestamp)}</span></div>
       <h3 class="card-title">${esc(titleOf(a))}</h3>
       ${a.description ? `<p class="card-desc">${esc(a.description)}</p>` : ''}
-      <div class="tags" style="margin-top:8px">${tagsOf(a).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
       <span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span>
     </div>
     <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
@@ -289,7 +290,6 @@ function popupHtml(a) {
     <p class="pp-title">${esc(titleOf(a))}</p>
     ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">📍 ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
     ${a.description ? `<p class="pp-desc">${esc(a.description)}</p>` : ''}
-    <div class="tags" style="margin-top:6px">${tagsOf(a).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
     <a class="pp-share" href="https://wa.me/?text=${encodeURIComponent(shareText(a) + '\n' + shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.share)}</a></div></div>`;
 }

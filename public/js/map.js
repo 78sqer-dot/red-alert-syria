@@ -218,7 +218,16 @@ export class AlertMap {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
     this.map.on('click', (e) => {
-      if (!e.originalEvent.target.closest('.mk, .maplibregl-popup')) this.onSelect(null, { fromMap: true });
+      if (e.originalEvent.target.closest('.mk, .maplibregl-popup')) return;
+      // a tap inside any circle of an alert (main or extra affected area) opens that same alert
+      const hit = this.zoneAt(e.lngLat);
+      if (hit) { this._popupAt = { id: hit.id, ll: [hit.lon, hit.lat] }; return this.onSelect(hit.id, { fromMap: true, fly: false }); }
+      this.onSelect(null, { fromMap: true });
+    });
+    this.map.on('mousemove', (e) => {
+      const c = this.map.getCanvas();
+      const want = this.zoneAt(e.lngLat) ? 'pointer' : '';
+      if (c.style.cursor !== want) c.style.cursor = want;
     });
     // Markers are DOM elements: show them as soon as the style is parsed,
     // without waiting for every basemap tile (or forever, if a tile server is down).
@@ -433,6 +442,7 @@ export class AlertMap {
     const features = [];
     const pulses = [];
     const orb = (this._orb = new Map());
+    const hits = (this._hits = []);
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
       // every alert type gets a glowing circle over each affected area (aircraft keep their dashed blue ring)
@@ -448,6 +458,7 @@ export class AlertMap {
       }
       zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);
+        hits.push({ id: a.id, lon: z.lon, lat: z.lat, km, ts: Date.parse(a.timestamp) || 0, live: !!a.is_active });
         features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [circlePolygon(z.lon, z.lat, km)] } });
         if (a.is_active && pulses.length < 80) pulses.push({ key: `${a.id}:${i}`, lon: z.lon, lat: z.lat, km, color: props.color });
       });
@@ -522,13 +533,27 @@ export class AlertMap {
     if (popup) this.openPopup(alert);
   }
 
+  // the alert circle under a map point: smallest circle first (the most precise area), then live, then newest
+  zoneAt(ll) {
+    if (!ll || !this._hits || !this._hits.length) return null;
+    let best = null;
+    const cos = Math.cos((ll.lat * Math.PI) / 180);
+    for (const h of this._hits) {
+      const dy = (ll.lat - h.lat) * 111.32, dx = (ll.lng - h.lon) * 111.32 * cos;
+      if (dx * dx + dy * dy > h.km * h.km) continue;
+      if (!best || h.km < best.km - 0.01 || (Math.abs(h.km - best.km) <= 0.01 && (h.live > best.live || (h.live === best.live && h.ts > best.ts)))) best = h;
+    }
+    return best;
+  }
   openPopup(alert) {
     const M = ml();
     this.closePopup();
-    const m = this.markers.get(alert.id);
+    const at = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
+    this._popupAt = null;
+    const m = at ? null : this.markers.get(alert.id);
     const off = m ? m.getOffset() : { x: 0, y: 0 };
     this.popup = new M.Popup({ closeButton: true, closeOnClick: false, maxWidth: '290px', offset: { bottom: [off.x, off.y - 26], top: [off.x, off.y + 26], left: [off.x + 26, off.y], right: [off.x - 26, off.y] }, focusAfterOpen: false })
-      .setLngLat([alert.location.longitude, alert.location.latitude])
+      .setLngLat(at || [alert.location.longitude, alert.location.latitude])
       .setDOMContent(htmlToNode(this.popupHtml(alert)))
       .addTo(this.map);
     this.popup._alertId = alert.id;

@@ -12,6 +12,7 @@ import { renderAlertPng } from './alert-image.js';
 import { registerContactTools } from './contact-tools.js';
 import { registerNewsTools } from './news-monitor.js';
 import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
+import { cleanAlertText } from './clean-text.js';
 
 const PAGE = 24;
 const SUB_MENU_MIN = 40; // districts with more towns than this get a ناحية (sub-district) step first
@@ -74,9 +75,10 @@ export function channelPost(alert, { ended = false } = {}) {
   const hasPlace = p.scope && p.scope !== 'country';
   const lines = [];
   lines.push(`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${t.emoji}`, '');
-  if (alert.type === 'breaking') lines.push(`<b>${esc(alert.description || alert.title)}</b>`, '');
+  const desc = cleanAlertText(alert.description || '');
+  if (alert.type === 'breaking') lines.push(`<b>${esc(desc || alert.title)}</b>`, '');
   if (hasPlace) for (const x of [p, ...(alert.extra || [])]) lines.push(`📍<b>${esc(locName(x, 'ar'))}</b>`);
-  if (alert.type !== 'breaking' && alert.description) lines.push(`<blockquote>${esc(alert.description)}</blockquote>`);
+  if (alert.type !== 'breaking' && desc) lines.push(`<blockquote>${esc(desc)}</blockquote>`);
   lines.push('');
   lines.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
   lines.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
@@ -370,7 +372,7 @@ function buildAlertInput(d, author) {
     title: named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar,
     title_en: named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en,
     extra,
-    description: d.type === 'breaking' ? d.text : d.details,
+    description: cleanAlertText(d.type === 'breaking' ? d.text : d.details),
     location: loc,
     areas,
     ttlMin: d.ttlMin,

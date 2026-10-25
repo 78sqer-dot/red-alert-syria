@@ -5,6 +5,7 @@ import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { ALERT_TYPES, typeOf } from '../shared/types.js';
 import { alertZones } from './places.js';
+import { cleanAlertText } from './clean-text.js';
 
 /**
  * In-memory state with atomic JSON persistence on disk and an optional remote backup
@@ -544,7 +545,7 @@ export function publicAlert(a) {
     type: a.type,
     title: a.title,
     title_en: a.title_en,
-    description: a.description || undefined,
+    description: cleanAlertText(a.description) || undefined,
     location: a.location,
     place: {
       name_ar: p.name_ar, name_en: p.name_en,
@@ -560,7 +561,6 @@ export function publicAlert(a) {
     expires_at: a.expires_at,
     ended_at: a.ended_at,
     is_active: a.is_active,
-    source: a.source,
     telegram_url: a.channel_message_id && config.channel.startsWith('@') ? `https://t.me/${config.channel.slice(1)}/${a.channel_message_id}` : undefined,
   };
 }

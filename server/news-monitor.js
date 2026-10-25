@@ -14,6 +14,7 @@ import { locationFrom, normalizeArabic } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText, parseUsername } from './news-sources.js';
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
+import { setSourceNames, cleanAlertText } from './clean-text.js';
 
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
@@ -50,7 +51,19 @@ export function newsState() {
   if (!Array.isArray(n.sources)) n.sources = DEFAULT_SOURCES.map((s) => ({ ...s, on: true }));
   if (!n.types || typeof n.types !== 'object') n.types = {};
   for (const k of NEWS_TYPES) if (typeof n.types[k] !== 'boolean') n.types[k] = true;
-  if (typeof n.attr !== 'boolean') n.attr = false;
+  // one-time: add the local/activist channels (25 Oct 2026) to an existing saved list; they start from
+  // their newest post (no backlog) like any new source. Sources the owner removed later stay removed.
+  if (!n.mig || typeof n.mig !== 'object') n.mig = {};
+  if (!n.mig.local1) {
+    for (const s of DEFAULT_SOURCES) {
+      if (!s.local) continue;
+      const cur = n.sources.find((x) => x.u.toLowerCase() === s.u.toLowerCase());
+      if (cur) { cur.local = true; cur.general = true; } else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
+    }
+    n.mig.local1 = new Date().toISOString();
+  }
+  setSourceNames(n.sources.map((s) => s.name));
+  n.attr = false; // published text never names a source (sources stay in the owner's draft card only)
   if (!n.last || typeof n.last !== 'object') n.last = {};
   if (!n.seen || typeof n.seen !== 'object') n.seen = {};
   if (!n.drafts || typeof n.drafts !== 'object') n.drafts = {};
@@ -183,8 +196,12 @@ function cardText(d, lang = 'ar') {
     for (const l of locs) lines.push(`• ${esc(fmtLoc(l))}`);
   } else lines.push(`📍 <b>${tr(lang, 'المكان', 'Place')}:</b> ${esc(locs[0] ? fmtLoc(locs[0]) : tr(lang, 'سوريا', 'Syria'))}`);
   lines.push(`📝 ${esc(d.headline)}`);
-  const srcs = (d.srcs || []).map((s) => (s.url ? `<a href="${esc(s.url)}">${esc(s.name)}</a>` : esc(s.name)));
+  const isLocal = (s) => s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local;
+  const srcs = (d.srcs || []).map((s) => (s.url ? `<a href="${esc(s.url)}">${esc(s.name)}</a>` : esc(s.name)) + (isLocal(s) ? tr(lang, ' <i>(محلي)</i>', ' <i>(local)</i>') : ''));
   lines.push('', `🗞 <b>${tr(lang, `المصادر (${srcs.length})`, `Sources (${srcs.length})`)}:</b> ${srcs.join(' · ')}`);
+  const nMain = (d.srcs || []).filter((s) => !isLocal(s)).length;
+  if ((d.srcs || []).length >= 2) lines.push(tr(lang, `✅ <i>مؤكد من ${(d.srcs || []).length} مصادر</i>`, `✅ <i>Confirmed by ${(d.srcs || []).length} sources</i>`));
+  else if (!nMain) lines.push(tr(lang, '⚠️ <i>مصدر محلي/ناشط واحد — غير مؤكد بعد، تأكد قبل النشر.</i>', '⚠️ <i>Single local/activist source — not confirmed yet, check before publishing.</i>'));
   lines.push(`🕒 ${tr(lang, 'أول خبر', 'First report')}: ${esc(clock(d.ts || d.created))} ${tr(lang, '(بتوقيت دمشق)', '(Damascus time)')}`);
   if (d.rule) lines.push(tr(lang, '⚙️ <i>تصنيف آلي بسيط (الذكاء الاصطناعي غير متاح حالياً) — راجع النوع والمكان.</i>', '⚙️ <i>Simple automatic classification (AI unavailable) — check type and place.</i>'));
   return lines.join('\n');
@@ -236,8 +253,7 @@ async function closeCards(d, keep = null) {
 /** the bot's normal draft (same as a hand-made alert) from a news draft */
 export function toBotDraft(d) {
   const n = newsState();
-  const srcNames = (d.srcs || []).map((s) => s.name).join('، ');
-  const body = n.attr && srcNames ? `${d.headline}\n(المصدر: ${srcNames})` : d.headline;
+  const body = d.headline;
   return {
     type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin,
     location: d.loc || locationFrom({}), extra: d.extra || [],
@@ -301,7 +317,7 @@ function capReached() {
 async function mergeInto(d, it, locs = []) {
   const n = newsState();
   if ((d.srcs || []).some((s) => s.u === it.src.u)) return false;
-  d.srcs.push({ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts });
+  d.srcs.push({ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local });
   // another channel names a more precise nearby place (e.g. "المعكر" next to "مزرعة الحانوت"): add it as an extra area
   const main = d.loc && Number.isFinite(d.loc.latitude) ? { lat: d.loc.latitude, lon: d.loc.longitude } : null;
   for (const l of locs) {
@@ -327,7 +343,8 @@ async function handleResult(it, r, known, pmap) {
   if (m && m[1].toUpperCase() === 'E') target = known[Number(m[2]) - 1] || null;
   if (m && m[1].toUpperCase() === 'P') target = pmap.get(Number(m[2])) || null;
   const locs = buildLocations(r, it);
-  const headline = String(r.headline || '').replace(/[\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) || it.text.split('\n')[0].slice(0, 160);
+  const tidy = (x) => cleanAlertText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/\s+/g, ' ').trim();
+  const headline = (tidy(r.headline) || tidy(it.text.split('\n')[0])).slice(0, 160);
   const cand = { type: r.type, ts: it.ts, headline, geo: geoOf(locs) };
   if (!target) target = known.find((k) => sameIncident(cand, k)) || null;
   if (!target && r.new_incident === false) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
@@ -343,7 +360,7 @@ async function handleResult(it, r, known, pmap) {
   if (capReached()) { note(it, 'hourly cap reached'); return; }
   const d = {
     id: rid(), type: r.type, loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
-    srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
+    srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
   };
   n.drafts[d.id] = d;
   n.stats.drafts++;
@@ -377,7 +394,7 @@ async function processQueue() {
       aiStats.today++;
       try {
         const prompt = buildPrompt(
-          batch.map((it) => ({ i: it.i, source: it.src.name, ago: `${Math.max(0, Math.round((Date.now() - it.ts) / 60000))} min ago`, text: it.text })),
+          batch.map((it) => ({ i: it.i, source: it.src.name, local: !!it.src.local, ago: `${Math.max(0, Math.round((Date.now() - it.ts) / 60000))} min ago`, text: it.text })),
           known.map((k, i) => ({ id: 'E' + (i + 1), type: k.type, where: k.where, ago: `${Math.round((Date.now() - k.ts) / 60000)} min ago`, headline: `${k.headline} [${k.status}]`.slice(0, 220) })),
           nowDamascus(),
         );
@@ -392,7 +409,8 @@ async function processQueue() {
       // AI unavailable: retry these posts on the next round; after 6 min fall back to simple rules
       const late = batch.filter((it) => !key || Date.now() - it.qAt > 6 * 60_000);
       R.queue.unshift(...batch.filter((it) => !late.includes(it)));
-      results = late.map((it) => ({ i: it.i, ...(ruleClassify(it.text, { breaking: it.breaking }) || { event: false, type: 'none' }) }));
+      // local/activist channels are never turned into drafts by the simple rules (too noisy without the AI)
+      results = late.map((it) => ({ i: it.i, ...((!it.src.local && ruleClassify(it.text, { breaking: it.breaking })) || { event: false, type: 'none' }) }));
       batch.splice(0, batch.length, ...late);
     }
     const byI = new Map(results.filter((r) => r && Number.isInteger(r.i)).map((r) => [r.i, r]));
@@ -426,7 +444,7 @@ async function rescanIfFilterChanged() {
         if (!f.ok) continue;
         const h = textHash(c.text);
         n.seen[h] = Date.now(); n.handled[key] = Date.now();
-        const it = { src: { u: src.u, name: src.name }, url: p.url, ts: p.ts, qAt: Date.now(), text: c.text, breaking: c.breaking, rescan: true };
+        const it = { src: { u: src.u, name: src.name, local: !!src.local }, url: p.url, ts: p.ts, qAt: Date.now(), text: c.text, breaking: c.breaking, rescan: true };
         note(it, 'rescan: queued');
         R.queue.push(it); queued++;
       }
@@ -461,7 +479,7 @@ async function pollOnce() {
   save(false);
   for (const { src, p } of fresh) {
     n.stats.posts++;
-    const it = { src: { u: src.u, name: src.name }, url: p.url, ts: p.ts || Date.now(), qAt: Date.now() };
+    const it = { src: { u: src.u, name: src.name, local: !!src.local }, url: p.url, ts: p.ts || Date.now(), qAt: Date.now() };
     if (!p.ts || Date.now() - p.ts > NEWS_CFG.maxAgeMin * 60_000) { it.text = p.text; note(it, 'too old'); continue; }
     const c = cleanPostText(p.text);
     it.text = c.text; it.breaking = c.breaking;
@@ -670,7 +688,6 @@ export function registerNewsTools(bot, h) {
       `${t(ctx, 'التصنيف', 'Classification')}: ${ai}`,
       `📰 ${t(ctx, 'المصادر المفعّلة', 'Active sources')}: ${on} / ${n.sources.length}${bad ? t(ctx, ` (⚠️ ${bad} لا يُقرأ حالياً)`, ` (⚠️ ${bad} unreadable now)`) : ''}`,
       `🏷 ${t(ctx, 'الأنواع المرصودة', 'Watched types')}: ${ty} / ${NEWS_TYPES.length}`,
-      `📝 ${t(ctx, 'ذكر المصدر في المنشور', 'Credit the source in the post')}: ${n.attr ? t(ctx, 'نعم', 'yes') : t(ctx, 'لا', 'no')}`,
       `📊 ${t(ctx, 'اليوم (بتوقيت دمشق)', 'Today (Damascus time)')}: ${t(ctx, 'مسودات', 'drafts')} ${n.stats.drafts} · ${t(ctx, 'نُشر', 'published')} ${n.stats.published} · ${t(ctx, 'تُجوهل', 'ignored')} ${n.stats.ignored} · ${t(ctx, 'تكرار مُنع', 'duplicates stopped')} ${n.stats.merged + n.stats.dupes}${pending ? ` · ${t(ctx, 'بانتظارك', 'waiting')} ${pending}` : ''}`,
     ].join('\n');
   };
@@ -679,25 +696,24 @@ export function registerNewsTools(bot, h) {
     return new InlineKeyboard()
       .text(n.on ? t(ctx, '⏸ إيقاف الرصد', '⏸ Pause monitoring') : t(ctx, '▶️ تشغيل الرصد', '▶️ Resume monitoring'), n.on ? 'nws:off' : 'nws:on').row()
       .text(t(ctx, '📰 المصادر', '📰 Sources'), 'nws:src').text(t(ctx, '🏷 الأنواع', '🏷 Types'), 'nws:ty').row()
-      .text(n.attr ? t(ctx, '📝 ذكر المصدر: نعم', '📝 Credit source: yes') : t(ctx, '📝 ذكر المصدر: لا', '📝 Credit source: no'), 'nws:attr').row()
       .text(t(ctx, '🧪 إرسال مسودة تجريبية', '🧪 Send a test draft'), 'nws:test').row()
       .text(t(ctx, '🔄 تحديث', '🔄 Refresh'), 'nws').text(t(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
   };
   const srcText = (ctx) => {
     const n = newsState();
     const lines = [t(ctx, `📰 <b>مصادر الرصد</b> (${n.sources.length})`, `📰 <b>Monitored sources</b> (${n.sources.length})`), '',
-      t(ctx, 'اضغط اسم المصدر لإيقافه أو تشغيله، و🗑 لحذفه. أي قناة تيليغرام <b>عامة</b> تصلح مصدراً.', 'Tap a source to pause/resume it, 🗑 to remove it. Any <b>public</b> Telegram channel works.'), ''];
+      t(ctx, 'اضغط اسم المصدر لإيقافه أو تشغيله، ، و📍/🏛 لتعليمه مصدراً محلياً (ناشط، أقل موثوقية) أو رئيسياً، و🗑 لحذفه. أي قناة تيليغرام <b>عامة</b> تصلح مصدراً.', 'Tap a source to pause/resume it, 📍/🏛 to mark it local (activist, less reliable) or main, 🗑 to remove it. Any <b>public</b> Telegram channel works.'), ''];
     for (const s of n.sources) {
       const st = R.src[s.u];
       const health = !s.on ? '⏸' : !st ? '…' : st.ok ? '✓' : '⚠️';
-      lines.push(`${s.on ? '✅' : '⏸'} ${esc(s.name)} — <a href="https://t.me/${esc(s.u)}">@${esc(s.u)}</a> ${health}${s.general ? t(ctx, ' <i>(عامة: أخبار سوريا فقط)</i>', ' <i>(general: Syria only)</i>') : ''}`);
+      lines.push(`${s.on ? '✅' : '⏸'} ${esc(s.name)} — <a href="https://t.me/${esc(s.u)}">@${esc(s.u)}</a> ${health}${s.local ? t(ctx, ' <i>(محلي/ناشط)</i>', ' <i>(local/activist)</i>') : ''}${s.general ? t(ctx, ' <i>(عامة: أخبار سوريا فقط)</i>', ' <i>(general: Syria only)</i>') : ''}`);
     }
     return lines.join('\n');
   };
   const srcKb = (ctx) => {
     const n = newsState();
     const kb = new InlineKeyboard();
-    for (const s of n.sources) kb.text(`${s.on ? '✅' : '⏸'} ${s.name}`.slice(0, 40), 'nws:sv:' + s.u).text('🗑', 'nws:sd:' + s.u).row();
+    for (const s of n.sources) kb.text(`${s.on ? '✅' : '⏸'} ${s.name}`.slice(0, 40), 'nws:sv:' + s.u).text(s.local ? t(ctx, '📍 محلي', '📍 local') : t(ctx, '🏛 رئيسي', '🏛 main'), 'nws:sl:' + s.u).text('🗑', 'nws:sd:' + s.u).row();
     if (n.sources.length < NEWS_CFG.maxSources) kb.text(t(ctx, '➕ إضافة مصدر', '➕ Add a source'), 'nws:sa').row();
     kb.text(t(ctx, '♻️ المصادر الافتراضية', '♻️ Default sources'), 'nws:sr').row();
     return kb.text(t(ctx, '↩️ رجوع', '↩️ Back'), 'nws');
@@ -722,7 +738,7 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, n.on ? t(ctx, '▶️ عاد الرصد للعمل', '▶️ Monitoring resumed') : t(ctx, '⏸ تم إيقاف الرصد', '⏸ Monitoring paused'));
     await showMain(ctx);
   }));
-  bot.callbackQuery('nws:attr', (ctx) => onlyOwner(ctx, async () => { const n = newsState(); n.attr = !n.attr; save(); await toast(ctx, '✅'); await showMain(ctx); }));
+  bot.callbackQuery('nws:attr', (ctx) => onlyOwner(ctx, async () => { await toast(ctx, ''); await showMain(ctx); })); // old button (removed)
   bot.callbackQuery('nws:test', (ctx) => onlyOwner(ctx, async () => {
     await toast(ctx, t(ctx, '🧪 أرسلت مسودة تجريبية', '🧪 Test draft sent'));
     await sendTestDraft(ctx.from.id);
@@ -734,6 +750,13 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, '✅'); await h.show(ctx, tyText(ctx), tyKb(ctx));
   }));
   bot.callbackQuery('nws:src', (ctx) => onlyOwner(ctx, async () => { await toast(ctx, ''); await h.show(ctx, srcText(ctx), srcKb(ctx)); }));
+  // 📍 local/activist ⇄ 🏛 main source: local ones are labelled in drafts and handled more strictly
+  bot.callbackQuery(/^nws:sl:(\w+)$/, (ctx) => onlyOwner(ctx, async () => {
+    const n = newsState(); const s = n.sources.find((x) => x.u === ctx.match[1]);
+    if (s) { s.local = !s.local; if (s.local) s.general = true; save(); }
+    await toast(ctx, s ? (s.local ? t(ctx, `📍 ${s.name}: مصدر محلي/ناشط`, `📍 ${s.name}: local/activist`) : t(ctx, `🏛 ${s.name}: مصدر رئيسي`, `🏛 ${s.name}: main source`)) : '');
+    await h.show(ctx, srcText(ctx), srcKb(ctx));
+  }));
   bot.callbackQuery(/^nws:sv:(\w+)$/, (ctx) => onlyOwner(ctx, async () => {
     const n = newsState(); const s = n.sources.find((x) => x.u === ctx.match[1]);
     if (s) { s.on = !s.on; if (s.on) delete n.last[s.u]; save(); }

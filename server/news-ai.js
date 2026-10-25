@@ -32,7 +32,9 @@ const has = (nt, w) => nt.includes(w);
 /** which types' keywords appear in the (normalized) text */
 export function keywordTypes(text) {
   const nt = ' ' + N(text) + ' ';
-  return Object.keys(KW_N).filter((k) => KW_N[k].some((w) => has(nt, w)));
+  // words split by a space to dodge filters ("انفج ار", "لغ م"): long keywords are also looked for without spaces
+  const tight = nt.replace(/\s+/g, '');
+  return Object.keys(KW_N).filter((k) => KW_N[k].some((w) => has(nt, w) || (w.replace(/\s+/g, '').length >= 5 && tight.includes(w.replace(/\s+/g, '')))));
 }
 // obviously not an event on the ground
 const NOISE = ['اسعار', 'سعر صرف', 'الذهب', 'مباراه', 'المنتخب', 'كاس العالم', 'الدوري', 'الطقس', 'الارصاد', 'درجات الحراره', 'موجز اخبار', 'برنامج', 'الحلقه', 'لقاء خاص', 'مقابله', 'التقويم', 'تهنئه', 'ذكري', 'الذكري', 'امتحانات', 'مسابقه', 'المعرض', 'مؤتمر صحفي'].map(N);
@@ -171,12 +173,14 @@ export function buildPrompt(items, known, nowIso) {
   const sys = `You are the news desk of "Red Alert Syria", a live alert map of Syria. You read short posts from Syrian news channels and decide which ones should become a map alert.
 For EACH post return one object. Rules:
 1. event=true ONLY if the post reports a concrete incident that is happening now or happened in the last hours INSIDE Syria, at a nameable place. event=false for: statements, politics, diplomacy, meetings, economy, prices, sports, weather forecasts, analysis, interviews, reports/documentaries, anniversaries, statistics, aid deliveries, returns of displaced people, arrests or trials as such, condemnations, and anything outside Syria (Lebanon, Iraq, Israel, Palestine, Yemen, Saudi Arabia, Iran, Turkey… even if it mentions Syrians). Israeli army activity INSIDE Syrian territory (Quneitra, Daraa, Rif Dimashq, the separation line with the occupied Golan, Mount Hermon) is inside Syria. Reports that only summarise many past violations (monthly counts, statistics) are not events.
+1b. Only Syrian PUBLIC affairs. event=false for personal or social posts: opinions, commentary, rants, poems/quotes, greetings and congratulations, religious or good-morning posts, condolences/obituaries without an incident, personal appeals ("ياريت تنشرلي"), missing-person or lost-item notices, complaints about services (potholes, garbage, electricity, water, prices), ads, promotions, courses, job offers, polls, donation/aid requests, giveaways, channel announcements, and posts that only promote a channel or a video.
+1c. Posts whose source line says [LOCAL] come from local/activist channels: be stricter — event=true only for a concrete, specific incident report with a named place; event=false for rumours ("أنباء عن", "يُقال", "معلومات غير مؤكدة"), accusations or incitement without a concrete incident, and old footage.
 2. Follow-ups are NOT new events: casualty updates ("ارتفاع حصيلة"), someone dying of wounds from an earlier incident, "the perpetrators were arrested", the hospital receiving the wounded of an incident already reported, a reporter's details/video of an incident already reported, re-posts, "again/مجدداً" reports of the same ongoing incident. For those: event=true, new_incident=false and same_as = the known event id (E…) or earlier post (P…) it follows up. Use new_incident=false only for a follow-up of an incident in KNOWN EVENTS / an earlier post, or a clear aftermath (casualty update, funeral, arrest of perpetrators) of an earlier incident; an activity that starts again after a pause ("يستأنف … بعد توقف") is a NEW incident. If a post is the same incident as a known event or an earlier post in this batch (same kind of incident, same area, close in time — even if described with different nearby village names, e.g. "حاجز مفرق خربا" = "قرب بلدة معربة" = "بصرى الشام" for one checkpoint attack in eastern Daraa countryside), set same_as to it.
 3. type: the most specific of:
 ${TYPE_HELP}
 Use "breaking" only when nothing else fits. Shooting by unknown gunmen = attack. Israeli army shelling = artillery; Israeli air strike = warplane.
 4. places: where it happened, most specific first, max 4 — list every named village/town of the incident in the post (e.g. both villages of a road "طريق عين البيضة - جباتا الخشب"). name = the Arabic place name exactly as a Syrian would write it (town/village/neighbourhood; without words like "بلدة/مدينة/قرية/ريف/حي"), gov = its Syrian governorate in Arabic (one of: دمشق، ريف دمشق، حلب، حمص، حماة، اللاذقية، طرطوس، إدلب، درعا، السويداء، القنيطرة، دير الزور، الرقة، الحسكة). For a road between two cities ("أوتوستراد دمشق درعا") give the nearest named place in the post (e.g. "خبب") or the governorate. If only the governorate is known, give name = the governorate.
-5. headline: one neutral Arabic sentence (max 140 characters) saying what happened and where, without the source name, hashtags or emojis.
+5. headline: rewrite the news as ONE clean, neutral Arabic news sentence (max 140 characters) saying what happened and where — only the news itself. Never include: the channel/source/reporter name ("مراسل …", "أفاد مراسلنا", "درعا 24", "الجزيرة"…), calls to follow/subscribe/click, links, @usernames, hashtags, emojis, "متداول", greetings, or the poster's opinion.
 Return a JSON array, one object per post, same order.`;
   const lines = [];
   lines.push(`Now (Damascus): ${nowIso}`);
@@ -184,7 +188,7 @@ Return a JSON array, one object per post, same order.`;
   if (!known.length) lines.push('(none)');
   for (const k of known) lines.push(`${k.id} | ${k.type} | ${k.where} | ${k.ago} | ${k.headline}`);
   lines.push('', 'POSTS:');
-  for (const it of items) lines.push(`P${it.i} | ${it.source} | ${it.ago}\n${it.text.slice(0, 900)}\n---`);
+  for (const it of items) lines.push(`P${it.i} | ${it.source}${it.local ? ' [LOCAL]' : ''} | ${it.ago}\n${it.text.slice(0, 900)}\n---`);
   return { sys, user: lines.join('\n') };
 }
 const SCHEMA = {
