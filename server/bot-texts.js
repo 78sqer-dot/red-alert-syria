@@ -232,4 +232,6 @@ export const TITLES = {
   protest: { ar: 'مظاهرة', en: 'Protest' },
   fire: { ar: 'حريق', en: 'Fire' },
   civil_plane: { ar: 'طائرة مدنية', en: 'Civil aircraft' },
+  quake: { ar: 'زلزال', en: 'Earthquake' },
+  weather: { ar: 'تحذير جوي', en: 'Weather warning' },
 };

@@ -345,7 +345,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const chip = (k, label) => `<button class="svc-chip${st.cat === k ? ' on' : ''}" data-cat="${k}">${esc(label)}</button>`;
     return `<input class="svc-q" id="svcQ" type="search" placeholder="${esc(L.searchPh)}" value="${esc(st.q)}" autocomplete="off"/>
       <div class="svc-chips">${chip('all', LANG === 'en' ? 'All' : 'الكل')}${Object.keys(GROUPS).map((g) => chip(g, L.cats[g])).join('')}</div>
-      ${st.me ? '' : `<button class="btn-sm svc-loc" data-a="locate">${icon('locate', 15)}${esc(L.locFirst)}</button>`}
+      ${st.me ? `<button class="svc-forget" data-a="forget">${esc(LANG === 'en' ? 'Forget my location on this device' : 'احذف موقعي من هذا الجهاز')}</button>` : `<button class="btn-sm svc-loc" data-a="locate">${icon('locate', 15)}${esc(L.locFirst)}</button>`}
       <div id="svcRes" class="svc-res"></div>
       <div class="dd-sec">${esc(L.svcLayers)}</div>
       ${Object.keys(GROUPS).map((g) => `<label class="tgl"><span class="txt"><span class="svc-lbl"><i class="svc-dot" style="--c:${CAT_COLORS[GROUPS[g][0]]}"></i>${esc(L.cats[g])}</span></span><input class="switch" type="checkbox" data-sl="${g}" ${on.includes(g) ? 'checked' : ''}/></label>`).join('')}
@@ -377,6 +377,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (tab) { st.tab = tab.dataset.tab; render(); if (st.tab === 'nearby') loadPoi().then(() => renderResults()).catch(() => renderResults(true)); return; }
     const cat = t.closest('[data-cat]');
     if (cat) { st.cat = cat.dataset.cat; sheet.querySelectorAll('.svc-chip').forEach((c) => c.classList.toggle('on', c.dataset.cat === st.cat)); return renderResults(); }
+    if (t.closest('[data-a="forget"]')) { forgetMe(); getMap()?.hideMe?.(); render(); toast(LANG === 'en' ? 'Location removed from this device' : 'انحذف موقعك من هذا الجهاز'); return; }
     if (t.closest('[data-a="locate"]')) { close(); return locate({ then: () => open('nearby') }); }
     const pe = t.closest('[data-poi]');
     if (pe) {
@@ -429,6 +430,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       const me = { lon: p.coords.longitude, lat: p.coords.latitude, acc: Math.round(p.coords.accuracy || 0), t: Date.now() };
       st.me = me; window.__rasMe = me;
       try { localStorage.setItem(ME_KEY, JSON.stringify(me)); } catch { /* ignore */ }
+      window.dispatchEvent(new Event('ras-me'));
       const inSyria = me.lat > 32.2 && me.lat < 37.4 && me.lon > 35.6 && me.lon < 42.5;
       const am = getMap();
       if (am) {
@@ -454,6 +456,11 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (!st.me || !Number.isFinite(lat)) return '';
     return L.away(dist(km([st.me.lon, st.me.lat], [lon, lat])));
   }
+  /** raw km from the saved location (null when the visitor has not shared it) */
+  function kmTo(lat, lon) { return st.me && Number.isFinite(lat) ? km([st.me.lon, st.me.lat], [lon, lat]) : null; }
+  const fmtAway = (d) => L.away(dist(d));
+  const forgetMe = () => { st.me = null; window.__rasMe = null; try { localStorage.removeItem(ME_KEY); } catch { /* ignore */ } am()?.map?.getSource?.('svc-me')?.setData(meGeo()); window.dispatchEvent(new Event('ras-me')); };
+  const am = () => getMap();
 
   // ------------------------------------------------------------ hash links & public API
   function fromHash() {
@@ -473,7 +480,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       load().then(() => { if ((s0().svcLayers || []).length) loadPoi().then(paintPoi).catch(() => {}); fromHash(); });
       setInterval(load, 10 * 60_000);
     },
-    open, close, isOpen, locate, distanceTo,
+    open, close, isOpen, locate, distanceTo, kmTo, fmtAway, forgetMe, hasMe: () => !!st.me,
     setRoads(r) { st.roads = Array.isArray(r) ? r : []; paintRoads(); if (isOpen() && st.tab === 'roads') render(); },
     setPower(p) { st.power = Array.isArray(p) ? p : []; if (isOpen() && st.tab === 'power') render(); },
     layersHtml(tg) {

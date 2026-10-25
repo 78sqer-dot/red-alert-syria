@@ -51,8 +51,8 @@ export function reloadLogo() { LOGO = loadLogo(); }
 
 // ------------------------------------------------------------------ texts per type
 const HEADLINE = {
-  ar: { breaking: 'خبر عاجل', uav: 'تحليق مسيّرة', warplane: 'تحليق طيران حربي', missile: 'إطلاق صواريخ', attack: 'هجوم', artillery: 'قصف مدفعي', civil: 'تنبيه مدني', accident: 'حادث سير', protest: 'مظاهرة', fire: 'حريق', civil_plane: 'طائرة مدنية' },
-  en: { breaking: 'Breaking news', uav: 'Drone activity', warplane: 'Warplane activity', missile: 'Missile launch', attack: 'Attack', artillery: 'Artillery shelling', civil: 'Civil alert', accident: 'Traffic accident', protest: 'Protest', fire: 'Fire', civil_plane: 'Civil aircraft' },
+  ar: { breaking: 'خبر عاجل', uav: 'تحليق مسيّرة', warplane: 'تحليق طيران حربي', missile: 'إطلاق صواريخ', attack: 'هجوم', artillery: 'قصف مدفعي', civil: 'تنبيه مدني', accident: 'حادث سير', protest: 'مظاهرة', fire: 'حريق', civil_plane: 'طائرة مدنية', quake: 'زلزال', weather: 'تحذير جوي' },
+  en: { breaking: 'Breaking news', uav: 'Drone activity', warplane: 'Warplane activity', missile: 'Missile launch', attack: 'Attack', artillery: 'Artillery shelling', civil: 'Civil alert', accident: 'Traffic accident', protest: 'Protest', fire: 'Fire', civil_plane: 'Civil aircraft', quake: 'Earthquake', weather: 'Weather warning' },
 };
 const LEVELS = {
   caution: { ar: 'حيطة وحذر', en: 'Caution', color: '#fdba74' },
@@ -61,10 +61,10 @@ const LEVELS = {
   notice: { ar: 'تنبيه', en: 'Notice', color: '#fcd34d' },
   info: { ar: 'للعلم', en: 'For information', color: '#7dd3fc' },
 };
-const LEVEL_OF = { breaking: 'urgent', uav: 'caution', warplane: 'caution', missile: 'danger', attack: 'danger', artillery: 'danger', civil: 'notice', accident: 'notice', protest: 'notice', fire: 'notice', civil_plane: 'info' };
+const LEVEL_OF = { breaking: 'urgent', uav: 'caution', warplane: 'caution', missile: 'danger', attack: 'danger', artillery: 'danger', civil: 'notice', accident: 'notice', protest: 'notice', fire: 'notice', civil_plane: 'info', quake: 'notice', weather: 'caution' };
 const NOTE = {
-  ar: { uav: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق لا على عدد المسيّرات', warplane: 'ملاحظة: الدائرة تدلّ على منطقة التحليق التقريبية', multi: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق المتأثرة' },
-  en: { uav: 'Note: the number of circles shows the number of areas, not the number of drones', warplane: 'Note: the circle shows the approximate flight area', multi: 'Note: the number of circles shows the number of affected areas' },
+  ar: { uav: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق لا على عدد المسيّرات', warplane: 'ملاحظة: الدائرة تدلّ على منطقة التحليق التقريبية', multi: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق المتأثرة', quake: 'ملاحظة: الدائرة تقريبية لمنطقة الشعور بالهزة، والمصدر مراصد الزلازل الدولية', weather: 'ملاحظة: الدائرة تقريبية للمنطقة المشمولة بالتحذير' },
+  en: { uav: 'Note: the number of circles shows the number of areas, not the number of drones', warplane: 'Note: the circle shows the approximate flight area', multi: 'Note: the number of circles shows the number of affected areas', quake: 'Note: the circle approximates where the shaking may be felt (international seismic agencies)', weather: 'Note: the circle approximates the warned area' },
 };
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -197,8 +197,9 @@ export async function alertImageSvg(alert, opts = {}) {
   const px = (lat, lon) => [lon2x(lon, z) - left, lat2y(lat, z) - top + HEAD];
   if (zoned) {
     const dashed = t.zone === 'dashed';
-    const col = dashed ? '#2563eb' : '#dc2626';
-    const fill = dashed ? '#3b82f6' : '#ef4444';
+    const natural = type === 'quake' || type === 'weather';
+    const col = natural ? t.ring : dashed ? '#2563eb' : '#dc2626';
+    const fill = natural ? t.color : dashed ? '#3b82f6' : '#ef4444';
     o.push(`<defs><radialGradient id="zglow"><stop offset="0.5" stop-color="${fill}" stop-opacity="0.38"/><stop offset="0.75" stop-color="${fill}" stop-opacity="0.14"/><stop offset="1" stop-color="${fill}" stop-opacity="0"/></radialGradient></defs>`);
     for (const zn of zones) {
       const [x, y] = px(zn.lat, zn.lon);
@@ -207,7 +208,7 @@ export async function alertImageSvg(alert, opts = {}) {
       o.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" fill-opacity="0.2" stroke="${col}" stroke-width="${r > 40 ? 4.5 : 3}"${dashed ? ' stroke-dasharray="14 9"' : ''}/>`);
     }
     // a single area keeps its type icon; several areas show just their glowing circles (the title names the type)
-    if ((type === 'breaking' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y)); }
+    if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y)); }
   } else if (!country) {
     const [x, y] = px(center.lat, center.lon);
     o.push(markerSvg(type, x, y));
@@ -220,9 +221,13 @@ export async function alertImageSvg(alert, opts = {}) {
   // ---- header
   o.push(`<rect x="0" y="0" width="${W}" height="${HEAD}" fill="#0f172a"/><rect x="0" y="0" width="${W}" height="6" fill="#f97316"/>`);
   const FF = en ? 'Noto Sans' : 'Noto Kufi Arabic';
-  const lvl = LEVELS[LEVEL_OF[type] || 'notice'];
-  const head = (HEADLINE[en ? 'en' : 'ar'][type]) || (en ? t.en : t.ar);
-  const place = opts.placeLabel != null ? opts.placeLabel : (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
+  const lvl = LEVELS[(type === 'weather' && alert.meta?.level === 2) || (type === 'quake' && (alert.meta?.mag ?? 0) >= 5) ? 'danger' : LEVEL_OF[type] || 'notice'];
+  let head = (HEADLINE[en ? 'en' : 'ar'][type]) || (en ? t.en : t.ar);
+  const mag = type === 'quake' ? (alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1])) : null;
+  if (alert.place?.head_ar) head = en ? alert.place.head_en || head : alert.place.head_ar;
+  if (Number.isFinite(mag)) head = en ? `M${mag.toFixed(1)} earthquake` : `زلزال بقوة ${arDigits(mag.toFixed(1))}`;
+  const short = en ? alert.place?.short_en : alert.place?.short_ar;
+  const place = opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
   const titleSize = head.length > 16 ? 44 : 52;
   const tx = en ? 36 : W - 36; const anchor = en ? 'start' : 'end';
   o.push(`<text x="${tx}" y="74" font-family="${FF}" font-size="${titleSize}" font-weight="800" fill="#ffffff" text-anchor="${anchor}"${en ? '' : ' direction="rtl"'}>${ttx(head)}</text>`);
@@ -247,7 +252,7 @@ export async function alertImageSvg(alert, opts = {}) {
   o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
   // ---- footer: note (multi-circle / aircraft) + time
   const notes = NOTE[en ? 'en' : 'ar'];
-  const note = type === 'uav' ? notes.uav : (zoned && zones.length > 1 ? notes.multi : type === 'warplane' ? notes.warplane : '');
+  const note = type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : type === 'warplane' ? notes.warplane : '');
   const when = whenText(alert.timestamp || Date.now(), lang);
   const fy = HEAD + MAP_H;
   o.push(`<rect x="0" y="${fy}" width="${W}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${fy}" width="${W}" height="1.5" fill="#e2e8f0"/>`);

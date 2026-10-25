@@ -665,3 +665,10 @@ html.dark .wa-btn svg { color: #2fe079; }
 .px-k { white-space: normal; min-width: 0; }
 .px-row { gap: 8px; }
 .px-v small { font-family: var(--font-arabic); letter-spacing: 0; }
+
+/* alert distance (location kept on the device) */
+.dist-chip.near { color: #fff; background: #dc2626; }
+.card.near { box-shadow: inset 0 0 0 2px #dc2626, 0 6px 18px -8px rgba(220, 38, 38, .55); }
+.card.near .card-title::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #dc2626; margin-inline-end: 6px; vertical-align: middle; animation: nearPulse 1.4s ease-in-out infinite; }
+@keyframes nearPulse { 50% { opacity: .25; } }
+.svc-forget { background: none; border: 0; color: var(--muted, #94a3b8); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; padding: 4px 0; margin: 2px 0 6px; }

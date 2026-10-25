@@ -57,6 +57,16 @@ export const ALERT_TYPES = {
     emoji: '🛫', color: '#0284c7', ring: '#075985', group: 'civil', parent: 'civil', ttlMin: 60,
     marker: 'icon', glyph: 'airliner', icon: '#0284c7', zone: false, tag_ar: 'طائرة_مدنية', tag_en: 'Civil_aircraft',
   },
+  quake: {
+    ar: 'زلزال', en: 'Earthquake', button_ar: 'زلزال', button_en: 'Earthquake',
+    emoji: '🌍', color: '#a16207', ring: '#713f12', group: 'nature', ttlMin: 180,
+    marker: 'icon', glyph: 'quake', icon: '#a16207', disc: '#000000', zone: 'dashed', tag_ar: 'زلزال', tag_en: 'Earthquake',
+  },
+  weather: {
+    ar: 'تحذير جوي', en: 'Weather warning', button_ar: 'تحذير جوي', button_en: 'Weather',
+    emoji: '⛈', color: '#4f46e5', ring: '#3730a3', group: 'nature', ttlMin: 720,
+    marker: 'icon', glyph: 'storm', icon: '#4f46e5', disc: '#000000', zone: 'dashed', tag_ar: 'طقس', tag_en: 'Weather',
+  },
 };
 
 // Zone radius (km) by location scope — same values as the original map.
@@ -67,6 +77,7 @@ export const ALERT_GROUPS = {
   aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'warplane', 'missile'] },
   strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'artillery'] },
   civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane'] },
+  nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   other: { ar: 'أخرى', en: 'Other', types: ['breaking'] },
 };
 

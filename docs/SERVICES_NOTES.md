@@ -32,3 +32,9 @@
   `https://api-v2.sp-today.com/api/v1/energy?lang=ar` -> {ok,data:{fuel_types,electricity_tiers,fuel_updated_at,electricity_updated_at}}
   (without Origin -> 401 MISSING_API_KEY). Also /api/v1/gold/international, /api/v1/crypto, /api/v1/silver.
 - sp-today Telegram channel: t.me/syp2day (rate posts are images only).
+## Earthquakes (14:10)
+- EMSC FDSN: https://www.seismicportal.eu/fdsnws/event/1/query?format=json&start=..&minlat..&maxlat..&minlon..&maxlon..&minmag=2.8&orderby=time
+  features[].properties {unid, time ISO, lat, lon, depth, mag, magtype, flynn_region, auth}; HTTP 204 when empty.
+- USGS FDSN: https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=..&minlatitude..&minmagnitude=2.8 ; coords [lon,lat,depth], properties {mag, place (English), time ms}.
+- Recent swarm near Feke (Türkiye) lat 37.7–37.8 lon 36.1, M4.2–5.0 (late Oct 2026).
+- Module server/quakes.js; rules: inside Syria M3+, ≤100 km M4+, ≤250 km M5+, ≤600 km M6+; dedup across sources (±120 s, <120 km).

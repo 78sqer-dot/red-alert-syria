@@ -14,6 +14,8 @@ import { applyProject } from './config.js';
 import { governorates } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
 import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
+import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
+import { weatherDebug, checkWeather } from './weather.js';
 import { startServices, publicRoads, publicPower } from './services.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -140,6 +142,16 @@ app.get('/api/pricesdebug', apiLimiter, async (req, res) => {
   if (!pricesKeyOk(req)) return res.status(404).end();
   if (req.query.refresh) await refreshPrices({ force: true }).catch(() => {});
   res.json(pricesDebug());
+});
+app.get('/api/weatherdebug', apiLimiter, async (req, res) => {
+  if (!pricesKeyOk(req)) return res.status(404).end();
+  if (req.query.dry) return res.json({ dry: await checkWeather({ dry: true }).catch((e) => ({ error: e.message })), ...weatherDebug() });
+  res.json(weatherDebug());
+});
+app.get('/api/quakesdebug', apiLimiter, async (req, res) => {
+  if (!pricesKeyOk(req)) return res.status(404).end();
+  if (req.query.dry) return res.json({ dry: await pollQuakes({ dry: true }).catch((e) => ({ error: e.message })), ...quakesDebug() });
+  res.json(quakesDebug());
 });
 app.get('/api/pricestest', apiLimiter, async (req, res) => {
   if (!pricesKeyOk(req) || !bots.admin) return res.status(404).end();
@@ -355,6 +367,7 @@ async function start() {
     startDailySummary(bots.admin.api);
     startPrices(() => bots.admin?.api); // 💱 morning prices bulletin (in-app scheduler, Damascus time)
     startServices(); // 🛣 road statuses expiry
+    startQuakes(() => bots.admin?.api); // 🌍 earthquake alerts (EMSC + USGS, auto-posted)
     startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (never auto-published)
     setTimeout(() => resyncChannelPosts(bots.admin.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
   };

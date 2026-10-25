@@ -31,3 +31,10 @@
 - DONE frontend: public/js/services.js (sheet tabs, GL layers, locate w/ explainer+errors, distance chip), app.js/map.js/settings.js/icons.js/index.html (?v=7) /sw.js v16 / css. QA screenshots OK ar+en (local dev server scripts/_svcdev.mjs on :3998).
 - services.json build: scripts/build-services.py now bbox tiles + Syria polygon filter, loop /tmp/svcloop.sh (log /tmp/svcloop.log, caches /tmp/svc_cache_<cat>_<tile>.json).
 - TODO: npm test, bot flow sim, commit+push, live QA, bulletin preview to owner.
+
+## Round 2 (14:17) — tasks: quakes, weather, borders, alert distance, full review, secret audit
+- DONE secret audit: no Gemini/bot/GitHub tokens in worktree or git history (only branch main on GitHub).
+- DONE (local, not pushed yet) server/quakes.js: EMSC+USGS poll 2 min, felt rules, dedup, auto channel+map, type 'quake', owner menu 'qk', /api/quakesdebug.
+- DONE (local) server/weather.js: Open-Meteo forecast+dust, 7:30/17:30 slots, drafts to owner (wx:c/m/x), severe auto-post, undo (wx:d), owner menu 'wx', /api/weatherdebug.
+- types.js: quake + weather types, group 'nature'; marker-svgs quake/storm glyphs; alert-image head/short/level/note per type; places.alertZones honours place.zone_km.
+- NEXT: frontend check (dev server scripts/_qkdev.mjs), push stage 1; then distance (distChip exists in app.js ~289, extend nearby highlight 25 km), borders, review.

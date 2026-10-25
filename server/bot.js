@@ -13,6 +13,8 @@ import { registerContactTools } from './contact-tools.js';
 import { registerNewsTools } from './news-monitor.js';
 import { ROAD_DURATIONS, roadLabel, addRoad, activeRoads, endRoad, roadWhere, postRoadToChannel, registerPowerTools } from './services.js';
 import { registerPriceTools } from './prices.js';
+import { registerQuakeTools } from './quakes.js';
+import { registerWeatherTools } from './weather.js';
 import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
 import { cleanAlertText } from './clean-text.js';
 
@@ -72,7 +74,9 @@ const fmtDate = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.tim
 //   🗺 الخريطة المباشرة · Red Alert Syria
 export function channelPost(alert, { ended = false } = {}) {
   const t = typeOf(alert.type);
-  const title = (TITLES[alert.type] || {}).ar || t.ar;
+  let title = (TITLES[alert.type] || {}).ar || t.ar;
+  if (alert.place?.head_ar) title = alert.place.head_ar;
+  if (alert.type === 'quake') { const m = alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1]); if (Number.isFinite(m)) title = `زلزال بقوة ${m.toFixed(1)}`; }
   const p = alert.place || {};
   const hasPlace = p.scope && p.scope !== 'country';
   const lines = [];
@@ -127,7 +131,8 @@ function mainKeyboard(ctx) {
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
   if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row().text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').text(lang === 'en' ? '📡 News monitor' : '📡 الرصد الإخباري', 'nws').row()
-    .text(lang === 'en' ? '💱 Prices bulletin' : '💱 نشرة الأسعار', 'px').text(lang === 'en' ? '⚡ Electricity' : '⚡ الكهرباء', 'pwr').row();
+    .text(lang === 'en' ? '💱 Prices bulletin' : '💱 نشرة الأسعار', 'px').text(lang === 'en' ? '⚡ Electricity' : '⚡ الكهرباء', 'pwr').row()
+    .text(lang === 'en' ? '🌍 Earthquakes' : '🌍 الزلازل', 'qk').text(lang === 'en' ? '⛈ Weather warnings' : '⛈ تحذيرات الطقس', 'wx').row();
   if (config.publicUrl) kb.url(l.btnMap, mapUrl('', lang));
   kb.url(l.btnChannel, config.channelUrl);
   return kb;
@@ -416,7 +421,8 @@ export async function alertImage(alert, lang = 'ar') {
   const p = alert.place || {};
   const n = (alert.extra || []).length;
   const en = lang === 'en';
-  const placeLabel = alert.scope === 'country' || !p.name_ar ? undefined
+  const short = en ? p.short_en : p.short_ar;
+  const placeLabel = short ? short : alert.scope === 'country' || !p.name_ar ? undefined
     : !n ? locName(p, lang)
     : `${en ? p.name_en || p.name_ar : p.name_ar}${en ? ` +${n} more` : n === 1 ? ' ومنطقة أخرى' : n === 2 ? ' ومنطقتان أخريان' : n <= 10 ? ` و${n} مناطق أخرى` : ` و${n} منطقة أخرى`}`;
   return renderAlertPng(alert, { lang, placeLabel });
@@ -453,7 +459,13 @@ export async function publishDraft(api, d, author) {
     if (d.toChannel) { try { await postRoadToChannel(api, r); } catch (e) { console.error('[road] channel post failed:', e.description || e.message); } }
     return r;
   }
-  const alert = store.addAlert(buildAlertInput(d, author));
+  return publishInput(api, buildAlertInput(d, author));
+}
+/** add an alert to the map and (unless toChannel=false) post it to the channel */
+export async function publishInput(api, input, { toChannel = true } = {}) {
+  const alert = store.addAlert(input);
+  if (input.meta) alert.meta = input.meta;
+  if (!toChannel || !config.channel) return alert;
   const text = channelPost(alert);
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
   let m = null; let media = 'text';
@@ -489,7 +501,13 @@ function resultKeyboard(ctx, alert) {
   return kb;
 }
 
-async function refreshChannelPost(api, alert, ended) {
+/** remove an alert from the map and its post from the channel (weather / quake undo) */
+export async function deleteAlertEverywhere(api, id) {
+  const removed = store.deleteAlert(id);
+  if (removed?.channel_message_id && api) { try { await api.deleteMessage(config.channel, removed.channel_message_id); } catch (e) { console.error('[bot] delete failed', e.description || e.message); } }
+  return removed;
+}
+export async function refreshChannelPost(api, alert, ended) {
   if (!alert?.channel_message_id) return;
   const editText = () => api.editMessageText(config.channel, alert.channel_message_id, channelPost(alert, { ended }), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(alert) });
   const editCaption = () => api.editMessageCaption(config.channel, alert.channel_message_id, { caption: channelCaption(alert, { ended }), parse_mode: 'HTML', reply_markup: channelKeyboard(alert) });
@@ -698,7 +716,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     await next();
   });
-  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerNewsTools(bot, OH); registerPriceTools(bot, OH); registerPowerTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
+  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerNewsTools(bot, OH); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerPowerTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {

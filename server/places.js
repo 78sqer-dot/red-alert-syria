@@ -201,6 +201,12 @@ export function alertZones(a) {
       out.push(z);
     }
   };
+  // earthquakes / weather: one circle with an explicit radius (felt area / warned area)
+  if (a.place && Number.isFinite(a.place.zone_km) && a.location && Number.isFinite(a.location.latitude)) {
+    out.push({ lat: a.location.latitude, lon: a.location.longitude, km: a.place.zone_km });
+    for (const x of a.extra || []) if (x && Number.isFinite(x.latitude)) out.push({ lat: x.latitude, lon: x.longitude, km: Number.isFinite(x.zone_km) ? x.zone_km : a.place.zone_km });
+    return out;
+  }
   if (a.location && Number.isFinite(a.location.latitude)) add({ ...(a.place || {}), ...a.location }, a.scope);
   for (const x of a.extra || []) if (x && Number.isFinite(x.latitude)) add(x, x.scope);
   return out;

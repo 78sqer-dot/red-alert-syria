@@ -143,7 +143,7 @@ function visibleAlerts() {
   return list
     .filter((a) => s.filter.includes(a.type))
     .filter((a) => a.is_active || s.showInactive)
-    .sort((x, y) => (y.is_active - x.is_active) || Date.parse(y.timestamp) - Date.parse(x.timestamp));
+    .sort((x, y) => (y.is_active - x.is_active) || (isNear(y) - isNear(x)) || Date.parse(y.timestamp) - Date.parse(x.timestamp));
 }
 function activeCount() {
   return [...state.alerts.values()].filter(isLive).length;
@@ -196,7 +196,7 @@ function badge(a, live = false) {
 function cardHtml(a, fresh) {
   const t = typeOf(a.type);
   const hasLoc = a.location && Number.isFinite(a.location.latitude);
-  return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}" data-id="${esc(a.id)}" style="--c:${t.color}" tabindex="0">
+  return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}${isNear(a) ? ' near' : ''}" data-id="${esc(a.id)}" style="--c:${t.color}" tabindex="0">
     <div class="card-top">${badge(a)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <h3 class="card-title">${esc(titleOf(a))}</h3>
     ${distChip(a)}
@@ -211,7 +211,8 @@ function renderList() {
   const n = activeCount();
   const s = settings.get();
   $('#sbTitle').textContent = T.alertsCount(n);
-  $('#sbSub').textContent = s.showInactive ? T.withInactive : T.activeOnMap;
+  const nearN = list.filter(isNear).length;
+  $('#sbSub').textContent = (s.showInactive ? T.withInactive : T.activeOnMap) + (nearN ? (LANG === 'ar' ? ` · ${nearN} قريب منك` : ` · ${nearN} near you`) : '');
   $('#fabCount').textContent = n;
   const box = $('#alertList');
   if (!list.length) {
@@ -240,6 +241,7 @@ function detailHtml(a) {
   const rows = [
     [T.type, `${badge(a)}`],
     [T.location, esc(placeName(a))],
+    ...(alertDist(a) ? [[LANG === 'ar' ? 'المسافة عنك' : 'Distance from you', distChip(a)]] : []),
     [T.time, esc(fmtFull.format(new Date(a.timestamp)))],
     live ? [T.expires, esc(fmtTime.format(new Date(a.expires_at)))] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at)))],
   ];
@@ -286,9 +288,30 @@ function showDetail() {
   renderDetail();
 }
 
+// distance from the visitor's saved location (kept on the device only). An alert is "near" when the
+// visitor is within NEAR_KM of any of its circles' edge (so a wide quake/weather zone counts as near).
+const NEAR_KM = 25;
+function alertDist(a) {
+  if (!svc?.kmTo || !svc.hasMe?.() || a.scope === 'country') return null;
+  const pts = Array.isArray(a.zones) && a.zones.length ? a.zones
+    : hasLoc(a) ? [{ lat: a.location.latitude, lon: a.location.longitude, km: 0 }] : [];
+  let best = null;
+  for (const z of pts) {
+    const d = svc.kmTo(z.lat, z.lon);
+    if (d == null) continue;
+    const edge = Math.max(0, d - (z.km || 0));
+    if (!best || edge < best.edge || (edge === best.edge && d < best.d)) best = { d, edge };
+  }
+  if (best) best.near = best.edge <= NEAR_KM;
+  return best;
+}
+const isNear = (a) => !!(isLive(a) && alertDist(a)?.near);
 function distChip(a) {
-  const d = svc && hasLoc(a) && a.scope !== 'country' ? svc.distanceTo(a.location.latitude, a.location.longitude) : '';
-  return d ? `<span class="dist-chip">${icon('locate', 12)}${esc(d)}</span>` : '';
+  const r = alertDist(a);
+  if (!r) return '';
+  const inside = r.edge === 0 && r.d > 0.5;
+  const txt = inside ? (LANG === 'ar' ? 'أنت ضمن المنطقة' : 'You are inside the area') : svc.fmtAway(r.d);
+  return `<span class="dist-chip${r.near ? ' near' : ''}">${icon('locate', 12)}${esc(txt)}${r.near && !inside ? ` · ${esc(LANG === 'ar' ? 'قريب منك' : 'near you')}` : ''}</span>`;
 }
 function popupHtml(a) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
@@ -1229,6 +1252,7 @@ async function boot() {
   }
   try {
     svc = createServices({ LANG, esc, icon, toast, openModal, closeModal, getMap: () => amap, botUrl: () => BOT });
+    window.addEventListener('ras-me', () => { renderList(); if (state.selectedId) renderDetail(); });
     $('#btnSvcLbl').textContent = svc.L.services;
     svc.init();
     document.addEventListener('ras:me', () => { renderList(); if (state.view === 'detail') renderDetail(); });
