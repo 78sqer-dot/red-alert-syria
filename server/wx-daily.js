@@ -128,7 +128,7 @@ export const WXB_TIMES = ['07:00', '07:30', '08:00', '08:30', '09:30'];
 export function wxbState() {
   const s = (store.state.svc ||= {});
   const b = (s.wxb ||= {});
-  b.cfg ||= { on: true, time: '08:00', last: null, preview: false };
+  b.cfg ||= { on: false, time: '08:00', last: null }; // off until the owner turns it on from the menu
   if (!WXB_TIMES.includes(b.cfg.time)) b.cfg.time = '08:00';
   return b;
 }
@@ -277,15 +277,6 @@ export function startWxBulletin(getApi) {
     if (busy) return;
     const api = getApi();
     if (!api) return;
-    // one private preview for the owner before the very first real post
-    if (!c.preview) {
-      busy = true; c.preview = true; save();
-      try {
-        const r = await postWxBulletin(api, { chatId: (config.ownerIds || [])[0], test: true });
-        if (!r.ok) { c.preview = false; save(); }
-      } catch (e) { console.error('[wxb] preview failed', e.description || e.message); } finally { busy = false; }
-      return;
-    }
     if (!c.on || !config.channel) return;
     const p = damascusParts();
     if (p.hm < c.time || c.last === p.date) return;
