@@ -552,14 +552,21 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   }
   const row = (label, a, b2, ch) => `<div class="px-row"><span class="px-k">${esc(label)}</span><span class="px-v">${a}</span>${b2 != null ? `<span class="px-v">${b2}</span>` : ''}${ch != null ? `<span class="px-ch ${ch > 0 ? 'up' : ch < 0 ? 'dn' : ''}">${ch ? (ch > 0 ? '▲' : '▼') : '•'}</span>` : ''}</div>`;
   const old = (v) => (v == null ? '' : `<small>${num(v * 100)} ${esc(L.oldLira)}</small>`);
-  const unitOf = (x) => (x.unit && !String(x.name).includes(x.unit) ? ` <small>/ ${esc(x.unit)}</small>` : '');
+  // the price sources give Arabic names / units: English labels for the English site
+  const FUEL_EN = { benzin: 'Gasoline 90', 'gasoline-95': 'Gasoline 95', diesel: 'Diesel', gas: 'Cooking gas', kerosene: 'Kerosene' };
+  const UNIT_EN = [[/^لتر$/, 'litre'], [/^أسطوانة\s*\((\d+)\s*كيلو\)$/, 'cylinder ($1 kg)'], [/^أسطوانة$/, 'cylinder'], [/^كيلو$/, 'kg'], [/^طن$/, 'ton'], [/^ك\.و\.س$/, 'kWh']];
+  const TARIFF_EN = { 'houses-under-300kwh': 'Homes (under 300 kWh)', 'houses-above-300kwh': 'Homes (over 300 kWh)', industrial: 'Industrial', commercial: 'Commercial', agricultural: 'Agricultural' };
+  const tariffName = (t) => (LANG === 'en' ? TARIFF_EN[t.slug] || t.name_en || t.name : t.name);
+  const fuelName = (k, f) => (LANG === 'en' ? FUEL_EN[k] || f.name_en || f.name : f.name);
+  const unitTxt = (u) => { if (LANG !== 'en') return u; for (const [re, en] of UNIT_EN) if (re.test(u)) return u.replace(re, en); return u; };
+  const unitOf = (x, name = x.name) => (x.unit && !String(x.name).includes(x.unit) ? ` <small>/ ${esc(unitTxt(x.unit))}</small>` : '');
   function pricesHtml() {
     const p = st.prices;
     if (!p || !p.ok) return `<div class="svc-empty">${esc(L.noPrices)}</div>`;
     const m = p.market;
     const cur = ['usd', 'eur', 'try', 'sar', 'aed'].filter((k) => m[k]);
     const g = p.gold || {};
-    const fuel = Object.values(p.fuel?.items || {});
+    const fuel = Object.entries(p.fuel?.items || {}).map(([k, f]) => ({ ...f, key: k }));
     let h = `<div class="px-card"><div class="px-h"><b>${esc(L.market)}</b><span>${esc(L.updated)}: ${esc(when(m.at))}</span></div>
       <div class="px-row px-th"><span class="px-k"></span><span class="px-v">${esc(L.buy)}</span><span class="px-v">${esc(L.sell)}</span><span class="px-ch"></span></div>
       ${cur.map((k) => row(L[k], `${lira(m[k].buy)}${old(m[k].buy)}`, `${lira(m[k].sell)}${old(m[k].sell)}`, m[k].change)).join('')}</div>`;
@@ -576,7 +583,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     }
     if (fuel.length) {
       h += `<div class="px-card"><div class="px-h"><b>${esc(L.fuel)}</b><span>${esc(when(p.fuel.at || fuel[0]?.at))}</span></div>
-        ${fuel.map((f) => `<div class="px-row"><span class="px-k">${esc(f.name)}${unitOf(f)}</span><span class="px-v">${lira(f.price)}${old(f.price)}</span>${f.usd ? `<span class="px-v" dir="ltr">$${num(f.usd, 2)}</span>` : ''}</div>`).join('')}</div>`;
+        ${fuel.map((f) => `<div class="px-row"><span class="px-k">${esc(fuelName(f.key, f))}${unitOf(f)}</span><span class="px-v">${lira(f.price)}${old(f.price)}</span>${f.usd ? `<span class="px-v" dir="ltr">$${num(f.usd, 2)}</span>` : ''}</div>`).join('')}</div>`;
     }
     h += `<p class="svc-note">${esc(L.priceNote)}</p>`;
     return h;
@@ -609,7 +616,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     h += govs.length ? `<div class="sel-wrap svc-sel"><select class="sel" id="svcGov"><option value="all">${esc(L.allGovs)}</option>${govs.map(([c, n]) => `<option value="${esc(c)}" ${st.gov === c ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : '';
     h += items.length ? items.map((p) => `<article class="svc-item"><div class="svc-it-top"><span class="badge" style="--c:#eab308">${icon('bolt', 13)}${esc(LANG === 'en' ? p.gov_en : p.gov_ar)}</span><span class="time">${esc(when(p.ts))}</span></div><p>${esc(p.text)}</p></article>`).join('')
       : `<div class="svc-empty">${esc(L.powerEmpty)}</div>`;
-    if (tariffs.length) h += `<div class="px-card"><div class="px-h"><b>${esc(L.tariffs)}</b><span>${esc(L.newLira)}</span></div>${tariffs.map((t) => `<div class="px-row"><span class="px-k">${esc(t.name)}${unitOf(t)}</span><span class="px-v">${lira(t.price)}${old(t.price)}</span></div>`).join('')}</div>`;
+    if (tariffs.length) h += `<div class="px-card"><div class="px-h"><b>${esc(L.tariffs)}</b><span>${esc(L.newLira)}</span></div>${tariffs.map((t) => `<div class="px-row"><span class="px-k">${esc(tariffName(t))}${unitOf(t)}</span><span class="px-v">${lira(t.price)}${old(t.price)}</span></div>`).join('')}</div>`;
     return h;
   }
   function roadsHtml() {
