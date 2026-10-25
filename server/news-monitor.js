@@ -200,7 +200,7 @@ function cardText(d, lang = 'ar') {
   const srcs = (d.srcs || []).map((s) => (s.url ? `<a href="${esc(s.url)}">${esc(s.name)}</a>` : esc(s.name)) + (isLocal(s) ? tr(lang, ' <i>(محلي)</i>', ' <i>(local)</i>') : ''));
   lines.push('', `🗞 <b>${tr(lang, `المصادر (${srcs.length})`, `Sources (${srcs.length})`)}:</b> ${srcs.join(' · ')}`);
   const nMain = (d.srcs || []).filter((s) => !isLocal(s)).length;
-  if ((d.srcs || []).length >= 2) lines.push(tr(lang, `✅ <i>مؤكد من ${(d.srcs || []).length} مصادر</i>`, `✅ <i>Confirmed by ${(d.srcs || []).length} sources</i>`));
+  if ((d.srcs || []).length >= 2) lines.push(tr(lang, `✅ <i>مؤكد من ${((k) => (k === 2 ? 'مصدرين' : k <= 10 ? `${k} مصادر` : `${k} مصدراً`))((d.srcs || []).length)}</i>`, `✅ <i>Confirmed by ${(d.srcs || []).length} sources</i>`));
   else if (!nMain) lines.push(tr(lang, '⚠️ <i>مصدر محلي/ناشط واحد — غير مؤكد بعد، تأكد قبل النشر.</i>', '⚠️ <i>Single local/activist source — not confirmed yet, check before publishing.</i>'));
   lines.push(`🕒 ${tr(lang, 'أول خبر', 'First report')}: ${esc(clock(d.ts || d.created))} ${tr(lang, '(بتوقيت دمشق)', '(Damascus time)')}`);
   if (d.rule) lines.push(tr(lang, '⚙️ <i>تصنيف آلي بسيط (الذكاء الاصطناعي غير متاح حالياً) — راجع النوع والمكان.</i>', '⚙️ <i>Simple automatic classification (AI unavailable) — check type and place.</i>'));
