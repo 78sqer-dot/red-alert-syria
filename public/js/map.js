@@ -378,9 +378,44 @@ export class AlertMap {
         el.title = a.title;
       });
     }
-    // one drone per alert (like the original map); the affected places are shown by their circles
+    // drones: the alert's own marker flies over its main circle; every other circle of the same alert gets
+    // its drone too, and an intensive flight (a.drones = 2-3, from the server) puts 2-3 over each circle
     this.sats = this.sats || new Map();
     const satSeen = new Set();
+    let satN = 0;
+    for (const a of this.alerts) {
+      if (typeOf(a.type).marker !== 'orbit' || !a.location || a.scope === 'country') continue;
+      const per = Math.max(1, Math.min(3, Number(a.drones) || 1));
+      const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [];
+      let mi = -1, bd = Infinity;
+      zs.forEach((z, i) => { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; mi = i; } });
+      zs.forEach((z, i) => {
+        for (let j = i === mi ? 1 : 0; j < per; j++) {
+          if (satN >= 60) return; // keep phones smooth
+          const key = `${a.id}:${i}:${j}`;
+          satSeen.add(key); satN++;
+          let m = this.sats.get(key);
+          const sig = `${a.is_active}|${z.lat.toFixed(4)},${z.lon.toFixed(4)}|${per}`;
+          if (m && m._sig !== sig) { m.remove(); this.sats.delete(key); m = null; }
+          if (!m) {
+            const el = this.markerEl(a);
+            el.classList.add('mk-sat');
+            el.removeAttribute('tabindex');
+            // spread the drones of one circle around it, and offset each circle a little
+            el.style.setProperty('--delay', `${(-(9 * j) / per - i * 1.3).toFixed(2)}s`);
+            el.addEventListener('click', (e) => { e.stopPropagation(); this.onSelect(a.id, { fromMap: true }); });
+            m = new M.Marker({ element: el, anchor: 'center' }).setLngLat([z.lon, z.lat]).addTo(this.map);
+            m._sig = sig;
+            this.sats.set(key, m);
+          }
+          m._zkm = z.km; m._lat = z.lat;
+          const el = m.getElement();
+          el.classList.toggle('sel', a.id === this.selectedId);
+          el.style.zIndex = a.is_active ? 9 : 1;
+          el.title = a.title;
+        }
+      });
+    }
     for (const [k, m] of this.sats) if (!satSeen.has(k)) { m.remove(); this.sats.delete(k); }
     for (const [id, m] of this.markers) {
       if (!seen.has(id)) {
@@ -539,6 +574,13 @@ export class AlertMap {
       const px = Math.max(14, Math.round((o.km * 1000) / mpp));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
+    if (z >= 11 && this.sats) for (const m of this.sats.values()) {
+      if (!Number.isFinite(m._zkm)) continue;
+      const mpp = (40075016.686 * Math.cos((m._lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
+      const px = Math.max(14, Math.round((this._screenKm(m._zkm, m._lat) * 1000) / mpp));
+      const el = m.getElement();
+      if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
+    }
   }
 
   // ------------------------------------------------------------- selection / camera
@@ -584,25 +626,34 @@ export class AlertMap {
     return window.innerWidth < 768 || (coarse && Math.min(screen.width || 9999, screen.height || 9999) < 768);
   }
   openDock(alert) {
+    return this.openDockHtml(this.popupHtml(alert), [alert.location.longitude, alert.location.latitude], { id: alert.id });
+  }
+  // the same docked card for any map popup (services, weather, pharmacies, roads, borders...)
+  openDockHtml(html, ll, { id = null, cls = '', onClose = null } = {}) {
     const card = document.createElement('div');
-    card.className = 'pp-dock';
+    card.className = 'pp-dock' + (cls ? ' ' + cls : '');
     card.setAttribute('role', 'dialog');
     const x = document.createElement('button'); x.className = 'pp-dock-x'; x.type = 'button'; x.setAttribute('aria-label', document.documentElement.lang === 'en' ? 'Close' : 'إغلاق'); x.textContent = '×';
-    const body = document.createElement('div'); body.className = 'pp-dock-body maplibregl-popup-content'; body.append(htmlToNode(this.popupHtml(alert)));
+    const body = document.createElement('div'); body.className = 'pp-dock-body maplibregl-popup-content'; body.append(htmlToNode(html));
     card.append(x, body);
+    for (const old of this.el.querySelectorAll('.pp-dock')) old.remove();
     this.el.append(card);
     document.body.classList.add('pp-docked');
     let tm = 0;
     const place = () => this.placeDock(card);
     const tick = () => { place(); tm = setTimeout(tick, 300); };
     const pp = {
-      _alertId: alert.id, _dock: true,
+      _alertId: id, _dock: true,
       getElement: () => card,
       on() { return pp; },
-      remove: () => { clearTimeout(tm); card.remove(); document.body.classList.remove('pp-docked'); for (const c of document.querySelectorAll('.map-ctrls')) c.style.transform = ''; },
+      remove: () => {
+        clearTimeout(tm); card.remove();
+        if (!this.el.querySelector('.pp-dock')) { document.body.classList.remove('pp-docked'); for (const c of document.querySelectorAll('.map-ctrls')) c.style.transform = ''; }
+        if (onClose) onClose();
+      },
     };
-    x.addEventListener('click', (e) => { e.stopPropagation(); this.closePopup(); });
-    requestAnimationFrame(() => { tick(); this.showAboveDock(alert, card); });
+    x.addEventListener('click', (e) => { e.stopPropagation(); if (id) this.closePopup(); else pp.remove(); });
+    requestAnimationFrame(() => { tick(); if (ll) this.showAboveDock(ll, card); });
     return pp;
   }
   // bottom of the dock = top of the list sheet (when it covers the map), the zoom buttons move up above the card
@@ -624,10 +675,9 @@ export class AlertMap {
     }
   }
   // after the flight: if the alert's point ends up behind the card, nudge the map so it sits in the free area above
-  showAboveDock(alert, card) {
+  showAboveDock(ll, card) {
     const go = () => {
       if (!card.isConnected || !this.map) return;
-      const ll = [alert.location.longitude, alert.location.latitude];
       const pt = this.map.project(ll);
       const mr = this.el.getBoundingClientRect(); const cr = card.getBoundingClientRect();
       const freeTop = 70; const freeBot = cr.top - mr.top - 16;

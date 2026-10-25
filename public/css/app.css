@@ -319,7 +319,7 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 /* original (redalert.com.lb): .zoom-tier-far/.zoom-tier-mid .uav-svg { visibility: hidden } -> below zoom 11
    only the glowing circle is shown; the tap target stays so the alert can still be opened */
 .maplibregl-map:not(.zoom-detail) .mk-orbit .uav { visibility: hidden; animation: none; }
-.mk-sat .uav { animation-delay: var(--delay, 0s); }
+.mk-sat .uav, .maplibregl-map.zoom-detail .mk-sat .uav { animation-delay: var(--delay, 0s); }
 /* the airframe circles the target and turns with its heading */
 @keyframes uavOrbit { from { transform: rotate(0deg) translateX(var(--orb, 20px)); } to { transform: rotate(-360deg) translateX(var(--orb, 20px)); } }
 .uav-svg { display: block; fill: #6b7280; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
@@ -763,3 +763,9 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .wx-rt small, .wx-t { unicode-bidi: isolate; }
 .wx-rt small { font-size: 11.5px; color: var(--text-muted); }
 .wx-row .svc-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); vertical-align: middle; }
+
+/* weather / services cards: keep each value on one line; in the phone dock the card uses the full width */
+.svc-pp .nw { white-space: nowrap; }
+.pp-dock.svc-dock .svc-pp { width: auto; max-width: none; }
+.pp-dock.svc-dock .pp-dock-body { padding-top: 10px; }
+.pp-dock.svc-dock .pp-top { padding-inline-end: 34px; }

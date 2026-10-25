@@ -402,9 +402,24 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   // ------------------------------------------------------------ popups
   function popup(ll, html) {
     const M = window.maplibregl; const m = map(); if (!M || !m) return;
-    getMap()?.closePopup?.();
+    const gm = getMap();
+    gm?.closePopup?.();
     if (st.popup) st.popup.remove();
-    st.popup = new M.Popup({ closeButton: true, closeOnClick: true, maxWidth: '290px', offset: 16, focusAfterOpen: false }).setLngLat(ll).setHTML(`<div class="pp svc-pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">${html}</div>`).addTo(m);
+    st.popAt = Date.now();
+    const inner = `<div class="pp svc-pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">${html}</div>`;
+    // phones (and a phone in desktop mode): a card docked at the bottom, like the news alerts,
+    // so it never leaves the screen or covers the zoom buttons
+    if (gm?.dockMode?.() && gm.openDockHtml) {
+      const pp = gm.openDockHtml(inner, ll, { cls: 'svc-dock', onClose: () => { if (st.popup === pp) st.popup = null; } });
+      st.popup = pp;
+      if (!st.dockClick) {
+        st.dockClick = true;
+        // tap on the empty map closes the card (a tap on another icon opens its own card instead)
+        m.on('click', (e) => { if (window.__svcHit && window.__svcHit(e)) return; const was = st.popup; setTimeout(() => { if (was && st.popup === was && was._dock) { was.remove(); st.popup = null; } }, 0); });
+      }
+      return;
+    }
+    st.popup = new M.Popup({ closeButton: true, closeOnClick: true, maxWidth: '290px', offset: 16, focusAfterOpen: false }).setLngLat(ll).setHTML(inner).addTo(m);
   }
   const dirUrl = (lat, lon) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
   function poiHtml(p) {
@@ -449,7 +464,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const lbl = WX_LABEL[LANG] || WX_LABEL.ar;
     let h = `<div class="pp-top"><span class="badge" style="--c:${MODES.weather.color}">${esc(L.wxNow)}</span>${st.wx?.at ? `<span class="time">${esc(L.updated)} ${esc(fmtHM.format(new Date(st.wx.at)))}</span>` : ''}</div>
       <p class="pp-title">${esc(wxName(p))}</p>
-      <div class="wx-now">${wxImg(n.k, 40)}<b dir="ltr">${T(n.t)}</b><span><em>${esc(lbl[n.k] || '')}</em><small>${esc(L.wind)} ${n.wind ?? '—'} ${esc(L.kmh)}${n.hum != null ? ` · ${esc(L.hum)} <bdi>${n.hum}%</bdi>` : ''}</small></span></div>
+      <div class="wx-now">${wxImg(n.k, 40)}<b dir="ltr">${T(n.t)}</b><span><em>${esc(lbl[n.k] || '')}</em><small><span class="nw">${esc(L.wind)} <bdi>${n.wind ?? '—'}</bdi> ${esc(L.kmh)}</span>${n.hum != null ? ` · <span class="nw">${esc(L.hum)} <bdi>${n.hum}%</bdi></span>` : ''}</small></span></div>
       <div class="wx-days">${(p.days || []).slice(0, 2).map((d, i) => wxDayRow(d, i ? L.tomorrow : L.today)).join('')}</div>`;
     for (const w of ws) h += `<div class="wx-warn" style="--c:${WARN_C(w.level)}">${esc(w.emoji)} <b>${esc(LANG === 'en' ? w.en : w.ar)}</b></div>`;
     return h;

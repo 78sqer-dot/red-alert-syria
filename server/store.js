@@ -3,8 +3,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { config } from './config.js';
-import { ALERT_TYPES, typeOf } from '../shared/types.js';
-import { alertZones } from './places.js';
+import { ALERT_TYPES, typeOf, droneLevel } from '../shared/types.js';
+import { alertZones, regionFix } from './places.js';
 import { cleanAlertText } from './clean-text.js';
 
 /**
@@ -49,6 +49,20 @@ class Store extends EventEmitter {
       }
     }
     this._restoredAt = Date.now();
+    // live alerts that name a whole region in their text ("حوض اليرموك") but were pinned on a same-named
+    // neighbourhood: move them onto the region (one wider circle)
+    try {
+      let fixed = 0;
+      for (const a of this.state.alerts) {
+        if (!a.is_active || !a.location || a.location.region) continue;
+        const loc = regionFix(a.location, `${a.title || ''} ${a.description || ''}`);
+        if (!loc) continue;
+        a.location = loc; a.place = { ...(a.place || {}), name_ar: loc.name_ar, name_en: loc.name_en, district_ar: loc.district_ar, district_en: loc.district_en, governorate_ar: loc.governorate_ar, governorate_en: loc.governorate_en };
+        a.title = String(a.title || '').replace(/ — .*$/, ` — ${loc.name_ar}`); a.title_en = String(a.title_en || '').replace(/ — .*$/, ` — ${loc.name_en}`);
+        a.areas = [loc.name_ar, loc.governorate_ar].filter(Boolean); fixed++;
+      }
+      if (fixed) { console.log(`[store] moved ${fixed} alert(s) onto their region`); this.persist(); }
+    } catch (e) { console.error('[store] region fix', e.message); }
     if (!Array.isArray(this.state.log)) this.state.log = this.state.alerts.map((a) => this._logEntry(a)).reverse();
     this.expireSweep();
     setInterval(() => this.expireSweep(), 30_000).unref();
@@ -546,6 +560,7 @@ export function publicAlert(a) {
     id: a.id,
     type: a.type,
     hazard: a.type === 'weather' ? a.meta?.hazard || undefined : undefined,
+    drones: a.type === 'uav' ? droneLevel(a) : undefined,
     title: a.title,
     title_en: a.title_en,
     description: cleanAlertText(a.description) || undefined,

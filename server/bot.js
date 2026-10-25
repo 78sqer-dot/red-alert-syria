@@ -5,7 +5,7 @@ import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert } from './store.js';
-import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji } from '../shared/types.js';
+import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji, droneAuto } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
@@ -261,6 +261,11 @@ function previewKeyboard(ctx, d) {
   else if (d.type === 'road') kb.text(enx ? '🗺 Publish on the map' : '🗺 نشر على الخريطة', 'publish').row().text(enx ? '📢 Map + channel' : '📢 الخريطة + القناة', 'publish:ch').row();
   else kb.text(l.btnPublish, 'publish').row();
   kb.text(l.btnDuration(d.ttlMin), 'dur').row();
+  // drones: "تحليق مكثف" = 2-3 drones over every circle on the map instead of one
+  if (d.type === 'uav' && d.mode !== 'report') {
+    const on = typeof d.intense === 'boolean' ? d.intense : droneAuto(d.details) > 1;
+    kb.text(enx ? `🛸 Intensive flight: ${on ? '✅ on' : '⬜ off'}` : `🛸 تحليق مكثف: ${on ? '✅ مفعّل' : '⬜ لا'}`, 'intense').row();
+  }
   kb.text(l.btnEditDetails, 'editdetails').text(l.btnChangeLoc, 'back:gov').row();
   // publishing bot only: one alert can cover several areas, each with its own circle on the map
   if (d.mode !== 'report' && d.location && d.location.scope !== 'country') {
@@ -416,6 +421,7 @@ function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
+    ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { meta: { intense: d.intense } } : {}),
   };
 }
 
@@ -1246,6 +1252,13 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     d.step = 'details';
     const kb = new InlineKeyboard().text(L(ctx).btnSkip, 'skip').row().text(L(ctx).btnCancel, 'cancel');
     await show(ctx, L(ctx).askDetails(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`, esc(locName(d.location, langOf(ctx)))), kb);
+  }));
+  bot.callbackQuery('intense', needDraft(async (ctx, d) => {
+    if (!staff(ctx) || d.type !== 'uav') return;
+    const on = typeof d.intense === 'boolean' ? d.intense : droneAuto(d.details) > 1;
+    d.intense = !on;
+    await ctx.answerCallbackQuery({ text: langOf(ctx) === 'en' ? (d.intense ? 'Intensive: 2-3 drones per area' : 'Normal: one drone per area') : (d.intense ? 'مكثف: 2-3 مسيّرات فوق كل منطقة' : 'عادي: مسيّرة وحدة فوق كل منطقة') }).catch(() => {});
+    return showPreview(ctx, d);
   }));
   bot.callbackQuery('dur', needDraft(async (ctx, d) => {
     const kb = new InlineKeyboard();

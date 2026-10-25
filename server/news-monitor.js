@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
 import { config, isOwner } from './config.js';
 import { store } from './store.js';
-import { ALERT_TYPES, typeOf } from '../shared/types.js';
+import { ALERT_TYPES, typeOf, droneAuto } from '../shared/types.js';
 import { locationFrom, normalizeArabic } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText, parseUsername } from './news-sources.js';
 import { onNewsPost as onPowerPost } from './services.js';
@@ -211,8 +211,11 @@ function cardText(d, lang = 'ar') {
 function cardKb(d, lang = 'ar') {
   return new InlineKeyboard()
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
-    .text(tr(lang, '🏷 تغيير النوع', '🏷 Change type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id);
+    .text(tr(lang, '🏷 تغيير النوع', '🏷 Change type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id)
+    .row().text(...(d.type === 'uav' ? [intenseLabel(d, lang), 'nw:i:' + d.id] : ['', 'noop']));
 }
+const intenseOn = (d) => (typeof d.intense === 'boolean' ? d.intense : droneAuto(d.headline) > 1);
+const intenseLabel = (d, lang) => (lang === 'en' ? `🛸 Intensive flight: ${intenseOn(d) ? '✅ on' : '⬜ off'}` : `🛸 تحليق مكثف: ${intenseOn(d) ? '✅ مفعّل' : '⬜ لا'}`);
 function typeKb(d, lang = 'ar') {
   const kb = new InlineKeyboard();
   NEWS_TYPES.forEach((k, i) => { kb.text(`${d.type === k ? '• ' : ''}${ALERT_TYPES[k].emoji} ${lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`, `nw:s:${d.id}:${k}`); if (i % 2 === 1) kb.row(); });
@@ -261,6 +264,7 @@ export function toBotDraft(d) {
     location: d.loc || locationFrom({}), extra: d.extra || [],
     details: d.type === 'breaking' ? '' : body, text: d.type === 'breaking' ? body : '',
     created: Date.now(), source: 'news',
+    ...(typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
   };
 }
 
@@ -614,6 +618,14 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, text);
     try { await ctx.deleteMessage(); } catch { try { await ctx.editMessageText('✔️'); } catch { /* ignore */ } }
   };
+  bot.callbackQuery(/^nw:i:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    if (!d || d.type !== 'uav' || (d.status !== 'pending' && !d.test)) return toast(ctx, '');
+    d.intense = !intenseOn(d); save();
+    await toast(ctx, t(ctx, d.intense ? 'مكثف: 2-3 مسيّرات فوق كل منطقة' : 'عادي: مسيّرة وحدة فوق كل منطقة', d.intense ? 'Intensive: 2-3 drones per area' : 'Normal: one drone per area'));
+    try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
+  });
   bot.callbackQuery(/^nw:(p|x|t|b|e):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const [, act, id] = ctx.match;

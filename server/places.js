@@ -7,6 +7,17 @@ export const districts = raw.districts; // [{code, gov, ar, en}]
 export const subdistricts = raw.subdistricts || []; // [{code, dist, gov, ar, en}] (ناحية, OCHA COD-AB)
 // alt: other Arabic spellings / old names, used by the search only
 export const places = raw.places.map(([id, ar, en, lat, lon, gov, dist, rank, sub = '', alt = []]) => ({ id, ar, en, lat, lon, gov, dist, rank, sub, alt }));
+// Well-known regions the news names as one area ("حوض اليرموك", "سهل الغاب"...): a wider circle over the
+// region itself instead of a same-named neighbourhood (e.g. حي اليرموك inside Daraa city). Never a
+// district / sub-district centre, never used to name a pinned point.
+const REGIONS = [
+  [990000001, 'حوض اليرموك', 'Yarmouk Basin', 32.786, 35.878, '06', '170904', '120003', ['منطقة حوض اليرموك', 'اليرموك', 'حوض نهر اليرموك'], 7.5],
+  [990000002, 'اللجاة', 'Al-Lajat', 33.04, 36.4, '06', '169339', '', ['منطقة اللجاة', 'اللجا'], 10],
+  [990000003, 'سهل الغاب', 'Al-Ghab Plain', 35.6, 36.34, '10', '173885', '', ['الغاب', 'منطقة الغاب', 'منطقة سهل الغاب'], 9],
+  [990000004, 'جبل الشيخ', 'Mount Hermon', 33.39, 35.86, '08', '165928', '030801', ['جبل حرمون', 'قمة جبل الشيخ', 'سفوح جبل الشيخ'], 6],
+  [990000005, 'وادي بردى', 'Wadi Barada', 33.628, 36.125, '08', '172060', '', ['منطقة وادي بردى', 'قرى وادي بردى'], 4.5],
+];
+for (const [id, ar, en, lat, lon, gov, dist, sub, alt, km] of REGIONS) places.push({ id, ar, en, lat, lon, gov, dist, rank: 2, sub, alt, region: true, km });
 
 const govByCode = new Map(governorates.map((g) => [g.code, g]));
 const distByCode = new Map(districts.map((d) => [d.code, d]));
@@ -23,7 +34,7 @@ for (const g of governorates) {
 }
 // District centre = its highest-ranked place.
 for (const d of districts) {
-  const best = places.filter((p) => p.dist === d.code && p.rank < 9).sort((a, b) => a.rank - b.rank)[0];
+  const best = places.filter((p) => p.dist === d.code && p.rank < 9 && !p.region).sort((a, b) => a.rank - b.rank)[0];
   if (best) { d.lat = best.lat; d.lon = best.lon; d.center = best.id; }
 }
 
@@ -146,7 +157,7 @@ export function locationFrom({ placeId, distCode, govCode, lat, lon, label }) {
     if (!p) return null;
     const d = getDist(p.dist);
     const g = getGov(p.gov);
-    return { scope: 'place', place_id: p.id, rank: p.rank, district: p.dist, name_ar: p.ar, name_en: p.en, district_ar: d?.ar, district_en: d?.en, governorate: p.gov, governorate_ar: g?.ar, governorate_en: g?.en, latitude: p.lat, longitude: p.lon };
+    return { scope: 'place', place_id: p.id, rank: p.rank, ...(p.region ? { region: true, area_km: p.km } : {}), district: p.dist, name_ar: p.ar, name_en: p.en, district_ar: d?.ar, district_en: d?.en, governorate: p.gov, governorate_ar: g?.ar, governorate_en: g?.en, latitude: p.lat, longitude: p.lon };
   }
   if (distCode) {
     const d = getDist(distCode);
@@ -164,7 +175,7 @@ export function locationFrom({ placeId, distCode, govCode, lat, lon, label }) {
     let best = null; let bd = Infinity;
     for (const p of places) {
       const dd = (p.lat - lat) ** 2 + (p.lon - lon) ** 2;
-      if (dd < bd && p.rank <= 6) { bd = dd; best = p; }
+      if (dd < bd && p.rank <= 6 && !p.region) { bd = dd; best = p; }
     }
     const near = best ? locationFrom({ placeId: best.id }) : {};
     return { ...near, scope: 'point', name_ar: label || (best ? `قرب ${best.ar}` : 'موقع محدد'), name_en: label || (best ? `Near ${best.en}` : 'Pinned location'), latitude: Number(lat.toFixed(5)), longitude: Number(lon.toFixed(5)) };
@@ -189,6 +200,7 @@ const kmBetween = (a, b) => {
 const zoneCache = new Map();
 // circle radius sized to the place: big city > town > village > neighbourhood
 export function placeKm(loc) {
+  if (Number.isFinite(loc?.area_km)) return loc.area_km; // a whole region (حوض اليرموك...)
   const r = Number.isFinite(loc?.rank) ? loc.rank : null;
   if (r == null) return 2.2;
   return r <= 1 ? 4.5 : r === 2 ? 3.2 : r === 3 ? 2.4 : r <= 5 ? 1.8 : 1.3;
@@ -235,7 +247,7 @@ export function zonePoints(loc, scope) {
 // "📍 مركز منبج": the main city of a district / governorate (a single place, one circle on the map)
 export const centerOfDist = (code) => { const d = getDist(code); return d && d.center ? getPlace(d.center) : null; };
 export const capitalOf = (gov) => getPlace(CAPITALS[gov]) || null;
-export const centerOfSub = (dist, sub) => places.filter((p) => p.dist === dist && p.sub === sub && p.rank < 9).sort((a, b) => a.rank - b.rank)[0] || null;
+export const centerOfSub = (dist, sub) => places.filter((p) => p.dist === dist && p.sub === sub && p.rank < 9 && !p.region).sort((a, b) => a.rank - b.rank)[0] || null;
 // Nothing found for "مخيم الرسم منبج" / "مخيمات الرسم": suggest the centres of the areas named in the
 // text (city / district / governorate), plus the area already picked in the menu.
 export function centerSuggestions(text, { gov = '', dist = '', sub = '' } = {}, limit = 4) {
@@ -254,4 +266,22 @@ export function centerSuggestions(text, { gov = '', dist = '', sub = '' } = {}, 
   if (dist) push(centerOfDist(dist));
   if (gov) push(capitalOf(gov));
   return out.filter(Boolean).slice(0, limit);
+}
+
+// an alert pinned on a small place whose text names a whole region of the same governorate
+// ("... في أجواء منطقة حوض اليرموك" pinned on حي اليرموك in Daraa city) -> that region's location
+export function regionFix(loc, text) {
+  if (!loc || loc.scope === 'country' || loc.region) return null;
+  const t = ' ' + normalizeArabic(text) + ' ';
+  for (const p of places) {
+    if (!p.region || (loc.governorate && p.gov !== loc.governorate)) continue;
+    const names = [p.ar, ...(p.alt || [])].map(normalizeArabic).filter((n) => n.includes(' ')); // full names only ("حوض اليرموك")
+    if (!names.some((n) => t.includes(' ' + n + ' '))) continue;
+    const cur = loc.place_id ? getPlace(loc.place_id) : null;
+    // only when the current place is near the region or shares a word with it (اليرموك / حوض اليرموك)
+    const share = cur && normalizeArabic(p.ar).split(' ').some((w) => w.length > 3 && normalizeArabic(cur.ar).includes(w));
+    if (!share && kmBetween({ lat: loc.latitude, lon: loc.longitude }, p) > p.km * 3) continue;
+    return locationFrom({ placeId: p.id });
+  }
+  return null;
 }

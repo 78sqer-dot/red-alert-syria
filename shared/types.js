@@ -99,3 +99,20 @@ export function dimColor(hex, alpha = 0.12) {
 // Weather warnings: the emoji follows the hazard (⛈ stays only as the generic type label)
 export const HAZARD_EMOJI = { rain: '🌧', snow: '❄️', wind: '💨', storm: '⛈', heat: '🌡', frost: '🥶', dust: '🌫' };
 export const alertEmoji = (a) => (a?.type === 'weather' && HAZARD_EMOJI[a.hazard || a.meta?.hazard]) || typeOf(a?.type).emoji;
+
+// ---- drones on the map: 1 per circle normally; an intensive flight ("تحليق مكثف", "عدة مسيّرات") shows 2,
+// a swarm ("سرب") 3. meta.intense (the "تحليق مكثف" switch in the bot) overrides what the text says.
+const _dn = (s) => String(s || '').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
+export function droneAuto(text) {
+  const t = _dn(text);
+  if (/سرب|اسراب|swarm/.test(t)) return 3;
+  if (/مكثف|كثيف|عده مسيرات|عدد من المسيرات|عده طائرات مسيره|طائرات مسيره|مسيرات|طيران مسير مكثف|intens|several drones|multiple drones/.test(t)) return 2;
+  return 1;
+}
+export function droneLevel(a) {
+  if (!a || a.type !== 'uav') return 0;
+  const auto = droneAuto(`${a.title || ''} ${a.description || ''}`);
+  if (a.meta && a.meta.intense === true) return Math.max(2, auto);
+  if (a.meta && a.meta.intense === false) return 1;
+  return auto;
+}
