@@ -118,9 +118,24 @@ export function checkSp(p, now = Date.now()) {
   return null;
 }
 export async function fetchSpToday() {
-  const r = await fetch('https://sp-today.com/', { headers: { 'User-Agent': UA, 'Accept-Language': 'ar,en;q=0.8' }, signal: AbortSignal.timeout(25_000) });
-  if (!r.ok) throw new Error(`sp-today HTTP ${r.status}`);
-  return parseSpToday(await r.text());
+  // sp-today's CDN blocks some datacenter IPs (Render gets HTTP 403), so fall back to a read-proxy
+  // that returns the same raw HTML (same embedded data, parsed and sanity-checked the same way).
+  const tries = [
+    ['direct', 'https://sp-today.com/', { 'User-Agent': UA, 'Accept-Language': 'ar,en;q=0.8' }],
+    ['proxy', 'https://r.jina.ai/https://sp-today.com/', { 'X-Return-Format': 'html', 'X-Engine': 'direct', 'X-No-Cache': 'true' }],
+  ];
+  const errs = [];
+  for (const [how, url, headers] of tries) {
+    try {
+      const r = await fetch(url, { headers, signal: AbortSignal.timeout(how === 'proxy' ? 45_000 : 25_000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const out = parseSpToday(await r.text());
+      if (!out?.usd?.buy) throw new Error('no rates in page');
+      out.via = how;
+      return out;
+    } catch (e) { errs.push(`${how}: ${e.message}`); }
+  }
+  throw new Error(`sp-today ${errs.join('; ')}`);
 }
 
 // ---------------------------------------------------------------- Central Bank (official bulletin)
