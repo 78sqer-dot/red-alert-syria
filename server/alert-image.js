@@ -242,6 +242,9 @@ export async function alertImageSvg(alert, opts = {}) {
   else if (LOGO?.kind === 'img') o.push(`<image x="${lx}" y="28" width="${lw}" height="${lh}" xlink:href="${LOGO.href}"/>`);
   o.push(`<text x="${en ? W - 36 : 36}" y="112" font-family="Noto Sans" font-size="${domain.length > 24 ? 22 : 26}" font-weight="700" fill="#cbd5e1" text-anchor="${en ? 'end' : 'start'}">${esc(domain)}</text>`);
 
+  // ---- channel watermark on the map (bottom-left, away from the OSM credit): forwarded or
+  // cropped images still say where they came from
+  o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
   // ---- footer: note (multi-circle / aircraft) + time
   const notes = NOTE[en ? 'en' : 'ar'];
   const note = type === 'uav' ? notes.uav : (zoned && zones.length > 1 ? notes.multi : type === 'warplane' ? notes.warplane : '');
@@ -259,6 +262,32 @@ export async function alertImageSvg(alert, opts = {}) {
   return o.join('');
 }
 
+const TG_PLANE = 'M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z';
+export const CHANNEL_HANDLE = 't.me/Red_Alert_Syria';
+export const badgeWidth = (h = 46) => Math.round(h + 8 + CHANNEL_HANDLE.length * Math.round(h * 0.46) * 0.53 + 18);
+/** white pill: Telegram icon + t.me/Red_Alert_Syria (x,y = top-left, height 46) */
+export function channelBadge(x, y, { h = 46, dark = false } = {}) {
+  const label = CHANNEL_HANDLE;
+  const fs = Math.round(h * 0.46);
+  const w = badgeWidth(h);
+  const r = h / 2; const ic = h - 12;
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${dark ? '#0b1220' : '#ffffff'}" fill-opacity="${dark ? 0.85 : 0.92}" stroke="${dark ? '#334155' : '#cbd5e1'}" stroke-width="1.2"/>`
+    + `<circle cx="${x + 6 + ic / 2}" cy="${y + h / 2}" r="${ic / 2}" fill="#229ED9"/>`
+    + `<path d="${TG_PLANE}" fill="#ffffff" transform="translate(${x + 6 + ic * 0.18} ${y + 6 + ic * 0.2}) scale(${(ic * 0.62) / 24})"/>`
+    + `<text x="${x + h + 8}" y="${y + h / 2 + fs * 0.36}" font-family="Noto Sans" font-size="${fs}" font-weight="700" fill="${dark ? '#e2e8f0' : '#0f172a'}">${label}</text></g>`;
+}
+/** any SVG (same fonts as the cards) -> PNG */
+export function svgToPng(svg, width) {
+  const r = new Resvg(svg, { fitTo: { mode: 'width', value: width }, font: { fontFiles: FONT_FILES, loadSystemFonts: false, defaultFontFamily: 'Noto Kufi Arabic' } });
+  return Buffer.from(r.render().asPng());
+}
+/** the site logo placed at x,y with height h -> { svg, w } */
+export function logoAt(x, y, h) {
+  const w = LOGO ? Math.min(h * 5, h * (LOGO.ratio || 2.5)) : 0;
+  if (LOGO?.kind === 'svg') return { w, svg: LOGO.body.replace('<svg', `<svg x="${x}" y="${y}" width="${w}" height="${h}"`) };
+  if (LOGO?.kind === 'img') return { w, svg: `<image x="${x}" y="${y}" width="${w}" height="${h}" xlink:href="${LOGO.href}"/>` };
+  return { w: 0, svg: '' };
+}
 /** Render the alert card to PNG. Throws on failure (callers fall back to a text post). */
 export async function renderAlertPng(alert, opts = {}) {
   const svg = await alertImageSvg(alert, opts);

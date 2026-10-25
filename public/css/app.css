@@ -181,10 +181,17 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .btn-ghost { height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-elevated); font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
 .btn-ghost:hover { background: var(--bg-card-hover); }
-.share-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.share-menu { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .share-menu button, .share-menu a { height: 42px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; font-size: 12.5px; border: 1px solid var(--border); background: var(--bg-elevated); }
 .share-menu .wa { background: #25d366; border-color: #25d366; color: #fff; }
 .share-menu .tg { background: #229ed9; border-color: #229ed9; color: #fff; }
+.share-menu .fb { background: #1877f2; border-color: #1877f2; color: #fff; }
+.share-ctrl { color: #ff3b4e; }
+.site-share { position: absolute; bottom: 64px; inset-inline-start: 60px; z-index: 13; width: 280px; padding: 12px; border-radius: 12px; background: var(--bg-elevated); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.site-share .ss-head { display: grid; gap: 2px; margin-bottom: 10px; }
+.site-share .ss-head b { font-size: 14px; }
+.site-share .ss-head span { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+@media (max-width: 767px) { .site-share { bottom: 104px; inset-inline-start: 56px; width: min(280px, calc(100vw - 72px)); } }
 .btn-sm { height: 32px; padding: 0 12px; border-radius: 8px; font-size: 12.5px; font-weight: 700; border: 1px solid var(--border); background: var(--bg-elevated); display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---------------------------------------------------------------- map tools */

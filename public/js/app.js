@@ -126,7 +126,10 @@ function onePlace(p) {
   return out.join(LANG === 'ar' ? '، ' : ', ');
 }
 const isLive = (a) => a.is_active && Date.parse(a.expires_at) > Date.now();
-const shareUrl = (a) => `${location.origin}/${LANG}/#${a.id}`;
+// share links go through /<lang>/a/<id>: chat apps get a rich preview (the alert's map card), people land on the map
+const shareUrl = (a) => `${location.origin}/${LANG}/a/${encodeURIComponent(a.id)}`;
+const siteUrl = () => `${location.origin}/${LANG}/`;
+const fbShare = (u) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`;
 const shareText = (a) => `🔴 ${titleOf(a)}${a.description ? '\n' + a.description : ''}`;
 
 // ------------------------------------------------------------------ alerts selection
@@ -165,6 +168,8 @@ function hydrateStatic() {
   $('#btnWa').title = T.waChannel; $('#btnWa').setAttribute('aria-label', T.waChannel);
   $('#btnContact').title = T.contactUs; $('#btnContact').setAttribute('aria-label', T.contactUs);
   $('#zoomIn').title = T.zoomIn;
+  $('#shareSite').title = T.shareMap;
+  $('#shareSite').setAttribute('aria-label', T.shareMap);
   $('#zoomOut').title = T.zoomOut;
   $('#resetView').title = T.resetView;
   $('#locateMe').title = T.myLocation;
@@ -247,6 +252,7 @@ function detailHtml(a) {
     <div class="share-menu" id="shareMenu" hidden>
       <a class="wa" href="https://wa.me/?text=${encodeURIComponent(shareText(a) + '\n' + shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 17)}${esc(T.whatsapp)}</a>
       <a class="tg" href="https://t.me/share/url?url=${encodeURIComponent(shareUrl(a))}&text=${encodeURIComponent(shareText(a))}" target="_blank" rel="noopener noreferrer">${icon('telegram', 17)}${esc(T.telegram)}</a>
+      <a class="fb" href="${fbShare(shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('facebook', 17)}${esc(T.facebook)}</a>
       <button data-act="copy">${icon('copy', 17)}${esc(T.copyLink)}</button>
     </div>
     <div class="btn-row">
@@ -488,7 +494,7 @@ function renderDrawer() {
   </section>
   <section class="s-card about-us"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.about)}</h3><p>${esc(T.aboutSub)}</p></div></div>
     <p>${esc(T.aboutText)}</p>
-    <div class="about-links"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a></div>
+    <div class="about-links"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a></div>
     ${cts}
   </section>
   <div class="drawer-foot"><button class="link-btn" data-s="terms" style="color:inherit;text-decoration:underline">${esc(T.terms)}</button> · <button class="link-btn" data-s="privacy" style="color:inherit;text-decoration:underline">${esc(T.privacy)}</button><br/>© ${new Date().getFullYear()} Red Alert Syria — ${esc(T.madeFor)}</div>`;
@@ -517,7 +523,7 @@ function renderAbout() {
     <div class="sec-label">${esc(T.legend)}</div>
     <div class="legend">${legend}</div>
     <div class="disclaimer">${esc(T.disclaimer)}</div>
-    <div class="about-links" style="margin-bottom:14px"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><button class="btn-sm" data-a="terms">${esc(T.terms)}</button><button class="btn-sm" data-a="privacy">${esc(T.privacy)}</button></div>
+    <div class="about-links" style="margin-bottom:14px"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a><button class="btn-sm" data-a="terms">${esc(T.terms)}</button><button class="btn-sm" data-a="privacy">${esc(T.privacy)}</button></div>
     ${contactRows().length ? `<div class="sec-label">${esc(T.contactUs)}</div>${contactListHtml()}` : ''}
     <div class="sec-label">${esc(T.sources)}</div>
     <p class="sources"><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a> · <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames (CC BY 4.0)</a> · <a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a> · Esri World Imagery · Mapzen Terrain (AWS Open Data) · Tabler Icons</p>`;
@@ -887,6 +893,30 @@ function bindEvents() {
   $('#breakingClose').addEventListener('click', () => ($('#breaking').hidden = true));
 
   // map controls
+  // share the whole map (native share sheet on phones, small panel elsewhere)
+  $('#shareSite').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (navigator.share && isMobile()) {
+      try { await navigator.share({ title: T.siteName, text: T.shareMapText, url: siteUrl() }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
+    }
+    const box = $('#siteShare');
+    if (!box.hidden) { box.hidden = true; return; }
+    const u = siteUrl();
+    box.innerHTML = `<div class="ss-head"><b>${esc(T.shareMap)}</b><span>${esc(T.shareMapSub)}</span></div>
+      <div class="share-menu">
+        <a class="wa" href="https://wa.me/?text=${encodeURIComponent(T.shareMapText + '\n' + u)}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 17)}${esc(T.whatsapp)}</a>
+        <a class="tg" href="https://t.me/share/url?url=${encodeURIComponent(u)}&text=${encodeURIComponent(T.shareMapText)}" target="_blank" rel="noopener noreferrer">${icon('telegram', 17)}${esc(T.telegram)}</a>
+        <a class="fb" href="${fbShare(u)}" target="_blank" rel="noopener noreferrer">${icon('facebook', 17)}${esc(T.facebook)}</a>
+        <button data-act="copy-site">${icon('copy', 17)}${esc(T.copyLink)}</button>
+      </div>`;
+    box.hidden = false;
+  });
+  $('#siteShare').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.target.closest('[data-act="copy-site"]')) copy(siteUrl());
+    else if (e.target.closest('a')) setTimeout(() => { $('#siteShare').hidden = true; }, 300);
+  });
+  document.addEventListener('click', () => { const b = $('#siteShare'); if (b && !b.hidden) b.hidden = true; });
   $('#zoomIn').addEventListener('click', () => amap && amap.zoomIn());
   $('#zoomOut').addEventListener('click', () => amap && amap.zoomOut());
   $('#resetView').addEventListener('click', () => amap && amap.fitSyria());
@@ -1182,6 +1212,7 @@ async function boot() {
     console.error('map init failed', e);
   }
   amap.setAlerts(visibleAlerts(), state.selectedId);
+  focusFromUrl();
   if (state.selectedId) {
     const a = state.alerts.get(state.selectedId);
     if (a) amap.select(isLive(a) ? a : { ...a, is_active: false });
@@ -1196,5 +1227,15 @@ async function boot() {
     if (!document.hidden) refresh();
   });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+// /ar/?at=32.62,36.10,9 -> open the map centred on that area (links from the "شو صاير بـ..." pages)
+function focusFromUrl() {
+  const at = new URLSearchParams(location.search).get('at');
+  if (!at || location.hash.length > 1) return;
+  const [lat, lon, z] = at.split(',').map(Number);
+  if (!(lat > 32 && lat < 37.6 && lon > 35.5 && lon < 42.5)) return;
+  const go = () => amap?.map?.flyTo({ center: [lon, lat], zoom: Math.min(13, Math.max(6, z || 10)), essential: true, duration: 1200 });
+  if (amap?.map?.loaded?.()) setTimeout(go, 300);
+  else amap?.map?.once?.('load', () => setTimeout(go, 300));
 }
 boot();

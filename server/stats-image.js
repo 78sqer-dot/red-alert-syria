@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { channelBadge, badgeWidth } from './alert-image.js';
 import { Resvg } from '@resvg/resvg-js';
 import { ALERT_TYPES, TYPE_KEYS } from '../shared/types.js';
 import { SVG as GLYPHS } from '../public/js/marker-svgs.js';
@@ -325,8 +326,9 @@ export function statsSvg(st, lang = 'ar') {
   // ---- footer
   const fy = H - 34;
   out.push(`<rect x="${P}" y="${fy - 40}" width="${W - 2 * P}" height="1" fill="#1f2937"/>`);
-  out.push(text(rtl ? R : P, fy, 'red-alert-syria.onrender.com', { size: 20, weight: 500, fill: '#9ca3af', anchor: A, family: 'Noto Sans' }));
-  out.push(text(rtl ? P : R, fy, 't.me/Red_Alert_Syria', { size: 20, weight: 500, fill: '#9ca3af', anchor: rtl ? 'start' : 'end', family: 'Noto Sans' }));
+  out.push(text(rtl ? R : P, fy, 'red-alert-syria.onrender.com', { size: 22, weight: 700, fill: '#cbd5e1', anchor: A, family: 'Noto Sans' }));
+  const bh = 42; const bw = badgeWidth(bh);
+  out.push(channelBadge(rtl ? P : R - bw, fy - bh + 12, { h: bh, dark: true }));
   out.push('</svg>');
   return out.join('\n');
 }

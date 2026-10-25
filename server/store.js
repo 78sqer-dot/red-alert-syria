@@ -195,6 +195,7 @@ class Store extends EventEmitter {
     const a = this.getAlert(id);
     if (!a) return null;
     Object.assign(a, patch);
+    if ('channel_message_id' in patch) this._logPatch(id, { m: patch.channel_message_id || undefined });
     this.persist();
     this.emit('update', publicAlert(a));
     return a;
@@ -304,7 +305,15 @@ class Store extends EventEmitter {
   // ---------- statistics log ----------
   _logEntry(a) {
     const p = a.place || {};
-    return { id: a.id, ty: a.type, ts: a.timestamp, g: p.governorate || null, ga: p.governorate_ar || null, ge: p.governorate_en || null, src: a.source || 'telegram' };
+    // place/district (p, d, pa, pe) + extra areas' districts (xd): used by the per-area SEO pages
+    const xd = [...new Set((a.extra || []).map((x) => x.district).filter(Boolean))];
+    const xg = [...new Set((a.extra || []).map((x) => x.governorate).filter((g) => g && g !== p.governorate))];
+    return {
+      id: a.id, ty: a.type, ts: a.timestamp, g: p.governorate || null, ga: p.governorate_ar || null, ge: p.governorate_en || null, src: a.source || 'telegram',
+      ...(p.place_id ? { p: p.place_id } : {}), ...(p.district ? { d: p.district } : {}),
+      ...(p.name_ar && p.scope !== 'governorate' ? { pa: p.name_ar, pe: p.name_en || undefined } : {}),
+      ...(xd.length ? { xd } : {}), ...(xg.length ? { xg } : {}),
+    };
   }
   _log(a) {
     if (!Array.isArray(this.state.log)) this.state.log = [];
@@ -312,6 +321,10 @@ class Store extends EventEmitter {
     const cutoff = Date.now() - 35 * 86400_000;
     if (this.state.log.length > 100 && Date.parse(this.state.log[0].ts) < cutoff) this.state.log = this.state.log.filter((e) => Date.parse(e.ts) >= cutoff);
     if (this.state.log.length > 20000) this.state.log = this.state.log.slice(-20000);
+  }
+  _logPatch(id, patch) {
+    const log = this.state.log || [];
+    for (let i = log.length - 1; i >= 0 && i >= log.length - 500; i--) if (log[i].id === id) { Object.assign(log[i], patch); return; }
   }
   /** log entries with ts in [fromMs, toMs) */
   logBetween(fromMs, toMs = Date.now()) {

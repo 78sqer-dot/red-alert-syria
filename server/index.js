@@ -12,6 +12,7 @@ import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './n
 import { createBot, imageTest, resyncChannelPosts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates } from './places.js';
+import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -166,7 +167,10 @@ const BUILD = String(process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).s
 const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8').replace(/\?v=\d+/g, `?v=${BUILD}`);
 function renderIndex(lang) {
   const url = config.publicUrl || '';
+  const head = `${verifyMetaTags()}<link rel="alternate" hreflang="x-default" href="${url}/ar/" /><meta property="og:locale" content="${lang === 'ar' ? 'ar_SY' : 'en_US'}" />`
+    + homeJsonLd(lang).map((j) => `<script type="application/ld+json">${JSON.stringify(j).replace(/</g, '\\u003c')}</script>`).join('');
   return indexHtml
+    .replace('</head>', `${head}\n</head>`)
     .replaceAll('{{LANG}}', lang)
     .replaceAll('{{DIR}}', lang === 'ar' ? 'rtl' : 'ltr')
     .replaceAll('{{URL}}', url)
@@ -199,6 +203,7 @@ app.get(['/ar', '/en', '/ar/', '/en/'], (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(renderIndex(p.startsWith('/en') ? 'en' : 'ar'));
 });
+mountSeo(app, { limiter: apiLimiter });
 app.use((req, res) => res.status(404).type('text').send('Not found'));
 
 // ------------------------------------------------------------------ start
