@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
+import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { createBot, imageTest, resyncChannelPosts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates } from './places.js';
@@ -105,6 +106,20 @@ app.get('/api/imgtest', apiLimiter, async (req, res) => {
   try {
     res.json(await imageTest(bots.admin.api, owner, { type: String(req.query.type || 'uav'), q: String(req.query.q || ''), lang: req.query.lang === 'en' ? 'en' : 'ar' }));
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Token-protected news-monitor tools (owner's private chat only): status JSON, and a clearly marked
+// test draft (cannot publish; removed after 10 min). key = sha256(BOT_TOKEN + ':news').
+const newsKeyOk = (req) => {
+  const want = config.botToken ? crypto.createHash('sha256').update(`${config.botToken}:news`).digest('hex') : null;
+  const key = String(req.query.key || '');
+  return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
+};
+app.get('/api/newsdebug', apiLimiter, (req, res) => (newsKeyOk(req) ? res.json(newsDebug()) : res.status(404).end()));
+app.get('/api/newstest', apiLimiter, async (req, res) => {
+  if (!newsKeyOk(req) || !bots.admin) return res.status(404).end();
+  const owner = config.ownerIds[0];
+  if (!owner) return res.status(400).json({ error: 'no owner' });
+  try { res.json(await sendTestDraft(owner)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/meta', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=3600');
@@ -306,6 +321,7 @@ async function start() {
     };
     upReport();
     startDailySummary(bots.admin.api);
+    startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (never auto-published)
     setTimeout(() => resyncChannelPosts(bots.admin.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
   };
   const upAdmin = async (attempt = 1) => {
@@ -336,6 +352,7 @@ async function start() {
 }
 
 const shutdown = async () => {
+  try { stopNewsMonitor(); } catch { /* ignore */ }
   try { store._writeLocal(); } catch { /* ignore */ }
   try { await Promise.race([store.flushBackup(true), new Promise((r) => setTimeout(r, 5000))]); } catch { /* ignore */ }
   try { if (config.botMode !== 'webhook') { for (const b of Object.values(bots)) if (b) await b.stop(); } } catch { /* ignore */ }

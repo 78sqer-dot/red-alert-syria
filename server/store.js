@@ -111,6 +111,8 @@ class Store extends EventEmitter {
       reportsDone: s.reportsDone && typeof s.reportsDone === 'object' ? s.reportsDone : {},
       // ids of alerts removed by hand / auto-delete (so a late copy from an old instance can't bring them back)
       gone: s.gone && typeof s.gone === 'object' ? s.gone : {},
+      // 📡 news monitor: settings, sources, drafts, remembered incidents (server/news-monitor.js)
+      news: s.news && typeof s.news === 'object' ? s.news : {},
     };
   }
 
@@ -293,6 +295,7 @@ class Store extends EventEmitter {
     }
     for (const [k, v] of Object.entries(o.relay || {})) if (!st.relay[k]) st.relay[k] = v;
     for (const [k, v] of Object.entries(o.threads || {})) if (!st.threads[k]) st.threads[k] = v;
+    for (const f of this.mergeHooks || []) { try { f(o); } catch (e) { console.error('[store] merge hook failed', e.message); } }
     if (reports || alerts) console.log(`[store] merged from the previous instance: ${reports} report change(s), ${alerts} alert(s)`);
     this.persist(); // the pinned backup becomes the merged state again
     return { reports, alerts };

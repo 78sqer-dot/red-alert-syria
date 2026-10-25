@@ -10,6 +10,7 @@ import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
 import { registerContactTools } from './contact-tools.js';
+import { registerNewsTools } from './news-monitor.js';
 import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
 
 const PAGE = 24;
@@ -120,7 +121,7 @@ function mainKeyboard(ctx) {
     .text(`${e('civil')} ${b('civil')}`, 'cv').text(`${e('missile')} ${b('missile')}`, 't:missile').row();
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
-  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row().text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').row();
+  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row().text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').text(lang === 'en' ? '📡 News monitor' : '📡 الرصد الإخباري', 'nws').row();
   if (config.publicUrl) kb.url(l.btnMap, mapUrl('', lang));
   kb.url(l.btnChannel, config.channelUrl);
   return kb;
@@ -373,7 +374,7 @@ function buildAlertInput(d, author) {
     location: loc,
     areas,
     ttlMin: d.ttlMin,
-    source: 'telegram',
+    source: d.source === 'news' ? 'news' : 'telegram',
     author,
   };
 }
@@ -639,6 +640,10 @@ const OH = {
   dropSessions: (id) => { sessions.delete(`admin:${id}`); },
   resync: () => resyncChannelPosts(APIS.admin).catch(() => {}),
   sendTransient: (api, chat, text, o) => sendTransient(api, chat, text, o),
+  publishDraft: (api, d, author) => publishDraft(api, d, author),
+  mapUrl: (id, lang) => mapUrl(id, lang),
+  // open a ready draft (news monitor "✏️ edit first") in this user's normal publishing preview
+  loadDraft: (ctx, d) => { const x = { ...d, mode: 'publish', created: Date.now(), msgId: null }; sessions.set(sk(ctx), x); return showPreview(ctx, x); },
 };
 export function createBot({ role = 'admin', token = config.botToken, reviewApi = null } = {}) {
   if (!token) return null;
@@ -675,7 +680,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     await next();
   });
-  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
+  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerNewsTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {
