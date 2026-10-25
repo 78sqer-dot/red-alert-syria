@@ -16,6 +16,8 @@ const DEFAULTS = {
   focusSyria: true,
   filter: [...TYPE_KEYS],
   sidebarHidden: false,
+  showRoads: true,
+  svcLayers: [],
 };
 
 function merge(base, over) {

@@ -1,4 +1,5 @@
 // Red Alert Syria — front-end application
+import { createServices } from './services.js';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, typeOf } from '/shared/types.js';
 import { DICT } from './i18n.js';
 import { icon } from './icons.js';
@@ -85,6 +86,7 @@ const state = {
   contacts: {},
 };
 let amap = null;
+let svc = null; // 💱 ⚡ 🛣 🏥 public/js/services.js
 
 // ------------------------------------------------------------------ formatting
 const fmtDay = new Intl.DateTimeFormat(LANG === 'ar' ? 'ar-SY' : 'en-GB', { day: 'numeric', month: 'long', timeZone: TZ });
@@ -197,6 +199,7 @@ function cardHtml(a, fresh) {
   return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}" data-id="${esc(a.id)}" style="--c:${t.color}" tabindex="0">
     <div class="card-top">${badge(a)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <h3 class="card-title">${esc(titleOf(a))}</h3>
+    ${distChip(a)}
     ${a.description ? `<p class="card-desc">${esc(a.description)}</p>` : ''}
     <div class="card-foot"><div class="tags">${tagsOf(a).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
       <div class="card-actions">${hasLoc ? `<button class="ic-btn" data-act="map" title="${esc(T.showOnMap)}">${icon('map', 16)}</button>` : ''}<button class="ic-btn" data-act="share" title="${esc(T.share)}">${icon('share', 16)}</button></div>
@@ -283,11 +286,16 @@ function showDetail() {
   renderDetail();
 }
 
+function distChip(a) {
+  const d = svc && hasLoc(a) && a.scope !== 'country' ? svc.distanceTo(a.location.latitude, a.location.longitude) : '';
+  return d ? `<span class="dist-chip">${icon('locate', 12)}${esc(d)}</span>` : '';
+}
 function popupHtml(a) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
   return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">
     <div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <p class="pp-title">${esc(titleOf(a))}</p>
+    ${distChip(a)}
     ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">📍 ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
     ${a.description ? `<p class="pp-desc">${esc(a.description)}</p>` : ''}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
@@ -404,7 +412,7 @@ function renderLayersPanel() {
     <label class="radio"><input type="radio" name="ml" value="satellite" ${s.mapLayer === 'satellite' ? 'checked' : ''}/><span class="thumb sat"></span>${esc(T.satellite)}</label>
     <div class="grp" style="margin-top:6px">${tg('map3d', T.terrain3d)}</div>
     <div class="dd-sec">${esc(T.extraLayers)}</div>
-    ${tg('showGov', T.govBorders)}${tg('focusSyria', T.focusSyria)}`;
+    ${tg('showGov', T.govBorders)}${tg('focusSyria', T.focusSyria)}${svc ? svc.layersHtml() : ''}`;
 }
 function closeDropdowns(except) {
   for (const [btn, panel] of [['#btnFilter', '#filterPanel'], ['#btnLayers', '#layersPanel']]) {
@@ -789,6 +797,7 @@ function bindEvents() {
     if (!$('#modalBackdrop').hidden) return closeModal();
     if ($('#drawer').classList.contains('open')) return closeDrawer();
     if ($('#aboutSheet').classList.contains('open')) return closeAbout();
+    if (svc && svc.isOpen()) return svc.close();
     closeDropdowns();
     if (state.selectedId) select(null);
   });
@@ -821,6 +830,8 @@ function bindEvents() {
     if (i.name === 'ml') {
       settings.set({ mapLayer: i.value });
       amap && amap.setOptions({ layer: i.value });
+    } else if (i.dataset.sl) {
+      svc && svc.toggleLayer(i.dataset.sl, i.checked);
     } else if (i.dataset.l) {
       settings.set({ [i.dataset.l]: i.checked });
       amap && amap.setOptions({ [i.dataset.l]: i.checked });
@@ -920,7 +931,9 @@ function bindEvents() {
   $('#zoomIn').addEventListener('click', () => amap && amap.zoomIn());
   $('#zoomOut').addEventListener('click', () => amap && amap.zoomOut());
   $('#resetView').addEventListener('click', () => amap && amap.fitSyria());
+  $('#btnSvc').addEventListener('click', (e) => { e.stopPropagation(); closeDropdowns(); svc && svc.open(); });
   $('#locateMe').addEventListener('click', () => {
+    if (svc) return svc.locate();
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition((p) => amap && amap.showMe(p.coords.longitude, p.coords.latitude), () => {}, { enableHighAccuracy: true, timeout: 10000 });
   });
@@ -1085,6 +1098,7 @@ function connect() {
     }
     setHistoryHours(j.history_hours);
     if (j.contacts) setContacts(j.contacts);
+    if (j.roads && svc) svc.setRoads(j.roads);
     const before = new Set(state.alerts.keys());
     state.alerts = new Map();
     for (const a of j.alerts) state.alerts.set(a.id, a);
@@ -1123,6 +1137,8 @@ function connect() {
       notify(a);
     }
   });
+  es.addEventListener('roads', (e) => { beat(); try { svc && svc.setRoads(JSON.parse(e.data)); } catch { /* ignore */ } });
+  es.addEventListener('power', (e) => { beat(); try { svc && svc.setPower(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('contacts', (e) => { beat(); try { setContacts(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('update', (e) => {
     const a = JSON.parse(e.data);
@@ -1211,6 +1227,12 @@ async function boot() {
   } catch (e) {
     console.error('map init failed', e);
   }
+  try {
+    svc = createServices({ LANG, esc, icon, toast, openModal, closeModal, getMap: () => amap, botUrl: () => BOT });
+    $('#btnSvcLbl').textContent = svc.L.services;
+    svc.init();
+    document.addEventListener('ras:me', () => { renderList(); if (state.view === 'detail') renderDetail(); });
+  } catch (e) { console.error('services init failed', e); }
   amap.setAlerts(visibleAlerts(), state.selectedId);
   focusFromUrl();
   if (state.selectedId) {

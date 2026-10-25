@@ -219,6 +219,7 @@ export class AlertMap {
     });
     this.map.on('click', (e) => {
       if (e.originalEvent.target.closest('.mk, .maplibregl-popup')) return;
+      if (window.__svcHit && window.__svcHit(e)) return; // a road / service icon (public/js/services.js)
       // a tap inside any circle of an alert (main or extra affected area) opens that same alert
       const hit = this.zoneAt(e.lngLat);
       if (hit) { this._popupAt = { id: hit.id, ll: [hit.lon, hit.lat] }; return this.onSelect(hit.id, { fromMap: true, fly: false }); }

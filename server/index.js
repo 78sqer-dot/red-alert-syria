@@ -13,6 +13,8 @@ import { createBot, imageTest, resyncChannelPosts, startDailySummary, telegramBa
 import { applyProject } from './config.js';
 import { governorates } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
+import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
+import { startServices, publicRoads, publicPower } from './services.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -122,6 +124,29 @@ app.get('/api/newstest', apiLimiter, async (req, res) => {
   if (!owner) return res.status(400).json({ error: 'no owner' });
   try { res.json(await sendTestDraft(owner)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// 💱 prices / 🛣 roads / ⚡ electricity for the website
+app.get('/api/services', apiLimiter, (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), server_time: new Date().toISOString() });
+});
+// Token-protected prices tools: status JSON, and a clearly marked preview of the bulletin sent to the
+// owner's private chat only (never the channel). key = sha256(BOT_TOKEN + ':prices').
+const pricesKeyOk = (req) => {
+  const want = config.botToken ? crypto.createHash('sha256').update(`${config.botToken}:prices`).digest('hex') : null;
+  const key = String(req.query.key || '');
+  return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
+};
+app.get('/api/pricesdebug', apiLimiter, async (req, res) => {
+  if (!pricesKeyOk(req)) return res.status(404).end();
+  if (req.query.refresh) await refreshPrices({ force: true }).catch(() => {});
+  res.json(pricesDebug());
+});
+app.get('/api/pricestest', apiLimiter, async (req, res) => {
+  if (!pricesKeyOk(req) || !bots.admin) return res.status(404).end();
+  const owner = config.ownerIds[0];
+  if (!owner) return res.status(400).json({ error: 'no owner' });
+  try { res.json(await postBulletin(bots.admin.api, { chatId: owner, test: true })); } catch (e) { res.status(500).json({ error: e.description || e.message }); }
+});
 app.get('/api/meta', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=3600');
   res.json({ governorates: governorates.map(({ code, ar, en, lat, lon }) => ({ code, ar, en, lat, lon })), channel: config.channelUrl, bot: (botInfo.report || botInfo.admin) ? `https://t.me/${botInfo.report || botInfo.admin}` : null });
@@ -139,7 +164,7 @@ app.get('/api/stream', streamLimiter, (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.write('retry: 4000\n\n');
-  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString(), build: BUILD, contacts: store.publicContacts })}\n\n`);
+  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString(), build: BUILD, contacts: store.publicContacts, roads: publicRoads() })}\n\n`);
   clients.add(res);
   req.on('close', () => clients.delete(res));
 });
@@ -150,6 +175,8 @@ const broadcast = (event, data) => {
 store.on('alert', (a) => broadcast('alert', a));
 store.on('update', (a) => broadcast('update', a));
 store.on('remove', (a) => broadcast('remove', a));
+store.on('roads', (r) => broadcast('roads', r)); // 🛣 road status layer
+store.on('power', (p) => broadcast('power', p)); // ⚡ electricity updates
 store.on('contacts', (c) => broadcast('contacts', c)); // website contact links change instantly
 setInterval(() => {
   for (const c of clients) c.write(`event: ping\ndata: ${Date.now()}\n\n`);
@@ -326,6 +353,8 @@ async function start() {
     };
     upReport();
     startDailySummary(bots.admin.api);
+    startPrices(() => bots.admin?.api); // 💱 morning prices bulletin (in-app scheduler, Damascus time)
+    startServices(); // 🛣 road statuses expiry
     startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (never auto-published)
     setTimeout(() => resyncChannelPosts(bots.admin.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
   };

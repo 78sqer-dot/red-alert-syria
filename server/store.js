@@ -114,6 +114,8 @@ class Store extends EventEmitter {
       gone: s.gone && typeof s.gone === 'object' ? s.gone : {},
       // 📡 news monitor: settings, sources, drafts, remembered incidents (server/news-monitor.js)
       news: s.news && typeof s.news === 'object' ? s.news : {},
+      // 💱 prices bulletin, 🛣 road status, ⚡ electricity updates (server/prices.js, server/services.js)
+      svc: s.svc && typeof s.svc === 'object' ? s.svc : {},
     };
   }
 

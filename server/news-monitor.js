@@ -12,6 +12,7 @@ import { store } from './store.js';
 import { ALERT_TYPES, typeOf } from '../shared/types.js';
 import { locationFrom, normalizeArabic } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText, parseUsername } from './news-sources.js';
+import { onNewsPost as onPowerPost } from './services.js';
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
@@ -485,6 +486,8 @@ async function pollOnce() {
     it.text = c.text; it.breaking = c.breaking;
     const h = textHash(c.text);
     if (n.seen[h]) { n.stats.dupes++; note(it, 'same text already seen'); continue; }
+    // ⚡ electricity / rationing updates -> a separate owner card (server/services.js), never an alert
+    try { if (onPowerPost(it)) { note(it, 'electricity update -> owner card'); continue; } } catch (e) { console.warn('[news] power hook failed', e.message); }
     const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
     if (!f.ok) { note(it, 'skipped: ' + f.why); continue; }
     // "seen" only once it really goes to the desk: a skipped post can be looked at again after a rule fix

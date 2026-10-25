@@ -11,6 +11,8 @@ import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
 import { registerContactTools } from './contact-tools.js';
 import { registerNewsTools } from './news-monitor.js';
+import { ROAD_DURATIONS, roadLabel, addRoad, activeRoads, endRoad, roadWhere, postRoadToChannel, registerPowerTools } from './services.js';
+import { registerPriceTools } from './prices.js';
 import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox } from './places.js';
 import { cleanAlertText } from './clean-text.js';
 
@@ -36,7 +38,7 @@ const sk = (ctx) => `${roleOf(ctx)}:${ctx.from?.id}`;
 export const botInfo = { admin: null, report: null }; // usernames, filled at start
 const L = (ctx) => T[store.userLang(ctx.from?.id)] || T.ar;
 const langOf = (ctx) => store.userLang(ctx.from?.id) === 'en' ? 'en' : 'ar';
-const typeLabel = (key, lang) => `${typeOf(key).emoji} ${lang === 'en' ? typeOf(key).en : typeOf(key).ar}`;
+const typeLabel = (key, lang) => (key === 'road' ? (lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق') : `${typeOf(key).emoji} ${lang === 'en' ? typeOf(key).en : typeOf(key).ar}`);
 const mapUrl = (id, lang = 'ar') => (config.publicUrl ? `${config.publicUrl}/${lang}/${id ? '#' + id : ''}` : '');
 
 // spelling-insensitive key: "داريّا" == "داريا", "حماه" == "حماة", "أعزاز" == "اعزاز"
@@ -98,7 +100,7 @@ export function channelKeyboard(alert) {
 function draftSummary(d, lang) {
   const l = T[lang];
   const loc = d.location;
-  const lines = [`<b>${esc(typeLabel(d.type, lang))}</b>`];
+  const lines = [`<b>${esc(d.type === 'road' ? roadLabel(d.road, lang) : typeLabel(d.type, lang))}</b>`];
   if (d.type === 'breaking') lines.push('', esc(d.text || ''));
   if (d.extra?.length) {
     lines.push('', `📍 <b>${lang === 'en' ? `Areas (${d.extra.length + 1})` : `المناطق (${d.extra.length + 1})`}:</b>`);
@@ -120,10 +122,12 @@ function mainKeyboard(ctx) {
     .text(`${e('breaking')} ${b('breaking')}`, 't:breaking').row()
     .text(`${e('uav')} ${b('uav')}`, 't:uav').text(`${e('warplane')} ${b('warplane')}`, 't:warplane').row()
     .text(`${e('artillery')} ${b('artillery')}`, 't:artillery').text(`${e('attack')} ${b('attack')}`, 't:attack').row()
-    .text(`${e('civil')} ${b('civil')}`, 'cv').text(`${e('missile')} ${b('missile')}`, 't:missile').row();
+    .text(`${e('civil')} ${b('civil')}`, 'cv').text(`${e('missile')} ${b('missile')}`, 't:missile').row()
+    .text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd').row();
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
-  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row().text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').text(lang === 'en' ? '📡 News monitor' : '📡 الرصد الإخباري', 'nws').row();
+  if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row().text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').text(lang === 'en' ? '📡 News monitor' : '📡 الرصد الإخباري', 'nws').row()
+    .text(lang === 'en' ? '💱 Prices bulletin' : '💱 نشرة الأسعار', 'px').text(lang === 'en' ? '⚡ Electricity' : '⚡ الكهرباء', 'pwr').row();
   if (config.publicUrl) kb.url(l.btnMap, mapUrl('', lang));
   kb.url(l.btnChannel, config.channelUrl);
   return kb;
@@ -226,7 +230,9 @@ function placeKeyboard(ctx, dist, page, sub = '', letter = '') {
 function previewKeyboard(ctx, d) {
   const l = L(ctx);
   const kb = new InlineKeyboard();
+  const enx = langOf(ctx) === 'en';
   if (d.mode === 'report') kb.text(l.btnSubmit, 'submit').row();
+  else if (d.type === 'road') kb.text(enx ? '🗺 Publish on the map' : '🗺 نشر على الخريطة', 'publish').row().text(enx ? '📢 Map + channel' : '📢 الخريطة + القناة', 'publish:ch').row();
   else kb.text(l.btnPublish, 'publish').row();
   kb.text(l.btnDuration(d.ttlMin), 'dur').row();
   kb.text(l.btnEditDetails, 'editdetails').text(l.btnChangeLoc, 'back:gov').row();
@@ -344,6 +350,11 @@ async function pickLocation(ctx, d, loc) {
 async function afterLocation(ctx, d) {
   if (d.type === 'breaking' || d.details) return showPreview(ctx, d);
   d.step = 'details';
+  if (d.type === 'road') {
+    const en = langOf(ctx) === 'en';
+    const kb0 = new InlineKeyboard().text(L(ctx).btnSkip, 'skip').row().text(L(ctx).btnBack, 'back:gov').text(L(ctx).btnCancel, 'cancel');
+    return show(ctx, en ? `<b>${esc(roadLabel(d.road, 'en'))}</b> — ${esc(locName(d.location, 'en'))}\n\n📝 Write a short description, e.g. <i>closed at the bridge entrance because of …</i>, or skip.` : `<b>${esc(roadLabel(d.road, 'ar'))}</b> — ${esc(locName(d.location, 'ar'))}\n\n📝 اكتب وصف مختصر، مثلاً: <i>مسكّر عند مدخل الجسر بسبب …</i> أو <i>في حاجز تفتيش وازدحام</i>، أو اضغط «تخطي».`, kb0);
+  }
   const kb = new InlineKeyboard().text(L(ctx).btnSkip, 'skip').row().text(L(ctx).btnBack, 'back:gov').text(L(ctx).btnCancel, 'cancel');
   await show(ctx, L(ctx).askDetails(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`, esc(locName(d.location, langOf(ctx)))), kb);
 }
@@ -437,6 +448,11 @@ export async function imageTest(api, chatId, { type = 'uav', q = '', lang = 'ar'
   return { place: loc?.name_ar || 'سوريا', scope: loc?.scope || 'country', results };
 }
 export async function publishDraft(api, d, author) {
+  if (d.type === 'road') {
+    const r = addRoad(d, author);
+    if (d.toChannel) { try { await postRoadToChannel(api, r); } catch (e) { console.error('[road] channel post failed:', e.description || e.message); } }
+    return r;
+  }
   const alert = store.addAlert(buildAlertInput(d, author));
   const text = channelPost(alert);
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
@@ -682,7 +698,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     await next();
   });
-  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerNewsTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
+  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerNewsTools(bot, OH); registerPriceTools(bot, OH); registerPowerTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {
@@ -968,6 +984,54 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       .text(L(ctx).btnBack, 'home');
     await show(ctx, L(ctx).askCivil, kb);
   });
+  // 🛣 road status: staff publish straight to the map layer, the public report bot sends it to review
+  const roadMenu = async (ctx) => {
+    const en = langOf(ctx) === 'en';
+    const kb = new InlineKeyboard()
+      .text(roadLabel('closed', langOf(ctx)), 'rd:closed').text(roadLabel('danger', langOf(ctx)), 'rd:danger').row()
+      .text(roadLabel('open', langOf(ctx)), 'rd:open').row();
+    const live = staff(ctx) ? activeRoads() : [];
+    if (live.length) kb.text(en ? `📋 Active road statuses (${live.length})` : `📋 حالات الطرق الفعالة (${live.length})`, 'rdl').row();
+    kb.text(L(ctx).btnBack, 'home');
+    await show(ctx, en
+      ? '🛣 <b>Road status</b>\n\nWhat is the road like? Then pick the place (you can add more places along the road).\nIt shows on the map\'s roads layer and disappears by itself when its time ends.'
+      : '🛣 <b>حالة طريق</b>\n\nشو وضع الطريق؟ بعدها اختار المكان (فيك تضيف أكتر من مكان على نفس الطريق).\nبتظهر على طبقة الطرق بالخريطة وبتنشال لحالها لما تخلص مدتها.', kb);
+  };
+  bot.callbackQuery('rd', async (ctx) => { await ctx.answerCallbackQuery(); await roadMenu(ctx); });
+  bot.callbackQuery(/^rd:(closed|danger|open)$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!staff(ctx)) {
+      if (store.isBanned(ctx.from.id)) return show(ctx, L(ctx).banned, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
+      if (Date.now() - (lastReport.get(ctx.from.id) || 0) < REPORT_COOLDOWN_MS) return show(ctx, L(ctx).reportRate, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
+    }
+    const d = newDraft(ctx, 'road');
+    d.road = ctx.match[1];
+    d.ttlMin = d.road === 'open' ? 180 : 360;
+    await askLocation(ctx, d);
+  });
+  bot.callbackQuery('rdl', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!staff(ctx)) return;
+    const en = langOf(ctx) === 'en';
+    const kb = new InlineKeyboard();
+    for (const r of activeRoads().slice(0, 20)) kb.text(`🏁 ${roadLabel(r.status, langOf(ctx)).split(' ')[0]} ${roadWhere(r, langOf(ctx))}`.slice(0, 60), 'rdx:' + r.id).row();
+    kb.text(L(ctx).btnBack, 'rd');
+    await show(ctx, en ? '📋 <b>Active road statuses</b>\n\nTap one to end it now (it leaves the map).' : '📋 <b>حالات الطرق الفعالة</b>\n\nاضغط على أي وحدة لتنهيها هلق (بتنشال من الخريطة).', kb);
+  });
+  bot.callbackQuery(/^rdx:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const ok = endRoad(ctx.match[1]);
+    await ctx.answerCallbackQuery(ok ? (langOf(ctx) === 'en' ? '🏁 Ended' : '🏁 انتهت وانشالت من الخريطة') : (langOf(ctx) === 'en' ? 'Already ended' : 'منتهية مسبقاً'));
+    if (activeRoads().length) {
+      ctx.callbackQuery.data = 'rdl';
+      const en = langOf(ctx) === 'en';
+      const kb = new InlineKeyboard();
+      for (const r of activeRoads().slice(0, 20)) kb.text(`🏁 ${roadLabel(r.status, langOf(ctx)).split(' ')[0]} ${roadWhere(r, langOf(ctx))}`.slice(0, 60), 'rdx:' + r.id).row();
+      kb.text(L(ctx).btnBack, 'rd');
+      return show(ctx, en ? '📋 <b>Active road statuses</b>\n\nTap one to end it now.' : '📋 <b>حالات الطرق الفعالة</b>\n\nاضغط على أي وحدة لتنهيها هلق.', kb);
+    }
+    return roadMenu(ctx);
+  });
   bot.callbackQuery(/^t:(\w+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     const type = ctx.match[1];
@@ -1083,7 +1147,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
   bot.callbackQuery('dur', needDraft(async (ctx, d) => {
     const kb = new InlineKeyboard();
-    DURATIONS.forEach((m, i) => {
+    (d.type === 'road' ? ROAD_DURATIONS : DURATIONS).forEach((m, i) => {
       kb.text((m === d.ttlMin ? '• ' : '') + fmtDur(m, langOf(ctx)), 'setdur:' + m);
       if (i % 4 === 3) kb.row();
     });
@@ -1092,13 +1156,27 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
   bot.callbackQuery(/^setdur:(\d+)$/, needDraft(async (ctx, d) => {
     const m = Number(ctx.match[1]);
-    if (DURATIONS.includes(m)) d.ttlMin = m;
+    if ((d.type === 'road' ? ROAD_DURATIONS : DURATIONS).includes(m)) d.ttlMin = m;
     await showPreview(ctx, d);
   }));
   bot.callbackQuery('preview', needDraft((ctx, d) => showPreview(ctx, d)));
 
+  const publishRoadDraft = async (ctx, d, toChannel) => {
+    if (!staff(ctx)) return;
+    if (!d.location) return askLocation(ctx, d);
+    sessions.delete(sk(ctx));
+    const en = langOf(ctx) === 'en';
+    const r = await publishDraft(ctx.api, { ...d, toChannel }, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
+    if (d.fromReport) await sendTransient(APIS[d.notifyVia] || APIS.report || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
+    const kb = new InlineKeyboard();
+    if (config.publicUrl) kb.url(en ? '🗺 Open the map' : '🗺 افتح الخريطة', `${config.publicUrl}/${en ? 'en' : 'ar'}/#roads`).row();
+    kb.text(en ? '🏁 End this road status' : '🏁 إنهاء حالة الطريق', 'rdx:' + r.id).row().text(L(ctx).btnHome, 'home');
+    await show(ctx, `${en ? '✅ Added to the map\'s roads layer' : '✅ انضافت على طبقة الطرق بالخريطة'}${toChannel ? (en ? ' and posted in the channel' : ' وانتشرت بالقناة') : ''}.\n\n${draftSummary(d, langOf(ctx))}`, kb);
+  };
+  bot.callbackQuery('publish:ch', needDraft((ctx, d) => (d.type === 'road' ? publishRoadDraft(ctx, d, true) : null)));
   bot.callbackQuery('publish', needDraft(async (ctx, d) => {
     if (!staff(ctx)) return;
+    if (d.type === 'road') return publishRoadDraft(ctx, d, false);
     if (d.type === 'breaking' && !d.text) return askLocation(ctx, d);
     sessions.delete(sk(ctx));
     if (config.alertImages) { try { await show(ctx, L(ctx).publishing, new InlineKeyboard()); } catch { /* ignore */ } }
