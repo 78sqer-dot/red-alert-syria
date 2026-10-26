@@ -84,6 +84,7 @@ const state = {
   conn: 'connecting',
   firstSnapshot: true,
   contacts: {},
+  support: null,
 };
 let amap = null;
 let svc = null; // 💱 ⚡ 🛣 🏥 public/js/services.js
@@ -495,6 +496,12 @@ function showContactModal() {
   if (!contactRows().length) return;
   openModal(`<div class="page-modal ct-modal"><div class="eyebrow"><span class="line"></span>${esc(T.siteName)}</div><h2>${esc(T.contactUs)}</h2><p>${esc(T.contactSub)}</p>${contactListHtml()}<button class="btn-text" data-m="close">${esc(T.close)}</button></div>`);
 }
+function showSupportModal() {
+  const s = state.support;
+  if (!s?.enabled) return;
+  const names = s.displayNames.length ? `<div class="support-names"><b>${esc(T.supportNames)}</b><div>${s.displayNames.map((name) => `<span>${esc(name)}</span>`).join('')}</div></div>` : '';
+  openModal(`<div class="page-modal support-modal"><div class="eyebrow"><span class="line"></span>${icon('heart', 16)}${esc(T.supportTitle)}</div><p>${esc(T.supportTransfer)}</p><div class="support-wallet"><small>${esc(T.supportWallet)}</small><b>${esc(s.walletName)}</b><code dir="ltr">${esc(s.walletPhone)}</code></div><button class="btn-red" data-m="copySupport">${icon('copy', 17)}${esc(T.supportCopy)}</button><p class="fine">${esc(T.supportDisclosure)}</p>${names}<button class="btn-text" data-m="close">${esc(T.close)}</button></div>`);
+}
 function renderContacts() {
   const c = state.contacts || {};
   const wa = $('#btnWa');
@@ -507,6 +514,13 @@ function renderContacts() {
 function setContacts(c) {
   state.contacts = c && typeof c === 'object' ? c : {};
   renderContacts();
+}
+function setSupport(s) {
+  const phone = String(s?.walletPhone || '');
+  state.support = s?.enabled === true && /^(?:\+[1-9]\d{7,14}|\d{6,18})$/.test(phone) && String(s.walletName || '').trim()
+    ? { enabled: true, walletName: String(s.walletName).slice(0, 60), walletPhone: phone, displayNames: Array.isArray(s.displayNames) ? s.displayNames.filter((x) => typeof x === 'string').slice(0, 30) : [] }
+    : null;
+  if ($('#aboutSheet')?.classList.contains('open')) renderAbout();
 }
 function renderDrawer() {
   const s = settings.get();
@@ -577,6 +591,7 @@ function renderAbout() {
     <div class="sec-label">${esc(T.legend)}</div>
     <div class="legend">${legend}</div>
     <div class="disclaimer">${esc(T.disclaimer)}</div>
+    ${state.support ? `<section class="support-card"><div class="support-card-head"><span class="support-icon">${icon('heart', 18)}</span><div><h3>${esc(T.supportTitle)}</h3><p>${esc(T.supportTransfer)}</p></div></div><button class="btn-red" data-a="support">${icon('heart', 16)}${esc(T.supportButton)}</button></section>` : ''}
     <div class="about-links" style="margin-bottom:14px"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a><button class="btn-sm" data-a="terms">${esc(T.terms)}</button><button class="btn-sm" data-a="privacy">${esc(T.privacy)}</button></div>
     ${contactRows().length ? `<div class="sec-label">${esc(T.contactUs)}</div>${contactListHtml()}` : ''}
     <div class="sec-label">${esc(T.sources)}</div>
@@ -1042,6 +1057,7 @@ function bindEvents() {
   $('#aboutBody').addEventListener('click', (e) => {
     const a = e.target.closest('[data-a]')?.dataset.a;
     if (a === 'close') closeAbout();
+    else if (a === 'support') showSupportModal();
     else if (a === 'terms') pageModal(T.terms, T.termsText);
     else if (a === 'privacy') pageModal(T.privacy, T.privacyText);
   });
@@ -1051,6 +1067,11 @@ function bindEvents() {
     if (m === 'start') {
       await enableNotifications();
       closeModal();
+    } else if (m === 'copySupport') {
+      const phone = state.support?.walletPhone;
+      if (!phone) return;
+      try { await navigator.clipboard.writeText(phone); toast(T.supportCopied); }
+      catch { toast(T.supportCopyFail); }
     } else if (m === 'skip' || m === 'close') closeModal();
   });
   // tour
@@ -1106,6 +1127,7 @@ async function poll() {
     const r = await fetch('/api/alerts?include=inactive', { cache: 'no-store' });
     const j = await r.json();
     setHistoryHours(j.history_hours);
+    setSupport(j.support);
     const before = new Set(state.alerts.keys());
     state.alerts = new Map();
     for (const a of j.alerts) state.alerts.set(a.id, a);
@@ -1144,6 +1166,7 @@ function connect() {
     }
     setHistoryHours(j.history_hours);
     if (j.contacts) setContacts(j.contacts);
+    setSupport(j.support);
     if (j.roads && svc) svc.setRoads(j.roads);
     if (j.borders && svc) svc.setBorders(j.borders);
     const before = new Set(state.alerts.keys());
@@ -1188,6 +1211,7 @@ function connect() {
   es.addEventListener('power', (e) => { beat(); try { svc && svc.setPower(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('borders', (e) => { beat(); try { svc && svc.setBorders(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('contacts', (e) => { beat(); try { setContacts(JSON.parse(e.data)); } catch { /* ignore */ } });
+  es.addEventListener('support', (e) => { beat(); try { setSupport(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('update', (e) => {
     const a = JSON.parse(e.data);
     upsert(a, false);

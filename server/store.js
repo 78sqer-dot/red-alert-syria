@@ -6,6 +6,7 @@ import { config } from './config.js';
 import { ALERT_TYPES, typeOf, droneLevel } from '../shared/types.js';
 import { alertZones, regionFix } from './places.js';
 import { cleanAlertText } from './clean-text.js';
+import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
 
 /**
  * In-memory state with atomic JSON persistence on disk and an optional remote backup
@@ -15,7 +16,7 @@ import { cleanAlertText } from './clean-text.js';
 class Store extends EventEmitter {
   constructor() {
     super();
-    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 1, autoDel1h: true, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null } }, log: [], relay: {}, threads: {} };
+    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 1, autoDel1h: true, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null }, support: sanitizeSupportSettings() }, log: [], relay: {}, threads: {} };
     this.file = path.join(config.dataDir, 'state.json');
     this.backup = null; // { save(jsonString), load() -> jsonString|null }
     this._saveTimer = null;
@@ -103,6 +104,8 @@ class Store extends EventEmitter {
           if (typeof c.tg === 'string' && /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(c.tg)) o.tg = c.tg;
           return o;
         })(),
+        // optional public wallet support; legacy projects default to disabled
+        support: sanitizeSupportSettings(s.settings?.support),
         project: (() => {
           const pr = s.settings?.project;
           if (!pr || typeof pr !== 'object') return {};
@@ -512,6 +515,16 @@ class Store extends EventEmitter {
     this.state.settings = { ...(this.state.settings || {}), contacts: cur };
     this.persist();
     this.emit('contacts', this.publicContacts);
+  }
+  get support() { return this.state.settings?.support || sanitizeSupportSettings(); }
+  get publicSupport() { return publicSupportSettings(this.support); }
+  setSupport(patch) {
+    const next = sanitizeSupportSettings({ ...this.support, ...(patch || {}) });
+    if (patch?.enabled === true && !next.enabled) return false;
+    this.state.settings = { ...(this.state.settings || {}), support: next };
+    this.persist();
+    this.emit('support', this.publicSupport);
+    return true;
   }
   get project() {
     return this.state.settings.project || (this.state.settings.project = {});

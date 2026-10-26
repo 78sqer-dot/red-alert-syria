@@ -97,7 +97,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(pro
 app.get('/api/alerts', apiLimiter, (req, res) => {
   const includeInactive = req.query.include === 'inactive' || req.query.all === '1';
   const list = (includeInactive ? store.recentAlerts() : store.activeAlerts()).map(publicAlert);
-  res.json({ alerts: list, history_hours: store.historyWindow, server_time: new Date().toISOString() });
+  res.json({ alerts: list, history_hours: store.historyWindow, server_time: new Date().toISOString(), support: store.publicSupport });
 });
 
 app.get('/api/alerts/:id', apiLimiter, (req, res) => {
@@ -187,7 +187,7 @@ app.get('/api/stream', streamLimiter, (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.write('retry: 4000\n\n');
-  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString(), build: BUILD, contacts: store.publicContacts, roads: publicRoads() })}\n\n`);
+  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString(), build: BUILD, contacts: store.publicContacts, support: store.publicSupport, roads: publicRoads() })}\n\n`);
   clients.add(res);
   req.on('close', () => clients.delete(res));
 });
@@ -202,6 +202,7 @@ store.on('roads', (r) => broadcast('roads', r)); // 🛣 road status layer
 store.on('power', (p) => broadcast('power', p));
 store.on('borders', (b) => broadcast('borders', b)); // 🛂 border crossings // ⚡ electricity updates
 store.on('contacts', (c) => broadcast('contacts', c)); // website contact links change instantly
+store.on('support', (s) => broadcast('support', s)); // optional wallet support changes instantly
 setInterval(() => {
   for (const c of clients) c.write(`event: ping\ndata: ${Date.now()}\n\n`);
 }, 25_000).unref();

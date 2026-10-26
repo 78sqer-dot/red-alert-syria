@@ -405,6 +405,21 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
 .sources { font-size: 12px; color: var(--text-muted); line-height: 1.9; }
 .sources a { text-decoration: underline; color: var(--text-secondary); }
 .disclaimer { font-size: 12px; background: color-mix(in srgb, var(--orange) 10%, transparent); border: 1px solid color-mix(in srgb, var(--orange) 30%, transparent); border-radius: 10px; padding: 10px 12px; color: var(--text-secondary); margin: 12px 0; }
+.support-card { margin: 14px 0; padding: 14px; border: 1px solid color-mix(in srgb, var(--red) 28%, var(--border)); border-radius: 14px; background: color-mix(in srgb, var(--red) 5%, var(--bg-card)); }
+.support-card-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.support-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+.support-card h3 { margin: 0; font-size: 15px; font-weight: 800; }
+.support-card p { margin: 3px 0 0; font-size: 12px; }
+.support-wallet { display: grid; gap: 4px; margin: 12px 0; padding: 12px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--bg-card); }
+.support-wallet small { color: var(--text-muted); font-size: 11px; }
+.support-wallet b { font-size: 14px; }
+.support-wallet code { direction: ltr; unicode-bidi: isolate; font: 700 16px var(--font-mono); overflow-wrap: anywhere; }
+.support-names { margin: 12px 0; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
+.support-names > b { display: block; margin-bottom: 7px; font-size: 12px; }
+.support-names > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.support-names span { padding: 4px 9px; border-radius: 99px; background: var(--bg-subtle); color: var(--text-secondary); font-size: 11px; }
+.support-modal .btn-red { width: 100%; justify-content: center; gap: 7px; }
+.support-modal .fine { margin-top: 12px; }
 .sheet-grab { width: 44px; height: 5px; border-radius: 3px; background: var(--border); margin: 10px auto 0; }
 
 /* ---------------------------------------------------------------- modal */

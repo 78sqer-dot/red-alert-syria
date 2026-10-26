@@ -12,7 +12,8 @@
     "build": "node scripts/vendor.js",
     "start": "node server/index.js",
     "dev": "BOT_MODE=polling node server/index.js",
-    "sim": "node scripts/bot-sim.js"
+    "sim": "node scripts/bot-sim.js",
+    "test": "node --test"
   },
   "license": "MIT",
   "dependencies": {

@@ -108,4 +108,14 @@ const n2 = log.length;
 await cb(owner, 'cv'); await cb(owner, 't:fire');
 const pub3 = user(557, 'Sami'); await rcb(pub3, 'cv'); await rcb(pub3, 't:accident');
 console.log('=== civil submenu:', log.slice(n2).filter((x) => x.payload.text && x.method !== 'answerCallbackQuery').map((x) => `${x.bot}:${String(x.payload.text).slice(0, 60).replace(/\n/g, ' ')} [${(x.payload.reply_markup?.inline_keyboard || []).flat().map((b) => b.text).join(', ')}]`).join('\n'));
+// ---- optional support must stay private and off until the owner configures it
+const channelPostsBeforeSupport = log.filter((x) => x.payload.chat_id === '@Red_Alert_Syria' && /sendMessage|sendPhoto/.test(x.method)).length;
+await msg(owner, '/support');
+if (store.support.enabled || store.publicSupport !== null) throw new Error('support must be hidden by default');
+await cb(owner, 'sp:toggle'); // cannot enable without an owner-chosen wallet name and number
+if (store.support.enabled || store.publicSupport !== null) throw new Error('support enabled without wallet configuration');
+await msg(ed, '/support');
+if (/الدعم الاختياري|Optional website support/.test(last().payload.text)) throw new Error('editor must not access owner support screen');
+if (log.filter((x) => x.payload.chat_id === '@Red_Alert_Syria' && /sendMessage|sendPhoto/.test(x.method)).length !== channelPostsBeforeSupport) throw new Error('support control must not post to the live channel');
+console.log('\n=== support simulation: hidden by default; incomplete setup cannot enable; no channel post');
 process.exit(0);
