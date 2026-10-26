@@ -748,12 +748,11 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .pp-dock { background: var(--bg-elevated); border: 1px solid var(--border); }
 .pp-dock .pp-dock-body.maplibregl-popup-content { border: 0; }
 
-/* Warplanes: three original SVGs spaced around EACH circle. Scale icons, not the orbit radius. */
+/* warplanes: flight path and three-plane footprint follow the ring while zooming (JS sets --fy, --sqi, --sqf) */
 .mk-squad .mk-s { transform: none; }
-.mk-squad .squad { width: 0; height: 0; left: 0; top: 0; }
-.mk-squad .squad .sq { left: 0; top: 0; animation: squadOrbit 8s linear infinite; animation-delay: calc(var(--phase, 0s) + var(--delay, 0s)); }
-.mk-squad .sq-svg { scale: var(--sqi, .8); }
-@keyframes squadOrbit { from { transform: rotate(0deg) translateX(var(--fy, 20px)); } to { transform: rotate(-360deg) translateX(var(--fy, 20px)); } }
+.mk-squad .squad { height: calc(var(--fy, 100px) * 2 + 20px); top: calc(var(--fy, 100px) * -1 - 10px); transform: scale(var(--sqf, 1)); transform-origin: center; }
+.mk-squad .squad .sq { scale: var(--sqi, .8); animation-name: squadFlyZ; }
+@keyframes squadFlyZ { 0% { transform: translateY(calc(var(--fy, 100px) * 1.05)); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(calc(var(--fy, 100px) * -1.05)); opacity: 0; } }
 
 /* 3D terrain: flat DOM pulse rings cannot tilt with the ground (the drawn circles do), so they are hidden */
 .is-3d .zp { display: none !important; }

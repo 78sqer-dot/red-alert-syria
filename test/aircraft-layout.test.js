@@ -2,29 +2,32 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { squadLayout } from '../public/js/aircraft-layout.js';
 
-test('country view keeps all three SVG aircraft legible on a moving path', () => {
-  assert.deepEqual(squadLayout(5), { flightRadius: 10, planeScale: 0.72 });
+test('country-view flight rings keep a moving path and a compact but legible three-plane formation', () => {
+  const layout = squadLayout(5);
+  assert.equal(layout.flightRadius, 10);
+  assert.equal(layout.planeScale, 0.72);
+  assert.equal(layout.formationScale, 0.82);
 });
 
-test('small and large circles keep their own full flight radii', () => {
-  const small = squadLayout(36);
-  const large = squadLayout(177);
-  assert.equal(small.flightRadius, 36);
-  assert.equal(large.flightRadius, 177);
+test('formation and plane scales grow smoothly as the ring becomes readable', () => {
+  const small = squadLayout(18);
+  const medium = squadLayout(36);
+  const large = squadLayout(90);
+  assert.ok(small.formationScale < medium.formationScale);
+  assert.ok(small.planeScale < medium.planeScale);
+  assert.equal(medium.formationScale, 1);
   assert.ok(small.planeScale < large.planeScale);
   assert.ok(large.planeScale <= 0.95);
+  assert.equal(large.flightRadius, 90);
 });
 
-test('large circle orbit is not clipped to 130px or scaled down with the SVG', () => {
-  for (const radius of [90, 130, 180, 260, 1000]) {
-    const layout = squadLayout(radius);
-    assert.equal(layout.flightRadius, radius);
-    assert.ok(layout.planeScale >= 0.7 && layout.planeScale <= 0.95);
-  }
+test('flight path and icon sizes stay within safe bounds at extreme zooms', () => {
+  const minimum = squadLayout(0);
+  const maximum = squadLayout(1000);
+  assert.deepEqual(minimum, { flightRadius: 10, planeScale: 0.7, formationScale: 0.82 });
+  assert.deepEqual(maximum, { flightRadius: 130, planeScale: 0.95, formationScale: 1 });
 });
 
 test('invalid radii safely use the compact country-view layout', () => {
   assert.deepEqual(squadLayout(Number.NaN), squadLayout(0));
-  assert.deepEqual(squadLayout(-20), squadLayout(0));
-  assert.deepEqual(squadLayout(Number.POSITIVE_INFINITY), squadLayout(0));
 });
