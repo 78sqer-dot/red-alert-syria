@@ -2,10 +2,11 @@
 // from the publishing bot (optionally posted to the channel) and suggestions from the news monitor
 // (owner card, never auto-published). Shown on the website (services panel tab + map layer).
 import crypto from 'node:crypto';
-import { InlineKeyboard } from 'grammy';
+import { InlineKeyboard, InputFile } from 'grammy';
 import { config } from './config.js';
 import { store } from './store.js';
 import { normalizeArabic } from './places.js';
+import { renderBorderPng } from './alert-image.js';
 
 const N = normalizeArabic;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -89,8 +90,13 @@ export function borderChannelText(id) {
 }
 async function postToChannel(api, id) {
   if (!config.channel) return null;
+  const c = byId(id); const s = bstate().borders[id];
+  if (!c || !s) return null;
   const kb = new InlineKeyboard().url('🛂 حالة كل المعابر', `${siteUrl()}/ar/#borders`);
-  return api.sendMessage(config.channel, borderChannelText(id), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
+  const png = await renderBorderPng({ ...c, country_ar: COUNTRIES[c.country].ar }, BORDER_STATUS[s.st], { timestamp: s.ts });
+  return api.sendPhoto(config.channel, new InputFile(png, `red-alert-syria-crossing-${id}.png`), {
+    caption: borderChannelText(id), parse_mode: 'HTML', reply_markup: kb,
+  });
 }
 
 // ---------------------------------------------------------------- news monitor suggestions
@@ -249,4 +255,4 @@ export function registerBorderTools(bot, h) {
     await close();
   }));
 }
-export const _test = { matchBorderNews, publicBorders, setBorder };
+export const _test = { matchBorderNews, publicBorders, setBorder, postToChannel };

@@ -316,3 +316,114 @@ export async function renderAlertPng(alert, opts = {}) {
   });
   return Buffer.from(r.render().asPng());
 }
+
+
+/** Build a channel-ready map card for a single border crossing. */
+export async function borderImageSvg(crossing, status, opts = {}) {
+  const BW = W; const HEAD = 144; const MAP_H = 680; const FOOT = 92; const HEIGHT = HEAD + MAP_H + FOOT;
+  const { lat, lon } = crossing || {};
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error('invalid border crossing coordinates');
+  const z = 11;
+  const cx = lon2x(lon, z); const cy = lat2y(lat, z);
+  const left = cx - BW / 2; const top = cy - MAP_H / 2;
+  const x0 = Math.floor(left / TILE); const x1 = Math.floor((left + BW) / TILE);
+  const y0 = Math.floor(top / TILE); const y1 = Math.floor((top + MAP_H) / TILE);
+  const timeoutMs = Number(opts.timeoutMs) || 6000;
+  const jobs = [];
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push(fetchTile(z, x, y, timeoutMs).then((href) => ({ x, y, href })));
+  const tiles = await Promise.all(jobs);
+  const okTiles = tiles.filter((q) => q.href).length;
+  if (okTiles < tiles.length * 0.6) throw new Error(`border map tiles unavailable (${okTiles}/${tiles.length})`);
+
+  const color = /^#[0-9a-f]{6}$/i.test(String(status?.color || '')) ? status.color : '#94a3b8';
+  const name = String(crossing.ar || crossing.name_ar || '');
+  const other = String(crossing.other || crossing.other_ar || '');
+  const country = String(crossing.country_ar || '');
+  const label = [other, country].filter(Boolean).join(' — ');
+  const statusLabel = String(status?.ar || 'غير معروف');
+  const when = whenText(opts.timestamp || Date.now(), 'ar');
+  const x = (cx - left).toFixed(1); const y = (cy - top + HEAD).toFixed(1);
+  const o = [];
+  o.push(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${BW}" height="${HEIGHT}" viewBox="0 0 ${BW} ${HEIGHT}">`);
+  o.push('<rect width="100%" height="100%" fill="#ffffff"/>');
+  o.push(`<clipPath id="border-map-clip"><rect x="0" y="${HEAD}" width="${BW}" height="${MAP_H}"/></clipPath><filter id="border-muted" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0.5"/></filter><g clip-path="url(#border-map-clip)"><rect x="0" y="${HEAD}" width="${BW}" height="${MAP_H}" fill="#f2efe9"/><g filter="url(#border-muted)">`);
+  for (const q of tiles) {
+    if (!q.href) continue;
+    o.push(`<image x="${(q.x * TILE - left).toFixed(1)}" y="${(q.y * TILE - top + HEAD).toFixed(1)}" width="${TILE + 0.6}" height="${TILE + 0.6}" preserveAspectRatio="none" xlink:href="${q.href}"/>`);
+  }
+  o.push('</g>');
+  o.push(`<rect x="0" y="${HEAD}" width="${BW}" height="${MAP_H}" fill="#ffffff" opacity="0.14"/>`);
+  o.push(`<circle cx="${x}" cy="${y}" r="54" fill="${color}" opacity="0.22"/><circle cx="${x}" cy="${y}" r="36" fill="#ffffff" opacity="0.98"/><circle cx="${x}" cy="${y}" r="29" fill="${color}"/><circle cx="${x}" cy="${y}" r="8" fill="#ffffff"/>`);
+  o.push(`<rect x="${BW - 224}" y="${HEAD + MAP_H - 28}" width="224" height="28" fill="#ffffff" opacity="0.82"/><text x="${BW - 10}" y="${HEAD + MAP_H - 9}" font-family="Noto Sans" font-size="14" fill="#475569" text-anchor="end">© OpenStreetMap contributors</text>`);
+  o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
+  o.push('</g>');
+  o.push(`<rect x="0" y="0" width="${BW}" height="${HEAD}" fill="#0f172a"/><rect x="0" y="0" width="${BW}" height="6" fill="#f97316"/>`);
+  o.push(`<text x="${BW - 34}" y="66" font-family="Noto Kufi Arabic" font-size="44" font-weight="800" fill="#ffffff" text-anchor="end" direction="rtl">معبر ${ttx(name)}</text>`);
+  if (label) o.push(`<text x="${BW - 36}" y="112" font-family="Noto Kufi Arabic" font-size="26" font-weight="500" fill="#cbd5e1" text-anchor="end" direction="rtl">${ttx(label)}</text>`);
+  o.push(`<circle cx="48" cy="101" r="13" fill="${color}"/><text x="420" y="111" font-family="Noto Kufi Arabic" font-size="28" font-weight="700" fill="${color}" text-anchor="end" direction="rtl">${ttx(statusLabel)}</text>`);
+  o.push(`<rect x="0" y="${HEAD + MAP_H}" width="${BW}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${HEAD + MAP_H}" width="${BW}" height="1.5" fill="#e2e8f0"/><text x="${BW / 2}" y="${HEAD + MAP_H + 56}" font-family="Noto Kufi Arabic" font-size="21" fill="#64748b" text-anchor="middle" direction="rtl">حالة المعبر · ${ttx(when)}</text>`);
+  o.push('</svg>');
+  return o.join('');
+}
+
+/** Render the border map card to PNG. */
+export async function renderBorderPng(crossing, status, opts = {}) {
+  return svgToPng(await borderImageSvg(crossing, status, opts), OUT_W);
+}
+
+
+/** Build a map card for an explicitly published road-status report. */
+export async function roadImageSvg(road, status, opts = {}) {
+  const pts = (Array.isArray(road?.pts) ? road.pts : []).filter((p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lon));
+  if (!pts.length) throw new Error('road report has no mappable points');
+  const zones = pts.map((p) => ({ lat: p.lat, lon: p.lon, km: 2 }));
+  const center = { lat: zones.reduce((sum, p) => sum + p.lat, 0) / zones.length, lon: zones.reduce((sum, p) => sum + p.lon, 0) / zones.length };
+  const view = chooseView(zones, center); const z = view.z;
+  const BW = W; const HEAD = 144; const MAP_H = 680; const FOOT = 92; const HEIGHT = HEAD + MAP_H + FOOT;
+  const cx = lon2x(view.lon, z); const cy = lat2y(view.lat, z);
+  const left = cx - BW / 2; const top = cy - MAP_H / 2;
+  const x0 = Math.floor(left / TILE); const x1 = Math.floor((left + BW) / TILE);
+  const y0 = Math.floor(top / TILE); const y1 = Math.floor((top + MAP_H) / TILE);
+  const timeoutMs = Number(opts.timeoutMs) || 6000;
+  const jobs = [];
+  for (let tx = x0; tx <= x1; tx++) for (let ty = y0; ty <= y1; ty++) jobs.push(fetchTile(z, tx, ty, timeoutMs).then((href) => ({ x: tx, y: ty, href })));
+  const tiles = await Promise.all(jobs);
+  const okTiles = tiles.filter((q) => q.href).length;
+  if (okTiles < tiles.length * 0.6) throw new Error(`road map tiles unavailable (${okTiles}/${tiles.length})`);
+
+  const color = /^#[0-9a-f]{6}$/i.test(String(status?.color || '')) ? status.color : '#94a3b8';
+  const statusLabel = String(status?.ar || 'حالة طريق');
+  const placeNames = pts.map((p) => p.name_ar).filter(Boolean);
+  const roadLabel = placeNames.slice(0, 2).join('، ') + (placeNames.length > 2 ? ` +${placeNames.length - 2}` : '');
+  const when = whenText(opts.timestamp || road.ts || Date.now(), 'ar');
+  const o = [];
+  o.push(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${BW}" height="${HEIGHT}" viewBox="0 0 ${BW} ${HEIGHT}">`);
+  o.push('<rect width="100%" height="100%" fill="#ffffff"/>');
+  o.push(`<clipPath id="road-map-clip"><rect x="0" y="${HEAD}" width="${BW}" height="${MAP_H}"/></clipPath><filter id="road-muted" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0.5"/></filter><g clip-path="url(#road-map-clip)"><rect x="0" y="${HEAD}" width="${BW}" height="${MAP_H}" fill="#f2efe9"/><g filter="url(#road-muted)">`);
+  for (const q of tiles) {
+    if (!q.href) continue;
+    o.push(`<image x="${(q.x * TILE - left).toFixed(1)}" y="${(q.y * TILE - top + HEAD).toFixed(1)}" width="${TILE + 0.6}" height="${TILE + 0.6}" preserveAspectRatio="none" xlink:href="${q.href}"/>`);
+  }
+  o.push('</g>');
+  o.push(`<rect x="0" y="${HEAD}" width="${BW}" height="${MAP_H}" fill="#ffffff" opacity="0.14"/>`);
+  const radius = pts.length > 6 ? 17 : pts.length > 1 ? 21 : 28;
+  for (const p of pts) {
+    const px = (lon2x(p.lon, z) - left).toFixed(1); const py = (lat2y(p.lat, z) - top + HEAD).toFixed(1);
+    o.push(`<circle cx="${px}" cy="${py}" r="${radius + 19}" fill="${color}" opacity="0.16"/><circle cx="${px}" cy="${py}" r="${radius + 7}" fill="#ffffff" opacity="0.98"/><circle cx="${px}" cy="${py}" r="${radius}" fill="${color}"/><circle cx="${px}" cy="${py}" r="6" fill="#ffffff"/>`);
+  }
+  o.push(`<rect x="${BW - 224}" y="${HEAD + MAP_H - 28}" width="224" height="28" fill="#ffffff" opacity="0.82"/><text x="${BW - 10}" y="${HEAD + MAP_H - 9}" font-family="Noto Sans" font-size="14" fill="#475569" text-anchor="end">© OpenStreetMap contributors</text>`);
+  o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
+  o.push('</g>');
+  o.push(`<rect x="0" y="0" width="${BW}" height="${HEAD}" fill="#0f172a"/><rect x="0" y="0" width="${BW}" height="6" fill="#f97316"/>`);
+  o.push(`<text x="${BW - 34}" y="66" font-family="Noto Kufi Arabic" font-size="44" font-weight="800" fill="#ffffff" text-anchor="end" direction="rtl">حالة طريق</text>`);
+  if (roadLabel) o.push(`<text x="${BW - 36}" y="112" font-family="Noto Kufi Arabic" font-size="25" font-weight="500" fill="#cbd5e1" text-anchor="end" direction="rtl">${ttx(roadLabel)}</text>`);
+  o.push(`<circle cx="48" cy="101" r="13" fill="${color}"/><text x="420" y="111" font-family="Noto Kufi Arabic" font-size="28" font-weight="700" fill="${color}" text-anchor="end" direction="rtl">${ttx(statusLabel)}</text>`);
+  o.push(`<rect x="0" y="${HEAD + MAP_H}" width="${BW}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${HEAD + MAP_H}" width="${BW}" height="1.5" fill="#e2e8f0"/><text x="${BW / 2}" y="${HEAD + MAP_H + 56}" font-family="Noto Kufi Arabic" font-size="21" fill="#64748b" text-anchor="middle" direction="rtl">حالة الطريق · ${ttx(when)}</text>`);
+  o.push('</svg>');
+  return o.join('');
+}
+
+/** Render the road-status map card to PNG. */
+export async function renderRoadPng(road, status, opts = {}) {
+  return svgToPng(await roadImageSvg(road, status, opts), OUT_W);
+}

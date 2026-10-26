@@ -6,11 +6,12 @@
 //    about electricity become cards for the owner, never auto-published) and by the owner by hand.
 //    Shown on the website (⚡ panel); optionally posted to the channel.
 import crypto from 'node:crypto';
-import { InlineKeyboard } from 'grammy';
+import { InlineKeyboard, InputFile } from 'grammy';
 import { config } from './config.js';
 import { store } from './store.js';
 import { governorates, normalizeArabic } from './places.js';
 import { weatherWarningInfo } from './news-ai.js';
+import { renderRoadPng } from './alert-image.js';
 
 const H_MS = 3600_000;
 const N = normalizeArabic;
@@ -68,9 +69,33 @@ export function roadChannelText(r) {
   L.push(`🕒 ${clock(r.ts)}`);
   return L.join('\n');
 }
+export function roadChannelCaption(r) {
+  const s = ROAD_STATUS[r.status] || ROAD_STATUS.danger;
+  const statusLine = `${s.emoji} <b>${esc(s.ar)}</b>`;
+  const timeLine = `🕒 ${clock(r.ts)}`;
+  const allPlaces = roadWhere(r); const allNote = String(r.note || '');
+  let places = allPlaces; let note = allNote;
+  const build = () => {
+    const lines = [statusLine, '', `📍 ${esc(places)}${places.length < allPlaces.length ? '…' : ''}`];
+    if (note) lines.push(`📝 ${esc(note)}${note.length < allNote.length ? '…' : ''}`);
+    lines.push(timeLine);
+    return lines.join('\n');
+  };
+  let caption = build();
+  while (caption.length > 1000 && (note.length || places.length)) {
+    if (note.length) note = note.slice(0, Math.max(0, note.length - 10));
+    else places = places.slice(0, Math.max(0, places.length - 10));
+    caption = build();
+  }
+  return caption;
+}
 export async function postRoadToChannel(api, r) {
+  if (!config.channel) return null;
   const kb = new InlineKeyboard().url('🗺 حالة الطرق على الخريطة', `${siteUrl()}/ar/#roads`);
-  const m = await api.sendMessage(config.channel, roadChannelText(r), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
+  const png = await renderRoadPng(r, ROAD_STATUS[r.status] || ROAD_STATUS.danger, { timestamp: r.ts });
+  const m = await api.sendPhoto(config.channel, new InputFile(png, `red-alert-syria-road-${r.id || 'report'}.png`), {
+    caption: roadChannelCaption(r), parse_mode: 'HTML', reply_markup: kb,
+  });
   r.channel_message_id = m.message_id; save();
   return m;
 }
