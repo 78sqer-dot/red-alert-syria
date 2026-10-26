@@ -173,6 +173,10 @@ function hydrateStatic() {
   $('#btnReport').title = T.reportTitle;
   $('#btnWa').title = T.waChannel; $('#btnWa').setAttribute('aria-label', T.waChannel);
   $('#btnContact').title = T.contactUs; $('#btnContact').setAttribute('aria-label', T.contactUs);
+  const refreshButton = $('#btnRefresh');
+  refreshButton.title = T.refreshSite;
+  refreshButton.setAttribute('aria-label', T.refreshSite);
+  refreshButton.addEventListener('click', () => location.reload());
   $('#zoomIn').title = T.zoomIn;
   $('#shareSite').title = T.shareMap;
   $('#shareSite').setAttribute('aria-label', T.shareMap);
@@ -785,7 +789,8 @@ function setupSheet() {
   const app = $('#app');
   const head = $('#sheetHandle');
   let y0 = null;
-  const toggle = () => app.classList.toggle('sheet-open');
+  const expanded = () => { if (app.classList.contains('sheet-open')) amap && amap.closePopup(); };
+  const toggle = () => { app.classList.toggle('sheet-open'); expanded(); };
   head.addEventListener('click', toggle);
   $('#viewList .sb-head').addEventListener('click', (e) => {
     if (isMobile() && !e.target.closest('#sbClose')) toggle();
@@ -802,6 +807,7 @@ function setupSheet() {
     y0 = null;
     if (dy < -30) app.classList.add('sheet-open');
     else if (dy > 30) app.classList.remove('sheet-open');
+    expanded();
   }, { passive: true });
 }
 
@@ -951,7 +957,10 @@ function bindEvents() {
     const b = e.target.closest('[data-pp="more"]');
     if (b) {
       select(b.dataset.id, { fly: false });
-      if (isMobile()) $('#app').classList.add('sheet-open');
+      if (isMobile()) {
+        amap && amap.closePopup();
+        $('#app').classList.add('sheet-open');
+      }
     }
   });
   // ticker

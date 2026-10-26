@@ -3,6 +3,7 @@ export const DICT = {
   ar: {
     siteName: 'الإنذار الأحمر سوريا',
     siteShort: 'الإنذار الأحمر',
+    refreshSite: 'تحديث الموقع',
     settings: 'الإعدادات',
     darkMode: 'الوضع الداكن',
     lightMode: 'الوضع الفاتح',
@@ -166,6 +167,7 @@ export const DICT = {
   en: {
     siteName: 'Red Alert Syria',
     siteShort: 'Red Alert',
+    refreshSite: 'Refresh site',
     settings: 'Settings',
     darkMode: 'Dark mode',
     lightMode: 'Light mode',

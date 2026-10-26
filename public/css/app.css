@@ -262,6 +262,7 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 
 /* ---------------------------------------------------------------- markers */
 .mk { position: absolute; top: 0; left: 0; width: 0; height: 0; cursor: pointer; --c: #ff3b4e; }
+.mk-count { position: absolute; left: 8px; top: -19px; min-width: 16px; height: 16px; padding: 0 3px; border: 1.5px solid var(--bg-primary); border-radius: 9px; background: var(--c); color: #fff; font: 700 10px/13px system-ui, sans-serif; text-align: center; pointer-events: none; }
 /* scale wrapper: icons shrink as the map zooms in (--mks set by map.js) */
 .mk-s { position: absolute; left: 0; top: 0; width: 0; height: 0; transform: scale(var(--mks, 0.5)); transform-origin: 0 0; transition: transform .2s ease; }
 /* aircraft / vehicles have no disc, so they get a little more size to stay readable */
@@ -507,6 +508,8 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
   .brand img { height: 34px; }
   #btnSettings, .theme-btn, .tg-btn, .ticker { display: none; }
   .m-settings { display: inline-flex; }
+  .refresh-btn { width: 36px; padding: 0; justify-content: center; }
+  .refresh-btn .lbl { display: none; }
   .lang-btn { min-width: 38px; padding: 0 8px; }
   .report-btn { padding: 0 10px; }
   .status { padding: 0 9px; }

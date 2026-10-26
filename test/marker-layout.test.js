@@ -1,60 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import { chooseClusterOffset, pointInGeoJSON } from '../public/js/marker-layout.js';
+import { groupAlerts, nextAlertId } from '../public/js/marker-layout.js';
 
-const border = {
-  type: 'Feature',
-  properties: { name: 'test' },
-  geometry: {
-    type: 'Polygon',
-    coordinates: [
-      [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
-      [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]],
-    ],
-  },
-};
+const attack = { id: 'attack', type: 'attack', location: { latitude: 36.69648, longitude: 38.95382 } };
+const protest = { id: 'protest', type: 'protest', location: { latitude: 36.69648, longitude: 38.95382 } };
 
-test('pointInGeoJSON handles an outer border and holes', () => {
-  assert.equal(pointInGeoJSON(border, 2, 2), true);
-  assert.equal(pointInGeoJSON(border, 0, 5), true, 'a point on the border is inside');
-  assert.equal(pointInGeoJSON(border, 5, 5), false, 'a point inside a polygon hole is outside');
-  assert.equal(pointInGeoJSON(border, 12, 5), false);
+test('Tall Abyad alerts share one representative at their exact unchanged coordinate', () => {
+  const input = structuredClone([attack, protest]);
+  const before = JSON.stringify(input);
+  const groups = groupAlerts(input);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].alerts.length, 2);
+  assert.equal(groups[0].representative.id, 'attack');
+  assert.deepEqual(groups[0].representative.location, attack.location);
+  assert.equal(JSON.stringify(input), before, 'layout must not mutate alert data');
 });
 
-test('cluster offsets avoid north-of-border positions and remain distinct', () => {
-  const used = new Set();
-  const inside = ([, screenY]) => screenY >= 0;
-  const first = chooseClusterOffset(0, 2, inside, used);
-  const second = chooseClusterOffset(1, 2, inside, used);
-
-  assert.ok(inside(first));
-  assert.ok(inside(second));
-  assert.notDeepEqual(first, second);
-  assert.notEqual(first.join(','), '0,-26', 'the first marker must not be shifted north');
-  assert.notEqual(second.join(','), '0,-26', 'no marker should be shifted north across this border');
+test('the selected same-place alert becomes the visible representative', () => {
+  const [group] = groupAlerts([attack, protest], 'protest');
+  assert.equal(group.representative.id, 'protest');
+  assert.equal(nextAlertId(group, 'protest'), 'attack');
+  assert.equal(nextAlertId(group, 'attack'), 'protest');
+  assert.equal(nextAlertId(group), 'attack');
 });
 
-test('Tall Abyad grouped markers stay inside the bundled Syria border', () => {
-  const syria = JSON.parse(fs.readFileSync(new URL('../public/data/syria-border.geojson', import.meta.url), 'utf8'));
-  const lat = 36.69648;
-  const lon = 38.95382;
-  const degreesPerPixel = 0.001;
-  const locationAtOffset = ([dx, dy]) => [lon + dx * degreesPerPixel, lat - dy * degreesPerPixel];
-  assert.equal(pointInGeoJSON(syria, lon, lat), true);
-
-  const used = new Set();
-  const offsets = [0, 1].map((i) => chooseClusterOffset(i, 2, (offset) => {
-    const [x, y] = locationAtOffset(offset);
-    return pointInGeoJSON(syria, x, y);
-  }, used));
-  for (const offset of offsets) {
-    const [x, y] = locationAtOffset(offset);
-    assert.equal(pointInGeoJSON(syria, x, y), true, `offset ${offset} stays in Syria`);
-  }
-  assert.notDeepEqual(offsets[0], offsets[1]);
+test('single alerts stay on their own coordinate and invalid locations are ignored', () => {
+  const groups = groupAlerts([attack, { id: 'invalid', location: { latitude: null, longitude: null } }]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].alerts.length, 1);
+  assert.equal(nextAlertId(groups[0], 'attack'), 'attack');
+  assert.deepEqual(groups[0].representative.location, attack.location);
 });
 
-test('single markers stay exactly on their geographic coordinate', () => {
-  assert.deepEqual(chooseClusterOffset(0, 1, () => false), [0, 0]);
+test('nearby but different published coordinates are not fanned out or merged', () => {
+  const nearby = { id: 'nearby', location: { latitude: 36.6967, longitude: 38.9539 } };
+  assert.equal(groupAlerts([attack, nearby]).length, 2);
 });

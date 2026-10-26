@@ -2,7 +2,7 @@
 import { ALERT_TYPES, ZONE_KM, typeOf } from '/shared/types.js';
 import { SVG } from './marker-svgs.js';
 import { icon } from './icons.js';
-import { chooseClusterOffset, pointInGeoJSON } from './marker-layout.js';
+import { groupAlerts, nextAlertId } from './marker-layout.js';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
@@ -160,7 +160,6 @@ export class AlertMap {
     this.alerts = [];
     this.selectedId = null;
     this.popup = null;
-    this.border = null;
     this.onSelect = opts.onSelect || (() => {});
     this.popupHtml = opts.popupHtml || (() => '');
     this.ready = false;
@@ -214,7 +213,7 @@ export class AlertMap {
     this.map.on('movestart', () => this.el.classList.add('is-moving'));
     this.map.on('moveend', () => {
       this.el.classList.remove('is-moving');
-      this.refreshMarkerOffsets();
+      this.refreshMarkerGroups();
     });
     this.map.on('resize', () => this._queueZones());
     zoomTier();
@@ -270,7 +269,6 @@ export class AlertMap {
   async addOverlays() {
     const map = this.map;
     const { border, govs } = await loadData();
-    this.border = border;
     const before = firstSymbolId(map);
     const dark = this.opts.dark || this.opts.layer === 'satellite';
     const font = labelFont(map);
@@ -300,7 +298,7 @@ export class AlertMap {
     this._startGlow();
     this.applyToggles();
     this.updateZones();
-    this.refreshMarkerOffsets();
+    this.refreshMarkerGroups();
   }
 
   /** services map mode (public/js/services.js): hide the news markers and circles until the user goes back */
@@ -342,48 +340,35 @@ export class AlertMap {
     if (this.ready) this.render();
   }
 
-  clusterOffsets() {
-    const groups = new Map();
-    for (const a of this.alerts) {
-      if (!a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
-      const key = `${a.location.latitude.toFixed(3)},${a.location.longitude.toFixed(3)}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(a);
-    }
-    const offsets = new Map();
-    for (const list of groups.values()) {
-      const used = new Set();
-      list.forEach((a, i) => {
-        const lat = a.location.latitude;
-        const lon = a.location.longitude;
-        let offset;
-        if (list.length === 1) offset = [0, 0];
-        else if (!this.map || !this.border || !pointInGeoJSON(this.border, lon, lat)) {
-          const angle = (i / list.length) * Math.PI * 2 - Math.PI / 2;
-          offset = [Math.round(Math.cos(angle) * 26), Math.round(Math.sin(angle) * 26)];
-          used.add(offset.join(','));
-        } else {
-          const anchor = this.map.project([lon, lat]);
-          offset = chooseClusterOffset(i, list.length, ([dx, dy]) => {
-            const p = this.map.unproject([anchor.x + dx, anchor.y + dy]);
-            return pointInGeoJSON(this.border, p.lng, p.lat);
-          }, used);
-        }
-        offsets.set(a.id, offset);
-      });
-    }
-    return offsets;
+  selectMarker(id) {
+    const group = groupAlerts(this.alerts, this.selectedId).find((g) => g.alerts.some((a) => a.id === id));
+    this.onSelect(group ? nextAlertId(group, this.selectedId) : id, { fromMap: true });
   }
 
-  refreshMarkerOffsets() {
-    if (!this.map || !this.markers.size) return;
-    const offsets = this.clusterOffsets();
-    for (const [id, marker] of this.markers) {
-      const offset = offsets.get(id);
-      if (!offset) continue;
-      if (!marker._offset || marker._offset[0] !== offset[0] || marker._offset[1] !== offset[1]) {
-        marker.setOffset(offset);
-        marker._offset = offset;
+  refreshMarkerGroups() {
+    // Never write MapLibre's private _offset field: the library owns its Point.
+    // Same-location reports share a visible marker, without inventing positions.
+    for (const group of groupAlerts(this.alerts, this.selectedId)) {
+      for (const a of group.alerts) {
+        const marker = this.markers.get(a.id);
+        if (!marker) continue;
+        const el = marker.getElement();
+        const visible = a.id === group.representative.id;
+        el.hidden = !visible;
+        el.setAttribute('aria-hidden', String(!visible));
+        el.tabIndex = visible ? 0 : -1;
+        el.classList.toggle('sel', a.id === this.selectedId);
+        el.style.zIndex = a.id === this.selectedId ? 50 : a.is_active ? 10 : 2;
+        const count = group.alerts.length;
+        const hint = this.opts.lang === 'en' ? `${count} alerts here — click to switch` : `${count} تنبيهات في هذا الموقع — اضغط للتبديل`;
+        el.title = count > 1 ? `${a.title} · ${hint}` : a.title;
+        el.setAttribute('aria-label', el.title);
+        el.dataset.alertId = a.id;
+        let badge = el.querySelector('.mk-count');
+        if (count > 1 && visible) {
+          if (!badge) { badge = document.createElement('span'); badge.className = 'mk-count'; badge.setAttribute('aria-hidden', 'true'); el.append(badge); }
+          badge.textContent = String(count);
+        } else if (badge) badge.remove();
       }
     }
   }
@@ -391,11 +376,9 @@ export class AlertMap {
   render() {
     const M = ml();
     const seen = new Set();
-    const offsets = this.clusterOffsets();
     for (const a of this.alerts) {
       if (!a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       seen.add(a.id);
-      const offset = offsets.get(a.id) || [0, 0];
       let m = this.markers.get(a.id);
       const sig = `${a.type}|${a.is_active}`;
       if (m && m._sig !== sig) {
@@ -405,20 +388,15 @@ export class AlertMap {
       }
       if (!m) {
         const el = this.markerEl(a);
-        m = new M.Marker({ element: el, anchor: 'center', offset }).setLngLat([a.location.longitude, a.location.latitude]).addTo(this.map);
+        m = new M.Marker({ element: el, anchor: 'center', offset: [0, 0] }).setLngLat([a.location.longitude, a.location.latitude]).addTo(this.map);
         m._sig = sig;
-        m._offset = offset;
         el.addEventListener('click', (e) => {
           e.stopPropagation();
-          this.onSelect(a.id, { fromMap: true });
+          this.selectMarker(a.id);
         });
         this.markers.set(a.id, m);
       } else {
         m.setLngLat([a.location.longitude, a.location.latitude]);
-        if (!m._offset || m._offset[0] !== offset[0] || m._offset[1] !== offset[1]) {
-          m.setOffset(offset);
-          m._offset = offset;
-        }
       }
       const el = m.getElement();
       const fresh = a.is_active && Date.now() - Date.parse(a.timestamp) < 20 * 60_000;
@@ -427,6 +405,7 @@ export class AlertMap {
       el.style.zIndex = a.id === this.selectedId ? 50 : a.is_active ? 10 : 1;
       el.title = a.title;
     }
+    this.refreshMarkerGroups();
     // drones: the alert's own marker flies over its main circle; every other circle of the same alert gets
     // its drone too, and an intensive flight (a.drones = 2-3, from the server) puts 2-3 over each circle
     this.sats = this.sats || new Map();
@@ -505,7 +484,7 @@ export class AlertMap {
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        this.onSelect(a.id, { fromMap: true });
+        this.selectMarker(a.id);
       }
     });
     return el;
@@ -636,10 +615,7 @@ export class AlertMap {
   select(alert, { fly = true, popup = true } = {}) {
     this.selectedId = alert ? alert.id : null;
     if (!this.ready) { this._pending = alert ? [alert, { fly, popup }] : null; return; }
-    for (const [id, m] of this.markers) {
-      m.getElement().classList.toggle('sel', id === this.selectedId);
-      m.getElement().style.zIndex = id === this.selectedId ? 50 : 10;
-    }
+    this.refreshMarkerGroups();
     if (!alert) return this.closePopup();
     if (!alert.location || !Number.isFinite(alert.location.latitude)) return this.closePopup();
     const ll = [alert.location.longitude, alert.location.latitude];
