@@ -2,12 +2,10 @@
 // fuel, in NEW Syrian lira (old lira = new × 100). Posted to the channel every morning as a branded
 // image + short caption; the website shows the same numbers (/api/prices).
 // Sources:
-//  - sp-today.com ("الليرة اليوم"): parallel-market rates, gold per gram, official fuel & electricity
-//    prices. Data is embedded in the Next.js page (self.__next_f chunks); values are in OLD lira.
-//  - Central Bank of Syria daily bulletin: cb.gov.sy is behind a JS challenge, so the bulletin image
-//    posted every day (~13:00 Damascus) by the official channel @AlekhbariahSY is read with Gemini
-//    and sanity-checked. The morning bulletin therefore carries the latest official bulletin (its date
-//    is printed).
+//  - sp-today.com ("الليرة اليوم"): parallel-market rates, gold per gram and electricity tariffs.
+//  - Central Bank of Syria: the official @SyCBOS Telegram channel's exchange-rate bulletin image is
+//    read with Gemini and sanity-checked. The legacy cb.gov.sy site is not used as the official source.
+//  - Fuel: SANA's official feed for Ministry of Energy / pricing-committee decisions; other sources only cross-check.
 // Wrong numbers are worse than none: every value is range-checked; stale or missing parallel-market
 // data -> nothing is posted and the owner gets a private notice.
 import { InlineKeyboard, InputFile } from 'grammy';
@@ -15,7 +13,7 @@ import { config } from './config.js';
 import { store } from './store.js';
 import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge, badgeWidth } from './alert-image.js';
-import { fetchSypNow, fromSpToday, mergeFuel, fuelView, STALE_H } from './fuel.js';
+import { fetchSanaFuel, fetchSypNow, fromSpToday, mergeFuel, fuelView, STALE_H } from './fuel.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -173,17 +171,16 @@ const OCR_SCHEMA = {
 };
 /** the newest official-bulletin post (text + image url) on a public Telegram channel */
 export async function latestBulletinPost() {
-  const q = encodeURIComponent('النشرة الرسمية لأسعار العملات');
-  const r = await fetch(`https://t.me/s/AlekhbariahSY?q=${q}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25_000) });
+  const r = await fetch('https://t.me/s/SyCBOS', { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25_000) });
   if (!r.ok) throw new Error(`telegram HTTP ${r.status}`);
   const html = await r.text();
   const posts = html.split('<div class="tgme_widget_message_wrap').slice(1).map((p) => {
     const id = (p.match(/data-post="([^"]+)"/) || [])[1];
     const dt = (p.match(/datetime="([^"]+)"/) || [])[1];
-    const txt = ((p.match(/tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/) || [])[1] || '').replace(/<[^>]+>/g, ' ');
+    const txt = ((p.match(/tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/) || [])[1] || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
     const img = (p.match(/tgme_widget_message_photo_wrap[^>]*background-image:url\('([^']+)'\)/) || [])[1];
     return { id, ts: Date.parse(dt || ''), txt, img };
-  }).filter((p) => p.id && p.img && /المصرف المركزي/.test(p.txt) && /النشرة\s+الرسمية/.test(p.txt) && /العملات/.test(p.txt));
+  }).filter((p) => p.id && p.img && /النشرة\s+الرسمية/.test(p.txt) && /(أسعار|اسعار|سعر)\s+الصرف/.test(p.txt));
   posts.sort((a, b) => b.ts - a.ts);
   return posts[0] || null;
 }
@@ -229,8 +226,9 @@ export async function fetchOfficial(sp) {
   const bad = checkOfficial(o, sp || st.sp);
   if (bad) throw new Error(`official bulletin rejected: ${bad}`);
   const p = damascusParts(post.ts);
+  const imageDate = String(o.bulletin_date || '').trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0];
   return {
-    src: 'cb.gov.sy (via @AlekhbariahSY)', post: post.id, url: `https://t.me/${post.id}`, date: p.date, ts: post.ts,
+    src: 'مصرف سورية المركزي — @SyCBOS الرسمي', post: post.id, url: `https://t.me/${post.id}`, date: imageDate || p.date, ts: post.ts,
     usd: { buy: o.usd_buy, sell: o.usd_sell },
     eur: o.eur_buy ? { buy: o.eur_buy, sell: o.eur_sell || null } : null,
     try: o.try_buy ? { buy: o.try_buy, sell: o.try_sell || null } : null,
@@ -238,35 +236,37 @@ export async function fetchOfficial(sp) {
 }
 
 // ---------------------------------------------------------------- refresh loop
-const R = { busy: false, lastSpTry: 0, lastOffTry: 0, spErr: '', offErr: '' };
-// ⛽ fuel: sp-today (read above) + SyPNow every 6 h (sooner while sp-today has no fuel, or on demand)
+const R = { busy: false, lastSpTry: 0, lastOffTry: 0, lastSanaTry: 0, spErr: '', offErr: '', sanaErr: '' };
+// ⛽ Fuel: confirm official decisions against SANA every 6 h; sp-today and SyPNow are secondary only.
 async function refreshFuel(st, { force = false } = {}) {
   const now = Date.now();
   const sp = R.spFuel && now - (st.spAt || 0) < 2 * H_MS ? R.spFuel : null;
   R.spFuel = null;
-  let syp = null;
+  let syp = null; let sana = null;
   const every = sp ? 6 * H_MS : 30 * 60_000;
   if (force || R.fuelDue || now - (R.lastSypTry || 0) > every) {
     R.lastSypTry = now; R.fuelDue = false;
     try { syp = await fetchSypNow(); R.sypErr = ''; } catch (e) { R.sypErr = e.message; console.warn('[prices] SyPNow failed:', e.message); }
   }
-  if (!sp && !syp) return;
+  if (force || !st.fuel?.official || now - R.lastSanaTry > 6 * H_MS) {
+    R.lastSanaTry = now;
+    try { sana = await fetchSanaFuel(); R.sanaErr = ''; } catch (e) { R.sanaErr = e.message; console.warn('[prices] SANA fuel feed failed:', e.message); }
+  }
+  if (!sp && !syp && !sana) return;
   const f = (st.fuel ||= {});
   const hadConflict = f.conflict;
-  // sp-today alone, same numbers as stored -> just confirm (keeps the last cross-check result)
-  if (!syp && f.items && Object.keys(sp.items).every((k) => f.items[k]?.price === sp.items[k].price)) { f.checked = now; save(false); return; }
-  const { changed, conflict } = mergeFuel(f, [sp, syp], now);
+  const { changed, conflict } = mergeFuel(f, [sana, sp, syp], now);
   save(false);
   const api = typeof R2.api === 'function' ? R2.api() : R2.api;
   if (!api) return;
   if (changed) {
     console.log('[prices] fuel prices changed', JSON.stringify(f.items));
     const L = Object.entries(f.items).map(([k, v]) => `• ${v.name}: <b>${fmtNew(f.prev?.items?.[k]?.price)}</b> ← <b>${fmtNew(v.price)}</b>`);
-    await notifyOwners(api, `⛽ <b>تغيّرت أسعار المحروقات الرسمية</b> (سارية منذ ${dateLabel(f.since)})\n\n${L.join('\n')}\n\nالمصدر: ${f.srcs.join(' + ')}\nالموقع ونشرة الصباح يأخذون الأسعار الجديدة تلقائياً.`).catch(() => {});
+    await notifyOwners(api, `⛽ <b>تغيّرت بيانات المحروقات${f.official ? ' الرسمية' : ' من مصدر ثانوي'}</b> (من ${dateLabel(f.since)})\n\n${L.join('\n')}\n\nالمصدر: ${f.srcs.join(' + ')}${f.url ? `\nالتسعيرة الرسمية: ${f.url}` : ''}`).catch(() => {});
   }
   if (conflict && conflict !== hadConflict && conflict !== f.conflictSent) {
     f.conflictSent = conflict; save(false);
-    await notifyOwners(api, `⚠️ <b>اختلاف بين مصدري أسعار المحروقات</b>\n\n${conflict}\n\nاعتمدتُ الأحدث تاريخاً. إذا الرقم غلط، قلّي وبصلّحه.`).catch(() => {});
+    await notifyOwners(api, `⚠️ <b>اختلاف بين أسعار المحروقات</b>\n\n${conflict}\n\nالأولوية لقرار سانا الرسمي، والمصادر الأخرى للمقارنة فقط.`).catch(() => {});
   }
 }
 /** an official pricing decision showed up in the news: re-check fuel soon (sources update a bit later) */
@@ -291,20 +291,23 @@ export async function refreshPrices({ force = false } = {}) {
     }
     await refreshFuel(st, { force });
     const p = damascusParts();
-    const haveToday = st.official?.date === p.date;
+    const currentOfficial = trustedOfficial(st.official);
+    const haveToday = currentOfficial?.date === p.date;
+    const needsSourceMigration = !!st.official && !currentOfficial;
     // the official bulletin appears ~13:00 Damascus on working days: look for it from 12:30, every 30 min
-    if ((force || !st.official || (!haveToday && p.hm >= '12:30')) && Date.now() - R.lastOffTry > (force ? 60_000 : 30 * 60_000)) {
+    if ((force || !currentOfficial || needsSourceMigration || (!haveToday && p.hm >= '12:30')) && Date.now() - R.lastOffTry > (force ? 60_000 : 30 * 60_000)) {
       R.lastOffTry = Date.now();
       try {
         const o = await fetchOfficial(st.sp);
-        if (o.post !== st.official?.post) { st.official = o; save(false); console.log(`[prices] official bulletin ${o.date}: USD ${o.usd.buy}/${o.usd.sell}`); }
+        if (o.post !== st.official?.post || o.src !== st.official?.src) { st.official = o; save(false); console.log(`[prices] official bulletin ${o.date}: USD ${o.usd.buy}/${o.usd.sell}`); }
         R.offErr = '';
       } catch (e) { R.offErr = e.message; console.warn('[prices] official failed:', e.message); }
     }
   } finally { R.busy = false; }
   return st;
 }
-export function pricesDebug() { const st = pricesState(); return { cfg: st.cfg, spAt: st.spAt, spErr: R.spErr, offErr: R.offErr, sypErr: R.sypErr, fuel: st.fuel ? { since: st.fuel.since, checked: st.fuel.checked, srcs: st.fuel.srcs, conflict: st.fuel.conflict, items: Object.fromEntries(Object.entries(st.fuel.items || {}).map(([k, v]) => [k, v.price])) } : null, official: st.official ? { date: st.official.date, usd: st.official.usd } : null, usd: st.sp?.usd }; }
+export function pricesDebug() { const st = pricesState(); return { cfg: st.cfg, spAt: st.spAt, spErr: R.spErr, offErr: R.offErr, sypErr: R.sypErr, sanaErr: R.sanaErr, fuel: st.fuel ? { since: st.fuel.since, checked: st.fuel.checked, srcs: st.fuel.srcs, official: st.fuel.official, url: st.fuel.url, conflict: st.fuel.conflict, items: Object.fromEntries(Object.entries(st.fuel.items || {}).map(([k, v]) => [k, v.price])) } : null, official: trustedOfficial(st.official) ? { date: st.official.date, src: st.official.src, url: st.official.url, usd: st.official.usd } : null, usd: st.sp?.usd }; }
+const trustedOfficial = (o) => o && (String(o.src || '').includes('@SyCBOS') || String(o.post || '').startsWith('SyCBOS/')) ? o : null;
 
 /** fuel for the site/bulletin: stored cross-checked prices, else sp-today's own reading */
 function fuelOf(st, now = Date.now()) {
@@ -314,13 +317,13 @@ function fuelOf(st, now = Date.now()) {
 }
 function fuelPublic(st) {
   const v = fuelOf(st);
-  return v ? { at: v.since, since: v.since, checked: v.checked, stale: v.stale, staleH: STALE_H, srcs: v.srcs, items: v.items } : { items: {} };
+  return v ? { at: v.since, since: v.since, checked: v.checked, stale: v.stale, staleH: STALE_H, official: v.official, url: v.url, tiersSrc: v.tiersSrc, srcs: v.srcs, items: v.items } : { items: {} };
 }
 /** public JSON for the website */
 export function publicPrices() {
   const st = pricesState();
   if (!st.sp) return { ok: false };
-  const { sp, official } = st;
+  const { sp } = st; const official = trustedOfficial(st.official);
   return {
     ok: true, unit: 'new_syp', oldFactor: 100,
     market: { at: sp.at, src: 'sp-today.com', usd: sp.usd, eur: sp.eur, try: sp.try, sar: sp.sar, aed: sp.aed },
@@ -341,7 +344,7 @@ const dayLabel = (ms) => { const p = damascusParts(ms); return `${AR_DAYS[p.wd]}
 const dateLabel = (iso) => { const [y, m, d] = String(iso || '').split('-').map(Number); return y ? `${d} ${AR_MONTHS[m - 1]}` : ''; };
 
 export function pricesSvg(st, now = Date.now()) {
-  const { sp, official } = st;
+  const { sp } = st; const official = trustedOfficial(st.official);
   const W = 1080; const P = 48; const R = W - P;
   let H = 1500;
   const o = [];
@@ -416,11 +419,11 @@ export function pricesSvg(st, now = Date.now()) {
   }
   // fuel
   const FV = fuelOf(st, now);
-  const F = FV && !FV.stale ? FV.items : {}; // unconfirmed for STALE_H hours -> no fuel section at all
+  const F = FV && !FV.stale ? FV.items : {}; // decision older than STALE_H -> no fuel section at all
   const fl = [['بنزين 90', F.benzin, 'لتر'], ['بنزين 95', F['gasoline-95'], 'لتر'], ['مازوت', F.diesel, 'لتر'], ['غاز منزلي', F.gas, 'أسطوانة']].filter((x) => x[1]?.price);
   if (fl.length) {
-    o.push(text(R, y + 34, 'المحروقات — السعر الرسمي', { size: 34, weight: 800, fill: '#ffffff' }));
-    if (FV.since) o.push(text(P, y + 34, `سارية منذ ${dateLabel(FV.since)}`, { size: 20, weight: 600, fill: '#9ca3af', anchor: 'start' }));
+    o.push(text(R, y + 34, FV.official ? 'المحروقات — تسعيرة وزارة الطاقة' : 'المحروقات — مصدر ثانوي غير مؤكد رسمياً', { size: 34, weight: 800, fill: '#ffffff' }));
+    if (FV.since) o.push(text(P, y + 34, `تاريخ التسعيرة ${dateLabel(FV.since)}`, { size: 20, weight: 600, fill: '#9ca3af', anchor: 'start' }));
     y += 56;
     const gap = 16; const cw = (W - 2 * P - gap * (fl.length - 1)) / fl.length; const ch = 140;
     fl.forEach(([lbl, f, unit], i) => {
@@ -454,7 +457,7 @@ export function pricesSvg(st, now = Date.now()) {
 export const renderPricesPng = (st, now) => svgToPng(pricesSvg(st, now), 1080);
 
 export function pricesCaption(st, now = Date.now()) {
-  const { sp, official } = st;
+  const { sp } = st; const official = trustedOfficial(st.official);
   const L = [];
   L.push(`💱 <b>نشرة الأسعار — ${dayLabel(now)}</b>`, '');
   L.push('<b>السوق الموازية (سوريا - عام)</b> — شراء / مبيع:');
@@ -462,6 +465,7 @@ export function pricesCaption(st, now = Date.now()) {
   if (sp.eur) L.push(`🇪🇺 اليورو: <b>${fmtNew(sp.eur.buy)}</b> / <b>${fmtNew(sp.eur.sell)}</b>`);
   if (sp.try) L.push(`🇹🇷 التركية: <b>${fmtNew(sp.try.buy)}</b> / <b>${fmtNew(sp.try.sell)}</b>`);
   if (official) L.push(`🏦 الرسمي (المركزي، نشرة ${dateLabel(official.date)}): الدولار <b>${fmtNew(official.usd.buy)}</b> / <b>${fmtNew(official.usd.sell)}</b>`);
+  if (official?.url) L.push(`🔗 <a href="${esc(official.url)}">النشرة الرسمية لمصرف سورية المركزي</a>`);
   const g = sp.gold || {};
   if (g.k21) L.push('', `🟡 ذهب عيار 21: <b>${fmtNew(g.k21.sell || g.k21.buy)}</b> · عيار 18: <b>${fmtNew(g.k18?.sell || g.k18?.buy)}</b> ل.س للغرام`);
   const FV = fuelOf(st, now);
@@ -469,8 +473,10 @@ export function pricesCaption(st, now = Date.now()) {
   if (F.benzin || F.diesel) {
     const t = F['diesel-150'] ? ` (صنف ثاني ${fmtNew(F['diesel-150'].price)})` : '';
     L.push(`⛽ بنزين 90: <b>${fmtNew(F.benzin?.price)}</b> · مازوت: <b>${fmtNew(F.diesel?.price)}</b>${t} · غاز: <b>${fmtNew(F.gas?.price)}</b>`);
-    if (FV.since) L.push(`<i>المحروقات: التسعيرة الرسمية سارية منذ ${dateLabel(FV.since)}</i>`);
+    if (FV.since) L.push(`<i>المحروقات: ${FV.official ? 'قرار رسمي منشور' : 'بيانات مصدر ثانوي'} منذ ${dateLabel(FV.since)}</i>`);
+    if (FV.url) L.push(`🔗 <a href="${esc(FV.url)}">قرار المحروقات لدى سانا</a>`);
   }
+  if (FV?.stale && FV.since) L.push(`⛽ آخر قرار رسمي للمحروقات بتاريخ ${dateLabel(FV.since)}؛ استبعدنا الأسعار من نشرة اليوم لقدمها.`);
   L.push('', '<i>بالليرة الجديدة · القديمة = ×100</i>');
   L.push(`📊 كل الأسعار على الموقع: ${siteUrl()}/ar/#prices`);
   return L.join('\n');
@@ -543,7 +549,7 @@ export function registerPriceTools(bot, h) {
   const en = (ctx) => h.langOf(ctx) === 'en';
   const onlyOwner = async (ctx, fn) => { if (!h.owner(ctx)) return ctx.answerCallbackQuery().catch(() => {}); return fn(); };
   const txt = (ctx) => {
-    const st = pricesState(); const c = st.cfg; const sp = st.sp; const of = st.official;
+    const st = pricesState(); const c = st.cfg; const sp = st.sp; const of = trustedOfficial(st.official);
     const status = sp ? `💵 الدولار الآن (موازي): <b>${fmtNew(sp.usd?.buy)} / ${fmtNew(sp.usd?.sell)}</b>\n🏦 الرسمي: ${of ? `<b>${fmtNew(of.usd.buy)} / ${fmtNew(of.usd.sell)}</b> (نشرة ${dateLabel(of.date)})` : '—'}` : '⏳ لسا ما وصلت بيانات الأسعار.';
     return en(ctx)
       ? `💱 <b>Daily prices bulletin</b>\n\nStatus: <b>${c.on ? '✅ On' : '⏸ Off'}</b>\nTime: <b>${c.time}</b> (Damascus)\n\nEvery morning the bot posts an image with exchange rates (parallel + official), gold and fuel prices in the channel. If the numbers can't be verified that day nothing is posted and you get a private notice.\n\n${status}${c.last ? `\nLast run: ${c.last}` : ''}`

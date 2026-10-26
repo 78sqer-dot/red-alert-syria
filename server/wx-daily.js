@@ -11,6 +11,7 @@ import { governorates } from './places.js';
 import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge } from './alert-image.js';
 import { EXTRA_POINTS, HAZARDS } from './weather.js';
+import { officialWeatherMeta, officialWeatherWarnings, DAILY_BULLETIN_INDEX } from './weather-official.js';
 import { WX_LABEL, WX_EMOJI, wxKind, wxIconSvg } from '../shared/wx-icons.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -117,9 +118,24 @@ export function activeWarnings() {
   }
   return out;
 }
+export async function allWeatherWarnings() {
+  const official = await officialWeatherWarnings().catch(() => []);
+  const local = activeWarnings();
+  const out = [...official];
+  for (const w of local) {
+    const duplicate = out.some((x) => x.hazard === w.hazard && x.govs.some((c) => w.govs.includes(c)) && (!x.day || !w.day || x.day === w.day));
+    if (!duplicate) out.push(w);
+  }
+  return out;
+}
 export async function publicWeather() {
   const pts = await getWeather();
-  return { ok: true, at: R.at, src: 'Open-Meteo', warnings: activeWarnings(), points: pts.map((p) => ({ id: p.id, gov: p.gov, lat: p.lat, lon: p.lon, ar: p.ar, en: p.en, main: p.main, now: p.now, days: p.days })) };
+  const [warnings, official] = await Promise.all([
+    allWeatherWarnings(),
+    officialWeatherMeta().catch(() => ({ url: DAILY_BULLETIN_INDEX, title: 'النشرة الجوية الرسمية', alertsUrl: 'https://climweb.med.gov.sy/api/cap/rss.xml' })),
+  ]);
+  return { ok: true, at: R.at, src: 'Open-Meteo', official: { ...official, warningSource: 'المركز الوطني للأرصاد الجوية / وزارة الطوارئ وإدارة الكوارث' }, warnings,
+    points: pts.map((p) => ({ id: p.id, gov: p.gov, lat: p.lat, lon: p.lon, ar: p.ar, en: p.en, main: p.main, now: p.now, days: p.days })) };
 }
 export const weatherNowDebug = () => ({ at: R.at, err: R.err, points: R.data?.length || 0 });
 
@@ -149,7 +165,7 @@ const todayOf = (p, date) => p.days.find((d) => d.day === date) || p.days[0];
 function text(x, y, s, { size = 24, weight = 400, fill = '#e5e7eb', anchor = 'end', family = 'Noto Kufi Arabic', opacity = 1 } = {}) {
   return `<text x="${x}" y="${y}" font-family="${family}, Noto Sans" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}"${opacity < 1 ? ` opacity="${opacity}"` : ''}>${esc(s)}</text>`;
 }
-const HZ_KIND = { rain: 'rain', snow: 'snow', wind: 'wind', storm: 'storm', heat: 'sun', frost: 'snow', dust: 'dust' };
+const HZ_KIND = { rain: 'rain', snow: 'snow', wind: 'wind', storm: 'storm', heat: 'sun', frost: 'snow', dust: 'dust', fog: 'fog' };
 export function wxBulletinSvg(pts, warns, now = Date.now()) {
   const date = damascusParts(now).date;
   const W = 1080; const P = 48; const RX = W - P;
@@ -215,7 +231,7 @@ export function wxBulletinSvg(pts, warns, now = Date.now()) {
   }
   const H = Math.round(y + 130);
   const fy = H - 40;
-  o.push(text(RX, fy - 52, 'المصدر: توقعات أوبن ميتيو لمراكز المحافظات · النسبة المئوية تعني احتمال هطول المطر', { size: 17, weight: 500, fill: '#6b7280' }));
+  o.push(text(RX, fy - 52, 'توقعات الحرارة من Open-Meteo · التحذيرات الرسمية من المركز الوطني للأرصاد الجوية', { size: 17, weight: 500, fill: '#6b7280' }));
   o.push(`<rect x="${P}" y="${fy - 32}" width="${W - 2 * P}" height="1" fill="#1f2937"/>`);
   o.push(text(RX, fy + 6, 'red-alert-syria.onrender.com', { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
   o.push(channelBadge(P, fy - 40 + 14, { h: 40, dark: true }));
@@ -224,7 +240,7 @@ export function wxBulletinSvg(pts, warns, now = Date.now()) {
 }
 
 // ---------------------------------------------------------------- caption
-export function wxBulletinCaption(pts, warns, now = Date.now()) {
+export function wxBulletinCaption(pts, warns, now = Date.now(), official = null) {
   const date = damascusParts(now).date;
   const byGov = new Map(pts.filter((p) => p.main).map((p) => [p.gov, p]));
   const L = [`🌤 <b>نشرة الطقس — ${dayLabel(now)}</b>`, ''];
@@ -237,6 +253,8 @@ export function wxBulletinCaption(pts, warns, now = Date.now()) {
     L.push('', `⚠️ <b>${esc(w.ar)}</b> ${w.emoji}${names.length ? ` — ${esc(names.slice(0, 5).join('، '))}${names.length > 5 ? ' وغيرها' : ''}` : ''}`);
   }
   L.push('', '<i>العظمى/الصغرى لمراكز المحافظات</i>');
+  L.push('<i>التوقعات العددية من Open-Meteo · التحذيرات الرسمية من المركز الوطني للأرصاد الجوية</i>');
+  L.push(`📡 <a href="${esc(official?.url || DAILY_BULLETIN_INDEX)}">النشرة الرسمية اليومية</a>`);
   L.push(`🗺 <a href="${esc(siteUrl())}/ar/#weather">الطقس على الخريطة</a> · <a href="${esc(config.channelUrl)}">Red Alert Syria</a>`);
   return L.join('\n');
 }
@@ -260,8 +278,8 @@ async function readyData() {
 export async function renderWxBulletin(now = Date.now()) {
   const r = await readyData();
   if (!r.ok) return r;
-  const warns = activeWarnings();
-  return { ok: true, png: svgToPng(wxBulletinSvg(r.pts, warns, now), 1080), caption: wxBulletinCaption(r.pts, warns, now) };
+  const [warns, official] = await Promise.all([allWeatherWarnings(), officialWeatherMeta().catch(() => null)]);
+  return { ok: true, png: svgToPng(wxBulletinSvg(r.pts, warns, now), 1080), caption: wxBulletinCaption(r.pts, warns, now, official) };
 }
 export async function postWxBulletin(api, { chatId = config.channel, test = false, en = false } = {}) {
   const r = await renderWxBulletin();
