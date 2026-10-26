@@ -6,7 +6,7 @@
 import { ALERT_TYPES } from '../shared/types.js';
 import { governorates, districts, searchPlaces, normalizeArabic, getGov, getDist, places } from './places.js';
 
-export const NEWS_TYPES = ['breaking', 'uav', 'warplane', 'missile', 'attack', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane'];
+export const NEWS_TYPES = ['breaking', 'uav', 'warplane', 'missile', 'attack', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane', 'weather'];
 const N = normalizeArabic;
 const stripAl = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w);
 
@@ -21,7 +21,8 @@ const KW = {
   accident: ['حادث سير', 'حوادث سير', 'حادث السير', 'حوادث السير', 'حادث', 'حوادث', 'حادث مرور', 'دراجه ناريه', 'انقلاب', 'تصادم', 'اصطدام', 'دهس', 'حادث مروري', 'تدهور سياره', 'تدهور شاحنه'],
   fire: ['حريق', 'حرائق', 'اندلاع', 'النيران', 'اشتعال', 'اخماد'],
   protest: ['مظاهره', 'مظاهرات', 'وقفه احتجاجيه', 'احتجاج', 'احتجاجات', 'اعتصام', 'تظاهر', 'يتظاهرون', 'تخرج تضامنا'],
-  civil_plane: ['طائره مدنيه', 'هبوط اضطراري', 'طائره ركاب', 'رحله جويه', 'مطار'],
+  civil_plane: ['طائره مدنيه', 'هبوط اضطراري', 'طائره ركاب', 'رحله جويه', 'هبوط في مطار'],
+  weather: ['تحذير جوي', 'تنبيه جوي', 'اضطراب جوي', 'امطار غزيره', 'عواصف رعديه', 'هطولات مطريه', 'موجه حر', 'عاصفه ترابيه'],
   breaking: ['توغل', 'توغلت', 'توغلات', 'اقتحام', 'اقتحمت', 'حاجز تفتيش', 'مداهمه', 'حمله امنيه', 'حظر تجول', 'اختطاف', 'خطف', 'اغتيال', 'اشتباكات', 'استنفار', 'دوي',
     // foreign (mostly Israeli) army ground activity in the south: incursions, patrols, bulldozing, berms, new positions
     'الاحتلال', 'قوات الاحتلال', 'جيش الاحتلال', 'الجيش الإسرائيلي', 'القوات الإسرائيلية', 'قوة إسرائيلية', 'دورية إسرائيلية', 'آليات إسرائيلية', 'آليات عسكرية', 'دبابات', 'ميركافا',
@@ -36,6 +37,28 @@ export function keywordTypes(text) {
   // words split by a space to dodge filters ("انفج ار", "لغ م"): long keywords are also looked for without spaces
   const tight = nt.replace(/\s+/g, '');
   return Object.keys(KW_N).filter((k) => KW_N[k].some((w) => has(nt, w) || (w.replace(/\s+/g, '').length >= 5 && tight.includes(w.replace(/\s+/g, '')))));
+}
+const WEATHER_HAZARD_WORDS = {
+  dust: ['غبار', 'عاصفه ترابيه', 'عواصف ترابيه', 'اتربه مثاره'],
+  snow: ['ثلوج', 'تساقط الثلوج', 'تساقط الثلج'],
+  frost: ['صقيع', 'انجماد', 'تجمد'],
+  heat: ['موجه حر', 'موجه الحر', 'ارتفاع درجات الحراره', 'حراره مرتفعه'],
+  storm: ['عواصف رعديه', 'عاصفه رعديه', 'عواصف', 'رعديه', 'برق ورعد'],
+  wind: ['رياح', 'هبات رياح', 'سرعه الرياح'],
+  rain: ['امطار', 'هطولات مطريه', 'هطولات غزيره', 'امطار غزيره'],
+};
+const WEATHER_OFFICIAL = ['تحذير جوي', 'تنبيه جوي', 'انذار جوي', 'لجنه الاستجابه الطارئه', 'الارصاد الجويه', 'هيئه الارصاد', 'تتاثر المحافظه', 'اضطراب جوي عالي الشده', 'وزاره الطوارئ'];
+const WEATHER_ACTION = ['يرجي', 'تجنب', 'اخذ الحيطه', 'الحذر', 'تحذير', 'تحذر', 'تنبيه', 'ضروره', 'علي المواطنين', 'الابتعاد', 'الاستعداد'];
+/** Only explicit, actionable warnings (not ordinary forecasts) get the weather alert type. */
+export function weatherWarningInfo(text) {
+  const nt = N(String(text || ''));
+  const hazard = Object.entries(WEATHER_HAZARD_WORDS).find(([, words]) => words.some((w) => nt.includes(N(w))))?.[0];
+  if (!hazard) return null;
+  const official = WEATHER_OFFICIAL.some((w) => nt.includes(N(w)));
+  const actionable = WEATHER_ACTION.some((w) => nt.includes(N(w)));
+  const severe = ['اضطراب جوي عالي الشده', 'امطار غزيره جدا', 'رياح شديده جدا', 'عواصف عنيفه'].some((w) => nt.includes(N(w)));
+  if (!official || (!actionable && !severe)) return null;
+  return { hazard };
 }
 // obviously not an event on the ground
 const NOISE = ['اسعار', 'سعر صرف', 'الذهب', 'مباراه', 'المنتخب', 'كاس العالم', 'الدوري', 'الطقس', 'الارصاد', 'درجات الحراره', 'موجز اخبار', 'برنامج', 'الحلقه', 'لقاء خاص', 'مقابله', 'التقويم', 'تهنئه', 'ذكري', 'الذكري', 'امتحانات', 'مسابقه', 'المعرض', 'مؤتمر صحفي'].map(N);
@@ -62,6 +85,8 @@ export function prefilter(text, { general = false, breaking = false } = {}) {
   if (t.replace(/\s/g, '').length < 25) return { ok: false, why: 'short' };
   const kt = keywordTypes(t);
   const nt = N(t);
+  const weather = weatherWarningInfo(t);
+  if (weather) return { ok: true, kt: [...new Set([...kt, 'weather'])], weather };
   const noisy = NOISE.some((w) => nt.includes(w));
   if (!kt.length && !breaking) return { ok: false, why: 'no-keywords' };
   if (noisy && kt.length <= 1 && !breaking) return { ok: false, why: 'noise' };
@@ -168,13 +193,14 @@ const TYPE_HELP = `- uav: drone (مسيّرة) seen / striking / shot down over 
 - fire: fire (حريق) of a building, forest, crops, market…
 - protest: demonstration, protest, sit-in (مظاهرة، وقفة احتجاجية)
 - civil_plane: civil aircraft incident (emergency landing, crash)
+- weather: ONLY an explicit, actionable official severe-weather warning/advisory for a named Syrian place, with a hazard and safety guidance (تحذير/تنبيه جوي رسمي مع مكان وتعليمات). NOT routine forecasts. Choose weather over civil/electricity when the post warns about dangerous storms, heavy rain, snow, wind, heat, frost or dust.
 - explosion: ANY explosion or blast (انفجار، تفجير، دوي انفجار): landmine (لغم), war remnants / unexploded ordnance (مخلفات حرب، ذخائر), IED / explosive device (عبوة ناسفة), car bomb (سيارة مفخخة), suicide bomber, gas cylinder / fuel tank / ammunition depot blowing up, controlled detonation of ordnance, a loud explosion heard, blowing up a house
 - civil: ONLY when no other type fits: building collapse, drowning, flood, electrocution, poisoning, a body found without a known cause, a person found hanged, a missing person found dead
 - breaking: another urgent, major security or humanitarian event in Syria that people need to know right now and that has none of the types above (e.g. curfew, road closed for security, major security operation starting, foreign forces setting up a checkpoint inside Syria). Israeli army ground activity inside Syria WITHOUT a raid or shooting IS an event of this type: vehicles/tanks/a patrol advancing near or into an area, bulldozing land or uprooting trees, digging trenches, building earth berms (سواتر ترابية) or fortifications, resuming excavation, setting up a new position — mostly in Quneitra / Daraa countryside / Mount Hermon (جبل الشيخ). It counts even when it is an ongoing or resumed activity, as long as the post reports it now.`;
 export function buildPrompt(items, known, nowIso) {
   const sys = `You are the news desk of "Red Alert Syria", a live alert map of Syria. You read short posts from Syrian news channels and decide which ones should become a map alert.
 For EACH post return one object. Rules:
-1. event=true ONLY if the post reports a concrete incident that is happening now or happened in the last hours INSIDE Syria, at a nameable place. event=false for: statements, politics, diplomacy, meetings, economy, prices, sports, weather forecasts, analysis, interviews, reports/documentaries, anniversaries, statistics, aid deliveries, returns of displaced people, arrests or trials as such, condemnations, and anything outside Syria (Lebanon, Iraq, Israel, Palestine, Yemen, Saudi Arabia, Iran, Turkey… even if it mentions Syrians). Israeli army activity INSIDE Syrian territory (Quneitra, Daraa, Rif Dimashq, the separation line with the occupied Golan, Mount Hermon) is inside Syria. Reports that only summarise many past violations (monthly counts, statistics) are not events.
+1. event=true ONLY if the post reports a concrete incident that is happening now or happened in the last hours INSIDE Syria, at a nameable place. Exception: an explicit, actionable official severe-weather warning for a named Syrian place is a weather event. event=false for: statements, politics, diplomacy, meetings, economy, prices, sports, routine weather forecasts (warnings meeting the exception are type weather), analysis, interviews, reports/documentaries, anniversaries, statistics, aid deliveries, returns of displaced people, arrests or trials as such, condemnations, and anything outside Syria (Lebanon, Iraq, Israel, Palestine, Yemen, Saudi Arabia, Iran, Turkey… even if it mentions Syrians). Israeli army activity INSIDE Syrian territory (Quneitra, Daraa, Rif Dimashq, the separation line with the occupied Golan, Mount Hermon) is inside Syria. Reports that only summarise many past violations (monthly counts, statistics) are not events.
 1b. Only Syrian PUBLIC affairs. event=false for personal or social posts: opinions, commentary, rants, poems/quotes, greetings and congratulations, religious or good-morning posts, condolences/obituaries without an incident, personal appeals ("ياريت تنشرلي"), missing-person or lost-item notices, complaints about services (potholes, garbage, electricity, water, prices), ads, promotions, courses, job offers, polls, donation/aid requests, giveaways, channel announcements, and posts that only promote a channel or a video.
 1c. Posts whose source line says [LOCAL] come from local/activist channels: be stricter — event=true only for a concrete, specific incident report with a named place; event=false for rumours ("أنباء عن", "يُقال", "معلومات غير مؤكدة"), accusations or incitement without a concrete incident, and old footage.
 2. Follow-ups are NOT new events: casualty updates ("ارتفاع حصيلة"), someone dying of wounds from an earlier incident, "the perpetrators were arrested", the hospital receiving the wounded of an incident already reported, a reporter's details/video of an incident already reported, re-posts, "again/مجدداً" reports of the same ongoing incident. For those: event=true, new_incident=false and same_as = the known event id (E…) or earlier post (P…) it follows up. Use new_incident=false only for a follow-up of an incident in KNOWN EVENTS / an earlier post, or a clear aftermath (casualty update, funeral, arrest of perpetrators) of an earlier incident; an activity that starts again after a pause ("يستأنف … بعد توقف") is a NEW incident. If a post is the same incident as a known event or an earlier post in this batch (same kind of incident, same area, close in time — even if described with different nearby village names, e.g. "حاجز مفرق خربا" = "قرب بلدة معربة" = "بصرى الشام" for one checkpoint attack in eastern Daraa countryside), set same_as to it.
@@ -244,6 +270,11 @@ const RULE_ORDER = ['uav', 'warplane', 'missile', 'artillery', 'explosion', 'acc
 const FOLLOW_UP = ['ارتفاع حصيله', 'ارتفاع عدد', 'القبض علي', 'قبضنا', 'القت القبض', 'تقبض علي', 'منفذي الهجوم', 'تفاصيل', 'ينقل', 'نتابع وصول', 'وصول اكثر من', 'وصول جثث'].map(N);
 export function ruleClassify(text, { breaking = false } = {}) {
   const nt = N(text);
+  if (weatherWarningInfo(text)) {
+    const found = [];
+    for (const g of governorates) if (nt.includes(N(g.ar)) || nt.includes(N(g.en)) || (g.alt || []).some((a) => nt.includes(N(a)))) found.push({ name: g.ar, gov: g.ar });
+    return found.length ? { event: true, type: 'weather', new_incident: true, same_as: null, places: found.slice(0, 4), headline: 'تحذير جوي: ' + String(text).split('\n')[0].slice(0, 120), hazard: weatherWarningInfo(text).hazard, rule: true } : null;
+  }
   if (FOLLOW_UP.some((w) => nt.includes(w))) return null;
   if (!mentionsSyria(text)) return null;
   const kt = keywordTypes(text);
@@ -282,12 +313,24 @@ const ACC_W = RX(['حادث سير', 'حوادث سير', 'حادث مروري',
 const PROT_W = RX(['مظاهره', 'مظاهرات', 'وقفه احتجاجيه', 'اعتصام', 'احتجاج']);
 export function refineType(type, text) {
   const nt = ' ' + N(text) + ' ';
-  const any = (ws) => ws.some((w) => nt.includes(w));
-  if (type === 'civil') {
-    if (any(EXPL_W)) return 'explosion';
-    if (any(FIRE_W)) return 'fire';
-    if (any(ACC_W)) return 'accident';
-    if (any(PROT_W)) return 'protest';
+  const any = (ws) => ws.some((w) => nt.includes(' ' + N(w) + ' ') || nt.includes(N(w)));
+  if (weatherWarningInfo(text)) return 'weather';
+  // Recover explicit specific event types when Gemini has fallen back to civil/breaking/attack.
+  if (['civil', 'breaking', 'attack'].includes(type)) {
+    const specific = [
+      ['explosion', EXPL_W],
+      ['civil_plane', RX(['هبوط اضطراري', 'طائره مدنيه', 'طائره ركاب', 'تحطم طائره مدنيه'])],
+      ['accident', ACC_W],
+      ['protest', PROT_W],
+      ['uav', RX(['طائره مسيره', 'طائرات مسيره', 'الطيران المسير', 'طيران مسير', 'درون', 'مسيره انتحاريه'])],
+      ['warplane', RX(['طيران حربي', 'الطيران الحربي', 'طائرات حربيه', 'طائره حربيه', 'غاره جويه', 'غارات جويه', 'قصف جوي'])],
+      ['missile', RX(['صاروخ', 'صواريخ', 'قذيفه صاروخيه'])],
+      ['artillery', RX(['قصف مدفعي', 'قذائف مدفعيه', 'قذائف هاون', 'قصف بالهاون', 'مدفعيه'])],
+      ['fire', FIRE_W],
+      ['attack', RX(['اطلاق نار', 'اطلاق النار', 'اطلاق الرصاص', 'اشتباك مسلح', 'اشتباكات مسلحه', 'استهداف مسلح', 'كمين مسلح', 'اغتيال'])],
+      ['breaking', RX(['حظر تجول', 'اغلاق طريق امني', 'عمليه امنيه واسعه', 'اقامه حاجز عسكري'])],
+    ];
+    for (const [k, ws] of specific) if (any(ws)) return k;
   }
   if (type === 'attack' && any(EXPL_W) && !any(GUN_W)) return 'explosion';
   return type;

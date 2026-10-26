@@ -400,6 +400,8 @@ async function showPreview(ctx, d) {
 function buildAlertInput(d, author) {
   const titles = TITLES[d.type];
   const loc = d.location || locationFrom({});
+  const wxNames = { rain: ['أمطار غزيرة', 'Heavy rain'], snow: ['ثلوج', 'Snow'], wind: ['رياح قوية', 'Strong winds'], storm: ['عواصف رعدية', 'Thunderstorms'], heat: ['موجة حر', 'Heatwave'], frost: ['صقيع', 'Frost'], dust: ['غبار', 'Dust'] };
+  const wx = d.type === 'weather' ? wxNames[d.meta?.hazard] : null;
   const named = loc.scope !== 'country';
   const areas = [];
   if (named) {
@@ -412,8 +414,8 @@ function buildAlertInput(d, author) {
   const more = (n, en) => (!n ? '' : en ? ` +${n} more` : n === 1 ? ' ومنطقة أخرى' : n === 2 ? ' ومنطقتان أخريان' : n <= 10 ? ` و${n} مناطق أخرى` : ` و${n} منطقة أخرى`);
   return {
     type: d.type,
-    title: named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar,
-    title_en: named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en,
+    title: wx ? `${titles.ar}: ${wx[0]}${named ? ` — ${loc.name_ar}` : ''}` : named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar,
+    title_en: wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en,
     extra,
     description: cleanAlertText(d.type === 'breaking' ? d.text : d.details),
     location: loc,
@@ -422,6 +424,7 @@ function buildAlertInput(d, author) {
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
     ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { meta: { intense: d.intense } } : {}),
+    ...(d.type === 'weather' && d.meta?.hazard ? { meta: { hazard: d.meta.hazard } } : {}),
   };
 }
 

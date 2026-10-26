@@ -9,23 +9,23 @@ import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
 import { config, isOwner } from './config.js';
 import { store } from './store.js';
-import { ALERT_TYPES, typeOf, droneAuto } from '../shared/types.js';
-import { locationFrom, normalizeArabic } from './places.js';
+import { ALERT_TYPES, typeOf, droneAuto, alertEmoji } from '../shared/types.js';
+import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText, parseUsername } from './news-sources.js';
-import { onNewsPost as onPowerPost } from './services.js';
+import { onNewsPost as onPowerPost, takeMisroutedWeatherPower } from './services.js';
 import { onBorderNews } from './borders.js';
 import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
 
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
 // that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
-export const FILTER_VER = 3;
+export const FILTER_VER = 4;
 const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
@@ -44,6 +44,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rid = () => crypto.randomBytes(5).toString('hex');
 const N = normalizeArabic;
 const H_MS = 3600_000;
+const WEATHER_NAME_AR = { rain: 'أمطار غزيرة', snow: 'ثلوج', wind: 'رياح قوية', storm: 'عواصف رعدية', heat: 'موجة حر', frost: 'صقيع', dust: 'غبار' };
+const weatherHeadline = (hazard, govs) => `تحذير جوي: ${WEATHER_NAME_AR[hazard] || 'أحوال جوية خطرة'} — ${govs.map((g) => g.ar).join('، ')}`;
 const dayKey = (t = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: config.timezone }).format(new Date(t));
 const clock = (t) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(t));
 const nowDamascus = () => new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, dateStyle: 'short', timeStyle: 'short' }).format(new Date());
@@ -140,7 +142,7 @@ const whereOf = (locs) => (locs.length ? locs.map((l) => [l.name_ar, l.scope !==
 const AIR = new Set(['uav', 'warplane', 'missile']);
 const STRIKE = new Set(['attack', 'artillery', 'explosion']);
 const CIVIL = new Set(['civil', 'accident', 'fire', 'civil_plane', 'explosion']);
-const WINDOW_MIN = { uav: 120, warplane: 120, missile: 180, attack: 360, artillery: 360, explosion: 360, civil: 360, accident: 360, fire: 360, civil_plane: 240, protest: 480, breaking: 360 };
+const WINDOW_MIN = { uav: 120, warplane: 120, missile: 180, attack: 360, artillery: 360, explosion: 360, civil: 360, accident: 360, fire: 360, civil_plane: 240, protest: 480, breaking: 360, weather: 720 };
 const sameFamily = (a, b) => a === b || (AIR.has(a) && AIR.has(b)) || (STRIKE.has(a) && STRIKE.has(b)) || ((a === 'civil' || b === 'civil') && CIVIL.has(a) && CIVIL.has(b));
 const tokens = (s) => new Set(N(s).split(' ').filter((w) => w.length >= 3).map((w) => (w.startsWith('ال') && w.length > 4 ? w.slice(2) : w)));
 function textSim(a, b) {
@@ -217,12 +219,13 @@ function cardText(d, lang = 'ar') {
   lines.push(d.test
     ? tr(lang, '🧪 <b>تجربة — هذه مسودة تجريبية، لن يُنشر شيء</b>', '🧪 <b>TEST — a test draft, nothing will be published</b>')
     : tr(lang, '📡 <b>رصد إخباري — مسودة جاهزة للنشر</b>', '📡 <b>News monitor — draft ready to publish</b>'));
-  lines.push('', `<b>${t.emoji} ${esc(lang === 'en' ? t.en : t.ar)}</b>`);
+  lines.push('', `<b>${alertEmoji({ type: d.type, hazard: d.hazard })} ${esc(lang === 'en' ? t.en : t.ar)}</b>`);
   if (locs.length > 1) {
     lines.push(`📍 <b>${tr(lang, `المناطق (${locs.length})`, `Areas (${locs.length})`)}:</b>`);
     for (const l of locs) lines.push(`• ${esc(fmtLoc(l))}`);
   } else lines.push(`📍 <b>${tr(lang, 'المكان', 'Place')}:</b> ${esc(locs[0] ? fmtLoc(locs[0]) : tr(lang, 'سوريا', 'Syria'))}`);
   lines.push(`📝 ${esc(d.headline)}`);
+  if (d.type === 'weather' && d.body) lines.push('', esc(d.body));
   const isLocal = (s) => s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local;
   const srcs = (d.srcs || []).map((s) => (s.url ? `<a href="${esc(s.url)}">${esc(s.name)}</a>` : esc(s.name)) + (isLocal(s) ? tr(lang, ' <i>(محلي)</i>', ' <i>(local)</i>') : ''));
   lines.push('', `🗞 <b>${tr(lang, `المصادر (${srcs.length})`, `Sources (${srcs.length})`)}:</b> ${srcs.join(' · ')}`);
@@ -368,8 +371,9 @@ export function toBotDraft(d) {
   return {
     type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin,
     location: d.loc || locationFrom({}), extra: d.extra || [],
-    details: d.type === 'breaking' ? '' : body, text: d.type === 'breaking' ? body : '',
+    details: d.type === 'breaking' ? '' : (d.body || body), text: d.type === 'breaking' ? body : '',
     created: Date.now(), source: 'news',
+    ...(d.type === 'weather' && d.hazard ? { meta: { hazard: d.hazard } } : {}),
     ...(typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
   };
 }
@@ -447,6 +451,15 @@ async function mergeInto(d, it, locs = []) {
   if (d.status === 'pending' && nightActive() && nightEligible(d)) await nightPublish(d); // confirmed by a 2nd source at night
   return true;
 }
+function explicitWeatherResult(it) {
+  const info = weatherWarningInfo(it.text);
+  if (!info) return null;
+  const nt = N(it.text);
+  const gs = governorates.filter((g) => [g.ar, g.en, ...(g.alt || [])].some((x) => nt.includes(N(x)))).slice(0, 4);
+  if (!gs.length) return null;
+  return { i: it.i, event: true, type: 'weather', new_incident: true, same_as: null,
+    places: gs.map((g) => ({ name: g.ar, gov: g.ar })), headline: weatherHeadline(info.hazard, gs), hazard: info.hazard };
+}
 async function handleResult(it, r, known, pmap) {
   const n = newsState();
   if (!r || !r.event || !NEWS_TYPES.includes(r.type)) { note(it, 'not an event'); return; }
@@ -475,6 +488,7 @@ async function handleResult(it, r, known, pmap) {
   const d = {
     id: rid(), type: r.type, loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
+    sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
   };
   n.drafts[d.id] = d;
   n.stats.drafts++;
@@ -533,6 +547,7 @@ async function processQueue() {
       batch.splice(0, batch.length, ...late);
     }
     const byI = new Map(results.filter((r) => r && Number.isInteger(r.i)).map((r) => [r.i, r]));
+    for (const it of batch) { const forced = explicitWeatherResult(it); if (forced) byI.set(it.i, forced); }
     const pmap = new Map();
     for (const it of batch) {
       try { await handleResult(it, byI.get(it.i), known, pmap); } catch (e) { console.error('[news] handle failed', e.message); note(it, 'error: ' + e.message); }
@@ -669,14 +684,37 @@ export function startNewsMonitor() {
   const first = async () => {
     if (store.backup && config.telegramBackup) { try { await store.mergeFromBackup(); } catch { /* ignore */ } }
     const n = newsState();
+    try {
+      const moved = await takeMisroutedWeatherPower();
+      for (const p of moved) {
+        const info = weatherWarningInfo(p.text || '');
+        const g = getGov(p.gov);
+        if (!info || !g) continue;
+        const body = cleanAlertText(String(p.text || '')).slice(0, 900);
+        const d = { id: rid(), type: 'weather', hazard: info.hazard, loc: locationFrom({ govCode: g.code }), extra: [],
+          headline: weatherHeadline(info.hazard, [g]), body, sourceText: body,
+          srcs: [{ u: p.src?.u || 'weather-warning', name: p.src?.name || 'الإخبارية السورية', url: p.src?.url || '', ts: p.ts, local: false }],
+          ts: p.ts || Date.now(), created: Date.now(), status: 'pending', cards: [], rule: false };
+        n.drafts[d.id] = d; n.stats.drafts++;
+        const c = cleanPostText(body); n.seen[textHash(c.text)] = Date.now();
+        const m = String(p.src?.url || '').match(/t\.me\/(?:s\/)?([^/]+)\/(\d+)/i);
+        if (m) (n.handled ||= {})[`${m[1]}/${m[2]}`] = Date.now();
+        save();
+        const sent = await sendCards(d);
+        console.log(`[news] corrected misrouted electricity card ${p.id} -> weather draft ${d.id} (${sent} reviewer(s))`);
+      }
+    } catch (e) { console.error('[news] weather-card correction failed', e.message); }
     try { await rescanIfFilterChanged(); } catch (e) { console.error('[news] rescan failed', e.message); }
     // re-tag drafts still waiting for review (e.g. explosions typed as the generic "civil")
     for (const d of Object.values(n.drafts)) {
       if (d.status !== 'pending' || d.test) continue;
-      const t2 = refineType(d.type, d.headline || '');
+      const text = d.sourceText || d.body || d.headline || '';
+      const t2 = refineType(d.type, text);
       if (t2 === d.type) continue;
       console.log(`[news] draft ${d.id} re-tagged ${d.type} -> ${t2}`);
-      d.type = t2; save();
+      d.type = t2;
+      if (t2 === 'weather') d.hazard = weatherWarningInfo(text)?.hazard || d.hazard; else delete d.hazard;
+      save();
       try { await refreshCards(d); } catch { /* ignore */ }
     }
     console.log(`[news] monitor started: ${n.on ? 'ON' : 'paused'} · ${n.sources.filter((s) => s.on).length} sources · AI ${NEWS_CFG.aiKey() ? NEWS_CFG.models()[0] : 'OFF (rules only)'} · every ${NEWS_CFG.pollSec}s`);
@@ -1027,4 +1065,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, nightSummaryTick, noticeText, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, govCodeOf };
+export const _test = { nightPublish, nightSummaryTick, noticeText, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, govCodeOf, explicitWeatherResult };

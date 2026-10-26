@@ -10,6 +10,7 @@ import { InlineKeyboard } from 'grammy';
 import { config } from './config.js';
 import { store } from './store.js';
 import { governorates, normalizeArabic } from './places.js';
+import { weatherWarningInfo } from './news-ai.js';
 
 const H_MS = 3600_000;
 const N = normalizeArabic;
@@ -84,17 +85,18 @@ export function govOfText(text) {
   }
   return null;
 }
-const STRONG = ['تقنين', 'التقنين', 'الكهرباء', 'كهرباء', 'الكهربائي', 'الكهربائية', 'التيار الكهربائي', 'محطة توليد', 'محطات التوليد', 'ساعات الوصل', 'ساعات القطع', 'المنظومة الكهربائية', 'الشبكة الكهربائية', 'التغذية الكهربائية', 'العنفات', 'ميغاواط'];
+const POWER_SUBJECT = ['الكهرباء', 'كهرباء', 'التيار الكهربائي', 'الكهربائي', 'الكهربائية', 'الشبكة الكهربائية', 'محطة توليد', 'محطة الكهرباء', 'وزارة الكهرباء', 'مؤسسة الكهرباء'].map(N);
+const POWER_EVENT = ['تقنين', 'ساعات الوصل', 'ساعات القطع', 'انقطاع التيار', 'انقطاع الكهرباء', 'قطع التيار', 'عودة التيار', 'عاد التيار', 'رجوع التيار', 'إعادة التيار', 'برنامج التقنين', 'تعرفة الكهرباء', 'التعرفة الكهربائية', 'فاتورة الكهرباء', 'زيادة ساعات التغذية', 'تخفيض التعرفة', 'عطل كهربائي', 'عطل في الشبكة', 'عطل بالشبكة', 'صيانة الشبكة', 'إصلاح الشبكة', 'خرجت محطة توليد', 'خرجت عن الخدمة', 'تحسن التغذية الكهربائية', 'جدول وصل الكهرباء', 'زيادة ساعات الوصل', 'خفض ساعات الوصل'].map(N);
 const NOISE = ['مسيرة', 'غارة', 'قصف', 'استهداف', 'اشتباك', 'انفجار'];
-/** is this news post an electricity update? -> { ok, gov } */
+/** Electricity hook only catches service/operations updates, not any text that merely mentions electricity. */
 export function isPowerNews(text) {
+  if (weatherWarningInfo(text)) return { ok: false, why: 'explicit weather warning' };
   const t = ` ${N(text)} `;
-  const hits = STRONG.filter((k) => t.includes(` ${N(k)}`) || t.includes(`${N(k)} `)).length;
-  if (!hits) return { ok: false };
-  // a strike that hit a power station is an alert, not a service update
+  const hasAny = (xs) => xs.some((k) => t.includes(N(k)));
+  if (!hasAny(POWER_SUBJECT) || !hasAny(POWER_EVENT)) return { ok: false };
+  // A strike at a power facility is a security alert, not a service update.
   if (NOISE.some((k) => t.includes(N(k)))) return { ok: false };
   const g = govOfText(text);
-  // Syria only: a post about another country's electricity (Saudi, Lebanon, Iraq …) is not ours
   if (FOREIGN.some((k) => t.includes(N(k))) && !g && !SYRIA.some((k) => t.includes(N(k)))) return { ok: false };
   return { ok: true, gov: g ? g.code : null };
 }
@@ -157,7 +159,8 @@ export function mergeServicesFromBackup(o) {
   const ids = new Set(roadsArr().map((r) => r.id));
   for (const r of os.roads || []) if (!ids.has(r.id)) roadsArr().push(r);
   const pids = new Set(powerArr().map((p) => p.id));
-  for (const p of os.power || []) if (!pids.has(p.id)) powerArr().push(p);
+  const suppressed = new Set(svc().powerSuppressed || []);
+  for (const p of os.power || []) if (!pids.has(p.id) && !suppressed.has(p.id)) powerArr().push(p);
 }
 
 // ---------------------------------------------------------------- bot: electricity tools (publishing bot)
@@ -183,6 +186,26 @@ async function sendPowerCard(p) {
   save();
 }
 /** news-monitor hook: an electricity post -> owner card (never auto-published) */
+export async function takeMisroutedWeatherPower() {
+  const s = svc(); const arr = powerArr(); const moved = [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const p = arr[i];
+    if (p.pub || !p.gov || !weatherWarningInfo(p.text || '')) continue;
+    moved.unshift(p); arr.splice(i, 1);
+    const tomb = (s.powerSuppressed ||= []);
+    if (!tomb.includes(p.id)) tomb.push(p.id);
+  }
+  if (!moved.length) return [];
+  s.powerSuppressed = (s.powerSuppressed || []).slice(-300);
+  save(); emitPower();
+  const api = R.H?.apis().admin;
+  if (api) for (const p of moved) for (const [chat, mid] of p.cards || []) {
+    try { await api.deleteMessage(chat, mid); } catch (e) { console.warn('[power] old misrouted card cleanup failed', p.id, e.description || e.message); }
+  }
+  console.log(`[power] removed ${moved.length} pending weather warning(s) misrouted to electricity`);
+  return moved;
+}
+/** news-monitor hook: only real electricity service updates become power cards. */
 export function onNewsPost(it) {
   const s = svc();
   const n = (s.powerNews ||= { on: true, day: '', count: 0 });
@@ -338,4 +361,4 @@ export function registerPowerTools(bot, h) {
     p.cards = [[m.chat.id, m.message_id]]; save();
   });
 }
-export const _test = { isPowerNews, govOfText, cleanPowerText, addRoad, publicRoads, endRoad };
+export const _test = { isPowerNews, govOfText, cleanPowerText, addRoad, publicRoads, endRoad, takeMisroutedWeatherPower };

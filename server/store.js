@@ -191,6 +191,7 @@ class Store extends EventEmitter {
       // an alert never outlives the auto-delete window (default 1 h), so "ends at" matches when it leaves the map
       expires_at: new Date(now.getTime() + Math.min(ttl, this.autoDeleteHours ? this.autoDeleteHours * 60 : Infinity) * 60_000).toISOString(),
       source: input.source || 'telegram',
+      meta: input.meta && typeof input.meta === 'object' ? { ...input.meta } : null,
       is_active: true,
       author: input.author || null,
       channel_message_id: null,
