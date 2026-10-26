@@ -644,16 +644,12 @@ export class AlertMap {
     }
     return best;
   }
-  // phones (also a phone in "desktop site" mode): the alert opens as a card docked at the bottom of the map,
-  // above the list sheet, so zooming / panning can never push it off screen
+  // Phone detection for mobile map rendering/3D performance; alert popups remain anchored to their map circles.
   dockMode() {
     const coarse = matchMedia('(pointer: coarse)').matches;
     return window.innerWidth < 768 || (coarse && Math.min(screen.width || 9999, screen.height || 9999) < 768);
   }
-  openDock(alert) {
-    return this.openDockHtml(this.popupHtml(alert), [alert.location.longitude, alert.location.latitude], { id: alert.id });
-  }
-  // the same docked card for any map popup (services, weather, pharmacies, roads, borders...)
+  // Service cards remain docked on phones; alert-circle popups use MapLibre's point-anchored popup below.
   openDockHtml(html, ll, { id = null, cls = '', onClose = null } = {}) {
     const card = document.createElement('div');
     card.className = 'pp-dock' + (cls ? ' ' + cls : '');
@@ -714,7 +710,6 @@ export class AlertMap {
   openPopup(alert) {
     const M = ml();
     this.closePopup();
-    if (this.dockMode()) { this._popupAt = null; this.popup = this.openDock(alert); return this.popup; }
     const at = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
     this._popupAt = null;
     const m = at ? null : this.markers.get(alert.id);
@@ -744,8 +739,8 @@ export class AlertMap {
     return this.popup;
   }
   // Pan the map just enough that the open popup lies completely inside the visible part of the map
-  // (works with page zoom in phone "desktop site" mode and with the bottom sheet / top buttons).
-  // visible part of the map in client px, minus the floating buttons (top) and the list sheet (bottom)
+  // (works with page zoom in phone "desktop site" mode, the top controls and bottom-positioned panels).
+  // visible part of the map in client px, excluding the top controls and any bottom-positioned panel
   visBox() {
     const c = this.map.getContainer();
     const cr = c.getBoundingClientRect();

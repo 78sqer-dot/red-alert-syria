@@ -738,7 +738,7 @@ body.svc-on .breaking-banner { display: none; }
 .svc-mwide { width: 100%; justify-content: center; margin: 8px 0 12px; border-color: var(--c) !important; color: var(--c) !important; }
 .svc-mwide.on { background: color-mix(in srgb, var(--c) 12%, transparent) !important; }
 
-/* phones: alert card docked at the bottom of the map (never follows the point off screen) */
+/* phones: service cards may use a bottom dock; alert details stay anchored to their map markers */
 .pp-dock { position: absolute; z-index: 17; left: 10px; right: 10px; bottom: 10px; max-width: 520px; margin: 0 auto; overflow-y: auto; overscroll-behavior: contain; border-radius: 14px; box-shadow: var(--shadow-lg); animation: ddUp .2s cubic-bezier(.2, .8, .2, 1); }
 .pp-dock .pp-dock-body { border-radius: 14px; padding: 12px 12px 10px; }
 .pp-dock .pp-dock-x { position: absolute; top: 6px; inset-inline-end: 6px; z-index: 2; width: 30px; height: 30px; border-radius: 8px; border: 0; background: var(--bg-subtle); color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer; }
@@ -931,23 +931,23 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
   .sidebar {
     position: fixed;
     inset-block: 0;
-    inset-inline-start: 0;
-    inset-inline-end: auto;
+    inset-inline: auto;
+    left: 0;
+    right: auto;
     width: min(420px, 58vw);
     height: 100dvh;
     max-height: 100dvh;
     overflow: hidden;
-    transform: translateX(105%);
+    transform: translateX(-105%);
     margin: 0 !important;
     border: 0;
-    border-inline-end: 1px solid var(--border);
+    border-right: 1px solid var(--border);
     border-radius: 0;
     background: var(--bg-primary);
     box-shadow: var(--shadow-lg);
     z-index: 61;
     transition: transform .38s cubic-bezier(.2, .8, .2, 1);
   }
-  html[dir='ltr'] .sidebar { transform: translateX(-105%); }
   .app.sheet-open .sidebar { transform: none; }
   .sheet-handle { display: none; }
   .sb-head { padding: 16px 16px 12px; }

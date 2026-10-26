@@ -800,7 +800,7 @@ function placeListFab() {
   const app = $('#app');
   if (isMobile()) {
     const topbar = $('#topbar');
-    if (fab.parentElement !== topbar) topbar.insertBefore(fab, $('#btnSettingsM'));
+    if (fab.parentElement !== topbar || topbar.firstElementChild !== fab) topbar.prepend(fab);
     fab.hidden = false;
     const open = app.classList.contains('sheet-open');
     $('#listBackdrop').hidden = !open;
