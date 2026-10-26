@@ -800,7 +800,12 @@ function placeListFab() {
   const app = $('#app');
   if (isMobile()) {
     const topbar = $('#topbar');
-    if (fab.parentElement !== topbar || topbar.firstElementChild !== fab) topbar.prepend(fab);
+    const rtl = getComputedStyle(topbar).direction === 'rtl';
+    const atLeft = rtl ? topbar.lastElementChild === fab : topbar.firstElementChild === fab;
+    if (fab.parentElement !== topbar || !atLeft) {
+      if (rtl) topbar.append(fab);
+      else topbar.prepend(fab);
+    }
     fab.hidden = false;
     const open = app.classList.contains('sheet-open');
     $('#listBackdrop').hidden = !open;
