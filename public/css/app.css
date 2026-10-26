@@ -780,3 +780,152 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
 .px-fuel .px-foot { margin-top: 6px; font-size: 11.5px; opacity: .65; line-height: 1.5; }
 .px-fuel .px-k small { white-space: nowrap; }
 .px-fuel .px-foot span[dir="ltr"] { white-space: nowrap; display: inline-block; }
+
+
+/* ---------------------------------------------------------------- final map UI pass */
+.topbar {
+  gap: 9px;
+  padding-inline: 14px;
+  background: color-mix(in srgb, var(--bg-secondary) 94%, var(--bg-primary));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 70%, transparent);
+}
+.brand img { height: 36px; }
+.tb-btn, .status { border-radius: 10px; }
+.ticker { border-radius: 10px; }
+.status {
+  background: color-mix(in srgb, var(--online) 6%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--online) 20%, var(--border));
+}
+.mobile-ticker { background: var(--bg-card); }
+.map-tools {
+  top: 14px;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-glass);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.map-btn {
+  height: 40px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  box-shadow: none;
+  font-size: 13px;
+}
+.map-btn:hover, .map-btn[aria-expanded='true'] {
+  background: var(--bg-card-hover);
+  border-color: color-mix(in srgb, var(--red) 35%, var(--border));
+}
+.dd-panel { max-height: min(72vh, calc(100dvh - 132px)); }
+.map-ctrls {
+  inset-inline-start: 14px;
+  padding: 2px;
+  border-radius: 13px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.ctrl-btn { width: 42px; height: 42px; }
+.about-pill {
+  min-height: 40px;
+  padding-inline: 15px;
+  border-color: color-mix(in srgb, var(--border) 85%, var(--text-muted));
+}
+.sidebar { background: var(--bg-secondary); }
+.sb-head { padding: 18px 18px 14px; }
+.sb-list { padding: 12px; gap: 10px; }
+.card { border-radius: 12px; padding: 13px 13px 11px; }
+
+@media (min-width: 768px) and (max-width: 1080px) {
+  :root { --sidebar-w: 300px; }
+  .topbar { gap: 6px; padding-inline: 8px; }
+  .brand img { height: 32px; }
+  .ticker { flex-basis: 220px; min-width: 120px; }
+  .tb-btn { padding-inline: 9px; }
+}
+
+@media (max-width: 767px) {
+  :root { --header-h: 54px; }
+  .topbar { height: calc(var(--header-h) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) 10px 0; gap: 6px; }
+  .brand img { height: 32px; }
+  .mobile-ticker { height: 36px; }
+  .map-tools {
+    top: 12px;
+    inset-inline: 12px;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px;
+  }
+  .map-tools > .dd, .map-tools > #btnSvc { flex: 1 1 0; min-width: 0; }
+  .map-btn {
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    justify-content: center;
+    gap: 5px;
+    padding-inline: 7px;
+    font-size: 12.5px;
+  }
+  .map-ctrls {
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    inset-inline-start: 12px;
+  }
+  .ctrl-btn { width: 40px; height: 40px; }
+  .about-pill {
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    height: 38px;
+    min-height: 38px;
+    max-width: calc(100% - 88px);
+    padding-inline: 12px;
+  }
+  .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right {
+    bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+  }
+  .sidebar {
+    bottom: 0;
+    height: 70px;
+    max-height: calc(100% - 12px);
+    overflow: hidden;
+    transform: none;
+    margin: 0 !important;
+    border-radius: 20px 20px 0 0;
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -10px 30px -12px #0005;
+    transition: height .32s cubic-bezier(.2, .8, .2, 1);
+  }
+  .app.sheet-open .sidebar {
+    height: min(72dvh, calc(100% - 14px));
+    transform: none;
+  }
+  .sheet-handle { padding-top: 8px; }
+  .sb-head { padding: 4px 14px 10px; }
+  .app.sheet-open .sb-head { padding-top: 6px; }
+  .detail-head { align-items: center; }
+  .detail-head .nav { gap: 6px; }
+  .app.sheet-open .map-ctrls { opacity: 0; pointer-events: none; }
+  .dd-panel.dd-sheet { max-height: min(78dvh, calc(100dvh - 84px)); }
+  .site-share { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
+  .breaking-banner { top: 56px; }
+}
+
+@media (max-width: 380px) {
+  .map-tools { inset-inline: 8px; }
+  .map-btn { gap: 4px; padding-inline: 5px; font-size: 11.5px; }
+  .map-btn svg { width: 16px; height: 16px; }
+  .about-pill { max-width: calc(100% - 76px); }
+}
+
+/* Distinct, still-small silhouettes for aerial alerts on both basemap themes. */
+.uav-svg, .sq-svg {
+  stroke: rgba(255,255,255,.94);
+  stroke-width: 18;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+html.dark .uav-svg, html.dark .sq-svg {
+  stroke: rgba(255,255,255,.98);
+}

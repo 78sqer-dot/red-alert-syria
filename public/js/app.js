@@ -65,7 +65,7 @@ function syncMediaRules() {
       if (!mediaOrig.has(r)) mediaOrig.set(r, r.media.mediaText);
       const txt = mediaOrig.get(r);
       if (!/(max|min)-width/.test(txt) || /prefers|hover|pointer/.test(txt)) continue;
-      if (uiz() === 1) { if (r.media.mediaText !== txt) r.media.mediaText = txt; continue; }
+      if (uiz() === 1 && !window.__dsm) { if (r.media.mediaText !== txt) r.media.mediaText = txt; continue; }
       const mx = /max-width:\s*(\d+)px/.exec(txt);
       const mn = /min-width:\s*(\d+)px/.exec(txt);
       const ok = (!mx || w <= +mx[1]) && (!mn || w >= +mn[1]);
@@ -449,7 +449,7 @@ function closeDropdowns(except) {
 }
 // phones: the filter / layers panels open as a bottom sheet on top of everything (list sheet, pills),
 // scrollable, full width; on wider screens they stay a dropdown under their button
-const PHONE = matchMedia('(max-width: 767px)');
+const PHONE = { get matches() { return isMobile(); } };
 const ddHome = new Map();
 function placeDropdown(p, open) {
   if (!ddHome.has(p)) ddHome.set(p, p.parentElement);
