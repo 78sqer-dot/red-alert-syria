@@ -906,6 +906,25 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
   .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right {
     bottom: calc(140px + env(safe-area-inset-bottom, 0px));
   }
+  .maplibregl-ctrl-attrib.maplibregl-compact-show {
+    box-sizing: border-box;
+    width: min(260px, calc(100vw - 96px));
+    max-width: calc(100vw - 96px);
+    max-height: min(24dvh, 160px);
+    margin: 8px 10px;
+    padding: 8px 32px 8px 8px !important;
+    border-radius: 8px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner {
+    max-width: 100%;
+    font-size: 11px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.55;
+    text-align: start;
+  }
   .sidebar {
     bottom: 0;
     height: 70px;
