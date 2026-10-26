@@ -1,5 +1,5 @@
 import { installTracker, cleanChat, setKeep } from './ui-clean.js';
-import { installResilience } from './tg-net.js';
+import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
 import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
@@ -430,7 +430,8 @@ function buildAlertInput(d, author) {
 }
 
 // ---- channel post as a map image (like redalert.com.lb): photo + the usual text as caption + buttons.
-// Falls back to the plain text post when the image can't be made in time or the text is too long.
+// Falls back to plain text when image generation fails or Telegram explicitly rejects the photo.
+// Never send a second post when photo delivery is ambiguous (network/5xx), as Telegram may have accepted it.
 const CAPTION_MAX = 1024;
 const IMAGE_DEADLINE_MS = Number(process.env.ALERT_IMAGE_DEADLINE_MS) || 12000;
 const visibleLen = (html) => html.replace(/<[^>]+>/g, '').replace(/&(lt|gt|amp|quot|#39);/g, 'x').length;
@@ -543,24 +544,31 @@ export async function publishInput(api, input, { toChannel = true } = {}) {
   if (!toChannel || !config.channel) return alert;
   const text = channelPost(alert);
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
-  let m = null; let media = 'text';
+  let m = null; let media = 'text'; let uncertainPhotoSend = false;
   if (config.alertImages && visibleLen(text) <= CAPTION_MAX) {
     const t0 = Date.now();
     try {
       const png = await withDeadline(alertImage(alert, 'ar'), IMAGE_DEADLINE_MS);
-      m = await api.sendPhoto(config.channel, new InputFile(png, `red-alert-syria-${alert.id.slice(0, 8)}.png`), { caption: text, ...extra });
-      media = 'photo';
-      console.log(`[img] channel image sent in ${Date.now() - t0} ms (${Math.round(png.length / 1024)} KB)`);
+      try {
+        m = await api.sendPhoto(config.channel, new InputFile(png, `red-alert-syria-${alert.id.slice(0, 8)}.png`), { caption: text, ...extra });
+        media = 'photo';
+        console.log(`[img] channel image sent in ${Date.now() - t0} ms (${Math.round(png.length / 1024)} KB)`);
+      } catch (e) {
+        uncertainPhotoSend = !isDefinitiveTelegramRejection(e);
+        console.error(`[img] channel image post failed after ${Date.now() - t0} ms:`, e.description || e.message);
+      }
     } catch (e) {
-      console.error(`[img] image post failed after ${Date.now() - t0} ms, falling back to text:`, e.description || e.message);
+      console.error(`[img] image generation failed after ${Date.now() - t0} ms:`, e.description || e.message);
     }
   }
-  if (!m) {
+  if (!m && !uncertainPhotoSend) {
     try {
       m = await api.sendMessage(config.channel, text, { ...extra, link_preview_options: { is_disabled: true } });
     } catch (e) {
       console.error('[bot] channel post failed:', e.description || e.message);
     }
+  } else if (!m) {
+    console.warn('[bot] photo delivery is uncertain; skipping text fallback to prevent a duplicate channel post');
   }
   if (m) store.updateAlert(alert.id, { channel_message_id: m.message_id, channel_media: media });
   return store.getAlert(alert.id);

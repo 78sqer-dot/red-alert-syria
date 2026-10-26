@@ -21,6 +21,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isPrivate = (chat) => (typeof chat === 'number' ? chat > 0 : /^\d+$/.test(String(chat ?? '')));
 const TRANSIENT = new Set([500, 502, 503, 504]);
 
+// Only a 400 response proves Telegram rejected sendPhoto; network/5xx failures may have delivered it.
+export const isDefinitiveTelegramRejection = (error) => error?.error_code === 400;
+
 // callMs/uploadMs: deadline of one attempt when a retry is safe. oneShotMs: calls that are never re-sent
 // after an ambiguous failure (channel posts, backup upload) keep a long deadline, so a slow-but-successful
 // post is not reported as failed (which would make an editor publish it twice).
