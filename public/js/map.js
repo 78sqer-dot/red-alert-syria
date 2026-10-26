@@ -372,6 +372,14 @@ export class AlertMap {
         } else if (badge) badge.remove();
       }
     }
+    if (this.sats) for (const m of this.sats.values()) {
+      const parent = this.markers.get(m._alertId);
+      if (!parent) continue;
+      const el = m.getElement();
+      el.hidden = parent.getElement().hidden;
+      el.classList.toggle('sel', m._alertId === this.selectedId);
+      el.style.zIndex = m._alertId === this.selectedId ? 49 : parent.getElement().style.zIndex;
+    }
   }
 
   render() {
@@ -407,14 +415,15 @@ export class AlertMap {
       el.title = a.title;
     }
     this.refreshMarkerGroups();
-    // drones: the alert's own marker flies over its main circle; every other circle of the same alert gets
-    // its drone too, and an intensive flight (a.drones = 2-3, from the server) puts 2-3 over each circle
+    // Every aircraft circle gets its own aircraft: a squad for warplanes, or 1–3 drones.
+    // The alert's primary marker covers the nearest circle; satellites cover the remaining circles.
     this.sats = this.sats || new Map();
     const satSeen = new Set();
     let satN = 0;
     for (const a of this.alerts) {
-      if (typeOf(a.type).marker !== 'orbit' || !a.location || a.scope === 'country') continue;
-      const per = Math.max(1, Math.min(3, Number(a.drones) || 1));
+      const kind = typeOf(a.type).marker;
+      if (!['orbit', 'squad'].includes(kind) || !a.location || a.scope === 'country') continue;
+      const per = kind === 'squad' ? 1 : Math.max(1, Math.min(3, Number(a.drones) || 1));
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [];
       let mi = -1, bd = Infinity;
       zs.forEach((z, i) => { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; mi = i; } });
@@ -424,7 +433,7 @@ export class AlertMap {
           const key = `${a.id}:${i}:${j}`;
           satSeen.add(key); satN++;
           let m = this.sats.get(key);
-          const sig = `${a.is_active}|${z.lat.toFixed(4)},${z.lon.toFixed(4)}|${per}`;
+          const sig = `${a.type}|${a.is_active}|${z.lat.toFixed(4)},${z.lon.toFixed(4)}|${per}`;
           if (m && m._sig !== sig) { m.remove(); this.sats.delete(key); m = null; }
           if (!m) {
             const el = this.markerEl(a);
@@ -437,8 +446,10 @@ export class AlertMap {
             m._sig = sig;
             this.sats.set(key, m);
           }
-          m._zkm = z.km; m._lat = z.lat;
+          m._zkm = z.km; m._lat = z.lat; m._squad = kind === 'squad'; m._alertId = a.id;
           const el = m.getElement();
+          el.dataset.alertId = a.id;
+          el.hidden = !!this.markers.get(a.id)?.getElement().hidden;
           el.classList.toggle('sel', a.id === this.selectedId);
           el.style.zIndex = a.is_active ? 9 : 1;
           el.title = a.title;
@@ -466,8 +477,8 @@ export class AlertMap {
     if (t.marker === 'orbit') {
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 20, 'class="uav-svg"')}</div></div>`;
     } else if (t.marker === 'squad') {
-      const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
-      el.innerHTML = `<div class="squad">${pl(18, 22, -8, 1)}${pl(16, 6, 12, 0.85)}${pl(16, 38, 12, 0.85)}</div>`;
+      const pl = (sz, phase, op) => `<div class="sq" style="width:${sz}px;height:${sz}px;margin:${-sz / 2}px;--phase:${phase}s;opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
+      el.innerHTML = `<div class="squad">${pl(18, 0, 1)}${pl(16, -8 / 3, 0.85)}${pl(16, -16 / 3, 0.85)}</div>`;
     } else if (t.marker === 'fly') {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 22, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
     } else if (t.marker === 'icon') {
@@ -538,6 +549,7 @@ export class AlertMap {
         let best = zs[0], bd = Infinity;
         for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
         orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, squad: t.marker === 'squad' });
+        if (t.marker === 'squad') this.markers.get(a.id)?.setLngLat([best.lon, best.lat]);
       }
       zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);
@@ -577,7 +589,12 @@ export class AlertMap {
     for (const [k, m] of this._pulses) if (!keep.has(k)) { m.remove(); this._pulses.delete(k); }
     if (!this.map.isZooming()) this.el.classList.remove('is-zooming');
   }
-  // orbit radius (px) of each drone = the on-screen radius of its glowing ring at the current zoom
+  _squadPx(el, radius) {
+    const layout = squadLayout(radius);
+    if (el._fy !== layout.flightRadius) { el._fy = layout.flightRadius; el.style.setProperty('--fy', layout.flightRadius + 'px'); }
+    if (el._sqi !== layout.planeScale) { el._sqi = layout.planeScale; el.style.setProperty('--sqi', layout.planeScale.toFixed(2)); }
+  }
+  // Each aircraft path uses its own circle's on-screen radius at the current zoom.
   _orbitPx() {
     if (!this._orb || !this.map) return;
     const z = this.map.getZoom();
@@ -587,24 +604,21 @@ export class AlertMap {
       const mpp = (40075016.686 * Math.cos((o.lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
       const el = m.getElement();
       if (o.squad) {
-        // Keep the full three-plane squad moving at country view too; shrink the planes and formation
-        // together as the visible flight ring gets smaller so they remain legible without crowding the map.
-        const r = Math.round((o.km * 1000) / mpp);
-        const layout = squadLayout(r);
-        if (el._fy !== layout.flightRadius) { el._fy = layout.flightRadius; el.style.setProperty('--fy', layout.flightRadius + 'px'); }
-        if (el._sqi !== layout.planeScale) { el._sqi = layout.planeScale; el.style.setProperty('--sqi', layout.planeScale.toFixed(2)); }
-        if (el._sqf !== layout.formationScale) { el._sqf = layout.formationScale; el.style.setProperty('--sqf', layout.formationScale.toFixed(2)); }
+        this._squadPx(el, (o.km * 1000) / mpp);
         continue;
       }
       if (z < 11) continue;
       const px = Math.max(14, Math.round((o.km * 1000) / mpp));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
-    if (z >= 11 && this.sats) for (const m of this.sats.values()) {
+    if (this.sats) for (const m of this.sats.values()) {
       if (!Number.isFinite(m._zkm)) continue;
       const mpp = (40075016.686 * Math.cos((m._lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
-      const px = Math.max(14, Math.round((this._screenKm(m._zkm, m._lat) * 1000) / mpp));
+      const radius = (this._screenKm(m._zkm, m._lat) * 1000) / mpp;
       const el = m.getElement();
+      if (m._squad) { this._squadPx(el, radius); continue; }
+      if (z < 11) continue;
+      const px = Math.max(14, Math.round(radius));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
   }
