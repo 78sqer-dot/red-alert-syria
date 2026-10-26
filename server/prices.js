@@ -3,8 +3,8 @@
 // image + short caption; the website shows the same numbers (/api/prices).
 // Sources:
 //  - sp-today.com ("الليرة اليوم"): parallel-market rates, gold per gram and electricity tariffs.
-//  - Central Bank of Syria: the official @SyCBOS Telegram channel's exchange-rate bulletin image is
-//    read with Gemini and sanity-checked. The legacy cb.gov.sy site is not used as the official source.
+//  - Central Bank of Syria: official Facebook page photo bulletins are read with Gemini, dated from the
+//    printed issue date and sanity-checked against the parallel market. The legacy cb.gov.sy demo is not used.
 //  - Fuel: SANA's official feed for Ministry of Energy / pricing-committee decisions; other sources only cross-check.
 // Wrong numbers are worse than none: every value is range-checked; stale or missing parallel-market
 // data -> nothing is posted and the owner gets a private notice.
@@ -26,6 +26,17 @@ const LOGO = (() => {
   } catch { return ''; }
 })();
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
+const CB_FACEBOOK_PAGE_ID = '100069248257915';
+const CB_FACEBOOK_URL = 'https://www.facebook.com/cb.gov.sy/';
+const CB_FACEBOOK_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
+  'sec-ch-ua': '"Chromium";v="131", "Not_A Brand";v="24"',
+  'sec-ch-ua-mobile': '?0', 'sec-ch-ua-platform': '"Linux"',
+  'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Site': 'none',
+  'Sec-Fetch-User': '?1', 'Upgrade-Insecure-Requests': '1',
+};
 const H_MS = 3600_000;
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -163,54 +174,70 @@ const OCR_SCHEMA = {
   properties: {
     is_bulletin: { type: 'BOOLEAN' },
     bulletin_date: { type: 'STRING', nullable: true },
+    bulletin_no: { type: 'STRING', nullable: true },
     usd_buy: { type: 'NUMBER', nullable: true }, usd_sell: { type: 'NUMBER', nullable: true },
     eur_buy: { type: 'NUMBER', nullable: true }, eur_sell: { type: 'NUMBER', nullable: true },
     try_buy: { type: 'NUMBER', nullable: true }, try_sell: { type: 'NUMBER', nullable: true },
   },
   required: ['is_bulletin', 'usd_buy', 'usd_sell'],
 };
-/** the newest official-bulletin post (text + image url) on a public Telegram channel */
-export async function latestBulletinPost() {
-  const r = await fetch('https://t.me/s/SyCBOS', { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25_000) });
-  if (!r.ok) throw new Error(`telegram HTTP ${r.status}`);
+/** Public photo candidates from the official Central Bank Facebook page, newest first. */
+export async function latestBulletinPosts() {
+  const r = await fetch(CB_FACEBOOK_URL, { headers: CB_FACEBOOK_HEADERS, signal: AbortSignal.timeout(35_000) });
+  if (!r.ok) throw new Error(`Central Bank Facebook HTTP ${r.status}`);
+  if (/\/login\//i.test(r.url || '')) throw new Error('Central Bank Facebook redirected to login');
   const html = await r.text();
-  const posts = html.split('<div class="tgme_widget_message_wrap').slice(1).map((p) => {
-    const id = (p.match(/data-post="([^"]+)"/) || [])[1];
-    const dt = (p.match(/datetime="([^"]+)"/) || [])[1];
-    const txt = ((p.match(/tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/) || [])[1] || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
-    const img = (p.match(/tgme_widget_message_photo_wrap[^>]*background-image:url\('([^']+)'\)/) || [])[1];
-    return { id, ts: Date.parse(dt || ''), txt, img };
-  }).filter((p) => p.id && p.img && /النشرة\s+الرسمية/.test(p.txt) && /(أسعار|اسعار|سعر)\s+الصرف/.test(p.txt));
-  posts.sort((a, b) => b.ts - a.ts);
-  return posts[0] || null;
+  const posts = []; const seen = new Set();
+  const re = /"__typename":"Photo","id":"(\d{13,17})","viewer_image":\{"uri":"((?:\\.|[^"\\])*?)","height":(\d+),"width":(\d+)\}/g;
+  for (const m of html.matchAll(re)) {
+    const id = m[1]; const height = Number(m[3]); const width = Number(m[4]);
+    if (seen.has(id) || width < 800 || height < 1000 || height / width < 1.1) continue;
+    const block = html.slice(m.index, m.index + 4200);
+    const owner = block.match(/"owner":\{"__typename":"(?:User|Page)","id":"(\d+)"/);
+    if (owner && owner[1] !== CB_FACEBOOK_PAGE_ID) continue;
+    seen.add(id);
+    const img = JSON.parse(`"${m[2]}"`);
+    posts.push({ id, ts: Date.now(), img, url: `https://www.facebook.com/photo/?fbid=${id}` });
+    if (posts.length >= 8) break;
+  }
+  return posts;
 }
+export async function latestBulletinPost() { return (await latestBulletinPosts())[0] || null; }
 export async function ocrBulletin(imgUrl) {
   const key = process.env.GEMINI_API_KEY || '';
   if (!key) throw new Error('no GEMINI_API_KEY');
-  const ir = await fetch(imgUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25_000) });
+  const ir = await fetch(imgUrl, { headers: { 'User-Agent': CB_FACEBOOK_HEADERS['User-Agent'], Referer: 'https://www.facebook.com/', Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' }, signal: AbortSignal.timeout(25_000) });
   if (!ir.ok) throw new Error(`image HTTP ${ir.status}`);
+  const mimeType = (ir.headers.get('content-type') || 'image/jpeg').split(';')[0];
+  if (!mimeType.startsWith('image/')) throw new Error(`unexpected image content type ${mimeType}`);
   const b64 = Buffer.from(await ir.arrayBuffer()).toString('base64');
-  const models = (process.env.PRICES_AI_MODELS || 'gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash').split(',').map((s) => s.trim()).filter(Boolean);
+  const configured = (process.env.PRICES_AI_MODELS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  // Always keep working fallbacks after any Render override; a retired model must not block the official rate.
+  const models = [...new Set([...configured, 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-3.5-flash', 'gemini-2.5-flash'])];
   const prompt = 'This image should be the official daily exchange-rate bulletin of the Central Bank of Syria (مصرف سورية المركزي - نشرة أسعار العملات). '
     + 'Read the table EXACTLY as printed. Return the buy (شراء) and sell (مبيع) rate in Syrian pounds for: US dollar (دولار أمريكي), Euro (يورو), Turkish lira (ليرة تركية). '
-    + 'Return numbers exactly as printed (e.g. 121.50). bulletin_date: the bulletin date printed on the image as YYYY-MM-DD if visible. is_bulletin=true when the image shows an exchange-rate table in Syrian pounds (any design, e.g. a TV channel graphic).';
-  let last;
+    + 'Return numbers exactly as printed (e.g. 121.50). Also read the bulletin number if visible. bulletin_date: the issue date printed on the image as YYYY-MM-DD. is_bulletin=true only when this is an official Central Bank exchange-rate bulletin, not just any image that mentions prices.';
+  const errors = [];
   for (const m of models) {
     try {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(key)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: prompt }] }], generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: OCR_SCHEMA } }),
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ inline_data: { mime_type: mimeType, data: b64 } }, { text: prompt }] }], generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: OCR_SCHEMA } }),
         signal: AbortSignal.timeout(45_000),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(`${m}: HTTP ${res.status} ${(j.error?.message || '').slice(0, 100)}`);
+      if (!res.ok) {
+        const err = new Error(`${m}: HTTP ${res.status} ${(j.error?.message || '').slice(0, 180)}`);
+        if ([401, 403, 429].includes(res.status)) err.fatal = true;
+        throw err;
+      }
       return JSON.parse((j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join(''));
-    } catch (e) { last = e; }
+    } catch (e) { errors.push(e.message); if (e.fatal) break; }
   }
-  throw last || new Error('OCR failed');
+  throw new Error(`Gemini OCR failed: ${errors.join(' | ').slice(0, 1000) || 'no compatible model'}`);
 }
 export function checkOfficial(o, sp) {
-  if (!o || (!o.is_bulletin && !Number.isFinite(o.usd_buy))) return 'not a bulletin';
+  if (!o || o.is_bulletin !== true) return 'not a bulletin';
   const inR = (v, a, b) => Number.isFinite(v) && v >= a && v <= b;
   if (!inR(o.usd_buy, 40, 2000) || !inR(o.usd_sell, 40, 2000) || o.usd_sell < o.usd_buy || o.usd_sell / o.usd_buy > 1.05) return 'USD official out of range';
   if (o.eur_buy != null && !inR(o.eur_buy / o.usd_buy, 0.9, 1.5)) return 'EUR official implausible';
@@ -218,25 +245,42 @@ export function checkOfficial(o, sp) {
   return null;
 }
 export async function fetchOfficial(sp) {
-  const post = await latestBulletinPost();
-  if (!post) throw new Error('no bulletin post found');
+  const posts = await latestBulletinPosts();
+  if (!posts.length) throw new Error('no public Central Bank portrait photos found');
   const st = pricesState();
-  if (st.official?.post === post.id && st.official?.usd) return st.official; // already read
-  const o = await ocrBulletin(post.img);
-  const bad = checkOfficial(o, sp || st.sp);
-  if (bad) throw new Error(`official bulletin rejected: ${bad}`);
-  const p = damascusParts(post.ts);
-  const imageDate = String(o.bulletin_date || '').trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0];
-  return {
-    src: 'مصرف سورية المركزي — @SyCBOS الرسمي', post: post.id, url: `https://t.me/${post.id}`, date: imageDate || p.date, ts: post.ts,
-    usd: { buy: o.usd_buy, sell: o.usd_sell },
-    eur: o.eur_buy ? { buy: o.eur_buy, sell: o.eur_sell || null } : null,
-    try: o.try_buy ? { buy: o.try_buy, sell: o.try_sell || null } : null,
-  };
+  const checkedAt = Date.now(); const errors = [];
+  for (const post of posts) {
+    if (st.official?.source === 'facebook' && st.official.post === post.id && st.official.usd) return { ...st.official, checkedAt };
+    if (R.ignoredPhotoIds.has(post.id)) continue;
+    try {
+      const o = await ocrBulletin(post.img);
+      if (o?.is_bulletin !== true) { R.ignoredPhotoIds.add(post.id); errors.push(`${post.id}: not a bulletin`); continue; }
+      const bad = checkOfficial(o, sp || st.sp);
+      if (bad) { R.ignoredPhotoIds.add(post.id); errors.push(`${post.id}: ${bad}`); continue; }
+      const imageDate = String(o.bulletin_date || '').trim().match(/^\d{4}-\d{2}-\d{2}$/)?.[0];
+      const dateMs = imageDate ? Date.parse(`${imageDate}T12:00:00+03:00`) : NaN;
+      if (!Number.isFinite(dateMs) || dateMs > Date.now() + 2 * 86_400_000 || Date.now() - dateMs > 31 * 86_400_000) {
+        R.ignoredPhotoIds.add(post.id); errors.push(`${post.id}: missing or implausible printed bulletin date`); continue;
+      }
+      R.ignoredPhotoIds.delete(post.id);
+      return {
+        source: 'facebook', src: 'مصرف سورية المركزي — فيسبوك رسمي', post: post.id, url: post.url,
+        date: imageDate, ts: post.ts, checkedAt, bulletinNo: String(o.bulletin_no || '').trim(),
+        usd: { buy: o.usd_buy, sell: o.usd_sell },
+        eur: o.eur_buy ? { buy: o.eur_buy, sell: o.eur_sell || null } : null,
+        try: o.try_buy ? { buy: o.try_buy, sell: o.try_sell || null } : null,
+      };
+    } catch (e) {
+      errors.push(`${post.id}: ${e.message}`);
+      if (/Gemini OCR failed/.test(e.message)) break;
+    }
+  }
+  if (st.official?.source === 'facebook' && st.official.usd) return { ...st.official, checkedAt };
+  throw new Error(`no verified Facebook exchange bulletin among recent photos: ${errors.join(' | ').slice(0, 700) || 'no usable portrait image'}`);
 }
 
 // ---------------------------------------------------------------- refresh loop
-const R = { busy: false, lastSpTry: 0, lastOffTry: 0, lastSanaTry: 0, spErr: '', offErr: '', sanaErr: '' };
+const R = { busy: false, lastSpTry: 0, lastOffTry: 0, lastSanaTry: 0, spErr: '', offErr: '', sanaErr: '', ignoredPhotoIds: new Set() };
 // ⛽ Fuel: confirm official decisions against SANA every 6 h; sp-today and SyPNow are secondary only.
 async function refreshFuel(st, { force = false } = {}) {
   const now = Date.now();
@@ -299,15 +343,18 @@ export async function refreshPrices({ force = false } = {}) {
       R.lastOffTry = Date.now();
       try {
         const o = await fetchOfficial(st.sp);
-        if (o.post !== st.official?.post || o.src !== st.official?.src) { st.official = o; save(false); console.log(`[prices] official bulletin ${o.date}: USD ${o.usd.buy}/${o.usd.sell}`); }
+        if (o.post !== st.official?.post || o.src !== st.official?.src || o.checkedAt !== st.official?.checkedAt) { st.official = o; save(false); console.log(`[prices] official bulletin ${o.date}: USD ${o.usd.buy}/${o.usd.sell}`); }
         R.offErr = '';
       } catch (e) { R.offErr = e.message; console.warn('[prices] official failed:', e.message); }
     }
   } finally { R.busy = false; }
   return st;
 }
-export function pricesDebug() { const st = pricesState(); return { cfg: st.cfg, spAt: st.spAt, spErr: R.spErr, offErr: R.offErr, sypErr: R.sypErr, sanaErr: R.sanaErr, fuel: st.fuel ? { since: st.fuel.since, checked: st.fuel.checked, srcs: st.fuel.srcs, official: st.fuel.official, url: st.fuel.url, conflict: st.fuel.conflict, items: Object.fromEntries(Object.entries(st.fuel.items || {}).map(([k, v]) => [k, v.price])) } : null, official: trustedOfficial(st.official) ? { date: st.official.date, src: st.official.src, url: st.official.url, usd: st.official.usd } : null, usd: st.sp?.usd }; }
-const trustedOfficial = (o) => o && (String(o.src || '').includes('@SyCBOS') || String(o.post || '').startsWith('SyCBOS/')) ? o : null;
+export function pricesDebug() { const st = pricesState(); return { cfg: st.cfg, spAt: st.spAt, spErr: R.spErr, offErr: R.offErr, sypErr: R.sypErr, sanaErr: R.sanaErr, fuel: st.fuel ? { since: st.fuel.since, checked: st.fuel.checked, srcs: st.fuel.srcs, official: st.fuel.official, url: st.fuel.url, conflict: st.fuel.conflict, items: Object.fromEntries(Object.entries(st.fuel.items || {}).map(([k, v]) => [k, v.price])) } : null, official: trustedOfficial(st.official) ? { source: st.official.source, date: st.official.date, checkedAt: st.official.checkedAt, bulletinNo: st.official.bulletinNo, src: st.official.src, url: st.official.url, usd: st.official.usd, eur: st.official.eur, try: st.official.try } : null, usd: st.sp?.usd }; }
+const trustedOfficial = (o) => {
+  if (o?.source !== 'facebook') return null;
+  try { return ['facebook.com', 'www.facebook.com'].includes(new URL(o.url).hostname) ? o : null; } catch { return null; }
+};
 
 /** fuel for the site/bulletin: stored cross-checked prices, else sp-today's own reading */
 function fuelOf(st, now = Date.now()) {
@@ -327,7 +374,7 @@ export function publicPrices() {
   return {
     ok: true, unit: 'new_syp', oldFactor: 100,
     market: { at: sp.at, src: 'sp-today.com', usd: sp.usd, eur: sp.eur, try: sp.try, sar: sp.sar, aed: sp.aed },
-    official: official ? { date: official.date, url: official.url, usd: official.usd, eur: official.eur, try: official.try } : null,
+    official: official ? { source: official.source, date: official.date, checkedAt: official.checkedAt, bulletinNo: official.bulletinNo, url: official.url, usd: official.usd, eur: official.eur, try: official.try } : null,
     gold: { at: sp.goldAt, ...sp.gold },
     fuel: fuelPublic(st),
     power: { at: sp.powerAt, items: sp.power },
@@ -342,6 +389,9 @@ const card = (x, y, w, h, r = 22, fill = '#111827', stroke = '#1f2937') => `<rec
 const arrow = (ch) => (!ch ? { s: '', c: '#9ca3af' } : ch > 0 ? { s: '+', c: '#fb7185' } : { s: '-', c: '#34d399' });
 const dayLabel = (ms) => { const p = damascusParts(ms); return `${AR_DAYS[p.wd]} ${p.d} ${AR_MONTHS[p.m - 1]} ${p.y}`; };
 const dateLabel = (iso) => { const [y, m, d] = String(iso || '').split('-').map(Number); return y ? `${d} ${AR_MONTHS[m - 1]}` : ''; };
+const CHECK_FMT = new Intl.DateTimeFormat('ar-SY-u-nu-latn', { timeZone: 'Asia/Damascus', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const checkedLabel = (ms) => (Number.isFinite(Number(ms)) ? CHECK_FMT.format(new Date(Number(ms))) : '—');
+const ltrNum = (value) => `\u2066${value}\u2069`;
 
 export function pricesSvg(st, now = Date.now()) {
   const { sp } = st; const official = trustedOfficial(st.official);
@@ -373,7 +423,9 @@ export function pricesSvg(st, now = Date.now()) {
   const rows = [
     ['🇺🇸', 'دولار أمريكي', sp.usd], ['🇪🇺', 'يورو', sp.eur], ['🇹🇷', 'ليرة تركية', sp.try],
   ].filter((r) => r[2]);
-  const rowH = 96; const th = 64 + rows.length * rowH + (official ? 132 : 0);
+  const officialRows = official ? [['دولار أمريكي', official.usd], official.eur?.buy ? ['يورو', official.eur] : null, official.try?.buy ? ['ليرة تركية', official.try] : null].filter(Boolean) : [];
+  const officialH = official ? 135 + officialRows.length * 30 : 0;
+  const rowH = 96; const th = 64 + rows.length * rowH + (official ? officialH + 6 : 0);
   o.push(card(P, y, W - 2 * P, th));
   const cBuy = P + 380; const cSell = P + 150; const cName = R - 32;
   o.push(text(cName, y + 44, 'السوق الموازية (سوريا - عام)', { size: 22, weight: 700, fill: '#9ca3af' }));
@@ -392,11 +444,21 @@ export function pricesSvg(st, now = Date.now()) {
     ry += rowH;
   }
   if (official) {
-    o.push(`<rect x="${P + 20}" y="${ry + 6}" width="${W - 2 * P - 40}" height="114" rx="16" fill="#0b2a1f" stroke="#065f46"/>`);
-    o.push(text(cName, ry + 46, 'السعر الرسمي — مصرف سورية المركزي', { size: 23, weight: 700, fill: '#6ee7b7' }));
-    o.push(text(cName, ry + 84, `دولار: ${fmtNew(official.usd.buy)} / ${fmtNew(official.usd.sell)}${official.eur ? `  ·  يورو: ${fmtNew(official.eur.buy)} / ${fmtNew(official.eur.sell)}` : ''}`, { size: 25, weight: 700, fill: '#ffffff' }));
-    o.push(text(P + 40, ry + 46, `نشرة ${dateLabel(official.date)}`, { size: 19, weight: 600, fill: '#6ee7b7', anchor: 'start' }));
-    o.push(text(P + 40, ry + 84, 'شراء / مبيع', { size: 18, weight: 500, fill: '#9ca3af', anchor: 'start' }));
+    o.push(`<rect x="${P + 20}" y="${ry + 6}" width="${W - 2 * P - 40}" height="${officialH}" rx="16" fill="#0b2a1f" stroke="#065f46"/>`);
+    o.push(text(cName, ry + 42, 'السعر الرسمي — مصرف سورية المركزي', { size: 23, weight: 700, fill: '#6ee7b7' }));
+    o.push(text(P + 40, ry + 42, `نشرة ${dateLabel(official.date)}${official.bulletinNo ? ` · رقم ${official.bulletinNo}` : ''}`, { size: 17, weight: 600, fill: '#6ee7b7', anchor: 'start' }));
+    o.push(text(cBuy, ry + 68, 'شراء', { size: 17, weight: 600, fill: '#9ca3af', anchor: 'middle' }));
+    o.push(text(cSell, ry + 68, 'مبيع', { size: 17, weight: 600, fill: '#9ca3af', anchor: 'middle' }));
+    officialRows.forEach(([name, rate], i) => {
+      const cy = ry + 96 + i * 30;
+      o.push(`<rect x="${P + 30}" y="${cy - 22}" width="${W - 2 * P - 60}" height="1" fill="#164e3c"/>`);
+      o.push(text(cName, cy, name, { size: 19, weight: 700, fill: '#ffffff' }));
+      o.push(text(cBuy, cy, fmtNew(rate.buy), { size: 21, weight: 700, fill: '#ffffff', anchor: 'middle', family: 'Noto Sans' }));
+      o.push(text(cSell, cy, fmtNew(rate.sell), { size: 21, weight: 700, fill: '#ffffff', anchor: 'middle', family: 'Noto Sans' }));
+    });
+    const sourceY = ry + 96 + officialRows.length * 30 + 4;
+    o.push(text(P + 40, sourceY, 'المصدر: صفحة المركزي الرسمية على فيسبوك', { size: 15, weight: 500, fill: '#9ca3af', anchor: 'start' }));
+    o.push(text(P + 40, sourceY + 24, `آخر تحقق: ${checkedLabel(official.checkedAt)}`, { size: 15, weight: 500, fill: '#9ca3af', anchor: 'start' }));
   }
   y += th + 34;
   // gold
@@ -461,11 +523,17 @@ export function pricesCaption(st, now = Date.now()) {
   const L = [];
   L.push(`💱 <b>نشرة الأسعار — ${dayLabel(now)}</b>`, '');
   L.push('<b>السوق الموازية (سوريا - عام)</b> — شراء / مبيع:');
-  if (sp.usd) L.push(`🇺🇸 الدولار: <b>${fmtNew(sp.usd.buy)}</b> / <b>${fmtNew(sp.usd.sell)}</b>`);
-  if (sp.eur) L.push(`🇪🇺 اليورو: <b>${fmtNew(sp.eur.buy)}</b> / <b>${fmtNew(sp.eur.sell)}</b>`);
-  if (sp.try) L.push(`🇹🇷 التركية: <b>${fmtNew(sp.try.buy)}</b> / <b>${fmtNew(sp.try.sell)}</b>`);
-  if (official) L.push(`🏦 الرسمي (المركزي، نشرة ${dateLabel(official.date)}): الدولار <b>${fmtNew(official.usd.buy)}</b> / <b>${fmtNew(official.usd.sell)}</b>`);
-  if (official?.url) L.push(`🔗 <a href="${esc(official.url)}">النشرة الرسمية لمصرف سورية المركزي</a>`);
+  if (sp.usd) L.push(`🇺🇸 الدولار: <b>${ltrNum(fmtNew(sp.usd.buy))}</b> / <b>${ltrNum(fmtNew(sp.usd.sell))}</b>`);
+  if (sp.eur) L.push(`🇪🇺 اليورو: <b>${ltrNum(fmtNew(sp.eur.buy))}</b> / <b>${ltrNum(fmtNew(sp.eur.sell))}</b>`);
+  if (sp.try) L.push(`🇹🇷 التركية: <b>${ltrNum(fmtNew(sp.try.buy))}</b> / <b>${ltrNum(fmtNew(sp.try.sell))}</b>`);
+  if (official) {
+    L.push(`🏦 الرسمي — مصرف سورية المركزي، نشرة ${dateLabel(official.date)}${official.bulletinNo ? ` رقم ${esc(official.bulletinNo)}` : ''}:`);
+    L.push(`🇺🇸 الدولار — شراء <b>${ltrNum(fmtNew(official.usd.buy))}</b> / مبيع <b>${ltrNum(fmtNew(official.usd.sell))}</b>`);
+    if (official.eur) L.push(`🇪🇺 اليورو — شراء <b>${ltrNum(fmtNew(official.eur.buy))}</b> / مبيع <b>${ltrNum(fmtNew(official.eur.sell))}</b>`);
+    if (official.try) L.push(`🇹🇷 التركية — شراء <b>${ltrNum(fmtNew(official.try.buy))}</b> / مبيع <b>${ltrNum(fmtNew(official.try.sell))}</b>`);
+    if (official.checkedAt) L.push(`<i>آخر تحقق: ${esc(checkedLabel(official.checkedAt))}</i>`);
+  }
+  if (official?.url) L.push(`🔗 <a href="${esc(official.url)}">صفحة مصرف سورية المركزي الرسمية على فيسبوك</a>`);
   const g = sp.gold || {};
   if (g.k21) L.push('', `🟡 ذهب عيار 21: <b>${fmtNew(g.k21.sell || g.k21.buy)}</b> · عيار 18: <b>${fmtNew(g.k18?.sell || g.k18?.buy)}</b> ل.س للغرام`);
   const FV = fuelOf(st, now);

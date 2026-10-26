@@ -135,7 +135,7 @@ app.get('/api/newstest', apiLimiter, async (req, res) => {
 });
 // 💱 prices / 🛣 roads / ⚡ electricity for the website
 app.get('/api/weather', apiLimiter, async (req, res) => {
-  try { res.set('Cache-Control', 'public, max-age=300'); res.json(await publicWeather()); } catch (e) { res.set('Cache-Control', 'no-store'); res.status(503).json({ ok: false, error: 'weather unavailable' }); }
+  try { res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60'); res.json(await publicWeather()); } catch (e) { res.set('Cache-Control', 'no-store'); res.status(503).json({ ok: false, error: 'weather unavailable' }); }
 });
 app.get('/api/weathernow', apiLimiter, (req, res) => res.json(weatherNowDebug()));
 app.get('/api/services', apiLimiter, (req, res) => {

@@ -99,6 +99,20 @@ export async function getWeather({ maxAge = TTL } = {}) {
   return R.busy;
 }
 const govOf = (code) => governorates.find((g) => g.code === code);
+const ALERT_EMOJI = { rain: '🌧', snow: '❄️', wind: '💨', storm: '⛈', heat: '🌡', frost: '🥶', dust: '🌫', fog: '🌫' };
+function alertHazard(a) {
+  if (HAZARDS[a.meta?.hazard]) return a.meta.hazard;
+  const t = `${a.title || ''} ${a.title_en || ''} ${a.description || ''} ${a.description_en || ''}`.toLowerCase().normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه');
+  if (/ثلج|ثلوج|تساقط الثلوج|snow/.test(t)) return 'snow';
+  if (/غبار|عجاج|dust storm|dust/.test(t)) return 'dust';
+  if (/عواصف رعديه|عاصفه رعديه|رعد|برق|thunderstorm|thunder/.test(t)) return 'storm';
+  if (/رياح|هبات|wind/.test(t)) return 'wind';
+  if (/امطار|مطر|rain/.test(t)) return 'rain';
+  if (/موجه حر|حراره مرتفعه|heat wave|extreme heat/.test(t)) return 'heat';
+  if (/صقيع|frost|freezing/.test(t)) return 'frost';
+  if (/ضباب|fog/.test(t)) return 'fog';
+  return '';
+}
 /** active weather warnings (published alerts) per governorate code */
 export function activeWarnings() {
   const out = [];
@@ -110,16 +124,20 @@ export function activeWarnings() {
       if (x.governorate) govs.add(x.governorate);
       else { const g = governorates.find((y) => y.ar === x.governorate_ar); if (g) govs.add(g.code); }
     }
-    const hz = HAZARDS[a.meta?.hazard];
-    out.push({ id: a.id, hazard: a.meta?.hazard || '', level: a.meta?.level || 1, day: a.meta?.day || '', govs: [...govs],
-      ar: hz ? `${a.meta?.level === 2 ? 'تحذير شديد' : 'تحذير'}: ${hz.ar}` : (a.title || 'تحذير جوي'),
-      en: hz ? `${a.meta?.level === 2 ? 'Severe warning' : 'Warning'}: ${hz.en}` : (a.title_en || 'Weather warning'),
-      emoji: hz?.emoji || '⛈', expires_at: a.expires_at });
+    const hazard = alertHazard(a); const hz = HAZARDS[hazard]; const level = a.meta?.level || 1;
+    const channel = String(config.channel || '');
+    const url = a.telegram_url || (a.channel_message_id && channel.startsWith('@') ? `https://t.me/${channel.slice(1)}/${a.channel_message_id}` : '');
+    out.push({ id: a.id, hazard, level, day: a.meta?.day || '', govs: [...govs], local: true, official: false,
+      source: 'Red Alert Syria', source_en: 'Red Alert Syria', url, at: a.timestamp || null,
+      details: a.description || '', details_en: a.description_en || '',
+      ar: hz ? `${level === 2 ? 'تحذير شديد' : 'تحذير'}: ${hz.ar}` : (a.title || 'تحذير جوي'),
+      en: hz ? `${level === 2 ? 'Severe warning' : 'Warning'}: ${hz.en}` : (a.title_en || 'Weather warning'),
+      emoji: hz?.emoji || ALERT_EMOJI[hazard] || '⛈', expires_at: a.expires_at });
   }
   return out;
 }
-export async function allWeatherWarnings() {
-  const official = await officialWeatherWarnings().catch(() => []);
+export async function allWeatherWarnings({ waitMs = 0 } = {}) {
+  const official = await officialWeatherWarnings({ waitMs }).catch(() => []);
   const local = activeWarnings();
   const out = [...official];
   for (const w of local) {
@@ -131,8 +149,8 @@ export async function allWeatherWarnings() {
 export async function publicWeather() {
   const pts = await getWeather();
   const [warnings, official] = await Promise.all([
-    allWeatherWarnings(),
-    officialWeatherMeta().catch(() => ({ url: DAILY_BULLETIN_INDEX, title: 'النشرة الجوية الرسمية', alertsUrl: 'https://climweb.med.gov.sy/api/cap/rss.xml' })),
+    allWeatherWarnings({ waitMs: 2_000 }),
+    officialWeatherMeta(),
   ]);
   return { ok: true, at: R.at, src: 'Open-Meteo', official: { ...official, warningSource: 'المركز الوطني للأرصاد الجوية / وزارة الطوارئ وإدارة الكوارث' }, warnings,
     points: pts.map((p) => ({ id: p.id, gov: p.gov, lat: p.lat, lon: p.lon, ar: p.ar, en: p.en, main: p.main, now: p.now, days: p.days })) };
@@ -278,7 +296,7 @@ async function readyData() {
 export async function renderWxBulletin(now = Date.now()) {
   const r = await readyData();
   if (!r.ok) return r;
-  const [warns, official] = await Promise.all([allWeatherWarnings(), officialWeatherMeta().catch(() => null)]);
+  const [warns, official] = await Promise.all([allWeatherWarnings({ waitMs: 45_000 }), officialWeatherMeta()]);
   return { ok: true, png: svgToPng(wxBulletinSvg(r.pts, warns, now), 1080), caption: wxBulletinCaption(r.pts, warns, now, official) };
 }
 export async function postWxBulletin(api, { chatId = config.channel, test = false, en = false } = {}) {
@@ -296,6 +314,8 @@ let started = false;
 export function startWxBulletin(getApi) {
   if (started) return;
   started = true;
+  getWeather().catch((e) => console.warn('[wx] initial Open-Meteo refresh failed:', e.message));
+  officialWeatherWarnings({ waitMs: 0 }); // warm the official CAP cache in the background after boot
   const c0 = wxbState().cfg; const p0 = damascusParts();
   if (!c0.last && p0.hm >= c0.time) { c0.last = p0.date; save(false); } // first boot after the time: start tomorrow
   save(false); // persist the one-time switch/migrations right away
