@@ -178,6 +178,8 @@ class Store extends EventEmitter {
     const t = typeOf(input.type);
     const now = new Date();
     const ttl = Math.max(5, Math.min(Number(input.ttlMin) || t.ttlMin, 24 * 60));
+    const weatherWarning = input.type === 'weather' && input.source === 'weather';
+    const weatherHours = this.autoDeleteHours;
     const alert = {
       id: input.id || this.newId(),
       type: input.type,
@@ -191,8 +193,11 @@ class Store extends EventEmitter {
       extra: Array.isArray(input.extra) ? input.extra.filter((x) => x && Number.isFinite(x.latitude)).slice(0, 20) : [],
       scope: input.location?.scope || 'country',
       timestamp: now.toISOString(),
-      // an alert never outlives the auto-delete window (default 1 h), so "ends at" matches when it leaves the map
-      expires_at: new Date(now.getTime() + Math.min(ttl, this.autoDeleteHours ? this.autoDeleteHours * 60 : Infinity) * 60_000).toISOString(),
+      // Automatic weather warnings use the owner's selected map lifetime, not the forecast-day boundary.
+      // null means explicitly no expiry; ordinary alerts keep their existing type-specific TTL.
+      expires_at: weatherWarning
+        ? (weatherHours ? new Date(now.getTime() + weatherHours * 3600_000).toISOString() : null)
+        : new Date(now.getTime() + Math.min(ttl, weatherHours ? weatherHours * 60 : Infinity) * 60_000).toISOString(),
       source: input.source || 'telegram',
       meta: input.meta && typeof input.meta === 'object' ? { ...input.meta } : null,
       is_active: true,
@@ -404,6 +409,11 @@ class Store extends EventEmitter {
   setAutoDelete(h) {
     if (![0, 1, 24, 48].includes(h)) return;
     this.state.settings = { ...(this.state.settings || {}), autoDeleteHours: h };
+    // Apply a changed owner choice to active generated weather warnings too.
+    for (const a of this.state.alerts) {
+      if (!a.is_active || a.type !== 'weather' || a.source !== 'weather') continue;
+      a.expires_at = h ? new Date(Date.parse(a.timestamp) + h * 3600_000).toISOString() : null;
+    }
     this.persist();
     this.autoDeleteSweep();
   }

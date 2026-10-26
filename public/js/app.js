@@ -132,7 +132,7 @@ function onePlace(p) {
   for (const x of [n, d, g]) { const k = key(x); if (!x || seen.has(k)) continue; seen.add(k); out.push(x); }
   return out.join(LANG === 'ar' ? '، ' : ', ');
 }
-const isLive = (a) => a.is_active && Date.parse(a.expires_at) > Date.now();
+const isLive = (a) => a.is_active && (a.expires_at == null || Date.parse(a.expires_at) > Date.now());
 // share links go through /<lang>/a/<id>: chat apps get a rich preview (the alert's map card), people land on the map
 const shareUrl = (a) => `${location.origin}/${LANG}/a/${encodeURIComponent(a.id)}`;
 const siteUrl = () => `${location.origin}/${LANG}/`;
@@ -250,7 +250,7 @@ function detailHtml(a) {
     [T.location, esc(placeName(a))],
     ...(alertDist(a) ? [[LANG === 'ar' ? 'المسافة عنك' : 'Distance from you', distChip(a)]] : []),
     [T.time, esc(fmtFull.format(new Date(a.timestamp)))],
-    live ? [T.expires, esc(fmtTime.format(new Date(a.expires_at)))] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at)))],
+    live ? [T.expires, a.expires_at ? esc(fmtTime.format(new Date(a.expires_at))) : T.noExpiry] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at || a.timestamp)))],
   ];
   return `<div class="d-card" style="--c:${t.color}">
       <div class="card-top">${badge(a, live)}<span class="time">${timeLine(a.timestamp)}</span></div>

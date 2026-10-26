@@ -639,7 +639,9 @@ function resultKeyboard(ctx, alert) {
   if (config.publicUrl) kb.url(l.btnOpenMap, mapUrl(alert.id, langOf(ctx)));
   const pa = publicAlert(alert);
   if (pa.telegram_url) kb.url(l.btnOpenPost, pa.telegram_url);
-  kb.row().text(l.btnEnd, 'end:' + alert.id).text(l.btnExtend, 'ext:' + alert.id).row().text(l.btnDelete, 'del:' + alert.id).row().text(l.btnHome, 'home');
+  kb.row().text(l.btnEnd, 'end:' + alert.id);
+  if (alert.expires_at) kb.text(l.btnExtend, 'ext:' + alert.id);
+  kb.row().text(l.btnDelete, 'del:' + alert.id).row().text(l.btnHome, 'home');
   return kb;
 }
 
@@ -1554,7 +1556,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
   const manageText = (ctx, a) => {
     const lang = langOf(ctx);
-    const exp = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-SY', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit' }).format(new Date(a.expires_at));
+    const exp = a.expires_at
+      ? new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-SY', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit' }).format(new Date(a.expires_at))
+      : (lang === 'en' ? 'No expiry' : 'بلا انتهاء');
     return `${L(ctx).manageTitle}\n\n${alertEmoji(a)} <b>${esc(lang === 'en' ? a.title_en : a.title)}</b>\n${a.description ? esc(a.description) + '\n' : ''}🕒 ${esc(fmtTime(a.timestamp, lang))}\n⌛ ${lang === 'en' ? 'Expires' : 'ينتهي'}: ${exp}${a.is_active ? '' : '\n\n' + L(ctx).ended}`;
   };
   bot.callbackQuery(/^m:([\w-]{36})$/, async (ctx) => {
@@ -1575,6 +1579,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await refreshChannelPost(ctx.api, store.getAlert(id), true);
       await vanish(ctx, L(ctx).ended);
     } else if (action === 'ext') {
+      if (!a.expires_at) {
+        await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This alert has no expiry.' : 'هذا التنبيه بلا انتهاء.');
+        return show(ctx, manageText(ctx, a), resultKeyboard(ctx, a));
+      }
       const base = Math.max(Date.now(), Date.parse(a.expires_at));
       store.updateAlert(id, { expires_at: new Date(base + 30 * 60_000).toISOString(), is_active: true, ended_at: undefined });
       await refreshChannelPost(ctx.api, store.getAlert(id), false);

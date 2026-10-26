@@ -9,6 +9,18 @@ import { governorates, locationFrom } from './places.js';
 const R = { H: null, started: false, last: 0, lastErr: '', running: false };
 const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const rid = () => Math.random().toString(36).slice(2, 9);
+const durationLabel = (hours, en = false) => hours
+  ? (en ? `${hours} ${hours === 1 ? 'hour' : 'hours'} after publishing` : `بعد ${hours === 1 ? 'ساعة' : `${hours} ساعة`} من النشر`)
+  : (en ? 'No expiry — stays on the map until ended or deleted' : 'بلا انتهاء — يبقى على الخريطة حتى إنهائه أو حذفه');
+const durationShort = (hours, en = false) => hours
+  ? (en ? `${hours}h` : `${hours} ساعة`)
+  : (en ? 'never' : 'بلا انتهاء');
+const actualDuration = (alert, en = false) => {
+  if (!alert) return durationLabel(store.autoDeleteHours, en);
+  if (!alert.expires_at) return durationLabel(0, en);
+  const hours = Math.round((Date.parse(alert.expires_at) - Date.parse(alert.timestamp)) / 3600_000);
+  return durationLabel(hours, en);
+};
 export function wxState() {
   const svc = (store.state.svc ||= {});
   const w = (svc.weather ||= {});
@@ -184,10 +196,13 @@ const cardKb = (it, en = false) => (it.pub
   ? new InlineKeyboard().text(en ? '🗑 Delete the warning' : '🗑 حذف التحذير', `wx:d:${it.id}`)
   : new InlineKeyboard().text(en ? '📢 Map + channel' : '📢 الخريطة + القناة', `wx:c:${it.id}`).row().text(en ? '🗺 Map only' : '🗺 الخريطة فقط', `wx:m:${it.id}`).text(en ? '❌ Ignore' : '❌ تجاهل', `wx:x:${it.id}`));
 function cardText(it, en = false) {
+  const alert = it.alertId ? store.getAlert(it.alertId) : null;
+  const duration = it.pub ? actualDuration(alert, en) : durationLabel(store.autoDeleteHours, en);
   const head = en
     ? (it.pub === 'channel' && it.auto ? '✅ <b>Auto-posted (severe warning)</b>\n\n' : it.pub ? `✅ <b>Published${it.pub === 'map' ? ' on the map' : ''}</b>\n\n` : '📝 <b>Weather warning draft</b> — awaiting your decision\n\n')
     : (it.pub === 'channel' && it.auto ? '✅ <b>نُشر تلقائياً (تحذير شديد)</b>\n\n' : it.pub ? `✅ <b>منشور${it.pub === 'map' ? ' على الخريطة' : ''}</b>\n\n` : '📝 <b>مسودة تحذير جوي</b> — بتنتظر قرارك\n\n');
-  return head + warningText(it.w) + (en ? '\n\n<i>Source: Open-Meteo forecast (for review)</i>' : '\n\n<i>المصدر: توقعات Open-Meteo (للمراجعة)</i>');
+  const lifetime = en ? `⌛ <b>Map duration:</b> ${esc(duration)}` : `⌛ <b>مدة البقاء على الخريطة:</b> ${esc(duration)}`;
+  return head + warningText(it.w) + `\n\n${lifetime}` + (en ? '\n\n<i>Source: Open-Meteo forecast (for review)</i>' : '\n\n<i>المصدر: توقعات Open-Meteo (للمراجعة)</i>');
 }
 async function sendCards(it) {
   const api = R.H?.apis().admin; if (!api) return;
@@ -271,10 +286,10 @@ export function registerWeatherTools(bot, h) {
   const mainText = (ctx) => {
     const st = wxState(); const en = E(ctx);
     const recent = st.items.slice(-5).reverse().map((i) => `• ${HAZARDS[i.w.hazard].emoji} ${en ? HAZARDS[i.w.hazard].en : HAZARDS[i.w.hazard].ar} — ${esc(en ? dayEn(i.w.day) : dayName(i.w.day))} (${i.w.govs.length} ${en ? (i.w.govs.length === 1 ? 'governorate' : 'governorates') : 'محافظة'})${i.pub ? ' ✅' : i.ignored ? ' ✖️' : ' 📝'}`).join('\n');
-    if (en) return `⛈ <b>Weather warnings</b>\n\nStatus: <b>${st.on ? '✅ On' : '⏸ Paused'}</b>\nAuto-post severe warnings: <b>${st.autoSevere ? '✅ Yes' : '⏸ No, all are drafts'}</b>\n\n`
+    if (en) return `⛈ <b>Weather warnings</b>\n\nStatus: <b>${st.on ? '✅ On' : '⏸ Paused'}</b>\nAuto-post severe warnings: <b>${st.autoSevere ? '✅ Yes' : '⏸ No, all are drafts'}</b>\nMap duration: <b>${esc(durationLabel(store.autoDeleteHours, true))}</b>\n\n`
       + 'The forecast is checked twice a day (7:30 am and 5:30 pm) for every governorate: heavy rain, snow, wind, thunderstorms, heat waves, frost and dust storms.\nOrdinary warnings reach you as drafts; severe ones go to the channel and the map on their own.\n\n'
       + `<b>Latest warnings:</b>\n${recent || '— No warnings right now'}`;
-    return `⛈ <b>تحذيرات الطقس</b>\n\nالحالة: <b>${st.on ? '✅ مفعّلة' : '⏸ موقوفة'}</b>\nالنشر التلقائي للتحذيرات الشديدة: <b>${st.autoSevere ? '✅ نعم' : '⏸ لا، كلها مسودات'}</b>\n\n`
+    return `⛈ <b>تحذيرات الطقس</b>\n\nالحالة: <b>${st.on ? '✅ مفعّلة' : '⏸ موقوفة'}</b>\nالنشر التلقائي للتحذيرات الشديدة: <b>${st.autoSevere ? '✅ نعم' : '⏸ لا، كلها مسودات'}</b>\nمدة البقاء على الخريطة: <b>${esc(durationLabel(store.autoDeleteHours))}</b>\n\n`
       + 'فحص التوقعات مرتين باليوم (7:30 الصبح و5:30 المسا) لكل المحافظات: أمطار غزيرة، ثلوج، رياح، عواصف رعدية، موجات حر، صقيع، وعواصف غبار.\nالتحذير العادي بيوصلك مسودة، والشديد بينزل لحاله بالقناة وعلى الخريطة.\n\n'
       + `<b>آخر التحذيرات:</b>\n${recent || '— ما في تحذيرات حالياً'}`;
   };
@@ -282,6 +297,7 @@ export function registerWeatherTools(bot, h) {
     const st = wxState();
     return new InlineKeyboard().text(T(ctx, '🔎 افحص التوقعات الآن', '🔎 Check the forecast now'), 'wx:now').row().text(T(ctx, '🌤 نشرة الطقس الصباحية', '🌤 Morning weather bulletin'), 'wxb').row()
       .text(st.on ? T(ctx, '⏸ إيقاف', '⏸ Pause') : T(ctx, '▶️ تشغيل', '▶️ Turn on'), 'wx:on').text(st.autoSevere ? T(ctx, '📝 الشديد كمان مسودة', '📝 Severe as drafts too') : T(ctx, '⚡ انشر الشديد تلقائياً', '⚡ Auto-post severe'), 'wx:auto').row()
+      .text(T(ctx, `⏱ المدة: ${durationShort(store.autoDeleteHours)}`, `⏱ Duration: ${durationShort(store.autoDeleteHours, true)}`), 'auto').row()
       .text(T(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
   };
   bot.callbackQuery('wx', (ctx) => only(ctx, async () => { await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(ctx), mainKb(ctx)); }));
@@ -324,4 +340,4 @@ export function registerWeatherTools(bot, h) {
     await refreshCards(it);
   }));
 }
-export const _test = { buildWarnings, warningText, alertInput, HAZARDS };
+export const _test = { buildWarnings, warningText, alertInput, cardKb, cardText, durationLabel, HAZARDS };
