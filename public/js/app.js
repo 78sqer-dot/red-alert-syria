@@ -177,6 +177,8 @@ function hydrateStatic() {
   refreshButton.title = T.refreshSite;
   refreshButton.setAttribute('aria-label', T.refreshSite);
   refreshButton.addEventListener('click', () => location.reload());
+  $('#listFab').title = T.listToggle;
+  $('#listFab').setAttribute('aria-label', T.listToggle);
   $('#zoomIn').title = T.zoomIn;
   $('#shareSite').title = T.shareMap;
   $('#shareSite').setAttribute('aria-label', T.shareMap);
@@ -783,6 +785,20 @@ function toggleSidebar(show) {
   settings.set({ sidebarHidden: hidden });
   setTimeout(() => amap && amap.resize(), 320);
 }
+function placeListFab() {
+  const fab = $('#listFab');
+  const app = $('#app');
+  if (isMobile()) {
+    const topbar = $('#topbar');
+    if (fab.parentElement !== topbar) topbar.insertBefore(fab, $('#btnSettingsM'));
+    fab.hidden = false;
+  } else {
+    const mapWrap = $('#mapWrap');
+    if (fab.parentElement !== mapWrap) mapWrap.append(fab);
+    fab.hidden = !app.classList.contains('sb-hidden');
+    if (app.classList.contains('sheet-open')) setSheetOpen(false);
+  }
+}
 function setSheetOpen(open) {
   $('#app').classList.toggle('sheet-open', open);
   $('#listFab').setAttribute('aria-expanded', String(open));
@@ -1096,6 +1112,7 @@ function bindEvents() {
     renderTour();
   });
   window.addEventListener('resize', () => {
+    placeListFab();
     if (!$('#tour').hidden) renderTour();
   });
   window.addEventListener('hashchange', () => {
@@ -1268,7 +1285,7 @@ async function boot() {
     $('#app').classList.add('sb-hidden');
     $('#listFab').hidden = false;
   }
-  if (isMobile()) $('#listFab').hidden = false;
+  placeListFab();
   bindEvents();
   setupSheet();
   renderList();

@@ -525,8 +525,9 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
   .sb-title { font-size: 17px; }
   #sbClose { display: none; }
   .app.sheet-open #sbClose { display: inline-flex; }
-  .list-fab { display: inline-flex; top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); inset-inline: auto; left: 12px; right: auto; z-index: 22; height: 44px; padding: 0 12px; border-radius: 10px; }
-  .app.sheet-open .list-fab { display: none; }
+  .list-fab { position: static; inset: auto; width: 44px; height: 36px; min-height: 36px; flex: none; justify-content: center; gap: 2px; padding: 0 4px; border-radius: 8px; }
+  .list-fab .lbl { display: none; }
+  .list-fab .fab-count { min-width: 16px; height: 16px; padding: 0 2px; border-radius: 9px; font-size: 9px; }
   .map-tools { top: 10px; inset-inline-start: 10px; }
   .map-btn { height: 36px; padding: 0 11px; font-size: 12.5px; }
   .map-ctrls { bottom: 104px; inset-inline-start: 10px; }
@@ -868,8 +869,10 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
 
 @media (max-width: 767px) {
   :root { --header-h: 54px; }
-  .topbar { height: calc(var(--header-h) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) 10px 0; gap: 6px; }
+  .topbar { height: calc(var(--header-h) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) 6px 0; gap: 4px; }
   .brand img { height: 32px; }
+  .report-btn { width: 36px; padding: 0; justify-content: center; }
+  .report-btn .lbl { display: none; }
   .mobile-ticker { height: 36px; }
   .map-tools {
     top: 12px;
