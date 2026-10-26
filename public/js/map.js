@@ -3,6 +3,7 @@ import { ALERT_TYPES, ZONE_KM, typeOf } from '/shared/types.js';
 import { SVG } from './marker-svgs.js';
 import { icon } from './icons.js';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
+import { squadLayout } from './aircraft-layout.js';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
@@ -586,16 +587,13 @@ export class AlertMap {
       const mpp = (40075016.686 * Math.cos((o.lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
       const el = m.getElement();
       if (o.squad) {
-        // warplanes fly across their ring: the path is the ring's on-screen diameter, the planes shrink a bit
-        // when the ring gets small, and a tiny ring (far zoom-out) shows one still plane in its middle
+        // Keep the full three-plane squad moving at country view too; shrink the planes and formation
+        // together as the visible flight ring gets smaller so they remain legible without crowding the map.
         const r = Math.round((o.km * 1000) / mpp);
-        const fy = Math.max(10, Math.min(130, r));
-        if (el._fy !== fy) {
-          el._fy = fy;
-          el.style.setProperty('--fy', fy + 'px');
-          el.style.setProperty('--sqi', Math.max(0.65, Math.min(0.95, r / 70)).toFixed(2));
-          el.classList.toggle('sq-tiny', r < 18);
-        }
+        const layout = squadLayout(r);
+        if (el._fy !== layout.flightRadius) { el._fy = layout.flightRadius; el.style.setProperty('--fy', layout.flightRadius + 'px'); }
+        if (el._sqi !== layout.planeScale) { el._sqi = layout.planeScale; el.style.setProperty('--sqi', layout.planeScale.toFixed(2)); }
+        if (el._sqf !== layout.formationScale) { el._sqf = layout.formationScale; el.style.setProperty('--sqf', layout.formationScale.toFixed(2)); }
         continue;
       }
       if (z < 11) continue;
