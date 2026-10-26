@@ -282,6 +282,56 @@ export function registerWeatherTools(bot, h) {
   const find = (id) => wxState().items.find((i) => i.id === id);
   const E = (ctx) => h.langOf?.(ctx) === 'en';
   const T = (ctx, ar, en) => (E(ctx) ? en : ar);
+  const activeWarnings = () => store.activeAlerts().filter((a) => a.type === 'weather');
+  const expiryLabel = (ctx, alert) => {
+    if (!alert.expires_at) return T(ctx, '♾ بلا انتهاء', '♾ No expiry');
+    const date = new Date(alert.expires_at);
+    if (!Number.isFinite(date.getTime())) return T(ctx, '⌛ وقت الانتهاء غير معروف', '⌛ Expiry unknown');
+    const formatted = new Intl.DateTimeFormat(E(ctx) ? 'en-GB' : 'ar-SY', {
+      timeZone: config.timezone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    }).format(date);
+    const remaining = Math.ceil((date.getTime() - Date.now()) / 60_000);
+    if (remaining <= 0) return `${T(ctx, '⌛ انتهت المدة', '⌛ Expired')} · ${formatted}`;
+    const days = Math.floor(remaining / 1440);
+    const hours = Math.floor((remaining % 1440) / 60);
+    const minutes = remaining % 60;
+    const left = E(ctx)
+      ? [days && `${days}d`, hours && `${hours}h`, !days && minutes && `${minutes}m`].filter(Boolean).join(' ')
+      : [days && `${days} يوم`, hours && `${hours} ساعة`, !days && minutes && `${minutes} دقيقة`].filter(Boolean).join(' و');
+    return `${T(ctx, '⌛ ينتهي', '⌛ Expires')} ${formatted} · ${T(ctx, 'المتبقي', 'left')} ${left}`;
+  };
+  const warningsView = (ctx, requestedPage = 0) => {
+    const alerts = activeWarnings();
+    const pageSize = 8;
+    const pages = Math.max(1, Math.ceil(alerts.length / pageSize));
+    const page = Math.max(0, Math.min(Number(requestedPage) || 0, pages - 1));
+    const first = page * pageSize;
+    const current = alerts.slice(first, first + pageSize);
+    const lines = current.map((a, i) => {
+      const title = E(ctx) ? (a.title_en || a.title) : (a.title || a.title_en);
+      return `${first + i + 1}. ⛈ <b>${esc(title || T(ctx, 'تحذير جوي', 'Weather warning'))}</b>\n   ${expiryLabel(ctx, a)}`;
+    });
+    const text = `${T(ctx, `⛈ <b>التحذيرات الجوية المنشورة والنشطة (${alerts.length})</b>`, `⛈ <b>Published active weather warnings (${alerts.length})</b>`)}\n\n${lines.length ? lines.join('\n\n') : T(ctx, 'لا توجد تحذيرات جوية نشطة حالياً.', 'There are no active weather warnings right now.')}`;
+    const kb = new InlineKeyboard();
+    for (let i = 0; i < current.length; i++) {
+      const a = current[i];
+      const title = E(ctx) ? (a.title_en || a.title) : (a.title || a.title_en);
+      kb.text(`${T(ctx, '🗑 حذف', '🗑 Delete')} · ${(title || T(ctx, 'التحذير', 'warning')).slice(0, 38)}`, `wxw:delete:${a.id}:${page}`).row();
+    }
+    if (pages > 1) {
+      if (page > 0) kb.text(T(ctx, '⬅️ السابق', '⬅️ Previous'), `wxw:list:${page - 1}`);
+      kb.text(`${page + 1}/${pages}`, `wxw:list:${page}`);
+      if (page + 1 < pages) kb.text(T(ctx, 'التالي ➡️', 'Next ➡️'), `wxw:list:${page + 1}`);
+      kb.row();
+    }
+    kb.text(T(ctx, `⏱ المدة: ${durationShort(store.autoDeleteHours)}`, `⏱ Duration: ${durationShort(store.autoDeleteHours, true)}`), 'auto')
+      .row().text(T(ctx, '↩️ رجوع لتحذيرات الطقس', '↩️ Back to weather'), 'wx');
+    return { text, keyboard: kb, page };
+  };
+  const showWarnings = async (ctx, page = 0) => {
+    const view = warningsView(ctx, page);
+    await h.show(ctx, view.text, view.keyboard);
+  };
   const dayEn = (d) => { try { return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'short' }).format(new Date(d + 'T12:00:00Z')); } catch { return d; } };
   const mainText = (ctx) => {
     const st = wxState(); const en = E(ctx);
@@ -298,9 +348,38 @@ export function registerWeatherTools(bot, h) {
     return new InlineKeyboard().text(T(ctx, '🔎 افحص التوقعات الآن', '🔎 Check the forecast now'), 'wx:now').row().text(T(ctx, '🌤 نشرة الطقس الصباحية', '🌤 Morning weather bulletin'), 'wxb').row()
       .text(st.on ? T(ctx, '⏸ إيقاف', '⏸ Pause') : T(ctx, '▶️ تشغيل', '▶️ Turn on'), 'wx:on').text(st.autoSevere ? T(ctx, '📝 الشديد كمان مسودة', '📝 Severe as drafts too') : T(ctx, '⚡ انشر الشديد تلقائياً', '⚡ Auto-post severe'), 'wx:auto').row()
       .text(T(ctx, `⏱ المدة: ${durationShort(store.autoDeleteHours)}`, `⏱ Duration: ${durationShort(store.autoDeleteHours, true)}`), 'auto').row()
+      .text(T(ctx, `📋 التحذيرات المنشورة (${activeWarnings().length})`, `📋 Published warnings (${activeWarnings().length})`), 'wxw:list:0').row()
       .text(T(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
   };
   bot.callbackQuery('wx', (ctx) => only(ctx, async () => { await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(ctx), mainKb(ctx)); }));
+  bot.callbackQuery(/^wxw:list:(\d+)$/, (ctx) => only(ctx, async () => {
+    await ctx.answerCallbackQuery().catch(() => {});
+    await showWarnings(ctx, Number(ctx.match[1]));
+  }));
+  bot.callbackQuery(/^wxw:delete:([\w-]{36}):(\d+)$/, (ctx) => only(ctx, async () => {
+    await ctx.answerCallbackQuery().catch(() => {});
+    const [, id, page] = ctx.match;
+    const alert = store.getAlert(id);
+    if (!alert || !alert.is_active || alert.type !== 'weather') return showWarnings(ctx, Number(page));
+    const title = E(ctx) ? (alert.title_en || alert.title) : (alert.title || alert.title_en);
+    const prompt = `${T(ctx, '🗑 <b>تأكيد حذف تحذير الطقس</b>', '🗑 <b>Confirm weather-warning deletion</b>')}\n\n⛈ <b>${esc(title || T(ctx, 'تحذير جوي', 'Weather warning'))}</b>\n${expiryLabel(ctx, alert)}\n\n${T(ctx, 'سيُزال التحذير من الخريطة ويُحذف منشوره من القناة.', 'This removes the warning from the map and deletes its channel post.')}`;
+    const kb = new InlineKeyboard()
+      .text(T(ctx, '🗑 نعم، احذف التحذير', '🗑 Yes, delete warning'), `wxw:confirm:${id}:${page}`)
+      .text(T(ctx, '↩️ إلغاء', '↩️ Cancel'), `wxw:list:${page}`);
+    await h.show(ctx, prompt, kb);
+  }));
+  bot.callbackQuery(/^wxw:confirm:([\w-]{36}):(\d+)$/, (ctx) => only(ctx, async () => {
+    const [, id, page] = ctx.match;
+    const alert = store.getAlert(id);
+    if (!alert || !alert.is_active || alert.type !== 'weather') {
+      await ctx.answerCallbackQuery(T(ctx, 'لم يعد التحذير متاحاً', 'This warning is no longer available')).catch(() => {});
+      return showWarnings(ctx, Number(page));
+    }
+    await ctx.answerCallbackQuery(T(ctx, 'تم تأكيد الحذف', 'Deletion confirmed')).catch(() => {});
+    const { deleteAlertEverywhere } = await import('./bot.js');
+    await deleteAlertEverywhere(ctx.api, id);
+    await showWarnings(ctx, Number(page));
+  }));
   bot.callbackQuery('wx:on', (ctx) => only(ctx, async () => { const st = wxState(); st.on = !st.on; save(); await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(ctx), mainKb(ctx)); }));
   bot.callbackQuery('wx:auto', (ctx) => only(ctx, async () => { const st = wxState(); st.autoSevere = !st.autoSevere; save(); await ctx.answerCallbackQuery().catch(() => {}); await h.show(ctx, mainText(ctx), mainKb(ctx)); }));
   bot.callbackQuery('wx:now', (ctx) => only(ctx, async () => {
