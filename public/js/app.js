@@ -1,7 +1,8 @@
 // Red Alert Syria — front-end application
-import { createServices } from './services.js';
+import { createServices, GOV_C } from './services.js';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, typeOf, HAZARD_EMOJI, alertEmoji } from '/shared/types.js';
 import { DICT } from './i18n.js';
+import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js';
 import { settings } from './settings.js';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
@@ -143,12 +144,10 @@ function visibleAlerts() {
   const s = settings.get();
   const list = [...state.alerts.values()].map((a) => (isLive(a) ? a : { ...a, is_active: false }));
   return list
+    .filter((a) => matchesGovernorate(a, s.governorate, GOV_C))
     .filter((a) => s.filter.includes(a.type))
     .filter((a) => a.is_active || s.showInactive)
     .sort((x, y) => (y.is_active - x.is_active) || (isNear(y) - isNear(x)) || Date.parse(y.timestamp) - Date.parse(x.timestamp));
-}
-function activeCount() {
-  return [...state.alerts.values()].filter(isLive).length;
 }
 
 // ------------------------------------------------------------------ static text & icons
@@ -216,7 +215,7 @@ function cardHtml(a, fresh) {
 let freshIds = new Set();
 function renderList() {
   const list = visibleAlerts();
-  const n = activeCount();
+  const n = list.filter((a) => a.is_active).length;
   const s = settings.get();
   $('#sbTitle').textContent = T.alertsCount(n);
   const nearN = list.filter(isNear).length;
@@ -224,7 +223,7 @@ function renderList() {
   $('#fabCount').textContent = n;
   const box = $('#alertList');
   if (!list.length) {
-    const filtered = s.filter.length < TYPE_KEYS.length && state.alerts.size;
+    const filtered = (s.filter.length < TYPE_KEYS.length || (s.governorate !== 'all' && GOV_C[s.governorate])) && state.alerts.size;
     box.innerHTML = `<div class="empty"><div class="radar"></div><h3>${esc(filtered ? T.noMatch : T.noAlerts)}</h3><p>${esc(filtered ? '' : T.noAlertsSub)}</p>${filtered ? `<button class="btn-sm" data-act="clear-filter">${esc(T.clearFilter)}</button>` : ''}</div>`;
   } else {
     let html = '';
@@ -412,16 +411,27 @@ function startTicker() {
 // ------------------------------------------------------------------ filter & layers panels
 function renderFilterBadge() {
   const s = settings.get();
-  const hidden = TYPE_KEYS.length - s.filter.length;
+  const selectedGov = GOV_C[s.governorate] ? s.governorate : 'all';
+  const activeFilters = Number(s.filter.length < TYPE_KEYS.length) + Number(selectedGov !== 'all');
   const b = $('#filterCount');
-  b.hidden = hidden === 0;
-  b.textContent = s.filter.length;
+  b.hidden = activeFilters === 0;
+  b.textContent = activeFilters;
 }
 function renderFilterPanel() {
   const s = settings.get();
+  const selectedGov = GOV_C[s.governorate] ? s.governorate : 'all';
   const counts = {};
-  for (const a of state.alerts.values()) if (isLive(a)) counts[a.type] = (counts[a.type] || 0) + 1;
-  let html = `<div class="dd-head"><b>${esc(T.showOnly)}</b><button class="link-btn" data-f="clear" ${s.filter.length === TYPE_KEYS.length ? 'disabled' : ''}>${esc(T.clear)}</button></div>`;
+  for (const a of state.alerts.values()) {
+    if (!isLive(a) || !matchesGovernorate(a, selectedGov, GOV_C)) continue;
+    counts[a.type] = (counts[a.type] || 0) + 1;
+  }
+  const govOptions = Object.entries(GOV_C)
+    .sort(([, a], [, b]) => (LANG === 'en' ? a[3] : a[2]).localeCompare(LANG === 'en' ? b[3] : b[2], LANG))
+    .map(([code, gov]) => `<option value="${esc(code)}" ${selectedGov === code ? 'selected' : ''}>${esc(LANG === 'en' ? gov[3] : gov[2])}</option>`)
+    .join('');
+  const clearNeeded = s.filter.length !== TYPE_KEYS.length || selectedGov !== 'all';
+  let html = `<div class="dd-head"><b>${esc(T.showOnly)}</b><button class="link-btn" data-f="clear" ${clearNeeded ? '' : 'disabled'}>${esc(T.clear)}</button></div>`;
+  html += `<label class="filter-governorate" for="alertGovFilter"><span>${esc(T.filterGovernorate)}</span><select id="alertGovFilter" class="sel" data-region-filter aria-label="${esc(T.filterGovernorate)}"><option value="all" ${selectedGov === 'all' ? 'selected' : ''}>${esc(T.allGovs)}</option>${govOptions}</select></label>`;
   for (const [g, def] of Object.entries(ALERT_GROUPS)) {
     const on = def.types.filter((t) => s.filter.includes(t)).length;
     html += `<div class="grp"><label class="chk grp-h"><input type="checkbox" data-g="${g}" ${on === def.types.length ? 'checked' : ''} ${on > 0 && on < def.types.length ? 'data-ind="1"' : ''}/><span class="name">${esc(def[LANG])}</span></label>`;
@@ -885,8 +895,14 @@ function bindEvents() {
   // filter
   $('#filterPanel').addEventListener('change', (e) => {
     const s = settings.get();
-    let f = new Set(s.filter);
     const i = e.target;
+    if (i.dataset.regionFilter !== undefined) {
+      settings.set({ governorate: i.value });
+      renderFilterPanel();
+      refresh();
+      return;
+    }
+    let f = new Set(s.filter);
     if (i.dataset.g) {
       const types = ALERT_GROUPS[i.dataset.g].types;
       types.forEach((t) => (i.checked ? f.add(t) : f.delete(t)));
@@ -899,7 +915,7 @@ function bindEvents() {
   });
   $('#filterPanel').addEventListener('click', (e) => {
     if (e.target.closest('[data-f="clear"]')) {
-      settings.set({ filter: [...TYPE_KEYS] });
+      settings.set({ filter: [...TYPE_KEYS], governorate: 'all' });
       renderFilterPanel();
       refresh();
     }
@@ -921,7 +937,7 @@ function bindEvents() {
   // list
   $('#alertList').addEventListener('click', (e) => {
     if (e.target.closest('[data-act="clear-filter"]')) {
-      settings.set({ filter: [...TYPE_KEYS] });
+      settings.set({ filter: [...TYPE_KEYS], governorate: 'all' });
       return refresh();
     }
     const card = e.target.closest('.card');

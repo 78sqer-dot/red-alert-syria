@@ -15,6 +15,7 @@ const DEFAULTS = {
   showGov: true,
   focusSyria: true,
   filter: [...TYPE_KEYS],
+  governorate: 'all',
   sidebarHidden: false,
   showRoads: true,
   showBorders: true,

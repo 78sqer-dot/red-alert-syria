@@ -205,6 +205,9 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .dd-head b { font-size: 12px; color: var(--text-secondary); font-weight: 800; }
 .link-btn { font-size: 12px; font-weight: 700; color: var(--red); }
 .link-btn:disabled { color: var(--text-muted); cursor: default; }
+.filter-governorate { display: grid; gap: 6px; padding: 2px 0 10px; margin-bottom: 4px; border-bottom: 1px solid var(--border-subtle); }
+.filter-governorate > span { font-size: 12px; font-weight: 800; color: var(--text-secondary); }
+.filter-governorate select.sel { width: 100%; }
 .grp { border-top: 1px solid var(--border-subtle); padding: 6px 0; }
 .grp:first-of-type { border-top: 0; }
 .chk { display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-radius: 7px; cursor: pointer; font-size: 13px; user-select: none; }
