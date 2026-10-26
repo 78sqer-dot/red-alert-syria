@@ -349,10 +349,8 @@ function select(id, { fromMap = false, fly = true } = {}) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
   amap && amap.select(shown, { fly: fly, popup: true });
   showDetail();
-  if (isMobile()) {
-    if (fromMap) document.body.parentElement && $('#app').classList.remove('sheet-open');
-    else $('#app').classList.remove('sheet-open');
-  } else if ($('#app').classList.contains('sb-hidden') && !fromMap) {
+  if (isMobile()) setSheetOpen(false);
+  else if ($('#app').classList.contains('sb-hidden') && !fromMap) {
     toggleSidebar(true);
   }
 }
@@ -785,15 +783,23 @@ function toggleSidebar(show) {
   settings.set({ sidebarHidden: hidden });
   setTimeout(() => amap && amap.resize(), 320);
 }
+function setSheetOpen(open) {
+  $('#app').classList.toggle('sheet-open', open);
+  $('#listFab').setAttribute('aria-expanded', String(open));
+  if (open) amap && amap.closePopup();
+}
 function setupSheet() {
   const app = $('#app');
   const head = $('#sheetHandle');
   let y0 = null;
-  const expanded = () => { if (app.classList.contains('sheet-open')) amap && amap.closePopup(); };
-  const toggle = () => { app.classList.toggle('sheet-open'); expanded(); };
+  const toggle = () => setSheetOpen(!app.classList.contains('sheet-open'));
   head.addEventListener('click', toggle);
   $('#viewList .sb-head').addEventListener('click', (e) => {
     if (isMobile() && !e.target.closest('#sbClose')) toggle();
+  });
+  $('#listFab').addEventListener('click', () => {
+    if (isMobile()) toggle();
+    else toggleSidebar(true);
   });
   const sb = $('#sidebar');
   sb.addEventListener('touchstart', (e) => {
@@ -805,9 +811,8 @@ function setupSheet() {
     if (y0 === null) return;
     const dy = e.changedTouches[0].clientY - y0;
     y0 = null;
-    if (dy < -30) app.classList.add('sheet-open');
-    else if (dy > 30) app.classList.remove('sheet-open');
-    expanded();
+    if (dy < -30) setSheetOpen(true);
+    else if (dy > 30) setSheetOpen(false);
   }, { passive: true });
 }
 
@@ -918,7 +923,7 @@ function bindEvents() {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'share') return share(a);
     if (act === 'map') {
-      if (isMobile()) $('#app').classList.remove('sheet-open');
+      if (isMobile()) setSheetOpen(false);
       state.selectedId = a.id;
       amap && amap.select(isLive(a) ? a : { ...a, is_active: false });
       $$('.card.sel').forEach((c) => c.classList.remove('sel'));
@@ -932,10 +937,9 @@ function bindEvents() {
   });
   $('#sbClose').addEventListener('click', (e) => {
     e.stopPropagation();
-    if (isMobile()) $('#app').classList.remove('sheet-open');
+    if (isMobile()) setSheetOpen(false);
     else toggleSidebar(false);
   });
-  $('#listFab').addEventListener('click', () => toggleSidebar(true));
   $('#dClose').addEventListener('click', () => select(null));
   $('#dPrev').addEventListener('click', () => step(-1));
   $('#dNext').addEventListener('click', () => step(1));
@@ -948,7 +952,7 @@ function bindEvents() {
       $('#shareMenu').hidden = !$('#shareMenu').hidden;
     } else if (act === 'copy') copy(shareUrl(a));
     else if (act === 'fly') {
-      if (isMobile()) $('#app').classList.remove('sheet-open');
+      if (isMobile()) setSheetOpen(false);
       amap && amap.select(isLive(a) ? a : { ...a, is_active: false });
     }
   });
@@ -958,8 +962,7 @@ function bindEvents() {
     if (b) {
       select(b.dataset.id, { fly: false });
       if (isMobile()) {
-        amap && amap.closePopup();
-        $('#app').classList.add('sheet-open');
+        setSheetOpen(true);
       }
     }
   });
@@ -1265,6 +1268,7 @@ async function boot() {
     $('#app').classList.add('sb-hidden');
     $('#listFab').hidden = false;
   }
+  if (isMobile()) $('#listFab').hidden = false;
   bindEvents();
   setupSheet();
   renderList();
