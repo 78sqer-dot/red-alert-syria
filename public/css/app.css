@@ -926,27 +926,31 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
     text-align: start;
   }
   .sidebar {
-    bottom: 0;
-    height: 70px;
-    max-height: calc(100% - 12px);
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+    width: min(420px, 58vw);
+    height: 100dvh;
+    max-height: 100dvh;
     overflow: hidden;
-    transform: translateY(100%);
+    transform: translateX(105%);
     margin: 0 !important;
-    border-radius: 20px 20px 0 0;
-    border-top: 1px solid var(--border);
-    box-shadow: 0 -10px 30px -12px #0005;
-    transition: height .32s cubic-bezier(.2, .8, .2, 1), transform .32s cubic-bezier(.2, .8, .2, 1);
+    border: 0;
+    border-inline-end: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-lg);
+    z-index: 61;
+    transition: transform .38s cubic-bezier(.2, .8, .2, 1);
   }
-  .app.sheet-open .sidebar {
-    height: min(72dvh, calc(100% - 14px));
-    transform: none;
-  }
-  .sheet-handle { padding-top: 8px; }
-  .sb-head { padding: 4px 14px 10px; }
-  .app.sheet-open .sb-head { padding-top: 6px; }
+  html[dir='ltr'] .sidebar { transform: translateX(-105%); }
+  .app.sheet-open .sidebar { transform: none; }
+  .sheet-handle { display: none; }
+  .sb-head { padding: 16px 16px 12px; }
+  #sbClose { display: inline-flex; }
   .detail-head { align-items: center; }
   .detail-head .nav { gap: 6px; }
-  .app.sheet-open .map-ctrls { opacity: 0; pointer-events: none; }
   .dd-panel.dd-sheet { max-height: min(78dvh, calc(100dvh - 84px)); }
   .site-share { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
   .breaking-banner { top: 56px; }

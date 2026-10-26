@@ -792,6 +792,10 @@ function placeListFab() {
     const topbar = $('#topbar');
     if (fab.parentElement !== topbar) topbar.insertBefore(fab, $('#btnSettingsM'));
     fab.hidden = false;
+    const open = app.classList.contains('sheet-open');
+    $('#listBackdrop').hidden = !open;
+    $('#sidebar').setAttribute('aria-hidden', String(!open));
+    $('#sidebar').inert = !open;
   } else {
     const mapWrap = $('#mapWrap');
     if (fab.parentElement !== mapWrap) mapWrap.append(fab);
@@ -802,34 +806,21 @@ function placeListFab() {
 function setSheetOpen(open) {
   $('#app').classList.toggle('sheet-open', open);
   $('#listFab').setAttribute('aria-expanded', String(open));
+  $('#listBackdrop').hidden = !open;
+  if (isMobile()) {
+    $('#sidebar').setAttribute('aria-hidden', String(!open));
+    $('#sidebar').inert = !open;
+  }
   if (open) amap && amap.closePopup();
 }
 function setupSheet() {
   const app = $('#app');
-  const head = $('#sheetHandle');
-  let y0 = null;
   const toggle = () => setSheetOpen(!app.classList.contains('sheet-open'));
-  head.addEventListener('click', toggle);
-  $('#viewList .sb-head').addEventListener('click', (e) => {
-    if (isMobile() && !e.target.closest('#sbClose')) toggle();
-  });
+  $('#listBackdrop').addEventListener('click', () => setSheetOpen(false));
   $('#listFab').addEventListener('click', () => {
     if (isMobile()) toggle();
     else toggleSidebar(true);
   });
-  const sb = $('#sidebar');
-  sb.addEventListener('touchstart', (e) => {
-    if (!isMobile()) return;
-    if (!e.target.closest('.sheet-handle, .sb-head')) return;
-    y0 = e.touches[0].clientY;
-  }, { passive: true });
-  sb.addEventListener('touchend', (e) => {
-    if (y0 === null) return;
-    const dy = e.changedTouches[0].clientY - y0;
-    y0 = null;
-    if (dy < -30) setSheetOpen(true);
-    else if (dy > 30) setSheetOpen(false);
-  }, { passive: true });
 }
 
 // ------------------------------------------------------------------ share
@@ -884,6 +875,7 @@ function bindEvents() {
     if (!$('#tour').hidden) return endTour();
     if (!$('#modalBackdrop').hidden) return closeModal();
     if ($('#drawer').classList.contains('open')) return closeDrawer();
+    if (isMobile() && $('#app').classList.contains('sheet-open')) return setSheetOpen(false);
     if ($('#aboutSheet').classList.contains('open')) return closeAbout();
     if (svc && svc.isOpen()) return svc.close();
     closeDropdowns();
