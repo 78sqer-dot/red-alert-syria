@@ -86,6 +86,101 @@ export function newsState() {
 }
 const save = (soon = true) => store.persist({ backupSoon: soon });
 
+// A manual cross-check for human-submitted reports. This is deliberately a source
+// lookup, not a truth classifier: a match is only evidence that a configured source
+// published something relevant, and no match does not mean the report is false.
+const REPORT_TYPE_TERMS = {
+  uav: ['مسيرة', 'مسيرات', 'المسيرات', 'درون', 'طائرة بدون طيار', 'استطلاع', 'drone'],
+  warplane: ['طيران حربي', 'الطيران الحربي', 'طائرة حربية', 'طائرات حربية', 'غارة جوية', 'غارات جوية', 'قصف جوي', 'warplane', 'airstrike'],
+  artillery: ['قصف مدفعي', 'مدفعية', 'قذائف', 'قصف', 'shelling'],
+  attack: ['هجوم', 'اشتباك', 'اقتحام', 'مسلح', 'attack', 'clash'],
+  explosion: ['انفجار', 'تفجير', 'عبوة ناسفة', 'explosion', 'blast'],
+  missile: ['صاروخ', 'صواريخ', 'الصواريخ', 'قذيفة', 'قذائف', 'missile', 'rocket'],
+  civil: ['مدني', 'مدنيين', 'المدنيين', 'ضحايا', 'مواطنين', 'civilian'],
+  accident: ['حادث سير', 'حادث مروري', 'تصادم', 'traffic accident'],
+  fire: ['حريق', 'اندلاع النيران', 'fire'],
+  protest: ['مظاهرة', 'احتجاج', 'تظاهر', 'protest'],
+  civil_plane: ['طائرة مدنية', 'طائرة ركاب', 'هبوط اضطراري', 'civilian aircraft'],
+  road: ['قطع طريق', 'إغلاق طريق', 'إغلاق الطريق', 'فتح الطريق', 'حالة الطريق', 'road closed', 'road closure'],
+  quake: ['زلزال', 'هزة أرضية', 'earthquake'],
+  weather: ['تحذير جوي', 'أمطار غزيرة', 'عاصفة', 'طقس', 'weather warning'],
+};
+const REPORT_STOP = new Set(['الى', 'على', 'عن', 'في', 'من', 'هذا', 'هذه', 'هناك', 'بعد', 'قبل', 'تم', 'كما', 'قد', 'ان', 'انه', 'الذي', 'التي', 'مع', 'كان', 'كانت', 'the', 'and', 'for', 'from', 'near', 'with', 'was', 'were', 'this', 'that']);
+const reportWords = (text) => new Set(N(text).split(' ').filter((w) => w.length >= 3 && !REPORT_STOP.has(w)));
+const reportPhraseIn = (text, phrase) => {
+  const p = N(phrase);
+  return p && (` ${text} `).includes(` ${p} `);
+};
+function reportLocationNames(d) {
+  return [d?.location, ...(d?.extra || [])].filter(Boolean).flatMap((loc) => {
+    // When a town is known, a governorate mention alone is too broad to count as corroboration.
+    const names = loc.scope === 'governorate'
+      ? [loc.name_ar, loc.name_en]
+      : [loc.name_ar, loc.name_en, loc.district_ar, loc.district_en];
+    return names.map((x) => N(x)).filter((x) => x.length >= 3);
+  }).filter((x, i, all) => all.indexOf(x) === i);
+}
+function reportCandidate(d, text) {
+  const normalized = N(text);
+  const locs = reportLocationNames(d);
+  const locHit = locs.some((name) => reportPhraseIn(normalized, name));
+  const typeTerms = (REPORT_TYPE_TERMS[d?.type] || []).some((term) => reportPhraseIn(normalized, term));
+  const details = d?.type === 'breaking' ? d?.text : d?.details;
+  const wanted = reportWords(details || '');
+  const shared = [...wanted].filter((w) => reportWords(text).has(w)).length;
+  // Requiring the place plus a type/detail cue avoids treating every post about the same city as a match.
+  const detailHit = shared >= (wanted.size <= 2 ? 1 : 2);
+  const isMatch = locHit
+    ? (typeTerms || detailHit)
+    : (!locs.length && (shared >= 3 || (wanted.size <= 3 && shared >= 2)) && (typeTerms || shared >= 3));
+  return { isMatch, score: (locHit ? 5 : 0) + (typeTerms ? 3 : 0) + shared, locHit, typeTerms, shared };
+}
+
+/** Check a report against recent public posts from the currently enabled configured sources. */
+export async function verifyReportSources(draft, {
+  sources = newsState().sources.filter((s) => s.on),
+  fetchSource = (source) => fetchChannel(source.u, { timeoutMs: 8_000 }),
+  now = Date.now(),
+  concurrency = 8,
+  maxAgeMs = 72 * H_MS,
+} = {}) {
+  const selected = (sources || []).filter((s) => s && s.on !== false && s.u).slice(0, NEWS_CFG.maxSources);
+  const matches = [];
+  const errors = [];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < selected.length) {
+      const source = selected[cursor++];
+      try {
+        const page = await fetchSource(source);
+        let best = null;
+        for (const post of page?.posts || []) {
+          if (post.ts && now - post.ts > maxAgeMs) continue;
+          const cleaned = cleanPostText(post.text || '').text;
+          if (!cleaned) continue;
+          const fit = reportCandidate(draft, cleaned);
+          if (!fit.isMatch) continue;
+          const candidate = {
+            name: source.name || page.title || source.u,
+            url: /^https:\/\/t\.me\/[A-Za-z0-9_/-]+$/.test(post.url || '') ? post.url : `https://t.me/${encodeURIComponent(source.u)}`,
+            ts: Number.isFinite(post.ts) ? post.ts : null,
+            excerpt: cleaned.replace(/\s+/g, ' ').slice(0, 240),
+            score: fit.score,
+          };
+          if (!best || candidate.score > best.score || (candidate.score === best.score && (candidate.ts || 0) > (best.ts || 0))) best = candidate;
+        }
+        if (best) matches.push(best);
+      } catch {
+        errors.push(source.name || source.u);
+      }
+    }
+  };
+  const workers = Array.from({ length: Math.min(Math.max(1, concurrency), selected.length) }, () => worker());
+  await Promise.all(workers);
+  matches.sort((a, b) => b.score - a.score || (b.ts || 0) - (a.ts || 0));
+  return { checkedAt: new Date(now).toISOString(), totalSources: selected.length, checkedSources: selected.length - errors.length, errors, matches: matches.slice(0, 5) };
+}
+
 // ---------------------------------------------------------------- runtime
 const R = {
   H: null, // bot helpers (registerNewsTools)

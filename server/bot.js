@@ -11,7 +11,7 @@ import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
 import { registerContactTools } from './contact-tools.js';
 import { registerSupportTools } from './support-tools.js';
-import { registerNewsTools } from './news-monitor.js';
+import { registerNewsTools, verifyReportSources } from './news-monitor.js';
 import { ROAD_DURATIONS, roadLabel, addRoad, activeRoads, endRoad, roadWhere, postRoadToChannel, registerPowerTools } from './services.js';
 import { registerPriceTools } from './prices.js';
 import { registerQuakeTools } from './quakes.js';
@@ -123,6 +123,65 @@ function draftSummary(d, lang) {
   if (d.type !== 'breaking' && d.details) lines.push(`📝 <b>${l.detailsLabel}:</b> ${esc(d.details)}`);
   lines.push(`⏱ <b>${l.durLabel}:</b> ${fmtDur(d.ttlMin, lang)}`);
   return lines.join('\n');
+}
+
+function reportReviewKeyboard(lang, rid) {
+  const l = T[lang] || T.ar;
+  const en = lang === 'en';
+  return new InlineKeyboard()
+    .text(l.btnApprove, 'rap:' + rid).row()
+    .text(en ? '🔎 Verify from sources' : '🔎 تحقق من المصادر', 'rv:' + rid).row()
+    .text(l.btnEditPublish, 'red:' + rid).row()
+    .text(l.btnReject, 'rrj:' + rid).text(l.btnBan, 'rbn:' + rid);
+}
+
+function reportVerificationBlock(v, lang) {
+  if (!v) return '';
+  const en = lang === 'en';
+  if (v.status === 'checking') return en
+    ? '🔎 <b>Checking the enabled sources…</b>'
+    : '🔎 <b>جارٍ فحص المصادر المفعّلة…</b>';
+  const lines = [en
+    ? '🔎 <b>Source check — not a final verdict</b>'
+    : '🔎 <b>نتيجة فحص المصادر — ليست حكماً نهائياً</b>'];
+  if (v.failed) {
+    lines.push(en ? 'The source check could not be completed. Please try again.' : 'تعذّر إكمال فحص المصادر؛ جرّب مرة ثانية.');
+  } else if (!v.totalSources) {
+    lines.push(en ? 'No enabled sources were available to check.' : 'لا توجد مصادر مفعّلة للفحص حالياً.');
+  } else {
+    lines.push(en
+      ? `Checked ${v.checkedSources} of ${v.totalSources} enabled sources.`
+      : `تم فحص ${v.checkedSources} من ${v.totalSources} مصدر مفعّل.`);
+  }
+  if (v.matches?.length) {
+    lines.push(en ? '<b>Potentially relevant coverage:</b>' : '<b>تغطية محتملة للخبر:</b>');
+    for (const m of v.matches.slice(0, 5)) {
+      const date = m.ts ? new Intl.DateTimeFormat(en ? 'en-GB' : 'ar-SY', { timeZone: config.timezone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(m.ts)) : '';
+      lines.push(`• <a href="${esc(m.url)}">${esc(m.name)}</a>${date ? ` · ${esc(date)}` : ''}`);
+      if (m.excerpt) lines.push(`<blockquote>${esc(m.excerpt)}</blockquote>`);
+    }
+  } else if (v.totalSources && !v.checkedSources) {
+    lines.push(en ? 'None of the enabled sources could be reached.' : 'تعذّر الوصول إلى أيٍّ من المصادر المفعّلة.');
+  } else if (v.totalSources) {
+    lines.push(en
+      ? 'No clear matching coverage was found among the sources reached. This does <b>not</b> prove the report is false.'
+      : 'لم يظهر تطابق واضح في المصادر التي أمكن الوصول إليها؛ وهذا <b>لا يثبت</b> أن البلاغ غير صحيح.');
+  }
+  if (v.errors?.length) {
+    const names = v.errors.slice(0, 4).map(esc).join('، ');
+    lines.push(en
+      ? `Could not read ${v.errors.length} source(s)${names ? `: ${names}` : ''}.`
+      : `تعذّر الوصول إلى ${v.errors.length} مصدر${names ? `: ${names}` : ''}.`);
+  }
+  lines.push(en
+    ? '<i>Source posts are supporting leads, not independent proof; review the links before deciding.</i>'
+    : '<i>المنشورات قرائن للمراجعة وليست إثباتاً مستقلاً؛ افتح الروابط قبل اتخاذ القرار.</i>');
+  return lines.join('\n');
+}
+
+function reportCardText(rep, lang) {
+  const hint = lang === 'en' ? '<i>↩️ Reply to this message to talk to the reporter.</i>' : '<i>↩️ لمراسلة صاحب البلاغ: اعمل «رد» على هذه الرسالة واكتب.</i>';
+  return [T[lang].reportNew(who(rep.from)), draftSummary(rep.draft, lang), reportVerificationBlock(rep.verification, lang), hint].filter(Boolean).join('\n\n');
 }
 
 // ---------------------------------------------------------------- keyboards
@@ -1324,11 +1383,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const reviewers = [...new Set([...config.ownerIds, ...store.state.editors])];
     for (const uid of reviewers) {
       const lang = store.userLang(uid) === 'en' ? 'en' : 'ar';
-      const l = T[lang];
-      const kb = new InlineKeyboard().text(l.btnApprove, 'rap:' + rid).row().text(l.btnEditPublish, 'red:' + rid).row().text(l.btnReject, 'rrj:' + rid).text(l.btnBan, 'rbn:' + rid);
       try {
-        const hint = lang === 'en' ? '<i>↩️ To talk to the reporter, use "Reply" on this message.</i>' : '<i>↩️ لمراسلة صاحب البلاغ: اعمل «رد» على هذه الرسالة واكتب.</i>';
-        const m = await api.sendMessage(uid, `${l.reportNew(who(ctx.from))}\n\n${draftSummary(d, lang)}\n\n${hint}`, { parse_mode: 'HTML', reply_markup: kb, _keep: 'c' }); // stays until handled
+        const m = await api.sendMessage(uid, reportCardText(rep, lang), { parse_mode: 'HTML', reply_markup: reportReviewKeyboard(lang, rid), _keep: 'c' }); // stays until handled
         rep.messages.push([uid, m.message_id]);
         store.reportPut(rid, rep); // saved with every card, so a decision always finds it
         store.relayPut(`a:${uid}:${m.message_id}`, ctx.from.id);
@@ -1339,6 +1395,52 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await home(ctx);
     await sendTransient(ctx.api, ctx.chat.id, L(ctx).reportSent);
   }));
+
+  bot.callbackQuery(/^rv:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const rid = ctx.match[1];
+    if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
+    const rep = store.reportGet(rid);
+    if (!rep) {
+      const en = langOf(ctx) === 'en';
+      try { await ctx.answerCallbackQuery({ text: en ? 'This report is no longer available.' : 'هذا البلاغ لم يعد متاحاً.', show_alert: true }); } catch { /* ignore */ }
+      return;
+    }
+    const en = langOf(ctx) === 'en';
+    if (rep.verification?.status === 'checking' && Date.now() - (rep.verification.startedAt || 0) < 120_000) {
+      return ctx.answerCallbackQuery({ text: en ? 'Source check is already running.' : 'التحقق من المصادر جارٍ بالفعل.' });
+    }
+    rep.verification = { status: 'checking', startedAt: Date.now(), by: ctx.from.id };
+    store.reportPut(rid, rep);
+    await ctx.answerCallbackQuery({ text: en ? 'Checking enabled sources…' : 'جارٍ فحص المصادر المفعّلة…' }).catch(() => {});
+
+    const reviewerApi = APIS.admin || reviewApi || ctx.api;
+    const refresh = async (current) => {
+      for (const [chat, mid] of current.messages || []) {
+        const lang = store.userLang(chat) === 'en' ? 'en' : 'ar';
+        try {
+          await reviewerApi.editMessageText(chat, mid, reportCardText(current, lang), {
+            parse_mode: 'HTML', reply_markup: reportReviewKeyboard(lang, rid),
+            link_preview_options: { is_disabled: true },
+          });
+        } catch { /* card may have been deleted or already updated */ }
+      }
+    };
+    await refresh(rep);
+
+    let result;
+    try {
+      result = await verifyReportSources(rep.draft);
+    } catch (e) {
+      console.warn('[bot] report source check failed', e?.message || e);
+      result = { checkedAt: new Date().toISOString(), totalSources: 0, checkedSources: 0, errors: [], matches: [], failed: true };
+    }
+    const latest = store.reportGet(rid);
+    if (!latest) return; // a reviewer may have made a decision while the lookup was running
+    latest.verification = { ...result, status: 'done', by: ctx.from.id };
+    store.reportPut(rid, latest);
+    await refresh(latest);
+  });
 
   // Remove the report from every reviewer's chat (optionally keeping the current one).
   const closeReport = async (ctx, rep, keepCurrent = false) => {
