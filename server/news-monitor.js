@@ -1,6 +1,6 @@
 // 📡 News monitor: the server (Render, 24/7) reads public Syrian news channels every minute, turns
 // each NEW incident into a ready-made alert draft and sends it to the owner + editors in the private
-// publishing bot with ✅ Publish / ❌ Ignore. Nothing is ever published by itself.
+// publishing bot with ✅ Publish / ❌ Ignore; only qualified AI news has an automatic fallback.
 // No duplicates: an incident reported by several channels arrives once (the card lists the sources);
 // an incident that is already on the map / channel (also from human reports), already waiting as a
 // draft or report, or already ignored never comes back, and follow-ups ("ارتفاع الحصيلة", "القبض على
@@ -46,6 +46,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rid = () => crypto.randomBytes(5).toString('hex');
 const N = normalizeArabic;
 const H_MS = 3600_000;
+const DAY_AUTO_DELAY_MS = 2 * 60_000;
 const WEATHER_NAME_AR = { rain: 'أمطار غزيرة', snow: 'ثلوج', wind: 'رياح قوية', storm: 'عواصف رعدية', heat: 'موجة حر', frost: 'صقيع', dust: 'غبار' };
 const weatherHeadline = (hazard, govs) => `تحذير جوي: ${WEATHER_NAME_AR[hazard] || 'أحوال جوية خطرة'} — ${govs.map((g) => g.ar).join('، ')}`;
 const dayKey = (t = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: config.timezone }).format(new Date(t));
@@ -207,6 +208,7 @@ const R = {
   log: [], // last decisions (debug endpoint)
   src: {}, // u -> { ok, at, err, n }
   lastPollAt: 0, lastAiAt: 0, aiOk: null, busy: false, stopped: false, started: false, timer: null,
+  dayAutoTimer: null,
 };
 const note = (it, decision) => {
   R.log.push({ t: new Date().toISOString(), src: it.src?.u || it.u, url: it.url, text: String(it.text || '').slice(0, 140), decision });
@@ -223,12 +225,27 @@ const hmNow = (t = Date.now()) => new Intl.DateTimeFormat('en-GB', { timeZone: c
 const hhmm = (t) => new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(t));
 export function inNightWindow(g, hm) { return g.from <= g.to ? hm >= g.from && hm < g.to : hm >= g.from || hm < g.to; }
 export function nightActive(t = Date.now()) { const g = newsState().night; return Boolean(g.on) && inNightWindow(g, hmNow(t)); }
+export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >= '08:00' && hm < '22:00'; }
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
   if (!d || d.test || d.rule) return false;
   const ss = d.srcs || [];
   return ss.length >= 2 || ss.some((x) => !isLocalSrc(x));
+}
+/** Daytime uses the same AI and source-confidence gate as overnight auto-publishing. */
+export function daytimeAutoEligible(d) { return Boolean(d && d.status === 'pending' && nightEligible(d)); }
+export function dayAutoDueAt(d, now = Date.now()) {
+  return daytimeWindow(now) && daytimeAutoEligible(d) && !Number.isFinite(d.dayAutoAt) ? now + DAY_AUTO_DELAY_MS : null;
+}
+export function dayAutoReady(d, now = Date.now()) {
+  return daytimeAutoEligible(d) && Number.isFinite(d.dayAutoAt) && d.dayAutoAt <= now;
+}
+function scheduleDayAuto(d, now = Date.now()) {
+  const dueAt = dayAutoDueAt(d, now);
+  if (dueAt == null) return false;
+  d.dayAutoAt = dueAt;
+  return true;
 }
 const langOfId = (id) => (store.userLang(id) === 'en' ? 'en' : 'ar');
 const tr = (lang, ar, en) => (lang === 'en' ? en : ar);
@@ -405,7 +422,9 @@ const postUrl = (mid) => (mid && String(config.channel || '').startsWith('@') ? 
 function noticeText(d, lang = 'ar') {
   const head = d.undone
     ? tr(lang, '↩️ <b>تم التراجع — حُذف من القناة والخريطة</b>', '↩️ <b>Undone — removed from the channel and the map</b>')
-    : tr(lang, `🌙 <b>نُشر تلقائياً (النشر الليلي)</b> · ${esc(hhmm(d.autoAt || Date.now()))}`, `🌙 <b>Auto-published (night mode)</b> · ${esc(hhmm(d.autoAt || Date.now()))}`);
+    : d.autoMode === 'day'
+      ? tr(lang, `⏱ <b>نُشر تلقائياً بعد دقيقتين لعدم المراجعة</b> · ${esc(hhmm(d.autoAt || Date.now()))}`, `⏱ <b>Auto-published after 2 minutes without review</b> · ${esc(hhmm(d.autoAt || Date.now()))}`)
+      : tr(lang, `🌙 <b>نُشر تلقائياً (النشر الليلي)</b> · ${esc(hhmm(d.autoAt || Date.now()))}`, `🌙 <b>Auto-published (night mode)</b> · ${esc(hhmm(d.autoAt || Date.now()))}`);
   return [head, ...cardText(d, lang).split('\n').slice(1)].join('\n');
 }
 function noticeKb(d, lang = 'ar') {
@@ -420,16 +439,19 @@ async function nightPublish(d) {
   const a = api();
   if (!a || !R.H?.publishDraft || d.status !== 'pending') return false;
   const n = newsState();
+  const mode = d.autoMode === 'day' ? 'day' : 'night';
   d.status = 'publishing'; save();
   let alert;
   try {
-    alert = await R.H.publishDraft(a, toBotDraft(d), { id: 0, name: 'رصد تلقائي', via: 'news-night' });
+    alert = await R.H.publishDraft(a, toBotDraft(d), { id: 0, name: 'رصد تلقائي', via: mode === 'day' ? 'news-day-fallback' : 'news-night' });
   } catch (e) {
-    d.status = 'pending'; save();
-    console.error('[news] night publish failed', e.description || e.message);
+    d.status = 'pending';
+    if (mode === 'day') d.dayAutoAt = Date.now() + DAY_AUTO_DELAY_MS;
+    save();
+    console.error(`[news] ${mode} auto-publish failed`, e.description || e.message);
     return false;
   }
-  d.status = 'published'; d.auto = true; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null;
+  d.status = 'published'; d.auto = true; d.autoMode = mode; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null;
   n.stats.published++; n.stats.auto = (n.stats.auto || 0) + 1;
   save();
   await closeCards(d); // a draft that was waiting (single local source, then confirmed) leaves the chat
@@ -442,8 +464,17 @@ async function nightPublish(d) {
     } catch (e) { console.warn('[news] night notice not delivered to', uid, e.description || e.message); }
   }
   save();
-  console.log(`[news] NIGHT auto-published ${d.id}: ${d.type} -> alert ${d.alertId} post ${d.postId}`);
+  console.log(`[news] ${mode.toUpperCase()} auto-published ${d.id}: ${d.type} -> alert ${d.alertId} post ${d.postId}`);
   return true;
+}
+async function dayAutoTick(now = Date.now()) {
+  const n = newsState();
+  if (!api() || !R.H?.publishDraft) return;
+  for (const d of Object.values(n.drafts)) {
+    if (!dayAutoReady(d, now)) continue;
+    d.autoMode = 'day';
+    await nightPublish(d);
+  }
 }
 async function nightSummaryTick() {
   const n = newsState(); const g = n.night;
@@ -455,7 +486,7 @@ async function nightSummaryTick() {
   g.sumDay = day; save();
   const since = Math.max(g.sumAt || 0, Date.now() - 16 * H_MS);
   const all = Object.values(n.drafts).filter((d) => !d.test);
-  const items = all.filter((d) => d.auto && d.autoAt > since).sort((x, y) => x.autoAt - y.autoAt);
+  const items = all.filter((d) => d.auto && d.autoMode !== 'day' && d.autoAt > since).sort((x, y) => x.autoAt - y.autoAt);
   const held = all.filter((d) => !d.auto && d.created > since && inNightWindow(g, hhmm(d.created)) && d.status !== 'published').length;
   g.sumAt = Date.now(); save();
   for (const uid of ownerIdsU()) {
@@ -548,6 +579,7 @@ async function mergeInto(d, it, locs = []) {
   const n = newsState();
   if ((d.srcs || []).some((s) => s.u === it.src.u)) return false;
   d.srcs.push({ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local });
+  scheduleDayAuto(d);
   // another channel names a more precise nearby place (e.g. "المعكر" next to "مزرعة الحانوت"): add it as an extra area
   const main = d.loc && Number.isFinite(d.loc.latitude) ? { lat: d.loc.latitude, lon: d.loc.longitude } : null;
   for (const l of locs) {
@@ -604,6 +636,7 @@ async function handleResult(it, r, known, pmap) {
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
     sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
   };
+  scheduleDayAuto(d, d.created);
   n.drafts[d.id] = d;
   n.stats.drafts++;
   const ev = { kind: 'draft', status: 'pending', draftId: d.id, type: d.type, ts: d.ts, headline, where: whereOf(locs), geo: cand.geo };
@@ -846,10 +879,12 @@ export function startNewsMonitor() {
     loop();
   };
   setInterval(() => { nightSummaryTick().catch((e) => console.warn('[news] night summary', e.message)); }, 60_000).unref?.();
+  R.dayAutoTimer = setInterval(() => { dayAutoTick().catch((e) => console.warn('[news] daytime auto-publish', e.message)); }, 5_000);
+  R.dayAutoTimer.unref?.();
   const t = setTimeout(first, NEWS_CFG.startDelaySec * 1000);
   t.unref?.();
 }
-export function stopNewsMonitor() { R.stopped = true; clearTimeout(R.timer); }
+export function stopNewsMonitor() { R.stopped = true; clearTimeout(R.timer); clearInterval(R.dayAutoTimer); }
 export function newsDebug() {
   const n = newsState();
   return {
@@ -1007,8 +1042,8 @@ export function registerNewsTools(bot, h) {
     return [
       t(ctx, '📡 <b>الرصد الإخباري التلقائي</b>', '📡 <b>Automatic news monitor</b>'),
       '',
-      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>لا يُنشر شيء إلا بعد ضغطك ✅ نشر</b> (إلا بساعات النشر الليلي إذا مفعّل)، والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
-        'The server watches Syrian news channels around the clock; each new incident in Syria arrives here as a ready draft (type, place, sources). <b>Nothing is published until you tap ✅ Publish</b> (except during night auto-publish, if on), and a repeated incident never comes twice.'),
+      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>بالنهار، الخبر المؤكد من مصدر رئيسي أو مصدرين يُنشر تلقائياً بعد دقيقتين إذا ما وافقت أو تجاهلت؛ وبالليل يبقى النشر التلقائي حسب إعداداته.</b> والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
+        'The server watches Syrian news channels around the clock; each new incident arrives here as a ready draft (type, place, sources). <b>By day, a confirmed AI-classified item backed by a main source or two sources is auto-published after 2 minutes if you do not approve or ignore it; overnight auto-publishing keeps its current settings.</b> Repeated incidents never come twice.'),
       '',
       `${t(ctx, 'الحالة', 'Status')}: ${n.on ? t(ctx, '✅ يعمل', '✅ running') : t(ctx, '⏸ متوقف', '⏸ paused')}${n.on ? ` · ${t(ctx, 'آخر فحص', 'last check')} ${ago(R.lastPollAt, ctx)}` : ''}`,
       `${t(ctx, 'التصنيف', 'Classification')}: ${ai}`,
