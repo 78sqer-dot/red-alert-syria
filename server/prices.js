@@ -319,8 +319,11 @@ export function fuelRecheckSoon() {
     setTimeout(() => { R.fuelDue = true; R.lastSpTry = 0; refreshPrices().catch(() => {}); }, ms).unref?.();
   }
 }
-export async function refreshPrices({ force = false } = {}) {
-  if (R.busy) return pricesState();
+export async function refreshPrices({ force = false, forceOfficial = false } = {}) {
+  if (R.busy) {
+    if (forceOfficial) throw new Error('price refresh already in progress');
+    return pricesState();
+  }
   R.busy = true;
   const st = pricesState();
   try {
@@ -339,7 +342,7 @@ export async function refreshPrices({ force = false } = {}) {
     const haveToday = currentOfficial?.date === p.date;
     const needsSourceMigration = !!st.official && !currentOfficial;
     // the official bulletin appears ~13:00 Damascus on working days: look for it from 12:30, every 30 min
-    if ((force || !currentOfficial || needsSourceMigration || (!haveToday && p.hm >= '12:30')) && Date.now() - R.lastOffTry > (force ? 60_000 : 30 * 60_000)) {
+    if (forceOfficial || ((force || !currentOfficial || needsSourceMigration || (!haveToday && p.hm >= '12:30')) && Date.now() - R.lastOffTry > (force ? 60_000 : 30 * 60_000))) {
       R.lastOffTry = Date.now();
       try {
         const o = await fetchOfficial(st.sp);
@@ -627,7 +630,8 @@ export function registerPriceTools(bot, h) {
     const c = pricesState().cfg; const e = en(ctx);
     const k = new InlineKeyboard().text(c.on ? (e ? '⏸ Turn off' : '⏸ إيقاف') : (e ? '▶️ Turn on' : '▶️ تشغيل'), c.on ? 'px:off' : 'px:on').row();
     PRICE_TIMES.forEach((t, i) => { k.text((t === c.time ? '✅ ' : '') + t, `px:t:${t}`); if (i % 3 === 2) k.row(); });
-    return k.text(e ? '📤 Send me a preview' : '📤 أرسل لي معاينة', 'px:test').row()
+    return k.text(e ? '🔄 Check for updates' : '🔄 تحقّق من تحديث النشرة', 'px:refresh').row()
+      .text(e ? '📤 Send me a preview' : '📤 أرسل لي معاينة', 'px:test').row()
       .text(e ? '📢 Post in the channel now' : '📢 انشرها بالقناة الآن', 'px:now').row()
       .text(h.L(ctx).btnHome, 'home');
   };
@@ -644,6 +648,40 @@ export function registerPriceTools(bot, h) {
     const c = pricesState().cfg; c.time = t; const p = damascusParts(); if (p.hm >= t) c.last = p.date; save();
     await ctx.answerCallbackQuery(`⏰ ${t}`);
     await h.show(ctx, txt(ctx), kb(ctx));
+  }));
+  bot.callbackQuery('px:refresh', (ctx) => onlyOwner(ctx, async () => {
+    await ctx.answerCallbackQuery(en(ctx) ? 'Checking the official bulletin…' : 'جارٍ التحقق من النشرة الرسمية…');
+    await ctx.replyWithChatAction('typing').catch(() => {});
+    const before = trustedOfficial(pricesState().official);
+    const resultKb = (changed = false) => {
+      const k = new InlineKeyboard();
+      if (changed) k.text(en(ctx) ? '📢 Publish updated bulletin' : '📢 انشر النشرة المحدّثة', 'px:now').row();
+      return k.text(en(ctx) ? '💱 Prices bulletin' : '💱 نشرة الأسعار', 'px').text(h.L(ctx).btnHome, 'home');
+    };
+    try {
+      const st = await refreshPrices({ force: true, forceOfficial: true });
+      const official = trustedOfficial(st.official);
+      if (!official || R.offErr) {
+        const why = R.offErr ? `\n\n${esc(R.offErr).slice(0, 500)}` : '';
+        const message = en(ctx) ? '⚠️ Could not verify the official source right now; no bulletin was published.' : '⚠️ تعذّر التحقق من المصدر الرسمي حالياً؛ ما نُشرت أي نشرة.';
+        return h.show(ctx, message + why, resultKb());
+      }
+      const signature = (o) => JSON.stringify(o ? [o.post, o.date, o.bulletinNo, o.usd?.buy, o.usd?.sell, o.eur?.buy, o.eur?.sell, o.try?.buy, o.try?.sell] : null);
+      const changed = signature(before) !== signature(official);
+      const lines = [
+        changed
+          ? (en(ctx) ? '🆕 <b>A new official bulletin was found.</b>' : '🆕 <b>تم العثور على نشرة رسمية جديدة.</b>')
+          : (en(ctx) ? '✅ <b>Checked the official source; no newer bulletin was found.</b>' : '✅ <b>تم فحص المصدر الرسمي؛ ما في نشرة أحدث.</b>'),
+        `${en(ctx) ? 'Central Bank of Syria — bulletin' : 'مصرف سورية المركزي — نشرة'} ${esc(dateLabel(official.date))}${official.bulletinNo ? ` ${en(ctx) ? 'No.' : 'رقم'} ${esc(official.bulletinNo)}` : ''}:`,
+        `${en(ctx) ? 'USD' : 'الدولار'}: ${en(ctx) ? 'buy' : 'شراء'} <b>${fmtNew(official.usd.buy)}</b> · ${en(ctx) ? 'sell' : 'مبيع'} <b>${fmtNew(official.usd.sell)}</b>`,
+        ...(official.eur ? [`${en(ctx) ? 'EUR' : 'اليورو'}: ${en(ctx) ? 'buy' : 'شراء'} <b>${fmtNew(official.eur.buy)}</b> · ${en(ctx) ? 'sell' : 'مبيع'} <b>${fmtNew(official.eur.sell)}</b>`] : []),
+        ...(official.try ? [`${en(ctx) ? 'TRY' : 'الليرة التركية'}: ${en(ctx) ? 'buy' : 'شراء'} <b>${fmtNew(official.try.buy)}</b> · ${en(ctx) ? 'sell' : 'مبيع'} <b>${fmtNew(official.try.sell)}</b>`] : []),
+        `${en(ctx) ? 'Source' : 'المصدر'}: <a href="${esc(official.url)}">${en(ctx) ? 'official Central Bank page' : 'صفحة المصرف المركزي الرسمية'}</a>`,
+      ];
+      await h.show(ctx, lines.join('\n'), resultKb(changed));
+    } catch (e) {
+      await h.show(ctx, `${en(ctx) ? '⚠️ The bulletin check failed' : '⚠️ تعذّر فحص النشرة'}: ${esc(e.message)}`, resultKb());
+    }
   }));
   bot.callbackQuery('px:test', (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery(en(ctx) ? 'Preparing…' : 'جارٍ التجهيز…');

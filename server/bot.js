@@ -203,7 +203,7 @@ function mainKeyboard(ctx) {
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
   if (owner(ctx)) kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row().text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row().text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').text(lang === 'en' ? '💝 Website support' : '💝 الدعم في الموقع', 'sp').row().text(lang === 'en' ? '📡 News monitor' : '📡 الرصد الإخباري', 'nws').row()
-    .text(lang === 'en' ? '💱 Prices bulletin' : '💱 نشرة الأسعار', 'px').text(lang === 'en' ? '⚡ Electricity' : '⚡ الكهرباء', 'pwr').row()
+    .text(lang === 'en' ? '💱 Prices bulletin' : '💱 نشرة الأسعار', 'px').text(lang === 'en' ? '🔄 Refresh rates' : '🔄 تحديث الأسعار', 'px:refresh').row().text(lang === 'en' ? '⚡ Electricity' : '⚡ الكهرباء', 'pwr').row()
     .text(lang === 'en' ? '🌍 Earthquakes' : '🌍 الزلازل', 'qk').text(lang === 'en' ? '⛈ Weather warnings' : '⛈ تحذيرات الطقس', 'wx').row()
     .text(lang === 'en' ? '🌤 Weather bulletin' : '🌤 نشرة الطقس', 'wxb').row();
   if (config.publicUrl) kb.url(l.btnMap, mapUrl('', lang));
