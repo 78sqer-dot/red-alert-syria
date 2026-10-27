@@ -1,5 +1,5 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, typeOf } from '/shared/types.js';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf } from '/shared/types.js';
 import { SVG } from './marker-svgs.js';
 import { EXTRA_SVG } from './target-svgs.js';
 import { icon } from './icons.js';
@@ -469,6 +469,7 @@ export class AlertMap {
 
   markerEl(a) {
     const t = typeOf(a.type);
+    const glyph = a.type === 'assassination' ? assassinationWeaponGlyph(a) : t.glyph;
     const el = document.createElement('div');
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${t.marker}`;
     el.style.setProperty('--c', t.color);
@@ -483,7 +484,7 @@ export class AlertMap {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 22, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
     } else if (t.marker === 'icon') {
       const sz = t.size || 30;
-      el.innerHTML = `<div class="ic ic-${t.glyph}" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px">${svgTag(t.glyph, sz, 'class="ic-svg"')}</div>`;
+      el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg"')}</div>`;
     } else {
       el.innerHTML = glyphDisc(a.type);
     }

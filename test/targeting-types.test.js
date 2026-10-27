@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ALERT_GROUPS, ALERT_TYPES, TYPE_KEYS } from '../shared/types.js';
+import { ALERT_GROUPS, ALERT_TYPES, TYPE_KEYS, assassinationWeaponGlyph } from '../shared/types.js';
 import { NEWS_TYPES, keywordTypes, refineType, ruleClassify } from '../server/news-ai.js';
 import { sameIncident } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
@@ -20,9 +20,21 @@ test('assassination has its own weapon marker and appears in the strikes filter'
   assert.ok(TYPE_KEYS.includes('assassination'));
   assert.ok(ALERT_GROUPS.strikes.types.includes('assassination'));
   assert.equal(type.marker, 'icon');
-  assert.equal(type.glyph, 'rifle');
+  assert.equal(type.glyph, 'weapon');
   assert.match(EXTRA_SVG.rifle, /<path/);
+  assert.match(EXTRA_SVG.pistol, /<path/);
+  assert.match(EXTRA_SVG.weapon, /<path/);
   assert.ok(NEWS_TYPES.includes('assassination'));
+});
+
+test('assassination marker specializes only for an explicitly named weapon', () => {
+  const alert = (description) => ({ type: 'assassination', title: 'اغتيال في المنطقة', description });
+  assert.equal(assassinationWeaponGlyph(alert('استخدم المهاجم بندقية كلاشنكوف AK-47.')), 'rifle');
+  assert.equal(assassinationWeaponGlyph(alert('أُطلق النار بمسدس بحسب البلاغ.')), 'pistol');
+  assert.equal(assassinationWeaponGlyph(alert('The report explicitly says handgun.')), 'pistol');
+  assert.equal(assassinationWeaponGlyph(alert('أُطلق النار على الضحية من دون تحديد نوع السلاح.')), 'weapon');
+  assert.equal(assassinationWeaponGlyph(alert('ذكر البلاغ بندقية ومسدساً معاً.')), 'weapon');
+  assert.equal(assassinationWeaponGlyph({ type: 'attack', title: 'AK-47' }), null);
 });
 
 test('Arabic drone-strike reports classify separately from routine drone sightings', () => {
