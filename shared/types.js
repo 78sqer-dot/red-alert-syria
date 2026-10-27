@@ -12,6 +12,11 @@ export const ALERT_TYPES = {
     emoji: '🛸', color: '#ff6b7a', ring: '#e11d48', group: 'aerial', ttlMin: 90,
     marker: 'orbit', glyph: 'uav', zone: true, tag_ar: 'مسيرة', tag_en: 'Drone',
   },
+  uav_strike: {
+    ar: 'استهداف بمسيّرة', en: 'Drone strike', button_ar: 'استهداف بمسيّرة', button_en: 'Drone strike',
+    emoji: '🎯', color: '#ff6b7a', ring: '#e11d48', group: 'aerial', ttlMin: 120,
+    marker: 'orbit', glyph: 'uav', zone: true, tag_ar: 'استهداف_بمسيّرة', tag_en: 'Drone_strike',
+  },
   warplane: {
     ar: 'طيران حربي', en: 'Warplane', button_ar: 'حربي', button_en: 'Warplane',
     emoji: '✈️', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
@@ -26,6 +31,11 @@ export const ALERT_TYPES = {
     ar: 'هجوم', en: 'Attack', button_ar: 'هجوم', button_en: 'Attack',
     emoji: '⚔️', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
     marker: 'static', glyph: 'airstrike', disc: '#dc2626', zone: false, tag_ar: 'هجوم', tag_en: 'Attack',
+  },
+  assassination: {
+    ar: 'اغتيال', en: 'Assassination', button_ar: 'اغتيال', button_en: 'Assassination',
+    emoji: '🔫', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
+    marker: 'icon', glyph: 'rifle', icon: '#b91c1c', size: 32, zone: false, tag_ar: 'اغتيال', tag_en: 'Assassination',
   },
   artillery: {
     ar: 'قصف مدفعي', en: 'Artillery shelling', button_ar: 'قصف مدفعي', button_en: 'Artillery',
@@ -79,8 +89,8 @@ export const ZONE_KM = { place: 1.5, point: 1.5, village: 1.5, multi: 3, distric
 export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 
 export const ALERT_GROUPS = {
-  aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'warplane', 'missile'] },
-  strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'artillery', 'explosion'] },
+  aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'missile'] },
+  strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'assassination', 'artillery', 'explosion'] },
   civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   other: { ar: 'أخرى', en: 'Other', types: ['breaking'] },

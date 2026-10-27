@@ -1,6 +1,7 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
 import { ALERT_TYPES, ZONE_KM, typeOf } from '/shared/types.js';
 import { SVG } from './marker-svgs.js';
+import { EXTRA_SVG } from './target-svgs.js';
 import { icon } from './icons.js';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
 import { squadLayout } from './aircraft-layout.js';
@@ -18,10 +19,10 @@ const SYRIA_BOUNDS = [[35.45, 32.25], [42.5, 37.4]];
 const STYLE_URL = { light: 'https://tiles.openfreemap.org/styles/liberty', dark: 'https://tiles.openfreemap.org/styles/dark' };
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
-const ZONE_COLOR = { uav: '#ef233c', breaking: '#ef233c' };
-const TYPE_ICON = { breaking: 'bolt', uav: 'drone', warplane: 'plane', missile: 'rocket', attack: 'swords', artillery: 'target', explosion: 'bomb', civil: 'ambulance', accident: 'carCrash', protest: 'speaker', fire: 'flame', civil_plane: 'planeDep', quake: 'quake', weather: 'storm' };
+const ZONE_COLOR = { uav: '#ef233c', uav_strike: '#ff6b7a', breaking: '#ef233c' };
+const TYPE_ICON = { breaking: 'bolt', uav: 'drone', uav_strike: 'drone', warplane: 'plane', missile: 'rocket', attack: 'swords', assassination: 'swords', artillery: 'target', explosion: 'bomb', civil: 'ambulance', accident: 'carCrash', protest: 'speaker', fire: 'flame', civil_plane: 'planeDep', quake: 'quake', weather: 'storm' };
 export const typeIcon = (t) => TYPE_ICON[t] || 'alert';
-const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${SVG[glyph] || SVG.other}</svg>`;
+const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
 // Round coloured disc with the original glyph (used by the map, the legend and toasts).
 export function glyphDisc(type, size = 34, iconSize = 18, cls = 'sai') {
   const t = typeOf(type);

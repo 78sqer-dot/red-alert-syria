@@ -329,6 +329,7 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 .uav-svg { display: block; fill: #6b7280; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
 html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95)) drop-shadow(0 0 .5px rgba(0,0,0,.95)); }
 .mk.sel .uav-svg { fill: var(--c); }
+.t-uav_strike .uav-svg { fill: #ff6b7a; }
 /* warplanes — squad of three flying across the zone */
 .squad { position: absolute; width: 60px; height: 200px; left: -30px; top: -100px; pointer-events: none; }
 .squad .sq { position: absolute; animation: squadFly 7s linear infinite; pointer-events: auto; }

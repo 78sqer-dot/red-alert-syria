@@ -91,6 +91,8 @@ const save = (soon = true) => store.persist({ backupSoon: soon });
 // published something relevant, and no match does not mean the report is false.
 const REPORT_TYPE_TERMS = {
   uav: ['مسيرة', 'مسيرات', 'المسيرات', 'درون', 'طائرة بدون طيار', 'استطلاع', 'drone'],
+  uav_strike: ['استهداف بمسيرة', 'استهداف بطائرة مسيرة', 'غارة بمسيرة', 'قصف بمسيرة', 'drone strike', 'uav strike'],
+  assassination: ['اغتيال', 'اغتيل', 'محاولة اغتيال', 'assassination', 'assassinated'],
   warplane: ['طيران حربي', 'الطيران الحربي', 'طائرة حربية', 'طائرات حربية', 'غارة جوية', 'غارات جوية', 'قصف جوي', 'warplane', 'airstrike'],
   artillery: ['قصف مدفعي', 'مدفعية', 'قذائف', 'قصف', 'shelling'],
   attack: ['هجوم', 'اشتباك', 'اقتحام', 'مسلح', 'attack', 'clash'],
@@ -237,7 +239,7 @@ const whereOf = (locs) => (locs.length ? locs.map((l) => [l.name_ar, l.scope !==
 const AIR = new Set(['uav', 'warplane', 'missile']);
 const STRIKE = new Set(['attack', 'artillery', 'explosion']);
 const CIVIL = new Set(['civil', 'accident', 'fire', 'civil_plane', 'explosion']);
-const WINDOW_MIN = { uav: 120, warplane: 120, missile: 180, attack: 360, artillery: 360, explosion: 360, civil: 360, accident: 360, fire: 360, civil_plane: 240, protest: 480, breaking: 360, weather: 720 };
+const WINDOW_MIN = { uav: 120, uav_strike: 120, warplane: 120, missile: 180, attack: 360, assassination: 360, artillery: 360, explosion: 360, civil: 360, accident: 360, fire: 360, civil_plane: 240, protest: 480, breaking: 360, weather: 720 };
 const sameFamily = (a, b) => a === b || (AIR.has(a) && AIR.has(b)) || (STRIKE.has(a) && STRIKE.has(b)) || ((a === 'civil' || b === 'civil') && CIVIL.has(a) && CIVIL.has(b));
 const tokens = (s) => new Set(N(s).split(' ').filter((w) => w.length >= 3).map((w) => (w.startsWith('ال') && w.length > 4 ? w.slice(2) : w)));
 function textSim(a, b) {

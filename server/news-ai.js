@@ -6,16 +6,18 @@
 import { ALERT_TYPES } from '../shared/types.js';
 import { governorates, districts, searchPlaces, normalizeArabic, getGov, getDist, places } from './places.js';
 
-export const NEWS_TYPES = ['breaking', 'uav', 'warplane', 'missile', 'attack', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane', 'weather'];
+export const NEWS_TYPES = ['breaking', 'uav', 'uav_strike', 'warplane', 'missile', 'attack', 'assassination', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane', 'weather'];
 const N = normalizeArabic;
 const stripAl = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w);
 
 // ---------------------------------------------------------------- keyword pre-filter
 const KW = {
   uav: ['مسيره', 'مسيرات', 'المسيره', 'درون', 'طائره مسيره', 'طائرات مسيره', 'انتحاريه'],
+  uav_strike: ['استهداف بمسيره', 'استهداف بطائره مسيره', 'استهداف مسيره', 'استهدفتها مسيره', 'مسيره استهدفت', 'طائره مسيره استهدفت', 'غاره بمسيره', 'غاره بطائره مسيره', 'قصف بمسيره', 'ضربه بمسيره', 'ضربات بمسيره', 'drone strike', 'uav strike'],
   warplane: ['طيران حربي', 'الطيران الحربي', 'طائرات حربيه', 'طائره حربيه', 'غاره', 'غارات', 'قصف جوي', 'الطيران الاسرائيلي', 'تحليق'],
   missile: ['صاروخ', 'صواريخ', 'صاروخي', 'صاروخيه', 'قذيفه صاروخيه'],
-  attack: ['هجوم', 'اعتداء', 'استهداف', 'استهدف', 'اطلاق نار', 'اطلاق النار', 'رصاص', 'اشتباك', 'اشتباكات', 'اغتيال', 'مسلحين', 'مسلحون', 'مسلح', 'كمين', 'مقتل', 'استشهاد', 'قتلى', 'قتيل', 'جرحى', 'اصابه', 'اصابات', 'توغل', 'اقتحام', 'حاجز', 'خطف', 'اختطاف', 'جريمه'],
+  attack: ['هجوم', 'اعتداء', 'استهداف', 'استهدف', 'اطلاق نار', 'اطلاق النار', 'رصاص', 'اشتباك', 'اشتباكات', 'مسلحين', 'مسلحون', 'مسلح', 'كمين', 'مقتل', 'استشهاد', 'قتلى', 'قتيل', 'جرحى', 'اصابه', 'اصابات', 'توغل', 'اقتحام', 'حاجز', 'خطف', 'اختطاف', 'جريمه'],
+  assassination: ['اغتيال', 'اغتيالات', 'اغتيل', 'اغتالت', 'محاوله اغتيال', 'عمليه اغتيال', 'assassination', 'assassinated'],
   explosion: ['انفجار', 'انفجارات', 'تفجير', 'تفجيرات', 'عبوه ناسفه', 'عبوه', 'لغم', 'الغام', 'مخلفات الحرب', 'مخلفات حرب', 'مخلفات حربيه', 'ذخائر', 'مفخخه', 'انتحاري', 'قنبله', 'دوي'],
   artillery: ['قصف', 'مدفعي', 'مدفعيه', 'قذائف', 'قذيفه', 'هاون'],
   accident: ['حادث سير', 'حوادث سير', 'حادث السير', 'حوادث السير', 'حادث', 'حوادث', 'حادث مرور', 'دراجه ناريه', 'انقلاب', 'تصادم', 'اصطدام', 'دهس', 'حادث مروري', 'تدهور سياره', 'تدهور شاحنه'],
@@ -23,7 +25,7 @@ const KW = {
   protest: ['مظاهره', 'مظاهرات', 'وقفه احتجاجيه', 'احتجاج', 'احتجاجات', 'اعتصام', 'تظاهر', 'يتظاهرون', 'تخرج تضامنا'],
   civil_plane: ['طائره مدنيه', 'هبوط اضطراري', 'طائره ركاب', 'رحله جويه', 'هبوط في مطار'],
   weather: ['تحذير جوي', 'تنبيه جوي', 'اضطراب جوي', 'امطار غزيره', 'عواصف رعديه', 'هطولات مطريه', 'موجه حر', 'عاصفه ترابيه'],
-  breaking: ['توغل', 'توغلت', 'توغلات', 'اقتحام', 'اقتحمت', 'حاجز تفتيش', 'مداهمه', 'حمله امنيه', 'حظر تجول', 'اختطاف', 'خطف', 'اغتيال', 'اشتباكات', 'استنفار', 'دوي',
+  breaking: ['توغل', 'توغلت', 'توغلات', 'اقتحام', 'اقتحمت', 'حاجز تفتيش', 'مداهمه', 'حمله امنيه', 'حظر تجول', 'اختطاف', 'خطف', 'اشتباكات', 'استنفار', 'دوي',
     // foreign (mostly Israeli) army ground activity in the south: incursions, patrols, bulldozing, berms, new positions
     'الاحتلال', 'قوات الاحتلال', 'جيش الاحتلال', 'الجيش الإسرائيلي', 'القوات الإسرائيلية', 'قوة إسرائيلية', 'دورية إسرائيلية', 'آليات إسرائيلية', 'آليات عسكرية', 'دبابات', 'ميركافا',
     'جرافات', 'جرافة', 'أعمال حفر', 'أعمال الحفر', 'عمليات الحفر', 'حفر خندق', 'خنادق', 'ساتر ترابي', 'سواتر', 'تجريف', 'جرف', 'تحصينات', 'نقطة عسكرية', 'قاعدة عسكرية', 'تمركز', 'نصب حاجز', 'حاجزا', 'اعتقال', 'اعتقلت', 'رتل', 'تعزيزات عسكرية', 'انتشار عسكري', 'تفجير منزل', 'نسف'],
@@ -184,10 +186,12 @@ export function nameInText(name, text) {
 }
 
 // ---------------------------------------------------------------- Gemini
-const TYPE_HELP = `- uav: drone (مسيّرة) seen / striking / shot down over a Syrian area
+const TYPE_HELP = `- uav: drone (مسيّرة) flight, sighting or surveillance over a Syrian area; NOT a direct strike
+- uav_strike: direct targeting or strike by an unmanned drone (استهداف/غارة/قصف بمسيّرة), distinct from routine drone activity
 - warplane: military aircraft activity or air strike (طيران حربي، غارة جوية)
 - missile: missiles/rockets launched at, falling on or intercepted over a Syrian area
-- attack: armed attack by people: shooting / gunfire at people or a checkpoint, killing by gunfire, stabbing, assassination by gunmen, armed clashes, armed robbery, armed kidnapping, a military incursion/raid by a foreign army into a Syrian village (e.g. Israeli forces storming/raiding a village, searching homes, arresting or shooting at people, blowing up a house)
+- assassination: an explicitly reported completed or attempted targeted killing / assassination (اغتيال), including by gunfire; keep distinct from a generic attack
+- attack: a non-assassination armed attack by people: shooting / gunfire at people or a checkpoint, stabbing, armed clashes, armed robbery, armed kidnapping, a military incursion/raid by a foreign army into a Syrian village (e.g. Israeli forces storming/raiding a village, searching homes, arresting or shooting at people, blowing up a house)
 - artillery: artillery / mortar / rocket-launcher shelling (قصف مدفعي، قذائف هاون)
 - accident: traffic accident (حادث سير، انقلاب، تصادم، دهس)
 - fire: fire (حريق) of a building, forest, crops, market…
@@ -266,7 +270,7 @@ export async function callGemini({ sys, user }, { key, models, timeoutMs = 40_00
 }
 
 // ---------------------------------------------------------------- rule-based fallback (AI unavailable)
-const RULE_ORDER = ['uav', 'warplane', 'missile', 'artillery', 'explosion', 'accident', 'fire', 'protest', 'civil_plane', 'attack', 'civil'];
+const RULE_ORDER = ['uav_strike', 'uav', 'warplane', 'missile', 'artillery', 'explosion', 'accident', 'fire', 'protest', 'civil_plane', 'assassination', 'attack', 'civil'];
 const FOLLOW_UP = ['ارتفاع حصيله', 'ارتفاع عدد', 'القبض علي', 'قبضنا', 'القت القبض', 'تقبض علي', 'منفذي الهجوم', 'تفاصيل', 'ينقل', 'نتابع وصول', 'وصول اكثر من', 'وصول جثث'].map(N);
 export function ruleClassify(text, { breaking = false } = {}) {
   const nt = N(text);
@@ -316,18 +320,20 @@ export function refineType(type, text) {
   const any = (ws) => ws.some((w) => nt.includes(' ' + N(w) + ' ') || nt.includes(N(w)));
   if (weatherWarningInfo(text)) return 'weather';
   // Recover explicit specific event types when Gemini has fallen back to civil/breaking/attack.
-  if (['civil', 'breaking', 'attack'].includes(type)) {
+  if (['civil', 'breaking', 'attack', 'uav'].includes(type)) {
     const specific = [
       ['explosion', EXPL_W],
       ['civil_plane', RX(['هبوط اضطراري', 'طائره مدنيه', 'طائره ركاب', 'تحطم طائره مدنيه'])],
       ['accident', ACC_W],
       ['protest', PROT_W],
+      ['uav_strike', RX(['استهداف بمسيره', 'استهداف بطائره مسيره', 'استهداف مسيره', 'استهدفتها مسيره', 'مسيره استهدفت', 'طائره مسيره استهدفت', 'غاره بمسيره', 'غاره بطائره مسيره', 'قصف بمسيره', 'ضربه بمسيره', 'ضربات بمسيره'])],
+      ['assassination', RX(['اغتيال', 'اغتيالات', 'اغتيل', 'اغتالت', 'محاوله اغتيال', 'عمليه اغتيال', 'assassination', 'assassinated'])],
       ['uav', RX(['طائره مسيره', 'طائرات مسيره', 'الطيران المسير', 'طيران مسير', 'درون', 'مسيره انتحاريه'])],
       ['warplane', RX(['طيران حربي', 'الطيران الحربي', 'طائرات حربيه', 'طائره حربيه', 'غاره جويه', 'غارات جويه', 'قصف جوي'])],
       ['missile', RX(['صاروخ', 'صواريخ', 'قذيفه صاروخيه'])],
       ['artillery', RX(['قصف مدفعي', 'قذائف مدفعيه', 'قذائف هاون', 'قصف بالهاون', 'مدفعيه'])],
       ['fire', FIRE_W],
-      ['attack', RX(['اطلاق نار', 'اطلاق النار', 'اطلاق الرصاص', 'اشتباك مسلح', 'اشتباكات مسلحه', 'استهداف مسلح', 'كمين مسلح', 'اغتيال'])],
+      ['attack', RX(['اطلاق نار', 'اطلاق النار', 'اطلاق الرصاص', 'اشتباك مسلح', 'اشتباكات مسلحه', 'استهداف مسلح', 'كمين مسلح'])],
       ['breaking', RX(['حظر تجول', 'اغلاق طريق امني', 'عمليه امنيه واسعه', 'اقامه حاجز عسكري'])],
     ];
     for (const [k, ws] of specific) if (any(ws)) return k;

@@ -194,6 +194,7 @@ function mainKeyboard(ctx) {
   const kb = new InlineKeyboard()
     .text(`${e('breaking')} ${b('breaking')}`, 't:breaking').row()
     .text(`${e('uav')} ${b('uav')}`, 't:uav').text(`${e('warplane')} ${b('warplane')}`, 't:warplane').row()
+    .text(lang === 'en' ? '🎯 Targeting' : '🎯 استهداف', 'target').row()
     .text(`${e('artillery')} ${b('artillery')}`, 't:artillery').text(`${e('attack')} ${b('attack')}`, 't:attack').row()
     .text(`${e('explosion')} ${b('explosion')}`, 't:explosion').text(`${e('missile')} ${b('missile')}`, 't:missile').row()
     .text(`${e('civil')} ${b('civil')}`, 'cv').row()
@@ -1135,6 +1136,17 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await ctx.replyWithPhoto(new InputFile(png, 'daily-summary-test.png'), { caption: `${head}\n\n${dailyCaption(st)}`, parse_mode: 'HTML', reply_markup: new InlineKeyboard().text(L(ctx).btnHome, 'home') });
   });
 
+  // Targeting sub-menu: drone strike and assassination remain distinct alert types.
+  bot.callbackQuery('target', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const lang = langOf(ctx);
+    const b = (k) => `${ALERT_TYPES[k].emoji} ${lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`;
+    const kb = new InlineKeyboard()
+      .text(b('uav_strike'), 't:uav_strike').row()
+      .text(b('assassination'), 't:assassination').row()
+      .text(L(ctx).btnBack, 'home');
+    await show(ctx, L(ctx).askTarget, kb);
+  });
   // civil sub-menu: general civil alert + traffic accident, protest, fire, civil aircraft
   bot.callbackQuery('cv', async (ctx) => {
     await ctx.answerCallbackQuery();

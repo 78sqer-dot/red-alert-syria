@@ -1,0 +1,51 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { ALERT_GROUPS, ALERT_TYPES, TYPE_KEYS } from '../shared/types.js';
+import { NEWS_TYPES, keywordTypes, refineType, ruleClassify } from '../server/news-ai.js';
+import { sameIncident } from '../server/news-monitor.js';
+import { EXTRA_SVG } from '../public/js/target-svgs.js';
+
+test('map types keep drone targeting distinct and visually on-brand', () => {
+  const drone = ALERT_TYPES.uav_strike;
+  assert.ok(TYPE_KEYS.includes('uav_strike'));
+  assert.ok(ALERT_GROUPS.aerial.types.includes('uav_strike'));
+  assert.equal(drone.marker, 'orbit');
+  assert.equal(drone.glyph, ALERT_TYPES.uav.glyph);
+  assert.equal(drone.color, ALERT_TYPES.uav.color);
+  assert.equal(drone.tag_ar, 'استهداف_بمسيّرة');
+});
+
+test('assassination has its own weapon marker and appears in the strikes filter', () => {
+  const type = ALERT_TYPES.assassination;
+  assert.ok(TYPE_KEYS.includes('assassination'));
+  assert.ok(ALERT_GROUPS.strikes.types.includes('assassination'));
+  assert.equal(type.marker, 'icon');
+  assert.equal(type.glyph, 'rifle');
+  assert.match(EXTRA_SVG.rifle, /<path/);
+  assert.ok(NEWS_TYPES.includes('assassination'));
+});
+
+test('Arabic drone-strike reports classify separately from routine drone sightings', () => {
+  const text = 'أفادت مصادر سورية باستهداف بطائرة مسيرة لسيارة في محافظة دير الزور بعد ظهر اليوم.';
+  assert.ok(keywordTypes(text).includes('uav_strike'));
+  assert.equal(ruleClassify(text)?.type, 'uav_strike');
+  assert.equal(refineType('uav', text), 'uav_strike');
+  assert.equal(ruleClassify('تحليق مسيرة فوق دير الزور السورية اليوم.')?.type, 'uav');
+});
+
+test('explicit assassination reports are not reduced to generic attack', () => {
+  const text = 'أفادت مصادر محلية باغتيال مسؤول محلي بإطلاق النار في محافظة درعا السورية.';
+  assert.ok(keywordTypes(text).includes('assassination'));
+  assert.equal(ruleClassify(text)?.type, 'assassination');
+  assert.equal(refineType('attack', text), 'assassination');
+});
+
+test('deduplication only joins identical precise types, not generic sightings or attacks', () => {
+  const now = Date.now();
+  const geo = { pts: [{ lat: 33.5, lon: 36.3 }], dists: [], govs: ['دمشق'], coarse: false, none: false };
+  const candidate = (type, headline) => ({ type, headline, ts: now, geo });
+  const strike = candidate('uav_strike', 'استهداف بمسيّرة لمركبة في محيط دمشق');
+  assert.equal(sameIncident(strike, candidate('uav_strike', 'استهداف بمسيّرة لمركبة في محيط دمشق')), true);
+  assert.equal(sameIncident(strike, candidate('uav', 'تحليق مسيّرة في محيط دمشق')), false);
+  assert.equal(sameIncident(candidate('assassination', 'اغتيال مسؤول في دمشق'), candidate('attack', 'إطلاق نار قرب دمشق')), false);
+});
