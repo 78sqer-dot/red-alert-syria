@@ -514,21 +514,50 @@ function withDeadline(promise, ms) {
  * Change the type of already-published alerts (owner request): map + stored alert + statistics log,
  * and EDIT (never delete/repost) the existing channel post: new title/emoji, new map image, same buttons.
  */
-export async function retypeAlerts(api, ids, type, { gapMs = 4000 } = {}) {
+export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph = null } = {}) {
   const out = [];
   const nt = TITLES[type];
-  if (!nt) return [{ ok: false, why: 'unknown type ' + type }];
+  if (!nt || (markerGlyph && markerGlyph !== 'weapon')) return [{ ok: false, why: 'unknown type or marker glyph' }];
   for (const id of ids) {
     const a = store.getAlert(id);
     if (!a) { out.push({ id, ok: false, why: 'alert not found' }); continue; }
+    const oldType = a.type;
     const ot = TITLES[a.type];
     const patch = { type };
+    if (markerGlyph) patch.marker_glyph = markerGlyph;
     if (ot && a.type !== type) {
       if (typeof a.title === 'string' && a.title.startsWith(ot.ar)) patch.title = nt.ar + a.title.slice(ot.ar.length);
       if (typeof a.title_en === 'string' && a.title_en.startsWith(ot.en)) patch.title_en = nt.en + a.title_en.slice(ot.en.length);
     }
+    if (markerGlyph) {
+      const b = { ...a, ...patch };
+      if (!api || !config.channel || !b.channel_message_id || b.channel_media !== 'photo') {
+        out.push({ id, ok: false, why: 'existing channel photo unavailable; no map change made' });
+        continue;
+      }
+      const opts = { ended: !b.is_active };
+      try {
+        const png = await withDeadline(alertImage(b, 'ar'), 30000);
+        try {
+          await api.editMessageMedia(config.channel, b.channel_message_id,
+            InputMediaBuilder.photo(new InputFile(png, `red-alert-syria-${b.id.slice(0, 8)}.png`), { caption: channelCaption(b, opts), parse_mode: 'HTML' }),
+            { reply_markup: channelKeyboard(b) });
+        } catch (e) {
+          if (!/message is not modified/i.test(String(e.description || e.message || e))) throw e;
+        }
+        store.updateAlert(id, patch); // emit the live-map update only after the existing photo edit succeeds
+        store.persist();
+        out.push({ id, ok: true, post: b.channel_message_id });
+      } catch (e) {
+        const msg = String(e.description || e.message || e);
+        out.push({ id, ok: false, post: b.channel_message_id, why: msg });
+        console.error(`[glyph] channel edit ${b.channel_message_id}: ${msg}`);
+      }
+      await new Promise((r) => setTimeout(r, gapMs));
+      continue;
+    }
     store.updateAlert(id, patch); // live map update
-    store._logPatch(id, { ty: type }); // statistics / area pages
+    if (oldType !== type) store._logPatch(id, { ty: type }); // statistics / area pages
     store.persist();
     const b = store.getAlert(id);
     if (!b.channel_message_id || !api || !config.channel) { out.push({ id, ok: true, post: null }); continue; }

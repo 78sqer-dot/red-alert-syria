@@ -24,11 +24,11 @@ const TYPE_ICON = { breaking: 'bolt', uav: 'drone', uav_strike: 'drone', warplan
 export const typeIcon = (t) => TYPE_ICON[t] || 'alert';
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
 // Round coloured disc with the original glyph (used by the map, the legend and toasts).
-export function glyphDisc(type, size = 34, iconSize = 18, cls = 'sai') {
+export function glyphDisc(type, size = 34, iconSize = 18, cls = 'sai', glyphOverride = null) {
   const t = typeOf(type);
   const bg = t.disc || '#000000';
   const fg = bg === '#000000' ? t.color : '#ffffff';
-  return `<span class="${cls}" style="width:${size}px;height:${size}px;background:${bg};border-color:${t.color};color:${fg}">${svgTag(t.glyph, iconSize, `fill="${fg}"`)}</span>`;
+  return `<span class="${cls}" style="width:${size}px;height:${size}px;background:${bg};border-color:${t.color};color:${fg}">${svgTag(glyphOverride || t.glyph, iconSize, `fill="${fg}"`)}</span>`;
 }
 
 const styleCache = {};
@@ -469,7 +469,7 @@ export class AlertMap {
 
   markerEl(a) {
     const t = typeOf(a.type);
-    const glyph = a.type === 'assassination' ? assassinationWeaponGlyph(a) : t.glyph;
+    const glyph = a.marker_glyph === 'weapon' ? 'weapon' : a.type === 'assassination' ? assassinationWeaponGlyph(a) : t.glyph;
     const el = document.createElement('div');
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${t.marker}`;
     el.style.setProperty('--c', t.color);
@@ -486,7 +486,7 @@ export class AlertMap {
       const sz = t.size || 30;
       el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg"')}</div>`;
     } else {
-      el.innerHTML = glyphDisc(a.type);
+      el.innerHTML = glyphDisc(a.type, 34, 18, 'sai', a.marker_glyph);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
     // civil family: pinned to its exact place; a small tidy dot at country view, the icon from zoom 7.5 up

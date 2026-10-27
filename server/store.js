@@ -583,6 +583,7 @@ export function publicAlert(a) {
   return {
     id: a.id,
     type: a.type,
+    marker_glyph: a.marker_glyph === 'weapon' ? 'weapon' : undefined,
     hazard: a.type === 'weather' ? a.meta?.hazard || undefined : undefined,
     drones: a.type === 'uav' ? droneLevel(a) : undefined,
     title: a.title,

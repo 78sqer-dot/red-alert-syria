@@ -403,9 +403,34 @@ async function start() {
         try { await store.flushBackup(); } catch { /* ignore */ }
       }, 200_000).unref();
     }
-    startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
-    startTranslations(); // 🌐 English descriptions for /en/
-    setTimeout(() => resyncChannelPosts(bots.admin.api).then((n) => console.log(`[bot] channel posts re-synced: ${n}`)).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
+    // One-time owner-approved icon correction: change only this attack's map glyph and existing channel photo.
+    {
+      const GLYPH_ID = 'weapon-glyph-hawrat-ammurin-2026-10-27';
+      const ALERT_ID = '1c96f12e-a894-4907-94e5-3e011c8611b7';
+      const correctWeaponGlyph = async () => {
+        if (store.state.maint?.[GLYPH_ID]?.done) return;
+        const a = store.getAlert(ALERT_ID);
+        if (!a || a.type !== 'attack' || a.channel_message_id !== 168 || a.channel_media !== 'photo'
+          || a.place?.name_ar !== 'حورات عمورين' || !String(a.description || '').includes('شقيقين')) {
+          console.error('[glyph] exact alert/photo guard failed; no change made');
+          return;
+        }
+        try {
+          const res = await retypeAlerts(bots.admin.api, [ALERT_ID], 'attack', { markerGlyph: 'weapon', gapMs: 0 });
+          if (!res[0]?.ok || res[0]?.post !== 168) { console.error('[glyph] update failed', JSON.stringify(res)); return; }
+          store.state.maint = { ...(store.state.maint || {}), [GLYPH_ID]: { done: new Date().toISOString(), res } };
+          store.persist();
+          await store.flushBackup(true);
+          console.log('[glyph] updated exact alert and edited channel photo in place');
+        } catch (e) { console.error('[glyph] update failed', e.description || e.message); }
+      };
+      startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
+      startTranslations(); // 🌐 English descriptions for /en/
+      setTimeout(() => resyncChannelPosts(bots.admin.api).then(async (n) => {
+        console.log(`[bot] channel posts re-synced: ${n}`);
+        await correctWeaponGlyph();
+      }).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
+    }
   };
   const upAdmin = async (attempt = 1) => {
     try {

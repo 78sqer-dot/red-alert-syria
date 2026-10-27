@@ -153,9 +153,9 @@ async function fetchTile(z, x, y, timeoutMs) {
 }
 
 // ------------------------------------------------------------------ marker for point alerts
-function markerSvg(type, cx, cy, k = 1) {
+function markerSvg(type, cx, cy, k = 1, glyphOverride = null) {
   const t = ALERT_TYPES[type] || ALERT_TYPES.breaking;
-  const g = GLYPHS[t.glyph] || GLYPHS.other || '';
+  const g = GLYPHS[glyphOverride] || GLYPHS[t.glyph] || GLYPHS.other || '';
   const r = 30 * k; const s = r * 1.2;
   const bg = t.marker === 'static' ? (t.disc || t.color) : (t.icon || t.color);
   return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${t.color}" opacity="0.16"/>`
@@ -221,10 +221,10 @@ export async function alertImageSvg(alert, opts = {}) {
       o.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" fill-opacity="0.2" stroke="${col}" stroke-width="${r > 40 ? 4.5 : 3}"${dashed ? ' stroke-dasharray="14 9"' : ''}/>`);
     }
     // a single area keeps its type icon; several areas show just their glowing circles (the title names the type)
-    if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y)); }
+    if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph)); }
   } else if (!country) {
     const [x, y] = px(center.lat, center.lon);
-    o.push(markerSvg(type, x, y));
+    o.push(markerSvg(type, x, y, 1, alert.marker_glyph));
   }
   // attribution (required by the tile licence)
   o.push(`<rect x="${W - 210}" y="${HEAD + MAP_H - 26}" width="210" height="26" fill="#ffffff" opacity="0.75"/>`);
