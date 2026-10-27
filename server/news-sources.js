@@ -10,6 +10,8 @@ export const DEFAULT_SOURCES = [
   { u: 'AlarabyTvSy', name: 'التلفزيون العربي - سوريا' },
   { u: 'TelevisionSyria', name: 'تلفزيون سوريا' },
   { u: 'AlekhbariahSY', name: 'الإخبارية السورية' },
+  { u: 'SyrSMOT', name: 'وزارة النقل السورية', general: true, roadOnly: true },
+  { u: 'syrianmoi', name: 'وزارة الداخلية السورية', general: true, roadOnly: true },
   { u: 'ALMHARAR', name: 'شبكة أخبار سوريا الحرة', general: true },
   { u: 'HalabTodayTV', name: 'حلب اليوم', general: true },
   { u: 'alarabiyaBr', name: 'العربية عاجل', general: true },

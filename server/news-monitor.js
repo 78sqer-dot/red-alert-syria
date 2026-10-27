@@ -11,7 +11,9 @@ import { config, isOwner } from './config.js';
 import { store } from './store.js';
 import { ALERT_TYPES, typeOf, droneAuto, alertEmoji } from '../shared/types.js';
 import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
-import { DEFAULT_SOURCES, fetchChannel, cleanPostText, parseUsername } from './news-sources.js';
+import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
+ parseUsername } from './news-sources.js';
+import { onRoadNewsPost, roadMonitorDebug, roadMonitorActivationTime } from './road-monitor.js';
 import { onNewsPost as onPowerPost, takeMisroutedWeatherPower } from './services.js';
 import { onBorderNews } from './borders.js';
 import { FUEL_NEWS_RE } from './fuel.js';
@@ -69,6 +71,16 @@ export function newsState() {
       if (cur) { cur.local = true; cur.general = true; } else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
     }
     n.mig.local1 = new Date().toISOString();
+  }
+  // Add only official first-party channels needed for road status; pollOnce baselines new feeds at their
+  // latest post, so deployment never replays existing events or changes current road records.
+  if (!n.mig.roadOfficial1) {
+    for (const s of DEFAULT_SOURCES.filter((x) => x.roadOnly)) {
+      const cur = n.sources.find((x) => x.u.toLowerCase() === s.u.toLowerCase());
+      if (cur) { cur.roadOnly = true; cur.general = true; }
+      else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
+    }
+    n.mig.roadOfficial1 = new Date().toISOString();
   }
   setSourceNames(n.sources.map((s) => s.name));
   n.attr = false; // published text never names a source (sources stay in the owner's draft card only)
@@ -690,6 +702,7 @@ async function rescanIfFilterChanged() {
 async function pollOnce() {
   const n = newsState();
   if (!n.on || R.stopped) return;
+  const roadActiveSince = roadMonitorActivationTime();
   R.lastPollAt = Date.now();
   const fresh = [];
   for (const src of n.sources.filter((s) => s.on)) {
@@ -710,11 +723,20 @@ async function pollOnce() {
   save(false);
   for (const { src, p } of fresh) {
     n.stats.posts++;
-    const it = { src: { u: src.u, name: src.name, local: !!src.local }, url: p.url, ts: p.ts || Date.now(), qAt: Date.now() };
+    const it = { src: { u: src.u, name: src.name, local: !!src.local, roadOnly: !!src.roadOnly }, url: p.url, ts: p.ts || Date.now(), qAt: Date.now() };
     if (!p.ts || Date.now() - p.ts > NEWS_CFG.maxAgeMin * 60_000) { it.text = p.text; note(it, 'too old'); continue; }
     const c = cleanPostText(p.text);
     it.text = c.text; it.breaking = c.breaking;
     const h = textHash(c.text);
+    if (it.ts >= roadActiveSince) {
+      try { if (await onRoadNewsPost(it)) note(it, 'road update -> confirmed or owner review'); }
+      catch (e) { console.warn('[news] road hook failed', e?.message || e); }
+    }
+    if (src.roadOnly) {
+      n.seen[h] = Date.now();
+      (n.handled ||= {})[`${src.u}/${p.id}`] = Date.now();
+      continue; // official road feeds never enter the general news/alert pipeline
+    }
     if (n.seen[h]) { n.stats.dupes++; note(it, 'same text already seen'); continue; }
     // ⚡ electricity / rationing updates -> a separate owner card (server/services.js), never an alert
     try { if (onPowerPost(it)) { note(it, 'electricity update -> owner card'); continue; } } catch (e) { console.warn('[news] power hook failed', e.message); }
@@ -768,6 +790,7 @@ export function startNewsMonitor() {
   if (R.started) return;
   R.started = true;
   newsState();
+  roadMonitorActivationTime();
   for (const a of store.state.alerts || []) { try { rememberAlert({ ...a, place: a.place, more: a.extra, zones: [] }); } catch { /* ignore */ } }
   store.on('alert', (pa) => { try { rememberAlert(pa); } catch (e) { console.warn('[news] remember failed', e.message); } });
   (store.mergeHooks ||= []).push(mergeNewsFromBackup);
@@ -830,7 +853,7 @@ export function newsDebug() {
     sources: n.sources.map((s) => ({ ...s, last: n.last[s.u] ?? null, status: R.src[s.u] || null })),
     types: n.types,
     drafts: Object.values(n.drafts).sort((a, b) => b.created - a.created).slice(0, 30).map((d) => ({ id: d.id, test: !!d.test, status: d.status, type: d.type, where: whereOf(locsOf(d.loc, d.extra)), headline: d.headline, sources: d.srcs.map((s) => s.u), created: new Date(d.created).toISOString() })),
-    alertsKnown: n.alerts.length,
+    alertsKnown: n.alerts.length, roadMonitor: roadMonitorDebug(),
     recent: R.log.slice(-80),
   };
 }

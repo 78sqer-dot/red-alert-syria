@@ -186,6 +186,26 @@ export function mergeServicesFromBackup(o) {
   const pids = new Set(powerArr().map((p) => p.id));
   const suppressed = new Set(svc().powerSuppressed || []);
   for (const p of os.power || []) if (!pids.has(p.id) && !suppressed.has(p.id)) powerArr().push(p);
+  if (os.roadWatch) {
+    const rw = (svc().roadWatch ||= { events: [], ignoredReports: [] });
+    rw.events ||= []; rw.ignoredReports ||= [];
+    const terminal = new Set(['published', 'ignored', 'duplicate', 'pending-report', 'published-existing']);
+    for (const e of os.roadWatch.events || []) {
+      if (!e?.id) continue;
+      const cur = rw.events.find((x) => x.id === e.id);
+      if (!cur) rw.events.push(e);
+      else {
+        const sources = [...new Map([...(cur.sources || []), ...(e.sources || [])].map((x) => [x.u, x])).values()].slice(-8);
+        const cards = [...new Map([...(cur.cards || []), ...(e.cards || [])].map((x) => [`${x[0]}:${x[1]}`, x])).values()];
+        if (!terminal.has(cur.state) && terminal.has(e.state)) Object.assign(cur, e);
+        cur.sources = sources; cur.cards = cards;
+        cur.reason ||= e.reason; cur.evidence ||= e.evidence;
+      }
+    }
+    const ignored = new Set(rw.ignoredReports.map((x) => `${x.ts}:${N(x.location?.name_ar || '')}`));
+    for (const x of os.roadWatch.ignoredReports || []) if (!ignored.has(`${x.ts}:${N(x.location?.name_ar || '')}`)) rw.ignoredReports.push(x);
+    rw.events = rw.events.slice(0, 300); rw.ignoredReports = rw.ignoredReports.slice(0, 200);
+  }
 }
 
 // ---------------------------------------------------------------- bot: electricity tools (publishing bot)

@@ -18,6 +18,7 @@ import { registerQuakeTools } from './quakes.js';
 import { registerWeatherTools } from './weather.js';
 import { registerWxBulletinTools } from './wx-daily.js';
 import { registerBorderTools } from './borders.js';
+import { registerRoadMonitorTools, rememberIgnoredRoadReport } from './road-monitor.js';
 import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox, centerOfDist, capitalOf, centerOfSub, centerSuggestions, getPlace } from './places.js';
 // publishing bot: a custom name for the pinned spot ("مخيم الرسم الجديد") while the pin stays on the chosen centre
 function withLabel(loc, label) {
@@ -891,7 +892,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     await next();
   });
-  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerSupportTools(bot, OH); registerNewsTools(bot, OH); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerWxBulletinTools(bot, OH); registerBorderTools(bot, OH); registerPowerTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
+  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerSupportTools(bot, OH); registerNewsTools(bot, OH); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerWxBulletinTools(bot, OH); registerBorderTools(bot, OH); registerPowerTools(bot, OH); registerRoadMonitorTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {
@@ -1534,6 +1535,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await showPreview(ctx, d);
     } else {
       if (action === 'bn') store.ban(rep.from.id);
+      if (rep.draft?.type === 'road') rememberIgnoredRoadReport(rep.draft);
       await closeReport(ctx, rep, true);
       await vanish(ctx, L(ctx).reportRejected(ctx.from.first_name || '') + (action === 'bn' ? ' · 🚫' : ''));
     }
