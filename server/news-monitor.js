@@ -88,11 +88,16 @@ export function newsState() {
   if (!n.seen || typeof n.seen !== 'object') n.seen = {};
   if (!n.drafts || typeof n.drafts !== 'object') n.drafts = {};
   if (!Array.isArray(n.alerts)) n.alerts = [];
-  // 🌙 night auto-publish (owner request 26 Oct 2026: «قبول تلقائي من الساعة 12 للساعة 8 الصبح»), Damascus time
-  if (!n.night || typeof n.night !== 'object') n.night = { on: true, from: '00:00', to: '08:00', summary: true, sumDay: null, sumAt: 0 };
-  if (!NIGHT_FROM.includes(n.night.from)) n.night.from = '00:00';
+  // 🌙 night auto-publish (owner request 27 Oct 2026: «من الساعة 10 المسا للساعة 8 الصبح»), Damascus time
+  if (!n.night || typeof n.night !== 'object') n.night = { on: true, from: '22:00', to: '08:00', summary: true, sumDay: null, sumAt: 0 };
+  if (!NIGHT_FROM.includes(n.night.from)) n.night.from = '22:00';
   if (!NIGHT_TO.includes(n.night.to)) n.night.to = '08:00';
   if (typeof n.night.summary !== 'boolean') n.night.summary = true;
+  if (!n.mig.nightStart22) {
+    if (n.night.from === '00:00') n.night.from = '22:00';
+    n.mig.nightStart22 = new Date().toISOString();
+    save();
+  }
   if (!n.stats || n.stats.day !== dayKey()) n.stats = { day: dayKey(), posts: 0, drafts: 0, merged: 0, dupes: 0, published: 0, ignored: 0 };
   return n;
 }
