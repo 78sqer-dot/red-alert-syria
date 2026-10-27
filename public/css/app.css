@@ -332,7 +332,7 @@ html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95))
 /* warplanes — squad of three flying across the zone */
 .squad { position: absolute; width: 60px; height: 200px; left: -30px; top: -100px; pointer-events: none; }
 .squad .sq { position: absolute; animation: squadFly 7s linear infinite; pointer-events: auto; }
-.sq-svg { display: block; transform: rotate(-45deg); filter: drop-shadow(0 0 1px rgba(0,0,0,.55)) drop-shadow(0 1px 2px rgba(255,255,255,.55)); }
+.sq-svg { display: block; fill: #5b9fe3; filter: drop-shadow(0 0 1px rgba(0,0,0,.55)) drop-shadow(0 1px 2px rgba(255,255,255,.55)); }
 html.dark .sq-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.4)) drop-shadow(0 1px 2px rgba(0,0,0,.85)); }
 /* civil — single craft-sized icon (same size as the drone) passing across the zone like the warplanes */
 .squad.solo .sq { left: 50% !important; margin-left: -11px; }

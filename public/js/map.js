@@ -477,7 +477,7 @@ export class AlertMap {
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 20, 'class="uav-svg"')}</div></div>`;
     } else if (t.marker === 'squad') {
       const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
-      el.innerHTML = `<div class="squad">${pl(18, 22, -8, 1)}${pl(16, 6, 12, 0.85)}${pl(16, 38, 12, 0.85)}</div>`;
+      el.innerHTML = `<div class="squad">${pl(15, 22, -6, 1)}${pl(13, 10, 8, 0.82)}${pl(13, 34, 8, 0.82)}</div>`;
     } else if (t.marker === 'fly') {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 22, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
     } else if (t.marker === 'icon') {
