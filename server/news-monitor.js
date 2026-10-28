@@ -47,8 +47,6 @@ const rid = () => crypto.randomBytes(5).toString('hex');
 const N = normalizeArabic;
 const H_MS = 3600_000;
 const DAY_AUTO_DELAY_MS = 2 * 60_000;
-// Owner requested this live source draft remain pending/manual during troubleshooting; manual approval still works.
-const MANUAL_REVIEW_ONLY_DRAFT_IDS = new Set(['4e55a74b59']);
 const WEATHER_NAME_AR = { rain: 'أمطار غزيرة', snow: 'ثلوج', wind: 'رياح قوية', storm: 'عواصف رعدية', heat: 'موجة حر', frost: 'صقيع', dust: 'غبار' };
 const weatherHeadline = (hazard, govs) => `تحذير جوي: ${WEATHER_NAME_AR[hazard] || 'أحوال جوية خطرة'} — ${govs.map((g) => g.ar).join('، ')}`;
 const dayKey = (t = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: config.timezone }).format(new Date(t));
@@ -241,7 +239,7 @@ export function dayAutoDueAt(d, now = Date.now()) {
   return daytimeWindow(now) && daytimeAutoEligible(d) && !Number.isFinite(d.dayAutoAt) ? now + DAY_AUTO_DELAY_MS : null;
 }
 export function dayAutoReady(d, now = Date.now()) {
-  return !MANUAL_REVIEW_ONLY_DRAFT_IDS.has(d?.id) && daytimeAutoEligible(d) && Number.isFinite(d.dayAutoAt) && d.dayAutoAt <= now;
+  return daytimeAutoEligible(d) && Number.isFinite(d.dayAutoAt) && d.dayAutoAt <= now;
 }
 function scheduleDayAuto(d, now = Date.now()) {
   const dueAt = dayAutoDueAt(d, now);
@@ -439,7 +437,7 @@ function noticeKb(d, lang = 'ar') {
 }
 async function nightPublish(d) {
   const a = api();
-  if (!a || !R.H?.publishDraft || d.status !== 'pending' || MANUAL_REVIEW_ONLY_DRAFT_IDS.has(d.id)) return false;
+  if (!a || !R.H?.publishDraft || d.status !== 'pending') return false;
   const n = newsState();
   const mode = d.autoMode === 'day' ? 'day' : 'night';
   d.status = 'publishing'; save();
