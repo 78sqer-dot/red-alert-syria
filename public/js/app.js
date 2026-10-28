@@ -93,6 +93,7 @@ let svc = null; // 💱 ⚡ 🛣 🏥 public/js/services.js
 // ------------------------------------------------------------------ formatting
 const fmtDay = new Intl.DateTimeFormat(LANG === 'ar' ? 'ar-SY' : 'en-GB', { day: 'numeric', month: 'long', timeZone: TZ });
 const fmtTime = new Intl.DateTimeFormat(LANG === 'ar' ? 'ar-SY' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: TZ });
+const fmtStatusClock = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: TZ });
 const fmtFull = new Intl.DateTimeFormat(LANG === 'ar' ? 'ar-SY' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: TZ });
 const fmtNum = (n, d = 5) => Number(n).toFixed(d);
 function ago(ts) {
@@ -204,7 +205,7 @@ function updateConnAge() {
     return;
   }
   const last = new Date(state.lastBeat);
-  age.textContent = fmtTime.format(last);
+  age.textContent = fmtStatusClock.format(last);
   el.title = `${T.lastConnection}: ${fmtFull.format(last)}`;
 }
 setInterval(updateConnAge, 15_000);
