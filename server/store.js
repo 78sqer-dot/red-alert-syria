@@ -577,6 +577,17 @@ class Store extends EventEmitter {
   }
 }
 
+/** Only expose a named provider when the alert was generated from a known feed. */
+function publicSourceInfo(a) {
+  if (a.source === 'weather') return { kind: 'provider', name: 'Open-Meteo', url: 'https://open-meteo.com/' };
+  if (a.source === 'quake') {
+    const src = String(a.meta?.src || '').toLowerCase();
+    if (src === 'usgs') return { kind: 'provider', name: 'USGS', url: 'https://earthquake.usgs.gov/' };
+    if (src === 'emsc') return { kind: 'provider', name: 'EMSC', url: 'https://www.seismicportal.eu/' };
+  }
+  return { kind: 'publisher', name: 'Red Alert Syria' };
+}
+
 /** Strip private fields before sending an alert to browsers. */
 export function publicAlert(a) {
   const p = a.place || {};
@@ -602,6 +613,7 @@ export function publicAlert(a) {
     zones: a.location ? alertZones(a) : undefined,
     more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
+    source_info: publicSourceInfo(a),
     expires_at: a.expires_at,
     ended_at: a.ended_at,
     is_active: a.is_active,

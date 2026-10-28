@@ -193,7 +193,21 @@ function setConn(s) {
   const el = $('#status');
   el.dataset.state = s;
   el.querySelector('.lbl').textContent = T.status[s];
+  updateConnAge();
 }
+function updateConnAge() {
+  const el = $('#status');
+  const age = el.querySelector('.status-age');
+  if (state.conn !== 'live' || !state.lastBeat) {
+    age.textContent = '';
+    el.title = T.status[state.conn];
+    return;
+  }
+  const last = new Date(state.lastBeat);
+  age.textContent = fmtTime.format(last);
+  el.title = `${T.lastConnection}: ${fmtFull.format(last)}`;
+}
+setInterval(updateConnAge, 15_000);
 
 // ------------------------------------------------------------------ list & detail
 function badge(a, live = false) {
@@ -250,6 +264,7 @@ function detailHtml(a) {
     [T.location, esc(placeName(a))],
     ...(alertDist(a) ? [[LANG === 'ar' ? 'المسافة عنك' : 'Distance from you', distChip(a)]] : []),
     [T.time, esc(fmtFull.format(new Date(a.timestamp)))],
+    [a.source_info?.kind === 'provider' ? T.dataProvider : T.publisher, a.source_info?.url ? `<a href="${esc(a.source_info.url)}" target="_blank" rel="noopener noreferrer">${esc(a.source_info.name)}</a>` : esc(a.source_info?.name || 'Red Alert Syria')],
     live ? [T.expires, a.expires_at ? esc(fmtTime.format(new Date(a.expires_at))) : T.noExpiry] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at || a.timestamp)))],
   ];
   return `<div class="d-card" style="--c:${t.color}">
@@ -259,6 +274,7 @@ function detailHtml(a) {
       <span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span>
     </div>
     <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
+    <div class="disclaimer" role="note">${esc(T.verificationNotRecorded)}</div>
     ${hasLoc ? `<div class="sec-label">${esc(T.coordinates)}</div>
     <div class="coords"><div class="coord"><div class="k">${esc(T.lat)}</div><div class="v">${fmtNum(a.location.latitude)}° N</div></div><div class="coord"><div class="k">${esc(T.lng)}</div><div class="v">${fmtNum(a.location.longitude)}° E</div></div></div>` : ''}
     <button class="btn-dark" data-act="share-toggle">${icon('share', 18)}${esc(T.shareAlert)}</button>
@@ -602,6 +618,8 @@ function renderAbout() {
       <div><div class="eyebrow"><span class="line"></span>${esc(T.siteName)}</div><h2>${esc(T.aboutTitle)}</h2></div>
       <button class="sb-x lg" data-a="close">${icon('x', 18)}</button></div>
     <p>${esc(T.aboutText)}</p>
+    <div class="sec-label">${esc(T.verificationPolicyTitle)}</div>
+    <div class="disclaimer" role="note">${esc(T.verificationPolicy)}</div>
     <div class="sec-label">${esc(T.legend)}</div>
     <div class="legend">${legend}</div>
     <div class="disclaimer">${esc(T.disclaimer)}</div>
@@ -1168,6 +1186,7 @@ async function poll() {
   try {
     const r = await fetch('/api/alerts?include=inactive', { cache: 'no-store' });
     const j = await r.json();
+    state.lastBeat = Date.now();
     setHistoryHours(j.history_hours);
     setSupport(j.support);
     const before = new Set(state.alerts.keys());

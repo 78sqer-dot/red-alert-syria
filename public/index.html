@@ -31,10 +31,10 @@
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
-  <link rel="stylesheet" href="/css/app.css?v=13" />
+  <link rel="stylesheet" href="/css/app.css?v=14" />
   <script src="/js/boot.js"></script>
   <script src="/vendor/maplibre-gl.js" defer></script>
-  <script type="module" src="/js/app.js?v=15"></script>
+  <script type="module" src="/js/app.js?v=16"></script>
 </head>
 <body>
   <noscript><div class="noscript">يتطلب الموقع تفعيل JavaScript — This site requires JavaScript.</div></noscript>
@@ -53,7 +53,7 @@
       <a class="tb-btn tg-btn" id="btnTelegram" href="https://t.me/Red_Alert_Syria" target="_blank" rel="noopener noreferrer"><span data-icon="telegram"></span><span class="lbl" data-t="followTelegram"></span></a>
       <div class="ticker" id="ticker" aria-live="polite"><div class="ticker-inner" id="tickerInner"></div></div>
       <a class="tb-btn report-btn" id="btnReport" href="https://t.me/Rad_Alert_Syria1_bot?start=report" target="_blank" rel="noopener noreferrer"><span data-icon="alert"></span><span class="lbl" data-t="report"></span></a>
-      <div class="status" id="status" data-tour="status" data-state="connecting"><span class="dot"></span><span class="lbl"></span></div>
+      <div class="status" id="status" data-tour="status" data-state="connecting" role="status" aria-live="polite" aria-atomic="true"><span class="dot" aria-hidden="true"></span><span class="lbl"></span><span class="status-age" aria-hidden="true"></span></div>
       <button class="tb-btn icon-only m-settings" id="btnSettingsM" type="button" aria-label="settings"><span data-icon="settings"></span></button>
     </header>
 

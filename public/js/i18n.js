@@ -40,6 +40,7 @@ export const DICT = {
     report: 'بلّغ',
     reportTitle: 'أرسل بلاغاً عبر بوت تيليغرام',
     status: { live: 'مباشر', connecting: 'جارٍ الاتصال', offline: 'غير متصل' },
+    lastConnection: 'آخر اتصال بالخادم',
     alertsCount: (n) => (n === 0 ? 'لا تنبيهات' : n === 1 ? 'تنبيه واحد' : n === 2 ? 'تنبيهان' : n <= 10 ? `${n} تنبيهات` : `${n} تنبيه`),
     activeOnMap: 'التنبيهات النشطة على الخريطة',
     withInactive: 'النشطة والمنتهية خلال آخر 72 ساعة',
@@ -69,6 +70,8 @@ export const DICT = {
     ended: 'منتهٍ',
     type: 'النوع',
     time: 'التوقيت',
+    dataProvider: 'مزود البيانات',
+    publisher: 'الجهة الناشرة',
     expires: 'ينتهي',
     noExpiry: 'بلا انتهاء',
     endedAt: 'انتهى',
@@ -96,6 +99,9 @@ export const DICT = {
     aboutTitle: 'عن الخريطة المباشرة',
     aboutText:
       'الإنذار الأحمر سوريا منصة مستقلة تعرض التنبيهات الميدانية في سوريا لحظةً بلحظة على خريطة تفاعلية: تحليق المسيّرات والطيران الحربي، الصواريخ، الهجمات، القصف المدفعي، والتنبيهات المدنية والأخبار العاجلة. تُنشر التنبيهات عبر فريق التحرير في بوت تيليغرام وتظهر فوراً على الخريطة وفي القناة.',
+    verificationNotRecorded: 'لا تُعرض درجة تحقق مستقلة لهذا التنبيه. وجود مزود بيانات لا يعني بحد ذاته تأكيد الواقعة.',
+    verificationPolicyTitle: 'المصادر والتحقق',
+    verificationPolicy: 'نعرض مزود البيانات عندما يكون معروفاً، لكن حالة التحقق المستقل غير مسجلة لكل بلاغ. لا نضع شارة «مؤكد» بلا بيانات موثقة. استخدم المعلومات للتوعية فقط واتبع تعليمات الجهات الرسمية والدفاع المدني.',
     legend: 'دليل الرموز',
     sources: 'مصادر الخريطة والبيانات',
     disclaimer:
@@ -207,6 +213,7 @@ export const DICT = {
     report: 'Report',
     reportTitle: 'Send a report through the Telegram bot',
     status: { live: 'Live', connecting: 'Connecting', offline: 'Offline' },
+    lastConnection: 'Last server connection',
     alertsCount: (n) => (n === 0 ? 'No alerts' : n === 1 ? '1 alert' : `${n} alerts`),
     activeOnMap: 'Active alerts on the map',
     withInactive: 'Active and ended in the last 72 hours',
@@ -236,6 +243,8 @@ export const DICT = {
     ended: 'Ended',
     type: 'Type',
     time: 'Time',
+    dataProvider: 'Data provider',
+    publisher: 'Published by',
     expires: 'Expires',
     noExpiry: 'No expiry',
     endedAt: 'Ended',
@@ -263,6 +272,9 @@ export const DICT = {
     aboutTitle: 'About the live map',
     aboutText:
       'Red Alert Syria is an independent platform showing field alerts across Syria in real time on an interactive map: drones and warplanes, missiles, attacks, artillery shelling, civil alerts and breaking news. Alerts are published by the editorial team through the Telegram bot and appear instantly on the map and the channel.',
+    verificationNotRecorded: 'Independent verification status is not shown for this alert. A data provider alone does not confirm the reported incident.',
+    verificationPolicyTitle: 'Sources & verification',
+    verificationPolicy: 'We show a data provider when it is known, but independent verification status is not recorded for every report. We do not label alerts “confirmed” without documented data. Use this information for awareness only and follow official and civil-defence instructions.',
     legend: 'Legend',
     sources: 'Map & data sources',
     disclaimer:
