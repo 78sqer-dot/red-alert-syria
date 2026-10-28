@@ -333,7 +333,7 @@ html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95))
 /* warplanes — squad of three flying across the zone */
 .squad { position: absolute; width: 60px; height: 200px; left: -30px; top: -100px; pointer-events: none; }
 .squad .sq { position: absolute; animation: squadFly 7s linear infinite; pointer-events: auto; }
-.sq-svg { display: block; fill: #5b9fe3; filter: drop-shadow(0 0 1px rgba(0,0,0,.55)) drop-shadow(0 1px 2px rgba(255,255,255,.55)); }
+.sq-svg { display: block; fill: #2476c9; filter: drop-shadow(0 0 1px rgba(0,0,0,.7)) drop-shadow(0 1px 2px rgba(255,255,255,.65)); }
 html.dark .sq-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.4)) drop-shadow(0 1px 2px rgba(0,0,0,.85)); }
 /* civil — single craft-sized icon (same size as the drone) passing across the zone like the warplanes */
 .squad.solo .sq { left: 50% !important; margin-left: -11px; }
@@ -752,8 +752,8 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 /* warplanes: flight path and three-plane footprint follow the ring while zooming (JS sets --fy, --sqi, --sqf) */
 .mk-squad .mk-s { transform: none; }
 .mk-squad .squad { height: calc(var(--fy, 100px) * 2 + 20px); top: calc(var(--fy, 100px) * -1 - 10px); transform: scale(var(--sqf, 1)); transform-origin: center; }
-.mk-squad .squad .sq { scale: var(--sqi, .8); animation-name: squadFlyZ; }
-@keyframes squadFlyZ { 0% { transform: translateY(calc(var(--fy, 100px) * 1.05)); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(calc(var(--fy, 100px) * -1.05)); opacity: 0; } }
+.mk-squad .squad .sq { scale: var(--sqi, .8); animation-name: squadFlyZ; animation-direction: alternate; animation-timing-function: ease-in-out; }
+@keyframes squadFlyZ { from { transform: translateY(calc(var(--fy, 100px) * 1.05)); opacity: 1; } to { transform: translateY(calc(var(--fy, 100px) * -1.05)); opacity: 1; } }
 
 /* 3D terrain: flat DOM pulse rings cannot tilt with the ground (the drawn circles do), so they are hidden */
 .is-3d .zp { display: none !important; }
