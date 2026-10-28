@@ -17,7 +17,7 @@ const { store } = await import('../server/store.js');
 await store.init(null);
 const { buildAlertInput, createBot } = await import('../server/bot.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
-const { newsState } = await import('../server/news-monitor.js');
+const { dayAutoReady, newsState } = await import('../server/news-monitor.js');
 
 const ownerId = 8270709633;
 const owner = { id: ownerId, is_bot: false, first_name: 'Local owner', language_code: 'ar' };
@@ -49,6 +49,7 @@ const tap = async (data) => bot.handleUpdate({
 });
 
 test('every monitored alert type builds, and accepting the same mock draft twice posts once', async (t) => {
+  assert.equal(dayAutoReady({ id: '4e55a74b59', status: 'pending', test: false, rule: false, srcs: [{ u: 'mock-source', local: false }], dayAutoAt: Date.now() - 1 }), false, 'the owner-designated live draft stays manual and pending');
   const addedAlertIds = [];
   const draftId = 'a1b2c3d4e5';
   t.after(async () => {
