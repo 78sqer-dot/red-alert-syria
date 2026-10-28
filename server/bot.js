@@ -192,14 +192,12 @@ function mainKeyboard(ctx) {
   const lang = langOf(ctx);
   const b = (k) => (lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar);
   const e = (k) => ALERT_TYPES[k].emoji;
-  const kb = new InlineKeyboard()
-    .text(`${e('breaking')} ${b('breaking')}`, 't:breaking').row()
-    .text(`${e('uav')} ${b('uav')}`, 't:uav').text(`${e('warplane')} ${b('warplane')}`, 't:warplane').row()
-    .text(lang === 'en' ? '🎯 Targeting' : '🎯 استهداف', 'target').row()
-    .text(`${e('artillery')} ${b('artillery')}`, 't:artillery').text(`${e('attack')} ${b('attack')}`, 't:attack').row()
-    .text(`${e('explosion')} ${b('explosion')}`, 't:explosion').text(`${e('missile')} ${b('missile')}`, 't:missile').row()
-    .text(`${e('civil')} ${b('civil')}`, 'cv').row()
-    .text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd');
+  const kb = new InlineKeyboard();
+  for (let i = 0; i < TYPE_KEYS.length; i += 2) {
+    for (const type of TYPE_KEYS.slice(i, i + 2)) kb.text(`${e(type)} ${b(type)}`, `t:${type}`);
+    kb.row();
+  }
+  kb.text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd');
   if (staff(ctx)) kb.text(lang === 'en' ? '🛂 Border crossings' : '🛂 المعابر', 'bd').row();
   else kb.url(lang === 'en' ? '🛂 Border crossings' : '🛂 حالة المعابر', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/${lang === 'en' ? 'en' : 'ar'}/#borders`).row();
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();

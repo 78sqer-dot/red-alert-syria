@@ -18,7 +18,7 @@ export const ALERT_TYPES = {
     marker: 'orbit', glyph: 'uav', zone: true, tag_ar: 'استهداف_بمسيّرة', tag_en: 'Drone_strike',
   },
   warplane: {
-    ar: 'طيران حربي', en: 'Warplane', button_ar: 'حربي', button_en: 'Warplane',
+    ar: 'طيران حربي', en: 'Warplane', button_ar: 'طيران حربي', button_en: 'Warplane',
     emoji: '✈️', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
     marker: 'squad', glyph: 'plane', zone: 'dashed', tag_ar: 'طيران_حربي', tag_en: 'Warplane',
   },
