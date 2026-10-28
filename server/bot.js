@@ -459,7 +459,7 @@ async function showPreview(ctx, d) {
   await show(ctx, `${d.mode === 'report' ? l.previewReport : l.preview}\n\n${draftSummary(d, langOf(ctx))}`, previewKeyboard(ctx, d));
 }
 
-function buildAlertInput(d, author) {
+export function buildAlertInput(d, author) {
   const titles = TITLES[d.type];
   const loc = d.location || locationFrom({});
   const wxNames = { rain: ['أمطار غزيرة', 'Heavy rain'], snow: ['ثلوج', 'Snow'], wind: ['رياح قوية', 'Strong winds'], storm: ['عواصف رعدية', 'Thunderstorms'], heat: ['موجة حر', 'Heatwave'], frost: ['صقيع', 'Frost'], dust: ['غبار', 'Dust'] };

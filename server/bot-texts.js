@@ -225,9 +225,11 @@ export function fmtDur(min, lang) {
 export const TITLES = {
   breaking: { ar: 'خبر عاجل', en: 'Breaking' },
   uav: { ar: 'تحليق مسيّرة', en: 'Drone activity' },
+  uav_strike: { ar: 'استهداف بمسيّرة', en: 'Drone strike' },
   warplane: { ar: 'تحليق طيران حربي', en: 'Warplane activity' },
   missile: { ar: 'صواريخ', en: 'Missiles' },
   attack: { ar: 'هجوم', en: 'Attack' },
+  assassination: { ar: 'اغتيال', en: 'Assassination' },
   artillery: { ar: 'قصف مدفعي', en: 'Artillery shelling' },
   explosion: { ar: 'انفجار', en: 'Explosion' },
   civil: { ar: 'تنبيه مدني', en: 'Civil alert' },
