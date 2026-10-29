@@ -753,8 +753,12 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 /* warplanes: flight path and three-plane footprint follow the ring while zooming (JS sets --fy, --sqi, --sqf) */
 .mk-squad .mk-s { transform: none; }
 .mk-squad .squad { height: calc(var(--fy, 100px) * 2 + 20px); top: calc(var(--fy, 100px) * -1 - 10px); transform: scale(var(--sqf, 1)); transform-origin: center; }
-.mk-squad .squad .sq { scale: var(--sqi, .8); animation-name: squadFlyZ; animation-direction: alternate; animation-timing-function: ease-in-out; }
-@keyframes squadFlyZ { from { transform: translateY(calc(var(--fy, 100px) * 1.05)); opacity: 1; } to { transform: translateY(calc(var(--fy, 100px) * -1.05)); opacity: 1; } }
+.mk-squad .squad .sq { scale: var(--sqi, .8); animation: squadFlyZ 7s linear infinite; }
+@keyframes squadFlyZ {
+  0% { transform: translateY(calc(var(--fy, 100px) * 1.05)); opacity: 0; }
+  12%, 88% { opacity: 1; }
+  100% { transform: translateY(calc(var(--fy, 100px) * -1.05)); opacity: 0; }
+}
 
 /* 3D terrain: flat DOM pulse rings cannot tilt with the ground (the drawn circles do), so they are hidden */
 .is-3d .zp { display: none !important; }
@@ -965,14 +969,15 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
   .about-pill { max-width: calc(100% - 76px); }
 }
 
-/* Distinct, still-small silhouettes for aerial alerts on both basemap themes. */
-.uav-svg, .sq-svg {
+/* Drones keep a light outline; warplanes match the clean blue silhouette used by the reference map. */
+.uav-svg {
   stroke: rgba(255,255,255,.94);
   stroke-width: 18;
   stroke-linecap: round;
   stroke-linejoin: round;
   paint-order: stroke fill;
 }
-html.dark .uav-svg, html.dark .sq-svg {
+html.dark .uav-svg {
   stroke: rgba(255,255,255,.98);
 }
+.sq-svg { transform: rotate(-45deg); }
