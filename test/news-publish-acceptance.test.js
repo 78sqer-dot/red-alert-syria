@@ -13,38 +13,47 @@ process.env.CHANNEL_ID = '@mock_news_channel';
 process.env.PUBLIC_URL = 'https://example.invalid';
 process.env.ALERT_IMAGES = 'false';
 
-const { store } = await import('../server/store.js');
+const { store, publicAlert } = await import('../server/store.js');
 await store.init(null);
-const { buildAlertInput, createBot } = await import('../server/bot.js');
+const { buildAlertInput, createBot, channelKeyboard } = await import('../server/bot.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { newsState } = await import('../server/news-monitor.js');
 
 const ownerId = 8270709633;
 const owner = { id: ownerId, is_bot: false, first_name: 'Local owner', language_code: 'ar' };
+const reporter = { id: 8270709634, is_bot: false, first_name: 'Local reporter', language_code: 'ar' };
 const bot = createBot();
 bot.botInfo = { id: 1, is_bot: true, first_name: 'Local news test', username: 'LocalNewsTestBot' };
+const reportBot = createBot({ role: 'report', token: '654321:LOCAL_REPORT_TEST' });
+reportBot.botInfo = { id: 2, is_bot: true, first_name: 'Local report test', username: 'LocalReportTestBot' };
 const calls = [];
 let messageId = 1000;
 bot.api.config.use(async (_previous, method, payload) => {
-  calls.push({ method, chatId: payload?.chat_id });
+  calls.push({ method, chatId: payload?.chat_id, payload: structuredClone(payload || {}) });
   if (method === 'sendMessage') {
-    return { ok: true, result: { message_id: ++messageId, chat: { id: payload.chat_id, type: payload.chat_id === ownerId ? 'private' : 'channel' }, date: 0, text: payload.text || '' } };
+    return { ok: true, result: { message_id: ++messageId, chat: { id: payload.chat_id, type: [ownerId, reporter.id].includes(payload.chat_id) ? 'private' : 'channel' }, date: 0, text: payload.text || '' } };
   }
   if (method === 'editMessageText') {
     return { ok: true, result: { message_id: payload.message_id, chat: { id: payload.chat_id, type: 'private' }, date: 0, text: payload.text || '' } };
   }
   return { ok: true, result: true };
 });
+reportBot.api.config.use(async (_previous, method, payload) => {
+  calls.push({ method, chatId: payload?.chat_id, payload: structuredClone(payload || {}) });
+  if (method === 'sendMessage') return { ok: true, result: { message_id: ++messageId, chat: { id: payload.chat_id, type: 'private' }, date: 0, text: payload.text || '' } };
+  if (method === 'editMessageText') return { ok: true, result: { message_id: payload.message_id, chat: { id: payload.chat_id, type: 'private' }, date: 0, text: payload.text || '' } };
+  return { ok: true, result: true };
+});
 
 let updateId = 1;
-const tap = async (data) => bot.handleUpdate({
+const tap = async (data, user = owner, targetBot = bot) => targetBot.handleUpdate({
   update_id: updateId++,
   callback_query: {
     id: `local-${updateId}`,
-    from: owner,
+    from: user,
     chat_instance: 'local',
     data,
-    message: { message_id: 700, date: 0, chat: { id: ownerId, type: 'private' }, from: bot.botInfo, text: 'Local test draft' },
+    message: { message_id: 700, date: 0, chat: { id: user.id, type: 'private' }, from: targetBot.botInfo, text: 'Local test draft' },
   },
 });
 
@@ -63,6 +72,51 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     assert.ok(input.title, `${type} must have a publish title`);
     assert.ok(input.title_en, `${type} must have an English publish title`);
   }
+  const socialRow = channelKeyboard({ id: 'test-social-buttons' }).inline_keyboard.find((row) => row.some((button) => button.url?.includes('/boost/')));
+  assert.equal(socialRow?.length, 2, 'boost and WhatsApp channel buttons share one professional row');
+  assert.equal(socialRow[1].url, 'https://whatsapp.com/channel/0029VbDl95H5fM5V2HJ2PO10');
+
+  const lastUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
+  const buttons = () => lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+  await tap('t:border');
+  assert.ok(buttons().some((button) => button.callback_data === 'bsel:iraq'));
+  assert.ok(buttons().some((button) => button.callback_data === 'bsel:turkey'));
+  await tap('bsel:turkey');
+  assert.match(lastUi().payload.text, /اختر المحافظة/);
+  await tap('t:warplane');
+  assert.ok(buttons().some((button) => button.callback_data === 'flight:toward_syria'));
+  assert.ok(buttons().some((button) => button.callback_data === 'flight:entering_syria'));
+  assert.ok(buttons().some((button) => button.callback_data === 'flight:leaving_syria'));
+  assert.ok(buttons().some((button) => button.callback_data === 'flight:from_area'));
+
+  await tap('t:uav', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 'flight:entering_syria'), 'drone reports ask for direction before location');
+  await tap('flight:entering_syria', reporter, reportBot);
+  await tap('g:09', reporter, reportBot);
+  const centerChoice = buttons().find((button) => button.text?.startsWith('📍 مركز مدينة'));
+  assert.ok(centerChoice, 'non-staff reporters can select the governorate city centre');
+  await tap(centerChoice.callback_data, reporter, reportBot);
+  assert.match(lastUi().payload.text, /حلب/);
+
+  const borderInput = buildAlertInput({
+    type: 'border', border: 'turkey', location: { scope: 'place', name_ar: 'حلب', name_en: 'Aleppo' }, extra: [], ttlMin: 120,
+  }, { id: ownerId, name: 'test' });
+  assert.match(borderInput.title, /السورية–التركية/);
+  const flightInput = buildAlertInput({
+    type: 'warplane', flightDirection: 'leaving_syria', location: { scope: 'place', name_ar: 'درعا', name_en: 'Daraa' }, extra: [], ttlMin: 60,
+  }, { id: ownerId, name: 'test' });
+  assert.match(flightInput.title_en, /Withdrawing from Syria/);
+  const droneInput = buildAlertInput({
+    type: 'uav', flightDirection: 'entering_syria', location: { scope: 'place', name_ar: 'حلب', name_en: 'Aleppo' }, extra: [], ttlMin: 90,
+  }, { id: ownerId, name: 'test' });
+  assert.match(droneInput.title, /دخول الأجواء السورية/);
+  const borderAlert = store.addAlert(borderInput);
+  assert.equal(publicAlert(borderAlert).border, 'turkey');
+  const flightAlert = store.addAlert(flightInput);
+  assert.equal(publicAlert(flightAlert).flight_direction, 'leaving_syria');
+  const droneAlert = store.addAlert(droneInput);
+  assert.equal(publicAlert(droneAlert).flight_direction, 'entering_syria');
+  addedAlertIds.push(borderAlert.id, flightAlert.id, droneAlert.id);
 
   const before = new Set(store.state.alerts.map((alert) => alert.id));
   newsState().drafts[draftId] = {
@@ -90,5 +144,5 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   addedAlertIds.push(...newAlerts.map((alert) => alert.id));
   assert.equal(newAlerts.length, 1, 'the repeated approval must not create another map alert');
   assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, 1, 'the repeated approval must not post to the channel twice');
-  assert.ok(calls.every((call) => !call.chatId || call.chatId === ownerId || call.chatId === process.env.CHANNEL_ID), 'all Telegram API calls are intercepted locally');
+  assert.ok(calls.every((call) => !call.chatId || [ownerId, reporter.id, process.env.CHANNEL_ID].includes(call.chatId)), 'all Telegram API calls are intercepted locally');
 });

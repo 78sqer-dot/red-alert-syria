@@ -5,7 +5,7 @@ import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert } from './store.js';
-import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji, droneAuto } from '../shared/types.js';
+import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji, droneAuto, BORDER_REGIONS, FLIGHT_DIRECTIONS } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
@@ -110,13 +110,17 @@ export function channelKeyboard(alert) {
   const kb = new InlineKeyboard();
   if (url) kb.url('🗺 عرض على الخريطة', url);
   if (config.reportBotUsername) kb.url('📨 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
-  kb.row().url('🚀 عزّز القناة', 'https://t.me/boost/Red_Alert_Syria');
+  kb.row()
+    .url('🚀 عزّز القناة', 'https://t.me/boost/Red_Alert_Syria')
+    .url('🟢 قناة واتساب', 'https://whatsapp.com/channel/0029VbDl95H5fM5V2HJ2PO10');
   return kb;
 }
 function draftSummary(d, lang) {
   const l = T[lang];
   const loc = d.location;
   const lines = [`<b>${esc(d.type === 'road' ? roadLabel(d.road, lang) : typeLabel(d.type, lang))}</b>`];
+  if (d.border && BORDER_REGIONS[d.border]) lines.push(`🛂 <b>${esc(lang === 'en' ? BORDER_REGIONS[d.border].en : BORDER_REGIONS[d.border].ar)}</b>`);
+  if (d.flightDirection && FLIGHT_DIRECTIONS[d.flightDirection]) lines.push(`${d.type === 'warplane' ? '✈️' : '🛸'} <b>${esc(lang === 'en' ? FLIGHT_DIRECTIONS[d.flightDirection].en : FLIGHT_DIRECTIONS[d.flightDirection].ar)}</b>`);
   if (d.type === 'breaking') lines.push('', esc(d.text || ''));
   if (d.extra?.length) {
     lines.push('', `📍 <b>${lang === 'en' ? `Areas (${d.extra.length + 1})` : `المناطق (${d.extra.length + 1})`}:</b>`);
@@ -232,8 +236,9 @@ function distKeyboard(ctx, gov) {
   const lang = langOf(ctx);
   const g = getGov(gov);
   const kb = new InlineKeyboard().text(l.btnWholeGov(lang === 'en' ? g.en : g.ar), 'wg:' + gov).row();
-  const cap = staff(ctx) && gov !== '08' && capitalOf(gov);
+  const cap = gov !== '08' && capitalOf(gov);
   if (cap) kb.text(centerBtn(cap, lang), 'p:' + cap.id).row();
+  else if (gov === '08') kb.text(lang === 'en' ? '📍 Approx. centre of Rif Dimashq' : '📍 مركز تقريبي لريف دمشق', 'gc:' + gov).row();
   districtsOf(gov).forEach((d, i) => {
     kb.text(lang === 'en' ? d.en : d.ar, 'd:' + d.code);
     if (i % 2 === 1) kb.row();
@@ -249,7 +254,7 @@ function subKeyboard(ctx, dist) {
   const lang = langOf(ctx);
   const d = getDist(dist);
   const kb = new InlineKeyboard().text(l.btnWholeDist(lang === 'en' ? d.en : d.ar), 'wd:' + dist).row();
-  const c0 = staff(ctx) && centerOfDist(dist);
+  const c0 = centerOfDist(dist);
   if (c0) kb.text(centerBtn(c0, lang), 'p:' + c0.id).row();
   subsOf(dist).forEach((x, i) => {
     kb.text((lang === 'en' ? x.en : x.ar).slice(0, 30), `s:${dist}:${x.code}`);
@@ -273,7 +278,7 @@ function letterKeyboard(ctx, dist, sub, all) {
   for (const p of all) { const c = firstLetter(p, lang); n.set(c, (n.get(c) || 0) + 1); }
   const letters = [...n.keys()].sort((a, b) => a.localeCompare(b, lang === 'en' ? 'en' : 'ar'));
   const kb = new InlineKeyboard().text(l.btnWholeDist(lang === 'en' ? d.en : d.ar), 'wd:' + dist).row();
-  const c1 = staff(ctx) && (sub ? centerOfSub(dist, sub) : centerOfDist(dist));
+  const c1 = sub ? centerOfSub(dist, sub) : centerOfDist(dist);
   if (c1) kb.text(centerBtn(c1, lang), 'p:' + c1.id).row();
   // the big towns of the area stay one tap away
   all.filter((p) => p.rank <= 4).slice(0, 9).forEach((p, i) => {
@@ -298,7 +303,7 @@ function placeKeyboard(ctx, dist, page, sub = '', letter = '') {
   const pages = Math.max(1, Math.ceil(all.length / PAGE));
   page = Math.min(Math.max(0, page), pages - 1);
   const kb = new InlineKeyboard().text(l.btnWholeDist(lang === 'en' ? d.en : d.ar), 'wd:' + dist).row();
-  const c2 = staff(ctx) && !page && !letter && (sub ? centerOfSub(dist, sub) : centerOfDist(dist));
+  const c2 = !page && !letter && (sub ? centerOfSub(dist, sub) : centerOfDist(dist));
   if (c2) kb.text(centerBtn(c2, lang), 'p:' + c2.id).row();
   all.slice(page * PAGE, page * PAGE + PAGE).forEach((p, i) => {
     kb.text((lang === 'en' ? p.en || p.ar : p.ar).slice(0, 28), 'p:' + p.id);
@@ -342,37 +347,13 @@ function previewKeyboard(ctx, d) {
 
 // ---------------------------------------------------------------- helpers
 
-// Show a short toast for the pressed button and remove the message from the chat (keeps the chat clean).
-// ---- transient notices ("thanks", "approved"...): removed on the user's next tap/message, or after 2 min
-const transient = new Map(); // `${botId}:${chatId}` -> [{ api, msgId, timer }]
+// Notices and conversation history remain in the private bot chat; navigation never deletes them.
 async function sendTransient(api, chatId, text, extra = {}) {
   try {
-    const m = await api.sendMessage(chatId, text, { link_preview_options: { is_disabled: true }, ...extra });
-    const key = `${api.token ? api.token.split(':')[0] : 'x'}:${chatId}`;
-    const item = { api, msgId: m.message_id };
-    item.timer = setTimeout(() => dropTransient(key, item), 120_000);
-    if (item.timer.unref) item.timer.unref();
-    if (!transient.has(key)) transient.set(key, []);
-    transient.get(key).push(item);
-    return m;
+    return await api.sendMessage(chatId, text, { link_preview_options: { is_disabled: true }, ...extra });
   } catch { return null; }
 }
-function dropTransient(key, only) {
-  const list = transient.get(key);
-  if (!list) return;
-  for (const it of list.slice()) {
-    if (only && it !== only) continue;
-    clearTimeout(it.timer);
-    it.api.deleteMessage(Number(key.split(':')[1]), it.msgId).catch(() => {});
-    list.splice(list.indexOf(it), 1);
-  }
-  if (!list.length) transient.delete(key);
-}
-function clearTransientFor(ctx) {
-  const chatId = ctx.chat?.id ?? ctx.from?.id;
-  if (chatId == null) return;
-  dropTransient(`${ctx.api.token ? ctx.api.token.split(':')[0] : 'x'}:${chatId}`);
-}
+function clearTransientFor() { /* retained intentionally */ }
 
 async function vanish(ctx, text) {
   try { await ctx.answerCallbackQuery(text ? { text: String(text).replace(/<[^>]+>/g, '').slice(0, 190) } : undefined); } catch { /* already answered */ }
@@ -396,11 +377,12 @@ async function show(ctx, text, keyboard) {
   if (d) d.msgId = m.message_id;
 }
 
+const FLIGHT_TYPES = new Set(['warplane', 'uav', 'uav_strike']);
 function newDraft(ctx, type) {
   const d = {
     type,
     mode: staff(ctx) ? 'publish' : 'report',
-    step: type === 'breaking' ? 'text' : 'gov',
+    step: type === 'breaking' ? 'text' : type === 'border' ? 'border' : FLIGHT_TYPES.has(type) ? 'flight' : 'gov',
     ttlMin: typeOf(type).ttlMin,
     location: null,
     extra: [], // further areas of the same alert (publishing bot)
@@ -423,6 +405,22 @@ async function askLocation(ctx, d) {
   const en = langOf(ctx) === 'en';
   const head = d.adding ? (en ? `➕ <b>Add another area</b> (${(d.extra?.length || 0) + 1} selected so far)\n\n` : `➕ <b>إضافة منطقة أخرى</b> (المحدد حتى الآن: ${(d.extra?.length || 0) + 1})\n\n`) : '';
   await show(ctx, head + L(ctx).askGov(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`), govKeyboard(ctx, d));
+}
+async function askBorder(ctx, d) {
+  d.step = 'border';
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard();
+  for (const [key, name] of Object.entries(BORDER_REGIONS)) kb.text(`🛂 ${en ? name.en : name.ar}`, `bsel:${key}`).row();
+  kb.text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en ? 'Choose the border section for this report:' : 'اختر الحدود المقصودة لهذا البلاغ:', kb);
+}
+async function askFlightDirection(ctx, d) {
+  d.step = 'flight';
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard();
+  for (const [key, name] of Object.entries(FLIGHT_DIRECTIONS)) kb.text(`✈️ ${en ? name.en : name.ar}`, `flight:${key}`).row();
+  kb.text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en ? 'Select the reported flight direction, then choose the relevant area:' : 'اختر اتجاه الطيران المبلّغ عنه، ثم حدّد المنطقة المرتبطة بالخبر:', kb);
 }
 const locKey = (x) => (x ? `${x.scope}:${x.place_id || x.district || x.governorate || ''}:${Number(x.latitude).toFixed(3)},${Number(x.longitude).toFixed(3)}` : '');
 // a picked location: either the alert's (first) area, or one more area added from the preview
@@ -473,10 +471,14 @@ export function buildAlertInput(d, author) {
   const extra = named && Array.isArray(d.extra) ? d.extra.filter((x) => x && x.scope !== 'country') : [];
   for (const x of extra) if (x.name_ar && !areas.includes(x.name_ar)) areas.push(x.name_ar);
   const more = (n, en) => (!n ? '' : en ? ` +${n} more` : n === 1 ? ' ومنطقة أخرى' : n === 2 ? ' ومنطقتان أخريان' : n <= 10 ? ` و${n} مناطق أخرى` : ` و${n} منطقة أخرى`);
+  const border = BORDER_REGIONS[d.border];
+  const flight = FLIGHT_DIRECTIONS[d.flightDirection];
+  const baseTitle = wx ? `${titles.ar}: ${wx[0]}${named ? ` — ${loc.name_ar}` : ''}` : named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar;
+  const baseTitleEn = wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
   return {
     type: d.type,
-    title: wx ? `${titles.ar}: ${wx[0]}${named ? ` — ${loc.name_ar}` : ''}` : named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar,
-    title_en: wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en,
+    title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}`,
+    title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}`,
     extra,
     description: cleanAlertText(d.type === 'breaking' ? d.text : d.details),
     location: loc,
@@ -484,8 +486,14 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { meta: { intense: d.intense } } : {}),
-    ...(d.type === 'weather' && d.meta?.hazard ? { meta: { hazard: d.meta.hazard } } : {}),
+    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight ? {
+      meta: {
+        ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
+        ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
+        ...(border ? { border: d.border } : {}),
+        ...(flight ? { flightDirection: d.flightDirection } : {}),
+      },
+    } : {}),
   };
 }
 
@@ -954,11 +962,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }
   // pressing the menu clears this chat's relay conversation (the thread itself stays open:
   // the reporter can still write, and staff can answer his next message)
-  const clearConvo = (ctx) => {
-    if (!ctx.chat || ctx.chat.type !== 'private') return;
-    const ids = store.convoTake(role, ctx.chat.id);
-    for (const id of ids) ctx.api.deleteMessage(ctx.chat.id, id).catch(() => {});
-  };
+  const clearConvo = () => { /* private-chat history is intentionally retained in both bots */ };
   const home = async (ctx) => {
     clearConvo(ctx);
     sessions.delete(sk(ctx));
@@ -1247,9 +1251,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const d = newDraft(ctx, type);
     if (type === 'breaking') {
       await show(ctx, L(ctx).askBreaking, new InlineKeyboard().text(L(ctx).btnCancel, 'cancel'));
-    } else {
-      await askLocation(ctx, d);
-    }
+    } else if (type === 'border') await askBorder(ctx, d);
+    else if (FLIGHT_TYPES.has(type)) await askFlightDirection(ctx, d);
+    else await askLocation(ctx, d);
   });
 
   const needDraft = (fn) => async (ctx) => {
@@ -1262,6 +1266,17 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return fn(ctx, d);
   };
 
+  bot.callbackQuery(/^bsel:(iraq|jordan|lebanon|turkey)$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'border') return;
+    d.border = ctx.match[1];
+    await askLocation(ctx, d);
+  }));
+  bot.callbackQuery(/^flight:(toward_syria|entering_syria|leaving_syria|from_area)$/, needDraft(async (ctx, d) => {
+    if (!FLIGHT_TYPES.has(d.type)) return;
+    d.flightDirection = ctx.match[1];
+    await askLocation(ctx, d);
+  }));
+
   bot.callbackQuery(/^g:(\d+)$/, needDraft(async (ctx, d) => {
     const gov = ctx.match[1];
     if (!getGov(gov)) return;
@@ -1270,6 +1285,13 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await show(ctx, L(ctx).askDist(`<b>${esc(typeLabel(d.type, lang))}</b>`, esc(lang === 'en' ? getGov(gov).en : getGov(gov).ar)), distKeyboard(ctx, gov));
   }));
   bot.callbackQuery(/^wg:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ govCode: ctx.match[1] }))));
+  bot.callbackQuery(/^gc:(\d+)$/, needDraft((ctx, d) => {
+    const g = getGov(ctx.match[1]);
+    if (!g || g.code !== '08') return;
+    const loc = locationFrom({ lat: g.lat, lon: g.lon, label: 'مركز تقريبي لريف دمشق' });
+    if (loc) loc.name_en = 'Approx. centre of Rif Dimashq';
+    return pickLocation(ctx, d, loc);
+  }));
   const showPlaces = async (ctx, d, dist, page, sub = '', letter = '') => {
     d.dist = dist; d.sub = sub; d.step = 'place';
     const lang = langOf(ctx);

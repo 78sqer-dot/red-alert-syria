@@ -239,4 +239,5 @@ export const TITLES = {
   civil_plane: { ar: 'طائرة مدنية', en: 'Civil aircraft' },
   quake: { ar: 'زلزال', en: 'Earthquake' },
   weather: { ar: 'تحذير جوي', en: 'Weather warning' },
+  border: { ar: 'تنبيه حدودي', en: 'Border alert' },
 };

@@ -6,8 +6,10 @@ const nm = (p) => path.join(root, 'node_modules', p);
 const out = (p) => path.join(root, 'public', p);
 const copy = (from, to) => { fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(from, to); };
 
-copy(nm('maplibre-gl/dist/maplibre-gl.js'), out('vendor/maplibre-gl.js'));
+copy(nm('maplibre-gl/dist/maplibre-gl.mjs'), out('vendor/maplibre-gl.mjs'));
+copy(nm('maplibre-gl/dist/maplibre-gl-worker.mjs'), out('vendor/maplibre-gl-worker.mjs'));
 copy(nm('maplibre-gl/dist/maplibre-gl.css'), out('vendor/maplibre-gl.css'));
+try { fs.unlinkSync(out('vendor/maplibre-gl.js')); } catch { /* removed in the ES-module release */ }
 copy(nm('@mapbox/mapbox-gl-rtl-text/dist/mapbox-gl-rtl-text.js'), out('vendor/mapbox-gl-rtl-text.js'));
 const fonts = [
   ['@fontsource/noto-kufi-arabic/files', /noto-kufi-arabic-(arabic|latin)-(300|400|500|600|700|800|900)-normal\.woff2$/],

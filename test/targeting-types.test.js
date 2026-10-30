@@ -15,6 +15,12 @@ test('map types keep drone targeting distinct and visually on-brand', () => {
   assert.equal(drone.tag_ar, 'استهداف_بمسيّرة');
 });
 
+test('border alert type is available in the map type filter', () => {
+  assert.ok(TYPE_KEYS.includes('border'));
+  assert.ok(ALERT_GROUPS.other.types.includes('border'));
+  assert.equal(ALERT_TYPES.border.button_ar, 'الحدود');
+});
+
 test('assassination has its own weapon marker and appears in the strikes filter', () => {
   const type = ALERT_TYPES.assassination;
   assert.ok(TYPE_KEYS.includes('assassination'));
@@ -60,4 +66,13 @@ test('deduplication only joins identical precise types, not generic sightings or
   assert.equal(sameIncident(strike, candidate('uav_strike', 'استهداف بمسيّرة لمركبة في محيط دمشق')), true);
   assert.equal(sameIncident(strike, candidate('uav', 'تحليق مسيّرة في محيط دمشق')), false);
   assert.equal(sameIncident(candidate('assassination', 'اغتيال مسؤول في دمشق'), candidate('attack', 'إطلاق نار قرب دمشق')), false);
+});
+
+test('similar headlines in distant governorates are not merged as the same incident', () => {
+  const now = Date.now();
+  const geo = (lat, lon, governorate) => ({ pts: [{ lat, lon }], dists: [], govs: [governorate], coarse: false, none: false });
+  const incident = (location) => ({ type: 'attack', headline: 'اشتباك مسلح قرب حاجز في المنطقة', ts: now, geo: location });
+  assert.equal(sameIncident(incident(geo(36.2, 37.1, 'حلب')), incident(geo(32.6, 36.1, 'درعا'))), false);
+  const unknown = { pts: [], dists: [], govs: [], coarse: false, none: true };
+  assert.equal(sameIncident(incident(unknown), incident(unknown)), true);
 });

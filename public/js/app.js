@@ -1,15 +1,18 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=15';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, typeOf, HAZARD_EMOJI, alertEmoji } from '/shared/types.js';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS } from '/shared/types.js';
+import * as maplibregl from '/vendor/maplibre-gl.mjs?v=6.16.0';
 import { DICT } from './i18n.js';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js';
 import { settings } from './settings.js';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=19';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=20';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
+maplibregl.setWorkerUrl(new URL('/vendor/maplibre-gl-worker.mjs', location.origin).href);
+window.maplibregl = maplibregl;
 const T = DICT[LANG];
 const TZ = 'Asia/Damascus';
 const CHANNEL = 'https://t.me/Red_Alert_Syria';
@@ -263,6 +266,8 @@ function detailHtml(a) {
   const rows = [
     [T.type, `${badge(a)}`],
     [T.location, esc(placeName(a))],
+    ...(BORDER_REGIONS[a.border] ? [[LANG === 'ar' ? 'الحدود' : 'Border', esc(LANG === 'ar' ? BORDER_REGIONS[a.border].ar : BORDER_REGIONS[a.border].en)]] : []),
+    ...(FLIGHT_DIRECTIONS[a.flight_direction] ? [[LANG === 'ar' ? 'اتجاه الطيران' : 'Flight direction', esc(LANG === 'ar' ? FLIGHT_DIRECTIONS[a.flight_direction].ar : FLIGHT_DIRECTIONS[a.flight_direction].en)]] : []),
     ...(alertDist(a) ? [[LANG === 'ar' ? 'المسافة عنك' : 'Distance from you', distChip(a)]] : []),
     [T.time, esc(fmtFull.format(new Date(a.timestamp)))],
     [a.source_info?.kind === 'provider' ? T.dataProvider : T.publisher, a.source_info?.url ? `<a href="${esc(a.source_info.url)}" target="_blank" rel="noopener noreferrer">${esc(a.source_info.name)}</a>` : esc(a.source_info?.name || 'Red Alert Syria')],

@@ -1,9 +1,7 @@
-// Clean chats: only the current screen stays in a private chat with the bot.
+// Track private-chat messages for optional manual cleanup, but never auto-delete on navigation.
 //
-// Every message a bot sends to a private chat is recorded (API transformer), together with the
-// user's own messages (commands, typed IDs/codes, report details...). After each update, if the
-// bot showed a new screen in that chat (sent a message with buttons / a photo / a document, or
-// edited a message in place), every older recorded message in that chat is removed.
+// Bot and user messages are recorded, but old screens and auto-published news cards remain visible
+// when the user returns to the menu.
 // Plain notices without buttons ("✅ done", "⚠️ wrong format") do not count as a new screen, so a
 // prompt stays visible while the user retries.
 // Kept: messages sent with `_keep: true` (pending report cards, relay conversation, the pinned
@@ -143,10 +141,8 @@ export function cleanChat(role) {
     } finally {
       try {
         const msg = ctx.message;
-        // no new screen (e.g. "⚠️ wrong format"): keep the screen, drop earlier typed inputs/notices
-        if (!st.screen && msg) await sweep(ctx.api, role, chat, st.start, true);
+        // Keep all messages on ordinary navigation. wipeChat() remains available for explicit cleanup.
         if (msg && !ctx.ras?.keepInput) add(role, chat, { id: msg.message_id, t: (msg.date || 0) * 1000 || Date.now(), s: st.start - 0.5, u: 1 });
-        if (st.screen) await sweep(ctx.api, role, chat, st.start);
       } catch (e) { console.warn('[ui] clean failed', e.description || e.message); }
     }
   };

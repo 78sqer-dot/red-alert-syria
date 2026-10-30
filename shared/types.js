@@ -22,6 +22,11 @@ export const ALERT_TYPES = {
     emoji: '✈️', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
     marker: 'squad', glyph: 'plane', zone: 'dashed', tag_ar: 'طيران_حربي', tag_en: 'Warplane',
   },
+  border: {
+    ar: 'تنبيه حدودي', en: 'Border alert', button_ar: 'الحدود', button_en: 'Border',
+    emoji: '🛂', color: '#7c3aed', ring: '#5b21b6', group: 'other', ttlMin: 120,
+    marker: 'icon', glyph: 'alert_tri', icon: '#7c3aed', zone: false, tag_ar: 'حدود', tag_en: 'Border',
+  },
   missile: {
     ar: 'صواريخ', en: 'Missiles', button_ar: 'صواريخ', button_en: 'Missiles',
     emoji: '🚀', color: '#7f1d1d', ring: '#450a0a', group: 'aerial', ttlMin: 180,
@@ -93,7 +98,21 @@ export const ALERT_GROUPS = {
   strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'assassination', 'artillery', 'explosion'] },
   civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
-  other: { ar: 'أخرى', en: 'Other', types: ['breaking'] },
+  other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border'] },
+};
+
+export const BORDER_REGIONS = {
+  iraq: { ar: 'الحدود السورية–العراقية', en: 'Syrian–Iraqi border' },
+  jordan: { ar: 'الحدود السورية–الأردنية', en: 'Syrian–Jordanian border' },
+  lebanon: { ar: 'الحدود السورية–اللبنانية', en: 'Syrian–Lebanese border' },
+  turkey: { ar: 'الحدود السورية–التركية', en: 'Syrian–Turkish border' },
+};
+
+export const FLIGHT_DIRECTIONS = {
+  toward_syria: { ar: 'باتجاه سوريا', en: 'Toward Syria' },
+  entering_syria: { ar: 'دخول الأجواء السورية', en: 'Entering Syrian airspace' },
+  leaving_syria: { ar: 'ينسحب من سوريا', en: 'Withdrawing from Syria' },
+  from_area: { ar: 'من المنطقة المحددة', en: 'From the selected area' },
 };
 
 export function typeOf(key) {

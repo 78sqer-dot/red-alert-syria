@@ -27,7 +27,7 @@ import { setSourceNames, cleanAlertText } from './clean-text.js';
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
 // that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
-export const FILTER_VER = 4;
+export const FILTER_VER = 5;
 const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
@@ -293,13 +293,16 @@ export function sameIncident(c, k) {
   const win = Math.max(WINDOW_MIN[c.type] || 360, WINDOW_MIN[k.type] || 360) * 60_000;
   if (Math.abs((c.ts || 0) - (k.ts || 0)) > win) return false;
   const sim = textSim(c.headline, k.headline);
+  const bothKnownAndNear = !c.geo.none && !k.geo.none && near(c.geo, k.geo);
+  const locationMissing = c.geo.none || k.geo.none;
   if (c.type === 'breaking' || k.type === 'breaking') {
-    if (c.type !== k.type) return sim >= 0.3 && (c.geo.none || k.geo.none || near(c.geo, k.geo));
-    return sim >= 0.45 || (!c.geo.none && !k.geo.none && near(c.geo, k.geo) && sim >= 0.15);
+    if (c.type !== k.type) return (bothKnownAndNear && sim >= 0.25) || (locationMissing && sim >= 0.85);
+    return (bothKnownAndNear && sim >= 0.2) || (locationMissing && sim >= 0.85);
   }
   if (!sameFamily(c.type, k.type)) return false;
-  if (sim >= 0.5) return true;
-  return near(c.geo, k.geo);
+  // Similar wording alone is not evidence of the same event: two incidents in distant
+  // governorates must remain separate. Unknown locations need near-identical headlines.
+  return (bothKnownAndNear && sim >= 0.2) || (locationMissing && sim >= 0.85);
 }
 /** every incident we already know of, newest first: drafts (any status), published alerts, pending human reports */
 function knownEvents(hours = 12) {
@@ -615,12 +618,18 @@ async function handleResult(it, r, known, pmap) {
   const m = String(r.same_as || '').trim().match(/^([EP])(\d+)$/i);
   if (m && m[1].toUpperCase() === 'E') target = known[Number(m[2]) - 1] || null;
   if (m && m[1].toUpperCase() === 'P') target = pmap.get(Number(m[2])) || null;
+  let rejectedSameAs = false;
   const locs = buildLocations(r, it);
   const tidy = (x) => cleanAlertText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/\s+/g, ' ').trim();
   const headline = (tidy(r.headline) || tidy(it.text.split('\n')[0])).slice(0, 160);
   const cand = { type: r.type, ts: it.ts, headline, geo: geoOf(locs) };
+  if (target && !sameIncident(cand, target)) {
+    note(it, `AI same_as rejected: event type/location/time mismatch (${r.same_as})`);
+    target = null;
+    rejectedSameAs = true;
+  }
   if (!target) target = known.find((k) => sameIncident(cand, k)) || null;
-  if (!target && r.new_incident === false) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
+  if (!target && r.new_incident === false && !rejectedSameAs) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
   if (target) {
     pmap.set(it.i, target);
     const d = target.draftId ? n.drafts[target.draftId] : null;
@@ -775,7 +784,6 @@ async function pollOnce() {
       (n.handled ||= {})[`${src.u}/${p.id}`] = Date.now();
       continue; // official road feeds never enter the general news/alert pipeline
     }
-    if (n.seen[h]) { n.stats.dupes++; note(it, 'same text already seen'); continue; }
     // ⚡ electricity / rationing updates -> a separate owner card (server/services.js), never an alert
     try { if (onPowerPost(it)) { note(it, 'electricity update -> owner card'); continue; } } catch (e) { console.warn('[news] power hook failed', e.message); }
     // 🛂 border crossing open/closed news -> owner suggestion card (server/borders.js); the post still goes on as news

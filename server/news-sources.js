@@ -52,6 +52,9 @@ export function parseChannelPage(html, u) {
     const post = (block.match(/data-post="([^"]+)"/) || [])[1];
     if (!post) continue;
     const [chan, idStr] = post.split('/');
+    // Telegram pages can contain embedded/quoted widgets. Never attribute one of those
+    // to the requested feed unless its data-post username matches that exact feed.
+    if (!chan || chan.toLowerCase() !== String(u).toLowerCase()) continue;
     const id = Number(idStr);
     if (!Number.isFinite(id)) continue;
     if (/tgme_widget_message_service/.test(block.slice(0, 400))) continue; // "channel created", pinned...
@@ -64,7 +67,7 @@ export function parseChannelPage(html, u) {
       .replace(/<[^>]+>/g, '');
     text = unescape(text).replace(/\u200f|\u200e|\u202b|\u202c/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     const fwd = /tgme_widget_message_forwarded_from/.test(block);
-    posts.push({ id, ts: Number.isFinite(ts) ? ts : null, text, url: `https://t.me/${chan || u}/${id}`, fwd });
+    posts.push({ id, ts: Number.isFinite(ts) ? ts : null, text, url: `https://t.me/${u}/${id}`, fwd });
   }
   posts.sort((a, b) => a.id - b.id);
   return { title, posts };

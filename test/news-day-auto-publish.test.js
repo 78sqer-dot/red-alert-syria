@@ -1,6 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dayAutoDueAt, dayAutoReady, daytimeAutoEligible, daytimeWindow } from '../server/news-monitor.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ras-day-auto-'));
+process.env.DATA_DIR = dataDir;
+process.env.TELEGRAM_BACKUP = 'false';
+process.env.BOT_TOKEN = '123456:LOCAL_TEST';
+process.env.OWNER_IDS = '8270709633';
+process.env.CHANNEL_ID = '@mock_news_channel';
+const { store } = await import('../server/store.js');
+await store.init(null);
+const { dayAutoDueAt, dayAutoReady, daytimeAutoEligible, daytimeWindow } = await import('../server/news-monitor.js');
+
+test.after(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  await fs.promises.rm(dataDir, { recursive: true, force: true });
+});
 
 const at = (iso) => Date.parse(iso);
 const daytimeStart = at('2026-10-27T05:00:00Z'); // 08:00 in Damascus
