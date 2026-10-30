@@ -30,7 +30,23 @@ const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسا�
 const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const LRM = '\u200E';
 const TTL = 30 * 60_000;
-const R = { data: null, at: 0, busy: null, err: '' };
+const R = { data: null, at: 0, busy: null, err: '', retryAt: 0 };
+const WX_CACHE_KEY = 'wxDailyCache';
+
+function restoreWeatherCache() {
+  if (R.data) return;
+  const c = store.state?.svc?.[WX_CACHE_KEY];
+  if (c?.v === 1 && Array.isArray(c.data) && c.data.length >= 10 && Number.isFinite(c.at)) {
+    R.data = c.data;
+    R.at = c.at;
+  }
+}
+function persistWeatherCache() {
+  try {
+    (store.state.svc ||= {})[WX_CACHE_KEY] = { v: 1, at: R.at, data: R.data };
+    store.persist();
+  } catch (e) { console.warn('[wx] cache persistence failed:', e.message); }
+}
 
 // regions for the bulletin (north → south → east)
 export const REGIONS = [
@@ -90,10 +106,16 @@ async function fetchAll() {
 }
 /** cached current + 2-day forecast; `maxAge` lets the bulletin ask for fresher data */
 export async function getWeather({ maxAge = TTL } = {}) {
-  if (R.data && Date.now() - R.at < maxAge) return R.data;
+  restoreWeatherCache();
+  const now = Date.now();
+  if (R.data && now - R.at < maxAge) return R.data;
+  if (R.retryAt && now < R.retryAt) {
+    if (R.data && now - R.at < 12 * 3600_000) return R.data;
+    throw new Error(R.err || 'Open-Meteo temporarily unavailable');
+  }
   if (!R.busy) {
-    R.busy = fetchAll().then((d) => { R.data = d; R.at = Date.now(); R.err = ''; return d; })
-      .catch((e) => { R.err = e.message; if (R.data && Date.now() - R.at < 12 * 3600_000) return R.data; throw e; })
+    R.busy = fetchAll().then((d) => { R.data = d; R.at = Date.now(); R.err = ''; R.retryAt = 0; persistWeatherCache(); return d; })
+      .catch((e) => { R.err = e.message; R.retryAt = Date.now() + (e.message.includes('429') ? 15 * 60_000 : 2 * 60_000); if (R.data && Date.now() - R.at < 12 * 3600_000) return R.data; throw e; })
       .finally(() => { R.busy = null; });
   }
   return R.busy;

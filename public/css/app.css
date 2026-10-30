@@ -628,6 +628,11 @@ html.dark .wa-btn svg { color: #2fe079; }
 /* ---- pulsing glow over every affected area of a live alert (one ring set per circle) ----
    transform + opacity only -> runs on the compositor; the map canvas is never redrawn for it */
 .zp { width: var(--d, 16px); height: var(--d, 16px); pointer-events: none !important; contain: layout style; }
+.zp-fill {
+  position: absolute; inset: 0; border-radius: 50%; background: var(--c, #ef233c);
+  opacity: .12; animation: zfillPulse 2.6s ease-in-out infinite; will-change: opacity; pointer-events: none;
+}
+@keyframes zfillPulse { 0%, 100% { opacity: .12; } 50% { opacity: .32; } }
 .zp::before, .zp::after {
   content: ''; position: absolute; inset: 0; border-radius: 50%;
   border: 2px solid var(--c, #ef233c);
@@ -642,8 +647,9 @@ html.dark .wa-btn svg { color: #2fe079; }
   100% { transform: scale(2.15); opacity: 0; }
 }
 .map-wrap.is-zooming .zp, .is-zooming .zp { visibility: hidden; }
-.is-moving .zp::before, .is-moving .zp::after { animation-play-state: paused; }
+.is-moving .zp::before, .is-moving .zp::after, .is-moving .zp-fill { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
+  .zp-fill { animation: none; opacity: .20; }
   .zp::before { animation: none; opacity: .55; transform: scale(1.25); }
   .zp::after { display: none; }
 }

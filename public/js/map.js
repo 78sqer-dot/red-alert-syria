@@ -514,18 +514,8 @@ export class AlertMap {
   }
 
   _startGlow() {
-    // static soft fill (like the original): a timer animating fill-opacity forced a full map redraw
-    // 10x per second forever, which made phones lag and gestures feel stuck
-    return;
-    if (this._glowTimer) return;
-    const t0 = performance.now();
-    this._glowTimer = setInterval(() => {
-      if (document.hidden || !this.map || !this.map.getLayer('ras-zones-fill')) return;
-      const k = (Math.sin(((performance.now() - t0) / 2000) * Math.PI * 2) + 1) / 2; // 0..1, 2 s period
-      const dark = this.opts.dark || this.opts.layer === 'satellite';
-      const lo = dark ? 0.14 : 0.1, hi = dark ? 0.28 : 0.22;
-      this.map.setPaintProperty('ras-zones-fill', 'fill-opacity', ['case', ['get', 'active'], lo + (hi - lo) * k, 0.05]);
-    }, 100);
+    // Circle-fill pulse runs on the compositor via .zp-fill; never animate the MapLibre paint layer,
+    // because repeated setPaintProperty calls force expensive WebGL map redraws on phones.
   }
   // Keep every affected-area circle in proportion to the screen: it follows its real size on the
   // ground, but never shrinks below a visible dot at country view nor grows past a comfortable share
@@ -587,6 +577,10 @@ export class AlertMap {
       if (!m) {
         const el = document.createElement('div');
         el.className = 'zp';
+        const fill = document.createElement('span');
+        fill.className = 'zp-fill';
+        fill.setAttribute('aria-hidden', 'true');
+        el.append(fill);
         el.setAttribute('aria-hidden', 'true');
         m = new M.Marker({ element: el, anchor: 'center' }).setLngLat([p.lon, p.lat]).addTo(this.map);
         el.style.zIndex = '1';
