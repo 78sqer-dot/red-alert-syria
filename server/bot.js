@@ -82,7 +82,7 @@ const fmtDate = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.tim
 //   تاريخ :  ٢٣ تشرين الأول
 //   الساعة :  ١٠:٣١ م
 //
-//   🗺 الخريطة المباشرة · Red Alert Syria
+//   (no footer; map and channel links remain on the inline buttons)
 export function channelPost(alert, { ended = false } = {}) {
   const t = typeOf(alert.type);
   let title = (TITLES[alert.type] || {}).ar || t.ar;
@@ -100,9 +100,6 @@ export function channelPost(alert, { ended = false } = {}) {
   lines.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
   lines.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
   if (ended) lines.push(`انتهى :  ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
-  lines.push('');
-  const url = mapUrl(alert.id);
-  lines.push(`🗺 ${url ? `<a href="${esc(url)}">الخريطة المباشرة</a>` : 'الخريطة المباشرة'} · <a href="${esc(config.channelUrl)}">Red Alert Syria</a>`);
   return lines.join('\n');
 }
 export function channelKeyboard(alert) {

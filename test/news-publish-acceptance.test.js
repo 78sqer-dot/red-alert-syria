@@ -15,7 +15,7 @@ process.env.ALERT_IMAGES = 'false';
 
 const { store, publicAlert } = await import('../server/store.js');
 await store.init(null);
-const { buildAlertInput, createBot, channelKeyboard } = await import('../server/bot.js');
+const { buildAlertInput, createBot, channelKeyboard, channelPost } = await import('../server/bot.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { newsState } = await import('../server/news-monitor.js');
 
@@ -75,6 +75,14 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const socialRow = channelKeyboard({ id: 'test-social-buttons' }).inline_keyboard.find((row) => row.some((button) => button.url?.includes('/boost/')));
   assert.equal(socialRow?.length, 2, 'boost and WhatsApp channel buttons share one professional row');
   assert.equal(socialRow[1].url, 'https://whatsapp.com/channel/0029VbDl95H5fM5V2HJ2PO10');
+  const channelText = channelPost({
+    id: 'test-channel-footer', type: 'warplane', timestamp: new Date().toISOString(),
+    place: { scope: 'place', name_ar: 'صمدانية شرقية', name_en: 'Samdaniyah Sharqiyah', governorate_ar: 'القنيطرة', governorate_en: 'Quneitra' }, extra: [],
+  });
+  assert.match(channelText, /تحليق طيران حربي/);
+  assert.match(channelText, /📍<b>صمدانية شرقية/);
+  assert.doesNotMatch(channelText, /الخريطة المباشرة|Red Alert Syria/);
+  assert.ok(channelKeyboard({ id: 'test-channel-footer' }).inline_keyboard.flat().some((button) => button.text?.includes('عرض على الخريطة')));
 
   const lastUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const buttons = () => lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
