@@ -221,57 +221,14 @@ async function refreshCards(it) {
 
 // ---------------------------------------------------------------- check
 export async function checkWeather({ dry = false, force = false } = {}) {
-  const st = wxState();
-  R.last = Date.now();
-  const rows = await fetchForecast();
-  const today = dayStr(); const tomorrow = dayStr(Date.now() + 24 * 3600_000);
-  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
-  const days = hour >= 15 ? [tomorrow] : [today, tomorrow];
-  const ws = buildWarnings(rows, { days });
-  if (dry) return ws;
-  const fresh = [];
-  for (const w of ws) {
-    const prev = st.sent[w.key];
-    const newGovs = prev ? w.govs.filter((g) => !prev.govs.includes(g.gov)) : w.govs;
-    const escalated = prev && w.level > prev.level;
-    if (prev && !escalated && newGovs.length < 2 && !force) continue;
-    st.sent[w.key] = { level: w.level, govs: w.govs.map((g) => g.gov), at: Date.now() };
-    const it = { id: rid(), w, ts: Date.now(), pub: '', auto: false };
-    st.items.push(it);
-    fresh.push(it);
-    if (w.level === 2 && st.autoSevere && config.channel) {
-      try { await publish(it, true); it.auto = true; } catch (e) { console.error('[weather] auto publish failed', e.message); }
-    }
-    await sendCards(it);
-  }
-  const cutoff = Date.now() - 4 * 86400_000;
-  st.items = st.items.filter((i) => i.ts > cutoff).slice(-40);
-  for (const [k, v] of Object.entries(st.sent)) if (v.at < cutoff) delete st.sent[k];
-  save();
-  return fresh;
+  void dry; void force;
+  throw new Error('توقفت تنبيهات الطقس الآلية المعتمدة على التوقعات الخارجية. استخدم تنبيهات المركز الوطني الرسمية في صفحة الطقس.');
 }
 export function startWeather(h) {
   if (h) R.H = h;
   if (R.started) return;
   R.started = true;
-  const tick = async () => {
-    const st = wxState();
-    if (!st.on || R.running || !R.H) return;
-    const hm = new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
-    const slot = hm >= '07:30' && hm < '12:00' ? 'am' : hm >= '17:30' && hm < '22:00' ? 'pm' : '';
-    if (!slot) return;
-    const key = `${dayStr()}:${slot}`;
-    if (st.slots[key]) return;
-    R.running = true;
-    try {
-      await checkWeather();
-      st.slots[key] = Date.now(); R.lastErr = '';
-      for (const k of Object.keys(st.slots)) if (Date.now() - st.slots[k] > 3 * 86400_000) delete st.slots[k];
-      save();
-    } catch (e) { R.lastErr = e.message; console.error('[weather] check failed', e.message); } finally { R.running = false; }
-  };
-  setTimeout(tick, 40_000).unref();
-  setInterval(tick, 10 * 60_000).unref();
+  const st = wxState(); st.on = false; st.autoSevere = false; save();
 }
 export function weatherDebug() { const st = wxState(); return { on: st.on, autoSevere: st.autoSevere, last: R.last, err: R.lastErr, slots: st.slots, items: st.items.slice(-8).map((i) => ({ id: i.id, key: i.w.key, level: i.w.level, govs: i.w.govs.length, pub: i.pub })) }; }
 
@@ -336,17 +293,16 @@ export function registerWeatherTools(bot, h) {
   const mainText = (ctx) => {
     const st = wxState(); const en = E(ctx);
     const recent = st.items.slice(-5).reverse().map((i) => `• ${HAZARDS[i.w.hazard].emoji} ${en ? HAZARDS[i.w.hazard].en : HAZARDS[i.w.hazard].ar} — ${esc(en ? dayEn(i.w.day) : dayName(i.w.day))} (${i.w.govs.length} ${en ? (i.w.govs.length === 1 ? 'governorate' : 'governorates') : 'محافظة'})${i.pub ? ' ✅' : i.ignored ? ' ✖️' : ' 📝'}`).join('\n');
-    if (en) return `⛈ <b>Weather warnings</b>\n\nStatus: <b>${st.on ? '✅ On' : '⏸ Paused'}</b>\nAuto-post severe warnings: <b>${st.autoSevere ? '✅ Yes' : '⏸ No, all are drafts'}</b>\nMap duration: <b>${esc(durationLabel(store.autoDeleteHours, true))}</b>\n\n`
-      + 'The forecast is checked twice a day (7:30 am and 5:30 pm) for every governorate: heavy rain, snow, wind, thunderstorms, heat waves, frost and dust storms.\nOrdinary warnings reach you as drafts; severe ones go to the channel and the map on their own.\n\n'
+    if (en) return `⛈ <b>Weather warnings</b>\n\n⏸ Third-party forecast-based automatic alerts are disabled.\nMap duration: <b>${esc(durationLabel(store.autoDeleteHours, true))}</b>\n\n`
+      + 'The weather service panel and morning bulletin now use only official warnings and links from Syria’s National Meteorological Center. Existing published warnings can still be reviewed below.\n\n'
       + `<b>Latest warnings:</b>\n${recent || '— No warnings right now'}`;
-    return `⛈ <b>تحذيرات الطقس</b>\n\nالحالة: <b>${st.on ? '✅ مفعّلة' : '⏸ موقوفة'}</b>\nالنشر التلقائي للتحذيرات الشديدة: <b>${st.autoSevere ? '✅ نعم' : '⏸ لا، كلها مسودات'}</b>\nمدة البقاء على الخريطة: <b>${esc(durationLabel(store.autoDeleteHours))}</b>\n\n`
-      + 'فحص التوقعات مرتين باليوم (7:30 الصبح و5:30 المسا) لكل المحافظات: أمطار غزيرة، ثلوج، رياح، عواصف رعدية، موجات حر، صقيع، وعواصف غبار.\nالتحذير العادي بيوصلك مسودة، والشديد بينزل لحاله بالقناة وعلى الخريطة.\n\n'
+    return `⛈ <b>تحذيرات الطقس</b>\n\n⏸ أوقفنا التنبيهات الآلية المبنية على توقعات خارجية.\nمدة بقاء التحذير المنشور على الخريطة: <b>${esc(durationLabel(store.autoDeleteHours))}</b>\n\n`
+      + 'لوحة الطقس والنشرة الصباحية تعرضان الآن التحذيرات والروابط الرسمية للمركز الوطني للأرصاد الجوية فقط. يمكن مراجعة التحذيرات المنشورة سابقاً أدناه.\n\n'
       + `<b>آخر التحذيرات:</b>\n${recent || '— ما في تحذيرات حالياً'}`;
   };
   const mainKb = (ctx) => {
-    const st = wxState();
-    return new InlineKeyboard().text(T(ctx, '🔎 افحص التوقعات الآن', '🔎 Check the forecast now'), 'wx:now').row().text(T(ctx, '🌤 نشرة الطقس الصباحية', '🌤 Morning weather bulletin'), 'wxb').row()
-      .text(st.on ? T(ctx, '⏸ إيقاف', '⏸ Pause') : T(ctx, '▶️ تشغيل', '▶️ Turn on'), 'wx:on').text(st.autoSevere ? T(ctx, '📝 الشديد كمان مسودة', '📝 Severe as drafts too') : T(ctx, '⚡ انشر الشديد تلقائياً', '⚡ Auto-post severe'), 'wx:auto').row()
+    return new InlineKeyboard().url(T(ctx, '🌐 نشرة المركز الرسمية', '🌐 Official weather bulletin'), 'https://climweb.med.gov.sy/منتجاتنا/النشرة-اليومية/').row()
+      .text(T(ctx, '🌤 النشرة الصباحية', '🌤 Morning bulletin settings'), 'wxb').row()
       .text(T(ctx, `⏱ المدة: ${durationShort(store.autoDeleteHours)}`, `⏱ Duration: ${durationShort(store.autoDeleteHours, true)}`), 'auto').row()
       .text(T(ctx, `📋 التحذيرات المنشورة (${activeWarnings().length})`, `📋 Published warnings (${activeWarnings().length})`), 'wxw:list:0').row()
       .text(T(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
@@ -387,8 +343,9 @@ export function registerWeatherTools(bot, h) {
     let n = 0; let err = '';
     try { n = (await checkWeather()).length; } catch (e) { err = e.message; }
     await ctx.answerCallbackQuery?.().catch(() => {});
-    const msg = E(ctx) ? (err ? `⚠️ Couldn't fetch the forecast: ${esc(err)}` : n ? `🆕 ${n} new warning(s) — the cards were sent to you.` : '✅ No new warnings.')
-      : (err ? `⚠️ ما قدرت جيب التوقعات: ${esc(err)}` : n ? `🆕 ${n} تحذير جديد — وصلتك البطاقات.` : '✅ ما في تحذيرات جديدة.');
+    const msg = err
+      ? (E(ctx) ? '⚠️ Third-party forecast-based alerts are disabled. Use the official National Meteorological Center bulletin.' : '⚠️ تنبيهات التوقعات الخارجية متوقفة؛ استخدم نشرة المركز الوطني الرسمية.')
+      : (E(ctx) ? (n ? `🆕 ${n} new warning(s) — the cards were sent to you.` : '✅ No new warnings.') : (n ? `🆕 ${n} تحذير جديد — وصلتك البطاقات.` : '✅ ما في تحذيرات جديدة.'));
     await h.show(ctx, mainText(ctx) + `\n\n${msg}`, mainKb(ctx));
   }));
   // test cards (🧪): their buttons never publish anything — they only answer, «تجاهل» removes the card

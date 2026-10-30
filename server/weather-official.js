@@ -1,5 +1,5 @@
 // Official Syrian weather products: CAP warnings and the National Meteorological Center's daily bulletin.
-// Numeric temperatures still come from Open-Meteo; this module only adds official warnings and source links.
+// Public weather panels and bulletins use these government products only; third-party numeric forecasts are excluded.
 import { governorates } from './places.js';
 
 export const CAP_FEED_URL = 'https://climweb.med.gov.sy/api/cap/rss.xml';

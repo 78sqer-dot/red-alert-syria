@@ -8,14 +8,14 @@ const S = {
   ar: {
     services: 'الخدمات', prices: 'الأسعار', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', nearby: 'قريب مني', weather: 'الطقس',
     sheetTitle: 'خدمات يومية', sheetSub: 'أسعار اليوم، الطقس، الكهرباء، حالة الطرق والمعابر، وأقرب مشفى وصيدلية وكازية وفرن.',
-    showWx: 'اعرض الطقس على الخريطة', wxSub: 'درجات الحرارة والتوقعات العددية من Open-Meteo، والتحذيرات الرسمية من المركز الوطني للأرصاد الجوية. تتحدث البيانات كل نصف ساعة.', wxNow: 'الطقس الآن', today: 'اليوم', tomorrow: 'بكرا', wind: 'رياح', hum: 'رطوبة', kmh: 'كم/س', mm: 'ملم', rainP: 'احتمال المطر', gusts: 'هبّات', mountains: 'مناطق جبلية', wxErr: 'تعذّر تحميل الطقس، جرّب بعد شوي.', wxWarn: 'تحذيرات الطقس', wxOfficial: 'تحذير رسمي', wxModel: 'تحذير توقّعي', wxLocal: 'تحذير منشور', wxSource: 'المصدر الرسمي', wxLocalSource: 'منشور التنبيه على تيليغرام', wxIssued: 'صدر', wxExpires: 'ينتهي', wxDailyLink: 'النشرة الجوية الرسمية', snowCm: 'ثلج', cm: 'سم',
+    showWx: 'خريطة المركز الرسمية', wxSub: 'الطقس والتحذيرات من المركز الوطني للأرصاد الجوية السوري. لا نعرض درجات أو توقعات من مزودات خارجية.', wxNow: 'الطقس الآن', today: 'اليوم', tomorrow: 'بكرا', wind: 'رياح', hum: 'رطوبة', kmh: 'كم/س', mm: 'ملم', rainP: 'احتمال المطر', gusts: 'هبّات', mountains: 'مناطق جبلية', wxErr: 'تعذّر تحميل بيانات المركز، جرّب بعد شوي.', wxWarn: 'تحذيرات رسمية', wxOfficial: 'تحذير رسمي', wxModel: 'تحذير توقّعي', wxLocal: 'تحذير منشور', wxSource: 'المصدر الرسمي', wxLocalSource: 'منشور التنبيه على تيليغرام', wxIssued: 'صدر', wxExpires: 'ينتهي', wxDailyLink: 'النشرة الجوية الرسمية', wxMapLink: 'خريطة المركز الرسمية', wxNoAlerts: 'لا توجد حالياً تنبيهات رسمية نشطة ظاهرة في موجز المركز.', snowCm: 'ثلج', cm: 'سم',
     market: 'سعر السوق الموازي (عام)', official: 'نشرة مصرف سورية المركزي', officialSource: 'صفحة المركزي الرسمية على فيسبوك', officialIssued: 'نشرة بتاريخ', officialChecked: 'آخر تحقق', buy: 'شراء', sell: 'مبيع',
     usd: 'دولار', eur: 'يورو', try: 'ليرة تركية', sar: 'ريال سعودي', aed: 'درهم إماراتي',
     gold: 'الذهب (للغرام)', k24: 'عيار 24', k21: 'عيار 21', k18: 'عيار 18', ounce: 'الأونصة عالمياً',
     fuel: 'المحروقات', fuelSince: 'تاريخ التسعيرة', fuelChecked: 'آخر تحقق', fuelSrc: 'المصادر', fuelOfficial: 'تسعيرة رسمية', fuelSecondary: 'مصدر ثانوي — غير مؤكد رسمياً', fuelLink: 'قرار الأسعار لدى سانا', fuelTiers: 'أصناف المازوت حسب وزارة الطاقة', fuelTiersLink: 'إعلان أصناف المازوت', fuelStale: 'لم نتمكن من تأكيد حداثة التسعيرة؛ قد تكون تغيّرت.', tariffs: 'تعرفة الكهرباء', newLira: 'بالليرة الجديدة', oldLira: 'بالقديمة',
-    updated: 'آخر تحديث', noPrices: 'الأسعار مو متوفرة هلق، جرّب بعد شوي.',
-    priceNote: 'الأسعار استرشادية وقد تختلف بين المحلات والمدن. الليرة الجديدة = 100 ليرة قديمة.',
-    powerEmpty: 'ما في تحديثات كهرباء منشورة حالياً.', allSyria: 'عموم سوريا', allGovs: 'كل المحافظات',
+    updated: 'آخر تحديث', noPrices: 'ما في حالياً نشرة أسعار رسمية موثقة.',
+    priceNote: 'نعرض فقط نشرة المركزي الرسمية وقرارات المحروقات الحكومية المنشورة. لا نعرض السوق الموازي أو الذهب. الليرة الجديدة = 100 ليرة قديمة.',
+    powerEmpty: 'ما في تحديثات كهرباء من مصدر حكومي رسمي حالياً.', powerSource: 'المصدر الحكومي الرسمي', powerCalc: 'حاسبة فاتورة الكهرباء الرسمية', allSyria: 'عموم سوريا', allGovs: 'كل المحافظات',
     roadsEmpty: 'ما في حالات طرق مسجّلة حالياً.', roadsSub: 'حالات الطرق يلي نشرها فريق الرصد أو وصلتنا ببلاغات وتأكدنا منها، وبتنشال لحالها لما تخلص مدتها.',
     showRoads: 'عرض الطرق على الخريطة', showBorders: 'عرض المعابر على الخريطة', bordersSub: 'حالة المعابر الحدودية الرئيسية مع دول الجوار، يحدّثها فريق الرصد. الحالة اللي صار لها أكتر من 3 أيام بلا تحديث بتظهر «غير معروف».', bst: { open: 'مفتوح', busy: 'مفتوح مع ازدحام', partial: 'مفتوح جزئياً', closed: 'مغلق', unknown: 'غير معروف' }, updated: 'آخر تحديث', withC: 'مع', crossing: 'معبر', until: 'لحد', reportRoad: 'بلّغ عن طريق',
     road: { closed: 'طريق مسكّر', danger: 'طريق خطر', open: 'طريق سالك' },
@@ -39,14 +39,14 @@ const S = {
   en: {
     services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me', weather: 'Weather',
     sheetTitle: 'Daily services', sheetSub: 'Today\'s prices, weather, electricity, road status, and the nearest hospital, pharmacy, fuel station and bakery.',
-    showWx: 'Show the weather on the map', wxSub: 'Numeric temperatures and forecasts are from Open-Meteo; official warnings are from Syria’s National Meteorological Center. Data refreshes every 30 minutes.', wxNow: 'Weather now', today: 'Today', tomorrow: 'Tomorrow', wind: 'Wind', hum: 'Humidity', kmh: 'km/h', mm: 'mm', rainP: 'Chance of rain', gusts: 'Gusts', mountains: 'Mountain areas', wxErr: 'Could not load the weather, try again shortly.', wxWarn: 'Weather warnings', wxOfficial: 'Official warning', wxModel: 'Forecast warning', wxLocal: 'Published alert', wxSource: 'Official source', wxLocalSource: 'Alert channel post', wxIssued: 'Issued', wxExpires: 'Valid until', wxDailyLink: 'Official weather bulletin', snowCm: 'Snow', cm: 'cm',
+    showWx: 'Official weather map', wxSub: 'Weather and warnings are from Syria’s National Meteorological Center. We do not show temperatures or forecasts from third-party providers.', wxNow: 'Weather now', today: 'Today', tomorrow: 'Tomorrow', wind: 'Wind', hum: 'Humidity', kmh: 'km/h', mm: 'mm', rainP: 'Chance of rain', gusts: 'Gusts', mountains: 'Mountain areas', wxErr: 'Could not load the official weather data; try again shortly.', wxWarn: 'Official warnings', wxOfficial: 'Official warning', wxModel: 'Forecast warning', wxLocal: 'Published alert', wxSource: 'Official source', wxLocalSource: 'Alert channel post', wxIssued: 'Issued', wxExpires: 'Valid until', wxDailyLink: 'Official daily bulletin', wxMapLink: 'Official meteorological map', wxNoAlerts: 'No active official warnings are currently visible in the Center’s feed.', snowCm: 'Snow', cm: 'cm',
     market: 'Parallel market (Syria, general)', official: 'Central Bank of Syria bulletin', officialSource: 'Official Central Bank Facebook page', officialIssued: 'Bulletin date', officialChecked: 'Last checked', buy: 'Buy', sell: 'Sell',
     usd: 'US dollar', eur: 'Euro', try: 'Turkish lira', sar: 'Saudi riyal', aed: 'UAE dirham',
     gold: 'Gold (per gram)', k24: '24K', k21: '21K', k18: '18K', ounce: 'World ounce',
     fuel: 'Fuel', fuelSince: 'Tariff date', fuelChecked: 'Last checked', fuelSrc: 'Sources', fuelOfficial: 'Official tariff', fuelSecondary: 'Secondary source — not officially confirmed', fuelLink: 'SANA price decision', fuelTiers: 'Diesel grades per the Ministry of Energy', fuelTiersLink: 'Diesel grades announcement', fuelStale: 'The tariff is too old to confirm as current; prices may have changed.', tariffs: 'Electricity tariffs', newLira: 'new lira', oldLira: 'old',
-    updated: 'Updated', noPrices: 'Prices are not available right now, try again shortly.',
-    priceNote: 'Indicative prices; they can differ between shops and cities. 1 new lira = 100 old lira.',
-    powerEmpty: 'No electricity updates published right now.', allSyria: 'All Syria', allGovs: 'All governorates',
+    updated: 'Updated', noPrices: 'No verified official price bulletin is available right now.',
+    priceNote: 'Only Central Bank bulletins and government fuel-price decisions are shown. Parallel-market rates and gold are excluded. 1 new lira = 100 old lira.',
+    powerEmpty: 'No electricity updates from an official government source right now.', powerSource: 'Official government source', powerCalc: 'Official electricity bill calculator', allSyria: 'All Syria', allGovs: 'All governorates',
     roadsEmpty: 'No road statuses right now.', roadsSub: 'Road statuses published by our desk or confirmed from reports; they disappear when their time ends.',
     showRoads: 'Show roads on the map', showBorders: 'Show crossings on the map', bordersSub: 'Status of the main border crossings with neighbouring countries, updated by our desk. A status not updated for 3 days shows as “unknown”.', bst: { open: 'Open', busy: 'Open – heavy traffic', partial: 'Partially open', closed: 'Closed', unknown: 'Unknown' }, updated: 'Updated', withC: 'with', crossing: 'Crossing', until: 'until', reportRoad: 'Report a road',
     road: { closed: 'Road closed', danger: 'Dangerous road', open: 'Road open' },
@@ -447,7 +447,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const top = g.items[0] || (g.nat ? st.power.find((p) => !p.gov) : null);
     const lv = g.level;
     let h = `<div class="pp-top"><span class="badge live" style="--c:${PW_COLORS[lv]}">${esc(L.pwLvl[lv])}</span>${top ? `<span class="time">${esc(when(top.ts))}</span>` : ''}</div><p class="pp-title">⚡ ${esc(g.name)}</p>`;
-    if (top) h += `<p class="pp-desc">${esc(top.text.length > 260 ? top.text.slice(0, 257) + '…' : top.text)}</p>${g.nat ? `<p class="pp-areas">${esc(L.pwNat)}</p>` : ''}`;
+    if (top) h += `<p class="pp-desc">${esc(top.text.length > 260 ? top.text.slice(0, 257) + '…' : top.text)}</p>${g.nat ? `<p class="pp-areas">${esc(L.pwNat)}</p>` : ''}${top.source_url ? `<p class="pp-areas"><a href="${esc(top.source_url)}" target="_blank" rel="noopener">${esc(L.powerSource)}: ${esc(top.source_name || '')}</a></p>` : ''}`;
     else h += `<p class="pp-areas">${esc(L.powerEmpty)}</p>`;
     return h;
   }
@@ -571,13 +571,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   function pricesHtml() {
     const p = st.prices;
     if (!p || !p.ok) return `<div class="svc-empty">${esc(L.noPrices)}</div>`;
-    const m = p.market;
-    const cur = ['usd', 'eur', 'try', 'sar', 'aed'].filter((k) => m[k]);
-    const g = p.gold || {};
     const fuel = Object.entries(p.fuel?.items || {}).map(([k, f]) => ({ ...f, key: k }));
-    let h = `<div class="px-card"><div class="px-h"><b>${esc(L.market)}</b><span>${esc(L.updated)}: ${esc(when(m.at))}</span></div>
-      <div class="px-row px-th"><span class="px-k"></span><span class="px-v">${esc(L.buy)}</span><span class="px-v">${esc(L.sell)}</span><span class="px-ch"></span></div>
-      ${cur.map((k) => row(L[k], `${lira(m[k].buy)}${old(m[k].buy)}`, `${lira(m[k].sell)}${old(m[k].sell)}`, m[k].change)).join('')}</div>`;
+    let h = '';
     if (p.official?.usd) {
       const o = p.official;
       h += `<div class="px-card"><div class="px-h"><b>${esc(L.official)}</b><span>${esc(L.officialIssued)}: ${esc(dayOf(o.date))}${o.bulletinNo ? ` · #${esc(o.bulletinNo)}` : ''}</span></div>
@@ -586,12 +581,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         ${o.try?.buy ? row(L.try, `${lira(o.try.buy)}${old(o.try.buy)}`, o.try.sell ? `${lira(o.try.sell)}${old(o.try.sell)}` : '—') : ''}
         ${o.checkedAt || o.url ? `<div class="px-foot">${o.checkedAt ? `${esc(L.officialChecked)}: ${esc(when(o.checkedAt))}` : ''}${o.checkedAt && o.url ? ' · ' : ''}${o.url ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(L.officialSource)}</a>` : ''}</div>` : ''}</div>`;
     }
-    if (g.k21 || g.k18) {
-      h += `<div class="px-card"><div class="px-h"><b>${esc(L.gold)}</b><span>${esc(when(g.at))}</span></div>
-        ${['k24', 'k21', 'k18'].filter((k) => g[k]).map((k) => row(L[k], `${lira(g[k].buy)}${old(g[k].buy)}`, `${lira(g[k].sell)}${old(g[k].sell)}`, g[k].change)).join('')}
-        ${g.ounce ? `<div class="px-row"><span class="px-k">${esc(L.ounce)}</span><span class="px-v" dir="ltr">$${num(g.ounce, 0)}</span></div>` : ''}</div>`;
-    }
-    if (fuel.length) {
+    if (fuel.length || p.fuel?.stale) {
       const F = p.fuel;
       const frow = (f) => `<div class="px-row"><span class="px-k">${esc(fuelName(f.key, f))}${unitOf(f)}${f.note ? ` <small>· ${esc(LANG === 'en' ? NOTE_EN[f.note] || f.note : f.note)}</small>` : ''}</span><span class="px-v">${lira(f.price)}${old(f.price)}</span>${f.usd ? `<span class="px-v" dir="ltr">$${num(f.usd, 2)}</span>` : ''}</div>`;
       const main = fuel.filter((f) => !f.tier); const tiers = fuel.filter((f) => f.tier);
@@ -606,9 +596,12 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     return h;
   }
   function weatherHtml() {
-    let h = `<p class="svc-note" style="margin-top:0">${esc(L.wxSub)}</p>${modeBtnWide('weather', L.showWx)}`;
+    let h = `<p class="svc-note" style="margin-top:0">${esc(L.wxSub)}</p>`;
     const j = st.wx;
     if (!j) return h + `<div class="svc-empty">${esc(st.wxErr ? L.wxErr : L.loading)}</div>`;
+    const dailyUrl = j.official?.url || 'https://climweb.med.gov.sy/منتجاتنا/النشرة-اليومية/';
+    const mapUrl = j.official?.mapUrl || 'https://climweb.med.gov.sy/mapviewer';
+    h += `<div class="svc-mgrid"><a class="btn-sm" href="${esc(dailyUrl)}" target="_blank" rel="noopener">${esc(L.wxDailyLink)}</a><a class="btn-sm" href="${esc(mapUrl)}" target="_blank" rel="noopener">${esc(L.wxMapLink)}</a></div>`;
     if (j.warnings?.length) {
       h += `<div class="dd-sec">${esc(L.wxWarn)}</div>`;
       h += j.warnings.map((w) => {
@@ -618,28 +611,18 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         const stamps = [w.at && `${L.wxIssued}: ${when(w.at)}`, w.expires_at && `${L.wxExpires}: ${when(w.expires_at)}`].filter(Boolean);
         return `<div class="wx-warn" style="--c:${WARN_C(w.level)}">${esc(w.emoji)} <b>${esc(LANG === 'en' ? w.en : w.ar)}</b><small>${esc(label)}${areas ? ` · ${esc(areas)}` : ''}${w.url ? ` · <a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.official ? L.wxSource : L.wxLocalSource)}</a>` : ''}</small>${stamps.length ? `<small>${esc(stamps.join(' · '))}</small>` : ''}${details ? `<small>${esc(details.slice(0, 220))}</small>` : ''}</div>`;
       }).join('');
-    }
-    const row = (p) => {
-      const d = p.days?.[0] || {}; const ws = wxWarns(p);
-      return `<button class="bd-row wx-row" data-wx="${esc(p.id)}">${wxImg(p.now.k, 30)}<span class="bd-main"><b>${esc(wxName(p))}${ws.length ? ` <i class="svc-dot" style="--c:${WARN_C(Math.max(...ws.map((w) => w.level)))}"></i>` : ''}</b><small>${esc((WX_LABEL[LANG] || WX_LABEL.ar)[p.now.k] || '')}</small></span><span class="wx-rt"><b dir="ltr">${T(p.now.t)}</b><small dir="ltr">${T(d.max)} / ${T(d.min)}</small></span></button>`;
-    };
-    const order = ['02', '14', '09', '12', '11', '10', '13', '08', '06', '05', '03', '04', '07', '01']; // coast → north → centre → south → east
-    const mains = j.points.filter((p) => p.main && p.now).sort((a, b) => order.indexOf(a.gov) - order.indexOf(b.gov));
-    h += `<div class="dd-sec">${esc(L.allGovs)}</div><div class="bd-list">${mains.map(row).join('')}</div>`;
-    const ex = j.points.filter((p) => !p.main && p.now);
-    if (ex.length) h += `<div class="dd-sec">${esc(L.mountains)}</div><div class="bd-list">${ex.map(row).join('')}</div>`;
-    h += `<p class="svc-note">${esc(L.updated)}: ${esc(when(j.at))} · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · <a href="${esc(j.official?.url || 'https://climweb.med.gov.sy/منتجاتنا/النشرة-اليومية/')}" target="_blank" rel="noopener">${esc(L.wxDailyLink)}</a></p>`;
+    } else h += `<div class="svc-empty">${esc(L.wxNoAlerts)}</div>`;
+    h += `<p class="svc-note">${esc(L.updated)}: ${esc(when(j.at))} · ${esc(j.src || '')}</p>`;
     return h;
   }
   function powerHtml() {
     const items = st.power.filter((p) => st.gov === 'all' || (p.gov || 'all') === st.gov || !p.gov);
     const govs = [...new Map(st.power.filter((p) => p.gov).map((p) => [p.gov, LANG === 'en' ? p.gov_en : p.gov_ar])).entries()];
-    const tariffs = st.prices?.power?.items || [];
     let h = modeBtnWide('power', L.mapPower);
     h += govs.length ? `<div class="sel-wrap svc-sel"><select class="sel" id="svcGov"><option value="all">${esc(L.allGovs)}</option>${govs.map(([c, n]) => `<option value="${esc(c)}" ${st.gov === c ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : '';
-    h += items.length ? items.map((p) => `<article class="svc-item"><div class="svc-it-top"><span class="badge" style="--c:#eab308">${icon('bolt', 13)}${esc(LANG === 'en' ? p.gov_en : p.gov_ar)}</span><span class="time">${esc(when(p.ts))}</span></div><p>${esc(p.text)}</p></article>`).join('')
+    h += items.length ? items.map((p) => `<article class="svc-item"><div class="svc-it-top"><span class="badge" style="--c:#eab308">${icon('bolt', 13)}${esc(LANG === 'en' ? p.gov_en : p.gov_ar)}</span><span class="time">${esc(when(p.ts))}</span></div><p>${esc(p.text)}</p>${p.source_url ? `<small class="svc-note"><a href="${esc(p.source_url)}" target="_blank" rel="noopener">${esc(L.powerSource)}: ${esc(p.source_name || '')}</a></small>` : ''}</article>`).join('')
       : `<div class="svc-empty">${esc(L.powerEmpty)}</div>`;
-    if (tariffs.length) h += `<div class="px-card"><div class="px-h"><b>${esc(L.tariffs)}</b><span>${esc(L.newLira)}</span></div>${tariffs.map((t) => `<div class="px-row"><span class="px-k">${esc(tariffName(t))}${unitOf(t)}</span><span class="px-v">${lira(t.price)}${old(t.price)}</span></div>`).join('')}</div>`;
+    h += `<a class="btn-sm svc-report" href="https://petde.gov.sy/calc-bill" target="_blank" rel="noopener">${esc(L.powerCalc)}</a>`;
     return h;
   }
   function roadsHtml() {

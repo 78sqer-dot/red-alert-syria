@@ -2,9 +2,9 @@
 //  - Roads: published from the publishing bot (staff) or approved public reports; each entry has one or
 //    more points (the bot's place picker), a status (closed / danger / open), a note and an expiry.
 //    Shown on the map as a toggleable layer; expired entries disappear by themselves.
-//  - Electricity: rationing / outage / tariff updates per governorate. Fed by the news monitor (posts
-//    about electricity become cards for the owner, never auto-published) and by the owner by hand.
-//    Shown on the website (⚡ panel); optionally posted to the channel.
+//  - Electricity: rationing / outage / tariff updates per governorate. Only government/SANA URLs are
+//    accepted from the news monitor or the owner; news becomes a review card and is never auto-published.
+//    Published items retain a direct source link on the website and in the channel.
 import crypto from 'node:crypto';
 import { InlineKeyboard, InputFile } from 'grammy';
 import { config } from './config.js';
@@ -115,6 +115,13 @@ const POWER_EVENT = ['تقنين', 'ساعات الوصل', 'ساعات القط
 const NOISE = ['مسيرة', 'غارة', 'قصف', 'استهداف', 'اشتباك', 'انفجار'];
 const POWER_NATIONAL_SCOPE = ['عموم سوريا', 'عموم سورية', 'عموم المحافظات السورية', 'جميع المحافظات السورية', 'كل المحافظات السورية', 'كافة المحافظات السورية', 'على مستوى سوريا', 'على مستوى سورية', 'في مختلف المحافظات السورية', 'في أنحاء سوريا', 'في عموم البلاد السورية', 'across syria', 'all of syria', 'nationwide in syria'].map(N);
 const FOREIGN = ['السعودية', 'السعودي', 'الملك سلمان', 'ولي العهد', 'المملكة', 'لبنان', 'اللبنانية', 'العراق', 'العراقية', 'الأردن', 'الاردن', 'الأردنية', 'مصر', 'المصرية', 'تركيا', 'التركية', 'إيران', 'الإمارات', 'الكويت', 'قطر', 'اليمن', 'ليبيا', 'غزة', 'إسرائيل', 'كييف', 'أوكرانيا', 'الأوكرانية', 'روسيا', 'الروسي', 'موسكو', 'بغداد', 'عمان', 'القاهرة'].map(N);
+export function isOfficialGovernmentUrl(value) {
+  try {
+    const u = new URL(String(value || ''));
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+    return ['http:', 'https:'].includes(u.protocol) && (host === 'gov.sy' || host.endsWith('.gov.sy') || host === 'sana.sy' || host.endsWith('.sana.sy'));
+  } catch { return false; }
+}
 /** Electricity hook only catches service/operations updates, not any text that merely mentions electricity. */
 export function isPowerNews(text) {
   if (weatherWarningInfo(text)) return { ok: false, why: 'explicit weather warning' };
@@ -133,14 +140,14 @@ export function isPowerNews(text) {
 // drop stored items that fail the Syria-only filter (e.g. a Saudi tariff post caught before the filter)
 export function purgeForeignPower() {
   const arr = powerArr(); let n = 0;
-  for (let i = arr.length - 1; i >= 0; i--) if (!isPowerNews(arr[i].text || '').ok && !arr[i].manual) { arr.splice(i, 1); n++; }
+  for (let i = arr.length - 1; i >= 0; i--) if (!isOfficialGovernmentUrl(arr[i].src?.url) || (!isPowerNews(arr[i].text || '').ok && !arr[i].manual)) { arr.splice(i, 1); n++; }
   if (n) { save(); emitPower(); }
   return n;
 }
 const govName = (code, lang = 'ar') => { const g = governorates.find((x) => x.code === code); return g ? (lang === 'en' ? g.en : g.ar) : (lang === 'en' ? 'All Syria' : 'عموم سوريا'); };
 export function publicPower(limit = 60) {
-  return powerArr().filter((p) => p.pub).sort((a, b) => b.ts - a.ts).slice(0, limit)
-    .map((p) => ({ id: p.id, gov: p.gov || null, gov_ar: govName(p.gov), gov_en: govName(p.gov, 'en'), text: p.text, ts: new Date(p.ts).toISOString() }));
+  return powerArr().filter((p) => p.pub && isOfficialGovernmentUrl(p.src?.url)).sort((a, b) => b.ts - a.ts).slice(0, limit)
+    .map((p) => ({ id: p.id, gov: p.gov || null, gov_ar: govName(p.gov), gov_en: govName(p.gov, 'en'), text: p.text, ts: new Date(p.ts).toISOString(), source_name: p.src?.name || 'مصدر حكومي رسمي', source_url: p.src.url }));
 }
 const emitPower = () => store.emit('power', publicPower());
 function trimPower() {
@@ -217,7 +224,7 @@ const R = { H: null };
 const reviewerIds = () => [...new Set([...config.ownerIds])];
 function powerCardText(p) {
   return `⚡ <b>تحديث كهرباء${p.src ? ' من الرصد' : ''}</b> — ${esc(govName(p.gov))}\n\n${esc(p.text)}\n\n`
-    + `${p.src ? `<i>المصدر (للمراجعة فقط، ما بينذكر بالنشر): ${esc(p.src.name)}</i>\n` : ''}<i>${dayClock(p.ts)}</i>`;
+    + `${p.src?.url ? `<i>المصدر: <a href="${esc(p.src.url)}">${esc(p.src.name || 'مصدر حكومي رسمي')}</a></i>\n` : ''}<i>${dayClock(p.ts)}</i>`;
 }
 const powerCardKb = (p) => new InlineKeyboard()
   .text('✅ نشر على الموقع', `pw:s:${p.id}`).row()
@@ -255,6 +262,8 @@ export async function takeMisroutedWeatherPower() {
 }
 /** news-monitor hook: only real electricity service updates become power cards. */
 export function onNewsPost(it) {
+  const sourceUrl = it.url || it.src?.url || '';
+  if (!isOfficialGovernmentUrl(sourceUrl)) return false;
   const s = svc();
   const n = (s.powerNews ||= { on: true, day: '', count: 0 });
   if (!n.on) return false;
@@ -271,16 +280,17 @@ export function onNewsPost(it) {
   seen[h] = Date.now();
   for (const [k, t] of Object.entries(seen)) if (Date.now() - t > 72 * H_MS) delete seen[k];
   n.count++;
-  const p = { id: rid(), gov: r.gov, text, ts: it.ts || Date.now(), src: { name: it.src?.name || '', url: it.url || '' }, pub: false };
+  const p = { id: rid(), gov: r.gov, text, ts: it.ts || Date.now(), src: { name: it.src?.name || 'مصدر حكومي رسمي', url: sourceUrl }, pub: false };
   powerArr().push(p); trimPower(); save();
   sendPowerCard(p).catch(() => {});
   return true;
 }
 async function publishPower(api, p, channel) {
+  if (!isOfficialGovernmentUrl(p.src?.url)) throw new Error('لا يمكن نشر تحديث كهرباء بلا رابط مصدر حكومي رسمي (.gov.sy أو سانا).');
   p.pub = true; p.ts = p.ts || Date.now(); p.pubAt = Date.now(); save(); emitPower();
   if (channel && config.channel) {
     const kb = new InlineKeyboard().url('⚡ كل تحديثات الكهرباء', `${siteUrl()}/ar/#power`);
-    const m = await api.sendMessage(config.channel, `⚡ <b>الكهرباء — ${esc(govName(p.gov))}</b>\n\n${esc(p.text)}`, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
+    const m = await api.sendMessage(config.channel, `⚡ <b>الكهرباء — ${esc(govName(p.gov))}</b>\n\n${esc(p.text)}\n\n🔗 <a href="${esc(p.src.url)}">${esc(p.src.name || 'المصدر الحكومي الرسمي')}</a>`, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     p.channel_message_id = m.message_id; save();
   }
 }
@@ -334,13 +344,13 @@ export function registerPowerTools(bot, h) {
   }));
   bot.callbackQuery('pwr:add', (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery();
-    await h.show(ctx, T(ctx, '⚡ <b>تحديث كهرباء جديد</b>\n\nلأي محافظة؟', '⚡ <b>New electricity update</b>\n\nFor which governorate?'), govKb('pwr:g', 'pwr', ctx));
+    await h.show(ctx, T(ctx, '⚡ <b>تحديث كهرباء رسمي جديد</b>\n\nلأي محافظة؟ يجب إرفاق رابط الخبر من موقع حكومي أو سانا قبل النشر.', '⚡ <b>New official electricity update</b>\n\nFor which governorate? A government-site or SANA source link is required before publishing.'), govKb('pwr:g', 'pwr', ctx));
   }));
   bot.callbackQuery(/^pwr:g:(\w+)$/, (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery();
     const gov = ctx.match[1] === 'all' ? null : ctx.match[1];
-    pend.set(ctx.from.id, { k: 'text', gov, exp: Date.now() + 10 * 60_000 });
-    await h.show(ctx, E(ctx) ? `⚡ <b>${esc(gName(ctx, gov))}</b>\n\nType the update (it is published as you write it, so Arabic is best), e.g.:\n<i>برنامج التقنين الجديد: 4 ساعات وصل مقابل ساعتين قطع اعتباراً من اليوم.</i>` : `⚡ <b>${esc(govName(gov))}</b>\n\nاكتب نص التحديث، مثلاً:\n<i>برنامج التقنين الجديد: 4 ساعات وصل مقابل ساعتين قطع اعتباراً من اليوم.</i>`, new InlineKeyboard().text(T(ctx, '↩️ رجوع', '↩️ Back'), 'pwr:add'));
+    pend.set(ctx.from.id, { k: 'source', gov, exp: Date.now() + 10 * 60_000 });
+    await h.show(ctx, E(ctx) ? `⚡ <b>${esc(gName(ctx, gov))}</b>\n\nFirst send the direct URL of the government/SANA announcement, then send the update text.` : `⚡ <b>${esc(govName(gov))}</b>\n\nأرسل أولاً رابط الخبر المباشر من موقع حكومي أو سانا، وبعدها أرسل نص التحديث.`, new InlineKeyboard().text(T(ctx, '↩️ رجوع', '↩️ Back'), 'pwr:add'));
   }));
   bot.callbackQuery('pwr:del', (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery();
@@ -388,6 +398,11 @@ export function registerPowerTools(bot, h) {
     if (!h.owner(ctx) || Date.now() > q.exp) { pend.delete(ctx.from.id); return next(); }
     const txt = String(ctx.message.text || '').trim();
     if (txt.startsWith('/')) { pend.delete(ctx.from.id); return next(); }
+    if (q.k === 'source') {
+      if (!isOfficialGovernmentUrl(txt)) return ctx.reply(T(ctx, '⚠️ أرسل رابطاً مباشراً من نطاق ‎.gov.sy‎ أو sana.sy.', '⚠️ Send a direct link from a .gov.sy or sana.sy domain.'));
+      q.sourceUrl = txt; q.k = 'text'; q.exp = Date.now() + 10 * 60_000;
+      return ctx.reply(T(ctx, '✅ تم قبول رابط المصدر. أرسل الآن نص تحديث الكهرباء الذي تريد نشره.', '✅ Source accepted. Now send the electricity update text.'), { _keep: 'c' });
+    }
     if (txt.length < 8) return ctx.reply(T(ctx, '⚠️ النص قصير كتير، اكتب التحديث كامل.', '⚠️ That text is too short — please write the full update.'));
     pend.delete(ctx.from.id);
     if (q.k === 'edit') {
@@ -403,7 +418,7 @@ export function registerPowerTools(bot, h) {
       p.cards = [[m.chat.id, m.message_id]]; save();
       return;
     }
-    const p = { id: rid(), gov: q.gov, text: txt.slice(0, 700), ts: Date.now(), src: null, pub: false, manual: true };
+    const p = { id: rid(), gov: q.gov, text: txt.slice(0, 700), ts: Date.now(), src: { name: 'مصدر حكومي رسمي', url: q.sourceUrl }, pub: false, manual: true };
     powerArr().push(p); save();
     const m = await ctx.reply(`${T(ctx, '👀 <b>معاينة</b> — هيك رح يظهر على الموقع:', '👀 <b>Preview</b> — this is how it will appear on the website:')}\n\n${powerCardText(p)}`, { parse_mode: 'HTML', reply_markup: powerCardKb(p), _keep: 'c' });
     p.cards = [[m.chat.id, m.message_id]]; save();
