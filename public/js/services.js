@@ -1,7 +1,7 @@
 // Services on the website: 💱 prices · ⚡ electricity · 🛣 road status layer · 🏥 nearby services
 // (hospitals, pharmacies, fuel stations, bakeries from OpenStreetMap) · 📍 better "my location".
 // Everything here is additive: the alert map keeps working even if this module fails.
-import { settings } from './settings.js';
+import { settings } from './settings.js?v=2';
 import { WX_ICONS, WX_LABEL } from '/shared/wx-icons.js';
 
 const S = {
