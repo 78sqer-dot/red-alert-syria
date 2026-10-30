@@ -13,7 +13,7 @@ import { ALERT_TYPES, typeOf, droneAuto, alertEmoji } from '../shared/types.js';
 import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
-import { onRoadNewsPost, roadMonitorDebug, roadMonitorActivationTime } from './road-monitor.js';
+import { onRoadNewsPost, roadMonitorDebug, roadMonitorActivationTime, parseRoadText } from './road-monitor.js';
 import { onNewsPost as onPowerPost, takeMisroutedWeatherPower } from './services.js';
 import { onBorderNews } from './borders.js';
 import { FUEL_NEWS_RE } from './fuel.js';
@@ -24,10 +24,18 @@ import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInTex
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
 
+const ROAD_INCIDENT_WORDS = ['قصف', 'غارة', 'هجوم', 'اعتداء', 'اشتباك', 'انفجار', 'تفجير', 'استهداف', 'اطلاق نار', 'اغتيال', 'مقتل', 'قتلى', 'جرحى', 'اصابه', 'كمين', 'توغل', 'مداهمه', 'حادث', 'تصادم', 'انقلاب', 'حريق', 'احتجاج', 'مظاهره', 'قذائف', 'هاون'].map(normalizeArabic);
+/** True for a road-state update that belongs in the road monitor, not a general breaking alert. */
+export function isRoadStatusOnlyPost(text) {
+  if (!parseRoadText(text) || weatherWarningInfo(text)) return false;
+  const nt = normalizeArabic(String(text || ''));
+  return !ROAD_INCIDENT_WORDS.some((word) => nt.includes(word));
+}
+
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
 // that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
-export const FILTER_VER = 5;
+export const FILTER_VER = 6;
 const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
@@ -229,7 +237,8 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule) return false;
+  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil'].includes(d.type)) return false;
+  if (!d.loc || d.loc.scope === 'country' || !Number.isFinite(d.loc.latitude) || !Number.isFinite(d.loc.longitude)) return false;
   const ss = d.srcs || [];
   return ss.length >= 2 || ss.some((x) => !isLocalSrc(x));
 }
@@ -440,7 +449,7 @@ function noticeKb(d, lang = 'ar') {
 }
 async function nightPublish(d) {
   const a = api();
-  if (!a || !R.H?.publishDraft || d.status !== 'pending') return false;
+  if (!a || !R.H?.publishDraft || d.status !== 'pending' || !nightEligible(d)) return false;
   const n = newsState();
   const mode = d.autoMode === 'day' ? 'day' : 'night';
   d.status = 'publishing'; save();
@@ -613,6 +622,7 @@ async function handleResult(it, r, known, pmap) {
   const n = newsState();
   if (!r || !r.event || !NEWS_TYPES.includes(r.type)) { note(it, 'not an event'); return; }
   { const t2 = refineType(r.type, `${r.headline || ''}\n${it.text}`); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
+  if (r.type === 'weather' && !weatherWarningInfo(it.text)) { note(it, 'not an explicit actionable weather warning'); return; }
   // the AI linked it to a known incident / an earlier post of this batch
   let target = null;
   const m = String(r.same_as || '').trim().match(/^([EP])(\d+)$/i);
@@ -637,8 +647,7 @@ async function handleResult(it, r, known, pmap) {
     n.stats.dupes++; note(it, `duplicate of ${target.kind} (${target.status})`); return;
   }
   if (!n.types[r.type]) { note(it, `type ${r.type} switched off`); return; }
-  if (!locs.length && r.type !== 'breaking') { note(it, 'no place found'); return; }
-  if (!mentionsSyria(it.text) && !locs.length) { note(it, 'not in Syria'); return; }
+  if (!locs.length) { note(it, 'no verified Syrian place found'); return; }
   if (capReached()) { note(it, 'hourly cap reached'); return; }
   const d = {
     id: rid(), type: r.type, loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
@@ -730,6 +739,10 @@ async function rescanIfFilterChanged() {
         const key = `${src.u}/${p.id}`;
         if (n.handled[key] || drafted.has(p.url)) continue;
         const c = cleanPostText(p.text);
+        if (isRoadStatusOnlyPost(c.text)) {
+          n.seen[textHash(c.text)] = Date.now(); n.handled[key] = Date.now();
+          continue;
+        }
         const f = prefilter(c.text, { general: !!src.general, breaking: c.breaking });
         if (!f.ok) continue;
         const h = textHash(c.text);
@@ -775,9 +788,16 @@ async function pollOnce() {
     const c = cleanPostText(p.text);
     it.text = c.text; it.breaking = c.breaking;
     const h = textHash(c.text);
+    let roadHandled = false;
     if (it.ts >= roadActiveSince) {
-      try { if (await onRoadNewsPost(it)) note(it, 'road update -> confirmed or owner review'); }
+      try { roadHandled = await onRoadNewsPost(it); }
       catch (e) { console.warn('[news] road hook failed', e?.message || e); }
+    }
+    if (isRoadStatusOnlyPost(it.text)) {
+      n.seen[h] = Date.now();
+      (n.handled ||= {})[`${src.u}/${p.id}`] = Date.now();
+      note(it, roadHandled ? 'road update -> dedicated road monitor only; excluded from breaking-news alerts' : 'road status withheld from general alerts; not accepted by road monitor');
+      continue;
     }
     if (src.roadOnly) {
       n.seen[h] = Date.now();

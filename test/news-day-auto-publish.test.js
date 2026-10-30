@@ -12,7 +12,7 @@ process.env.OWNER_IDS = '8270709633';
 process.env.CHANNEL_ID = '@mock_news_channel';
 const { store } = await import('../server/store.js');
 await store.init(null);
-const { dayAutoDueAt, dayAutoReady, daytimeAutoEligible, daytimeWindow } = await import('../server/news-monitor.js');
+const { dayAutoDueAt, dayAutoReady, daytimeAutoEligible, daytimeWindow, nightEligible } = await import('../server/news-monitor.js');
 
 test.after(async () => {
   await new Promise((resolve) => setTimeout(resolve, 350));
@@ -23,9 +23,11 @@ const at = (iso) => Date.parse(iso);
 const daytimeStart = at('2026-10-27T05:00:00Z'); // 08:00 in Damascus
 const qualified = (overrides = {}) => ({
   id: 'news-draft',
+  type: 'attack',
   status: 'pending',
   test: false,
   rule: false,
+  loc: { scope: 'place', latitude: 33.5, longitude: 36.3 },
   srcs: [{ u: 'test-main-source', local: false }],
   ...overrides,
 });
@@ -51,6 +53,14 @@ test('test, rules-only, low-confidence, and already handled drafts never qualify
   assert.equal(daytimeAutoEligible(qualified({ status: 'published' })), false);
   assert.equal(daytimeAutoEligible(qualified({ status: 'duplicate' })), false);
   assert.equal(daytimeAutoEligible(qualified({ srcs: [{ u: 'local-one', local: true }, { u: 'local-two', local: true }] })), true);
+});
+
+test('high-risk categories and drafts without a verified map point are held for human review', () => {
+  for (const type of ['breaking', 'weather', 'civil']) {
+    assert.equal(nightEligible(qualified({ type })), false, `${type} must not auto-publish`);
+  }
+  assert.equal(nightEligible(qualified({ loc: { scope: 'country', latitude: null, longitude: null } })), false);
+  assert.equal(nightEligible(qualified({ loc: { scope: 'place', latitude: null, longitude: null } })), false);
 });
 
 test('the scheduler considers only still-pending eligible drafts whose saved deadline has elapsed', () => {

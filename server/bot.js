@@ -5,7 +5,7 @@ import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert } from './store.js';
-import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji, droneAuto, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
+import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
@@ -90,17 +90,15 @@ export function channelPost(alert, { ended = false } = {}) {
   if (alert.type === 'quake') { const m = alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1]); if (Number.isFinite(m)) title = `زلزال بقوة ${m.toFixed(1)}`; }
   const p = alert.place || {};
   const hasPlace = p.scope && p.scope !== 'country';
-  const lines = [];
-  lines.push(`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${alertEmoji(alert)}`, '');
+  const sections = [`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${alertEmoji(alert)}`];
   const desc = cleanAlertText(alert.description || '');
-  if (alert.type === 'breaking') lines.push(`<b>${esc(desc || alert.title)}</b>`, '');
-  if (hasPlace) for (const x of [p, ...(alert.extra || [])]) lines.push(`📍<b>${esc(locName(x, 'ar'))}</b>`);
-  if (alert.type !== 'breaking' && desc) lines.push(`<blockquote>${esc(desc)}</blockquote>`);
-  lines.push('');
-  lines.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
-  lines.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
-  if (ended) lines.push(`انتهى :  ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
-  return lines.join('\n');
+  if (alert.type === 'breaking') sections.push(`<b>${esc(desc || alert.title)}</b>`);
+  if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
+  if (alert.type !== 'breaking' && desc) sections.push(`<blockquote>${esc(desc)}</blockquote>`);
+  sections.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
+  sections.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
+  if (ended) sections.push(`انتهى :  ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
+  return sections.join('\n\n');
 }
 export function channelKeyboard(alert) {
   const url = mapUrl(alert.id);
@@ -124,7 +122,9 @@ function draftSummary(d, lang) {
     if (direction) lines.push(`➜ <b>${esc(lang === 'en' ? direction.en : direction.ar)}</b>`);
   }
   if (d.type === 'breaking') lines.push('', esc(d.text || ''));
-  if (d.extra?.length) {
+  if (d.type === 'air_movement' && (!loc || loc.scope === 'country')) {
+    lines.push('', lang === 'en' ? '📍 No place selected — no map pin' : '📍 اتجاه عام — بلا تحديد منطقة أو دبوس على الخريطة');
+  } else if (d.extra?.length) {
     lines.push('', `📍 <b>${lang === 'en' ? `Areas (${d.extra.length + 1})` : `المناطق (${d.extra.length + 1})`}:</b>`);
     for (const x of [loc, ...d.extra]) lines.push(`• ${esc(locName(x, lang))}`);
   } else lines.push('', `📍 <b>${l.locLabel}:</b> ${esc(loc ? locName(loc, lang) : (lang === 'en' ? 'Syria' : 'سوريا'))}`);
@@ -199,9 +199,17 @@ function mainKeyboard(ctx) {
   const lang = langOf(ctx);
   const b = (k) => (lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar);
   const e = (k) => ALERT_TYPES[k].emoji;
+  const menuTypes = TYPE_KEYS
+    .filter((type) => type !== 'air_movement' && !['accident', 'protest', 'fire', 'civil_plane'].includes(type))
+    .map((type) => (type === 'civil' ? 'civil_menu' : type));
   const kb = new InlineKeyboard();
-  for (let i = 0; i < TYPE_KEYS.length; i += 2) {
-    for (const type of TYPE_KEYS.slice(i, i + 2)) kb.text(`${e(type)} ${b(type)}`, `t:${type}`);
+  for (let i = 0; i < menuTypes.length; i += 2) {
+    for (const item of menuTypes.slice(i, i + 2)) {
+      const type = item === 'civil_menu' ? 'civil' : item;
+      const emoji = item === 'civil_menu' ? '🛡️' : e(type);
+      const label = item === 'civil_menu' ? (lang === 'en' ? 'Civil' : 'مدني') : b(type);
+      kb.text(`${emoji} ${label}`, item === 'civil_menu' ? 'cv' : `t:${type}`);
+    }
     kb.row();
   }
   kb.text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd');
@@ -383,7 +391,7 @@ function newDraft(ctx, type) {
   const d = {
     type,
     mode: staff(ctx) ? 'publish' : 'report',
-    step: type === 'breaking' ? 'text' : type === 'border' ? 'border' : type === 'air_movement' ? 'aircraft' : 'gov',
+    step: type === 'breaking' ? 'text' : type === 'border' ? 'border' : type === 'air_movement' ? 'aircraft' : ['uav', 'warplane'].includes(type) ? 'flightmode' : 'gov',
     ttlMin: typeOf(type).ttlMin,
     location: null,
     extra: [], // further areas of the same alert (publishing bot)
@@ -415,6 +423,16 @@ async function askBorder(ctx, d) {
   kb.text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en ? 'Choose the border section for this report:' : 'اختر الحدود المقصودة لهذا البلاغ:', kb);
 }
+async function askAerialMode(ctx, d) {
+  d.step = 'flightmode';
+  const en = langOf(ctx) === 'en';
+  const aircraft = d.type === 'uav' ? '🛸' : '✈️';
+  const kb = new InlineKeyboard()
+    .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row()
+    .text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row()
+    .text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en ? 'Choose hovering over an area, or select a movement direction only (no place or map pin):' : 'اختر تحليقًا فوق منطقة، أو حدّد اتجاه الحركة فقط (بلا منطقة أو دبوس على الخريطة):', kb);
+}
 async function askFlightDirection(ctx, d) {
   d.step = 'flight';
   const en = langOf(ctx) === 'en';
@@ -424,7 +442,7 @@ async function askFlightDirection(ctx, d) {
     kb.text(`✈️ ${en ? name.en : name.ar}`, `flight:${key}`).row();
   }
   kb.text(L(ctx).btnCancel, 'cancel');
-  await show(ctx, en ? 'Choose the movement, then select the area it is moving toward or entering/leaving:' : 'اختر حركة الطائرة، ثم حدّد المنطقة المقصودة أو التي تدخلها/تنسحب منها:', kb);
+  await show(ctx, en ? 'Choose the movement direction only:' : 'اختر اتجاه حركة الطائرة فقط:', kb);
 }
 async function askFlightAircraft(ctx, d) {
   d.step = 'aircraft';
@@ -458,8 +476,12 @@ async function afterLocation(ctx, d) {
     const kb0 = new InlineKeyboard().text(L(ctx).btnSkip, 'skip').row().text(L(ctx).btnBack, 'back:gov').text(L(ctx).btnCancel, 'cancel');
     return show(ctx, en ? `<b>${esc(roadLabel(d.road, 'en'))}</b> — ${esc(locName(d.location, 'en'))}\n\n📝 Write a short description, e.g. <i>closed at the bridge entrance because of …</i>, or skip.` : `<b>${esc(roadLabel(d.road, 'ar'))}</b> — ${esc(locName(d.location, 'ar'))}\n\n📝 اكتب وصف مختصر، مثلاً: <i>مسكّر عند مدخل الجسر بسبب …</i> أو <i>في حاجز تفتيش وازدحام</i>، أو اضغط «تخطي».`, kb0);
   }
-  const kb = new InlineKeyboard().text(L(ctx).btnSkip, 'skip').row().text(L(ctx).btnBack, 'back:gov').text(L(ctx).btnCancel, 'cancel');
-  await show(ctx, L(ctx).askDetails(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`, esc(locName(d.location, langOf(ctx)))), kb);
+  const backKey = d.type === 'border' ? 'back:border' : d.type === 'air_movement' && d.location?.scope === 'country' ? 'back:flight' : 'back:gov';
+  const kb = new InlineKeyboard().text(L(ctx).btnSkip, 'skip').row().text(L(ctx).btnBack, backKey).text(L(ctx).btnCancel, 'cancel');
+  const detailsLocation = d.type === 'air_movement' && d.location?.scope === 'country'
+    ? (langOf(ctx) === 'en' ? 'general direction (no place or map pin)' : 'اتجاه عام — بلا تحديد منطقة أو دبوس خريطة')
+    : locName(d.location, langOf(ctx));
+  await show(ctx, L(ctx).askDetails(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`, esc(detailsLocation)), kb);
 }
 
 async function showPreview(ctx, d) {
@@ -1271,6 +1293,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await show(ctx, L(ctx).askBreaking, new InlineKeyboard().text(L(ctx).btnCancel, 'cancel'));
     } else if (type === 'border') await askBorder(ctx, d);
     else if (type === 'air_movement') await askFlightAircraft(ctx, d);
+    else if (type === 'uav' || type === 'warplane') await askAerialMode(ctx, d);
     else await askLocation(ctx, d);
   });
 
@@ -1284,10 +1307,33 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return fn(ctx, d);
   };
 
+  bot.callbackQuery('back:border', needDraft(async (ctx, d) => {
+    if (d.type !== 'border') return;
+    await askBorder(ctx, d);
+  }));
+  bot.callbackQuery('back:flight', needDraft(async (ctx, d) => {
+    if (d.type !== 'air_movement') return;
+    await askFlightDirection(ctx, d);
+  }));
   bot.callbackQuery(/^bsel:(iraq|jordan|lebanon|turkey)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'border') return;
     d.border = ctx.match[1];
-    await askLocation(ctx, d);
+    const marker = BORDER_MARKERS[d.border];
+    if (!marker) return;
+    d.location = { scope: 'point', name_ar: marker.ar, name_en: marker.en, latitude: marker.lat, longitude: marker.lon };
+    d.extra = [];
+    await afterLocation(ctx, d);
+  }));
+  bot.callbackQuery(/^airmode:(over|move)$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'uav' && d.type !== 'warplane') return;
+    if (ctx.match[1] === 'over') {
+      d.aerialMode = 'over';
+      return askLocation(ctx, d);
+    }
+    d.aircraft = d.type;
+    d.type = 'air_movement';
+    d.ttlMin = typeOf(d.type).ttlMin;
+    await askFlightDirection(ctx, d);
   }));
   bot.callbackQuery(/^flightair:(warplane|uav)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'air_movement') return;
@@ -1297,7 +1343,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery(/^flight:(toward_syria|entering_syria|leaving_syria)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'air_movement' || !FLIGHT_DIRECTIONS[ctx.match[1]]) return;
     d.flightDirection = ctx.match[1];
-    await askLocation(ctx, d);
+    d.location = locationFrom({});
+    d.extra = [];
+    await afterLocation(ctx, d);
   }));
 
   bot.callbackQuery(/^g:(\d+)$/, needDraft(async (ctx, d) => {

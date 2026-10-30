@@ -1,8 +1,8 @@
 // Persistent user settings (stored on the device only)
-import { TYPE_KEYS } from '/shared/types.js';
+import { TYPE_KEYS } from '/shared/types.js?v=16';
 
 const KEY = 'ras-settings';
-const DEFAULTS = {
+DEFAULTS = {
   notifications: { enabled: false, types: [...TYPE_KEYS], sound: true, vibration: true, ringtone: 'alert1', volume: 0.8 },
   darkMode: null,
   language: null,

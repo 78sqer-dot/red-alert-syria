@@ -51,6 +51,8 @@ const WEATHER_HAZARD_WORDS = {
 };
 const WEATHER_OFFICIAL = ['تحذير جوي', 'تنبيه جوي', 'انذار جوي', 'لجنه الاستجابه الطارئه', 'الارصاد الجويه', 'هيئه الارصاد', 'تتاثر المحافظه', 'اضطراب جوي عالي الشده', 'وزاره الطوارئ'];
 const WEATHER_ACTION = ['يرجي', 'تجنب', 'اخذ الحيطه', 'الحذر', 'تحذير', 'تحذر', 'تنبيه', 'ضروره', 'علي المواطنين', 'الابتعاد', 'الاستعداد'];
+const ROUTINE_WEATHER_WORDS = ['الطقس', 'توقعات الطقس', 'النشرة الجوية', 'حالة الجو', 'درجات الحرارة', 'الاحوال الجوية', 'weather forecast', 'daily forecast'].map(N);
+const NON_WEATHER_CIVIL_WORDS = ['انهيار', 'غرق', 'فيضان', 'سيول', 'زلزال', 'هزة ارضية', 'الدفاع المدني', 'انقاذ', 'تسمم', 'اختناق', 'صعق كهربائي'].map(N);
 /** Only explicit, actionable warnings (not ordinary forecasts) get the weather alert type. */
 export function weatherWarningInfo(text) {
   const nt = N(String(text || ''));
@@ -87,12 +89,15 @@ export function prefilter(text, { general = false, breaking = false } = {}) {
   if (t.replace(/\s/g, '').length < 25) return { ok: false, why: 'short' };
   const kt = keywordTypes(t);
   const nt = N(t);
+  // Apply the Syria-only source gate before the weather shortcut: an official foreign warning is still foreign.
+  if (general && !mentionsSyria(t)) return { ok: false, why: 'not-syria' };
   const weather = weatherWarningInfo(t);
   if (weather) return { ok: true, kt: [...new Set([...kt, 'weather'])], weather };
+  const independentIncident = kt.some((k) => k !== 'weather' && k !== 'civil') || NON_WEATHER_CIVIL_WORDS.some((w) => nt.includes(w));
+  if ((kt.includes('weather') || ROUTINE_WEATHER_WORDS.some((w) => nt.includes(w))) && !independentIncident) return { ok: false, why: 'routine-weather' };
   const noisy = NOISE.some((w) => nt.includes(w));
   if (!kt.length && !breaking) return { ok: false, why: 'no-keywords' };
   if (noisy && kt.length <= 1 && !breaking) return { ok: false, why: 'noise' };
-  if (general && !mentionsSyria(t)) return { ok: false, why: 'not-syria' };
   return { ok: true, kt };
 }
 

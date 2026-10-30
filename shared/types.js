@@ -24,8 +24,8 @@ export const ALERT_TYPES = {
   },
   air_movement: {
     ar: 'حركة طيران', en: 'Aircraft movement', button_ar: 'حركة طيران', button_en: 'Aircraft movement',
-    emoji: '🛫', color: '#0f766e', ring: '#115e59', group: 'aerial', ttlMin: 60,
-    marker: 'movement', glyph: 'plane', icon: '#0f766e', zone: false, tag_ar: 'حركة_طيران', tag_en: 'Aircraft_movement',
+    emoji: '🛫', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
+    marker: 'movement', glyph: 'plane', icon: '#3b8eff', zone: false, tag_ar: 'حركة_طيران', tag_en: 'Aircraft_movement',
   },
   border: {
     ar: 'تنبيه حدودي', en: 'Border alert', button_ar: 'الحدود', button_en: 'Border',
@@ -111,6 +111,14 @@ export const BORDER_REGIONS = {
   jordan: { ar: 'الحدود السورية–الأردنية', en: 'Syrian–Jordanian border' },
   lebanon: { ar: 'الحدود السورية–اللبنانية', en: 'Syrian–Lebanese border' },
   turkey: { ar: 'الحدود السورية–التركية', en: 'Syrian–Turkish border' },
+};
+
+// Representative border-crossing pins (from the site's crossing map); the alert is not placed at a governorate center.
+export const BORDER_MARKERS = {
+  iraq: { lat: 34.3958, lon: 40.9773, ar: 'قرب معبر البوكمال', en: 'Near Al-Bukamal crossing' },
+  jordan: { lat: 32.5424, lon: 36.2029, ar: 'قرب معبر نصيب', en: 'Near Nasib crossing' },
+  lebanon: { lat: 33.6579, lon: 35.9777, ar: 'قرب معبر جديدة يابوس', en: 'Near Jdeidet Yabous crossing' },
+  turkey: { lat: 36.2305, lon: 36.6927, ar: 'قرب معبر باب الهوى', en: 'Near Bab al-Hawa crossing' },
 };
 
 export const FLIGHT_DIRECTIONS = {

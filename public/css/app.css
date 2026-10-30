@@ -272,12 +272,16 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 /* aircraft / vehicles have no disc, so they get a little more size to stay readable */
 .mk-squad .mk-s, .mk-fly .mk-s { transform: scale(calc(var(--mks, 0.5) * 1.5)); }
 .mk-movement .mk-s { transform: scale(calc(var(--mks, 0.5) * 1.5)); }
-.flight-movement { position: absolute; left: 0; top: 0; width: 40px; height: 40px; transform: translate(-50%, -50%); display: grid; place-items: center; border: 2px solid var(--c); border-radius: 50%; background: var(--bg-elevated); box-shadow: 0 2px 8px rgba(0,0,0,.35); transition: transform .16s ease; }
+.flight-movement { position: absolute; left: 0; top: 0; width: 40px; height: 40px; transform: translate(-50%, -50%); display: grid; place-items: center; border: 2px solid var(--c); border-radius: 50%; background: var(--bg-elevated); box-shadow: 0 0 15px color-mix(in srgb, var(--c) 58%, transparent), 0 2px 8px rgba(0,0,0,.35); animation: flightMovementGlow 2s ease-in-out infinite; transition: transform .16s ease; }
+.flight-movement::before { content: ''; position: absolute; inset: -6px; border: 2px solid color-mix(in srgb, var(--c) 78%, transparent); border-radius: 50%; opacity: 0; pointer-events: none; animation: flightMovementPulse 2s ease-out infinite; }
 .flight-aircraft { display: grid; place-items: center; width: 28px; height: 28px; }
 .flight-svg { display: block; width: 23px; height: 23px; }
 .flight-arrow { position: absolute; right: -7px; bottom: -5px; display: grid; place-items: center; width: 19px; height: 19px; border: 2px solid var(--bg-elevated); border-radius: 50%; background: var(--c); color: #fff; font: 900 12px/1 system-ui, sans-serif; }
 .mk:hover .flight-movement, .mk.sel .flight-movement { transform: translate(-50%, -50%) scale(1.15); }
 .mk.inactive .flight-movement { opacity: .55; }
+@keyframes flightMovementPulse { 0% { transform: scale(.88); opacity: .72; } 100% { transform: scale(1.65); opacity: 0; } }
+@keyframes flightMovementGlow { 50% { box-shadow: 0 0 20px color-mix(in srgb, var(--c) 72%, transparent), 0 2px 8px rgba(0,0,0,.35); } }
+@media (prefers-reduced-motion: reduce) { .flight-movement, .flight-movement::before { animation: none; } .flight-movement::before { opacity: .5; } }
 /* drone: exactly like the original — fixed 18px airframe, never scaled with zoom */
 .mk-orbit .mk-s { transform: none; }
 /* static disc — identical to the original .static-alert-icon */

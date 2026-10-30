@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { store } from '../server/store.js';
 import { addRoad } from '../server/services.js';
 import { onRoadNewsPost, parseRoadText, roadEvidence, roadLocations, rememberIgnoredRoadReport } from '../server/road-monitor.js';
+import { isRoadStatusOnlyPost } from '../server/news-monitor.js';
 
 function freshStore() {
   const oldState = store.state;
@@ -25,6 +26,12 @@ test('road parsing accepts explicit closures and impassability but keeps negated
   assert.equal(parseRoadText('سيتم إغلاق الطريق في حمص غداً').road, null);
   assert.equal(parseRoadText('أعيد فتح الطريق بعد إغلاق مؤقت في دمشق').road, null);
   assert.equal(parseRoadText('ازدحام مروري في دمشق'), null);
+});
+
+test('road-only status updates do not also enter the general breaking-news pipeline', () => {
+  assert.equal(isRoadStatusOnlyPost('إغلاق الطريق بين دمشق ودرعا بسبب أعمال صيانة'), true);
+  assert.equal(isRoadStatusOnlyPost('إغلاق الطريق بعد انفجار قرب حاجز في درعا'), false, 'a concrete incident remains eligible for the alert pipeline');
+  assert.equal(isRoadStatusOnlyPost('تحذير جوي رسمي من أمطار غزيرة في دمشق مع إغلاق الطريق'), false, 'an actionable weather warning remains eligible');
 });
 
 test('road locations require a named Syrian place and resolve route endpoints without a governorate-only pin', () => {

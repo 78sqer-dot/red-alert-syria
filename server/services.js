@@ -113,6 +113,8 @@ export function govOfText(text) {
 const POWER_SUBJECT = ['الكهرباء', 'كهرباء', 'التيار الكهربائي', 'الكهربائي', 'الكهربائية', 'الشبكة الكهربائية', 'محطة توليد', 'محطة الكهرباء', 'وزارة الكهرباء', 'مؤسسة الكهرباء'].map(N);
 const POWER_EVENT = ['تقنين', 'ساعات الوصل', 'ساعات القطع', 'انقطاع التيار', 'انقطاع الكهرباء', 'قطع التيار', 'عودة التيار', 'عاد التيار', 'رجوع التيار', 'إعادة التيار', 'برنامج التقنين', 'تعرفة الكهرباء', 'التعرفة الكهربائية', 'فاتورة الكهرباء', 'زيادة ساعات التغذية', 'تخفيض التعرفة', 'عطل كهربائي', 'عطل في الشبكة', 'عطل بالشبكة', 'صيانة الشبكة', 'إصلاح الشبكة', 'خرجت محطة توليد', 'خرجت عن الخدمة', 'تحسن التغذية الكهربائية', 'جدول وصل الكهرباء', 'زيادة ساعات الوصل', 'خفض ساعات الوصل'].map(N);
 const NOISE = ['مسيرة', 'غارة', 'قصف', 'استهداف', 'اشتباك', 'انفجار'];
+const POWER_NATIONAL_SCOPE = ['عموم سوريا', 'عموم سورية', 'عموم المحافظات السورية', 'جميع المحافظات السورية', 'كل المحافظات السورية', 'كافة المحافظات السورية', 'على مستوى سوريا', 'على مستوى سورية', 'في مختلف المحافظات السورية', 'في أنحاء سوريا', 'في عموم البلاد السورية', 'across syria', 'all of syria', 'nationwide in syria'].map(N);
+const FOREIGN = ['السعودية', 'السعودي', 'الملك سلمان', 'ولي العهد', 'المملكة', 'لبنان', 'اللبنانية', 'العراق', 'العراقية', 'الأردن', 'الاردن', 'الأردنية', 'مصر', 'المصرية', 'تركيا', 'التركية', 'إيران', 'الإمارات', 'الكويت', 'قطر', 'اليمن', 'ليبيا', 'غزة', 'إسرائيل', 'كييف', 'أوكرانيا', 'الأوكرانية', 'روسيا', 'الروسي', 'موسكو', 'بغداد', 'عمان', 'القاهرة'].map(N);
 /** Electricity hook only catches service/operations updates, not any text that merely mentions electricity. */
 export function isPowerNews(text) {
   if (weatherWarningInfo(text)) return { ok: false, why: 'explicit weather warning' };
@@ -121,12 +123,13 @@ export function isPowerNews(text) {
   if (!hasAny(POWER_SUBJECT) || !hasAny(POWER_EVENT)) return { ok: false };
   // A strike at a power facility is a security alert, not a service update.
   if (NOISE.some((k) => t.includes(N(k)))) return { ok: false };
+  // An explicit foreign place wins over a passing Syria mention; never guess that an unlocated outage is nationwide in Syria.
+  if (FOREIGN.some((k) => t.includes(N(k)))) return { ok: false, why: 'foreign location' };
   const g = govOfText(text);
-  if (FOREIGN.some((k) => t.includes(N(k))) && !g && !SYRIA.some((k) => t.includes(N(k)))) return { ok: false };
-  return { ok: true, gov: g ? g.code : null };
+  if (g) return { ok: true, gov: g.code };
+  if (!POWER_NATIONAL_SCOPE.some((k) => t.includes(k))) return { ok: false, why: 'no verified Syrian location or national scope' };
+  return { ok: true, gov: null };
 }
-const SYRIA = ['سوريا', 'سورية', 'السوري', 'السورية', 'السوريين', 'وزارة الطاقة', 'المؤسسة العامة لنقل وتوزيع الكهرباء', 'الشركة السورية', 'دمشق'];
-const FOREIGN = ['السعودية', 'السعودي', 'الملك سلمان', 'ولي العهد', 'المملكة', 'لبنان', 'اللبنانية', 'العراق', 'العراقية', 'الأردن', 'الاردن', 'الأردنية', 'مصر', 'المصرية', 'تركيا', 'التركية', 'إيران', 'الإمارات', 'الكويت', 'قطر', 'اليمن', 'ليبيا', 'غزة', 'إسرائيل'];
 // drop stored items that fail the Syria-only filter (e.g. a Saudi tariff post caught before the filter)
 export function purgeForeignPower() {
   const arr = powerArr(); let n = 0;
