@@ -84,13 +84,20 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('bsel:turkey');
   assert.match(lastUi().payload.text, /اختر المحافظة/);
   await tap('t:warplane');
+  assert.match(lastUi().payload.text, /اختر المحافظة/);
+  assert.equal(buttons().some((button) => button.callback_data?.startsWith('flight:')), false, 'warplane over area skips movement choices');
+
+  await tap('t:uav', reporter, reportBot);
+  assert.match(lastUi().payload.text, /اختر المحافظة/);
+  assert.equal(buttons().some((button) => button.callback_data?.startsWith('flight:')), false, 'drone over area skips movement choices');
+  await tap('t:air_movement', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 'flightair:uav'));
+  assert.ok(buttons().some((button) => button.callback_data === 'flightair:warplane'));
+  await tap('flightair:uav', reporter, reportBot);
   assert.ok(buttons().some((button) => button.callback_data === 'flight:toward_syria'));
   assert.ok(buttons().some((button) => button.callback_data === 'flight:entering_syria'));
   assert.ok(buttons().some((button) => button.callback_data === 'flight:leaving_syria'));
-  assert.ok(buttons().some((button) => button.callback_data === 'flight:from_area'));
-
-  await tap('t:uav', reporter, reportBot);
-  assert.ok(buttons().some((button) => button.callback_data === 'flight:entering_syria'), 'drone reports ask for direction before location');
+  assert.equal(buttons().some((button) => button.callback_data === 'flight:from_area'), false, 'hovering over an area remains its own alert type');
   await tap('flight:entering_syria', reporter, reportBot);
   await tap('g:09', reporter, reportBot);
   const centerChoice = buttons().find((button) => button.text?.startsWith('📍 مركز مدينة'));
@@ -103,20 +110,30 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   }, { id: ownerId, name: 'test' });
   assert.match(borderInput.title, /السورية–التركية/);
   const flightInput = buildAlertInput({
-    type: 'warplane', flightDirection: 'leaving_syria', location: { scope: 'place', name_ar: 'درعا', name_en: 'Daraa' }, extra: [], ttlMin: 60,
+    type: 'warplane', location: { scope: 'place', name_ar: 'درعا', name_en: 'Daraa' }, extra: [], ttlMin: 60,
   }, { id: ownerId, name: 'test' });
-  assert.match(flightInput.title_en, /Withdrawing from Syria/);
+  assert.match(flightInput.title_en, /Warplane/);
+  assert.equal(flightInput.meta?.flightDirection, undefined, 'over-area warplane reports contain no movement metadata');
   const droneInput = buildAlertInput({
-    type: 'uav', flightDirection: 'entering_syria', location: { scope: 'place', name_ar: 'حلب', name_en: 'Aleppo' }, extra: [], ttlMin: 90,
+    type: 'uav', location: { scope: 'place', name_ar: 'حلب', name_en: 'Aleppo' }, extra: [], ttlMin: 90,
   }, { id: ownerId, name: 'test' });
-  assert.match(droneInput.title, /دخول الأجواء السورية/);
+  assert.match(droneInput.title, /تحليق مسيّرة/);
+  assert.equal(droneInput.meta?.flightDirection, undefined, 'over-area drone reports contain no movement metadata');
+  const movementInput = buildAlertInput({
+    type: 'air_movement', aircraft: 'uav', flightDirection: 'entering_syria', location: { scope: 'place', name_ar: 'حلب', name_en: 'Aleppo' }, extra: [], ttlMin: 60,
+  }, { id: ownerId, name: 'test' });
+  assert.match(movementInput.title, /دخول الأجواء السورية/);
+  assert.equal(movementInput.meta.aircraft, 'uav');
   const borderAlert = store.addAlert(borderInput);
   assert.equal(publicAlert(borderAlert).border, 'turkey');
   const flightAlert = store.addAlert(flightInput);
-  assert.equal(publicAlert(flightAlert).flight_direction, 'leaving_syria');
+  assert.equal(publicAlert(flightAlert).flight_direction, undefined);
   const droneAlert = store.addAlert(droneInput);
-  assert.equal(publicAlert(droneAlert).flight_direction, 'entering_syria');
-  addedAlertIds.push(borderAlert.id, flightAlert.id, droneAlert.id);
+  assert.equal(publicAlert(droneAlert).flight_direction, undefined);
+  const movementAlert = store.addAlert(movementInput);
+  assert.equal(publicAlert(movementAlert).flight_direction, 'entering_syria');
+  assert.equal(publicAlert(movementAlert).aircraft, 'uav');
+  addedAlertIds.push(borderAlert.id, flightAlert.id, droneAlert.id, movementAlert.id);
 
   const before = new Set(store.state.alerts.map((alert) => alert.id));
   newsState().drafts[draftId] = {

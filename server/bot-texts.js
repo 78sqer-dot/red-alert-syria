@@ -227,6 +227,7 @@ export const TITLES = {
   uav: { ar: 'تحليق مسيّرة', en: 'Drone activity' },
   uav_strike: { ar: 'استهداف بمسيّرة', en: 'Drone strike' },
   warplane: { ar: 'تحليق طيران حربي', en: 'Warplane activity' },
+  air_movement: { ar: 'حركة طيران', en: 'Aircraft movement' },
   missile: { ar: 'صواريخ', en: 'Missiles' },
   attack: { ar: 'هجوم', en: 'Attack' },
   assassination: { ar: 'اغتيال', en: 'Assassination' },

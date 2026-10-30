@@ -20,7 +20,7 @@ const STYLE_URL = { light: 'https://tiles.openfreemap.org/styles/liberty', dark:
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 const ZONE_COLOR = { uav: '#ef233c', uav_strike: '#ff6b7a', breaking: '#ef233c' };
-const TYPE_ICON = { breaking: 'bolt', uav: 'drone', uav_strike: 'drone', warplane: 'plane', border: 'mapPin', missile: 'rocket', attack: 'swords', assassination: 'swords', artillery: 'target', explosion: 'bomb', civil: 'ambulance', accident: 'carCrash', protest: 'speaker', fire: 'flame', civil_plane: 'planeDep', quake: 'quake', weather: 'storm' };
+const TYPE_ICON = { breaking: 'bolt', uav: 'drone', uav_strike: 'drone', warplane: 'plane', air_movement: 'route', border: 'mapPin', missile: 'rocket', attack: 'swords', assassination: 'swords', artillery: 'target', explosion: 'bomb', civil: 'ambulance', accident: 'carCrash', protest: 'speaker', fire: 'flame', civil_plane: 'planeDep', quake: 'quake', weather: 'storm' };
 export const typeIcon = (t) => TYPE_ICON[t] || 'alert';
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
 // Round coloured disc with the original glyph (used by the map, the legend and toasts).
@@ -487,6 +487,11 @@ export class AlertMap {
       el.innerHTML = `<div class="squad">${pl(16, 22, -8, 1)}${pl(14, 6, 12, 0.85)}${pl(14, 38, 12, 0.85)}</div>`;
     } else if (t.marker === 'fly') {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 22, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
+    } else if (t.marker === 'movement') {
+      const aircraftGlyph = a.aircraft === 'uav' ? 'uav' : 'plane';
+      const arrow = a.flight_direction === 'entering_syria' ? '⇢' : a.flight_direction === 'leaving_syria' ? '⇠' : '➤';
+      const movement = a.flight_direction === 'entering_syria' ? 'entering' : a.flight_direction === 'leaving_syria' ? 'leaving' : 'toward';
+      el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-aircraft">${svgTag(aircraftGlyph, 23, `fill="${t.color}" class="flight-svg"`)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
     } else if (t.marker === 'icon') {
       const sz = t.size || 30;
       el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg"')}</div>`;
@@ -546,7 +551,7 @@ export class AlertMap {
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
       // every alert type gets a glowing circle over each affected area (aircraft keep their dashed blue ring)
-      if (!t || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude)) continue;
+      if (!t || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude)) continue;
       const props = { color: t.zone === 'dashed' ? t.color : ZONE_COLOR[a.type] || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];

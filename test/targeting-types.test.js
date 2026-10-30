@@ -15,6 +15,15 @@ test('map types keep drone targeting distinct and visually on-brand', () => {
   assert.equal(drone.tag_ar, 'استهداف_بمسيّرة');
 });
 
+test('aircraft movement is separate from unchanged hovering markers', () => {
+  assert.ok(ALERT_GROUPS.aerial.types.includes('air_movement'));
+  assert.equal(ALERT_TYPES.uav.marker, 'orbit');
+  assert.equal(ALERT_TYPES.warplane.marker, 'squad');
+  assert.equal(ALERT_TYPES.air_movement.marker, 'movement');
+  assert.equal(ALERT_TYPES.air_movement.zone, false);
+  assert.equal(Array.from(NEWS_TYPES).includes('air_movement'), false, 'manual movement reports are not auto-classified from news');
+});
+
 test('border alert type is available in the map type filter', () => {
   assert.ok(TYPE_KEYS.includes('border'));
   assert.ok(ALERT_GROUPS.other.types.includes('border'));

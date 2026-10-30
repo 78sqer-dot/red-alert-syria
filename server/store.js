@@ -3,7 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { config } from './config.js';
-import { ALERT_TYPES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS } from '../shared/types.js';
+import { ALERT_TYPES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
 import { alertZones, regionFix } from './places.js';
 import { cleanAlertText } from './clean-text.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
@@ -598,6 +598,7 @@ export function publicAlert(a) {
     hazard: a.type === 'weather' ? a.meta?.hazard || undefined : undefined,
     border: BORDER_REGIONS[a.meta?.border] ? a.meta.border : undefined,
     flight_direction: FLIGHT_DIRECTIONS[a.meta?.flightDirection] ? a.meta.flightDirection : undefined,
+    aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
     drones: a.type === 'uav' ? droneLevel(a) : undefined,
     title: a.title,
     title_en: a.title_en,

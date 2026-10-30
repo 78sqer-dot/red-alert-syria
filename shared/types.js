@@ -22,6 +22,11 @@ export const ALERT_TYPES = {
     emoji: '✈️', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
     marker: 'squad', glyph: 'plane', zone: 'dashed', tag_ar: 'طيران_حربي', tag_en: 'Warplane',
   },
+  air_movement: {
+    ar: 'حركة طيران', en: 'Aircraft movement', button_ar: 'حركة طيران', button_en: 'Aircraft movement',
+    emoji: '🛫', color: '#0f766e', ring: '#115e59', group: 'aerial', ttlMin: 60,
+    marker: 'movement', glyph: 'plane', icon: '#0f766e', zone: false, tag_ar: 'حركة_طيران', tag_en: 'Aircraft_movement',
+  },
   border: {
     ar: 'تنبيه حدودي', en: 'Border alert', button_ar: 'الحدود', button_en: 'Border',
     emoji: '🛂', color: '#7c3aed', ring: '#5b21b6', group: 'other', ttlMin: 120,
@@ -94,7 +99,7 @@ export const ZONE_KM = { place: 1.5, point: 1.5, village: 1.5, multi: 3, distric
 export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 
 export const ALERT_GROUPS = {
-  aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'missile'] },
+  aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'air_movement', 'missile'] },
   strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'assassination', 'artillery', 'explosion'] },
   civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
@@ -113,6 +118,11 @@ export const FLIGHT_DIRECTIONS = {
   entering_syria: { ar: 'دخول الأجواء السورية', en: 'Entering Syrian airspace' },
   leaving_syria: { ar: 'ينسحب من سوريا', en: 'Withdrawing from Syria' },
   from_area: { ar: 'من المنطقة المحددة', en: 'From the selected area' },
+};
+
+export const FLIGHT_AIRCRAFT = {
+  warplane: { ar: 'طيران حربي', en: 'Warplane' },
+  uav: { ar: 'مسيّرة', en: 'Drone' },
 };
 
 export function typeOf(key) {

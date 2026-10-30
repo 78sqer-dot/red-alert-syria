@@ -5,7 +5,7 @@ import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert } from './store.js';
-import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji, droneAuto, BORDER_REGIONS, FLIGHT_DIRECTIONS } from '../shared/types.js';
+import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji, droneAuto, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
@@ -120,7 +120,12 @@ function draftSummary(d, lang) {
   const loc = d.location;
   const lines = [`<b>${esc(d.type === 'road' ? roadLabel(d.road, lang) : typeLabel(d.type, lang))}</b>`];
   if (d.border && BORDER_REGIONS[d.border]) lines.push(`🛂 <b>${esc(lang === 'en' ? BORDER_REGIONS[d.border].en : BORDER_REGIONS[d.border].ar)}</b>`);
-  if (d.flightDirection && FLIGHT_DIRECTIONS[d.flightDirection]) lines.push(`${d.type === 'warplane' ? '✈️' : '🛸'} <b>${esc(lang === 'en' ? FLIGHT_DIRECTIONS[d.flightDirection].en : FLIGHT_DIRECTIONS[d.flightDirection].ar)}</b>`);
+  if (d.type === 'air_movement') {
+    const aircraft = FLIGHT_AIRCRAFT[d.aircraft];
+    const direction = FLIGHT_DIRECTIONS[d.flightDirection];
+    if (aircraft) lines.push(`✈️ <b>${esc(lang === 'en' ? aircraft.en : aircraft.ar)}</b>`);
+    if (direction) lines.push(`➜ <b>${esc(lang === 'en' ? direction.en : direction.ar)}</b>`);
+  }
   if (d.type === 'breaking') lines.push('', esc(d.text || ''));
   if (d.extra?.length) {
     lines.push('', `📍 <b>${lang === 'en' ? `Areas (${d.extra.length + 1})` : `المناطق (${d.extra.length + 1})`}:</b>`);
@@ -377,12 +382,11 @@ async function show(ctx, text, keyboard) {
   if (d) d.msgId = m.message_id;
 }
 
-const FLIGHT_TYPES = new Set(['warplane', 'uav', 'uav_strike']);
 function newDraft(ctx, type) {
   const d = {
     type,
     mode: staff(ctx) ? 'publish' : 'report',
-    step: type === 'breaking' ? 'text' : type === 'border' ? 'border' : FLIGHT_TYPES.has(type) ? 'flight' : 'gov',
+    step: type === 'breaking' ? 'text' : type === 'border' ? 'border' : type === 'air_movement' ? 'aircraft' : 'gov',
     ttlMin: typeOf(type).ttlMin,
     location: null,
     extra: [], // further areas of the same alert (publishing bot)
@@ -418,9 +422,20 @@ async function askFlightDirection(ctx, d) {
   d.step = 'flight';
   const en = langOf(ctx) === 'en';
   const kb = new InlineKeyboard();
-  for (const [key, name] of Object.entries(FLIGHT_DIRECTIONS)) kb.text(`✈️ ${en ? name.en : name.ar}`, `flight:${key}`).row();
+  for (const key of ['toward_syria', 'entering_syria', 'leaving_syria']) {
+    const name = FLIGHT_DIRECTIONS[key];
+    kb.text(`✈️ ${en ? name.en : name.ar}`, `flight:${key}`).row();
+  }
   kb.text(L(ctx).btnCancel, 'cancel');
-  await show(ctx, en ? 'Select the reported flight direction, then choose the relevant area:' : 'اختر اتجاه الطيران المبلّغ عنه، ثم حدّد المنطقة المرتبطة بالخبر:', kb);
+  await show(ctx, en ? 'Choose the movement, then select the area it is moving toward or entering/leaving:' : 'اختر حركة الطائرة، ثم حدّد المنطقة المقصودة أو التي تدخلها/تنسحب منها:', kb);
+}
+async function askFlightAircraft(ctx, d) {
+  d.step = 'aircraft';
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard();
+  for (const [key, name] of Object.entries(FLIGHT_AIRCRAFT)) kb.text(`✈️ ${en ? name.en : name.ar}`, `flightair:${key}`).row();
+  kb.text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en ? 'Choose the aircraft type for this movement:' : 'اختر نوع الطائرة في بلاغ الحركة الجوية:', kb);
 }
 const locKey = (x) => (x ? `${x.scope}:${x.place_id || x.district || x.governorate || ''}:${Number(x.latitude).toFixed(3)},${Number(x.longitude).toFixed(3)}` : '');
 // a picked location: either the alert's (first) area, or one more area added from the preview
@@ -472,9 +487,14 @@ export function buildAlertInput(d, author) {
   for (const x of extra) if (x.name_ar && !areas.includes(x.name_ar)) areas.push(x.name_ar);
   const more = (n, en) => (!n ? '' : en ? ` +${n} more` : n === 1 ? ' ومنطقة أخرى' : n === 2 ? ' ومنطقتان أخريان' : n <= 10 ? ` و${n} مناطق أخرى` : ` و${n} منطقة أخرى`);
   const border = BORDER_REGIONS[d.border];
-  const flight = FLIGHT_DIRECTIONS[d.flightDirection];
-  const baseTitle = wx ? `${titles.ar}: ${wx[0]}${named ? ` — ${loc.name_ar}` : ''}` : named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar;
-  const baseTitleEn = wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
+  const flight = d.type === 'air_movement' ? FLIGHT_DIRECTIONS[d.flightDirection] : null;
+  const aircraft = d.type === 'air_movement' ? FLIGHT_AIRCRAFT[d.aircraft] : null;
+  const baseTitle = d.type === 'air_movement'
+    ? `${titles.ar}${aircraft ? ` — ${aircraft.ar}` : ''}${named ? ` — ${loc.name_ar}` : ''}`
+    : wx ? `${titles.ar}: ${wx[0]}${named ? ` — ${loc.name_ar}` : ''}` : named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar;
+  const baseTitleEn = d.type === 'air_movement'
+    ? `${titles.en}${aircraft ? ` — ${aircraft.en}` : ''}${named ? ` — ${loc.name_en}` : ''}`
+    : wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
   return {
     type: d.type,
     title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}`,
@@ -486,12 +506,13 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight ? {
+    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft ? {
       meta: {
         ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
         ...(border ? { border: d.border } : {}),
         ...(flight ? { flightDirection: d.flightDirection } : {}),
+        ...(aircraft ? { aircraft: d.aircraft } : {}),
       },
     } : {}),
   };
@@ -1252,7 +1273,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (type === 'breaking') {
       await show(ctx, L(ctx).askBreaking, new InlineKeyboard().text(L(ctx).btnCancel, 'cancel'));
     } else if (type === 'border') await askBorder(ctx, d);
-    else if (FLIGHT_TYPES.has(type)) await askFlightDirection(ctx, d);
+    else if (type === 'air_movement') await askFlightAircraft(ctx, d);
     else await askLocation(ctx, d);
   });
 
@@ -1271,8 +1292,13 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     d.border = ctx.match[1];
     await askLocation(ctx, d);
   }));
-  bot.callbackQuery(/^flight:(toward_syria|entering_syria|leaving_syria|from_area)$/, needDraft(async (ctx, d) => {
-    if (!FLIGHT_TYPES.has(d.type)) return;
+  bot.callbackQuery(/^flightair:(warplane|uav)$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'air_movement') return;
+    d.aircraft = ctx.match[1];
+    await askFlightDirection(ctx, d);
+  }));
+  bot.callbackQuery(/^flight:(toward_syria|entering_syria|leaving_syria)$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'air_movement' || !FLIGHT_DIRECTIONS[ctx.match[1]]) return;
     d.flightDirection = ctx.match[1];
     await askLocation(ctx, d);
   }));
