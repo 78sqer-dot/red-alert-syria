@@ -5,9 +5,9 @@ import * as maplibregl from '/vendor/maplibre-gl.mjs?v=6.16.0';
 import { DICT } from './i18n.js';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js';
-import { settings } from './settings.js';
+import { settings } from './settings.js?v=2';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=22';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=23';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';

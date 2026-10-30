@@ -5,7 +5,7 @@ export const ALERT_TYPES = {
   breaking: {
     ar: 'خبر عاجل', en: 'Breaking news', button_ar: 'خبر عاجل', button_en: 'Breaking',
     emoji: '🔴', color: '#ff3b4e', ring: '#c81e2f', group: 'other', ttlMin: 120,
-    marker: 'icon', glyph: 'alert_tri', icon: '#e11d2e', disc: '#000000', zone: true, tag_ar: 'عاجل', tag_en: 'Breaking',
+    marker: 'icon', glyph: 'urgent_warning', icon: '#e11d2e', disc: '#000000', zone: true, tag_ar: 'عاجل', tag_en: 'Breaking',
   },
   uav: {
     ar: 'مسيّرة', en: 'UAV / Drone', button_ar: 'مسيّرة', button_en: 'Drone',
@@ -54,13 +54,13 @@ export const ALERT_TYPES = {
   },
   explosion: {
     ar: 'انفجار', en: 'Explosion', button_ar: 'انفجار', button_en: 'Explosion',
-    emoji: '💥', color: '#d6336c', ring: '#a61e4d', group: 'strikes', ttlMin: 240,
-    marker: 'icon', glyph: 'explosion', icon: '#d6336c', size: 34, zone: false, tag_ar: 'انفجار', tag_en: 'Explosion',
+    emoji: '💥', color: '#f04452', ring: '#b42332', group: 'strikes', ttlMin: 240,
+    marker: 'icon', glyph: 'explosion_modern', icon: '#f04452', size: 36, zone: false, tag_ar: 'انفجار', tag_en: 'Explosion',
   },
   civil: {
     ar: 'مدني', en: 'Civil alert', button_ar: 'مدني', button_en: 'Civil',
-    emoji: '🚑', color: '#0891b2', ring: '#155e75', group: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'ambulance', icon: '#0891b2', disc: '#000000', zone: false, tag_ar: 'مدني', tag_en: 'Civil',
+    emoji: '🛡️', color: '#0891b2', ring: '#155e75', group: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'civil_shield', icon: '#0891b2', disc: '#000000', zone: false, tag_ar: 'مدني', tag_en: 'Civil',
   },
   accident: {
     ar: 'حادث سير', en: 'Traffic accident', button_ar: 'حادث سير', button_en: 'Traffic accident',
@@ -75,7 +75,7 @@ export const ALERT_TYPES = {
   fire: {
     ar: 'حريق', en: 'Fire', button_ar: 'حريق', button_en: 'Fire',
     emoji: '🔥', color: '#ea580c', ring: '#9a3412', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'fire', icon: '#ea580c', size: 32, zone: false, tag_ar: 'حريق', tag_en: 'Fire',
+    marker: 'icon', glyph: 'fire_modern', icon: '#ea580c', size: 34, zone: false, tag_ar: 'حريق', tag_en: 'Fire',
   },
   civil_plane: {
     ar: 'طائرة مدنية', en: 'Civil aircraft', button_ar: 'طائرة مدنية', button_en: 'Civil aircraft',
@@ -125,12 +125,20 @@ export const FLIGHT_DIRECTIONS = {
   toward_syria: { ar: 'باتجاه سوريا', en: 'Toward Syria' },
   entering_syria: { ar: 'دخول الأجواء السورية', en: 'Entering Syrian airspace' },
   leaving_syria: { ar: 'ينسحب من سوريا', en: 'Withdrawing from Syria' },
-  from_area: { ar: 'من المنطقة المحددة', en: 'From the selected area' },
 };
 
 export const FLIGHT_AIRCRAFT = {
   warplane: { ar: 'طيران حربي', en: 'Warplane' },
   uav: { ar: 'مسيّرة', en: 'Drone' },
+};
+
+export const CIVIL_EMOJIS = {
+  protection: { emoji: '🛡️', ar: 'حماية مدنية', en: 'Civil protection' },
+  people: { emoji: '🧑‍🤝‍🧑', ar: 'مدنيون', en: 'Civilians' },
+  housing: { emoji: '🏘️', ar: 'منطقة سكنية', en: 'Residential area' },
+  emergency: { emoji: '🆘', ar: 'استغاثة', en: 'Emergency' },
+  warning: { emoji: '⚠️', ar: 'تنبيه عام', en: 'General warning' },
+  medical: { emoji: '🚑', ar: 'إسعاف', en: 'Medical aid' },
 };
 
 export function typeOf(key) {
@@ -159,7 +167,9 @@ export function dimColor(hex, alpha = 0.12) {
 
 // Weather warnings: the emoji follows the hazard (⛈ stays only as the generic type label)
 export const HAZARD_EMOJI = { rain: '🌧', snow: '❄️', wind: '💨', storm: '⛈', heat: '🌡', frost: '🥶', dust: '🌫' };
-export const alertEmoji = (a) => (a?.type === 'weather' && HAZARD_EMOJI[a.hazard || a.meta?.hazard]) || typeOf(a?.type).emoji;
+export const alertEmoji = (a) => (a?.type === 'weather' && HAZARD_EMOJI[a.hazard || a.meta?.hazard])
+  || (a?.type === 'civil' && CIVIL_EMOJIS[a.civil_emoji || a.meta?.civilEmoji]?.emoji)
+  || typeOf(a?.type).emoji;
 
 // ---- drones on the map: 1 per circle normally; an intensive flight ("تحليق مكثف", "عدة مسيّرات") shows 2,
 // a swarm ("سرب") 3. meta.intense (the "تحليق مكثف" switch in the bot) overrides what the text says.
