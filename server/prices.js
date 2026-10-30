@@ -339,7 +339,8 @@ const trustedOfficial = (o) => {
 /** fuel for the site/bulletin: an official decision only; never fall back to a market quote. */
 function fuelOf(st, now = Date.now()) {
   if (!st.fuel?.official || !st.fuel?.items) return null;
-  return fuelView(st.fuel, now);
+  const view = fuelView(st.fuel, now);
+  return view.stale ? { ...view, items: {} } : view;
 }
 function fuelPublic(st) {
   const v = fuelOf(st);
