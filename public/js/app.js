@@ -1348,11 +1348,8 @@ async function boot() {
   window.__rasInstall = { show: () => showInstallCard(true), mode: installMode };
 
   // wait for maplibre (deferred script)
-  const waitML = () => new Promise((res) => {
-    if (window.maplibregl) return res();
-    const iv = setInterval(() => window.maplibregl && (clearInterval(iv), res()), 30);
-  });
-  await waitML();
+  // MapLibre is imported as an ES module; expose that instance for map.js.
+  window.maplibregl = maplibregl;
   amap = new AlertMap($('#map'), {
     lang: LANG,
     dark: document.documentElement.classList.contains('dark'),
