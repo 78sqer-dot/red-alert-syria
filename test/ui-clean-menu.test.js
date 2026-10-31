@@ -12,14 +12,14 @@ process.env.OWNER_IDS = '8270709633';
 
 const { store } = await import('../server/store.js');
 await store.init(null);
-const { cleanMenuScreens, _test } = await import('../server/ui-clean.js');
+const { cleanMenuMessages, _test } = await import('../server/ui-clean.js');
 
 test.after(async () => {
   await new Promise((resolve) => setTimeout(resolve, 350));
   await fs.promises.rm(dataDir, { recursive: true, force: true });
 });
 
-test('menu cleanup deletes only old bot screens and preserves user, kept, pinned, and current messages', async () => {
+test('menu cleanup deletes old bot messages and preserves user, kept, pinned, and current messages', async () => {
   const chat = 8270709633;
   _test.bucket('admin', chat).push(
     { id: 101, t: Date.now(), s: 1, c: 1 },                 // old bot menu screen
@@ -27,7 +27,7 @@ test('menu cleanup deletes only old bot screens and preserves user, kept, pinned
     { id: 103, t: Date.now(), s: 3, c: 1, k: 'c' },         // open report card
     { id: 104, t: Date.now(), s: 4, c: 1 },                 // current callback message
     { id: 105, t: Date.now(), s: 5, c: 1 },                 // pinned message
-    { id: 106, t: Date.now(), s: 6 },                       // plain notice, not a screen
+    { id: 106, t: Date.now(), s: 6 },                       // old plain bot notice
   );
   const deleted = [];
   const api = {
@@ -36,10 +36,10 @@ test('menu cleanup deletes only old bot screens and preserves user, kept, pinned
     deleteMessage: async (_chat, id) => { deleted.push(id); },
   };
 
-  const count = await cleanMenuScreens(api, 'admin', chat, 104);
-  assert.equal(count, 1);
-  assert.deepEqual(deleted, [101]);
-  assert.deepEqual(_test.bucket('admin', chat).map((x) => x.id), [102, 103, 104, 105, 106]);
+  const count = await cleanMenuMessages(api, 'admin', chat, 104);
+  assert.equal(count, 2);
+  assert.deepEqual(deleted, [101, 106]);
+  assert.deepEqual(_test.bucket('admin', chat).map((x) => x.id), [102, 103, 104, 105]);
 });
 
 test('menu cleanup fails closed if the pinned message cannot be checked', async () => {
@@ -52,7 +52,7 @@ test('menu cleanup fails closed if the pinned message cannot be checked', async 
     deleteMessage: async () => { deleteCalls++; },
   };
 
-  assert.equal(await cleanMenuScreens(api, 'report', chat), 0);
+  assert.equal(await cleanMenuMessages(api, 'report', chat), 0);
   assert.equal(deleteCalls, 0);
   assert.deepEqual(_test.bucket('report', chat).map((x) => x.id), [201]);
 });

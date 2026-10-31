@@ -1,5 +1,5 @@
 // Track private-chat messages for safe, targeted cleanup when the user opens the menu.
-// Only old bot-rendered screens are removed; user messages and explicitly kept cards stay untouched.
+// Only old bot messages are removed; user messages and explicitly kept cards stay untouched.
 // Plain notices without buttons ("✅ done", "⚠️ wrong format") do not count as a new screen, so a
 // prompt stays visible while the user retries.
 // Kept: messages sent with `_keep: true` (pending report cards, relay conversation, the pinned
@@ -128,14 +128,14 @@ async function sweep(api, role, chat, before, softOnly = false, include = () => 
   return done.size;
 }
 
-/** Remove only prior bot menu/screens in private chats, preserving the current and pinned messages. */
-export async function cleanMenuScreens(api, role, chat, preserveId = null) {
+/** Remove prior non-kept bot messages in private chats, preserving the current and pinned messages. */
+export async function cleanMenuMessages(api, role, chat, preserveId = null) {
   const id = privId(chat);
   if (id == null || typeof api?.getChat !== 'function') return 0;
   let pinnedId = null;
   try { pinnedId = Number((await api.getChat(id))?.pinned_message?.message_id) || null; }
   catch { return 0; } // fail closed: never delete screens if we cannot check the pinned message
-  return sweep(api, role, id, Infinity, false, (x) => Boolean(x.c) && !x.u && x.id !== preserveId && x.id !== pinnedId);
+  return sweep(api, role, id, Infinity, false, (x) => !x.u && x.id !== preserveId && x.id !== pinnedId);
 }
 
 /** Middleware: wraps every update of a private chat. */

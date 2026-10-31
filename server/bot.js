@@ -1,4 +1,4 @@
-import { installTracker, cleanChat, cleanMenuScreens, setKeep } from './ui-clean.js';
+import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
 import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
 import { config, isOwner, envDefaults, applyProject } from './config.js';
@@ -1039,7 +1039,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   };
   const home = async (ctx) => {
     await clearConvo(ctx);
-    await cleanMenuScreens(ctx.api, role, ctx.chat?.id, ctx.callbackQuery?.message?.message_id);
+    await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.callbackQuery?.message?.message_id);
     sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');
@@ -1050,7 +1050,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.command(['start', 'menu'], async (ctx) => {
     if (ctx.callbackQuery) return home(ctx);
     await clearConvo(ctx);
-    await cleanMenuScreens(ctx.api, role, ctx.chat?.id);
+    await cleanMenuMessages(ctx.api, role, ctx.chat?.id);
     sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');
