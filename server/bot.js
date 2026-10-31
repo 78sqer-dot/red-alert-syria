@@ -115,7 +115,8 @@ export function channelPost(alert, { ended = false } = {}) {
   if (alert.type === 'military_incursion' && Number.isInteger(alert.meta?.vehicleCount)) title += ` — ${vehicleCountPhrase(alert.meta.vehicleCount, 'ar')}`;
   const p = alert.place || {};
   const hasPlace = p.scope && p.scope !== 'country';
-  const sections = [`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${alertEmoji(alert)}`];
+  const emoji = alertEmoji(alert);
+  const sections = [`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b>${emoji ? ` - ${emoji}` : ''}`];
   const desc = cleanAlertText(alert.description || '');
   if (alert.type === 'breaking') sections.push(`<b>${esc(desc || alert.title)}</b>`);
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
@@ -242,7 +243,7 @@ function mainKeyboard(ctx) {
       const type = item === 'civil_menu' ? 'civil' : item;
       const emoji = item === 'civil_menu' ? '🛡️' : e(type);
       const label = item === 'civil_menu' ? (lang === 'en' ? 'Civil' : 'مدني') : b(type);
-      kb.text(`${emoji} ${label}`, item === 'civil_menu' ? 'cv' : `t:${type}`);
+      kb.text(`${emoji ? `${emoji} ` : ''}${label}`, item === 'civil_menu' ? 'cv' : `t:${type}`);
     }
     kb.row();
   }
@@ -1863,7 +1864,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const kb = new InlineKeyboard();
     for (const a of act) {
       const t = new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit' }).format(new Date(a.timestamp));
-      kb.text(`${alertEmoji(a)} ${t} · ${(lang === 'en' ? a.title_en : a.title) || ''}`.slice(0, 60), 'm:' + a.id).row();
+      const emoji = alertEmoji(a);
+      kb.text(`${emoji ? `${emoji} ` : ''}${t} · ${(lang === 'en' ? a.title_en : a.title) || ''}`.slice(0, 60), 'm:' + a.id).row();
     }
     kb.text(l.btnHome, 'home');
     await show(ctx, l.activeTitle(store.activeAlerts().length), kb);
@@ -1916,7 +1918,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const exp = a.expires_at
       ? new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-SY', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit' }).format(new Date(a.expires_at))
       : (lang === 'en' ? 'No expiry' : 'بلا انتهاء');
-    return `${L(ctx).manageTitle}\n\n${alertEmoji(a)} <b>${esc(lang === 'en' ? a.title_en : a.title)}</b>\n${a.description ? esc(a.description) + '\n' : ''}🕒 ${esc(fmtTime(a.timestamp, lang))}\n⌛ ${lang === 'en' ? 'Expires' : 'ينتهي'}: ${exp}${a.is_active ? '' : '\n\n' + L(ctx).ended}`;
+    const emoji = alertEmoji(a);
+    return `${L(ctx).manageTitle}\n\n${emoji ? `${emoji} ` : ''}<b>${esc(lang === 'en' ? a.title_en : a.title)}</b>\n${a.description ? esc(a.description) + '\n' : ''}🕒 ${esc(fmtTime(a.timestamp, lang))}\n⌛ ${lang === 'en' ? 'Expires' : 'ينتهي'}: ${exp}${a.is_active ? '' : '\n\n' + L(ctx).ended}`;
   };
   bot.callbackQuery(/^m:([\w-]{36})$/, async (ctx) => {
     await ctx.answerCallbackQuery();

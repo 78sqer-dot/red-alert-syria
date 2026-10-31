@@ -108,6 +108,10 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(ALERT_TYPES.military_incursion, 'military vehicle incursion is a registered manual alert type');
   assert.ok(ALERT_GROUPS.other.types.includes('military_incursion'), 'the new type is filterable on the map');
   assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'manual vehicle-incursion reports stay out of automatic news classification');
+  const shootingAlert = store.addAlert(buildAlertInput({ type: 'shooting', location: { scope: 'country' }, extra: [], ttlMin: 60 }, { id: ownerId, name: 'test' }));
+  addedAlertIds.push(shootingAlert.id);
+  const shootingPost = channelPost(shootingAlert);
+  assert.doesNotMatch(shootingPost, /🔫|<b>إطلاق نار<\/b> -/, 'gunfire channel posts omit the gun emoji and dangling separator');
   const socialRow = channelKeyboard({ id: 'test-social-buttons' }).inline_keyboard.find((row) => row.some((button) => button.url?.includes('/boost/')));
   assert.equal(socialRow?.length, 1, 'only the Telegram boost button remains in the footer');
   assert.equal(socialRow[0].url, 'https://t.me/boost/Red_Alert_Syria');

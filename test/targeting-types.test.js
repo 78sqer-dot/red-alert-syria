@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ALERT_GROUPS, ALERT_TYPES, TYPE_KEYS, assassinationWeaponGlyph } from '../shared/types.js';
+import { ALERT_GROUPS, ALERT_TYPES, TYPE_KEYS, alertEmoji, assassinationWeaponGlyph } from '../shared/types.js';
 import { NEWS_TYPES, keywordTypes, refineType, ruleClassify } from '../server/news-ai.js';
 import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
@@ -92,6 +92,12 @@ test('assassination has its own weapon marker and appears in the strikes filter'
   assert.match(EXTRA_SVG.pistol, /<path/);
   assert.match(EXTRA_SVG.weapon, /<path/);
   assert.ok(NEWS_TYPES.includes('assassination'));
+});
+
+test('shooting alerts omit the gun emoji while assassination retains its monochrome pistol', () => {
+  assert.equal(ALERT_TYPES.shooting.emoji, '');
+  assert.equal(alertEmoji({ type: 'shooting' }), '');
+  assert.equal(ALERT_TYPES.assassination.emoji, '\u{1F52B}\uFE0E');
 });
 
 test('assassination marker specializes only for an explicitly named weapon', () => {

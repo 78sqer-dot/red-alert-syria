@@ -121,7 +121,7 @@ export const ALERT_TYPES = {
   },
   shooting: {
     ar: 'إطلاق نار', en: 'Gunfire', button_ar: 'إطلاق نار', button_en: 'Gunfire',
-    emoji: '🔫', color: '#dc2626', ring: '#991b1b', group: 'civil', parent: 'civil', ttlMin: 240,
+    emoji: '', color: '#dc2626', ring: '#991b1b', group: 'civil', parent: 'civil', ttlMin: 240,
     marker: 'icon', glyph: 'weapon', icon: '#dc2626', size: 32, zone: false, tag_ar: 'إطلاق_نار', tag_en: 'Gunfire',
   },
   quake: {
