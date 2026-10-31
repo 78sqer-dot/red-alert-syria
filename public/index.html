@@ -28,6 +28,10 @@
   <meta name="apple-mobile-web-app-title" content="Red Alert Syria" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="application-name" content="Red Alert Syria" />
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+  <link rel="modulepreload" href="/vendor/maplibre-gl.mjs?v=6.16.0" />
+  <link rel="preload" href="/data/syria-border.geojson" as="fetch" crossorigin />
+  <link rel="preload" href="/data/syria-governorates.geojson" as="fetch" crossorigin />
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/vendor/maplibre-gl.css?v=6.16.0" />
