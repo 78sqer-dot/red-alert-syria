@@ -205,11 +205,12 @@ export class AlertMap {
     const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
-      c.classList.toggle('zoom-detail', z >= 11);
-      c.classList.toggle('zoom-tier-mid', z >= 9 && z < 11);
+      c.classList.toggle('zoom-detail', z >= 10.5);
+      c.classList.toggle('zoom-tier-mid', z >= 9 && z < 10.5);
       c.classList.toggle('zoom-tier-far', z < 9);
       c.classList.toggle('zoom-far', z < 7.5);
-      // like the original: below zoom 11 only the glowing circle shows; from 11 up the drone appears
+      // Keep the drone hidden on the country view, but reveal its orbit at the close-zoom level
+      // reached by mobile multi-area alerts (which can settle just under zoom 11).
       // and flies along the circle's edge, so its orbit follows the ring while pinching
       const now = performance.now();
       if (forceOrbit || now - lastOrbitUpdate >= 33) {
@@ -815,11 +816,11 @@ export class AlertMap {
         if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
         continue;
       }
-      if (z < 11) continue;
+      if (z < 10.5) continue;
       const px = Math.max(8, Math.min(12, Math.round((o.km * 1000) / mpp)));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
-    if (z >= 11 && this.sats) for (const m of this.sats.values()) {
+    if (z >= 10.5 && this.sats) for (const m of this.sats.values()) {
       if (!Number.isFinite(m._zkm)) continue;
       const mpp = (40075016.686 * Math.cos((m._lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
       const px = Math.max(8, Math.min(12, Math.round((this._screenKm(m._zkm, m._lat) * 1000) / mpp)));

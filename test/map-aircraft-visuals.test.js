@@ -8,6 +8,9 @@ const mapJs = await readFile(new URL('../public/js/map.js', import.meta.url), 'u
 test('drone marker resumes its circular flight at detailed zoom', () => {
   assert.match(css, /\.maplibregl-map\.zoom-detail \.uav\s*\{\s*animation:\s*uavOrbit 9s linear infinite;\s*\}/);
   assert.doesNotMatch(css, /uavHover/);
+  assert.match(mapJs, /classList\.toggle\('zoom-detail', z >= 10\.5\)/);
+  assert.match(mapJs, /if \(z < 10\.5\) continue;/);
+  assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });
 
 test('helicopter airframe is compact while its orbit stays unscaled', () => {
