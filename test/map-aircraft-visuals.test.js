@@ -4,6 +4,15 @@ import { readFile } from 'node:fs/promises';
 
 const css = await readFile(new URL('../public/css/app.css', import.meta.url), 'utf8');
 const mapJs = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf8');
+const markerSvgs = await readFile(new URL('../public/js/marker-svgs.js', import.meta.url), 'utf8');
+const types = await readFile(new URL('../shared/types.js', import.meta.url), 'utf8');
+
+test('drone keeps the original top-down silhouette, fixed icon size and perimeter orbit', () => {
+  assert.match(types, /uav:\s*\{[\s\S]*?glyph: 'uav'/);
+  assert.ok(markerSvgs.includes('"uav": "<g> <ellipse cx=\\"256\\" cy=\\"256\\" rx=\\"18\\" ry=\\"140\\" />'));
+  assert.match(mapJs, /svgTag\(t\.glyph,\s*20,\s*'class="uav-svg"'\)/);
+  assert.match(css, /\.uav-svg\s*\{\s*stroke: rgba\(255,255,255,\.94\);\s*stroke-width: 18;/);
+});
 
 test('drone marker resumes its circular flight at detailed zoom', () => {
   assert.match(css, /\.maplibregl-map\.zoom-detail \.uav\s*\{\s*animation:\s*uavOrbit 9s linear infinite;\s*\}/);

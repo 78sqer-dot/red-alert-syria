@@ -111,7 +111,13 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const shootingAlert = store.addAlert(buildAlertInput({ type: 'shooting', location: { scope: 'country' }, extra: [], ttlMin: 60 }, { id: ownerId, name: 'test' }));
   addedAlertIds.push(shootingAlert.id);
   const shootingPost = channelPost(shootingAlert);
-  assert.doesNotMatch(shootingPost, /🔫|<b>إطلاق نار<\/b> -/, 'gunfire channel posts omit the gun emoji and dangling separator');
+  assert.match(shootingPost, /<b>إطلاق نار<\/b> - 🔊/);
+  assert.doesNotMatch(shootingPost, /🔫/);
+  const assassinationAlert = store.addAlert(buildAlertInput({ type: 'assassination', location: { scope: 'country' }, extra: [], ttlMin: 60 }, { id: ownerId, name: 'test' }));
+  addedAlertIds.push(assassinationAlert.id);
+  const assassinationPost = channelPost(assassinationAlert);
+  assert.match(assassinationPost, /🎯/);
+  assert.doesNotMatch(assassinationPost, /🔫/);
   const socialRow = channelKeyboard({ id: 'test-social-buttons' }).inline_keyboard.find((row) => row.some((button) => button.url?.includes('/boost/')));
   assert.equal(socialRow?.length, 1, 'only the Telegram boost button remains in the footer');
   assert.equal(socialRow[0].url, 'https://t.me/boost/Red_Alert_Syria');

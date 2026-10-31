@@ -81,30 +81,32 @@ test('military vehicle incursion has a vehicle marker and stays manual-only', ()
   assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'vehicle incursion is not automatically classified from news');
 });
 
-test('assassination has its own weapon marker and appears in the strikes filter', () => {
+test('assassination uses a neutral target symbol and appears in the strikes filter', () => {
   const type = ALERT_TYPES.assassination;
   assert.ok(TYPE_KEYS.includes('assassination'));
   assert.ok(ALERT_GROUPS.strikes.types.includes('assassination'));
-  assert.equal(type.emoji, '\u{1F52B}\uFE0E', 'request monochrome text presentation for the assassination button');
+  assert.equal(type.emoji, '🎯', 'assassination uses a target symbol instead of a pistol');
   assert.equal(type.marker, 'icon');
   assert.equal(type.glyph, 'weapon');
-  assert.match(EXTRA_SVG.rifle, /<path/);
-  assert.match(EXTRA_SVG.pistol, /<path/);
   assert.match(EXTRA_SVG.weapon, /<path/);
+  assert.equal(EXTRA_SVG.rifle, undefined);
+  assert.equal(EXTRA_SVG.pistol, undefined);
   assert.ok(NEWS_TYPES.includes('assassination'));
 });
 
-test('shooting alerts omit the gun emoji while assassination retains its monochrome pistol', () => {
-  assert.equal(ALERT_TYPES.shooting.emoji, '');
-  assert.equal(alertEmoji({ type: 'shooting' }), '');
-  assert.equal(ALERT_TYPES.assassination.emoji, '\u{1F52B}\uFE0E');
+test('shooting alerts use a sound symbol and neither type exposes a pistol emoji', () => {
+  assert.equal(ALERT_TYPES.shooting.emoji, '🔊');
+  assert.equal(alertEmoji({ type: 'shooting' }), '🔊');
+  assert.equal(ALERT_TYPES.assassination.emoji, '🎯');
+  assert.notEqual(ALERT_TYPES.shooting.emoji, '🔫');
+  assert.notEqual(ALERT_TYPES.assassination.emoji, '🔫');
 });
 
-test('assassination marker specializes only for an explicitly named weapon', () => {
+test('assassination map marker stays neutral even when the report names a pistol or rifle', () => {
   const alert = (description) => ({ type: 'assassination', title: 'اغتيال في المنطقة', description });
-  assert.equal(assassinationWeaponGlyph(alert('استخدم المهاجم بندقية كلاشنكوف AK-47.')), 'rifle');
-  assert.equal(assassinationWeaponGlyph(alert('أُطلق النار بمسدس بحسب البلاغ.')), 'pistol');
-  assert.equal(assassinationWeaponGlyph(alert('The report explicitly says handgun.')), 'pistol');
+  assert.equal(assassinationWeaponGlyph(alert('استخدم المهاجم بندقية كلاشنكوف AK-47.')), 'weapon');
+  assert.equal(assassinationWeaponGlyph(alert('أُطلق النار بمسدس بحسب البلاغ.')), 'weapon');
+  assert.equal(assassinationWeaponGlyph(alert('The report explicitly says handgun.')), 'weapon');
   assert.equal(assassinationWeaponGlyph(alert('أُطلق النار على الضحية من دون تحديد نوع السلاح.')), 'weapon');
   assert.equal(assassinationWeaponGlyph(alert('ذكر البلاغ بندقية ومسدساً معاً.')), 'weapon');
   assert.equal(assassinationWeaponGlyph({ type: 'attack', title: 'AK-47' }), null);

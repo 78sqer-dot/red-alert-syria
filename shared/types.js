@@ -66,7 +66,7 @@ export const ALERT_TYPES = {
   },
   assassination: {
     ar: 'اغتيال', en: 'Assassination', button_ar: 'اغتيال', button_en: 'Assassination',
-    emoji: '\u{1F52B}\uFE0E', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
+    emoji: '🎯', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
     marker: 'icon', glyph: 'weapon', icon: '#b91c1c', size: 32, zone: false, tag_ar: 'اغتيال', tag_en: 'Assassination',
   },
   artillery: {
@@ -126,7 +126,7 @@ export const ALERT_TYPES = {
   },
   shooting: {
     ar: 'إطلاق نار', en: 'Gunfire', button_ar: 'إطلاق نار', button_en: 'Gunfire',
-    emoji: '', color: '#dc2626', ring: '#991b1b', group: 'civil', parent: 'civil', ttlMin: 240,
+    emoji: '🔊', color: '#dc2626', ring: '#991b1b', group: 'civil', parent: 'civil', ttlMin: 240,
     marker: 'icon', glyph: 'weapon', icon: '#dc2626', size: 32, zone: false, tag_ar: 'إطلاق_نار', tag_en: 'Gunfire',
   },
   quake: {
@@ -203,18 +203,9 @@ export function typeOf(key) {
   return ALERT_TYPES[key] || ALERT_TYPES.breaking;
 }
 
-// Only specialize an assassination marker when the report explicitly names one weapon class.
-// If neither class is named, or both are mentioned, keep the non-specific weapon glyph.
+// Keep assassination markers neutral: never turn report text into a pistol or rifle drawing.
 export function assassinationWeaponGlyph(alert) {
-  if (alert?.type !== 'assassination') return null;
-  const text = [alert.title, alert.title_en, alert.description, alert.description_en, alert.details, alert.text]
-    .filter(Boolean).join(' ').toLowerCase().normalize('NFKC')
-    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
-    .replace(/[إأآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
-  const rifle = /(?:كلاشنكوف|كلاشينكوف|بندقيه|\b(?:assault\s+)?rifles?\b|\bkalashnikov\b|\bak(?:[- ]?(?:47|74|m))?\b)/i.test(text);
-  const pistol = /(?:مسدس|طبنجه|\bpistols?\b|\bhandguns?\b|\brevolvers?\b)/i.test(text);
-  if (rifle !== pistol) return rifle ? 'rifle' : 'pistol';
-  return 'weapon';
+  return alert?.type === 'assassination' ? 'weapon' : null;
 }
 
 export function dimColor(hex, alpha = 0.12) {
