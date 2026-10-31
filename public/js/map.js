@@ -6,6 +6,7 @@ import { icon } from './icons.js';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
 import { squadLayout } from './aircraft-layout.js';
 import { flightPath, flightPosition } from '/shared/flight-path.js?v=1';
+import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
@@ -163,6 +164,7 @@ export class AlertMap {
     this.alerts = [];
     this.selectedId = null;
     this.popup = null;
+    this._lastMarkerTap = null;
     this.onSelect = opts.onSelect || (() => {});
     this.popupHtml = opts.popupHtml || (() => '');
     this.ready = false;
@@ -238,7 +240,10 @@ export class AlertMap {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
     this.map.on('click', (e) => {
-      if (e.originalEvent.target.closest('.mk, .maplibregl-popup')) return;
+      const markerTap = this._lastMarkerTap;
+      this._lastMarkerTap = null; // consume the next map click, whether it is an echo or a separate tap
+      if (markerTapMatchesMapClick(markerTap, e.point, performance.now())) return;
+      if (e.originalEvent?.target?.closest?.('.mk, .maplibregl-popup')) return;
       if (window.__svcHit && window.__svcHit(e)) return; // a road / service icon (public/js/services.js)
       if (this.newsHidden) return; // services map mode: the news is hidden
       // a tap inside any circle of an alert (main or extra affected area) opens that same alert
@@ -497,6 +502,10 @@ export class AlertMap {
     let gesture = null;
     let ignoreTouchClick = false;
     let ignoreTimer = 0;
+    const rememberTap = (e) => {
+      const r = this.el.getBoundingClientRect();
+      this._lastMarkerTap = { x: e.clientX - r.left, y: e.clientY - r.top, at: performance.now() };
+    };
     el.addEventListener('pointerdown', (e) => {
       if ((e.pointerType === 'touch' || e.pointerType === 'pen') && e.isPrimary) {
         gesture = { id: e.pointerId, x: e.clientX, y: e.clientY };
@@ -516,6 +525,7 @@ export class AlertMap {
       ignoreTouchClick = true;
       clearTimeout(ignoreTimer);
       ignoreTimer = setTimeout(() => { ignoreTouchClick = false; }, 750);
+      rememberTap(e);
       activate();
     }, { passive: true });
     el.addEventListener('pointercancel', () => { gesture = null; }, { passive: true });
@@ -527,6 +537,7 @@ export class AlertMap {
         e.preventDefault();
         return;
       }
+      if (e.detail > 0) rememberTap(e);
       activate();
     });
   }
