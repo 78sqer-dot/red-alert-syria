@@ -1,7 +1,5 @@
-// Track private-chat messages for optional manual cleanup, but never auto-delete on navigation.
-//
-// Bot and user messages are recorded, but old screens and auto-published news cards remain visible
-// when the user returns to the menu.
+// Track private-chat messages for safe, targeted cleanup when the user opens the menu.
+// Only old bot-rendered screens are removed; user messages and explicitly kept cards stay untouched.
 // Plain notices without buttons ("✅ done", "⚠️ wrong format") do not count as a new screen, so a
 // prompt stays visible while the user retries.
 // Kept: messages sent with `_keep: true` (pending report cards, relay conversation, the pinned
@@ -100,10 +98,10 @@ export function setKeep(role, chat, id, keep = true) {
   if (it) { if (keep) it.k = 1; else delete it.k; save(); }
 }
 
-async function sweep(api, role, chat, before, softOnly = false) {
+async function sweep(api, role, chat, before, softOnly = false, include = () => true) {
   const list = bucket(role, chat, false);
   if (!list) return 0;
-  const old = list.filter((x) => x.s < before && !x.k && (!softOnly || x.u || !x.c));
+  const old = list.filter((x) => x.s < before && !x.k && (!softOnly || x.u || !x.c) && include(x));
   if (!old.length) return 0;
   const now = Date.now();
   const fresh = old.filter((x) => now - x.t < DELETE_WINDOW).map((x) => x.id);
@@ -130,6 +128,16 @@ async function sweep(api, role, chat, before, softOnly = false) {
   return done.size;
 }
 
+/** Remove only prior bot menu/screens in private chats, preserving the current and pinned messages. */
+export async function cleanMenuScreens(api, role, chat, preserveId = null) {
+  const id = privId(chat);
+  if (id == null || typeof api?.getChat !== 'function') return 0;
+  let pinnedId = null;
+  try { pinnedId = Number((await api.getChat(id))?.pinned_message?.message_id) || null; }
+  catch { return 0; } // fail closed: never delete screens if we cannot check the pinned message
+  return sweep(api, role, id, Infinity, false, (x) => Boolean(x.c) && !x.u && x.id !== preserveId && x.id !== pinnedId);
+}
+
 /** Middleware: wraps every update of a private chat. */
 export function cleanChat(role) {
   return async (ctx, nextMw) => {
@@ -141,7 +149,7 @@ export function cleanChat(role) {
     } finally {
       try {
         const msg = ctx.message;
-        // Keep all messages on ordinary navigation. wipeChat() remains available for explicit cleanup.
+        // Ordinary navigation is untouched; menu handlers explicitly clean only old bot screens.
         if (msg && !ctx.ras?.keepInput) add(role, chat, { id: msg.message_id, t: (msg.date || 0) * 1000 || Date.now(), s: st.start - 0.5, u: 1 });
       } catch (e) { console.warn('[ui] clean failed', e.description || e.message); }
     }
