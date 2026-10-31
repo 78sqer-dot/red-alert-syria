@@ -301,7 +301,7 @@ export class AlertMap {
     if (!map.getSource('ras-zones')) map.addSource('ras-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     if (!map.getSource('ras-flight-paths')) map.addSource('ras-flight-paths', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
 
-    if (this.opts.layer !== 'satellite') {
+    if (this.opts.layer !== 'satellite' && map.getSource('ras-dem-hs')) {
       add({ id: 'ras-hillshade', type: 'hillshade', source: 'ras-dem-hs', paint: { 'hillshade-exaggeration': dark ? 0.18 : 0.28, 'hillshade-shadow-color': dark ? '#000000' : '#5a5a70', 'hillshade-highlight-color': dark ? '#2a2a35' : '#ffffff', 'hillshade-accent-color': dark ? '#000000' : '#6a6a80' } });
     }
     add({ id: 'ras-mask', type: 'fill', source: 'ras-mask', paint: { 'fill-color': dark ? '#000000' : '#1a1a2e', 'fill-opacity': dark ? 0.42 : 0.14 } });

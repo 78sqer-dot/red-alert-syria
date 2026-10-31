@@ -216,7 +216,9 @@ app.use(express.static(PUBLIC, { index: false, maxAge: '1h', setHeaders: (res, p
 
 // build id: changes on every deploy so browsers fetch fresh files and open pages reload themselves
 const BUILD = String(process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).slice(0, 10);
-const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8').replace(/\?v=\d+/g, `?v=${BUILD}`);
+// Bust integer app asset versions but preserve semantic vendor versions (e.g. 6.16.0),
+// so modulepreload URLs match the exact imports used by app.js.
+const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8').replace(/\?v=(\d+)(?=["&])/g, `?v=${BUILD}`);
 function renderIndex(lang) {
   const url = config.publicUrl || '';
   const head = `${verifyMetaTags()}<link rel="alternate" hreflang="x-default" href="${url}/ar/" /><meta property="og:locale" content="${lang === 'ar' ? 'ar_SY' : 'en_US'}" />`
