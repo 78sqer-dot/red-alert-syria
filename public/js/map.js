@@ -673,7 +673,7 @@ export class AlertMap {
     if (t.marker === 'orbit') {
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 20, 'class="uav-svg"')}</div></div>`;
     } else if (t.marker === 'helicopter') {
-      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 34, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
+      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 24, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (t.marker === 'squad') {
       const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(16, 22, -16, 1)}${pl(14, 6, -3, 0.85)}${pl(14, 38, -3, 0.85)}</div>`;
