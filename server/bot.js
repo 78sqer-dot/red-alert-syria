@@ -210,7 +210,7 @@ function mainKeyboard(ctx) {
   const b = (k) => (lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar);
   const e = (k) => ALERT_TYPES[k].emoji;
   const menuTypes = TYPE_KEYS
-    .filter((type) => type !== 'air_movement' && !['accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom'].includes(type))
+    .filter((type) => type !== 'air_movement' && !['accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'].includes(type))
     .map((type) => (type === 'civil' ? 'civil_menu' : type));
   const kb = new InlineKeyboard();
   for (let i = 0; i < menuTypes.length; i += 2) {
@@ -1288,6 +1288,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       .text(b('protest'), 't:protest').text(b('civil_plane'), 't:civil_plane').row()
       .text(b('arrest'), 't:arrest').text(b('death'), 't:death').row()
       .text(b('martyrdom'), 't:martyrdom').row()
+      .text(b('brawl'), 't:brawl').text(b('shooting'), 't:shooting').row()
       .text(`🛡️ ${lang === 'en' ? 'Other civil alert' : 'تنبيه مدني آخر'}`, 't:civil').row()
       .text(L(ctx).btnBack, 'home');
     await show(ctx, L(ctx).askCivil, kb);

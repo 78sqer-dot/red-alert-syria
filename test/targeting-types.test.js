@@ -86,8 +86,8 @@ test('similar headlines in distant governorates are not merged as the same incid
   assert.equal(sameIncident(incident(unknown), incident(unknown)), true);
 });
 
-test('arrest, death and martyrdom are report-only types nested under the civil group', () => {
-  for (const key of ['arrest', 'death', 'martyrdom']) {
+test('civil incident types are report-only and nested under the civil group', () => {
+  for (const key of ['arrest', 'death', 'martyrdom', 'brawl', 'shooting']) {
     assert.ok(TYPE_KEYS.includes(key));
     assert.ok(ALERT_GROUPS.civil.types.includes(key));
     assert.equal(ALERT_TYPES[key].parent, 'civil');

@@ -97,6 +97,16 @@ export const ALERT_TYPES = {
     emoji: '🕊️', color: '#b91c1c', ring: '#7f1d1d', group: 'civil', parent: 'civil', ttlMin: 240,
     marker: 'icon', glyph: 'urgent_warning', icon: '#b91c1c', zone: false, tag_ar: 'استشهاد', tag_en: 'Martyrdom',
   },
+  brawl: {
+    ar: 'مشاجرة', en: 'Brawl', button_ar: 'مشاجرة', button_en: 'Brawl',
+    emoji: '🥊', color: '#7c3aed', ring: '#5b21b6', group: 'civil', parent: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'other', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مشاجرة', tag_en: 'Brawl',
+  },
+  shooting: {
+    ar: 'إطلاق نار', en: 'Gunfire', button_ar: 'إطلاق نار', button_en: 'Gunfire',
+    emoji: '🔫', color: '#dc2626', ring: '#991b1b', group: 'civil', parent: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'weapon', icon: '#dc2626', size: 32, zone: false, tag_ar: 'إطلاق_نار', tag_en: 'Gunfire',
+  },
   quake: {
     ar: 'زلزال', en: 'Earthquake', button_ar: 'زلزال', button_en: 'Earthquake',
     emoji: '🌍', color: '#a16207', ring: '#713f12', group: 'nature', ttlMin: 180,
@@ -116,7 +126,7 @@ export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 export const ALERT_GROUPS = {
   aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'air_movement', 'missile'] },
   strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'assassination', 'artillery', 'explosion'] },
-  civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom'] },
+  civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border'] },
 };

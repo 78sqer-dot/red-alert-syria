@@ -123,12 +123,14 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 't:warplane'));
   assert.ok(buttons().some((button) => button.callback_data === 't:uav'));
   assert.ok(buttons().some((button) => button.callback_data === 'cv' && button.text?.startsWith('🛡️ مدني')));
-  assert.equal(buttons().some((button) => ['t:civil', 't:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom'].includes(button.callback_data)), false, 'civil choices stay inside the civil submenu');
+  assert.equal(buttons().some((button) => ['t:civil', 't:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting'].includes(button.callback_data)), false, 'civil choices stay inside the civil submenu');
   assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'aircraft direction is selected inside warplane/drone options, not as a separate main button');
   await tap('cv');
-  for (const callback of ['t:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:civil']) {
+  for (const callback of ['t:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting', 't:civil']) {
     assert.ok(buttons().some((button) => button.callback_data === callback), `civil submenu includes ${callback}`);
   }
+  assert.ok(buttons().some((button) => button.callback_data === 't:brawl' && button.text?.includes('مشاجرة')));
+  assert.ok(buttons().some((button) => button.callback_data === 't:shooting' && button.text?.includes('إطلاق نار')));
   await tap('home');
   await tap('t:border');
   assert.ok(buttons().some((button) => button.callback_data === 'bsel:iraq'));
