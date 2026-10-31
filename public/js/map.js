@@ -637,7 +637,11 @@ export class AlertMap {
       const aircraftGlyph = a.aircraft === 'uav' ? 'uav' : 'plane';
       const arrow = a.flight_direction === 'entering_syria' ? '⇢' : a.flight_direction === 'leaving_syria' ? '⇠' : '➤';
       const movement = a.flight_direction === 'entering_syria' ? 'entering' : a.flight_direction === 'leaving_syria' ? 'leaving' : 'toward';
-      el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-aircraft">${svgTag(aircraftGlyph, 23, `fill="${t.color}" class="flight-svg"`)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
+      const plane = (slot, size) => `<span class="flight-airframe ${slot}">${svgTag(aircraftGlyph, size, `fill="${t.color}" class="flight-svg"`)}</span>`;
+      el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 23)}${plane('is-left', 18)}${plane('is-right', 18)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
+    } else if (a.type === 'breaking') {
+      el.classList.add('mk-breaking-news');
+      el.innerHTML = `<span class="news-pulse-ring" aria-hidden="true"></span><span class="news-marker-core">${svgTag(glyph, 24, 'class="news-marker-svg" fill="none"')}</span>`;
     } else if (t.marker === 'icon') {
       const sz = t.size || 30;
       el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg"')}</div>`;

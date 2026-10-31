@@ -296,12 +296,28 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .flight-movement::before { content: ''; position: absolute; inset: -6px; border: 2px solid color-mix(in srgb, var(--c) 78%, transparent); border-radius: 50%; opacity: 0; pointer-events: none; animation: flightMovementPulse 2s ease-out infinite; }
 .flight-aircraft { display: grid; place-items: center; width: 28px; height: 28px; }
 .flight-svg { display: block; width: 23px; height: 23px; }
+.flight-squad { position: absolute; left: -8px; top: -7px; width: 56px; height: 52px; pointer-events: none; }
+.flight-airframe { position: absolute; display: grid; place-items: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
+.flight-airframe.is-lead { left: 50%; top: 0; width: 25px; height: 25px; transform: translateX(-50%); }
+.flight-airframe.is-left { left: 3px; top: 25px; width: 20px; height: 20px; }
+.flight-airframe.is-right { right: 3px; top: 25px; width: 20px; height: 20px; }
 .flight-arrow { position: absolute; right: -7px; bottom: -5px; display: grid; place-items: center; width: 19px; height: 19px; border: 2px solid var(--bg-elevated); border-radius: 50%; background: var(--c); color: #fff; font: 900 12px/1 system-ui, sans-serif; }
 .mk:hover .flight-movement, .mk.sel .flight-movement { transform: translate(-50%, -50%) scale(1.15); }
 .mk.inactive .flight-movement { opacity: .55; }
 @keyframes flightMovementPulse { 0% { transform: scale(.88); opacity: .72; } 100% { transform: scale(1.65); opacity: 0; } }
 @keyframes flightMovementGlow { 50% { box-shadow: 0 0 20px color-mix(in srgb, var(--c) 72%, transparent), 0 2px 8px rgba(0,0,0,.35); } }
 @media (prefers-reduced-motion: reduce) { .flight-movement, .flight-movement::before { animation: none; } .flight-movement::before { opacity: .5; } }
+.mk-breaking-news .mk-s { transform: scale(calc(var(--mks, 0.5) * 2)); }
+.news-pulse-ring { position: absolute; left: 0; top: 0; width: 96px; height: 96px; box-sizing: border-box; transform: translate(-50%, -50%); border: 3px solid #e11d2e; border-radius: 50%; background: rgba(225,29,46,.16); box-shadow: 0 0 16px rgba(225,29,46,.58), inset 0 0 14px rgba(225,29,46,.28); animation: newsPulseGlow 1.8s ease-in-out infinite; pointer-events: none; }
+.news-pulse-ring::after { content: ''; position: absolute; inset: -3px; border: 2px solid rgba(225,29,46,.72); border-radius: inherit; animation: newsPulseWave 1.8s ease-out infinite; }
+.news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 38px; height: 38px; box-sizing: border-box; transform: translate(-50%, -50%); border: 3px solid #fff; border-radius: 50%; background: #d7192d; box-shadow: 0 0 0 2px rgba(225,29,46,.28), 0 2px 8px rgba(0,0,0,.4); }
+.news-marker-svg { display: block; width: 24px; height: 24px; color: #fff; stroke: #fff; fill: none; }
+.mk:hover .news-marker-core, .mk.sel .news-marker-core { transform: translate(-50%, -50%) scale(1.12); }
+.mk.inactive .news-pulse-ring { animation: none; opacity: .55; }
+.is-moving .news-pulse-ring, .is-zooming .news-pulse-ring { animation-play-state: paused; }
+@keyframes newsPulseWave { 0% { transform: scale(.82); opacity: .76; } 100% { transform: scale(1.32); opacity: 0; } }
+@keyframes newsPulseGlow { 0%, 100% { box-shadow: 0 0 12px rgba(225,29,46,.46), inset 0 0 10px rgba(225,29,46,.2); } 50% { box-shadow: 0 0 25px rgba(225,29,46,.86), inset 0 0 20px rgba(225,29,46,.42); } }
+@media (prefers-reduced-motion: reduce) { .news-pulse-ring, .news-pulse-ring::after { animation: none !important; } .news-pulse-ring { box-shadow: 0 0 18px rgba(225,29,46,.68), inset 0 0 14px rgba(225,29,46,.28); } }
 /* drone: exactly like the original — fixed 18px airframe, never scaled with zoom */
 .mk-orbit .mk-s { transform: none; }
 /* static disc — identical to the original .static-alert-icon */
