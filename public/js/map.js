@@ -205,11 +205,13 @@ export class AlertMap {
     const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
-      c.classList.toggle('zoom-detail', z >= 11);
-      c.classList.toggle('zoom-tier-mid', z >= 9 && z < 11);
+      c.classList.toggle('zoom-detail', z >= 10.5);
+      c.classList.toggle('zoom-tier-mid', z >= 9 && z < 10.5);
       c.classList.toggle('zoom-tier-far', z < 9);
       c.classList.toggle('zoom-far', z < 7.5);
-      // Preserve the original flight treatment: hidden on the country view, orbiting from zoom 11.
+      // Keep the drone hidden on the country view, but reveal its orbit at the close-zoom level
+      // reached by mobile multi-area alerts (which can settle just under zoom 11).
+      // and flies along the circle's edge, so its orbit follows the ring while pinching
       const now = performance.now();
       if (forceOrbit || now - lastOrbitUpdate >= 33) {
         lastOrbitUpdate = now;
@@ -814,11 +816,11 @@ export class AlertMap {
         if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
         continue;
       }
-      if (z < 11) continue;
+      if (z < 10.5) continue;
       const px = Math.max(8, Math.min(12, Math.round((o.km * 1000) / mpp)));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
-    if (z >= 11 && this.sats) for (const m of this.sats.values()) {
+    if (z >= 10.5 && this.sats) for (const m of this.sats.values()) {
       if (!Number.isFinite(m._zkm)) continue;
       const mpp = (40075016.686 * Math.cos((m._lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
       const px = Math.max(8, Math.min(12, Math.round((this._screenKm(m._zkm, m._lat) * 1000) / mpp)));
@@ -836,10 +838,7 @@ export class AlertMap {
     if (!alert.location || !Number.isFinite(alert.location.latitude)) return this.closePopup();
     const ll = [alert.location.longitude, alert.location.latitude];
     const zs = Array.isArray(alert.zones) ? alert.zones : [];
-    if (fly && ['uav', 'uav_strike'].includes(alert.type)) {
-      // Focus the drone's primary locality; framing several linked circles can settle below its original orbit zoom.
-      this.map.flyTo({ center: ll, zoom: Math.max(this.map.getZoom(), 11.5), padding: this.padding(), speed: 1.4, essential: true });
-    } else if (fly && alert.more && alert.more.length && zs.length > 1) {
+    if (fly && alert.more && alert.more.length && zs.length > 1) {
       // several areas: frame all of their circles
       let w = 180, e = -180, s = 90, n = -90;
       for (const q of zs) { const dl = q.km / 111, dn = q.km / (111 * Math.cos((q.lat * Math.PI) / 180)); w = Math.min(w, q.lon - dn); e = Math.max(e, q.lon + dn); s = Math.min(s, q.lat - dl); n = Math.max(n, q.lat + dl); }

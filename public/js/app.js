@@ -370,7 +370,7 @@ function select(id, { fromMap = false, fly = true } = {}) {
   state.selectedId = id;
   if (history.replaceState) history.replaceState(null, '', '#' + id);
   const shown = isLive(a) ? a : { ...a, is_active: false };
-  amap && amap.select(shown, { fly: fly || ['uav', 'uav_strike'].includes(a.type), popup: true });
+  amap && amap.select(shown, { fly: fly, popup: true });
   showDetail();
   if (isMobile()) setSheetOpen(false);
   else if ($('#app').classList.contains('sb-hidden') && !fromMap) {
