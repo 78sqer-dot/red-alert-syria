@@ -438,7 +438,7 @@ export class AlertMap {
       const path = flightPath(alert.flight_direction);
       if (path.length < 2) return;
       keep.add(alert.id);
-      features.push({ type: 'Feature', properties: { id: alert.id }, geometry: { type: 'LineString', coordinates: path } });
+      // Keep the schematic coordinates for aircraft motion, but do not draw a route line.
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
       const color = aircraft === 'uav' ? '#ef4444' : '#3b82f6';
       const signature = `${aircraft}|${alert.flight_direction}`;
@@ -626,7 +626,9 @@ export class AlertMap {
     el.style.setProperty('--c', t.color);
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
-    if (t.marker === 'orbit') {
+    if (a.type === 'breaking') {
+      el.innerHTML = '<span class="breaking-triangle" aria-hidden="true">🔺</span>';
+    } else if (t.marker === 'orbit') {
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 20, 'class="uav-svg"')}</div></div>`;
     } else if (t.marker === 'squad') {
       const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
@@ -701,7 +703,7 @@ export class AlertMap {
         const km = this._screenKm(z.km, z.lat);
         hits.push({ id: a.id, lon: z.lon, lat: z.lat, km, ts: Date.parse(a.timestamp) || 0, live: !!a.is_active });
         features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [circlePolygon(z.lon, z.lat, km)] } });
-        if (a.is_active && pulses.length < 80) pulses.push({ key: `${a.id}:${i}`, lon: z.lon, lat: z.lat, km, color: props.color });
+        if (a.is_active && pulses.length < 80) pulses.push({ key: `${a.id}:${i}`, lon: z.lon, lat: z.lat, km, color: props.color, type: a.type });
       });
     }
     src.setData({ type: 'FeatureCollection', features });
@@ -733,6 +735,17 @@ export class AlertMap {
         this._pulses.set(p.key, m);
       }
       const el = m.getElement();
+      const breaking = p.type === 'breaking';
+      el.classList.toggle('zp-breaking', breaking);
+      let core = el.querySelector('.zp-core');
+      if (breaking && !core) {
+        core = document.createElement('span');
+        core.className = 'zp-core';
+        core.setAttribute('aria-hidden', 'true');
+        el.append(core);
+      } else if (!breaking && core) {
+        core.remove();
+      }
       if (el._d !== d) { el._d = d; el.style.setProperty('--d', d + 'px'); }
       if (el._c !== p.color) { el._c = p.color; el.style.setProperty('--c', p.color); }
     }

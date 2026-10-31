@@ -1030,9 +1030,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }
   // pressing the menu clears this chat's relay conversation (the thread itself stays open:
   // the reporter can still write, and staff can answer his next message)
-  const clearConvo = () => { /* private-chat history is intentionally retained in both bots */ };
+  const clearConvo = async (ctx) => {
+    if (!ctx.chat || ctx.chat.type !== 'private') return;
+    const ids = store.convoTake(role, ctx.chat.id);
+    for (let i = 0; i < ids.length; i += 10) {
+      await Promise.allSettled(ids.slice(i, i + 10).map((id) => ctx.api.deleteMessage(ctx.chat.id, id)));
+    }
+  };
   const home = async (ctx) => {
-    clearConvo(ctx);
+    await clearConvo(ctx);
     sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');
@@ -1042,7 +1048,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
   bot.command(['start', 'menu'], async (ctx) => {
     if (ctx.callbackQuery) return home(ctx);
-    clearConvo(ctx);
+    await clearConvo(ctx);
     sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');

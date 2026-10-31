@@ -66,6 +66,21 @@ const tap = async (data, user = owner, targetBot = bot) => targetBot.handleUpdat
   },
 });
 
+test('home menu clears tracked private relay messages for this bot and chat only', async () => {
+  store.convoAdd('admin', ownerId, 9101, 9102);
+  store.convoAdd('report', reporter.id, 9103);
+  const adminStart = calls.length;
+  await tap('home', owner, bot);
+  const adminDeletes = calls.slice(adminStart).filter(({ method }) => method === 'deleteMessage');
+  assert.deepEqual(adminDeletes.map(({ chatId, payload }) => [chatId, payload.message_id]).sort((a, b) => a[1] - b[1]), [
+    [ownerId, 9101], [ownerId, 9102],
+  ]);
+  const reportStart = calls.length;
+  await tap('home', reporter, reportBot);
+  const reportDeletes = calls.slice(reportStart).filter(({ method }) => method === 'deleteMessage');
+  assert.deepEqual(reportDeletes.map(({ chatId, payload }) => [chatId, payload.message_id]), [[reporter.id, 9103]]);
+});
+
 test('every monitored alert type builds, and accepting the same mock draft twice posts once', async (t) => {
   const addedAlertIds = [];
   const draftId = 'a1b2c3d4e5';
