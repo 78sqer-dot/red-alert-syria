@@ -7,6 +7,11 @@ export const ALERT_TYPES = {
     emoji: '🔴', color: '#ff3b4e', ring: '#c81e2f', group: 'other', ttlMin: 120,
     marker: 'icon', glyph: 'urgent_warning', icon: '#e11d2e', disc: '#000000', zone: true, tag_ar: 'عاجل', tag_en: 'Breaking',
   },
+  political: {
+    ar: 'تطور سياسي', en: 'Political development', button_ar: 'تطور سياسي', button_en: 'Political development',
+    emoji: '🏛️', color: '#64748b', ring: '#475569', group: 'political', ttlMin: 360,
+    marker: 'icon', glyph: 'political', icon: '#475569', disc: '#334155', size: 32, zone: false, tag_ar: 'تطور_سياسي', tag_en: 'Political_development',
+  },
   uav: {
     ar: 'مسيّرة', en: 'UAV / Drone', button_ar: 'مسيّرة', button_en: 'Drone',
     emoji: '🛸', color: '#ff6b7a', ring: '#e11d48', group: 'aerial', ttlMin: 90,
@@ -140,11 +145,20 @@ export const ALERT_TYPES = {
 export const ZONE_KM = { place: 1.5, point: 1.5, village: 1.5, multi: 3, district: 8, governorate: 20 };
 export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 
+export const POLITICAL_CATEGORIES = Object.freeze({
+  statement: { ar: 'تصريح أو موقف منسوب', en: 'Attributed statement or position' },
+  decision: { ar: 'قرار أو تعيين', en: 'Decision or appointment' },
+  negotiation: { ar: 'مفاوضات أو اتفاق', en: 'Negotiation or agreement' },
+  meeting: { ar: 'لقاء أو زيارة', en: 'Meeting or visit' },
+  election: { ar: 'انتخابات', en: 'Election' },
+});
+
 export const ALERT_GROUPS = {
   aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'helicopter', 'air_movement', 'missile'] },
   strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'assassination', 'artillery', 'airstrike', 'explosion'] },
   civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
+  political: { ar: 'تطورات سياسية', en: 'Political developments', types: ['political'] },
   other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border', 'military_incursion'] },
 };
 

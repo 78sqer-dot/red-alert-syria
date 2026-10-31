@@ -12,7 +12,7 @@ process.env.OWNER_IDS = '8270709633';
 process.env.CHANNEL_ID = '@mock_news_channel';
 const { store } = await import('../server/store.js');
 await store.init(null);
-const { dayAutoDueAt, dayAutoReady, daytimeAutoEligible, daytimeWindow, nightEligible } = await import('../server/news-monitor.js');
+const { dayAutoDueAt, dayAutoReady, daytimeAutoEligible, daytimeWindow, nightEligible, newsState, toBotDraft, _test } = await import('../server/news-monitor.js');
 
 test.after(async () => {
   await new Promise((resolve) => setTimeout(resolve, 350));
@@ -61,6 +61,81 @@ test('high-risk categories and drafts without a verified map point are held for 
   }
   assert.equal(nightEligible(qualified({ loc: { scope: 'country', latitude: null, longitude: null } })), false);
   assert.equal(nightEligible(qualified({ loc: { scope: 'place', latitude: null, longitude: null } })), false);
+});
+
+test('political drafts are never auto-published by day or night, even with multiple sources and a clear map point', () => {
+  const political = qualified({
+    type: 'political',
+    politicalCategory: 'statement',
+    srcs: [{ u: 'main-a', local: false }, { u: 'main-b', local: false }],
+  });
+  assert.equal(nightEligible(political), false);
+  assert.equal(daytimeAutoEligible(political), false);
+  assert.equal(dayAutoDueAt(political, daytimeStart), null);
+  assert.equal(dayAutoReady({ ...political, dayAutoAt: daytimeStart }, daytimeStart + 1), false);
+});
+
+test('Syrian political news without a verified place remains a locationless review draft', async () => {
+  const n = newsState();
+  n.drafts = {};
+  n.types.political = true;
+  n.stats.drafts = 0;
+  const ts = at('2026-10-27T05:00:00Z');
+  const item = {
+    i: 1,
+    src: { u: 'test-syrian-source', name: 'وكالة اختبار', local: false },
+    url: 'https://t.me/test-syrian-source/123',
+    ts,
+    text: 'أعلنت الرئاسة السورية اليوم بدء مفاوضات رسمية جديدة مع ممثلي القوى الوطنية بشأن المرحلة المقبلة',
+  };
+  await _test.handleResult(item, {
+    i: 1, event: true, type: 'political', political_category: 'none', new_incident: false,
+    same_as: null, places: [], headline: 'الرئاسة السورية تعلن بدء مفاوضات جديدة مع ممثلي القوى الوطنية',
+  }, [], new Map());
+  const draft = Object.values(n.drafts).find((d) => d.type === 'political');
+  assert.ok(draft, 'political item should not be discarded for missing a place');
+  assert.equal(draft.loc.scope, 'country');
+  assert.equal(draft.loc.latitude, null);
+  assert.equal(draft.loc.longitude, null);
+  assert.equal(draft.politicalCategory, null);
+  assert.equal(draft.politicalNeedsCategory, true);
+  assert.equal(nightEligible(draft), false);
+  assert.equal(daytimeAutoEligible(draft), false);
+  const botDraft = toBotDraft(draft);
+  assert.equal(botDraft.politicalCategory, null);
+  assert.deepEqual(botDraft.politicalSources, [{ name: 'وكالة اختبار', url: item.url, timestamp: new Date(ts).toISOString() }]);
+  assert.equal(botDraft.politicalSourceTimestamp, new Date(ts).toISOString());
+});
+
+test('published political alerts and pending reports retain their category for deduplication', () => {
+  const n = newsState();
+  const oldRemembered = n.alerts;
+  const oldReports = store.state.reports;
+  const oldAlerts = store.state.alerts;
+  const now = Date.now();
+  n.alerts = [{ id: 'legacy-political', type: 'political', ts: now, headline: 'بيان رسمي جديد', where: '', geo: { pts: [], dists: [], govs: [], coarse: false, none: true } }];
+  store.state.alerts = [{ id: 'legacy-political', type: 'political', meta: { political: { category: 'statement' } } }];
+  store.state.reports = {
+    'pending-political': {
+      created: now,
+      draft: { type: 'political', title: 'مفاوضات سورية', details: 'تفاصيل عامة', meta: { political: { category: 'negotiation' } }, location: { scope: 'country' } },
+    },
+  };
+  try {
+    _test.rememberAlert({
+      id: 'new-political', type: 'political', political_category: 'meeting',
+      timestamp: new Date(now).toISOString(), title: 'لقاء رسمي', description: 'اجتماع في دمشق',
+      scope: 'country', location: null, place: {},
+    });
+    const known = _test.knownEvents(24);
+    assert.equal(known.find((event) => event.headline === 'بيان رسمي جديد')?.politicalCategory, 'statement');
+    assert.equal(known.find((event) => event.headline === 'لقاء رسمي اجتماع في دمشق')?.politicalCategory, 'meeting');
+    assert.equal(known.find((event) => event.kind === 'report')?.politicalCategory, 'negotiation');
+  } finally {
+    n.alerts = oldRemembered;
+    store.state.reports = oldReports;
+    store.state.alerts = oldAlerts;
+  }
 });
 
 test('the scheduler considers only still-pending eligible drafts whose saved deadline has elapsed', () => {

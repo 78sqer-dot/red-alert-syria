@@ -224,6 +224,7 @@ export function fmtDur(min, lang) {
 // Title phrases used for the alert headline
 export const TITLES = {
   breaking: { ar: 'خبر عاجل', en: 'Breaking' },
+  political: { ar: 'تطور سياسي', en: 'Political development' },
   uav: { ar: 'تحليق مسيّرة', en: 'Drone activity' },
   uav_strike: { ar: 'استهداف بمسيّرة', en: 'Drone strike' },
   airstrike: { ar: 'غارة جوية', en: 'Airstrike' },

@@ -1,5 +1,6 @@
 // Extra map glyphs kept separate from the large shared marker catalogue.
 export const EXTRA_SVG = {
+  political: '<g><path d="M34 190 256 52l222 138H34z"/><path d="M52 204h408v28H52z"/><path d="M82 252h48v148H82zm74 0h48v148h-48zm74 0h48v148h-48zm74 0h48v148h-48zm74 0h48v148h-48z"/><path d="M45 412h422v30H45zM26 454h460v34H26z"/></g>',
   // Non-specific projectile/reticle: does not imply a rifle or pistol.
   weapon: '<g><path fill-rule="evenodd" d="M256 66a190 190 0 1 0 0 380a190 190 0 0 0 0-380zm0 38a152 152 0 1 1 0 304a152 152 0 0 1 0-304z"/><path d="M34 244h116v24H34zm328 0h116v24H362zM244 34h24v116h-24zm0 328h24v116h-24z"/><path d="M256 166l57 68v68l-57 44-57-44v-68z"/></g>',
   urgent_warning: '<path d="M256 42 475 430H37z" fill="none" stroke="currentColor" stroke-width="34" stroke-linejoin="round"/><path d="M237 154h42l-9 174h-24z"/><circle cx="256" cy="375" r="23"/>',

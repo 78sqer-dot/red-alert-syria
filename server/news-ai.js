@@ -1,12 +1,12 @@
 // Turns news posts into alert candidates: a cheap keyword pre-filter (no AI cost for weather/sports/
-// politics), then one Gemini call per batch that says, for every post, whether it reports a NEW concrete
+// politics unless enabled by keywords), then one Gemini call per batch that says, for every post, whether it reports a NEW concrete
 // event inside Syria, its type, the place(s) and a short neutral headline, and whether it is the same
 // incident as an event we already know (published, pending, ignored). Places are then matched to the
 // bot's own places database, so a draft always points at a real place of the map.
-import { ALERT_TYPES } from '../shared/types.js';
+import { ALERT_TYPES, POLITICAL_CATEGORIES } from '../shared/types.js';
 import { governorates, districts, searchPlaces, normalizeArabic, getGov, getDist, places } from './places.js';
 
-export const NEWS_TYPES = ['breaking', 'uav', 'uav_strike', 'warplane', 'helicopter', 'airstrike', 'missile', 'attack', 'assassination', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'weather'];
+export const NEWS_TYPES = ['breaking', 'political', 'uav', 'uav_strike', 'warplane', 'helicopter', 'airstrike', 'missile', 'attack', 'assassination', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'weather'];
 const N = normalizeArabic;
 const stripAl = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w);
 
@@ -37,6 +37,8 @@ const KW = {
     'الاحتلال', 'قوات الاحتلال', 'جيش الاحتلال', 'الجيش الإسرائيلي', 'القوات الإسرائيلية', 'قوة إسرائيلية', 'دورية إسرائيلية', 'آليات إسرائيلية', 'آليات عسكرية', 'دبابات', 'ميركافا',
     'جرافات', 'جرافة', 'أعمال حفر', 'أعمال الحفر', 'عمليات الحفر', 'حفر خندق', 'خنادق', 'ساتر ترابي', 'سواتر', 'تجريف', 'جرف', 'تحصينات', 'نقطة عسكرية', 'قاعدة عسكرية', 'تمركز', 'نصب حاجز', 'حاجزا', 'رتل', 'تعزيزات عسكرية', 'انتشار عسكري', 'تفجير منزل', 'نسف'],
   civil: ['انهيار', 'غرق', 'فيضان', 'سيول', 'زلزال', 'هزه ارضيه', 'الدفاع المدني', 'انقاذ', 'تسمم', 'عاصفه', 'عواصف رعديه', 'عاصفه رعديه', 'اضطراب جوي', 'هطولات غزيره', 'امطار غزيره', 'وزاره الطوارئ'],
+  // Deliberately narrow event cues; broad politics/opinion vocabulary is not enough on its own.
+  political: ['تصريح رسمي', 'بيان رسمي', 'موقف رسمي', 'قال الرئيس', 'قال وزير', 'اعلن الرئيس', 'اعلنت الرئاسه', 'قرار حكومي', 'قرار رئاسي', 'تعيين', 'عينت الحكومه', 'مفاوضات', 'مباحثات', 'اتفاق بين', 'اتفاق سوري', 'التقي الرئيس', 'اجتمع الرئيس', 'لقاء رسمي', 'زياره رسميه', 'انتخابات سوريا', 'الانتخابات السوريه', 'انتخابات رئاسيه', 'syrian statement', 'syrian government decision', 'syria negotiations', 'syria election'],
 };
 const KW_N = Object.fromEntries(Object.entries(KW).map(([k, a]) => [k, a.map(N)]));
 const has = (nt, w) => nt.includes(w);
@@ -105,6 +107,8 @@ export function prefilter(text, { general = false, breaking = false } = {}) {
   const nt = N(t);
   // Apply the Syria-only source gate before the weather shortcut: an official foreign warning is still foreign.
   if (general && !mentionsSyria(t)) return { ok: false, why: 'not-syria' };
+  // Political posts are especially prone to foreign-news bleed; require an explicit Syrian reference.
+  if (kt.includes('political') && !mentionsSyria(t)) return { ok: false, why: 'not-syria' };
   const weather = weatherWarningInfo(t);
   if (weather && !hasNonWeatherSignal(t)) return { ok: true, kt: [...new Set([...kt, 'weather'])], weather };
   const independentIncident = kt.some((k) => k !== 'weather' && k !== 'civil') || NON_WEATHER_CIVIL_WORDS.some((w) => nt.includes(w));
@@ -230,12 +234,13 @@ const TYPE_HELP = `- uav: drone (مسيّرة) flight, sighting or surveillance 
 export function buildPrompt(items, known, nowIso) {
   const sys = `You are the news desk of "Red Alert Syria", a live alert map of Syria. You read short posts from Syrian news channels and decide which ones should become a map alert.
 For EACH post return one object. Rules:
-1. event=true ONLY if the post reports a concrete incident that is happening now or happened in the last hours INSIDE Syria, at a nameable place. Exception: an explicit, actionable official severe-weather warning for a named Syrian place is a weather event. event=false for: statements, politics, diplomacy, meetings, economy, prices, sports, routine weather forecasts (warnings meeting the exception are type weather), analysis, interviews, reports/documentaries, anniversaries, statistics, aid deliveries, returns of displaced people, routine arrests or trials as such, condemnations, and anything outside Syria (Lebanon, Iraq, Israel, Palestine, Yemen, Saudi Arabia, Iran, Turkey… even if it mentions Syrians). Israeli army activity INSIDE Syrian territory (Quneitra, Daraa, Rif Dimashq, the separation line with the occupied Golan, Mount Hermon) is inside Syria. Reports that only summarise many past violations (monthly counts, statistics) are not events.
+1. For non-political alerts, event=true ONLY if the post reports a concrete incident that is happening now or happened in the last hours INSIDE Syria, at a nameable place. Exception: an explicit, actionable official severe-weather warning for a named Syrian place is a weather event. For political alerts, event=true ONLY for a specific, recent Syrian-affairs development in one of the allowed political categories in rule 3; a precise location is NOT required. event=false for general political speech, opinion, analysis, commentary, interviews, vague/rumoured claims, and foreign news (Lebanon, Iraq, Israel, Palestine, Yemen, Saudi Arabia, Iran, Turkey… even if it mentions Syrians), as well as routine weather forecasts, reports/documentaries, anniversaries, statistics, aid deliveries, returns of displaced people, routine arrests or trials as such, and condemnations. Israeli army activity INSIDE Syrian territory (Quneitra, Daraa, Rif Dimashq, the separation line with the occupied Golan, Mount Hermon) is inside Syria. Reports that only summarise many past violations (monthly counts, statistics) are not events.
 1b. Only Syrian PUBLIC affairs. event=false for personal or social posts: opinions, commentary, rants, poems/quotes, greetings and congratulations, religious or good-morning posts, condolences/obituaries without an incident, personal appeals ("ياريت تنشرلي"), missing-person or lost-item notices, complaints about services (potholes, garbage, electricity, water, prices), ads, promotions, courses, job offers, polls, donation/aid requests, giveaways, channel announcements, and posts that only promote a channel or a video.
-1c. Posts whose source line says [LOCAL] come from local/activist channels: be stricter — event=true only for a concrete, specific incident report with a named place; event=false for rumours ("أنباء عن", "يُقال", "معلومات غير مؤكدة"), accusations or incitement without a concrete incident, and old footage.
+1c. Posts whose source line says [LOCAL] come from local/activist channels: be stricter — for non-political alerts, event=true only for a concrete, specific incident report with a named place. A specific, attributable Syrian political development may qualify without a precise place, but not on a rumour or vague claim. event=false for rumours ("أنباء عن", "يُقال", "معلومات غير مؤكدة"), accusations or incitement without a concrete incident, and old footage.
 2. Follow-ups are NOT new events: casualty updates ("ارتفاع حصيلة"), someone dying of wounds from an earlier incident, "the perpetrators were arrested", the hospital receiving the wounded of an incident already reported, a reporter's details/video of an incident already reported, re-posts, "again/مجدداً" reports of the same ongoing incident. For those: event=true, new_incident=false and same_as = the known event id (E…) or earlier post (P…) it follows up. Use new_incident=false only for a follow-up of an incident in KNOWN EVENTS / an earlier post, or a clear aftermath (casualty update, funeral, arrest of perpetrators) of an earlier incident; an activity that starts again after a pause ("يستأنف … بعد توقف") is a NEW incident. If a post is the same incident as a known event or an earlier post in this batch (same kind of incident, same area, close in time — even if described with different nearby village names, e.g. "حاجز مفرق خربا" = "قرب بلدة معربة" = "بصرى الشام" for one checkpoint attack in eastern Daraa countryside), set same_as to it.
 3. type: the most specific of:
 ${TYPE_HELP}
+Use type=political ONLY for a concrete Syrian-affairs news development: a specifically attributed statement/position, an official decision/appointment, negotiations/agreement, an identified meeting/visit, or an election. Set political_category to exactly one of statement, decision, negotiation, meeting, election. If the post is a relevant Syrian political development but the subcategory is genuinely unclear, set type=political and political_category="none" so it is held for human review. For every non-political type set political_category="none". Never infer or invent a place for political news; places may be empty or contain only a place explicitly stated. Do not promote generic speeches, commentary, analysis, rumours, or foreign politics to political events.
 Pick the type of the core incident; it must be the most specific one. An explosion of any kind = explosion (never civil or attack), even when it hurts civilians. Any fire = fire (never civil), a road/vehicle crash = accident, a demonstration or public march = protest, a civil aircraft incident = civil_plane. Use civil only when none of these fits and use breaking only when no specific type fits. Do not classify a protest march as a drone. A standalone sound/report of gunfire with no target or victim = shooting; gunfire against a person, place or checkpoint = attack (or assassination when explicitly targeted killing). A non-armed physical quarrel = brawl. A new specific detention can be arrest; arrest of earlier incident perpetrators is a follow-up, not a new event. Use death/martyrdom only when no specific incident cause is reported. Israeli army shelling = artillery; a completed air strike = airstrike; report only the presence or overflight of a military aircraft as warplane.
 4. places: where it happened, most specific first, max 4 — list every named village/town of the incident in the post (e.g. both villages of a road "طريق عين البيضة - جباتا الخشب"). name = the Arabic place name exactly as a Syrian would write it (town/village/neighbourhood; without words like "بلدة/مدينة/قرية/ريف/حي"), gov = its Syrian governorate in Arabic (one of: دمشق، ريف دمشق، حلب، حمص، حماة، اللاذقية، طرطوس، إدلب، درعا، السويداء، القنيطرة، دير الزور، الرقة، الحسكة). For a road between two cities ("أوتوستراد دمشق درعا") give the nearest named place in the post (e.g. "خبب") or the governorate. If only the governorate is known, give name = the governorate.
 5. headline: rewrite the news as ONE clean, neutral Arabic news sentence (max 140 characters) saying what happened and where — only the news itself. Never include: the channel/source/reporter name ("مراسل …", "أفاد مراسلنا", "درعا 24", "الجزيرة"…), calls to follow/subscribe/click, links, @usernames, hashtags, emojis, "متداول", greetings, or the poster's opinion.
@@ -249,7 +254,7 @@ Return a JSON array, one object per post, same order.`;
   for (const it of items) lines.push(`P${it.i} | ${it.source}${it.local ? ' [LOCAL]' : ''} | ${it.ago}\n${it.text.slice(0, 900)}\n---`);
   return { sys, user: lines.join('\n') };
 }
-const SCHEMA = {
+export const AI_RESPONSE_SCHEMA = {
   type: 'ARRAY',
   items: {
     type: 'OBJECT',
@@ -257,12 +262,13 @@ const SCHEMA = {
       i: { type: 'INTEGER' },
       event: { type: 'BOOLEAN' },
       type: { type: 'STRING', enum: [...NEWS_TYPES, 'none'] },
+      political_category: { type: 'STRING', enum: [...Object.keys(POLITICAL_CATEGORIES), 'none'] },
       new_incident: { type: 'BOOLEAN' },
       same_as: { type: 'STRING', nullable: true },
       places: { type: 'ARRAY', items: { type: 'OBJECT', properties: { name: { type: 'STRING' }, gov: { type: 'STRING' } }, required: ['name'] } },
       headline: { type: 'STRING' },
     },
-    required: ['i', 'event', 'type', 'new_incident', 'places', 'headline'],
+    required: ['i', 'event', 'type', 'political_category', 'new_incident', 'places', 'headline'],
   },
 };
 export const aiStats = { calls: 0, fails: 0, lastError: '', lastModel: '', day: '', today: 0 };
@@ -277,7 +283,7 @@ export async function callGemini({ sys, user }, { key, models, timeoutMs = 40_00
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: sys }] },
           contents: [{ role: 'user', parts: [{ text: user }] }],
-          generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: SCHEMA },
+          generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: AI_RESPONSE_SCHEMA },
         }),
         signal: AbortSignal.timeout(timeoutMs),
       });

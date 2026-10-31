@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ALERT_GROUPS, ALERT_TYPES, TYPE_KEYS, alertEmoji, assassinationWeaponGlyph } from '../shared/types.js';
+import { ALERT_GROUPS, ALERT_TYPES, POLITICAL_CATEGORIES, TYPE_KEYS, alertEmoji, assassinationWeaponGlyph } from '../shared/types.js';
 import { NEWS_TYPES, keywordTypes, refineType, ruleClassify } from '../server/news-ai.js';
 import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
@@ -144,6 +144,16 @@ test('similar headlines in distant governorates are not merged as the same incid
   assert.equal(sameIncident(incident(unknown), incident(unknown)), true);
 });
 
+test('political incidents deduplicate only when their category and headline both match', () => {
+  const now = Date.now();
+  const geo = { pts: [], dists: [], govs: [], coarse: false, none: true };
+  const meeting = { type: 'political', politicalCategory: 'meeting', ts: now, headline: 'اجتماع رسمي بين مسؤولين سوريين ومبعوث أممي', geo };
+  assert.equal(sameIncident(meeting, { ...meeting }), true);
+  assert.equal(sameIncident(meeting, { ...meeting, politicalCategory: 'statement' }), false);
+  assert.equal(sameIncident(meeting, { ...meeting, politicalCategory: null }), false);
+  assert.equal(sameIncident(meeting, { ...meeting, headline: 'قرار حكومي جديد بشأن موعد الانتخابات' }), false);
+});
+
 test('civil incident types are nested under the civil group and enabled for news monitoring', () => {
   for (const key of ['arrest', 'death', 'martyrdom', 'brawl', 'shooting']) {
     assert.ok(TYPE_KEYS.includes(key));
@@ -163,6 +173,21 @@ test('helicopter and airstrike are watched automatically but require human publi
     assert.equal(nightEligible(draft), false, `${key} remains human-reviewed overnight`);
     assert.equal(dayAutoReady(draft), false, `${key} is not auto-published during daytime`);
   }
+});
+
+test('political developments use a neutral marker without a hazard ring and have controlled subcategories', () => {
+  const type = ALERT_TYPES.political;
+  assert.ok(TYPE_KEYS.includes('political'));
+  assert.ok(ALERT_GROUPS.political.types.includes('political'));
+  assert.equal(type.group, 'political');
+  assert.equal(type.marker, 'icon');
+  assert.equal(type.glyph, 'political');
+  assert.equal(type.zone, false);
+  assert.equal(type.color, '#64748b');
+  assert.match(EXTRA_SVG.political, /M34 190/);
+  assert.match(mapSource, /political: 'news'/);
+  assert.match(mapSource, /a\.type === 'political'/, 'political marker must not create a glowing hazard zone');
+  assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['statement', 'decision', 'negotiation', 'meeting', 'election']);
 });
 
 test('new civil news types classify separately and a protest march is not a drone', () => {

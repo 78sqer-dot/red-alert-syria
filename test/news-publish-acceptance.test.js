@@ -16,7 +16,7 @@ process.env.ALERT_IMAGES = 'false';
 const { store, publicAlert } = await import('../server/store.js');
 await store.init(null);
 const { buildAlertInput, createBot, channelKeyboard, channelPost } = await import('../server/bot.js');
-const { BORDER_MARKERS, ALERT_TYPES, ALERT_GROUPS } = await import('../shared/types.js');
+const { BORDER_MARKERS, ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES } = await import('../shared/types.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { governorates } = await import('../server/places.js');
 const { newsState } = await import('../server/news-monitor.js');
@@ -134,7 +134,82 @@ test('every monitored alert type builds, and accepting the same mock draft twice
 
   const lastUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const buttons = () => lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+  const politicalIdlib = governorates.find((g) => g.ar === 'إدلب');
+  assert.ok(politicalIdlib, 'Idlib governorate is available for the political location flow');
   await tap('home');
+  assert.ok(buttons().some((button) => button.callback_data === 't:political'), 'political development is present in the publishing bot main menu');
+  await tap('t:political');
+  assert.deepEqual(buttons().filter((button) => button.callback_data?.startsWith('pcat:')).map((button) => button.callback_data.slice(5)), Object.keys(POLITICAL_CATEGORIES));
+  await tap('pcat:invalid');
+  assert.ok(buttons().some((button) => button.callback_data === 'pcat:statement'), 'an invalid category callback leaves the category picker active');
+  await tap('pcat:statement');
+  assert.ok(buttons().some((button) => button.callback_data === 'pol:general'), 'general political news is offered as the default no-pin option');
+  assert.ok(buttons().some((button) => button.callback_data === 'pol:location'), 'a confirmed location can be selected explicitly');
+  await tap('pol:general');
+  await sendText('بيان رسمي https://news.example/politics');
+  assert.match(lastUi().payload.text, /موقع غير محدد — دون دبوس/);
+  assert.match(lastUi().payload.text, /الرأي أو التحليل ليس خبراً/);
+  assert.match(lastUi().payload.text, /الفئة:<\/b> تصريح أو موقف منسوب/);
+  const politicalNewsDate = '2026-10-30T19:20:00.000Z';
+  const attributedInput = buildAlertInput({
+    type: 'political', politicalCategory: 'negotiation', location: { scope: 'country', latitude: null, longitude: null },
+    details: 'اتفاق معلن https://details.example/story', extra: [], ttlMin: 360,
+    politicalSources: [
+      { name: '<Official source>', url: 'https://official.example/news', timestamp: politicalNewsDate },
+      { name: 'unsafe protocol', url: 'javascript:alert(1)', timestamp: politicalNewsDate },
+      { name: 'bad date', url: 'https://bad-date.example/item', timestamp: 'not-a-date' },
+    ], politicalSourceTimestamp: politicalNewsDate,
+  }, { id: ownerId, name: 'test' });
+  assert.deepEqual(attributedInput.meta.political, {
+    category: 'negotiation',
+    sources: [{ name: '<Official source>', url: 'https://official.example/news', timestamp: politicalNewsDate }],
+    sourceTimestamp: politicalNewsDate,
+  });
+  assert.equal(attributedInput.location.scope, 'country');
+  assert.equal(attributedInput.location.latitude, null, 'political general news has no fabricated latitude');
+  assert.equal(attributedInput.location.longitude, null, 'political general news has no fabricated longitude');
+  assert.equal(attributedInput.timestamp, undefined, 'a source publication date never becomes the alert timestamp');
+  const politicalAlert = store.addAlert(attributedInput);
+  addedAlertIds.push(politicalAlert.id);
+  const politicalPost = channelPost(politicalAlert);
+  assert.match(politicalPost, /موقع غير محدد — دون دبوس/);
+  assert.match(politicalPost, /الفئة:<\/b> مفاوضات أو اتفاق/);
+  assert.match(politicalPost, /href="https:\/\/official\.example\/news"/);
+  assert.match(politicalPost, /&lt;Official source&gt;/, 'source labels are escaped in channel HTML');
+  assert.match(politicalPost, /تاريخ المصدر/);
+  assert.match(politicalPost, /منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل/);
+  const detailSourceInput = buildAlertInput({
+    type: 'political', politicalCategory: 'statement', location: { scope: 'country', latitude: null, longitude: null },
+    details: 'رابط يدوي https://manual.example/report', extra: [], ttlMin: 360,
+  }, { id: ownerId, name: 'test' });
+  assert.equal(detailSourceInput.meta.political.sources.length, 1, 'one HTTP(S) link in details can supply a manual source');
+  assert.equal(detailSourceInput.meta.political.sources[0].url, 'https://manual.example/report');
+  const javascriptInput = buildAlertInput({
+    type: 'political', politicalCategory: 'invalid-category', location: { scope: 'country', latitude: null, longitude: null },
+    details: 'javascript:alert(1)', politicalSources: [{ name: 'bad', url: 'javascript:alert(1)' }],
+    politicalSourceTimestamp: 'javascript:date', extra: [], ttlMin: 360,
+  }, { id: ownerId, name: 'test' });
+  assert.equal(javascriptInput.meta.political.category, null, 'unknown category keys are rejected');
+  assert.deepEqual(javascriptInput.meta.political.sources, [], 'javascript URLs are never accepted as sources');
+  assert.equal(javascriptInput.meta.political.sourceTimestamp, null, 'invalid source dates are rejected');
+
+  await tap('home', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 't:political'), 'political development is present in the public report bot main menu');
+  await tap('t:political', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 'pcat:election'), 'the public report bot offers political categories');
+  await tap('pcat:invalid', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 'pcat:meeting'), 'invalid public-bot category callbacks do not advance');
+  await tap('pcat:meeting', reporter, reportBot);
+  await tap('pol:location', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 'pol:nopin'), 'location picker still permits an explicit no-pin choice');
+  await tap(`g:${politicalIdlib.code}`, reporter, reportBot);
+  await tap(`wg:${politicalIdlib.code}`, reporter, reportBot);
+  await tap('skip', reporter, reportBot);
+  assert.match(lastUi().payload.text, /الفئة:<\/b> لقاء أو زيارة/);
+  assert.match(lastUi().payload.text, /إدلب/);
+  assert.doesNotMatch(lastUi().payload.text, /No verified location|موقع غير محدد — دون دبوس/);
+  await tap('home', reporter, reportBot);
+
   assert.ok(buttons().some((button) => button.callback_data === 't:warplane'));
   assert.ok(buttons().some((button) => button.callback_data === 't:uav'));
   assert.ok(buttons().some((button) => button.callback_data === 't:helicopter'));

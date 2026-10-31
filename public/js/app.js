@@ -1,13 +1,13 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=18';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=20';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=21';
 import * as maplibregl from '/vendor/maplibre-gl.mjs?v=6.16.0';
 import { DICT } from './i18n.js';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=2';
-import { settings } from './settings.js?v=3';
+import { settings } from './settings.js?v=4';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=35';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=36';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
@@ -53,6 +53,11 @@ let BOT = 'https://t.me/Rad_Alert_Syria1_bot';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const safeExternalUrl = (value) => {
+  if (typeof value !== 'string' || value.length > 2048 || /[\u0000-\u0020\\]/.test(value)) return null;
+  try { const u = new URL(value); return ['http:', 'https:'].includes(u.protocol) && u.hostname && !u.username && !u.password ? u.href : null; }
+  catch { return null; }
+};
 const uiz = () => window.__uiz || 1;
 const viewW = () => (window.__viewW ? window.__viewW() : window.innerWidth / uiz());
 const isMobile = () => viewW() < 768;
@@ -261,16 +266,31 @@ function renderList() {
 function detailHtml(a) {
   const t = typeOf(a.type);
   const live = a.is_active;
-  const hasLoc = a.location && Number.isFinite(a.location.latitude);
+  const political = a.type === 'political';
+  const hasLoc = a.location && Number.isFinite(a.location.latitude) && Number.isFinite(a.location.longitude);
+  const category = political && Object.hasOwn(POLITICAL_CATEGORIES, a.political_category) ? POLITICAL_CATEGORIES[a.political_category] : null;
+  const sources = political && Array.isArray(a.political_sources) ? a.political_sources.slice(0, 5).flatMap((source) => {
+    const url = safeExternalUrl(source?.url);
+    if (!url || typeof source?.name !== 'string' || !source.name.trim()) return [];
+    const time = typeof source.timestamp === 'string' && Number.isFinite(Date.parse(source.timestamp)) ? fmtFull.format(new Date(source.timestamp)) : null;
+    return [`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(source.name.slice(0, 120))}</a>${time ? ` <span class="source-time">(${esc(time)})</span>` : ''}`];
+  }) : [];
+  const hasIndividualSourceDate = political && Array.isArray(a.political_sources) && a.political_sources.some((source) => typeof source?.timestamp === 'string' && Number.isFinite(Date.parse(source.timestamp)));
+  const sourceTimestamp = political && !hasIndividualSourceDate && typeof a.political_source_timestamp === 'string' && Number.isFinite(Date.parse(a.political_source_timestamp))
+    ? fmtFull.format(new Date(a.political_source_timestamp)) : null;
+  const sourceInfoUrl = safeExternalUrl(a.source_info?.url);
   const rows = [
     [T.type, `${badge(a)}`],
-    [T.location, esc(placeName(a))],
+    [T.location, political && !hasLoc ? (LANG === 'ar' ? 'موقع غير محدد — بلا دبوس' : 'Location unspecified — no pin') : esc(placeName(a))],
+    ...(category ? [[LANG === 'ar' ? 'الفئة الفرعية' : 'Subcategory', esc(LANG === 'ar' ? category.ar : category.en)]] : []),
+    ...(sources.length ? [[LANG === 'ar' ? 'المصادر' : 'Sources', sources.join('<br>')]] : []),
+    ...(sourceTimestamp ? [[LANG === 'ar' ? 'تاريخ المصدر' : 'Source date', esc(sourceTimestamp)]] : []),
     ...(BORDER_REGIONS[a.border] ? [[LANG === 'ar' ? 'الحدود' : 'Border', esc(LANG === 'ar' ? BORDER_REGIONS[a.border].ar : BORDER_REGIONS[a.border].en)]] : []),
     ...(FLIGHT_AIRCRAFT[a.aircraft] ? [[LANG === 'ar' ? 'نوع الطائرة' : 'Aircraft type', esc(LANG === 'ar' ? FLIGHT_AIRCRAFT[a.aircraft].ar : FLIGHT_AIRCRAFT[a.aircraft].en)]] : []),
     ...(FLIGHT_DIRECTIONS[a.flight_direction] ? [[LANG === 'ar' ? 'اتجاه الطيران' : 'Flight direction', esc(LANG === 'ar' ? FLIGHT_DIRECTIONS[a.flight_direction].ar : FLIGHT_DIRECTIONS[a.flight_direction].en)]] : []),
     ...(alertDist(a) ? [[LANG === 'ar' ? 'المسافة عنك' : 'Distance from you', distChip(a)]] : []),
     [T.time, esc(fmtFull.format(new Date(a.timestamp)))],
-    [a.source_info?.kind === 'provider' ? T.dataProvider : T.publisher, a.source_info?.url ? `<a href="${esc(a.source_info.url)}" target="_blank" rel="noopener noreferrer">${esc(a.source_info.name)}</a>` : esc(a.source_info?.name || 'Red Alert Syria')],
+    [a.source_info?.kind === 'provider' ? T.dataProvider : T.publisher, sourceInfoUrl ? `<a href="${esc(sourceInfoUrl)}" target="_blank" rel="noopener noreferrer">${esc(a.source_info?.name)}</a>` : esc(a.source_info?.name || 'Red Alert Syria')],
     live ? [T.expires, a.expires_at ? esc(fmtTime.format(new Date(a.expires_at))) : T.noExpiry] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at || a.timestamp)))],
   ];
   return `<div class="d-card" style="--c:${t.color}">
@@ -280,7 +300,7 @@ function detailHtml(a) {
       <span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span>
     </div>
     <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
-    <div class="disclaimer" role="note">${esc(T.verificationNotRecorded)}</div>
+    <div class="disclaimer" role="note">${esc(political ? (LANG === 'ar' ? 'منسوب للمصدر — لا يعني تحققاً مستقلاً' : 'Attributed to the source — this does not mean independent verification') : T.verificationNotRecorded)}</div>
     ${hasLoc ? `<div class="sec-label">${esc(T.coordinates)}</div>
     <div class="coords"><div class="coord"><div class="k">${esc(T.lat)}</div><div class="v">${fmtNum(a.location.latitude)}° N</div></div><div class="coord"><div class="k">${esc(T.lng)}</div><div class="v">${fmtNum(a.location.longitude)}° E</div></div></div>` : ''}
     <button class="btn-dark" data-act="share-toggle">${icon('share', 18)}${esc(T.shareAlert)}</button>

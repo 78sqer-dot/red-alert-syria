@@ -3,7 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { config } from './config.js';
-import { ALERT_TYPES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
+import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
 import { alertZones, regionFix } from './places.js';
 import { cleanAlertText } from './clean-text.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
@@ -576,8 +576,45 @@ class Store extends EventEmitter {
   }
 }
 
+/** Accept only ordinary HTTP(S) links; never pass script/data URLs to clients. */
+function safeHttpUrl(value) {
+  if (typeof value !== 'string' || value.length > 2048 || /[\u0000-\u0020\\]/.test(value)) return undefined;
+  try {
+    const u = new URL(value);
+    if (!['http:', 'https:'].includes(u.protocol) || !u.hostname || u.username || u.password) return undefined;
+    return u.href;
+  } catch { return undefined; }
+}
+function safeSourceTimestamp(value) {
+  if (typeof value !== 'string' || value.length > 64 || !value.trim()) return undefined;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+}
+function politicalSources(a) {
+  if (a.type !== 'political') return undefined;
+  const raw = Array.isArray(a.meta?.political?.sources) ? a.meta.political.sources : [];
+  const sources = [];
+  for (const source of raw) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) continue;
+    const name = typeof source.name === 'string'
+      ? source.name.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+      : '';
+    const url = safeHttpUrl(source.url);
+    if (!name || !url) continue;
+    const timestamp = safeSourceTimestamp(source.timestamp);
+    sources.push({ name, url, ...(timestamp ? { timestamp } : {}) });
+    if (sources.length === 5) break;
+  }
+  return sources;
+}
 /** Only expose a named provider when the alert was generated from a known feed. */
-function publicSourceInfo(a) {
+function publicSourceInfo(a, sources) {
+  if (a.type === 'political') {
+    const source = sources?.[0];
+    return source
+      ? { kind: 'publisher', name: source.name, url: source.url }
+      : { kind: 'publisher', name: 'Red Alert Syria' };
+  }
   if (a.source === 'weather') return { kind: 'provider', name: 'Open-Meteo', url: 'https://open-meteo.com/' };
   if (a.source === 'quake') {
     const src = String(a.meta?.src || '').toLowerCase();
@@ -590,6 +627,10 @@ function publicSourceInfo(a) {
 /** Strip private fields before sending an alert to browsers. */
 export function publicAlert(a) {
   const p = a.place || {};
+  const sources = politicalSources(a);
+  const political = a.type === 'political' ? a.meta?.political : null;
+  const category = political && Object.hasOwn(POLITICAL_CATEGORIES, political.category) ? political.category : undefined;
+  const sourceTimestamp = safeSourceTimestamp(political?.sourceTimestamp);
   return {
     id: a.id,
     type: a.type,
@@ -600,6 +641,11 @@ export function publicAlert(a) {
     aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
     drones: a.type === 'uav' ? droneLevel(a) : undefined,
     vehicle_count: a.type === 'military_incursion' && Number.isInteger(a.meta?.vehicleCount) ? a.meta.vehicleCount : undefined,
+    ...(a.type === 'political' ? {
+      ...(category ? { political_category: category } : {}),
+      political_sources: sources,
+      ...(sourceTimestamp ? { political_source_timestamp: sourceTimestamp } : {}),
+    } : {}),
     title: a.title,
     title_en: a.title_en,
     description: cleanAlertText(a.description) || undefined,
@@ -612,11 +658,11 @@ export function publicAlert(a) {
     },
     areas: a.areas,
     scope: a.scope,
-    // every alert type now shows a glowing circle over each affected area (main + extra areas)
-    zones: a.location ? alertZones(a) : undefined,
+    // Political reports may use one verified point, but are not hazard zones.
+    zones: a.location && a.type !== 'political' ? alertZones(a) : undefined,
     more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
-    source_info: publicSourceInfo(a),
+    source_info: publicSourceInfo(a, sources),
     expires_at: a.expires_at,
     ended_at: a.ended_at,
     is_active: a.is_active,

@@ -5,7 +5,7 @@ import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert } from './store.js';
-import { ALERT_TYPES, TYPE_KEYS, typeOf, alertEmoji, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS } from '../shared/types.js';
+import { ALERT_TYPES, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
@@ -40,6 +40,44 @@ const hashTag = (s) => '#' + String(s || '').replace(/[^\p{L}\p{N}]+/gu, '_').re
 
 const VEHICLE_COUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const VEHICLE_COUNT_MAX = 999;
+const politicalCategory = (key) => Object.hasOwn(POLITICAL_CATEGORIES, key) ? key : null;
+function safeHttpUrl(value) {
+  const text = String(value || '').trim();
+  if (!/^https?:\/\//i.test(text) || text.length > 2048) return null;
+  try {
+    const url = new URL(text);
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
+    return url.href;
+  } catch { return null; }
+}
+function sourceIso(value) {
+  if (value == null || value === '') return null;
+  const raw = typeof value === 'number' ? (value < 1e12 ? value * 1000 : value) : value;
+  const ms = typeof raw === 'string' && /^\d{10,13}$/.test(raw) ? Number(raw) * (raw.length === 10 ? 1000 : 1) : Date.parse(raw);
+  return Number.isFinite(ms) && Number.isFinite(new Date(ms).getTime()) ? new Date(ms).toISOString() : null;
+}
+function politicalSourcesFor(d) {
+  const sources = [];
+  for (const item of Array.isArray(d.politicalSources) ? d.politicalSources : []) {
+    const url = safeHttpUrl(item?.url);
+    if (!url) continue;
+    const timestamp = item?.timestamp == null || item.timestamp === '' ? null : sourceIso(item.timestamp);
+    if (item?.timestamp != null && item.timestamp !== '' && !timestamp) continue;
+    sources.push({ name: clean(item?.name, 120) || url, url, timestamp });
+  }
+  if (!sources.length) {
+    const urls = String(d.details || '').match(/https?:\/\/[^\s<>"']+/gi) || [];
+    for (const token of urls) {
+      const url = safeHttpUrl(token.replace(/[),.;!?\]}]+$/g, ''));
+      if (url) {
+        sources.push({ name: langSourceName(d), url, timestamp: null });
+        break;
+      }
+    }
+  }
+  return sources;
+}
+function langSourceName(d) { return d.lang === 'en' ? 'Source in report details' : 'مصدر مذكور في التفاصيل'; }
 function parseVehicleCount(value) {
   const normalized = String(value ?? '').replace(/[٠-٩۰-۹]/g, (digit) => {
     const code = digit.charCodeAt(0);
@@ -120,7 +158,22 @@ export function channelPost(alert, { ended = false } = {}) {
   const desc = cleanAlertText(alert.description || '');
   if (alert.type === 'breaking') sections.push(`<b>${esc(desc || alert.title)}</b>`);
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
+  else if (alert.type === 'political') sections.push('📍<b>موقع غير محدد — دون دبوس</b>');
   if (alert.type !== 'breaking' && desc) sections.push(`<blockquote>${esc(desc)}</blockquote>`);
+  if (alert.type === 'political') {
+    const meta = alert.meta?.political || {};
+    const category = POLITICAL_CATEGORIES[meta.category];
+    if (category) sections.push(`🏛 <b>الفئة:</b> ${esc(category.ar)}`);
+    const sources = (Array.isArray(meta.sources) ? meta.sources : []).filter((s) => safeHttpUrl(s?.url)).slice(0, 5);
+    for (const source of sources) {
+      const url = safeHttpUrl(source.url);
+      const date = sourceIso(source.timestamp) || (!source.timestamp ? sourceIso(meta.sourceTimestamp) : null);
+      const when = date ? ` · تاريخ المصدر: ${esc(fmtDate(date))}` : '';
+      sections.push(`🔎 <b>المصدر:</b> <a href="${esc(url)}">${esc(clean(source.name, 120) || url)}</a>${when}`);
+    }
+    if (!sources.length && sourceIso(meta.sourceTimestamp)) sections.push(`🗓 تاريخ المصدر: ${esc(fmtDate(sourceIso(meta.sourceTimestamp)))}`);
+    sections.push('<i>منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل</i>');
+  }
   sections.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
   sections.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
   if (ended) sections.push(`انتهى :  ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
@@ -153,6 +206,8 @@ function draftSummary(d, lang) {
   if (d.type === 'breaking') lines.push('', esc(d.text || ''));
   if (d.type === 'air_movement' && (!loc || loc.scope === 'country')) {
     lines.push('', lang === 'en' ? '📍 No place selected — no map pin' : '📍 اتجاه عام — بلا تحديد منطقة أو دبوس على الخريطة');
+  } else if (d.type === 'political' && (!loc || loc.scope === 'country')) {
+    lines.push('', lang === 'en' ? '📍 No verified location — no map pin' : '📍 موقع غير محدد — دون دبوس');
   } else if (d.type === 'air_movement' && d.flightTarget) {
     const leaving = d.flightDirection === 'leaving_syria';
     const label = lang === 'en' ? (leaving ? 'Departure area' : 'Destination area') : (leaving ? 'منطقة المغادرة' : 'الوجهة');
@@ -163,6 +218,13 @@ function draftSummary(d, lang) {
     for (const x of [loc, ...d.extra]) lines.push(`• ${esc(locName(x, lang))}`);
   } else lines.push('', `📍 <b>${l.locLabel}:</b> ${esc(loc ? locName(loc, lang) : (lang === 'en' ? 'Syria' : 'سوريا'))}`);
   if (d.type !== 'breaking' && d.details) lines.push(`📝 <b>${l.detailsLabel}:</b> ${esc(d.details)}`);
+  if (d.type === 'political') {
+    const category = POLITICAL_CATEGORIES[politicalCategory(d.politicalCategory)];
+    if (category) lines.push(`🏛 <b>${lang === 'en' ? 'Category' : 'الفئة'}:</b> ${esc(lang === 'en' ? category.en : category.ar)}`);
+    lines.push(lang === 'en'
+      ? '⚠️ Opinion or analysis is not news; report verifiable developments only.'
+      : '⚠️ الرأي أو التحليل ليس خبراً؛ أدرج تطوراً قابلاً للتحقق فقط.');
+  }
   lines.push(`⏱ <b>${l.durLabel}:</b> ${fmtDur(d.ttlMin, lang)}`);
   return lines.join('\n');
 }
@@ -273,6 +335,7 @@ function govKeyboard(ctx, d) {
   if (d.adding) return kb.text(langOf(ctx) === 'en' ? '↩️ Back to preview' : '↩️ رجوع للمعاينة', 'addback');
   if (d.selectingFlightTarget) kb.text(lang === 'en' ? '➡️ Keep direction only' : '➡️ اتجاه عام بلا منطقة', 'flightdest:none').row();
   if (d.type === 'breaking') kb.text(l.btnNoLocation, 'noloc').row();
+  if (d.type === 'political') kb.text(lang === 'en' ? '📍 No verified location — no map pin' : '📍 موقع غير محدد — دون دبوس', 'pol:nopin').row();
   kb.text(l.btnCancel, 'cancel');
   return kb;
 }
@@ -427,7 +490,7 @@ function newDraft(ctx, type) {
   const d = {
     type,
     mode: staff(ctx) ? 'publish' : 'report',
-    step: type === 'military_incursion' ? 'vehicle_count' : type === 'breaking' ? 'text' : type === 'border' ? 'border' : type === 'air_movement' ? 'aircraft' : ['uav', 'warplane'].includes(type) ? 'flightmode' : 'gov',
+    step: type === 'political' ? 'political_category' : type === 'military_incursion' ? 'vehicle_count' : type === 'breaking' ? 'text' : type === 'border' ? 'border' : type === 'air_movement' ? 'aircraft' : ['uav', 'warplane'].includes(type) ? 'flightmode' : 'gov',
     ttlMin: typeOf(type).ttlMin,
     location: null,
     extra: [], // further areas of the same alert (publishing bot)
@@ -539,6 +602,27 @@ async function askCivilEmoji(ctx, d) {
   kb.text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en ? 'Choose the icon for this civil alert:' : 'اختر الرمز الذي سيظهر مع هذا البلاغ المدني:', kb);
 }
+async function askPoliticalCategory(ctx, d) {
+  d.step = 'political_category';
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard();
+  for (const [key, label] of Object.entries(POLITICAL_CATEGORIES)) kb.text(en ? label.en : label.ar, `pcat:${key}`).row();
+  kb.text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en
+    ? '🏛 <b>Political development</b>\n\nChoose the category. Opinions and analysis are not news.'
+    : '🏛 <b>تطور سياسي</b>\n\nاختر الفئة. الرأي والتحليل ليسا خبراً.', kb);
+}
+async function askPoliticalLocationMode(ctx, d) {
+  d.step = 'political_location_mode';
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard()
+    .text(en ? '📰 General political news — no location or pin (default)' : '📰 خبر سياسي عام — بلا موقع أو دبوس (الخيار الافتراضي)', 'pol:general').row()
+    .text(en ? '📍 Choose a verified location' : '📍 تحديد موقع مؤكد من القوائم', 'pol:location').row()
+    .text(L(ctx).btnBack, 'pol:category').text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en
+    ? 'Choose whether this development has a verified location. The default is general news with no map pin.'
+    : 'اختر إن كان للتطور موقع مؤكد. الخيار الافتراضي خبر عام بلا دبوس على الخريطة.', kb);
+}
 const locKey = (x) => (x ? `${x.scope}:${x.place_id || x.district || x.governorate || ''}:${Number(x.latitude).toFixed(3)},${Number(x.longitude).toFixed(3)}` : '');
 // a picked location: either the alert's (first) area, or one more area added from the preview
 async function pickLocation(ctx, d, loc) {
@@ -592,7 +676,7 @@ async function showPreview(ctx, d) {
 }
 
 export function buildAlertInput(d, author) {
-  const titles = TITLES[d.type];
+  const titles = TITLES[d.type] || { ar: typeOf(d.type).ar, en: typeOf(d.type).en };
   const loc = d.location || locationFrom({});
   const wxNames = { rain: ['أمطار غزيرة', 'Heavy rain'], snow: ['ثلوج', 'Snow'], wind: ['رياح قوية', 'Strong winds'], storm: ['عواصف رعدية', 'Thunderstorms'], heat: ['موجة حر', 'Heatwave'], frost: ['صقيع', 'Frost'], dust: ['غبار', 'Dust'] };
   const wx = d.type === 'weather' ? wxNames[d.meta?.hazard] : null;
@@ -614,6 +698,11 @@ export function buildAlertInput(d, author) {
   const flightTargetEn = flightTarget ? (d.flightDirection === 'leaving_syria' ? ` — from ${locName(flightTarget, 'en')}` : ` — toward ${locName(flightTarget, 'en')}`) : '';
   const vehicleCount = d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0 && d.vehicleCount <= VEHICLE_COUNT_MAX ? d.vehicleCount : null;
   const civilEmoji = d.type === 'civil' && CIVIL_EMOJIS[d.civilEmoji] ? d.civilEmoji : null;
+  const politicalMeta = d.type === 'political' ? {
+    category: politicalCategory(d.politicalCategory || d.politicalCategoryKey) || null,
+    sources: politicalSourcesFor(d),
+    sourceTimestamp: sourceIso(d.politicalSourceTimestamp),
+  } : null;
   const baseTitle = d.type === 'air_movement'
     ? (aircraft?.ar || titles.ar)
     : wx ? `${titles.ar}: ${wx[0]}${named ? ` — ${loc.name_ar}` : ''}` : named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar;
@@ -631,7 +720,7 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || civilEmoji || vehicleCount ? {
+    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || civilEmoji || vehicleCount || politicalMeta ? {
       meta: {
         ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
@@ -640,6 +729,7 @@ export function buildAlertInput(d, author) {
         ...(aircraft ? { aircraft: d.aircraft } : {}),
         ...(civilEmoji ? { civilEmoji } : {}),
         ...(vehicleCount ? { vehicleCount } : {}),
+        ...(politicalMeta ? { political: politicalMeta } : {}),
       },
     } : {}),
   };
@@ -1479,6 +1569,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const d = newDraft(ctx, type);
     if (type === 'breaking') {
       await show(ctx, L(ctx).askBreaking, new InlineKeyboard().text(L(ctx).btnCancel, 'cancel'));
+    } else if (type === 'political') {
+      await askPoliticalCategory(ctx, d);
     } else if (type === 'military_incursion') {
       await askVehicleCount(ctx, d);
     } else if (type === 'border') await askBorder(ctx, d);
@@ -1486,6 +1578,35 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     else if (type === 'civil') await askCivilEmoji(ctx, d);
     else if (type === 'uav' || type === 'warplane') await askAerialMode(ctx, d);
     else await askLocation(ctx, d);
+  });
+
+  bot.callbackQuery(/^pcat:([a-z]+)$/, async (ctx) => {
+    const d = getDraft(ctx);
+    if (!d) { await ctx.answerCallbackQuery(L(ctx).expiredSession); return; }
+    await ctx.answerCallbackQuery();
+    if (d.type !== 'political' || d.step !== 'political_category') return;
+    const category = politicalCategory(ctx.match[1]);
+    if (!category) return askPoliticalCategory(ctx, d);
+    d.politicalCategory = category;
+    return askPoliticalLocationMode(ctx, d);
+  });
+  bot.callbackQuery(/^pol:(general|location|category|nopin)$/, async (ctx) => {
+    const d = getDraft(ctx);
+    if (!d) { await ctx.answerCallbackQuery(L(ctx).expiredSession); return; }
+    await ctx.answerCallbackQuery();
+    const action = ctx.match[1];
+    if (d.type !== 'political') return;
+    if (action === 'category') return askPoliticalCategory(ctx, d);
+    if (action === 'location' && d.step === 'political_location_mode') {
+      d.politicalLocation = 'specific';
+      return askLocation(ctx, d);
+    }
+    if (action === 'general' && d.step === 'political_location_mode' || action === 'nopin' && d.step === 'gov') {
+      d.politicalLocation = 'general';
+      d.location = locationFrom({});
+      d.extra = [];
+      return afterLocation(ctx, d);
+    }
   });
 
   const needDraft = (fn) => async (ctx) => {

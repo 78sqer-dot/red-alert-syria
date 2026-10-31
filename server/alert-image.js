@@ -163,6 +163,12 @@ function markerSvg(type, cx, cy, k = 1, glyphOverride = null) {
     + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${bg}"/>`
     + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#ffffff">${g}</g></svg>`;
 }
+function politicalMarkerSvg(cx, cy) {
+  const g = GLYPHS[ALERT_TYPES.political.glyph] || GLYPHS.other || '';
+  const r = 28; const s = r * 1.18;
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#64748b" stroke="#ffffff" stroke-width="4"/>`
+    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#ffffff">${g}</g></svg>`;
+}
 
 // ------------------------------------------------------------------ main
 export async function alertImageSvg(alert, opts = {}) {
@@ -171,10 +177,11 @@ export async function alertImageSvg(alert, opts = {}) {
   const type = ALERT_TYPES[alert.type] ? alert.type : 'breaking';
   const t = ALERT_TYPES[type];
   const loc = alert.location || {};
-  const country = alert.scope === 'country' || !Number.isFinite(loc.latitude);
+  const politicalLocation = Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude) && alert.scope !== 'country';
+  const country = type === 'political' ? !politicalLocation : alert.scope === 'country' || !Number.isFinite(loc.latitude);
   const center = country ? { lat: 34.85, lon: 38.6 } : { lat: loc.latitude, lon: loc.longitude };
   // every alert type: a glowing circle over each affected area (main area + extra areas)
-  const zoned = !country;
+  const zoned = !country && type !== 'political';
   let zones = [];
   if (zoned) {
     zones = Array.isArray(alert.zones) && alert.zones.length ? alert.zones : alertZones({ ...alert, location: loc });
@@ -224,7 +231,7 @@ export async function alertImageSvg(alert, opts = {}) {
     if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph)); }
   } else if (!country) {
     const [x, y] = px(center.lat, center.lon);
-    o.push(markerSvg(type, x, y, 1, alert.marker_glyph));
+    o.push(type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph));
   }
   // attribution (required by the tile licence)
   o.push(`<rect x="${W - 210}" y="${HEAD + MAP_H - 26}" width="210" height="26" fill="#ffffff" opacity="0.75"/>`);

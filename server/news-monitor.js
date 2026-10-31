@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
 import { config, isOwner } from './config.js';
 import { store } from './store.js';
-import { ALERT_TYPES, typeOf, droneAuto, alertEmoji } from '../shared/types.js';
+import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji } from '../shared/types.js';
 import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
@@ -35,7 +35,7 @@ export function isRoadStatusOnlyPost(text) {
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
 // that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
-export const FILTER_VER = 7;
+export const FILTER_VER = 8;
 const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
@@ -261,6 +261,7 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
+  if (d?.type === 'political') return false; // Political developments always require human review.
   if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike'].includes(d.type)) return false;
   if (!d.loc || d.loc.scope === 'country' || !Number.isFinite(d.loc.latitude) || !Number.isFinite(d.loc.longitude)) return false;
   const ss = d.srcs || [];
@@ -328,6 +329,11 @@ export function sameIncident(c, k) {
   const sim = textSim(c.headline, k.headline);
   const bothKnownAndNear = !c.geo.none && !k.geo.none && near(c.geo, k.geo);
   const locationMissing = c.geo.none || k.geo.none;
+  if (c.type === 'political' || k.type === 'political') {
+    return c.type === 'political' && k.type === 'political'
+      && !!c.politicalCategory && c.politicalCategory === k.politicalCategory
+      && sim >= 0.82;
+  }
   if (c.type === 'breaking' || k.type === 'breaking') {
     if (c.type !== k.type) return (bothKnownAndNear && sim >= 0.25) || (locationMissing && sim >= 0.85);
     return (bothKnownAndNear && sim >= 0.2) || (locationMissing && sim >= 0.85);
@@ -347,17 +353,18 @@ function knownEvents(hours = 12) {
     if (d.test || (d.ts || d.created) < since) continue;
     const locs = locsOf(d.loc, d.extra);
     if (d.alertId) fromDraft.add(d.alertId);
-    out.push({ kind: 'draft', status: d.status, draftId: d.id, type: d.type, ts: d.ts || d.created, headline: d.headline, where: whereOf(locs), geo: geoOf(locs) });
+    out.push({ kind: 'draft', status: d.status, draftId: d.id, type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: d.headline, where: whereOf(locs), geo: geoOf(locs) });
   }
   for (const a of n.alerts) {
     if (a.ts < since || fromDraft.has(a.id)) continue;
-    out.push({ kind: 'alert', status: 'published', type: a.type, ts: a.ts, headline: a.headline, where: a.where, geo: a.geo });
+    const stored = store.getAlert(a.id);
+    out.push({ kind: 'alert', status: 'published', type: a.type, politicalCategory: a.politicalCategory || stored?.meta?.political?.category, ts: a.ts, headline: a.headline, where: a.where, geo: a.geo });
   }
   for (const rep of Object.values(store.state.reports || {})) {
     const d = rep?.draft;
     if (!d || !ALERT_TYPES[d.type] || (rep.created || 0) < since) continue;
     const locs = locsOf(d.location, d.extra);
-    out.push({ kind: 'report', status: 'pending-report', type: d.type, ts: rep.created, headline: [typeOf(d.type).ar, d.text || d.details || '', whereOf(locs)].join(' '), where: whereOf(locs), geo: geoOf(locs) });
+    out.push({ kind: 'report', status: 'pending-report', type: d.type, politicalCategory: d.meta?.political?.category || d.politicalCategory, ts: rep.created, headline: [typeOf(d.type).ar, d.text || d.details || '', whereOf(locs)].join(' '), where: whereOf(locs), geo: geoOf(locs) });
   }
   return out.sort((a, b) => b.ts - a.ts);
 }
@@ -373,7 +380,7 @@ function rememberAlert(pa) {
   for (const x of pa.more || []) locs.push({ ...x });
   const geo = geoOf(locs);
   for (const z of pa.zones || []) geo.pts.push({ lat: z.lat, lon: z.lon });
-  n.alerts.push({ id: pa.id, type: pa.type, ts: Date.parse(pa.timestamp) || Date.now(), headline: [pa.title, pa.description || ''].join(' ').trim(), where: whereOf(locs), geo });
+  n.alerts.push({ id: pa.id, type: pa.type, politicalCategory: pa.political_category || pa.meta?.political?.category, ts: Date.parse(pa.timestamp) || Date.now(), headline: [pa.title, pa.description || ''].join(' ').trim(), where: whereOf(locs), geo });
   save(false);
 }
 
@@ -390,14 +397,22 @@ function cardText(d, lang = 'ar') {
   if (locs.length > 1) {
     lines.push(`📍 <b>${tr(lang, `المناطق (${locs.length})`, `Areas (${locs.length})`)}:</b>`);
     for (const l of locs) lines.push(`• ${esc(fmtLoc(l))}`);
-  } else lines.push(`📍 <b>${tr(lang, 'المكان', 'Place')}:</b> ${esc(locs[0] ? fmtLoc(locs[0]) : tr(lang, 'سوريا', 'Syria'))}`);
+  } else lines.push(`📍 <b>${tr(lang, 'المكان', 'Place')}:</b> ${esc(locs[0] ? fmtLoc(locs[0]) : d.type === 'political' ? tr(lang, 'غير محدد داخل سوريا', 'Unspecified within Syria') : tr(lang, 'سوريا', 'Syria'))}`);
   lines.push(`📝 ${esc(d.headline)}`);
+  if (d.type === 'political') {
+    const category = POLITICAL_CATEGORIES[d.politicalCategory];
+    lines.push(category
+      ? `🏛 ${tr(lang, 'الفئة', 'Category')}: ${esc(lang === 'en' ? category.en : category.ar)}`
+      : tr(lang, '⚠️ <b>الفئة السياسية غير محددة — اخترها قبل النشر.</b>', '⚠️ <b>Political category is missing — choose one before publishing.</b>'));
+  }
   if (d.type === 'weather' && d.body) lines.push('', esc(d.body));
   const isLocal = (s) => s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local;
   const srcs = (d.srcs || []).map((s) => (s.url ? `<a href="${esc(s.url)}">${esc(s.name)}</a>` : esc(s.name)) + (isLocal(s) ? tr(lang, ' <i>(محلي)</i>', ' <i>(local)</i>') : ''));
   lines.push('', `🗞 <b>${tr(lang, `المصادر (${srcs.length})`, `Sources (${srcs.length})`)}:</b> ${srcs.join(' · ')}`);
   const nMain = (d.srcs || []).filter((s) => !isLocal(s)).length;
-  if ((d.srcs || []).length >= 2) lines.push(tr(lang, `✅ <i>مؤكد من ${((k) => (k === 2 ? 'مصدرين' : k <= 10 ? `${k} مصادر` : `${k} مصدراً`))((d.srcs || []).length)}</i>`, `✅ <i>Confirmed by ${(d.srcs || []).length} sources</i>`));
+  if (d.type === 'political') {
+    lines.push(tr(lang, 'ℹ️ <i>صياغة منسوبة لما نشرته المصادر — ليست تحققاً مستقلاً، وتحتاج مراجعة بشرية.</i>', 'ℹ️ <i>Attributed to the cited sources; this is not independent verification and needs human review.</i>'));
+  } else if ((d.srcs || []).length >= 2) lines.push(tr(lang, `✅ <i>مؤكد من ${((k) => (k === 2 ? 'مصدرين' : k <= 10 ? `${k} مصادر` : `${k} مصدراً`))((d.srcs || []).length)}</i>`, `✅ <i>Confirmed by ${(d.srcs || []).length} sources</i>`));
   else if (!nMain) lines.push(tr(lang, '⚠️ <i>مصدر محلي/ناشط واحد — غير مؤكد بعد، تأكد قبل النشر.</i>', '⚠️ <i>Single local/activist source — not confirmed yet, check before publishing.</i>'));
   lines.push(`🕒 ${tr(lang, 'أول خبر', 'First report')}: ${esc(clock(d.ts || d.created))} ${tr(lang, '(بتوقيت دمشق)', '(Damascus time)')}`);
   if (d.rule) lines.push(tr(lang, '⚙️ <i>تصنيف آلي بسيط (الذكاء الاصطناعي غير متاح حالياً) — راجع النوع والمكان.</i>', '⚙️ <i>Simple automatic classification (AI unavailable) — check type and place.</i>'));
@@ -408,6 +423,7 @@ function cardKb(d, lang = 'ar') {
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
     .text(tr(lang, '🏷 تغيير النوع', '🏷 Change type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id)
   ;
+  if (d.type === 'political') kb.row().text(tr(lang, '🏛 الفئة السياسية', '🏛 Political category'), 'nw:pc:' + d.id);
   // Telegram refuses a whole message when one button has an empty text: the extra row only for drones
   if (d.type === 'uav') kb.row().text(intenseLabel(d, lang), 'nw:i:' + d.id);
   return kb;
@@ -417,6 +433,14 @@ const intenseLabel = (d, lang) => (lang === 'en' ? `🛸 Intensive flight: ${int
 function typeKb(d, lang = 'ar') {
   const kb = new InlineKeyboard();
   NEWS_TYPES.forEach((k, i) => { kb.text(`${d.type === k ? '• ' : ''}${ALERT_TYPES[k].emoji} ${lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`, `nw:s:${d.id}:${k}`); if (i % 2 === 1) kb.row(); });
+  return kb.row().text(tr(lang, '↩️ رجوع', '↩️ Back'), 'nw:b:' + d.id);
+}
+function politicalCategoryKb(d, lang = 'ar') {
+  const kb = new InlineKeyboard();
+  Object.entries(POLITICAL_CATEGORIES).forEach(([key, value], i) => {
+    kb.text(`${d.politicalCategory === key ? '• ' : ''}${lang === 'en' ? value.en : value.ar}`, `nw:ps:${d.id}:${key}`);
+    if (i % 2 === 1) kb.row();
+  });
   return kb.row().text(tr(lang, '↩️ رجوع', '↩️ Back'), 'nw:b:' + d.id);
 }
 async function sendCards(d, only = null) {
@@ -556,6 +580,11 @@ export function toBotDraft(d) {
     created: Date.now(), source: 'news',
     ...(d.type === 'weather' && d.hazard ? { meta: { hazard: d.hazard } } : {}),
     ...(typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
+    ...(d.type === 'political' ? {
+      politicalCategory: POLITICAL_CATEGORIES[d.politicalCategory] ? d.politicalCategory : null,
+      politicalSources: (d.srcs || []).map((s) => ({ name: s.name || s.u || '', url: s.url || '', timestamp: Number.isFinite(s.ts) ? new Date(s.ts).toISOString() : null })),
+      politicalSourceTimestamp: Number.isFinite(d.ts) ? new Date(d.ts).toISOString() : null,
+    } : {}),
   };
 }
 
@@ -656,14 +685,15 @@ async function handleResult(it, r, known, pmap) {
   const locs = buildLocations(r, it);
   const tidy = (x) => cleanAlertText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/\s+/g, ' ').trim();
   const headline = (tidy(r.headline) || tidy(it.text.split('\n')[0])).slice(0, 160);
-  const cand = { type: r.type, ts: it.ts, headline, geo: geoOf(locs) };
+  const politicalCategory = POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null;
+  const cand = { type: r.type, politicalCategory, ts: it.ts, headline, geo: geoOf(locs) };
   if (target && !sameIncident(cand, target)) {
     note(it, `AI same_as rejected: event type/location/time mismatch (${r.same_as})`);
     target = null;
     rejectedSameAs = true;
   }
   if (!target) target = known.find((k) => sameIncident(cand, k)) || null;
-  if (!target && r.new_incident === false && !rejectedSameAs) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
+  if (!target && r.new_incident === false && !rejectedSameAs && !(r.type === 'political' && !politicalCategory)) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
   if (target) {
     pmap.set(it.i, target);
     const d = target.draftId ? n.drafts[target.draftId] : null;
@@ -671,10 +701,11 @@ async function handleResult(it, r, known, pmap) {
     n.stats.dupes++; note(it, `duplicate of ${target.kind} (${target.status})`); return;
   }
   if (!n.types[r.type]) { note(it, `type ${r.type} switched off`); return; }
-  if (!locs.length) { note(it, 'no verified Syrian place found'); return; }
+  if (!locs.length && r.type !== 'political') { note(it, 'no verified Syrian place found'); return; }
   if (capReached()) { note(it, 'hourly cap reached'); return; }
   const d = {
-    id: rid(), type: r.type, loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
+    id: rid(), type: r.type, ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
+    loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
     sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
   };
@@ -1020,6 +1051,9 @@ export function registerNewsTools(bot, h) {
       await closeCards(d, cur(ctx));
       return vanish(ctx, t(ctx, 'تم التجاهل — لن يصلك هذا الحدث مرة ثانية', 'Ignored — this incident will not come back'));
     }
+    if (d.type === 'political' && !POLITICAL_CATEGORIES[d.politicalCategory] && (act === 'p' || act === 'e')) {
+      return toast(ctx, t(ctx, 'اختر فئة سياسية صالحة قبل النشر أو التعديل', 'Choose a valid political category before publishing or editing'), true);
+    }
     if (act === 'e') {
       d.status = 'editing'; d.by = ctx.from.id; save();
       await toast(ctx, '');
@@ -1050,13 +1084,34 @@ export function registerNewsTools(bot, h) {
     if (alert?.channel_message_id && config.channel.startsWith('@')) kb.url(t(ctx, '📣 المنشور', '📣 Post'), `https://t.me/${config.channel.slice(1)}/${alert.channel_message_id}`);
     await h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ تم النشر: ${typeOf(d.type).emoji} ${esc(typeOf(d.type).ar)} — ${esc(whereOf(locsOf(d.loc, d.extra)))}`, `✅ Published: ${typeOf(d.type).emoji} ${esc(typeOf(d.type).en)}`), { parse_mode: 'HTML', reply_markup: kb });
   });
+  bot.callbackQuery(/^nw:pc:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    if (!d || d.type !== 'political' || d.status !== 'pending') return toast(ctx, '');
+    await toast(ctx, '');
+    try { await ctx.editMessageReplyMarkup({ reply_markup: politicalCategoryKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
+  });
+  bot.callbackQuery(/^nw:ps:(\w+):(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const [, id, category] = ctx.match;
+    const d = await findDraft(id);
+    if (!d || d.type !== 'political' || d.status !== 'pending' || !POLITICAL_CATEGORIES[category]) return toast(ctx, '');
+    d.politicalCategory = category;
+    d.politicalNeedsCategory = false;
+    save();
+    await toast(ctx, h.langOf(ctx) === 'en' ? POLITICAL_CATEGORIES[category].en : POLITICAL_CATEGORIES[category].ar);
+    await refreshCards(d);
+  });
   bot.callbackQuery(/^nw:s:(\w+):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const [, id, type] = ctx.match;
     const d = await findDraft(id);
     if (!d || !NEWS_TYPES.includes(type)) return vanish(ctx, t(ctx, 'هذه المسودة لم تعد متاحة', 'This draft is no longer available'));
     if (d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجتها مسبقاً ✔️', 'already handled ✔️'));
-    d.type = type; save();
+    d.type = type;
+    if (type !== 'political') { delete d.politicalCategory; delete d.politicalNeedsCategory; }
+    else d.politicalNeedsCategory = !POLITICAL_CATEGORIES[d.politicalCategory];
+    save();
     await toast(ctx, `${ALERT_TYPES[type].emoji} ${en(ctx) ? ALERT_TYPES[type].en : ALERT_TYPES[type].ar}`);
     await refreshCards(d);
   });
@@ -1100,8 +1155,8 @@ export function registerNewsTools(bot, h) {
     return [
       t(ctx, '📡 <b>الرصد الإخباري التلقائي</b>', '📡 <b>Automatic news monitor</b>'),
       '',
-      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>بالنهار، الخبر المؤكد من مصدر رئيسي أو مصدرين يُنشر تلقائياً بعد دقيقتين إذا ما وافقت أو تجاهلت؛ وبالليل يبقى النشر التلقائي حسب إعداداته.</b> والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
-        'The server watches Syrian news channels around the clock; each new incident arrives here as a ready draft (type, place, sources). <b>By day, a confirmed AI-classified item backed by a main source or two sources is auto-published after 2 minutes if you do not approve or ignore it; overnight auto-publishing keeps its current settings.</b> Repeated incidents never come twice.'),
+      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>بالنهار، الخبر المؤهل يُنشر تلقائياً بعد دقيقتين إذا ما وافقت أو تجاهلت؛ وبالليل يبقى النشر التلقائي حسب إعداداته. الأخبار السياسية تبقى دائماً للمراجعة البشرية ولا تُنشر تلقائياً.</b> والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
+        'The server watches Syrian news channels around the clock; each new incident arrives as a ready draft (type, place, sources). <b>Eligible items may auto-publish after 2 minutes by day or under the overnight settings. Political developments always require human review and are never auto-published.</b> Repeated incidents never come twice.'),
       '',
       `${t(ctx, 'الحالة', 'Status')}: ${n.on ? t(ctx, '✅ يعمل', '✅ running') : t(ctx, '⏸ متوقف', '⏸ paused')}${n.on ? ` · ${t(ctx, 'آخر فحص', 'last check')} ${ago(R.lastPollAt, ctx)}` : ''}`,
       `${t(ctx, 'التصنيف', 'Classification')}: ${ai}`,
@@ -1151,10 +1206,10 @@ export function registerNewsTools(bot, h) {
     return [
       t(ctx, '🌙 <b>النشر الليلي التلقائي</b>', '🌙 <b>Night auto-publish</b>'),
       '',
-      t(ctx, 'بهالساعات (بتوقيت دمشق) مسودات الرصد بتنزل لحالها عالقناة والخريطة بنفس القالب وصورة الخريطة، ومن دون أي مصدر أو رابط. المكرر (منشور، أو بانتظارك، أو متجاهَل، أو نفس الحدث من مصدر تاني) ما بينزل، والتنبيه بينشال من الخريطة بوقته العادي.',
-        'During these hours (Damascus time) monitor drafts are published to the channel and the map by themselves, same template and map image, no source or link. Duplicates never go out, and alerts leave the map on their normal timer.'),
+      t(ctx, 'بهالساعات (بتوقيت دمشق) المسودات المؤهلة بتنزل لحالها عالقناة والخريطة بنفس القالب وصورة الخريطة. الأخبار السياسية تبقى دائماً للمراجعة البشرية ولا تُنشر تلقائياً. المكرر ما بينزل، والتنبيه بينشال من الخريطة بوقته العادي.',
+        'During these hours (Damascus time), eligible drafts publish to the channel and map with the usual template. Political developments always require human review and are never auto-published. Duplicates never go out, and alerts leave the map on their normal timer.'),
       '',
-      t(ctx, '• بينشر بس الخبر المؤكد من مصدر رئيسي أو من مصدرين. خبر من مصدر محلي/ناشط وحيد، أو تصنيف بسيط بدون Gemini، بيضل مسودة إلك (بدون صوت).', '• Only drafts backed by a main source or two sources. A single local/activist source, or a rules-only classification, stays a (silent) draft for you.'),
+      t(ctx, '• بينشر الخبر المؤهل فقط؛ خبر من مصدر محلي/ناشط وحيد أو تصنيف بسيط بدون Gemini بيضل مسودة. وكل خبر سياسي يبقى للمراجعة البشرية مهما تعددت مصادره.', '• Only eligible drafts auto-publish. A single local/activist source or rules-only classification stays a draft; political news always waits for human review regardless of source count.'),
       t(ctx, '• كل منشور تلقائي بيوصلك إشعار صامت فيه زر ↩️ تراجع (بيحذفه من القناة والخريطة).', '• Each auto-post sends you a silent notice with ↩️ Undo (removes it from the channel and map).'),
       t(ctx, '• بلاغات بوت التبليغ ما بتنتشر تلقائياً — بتضل لمراجعتك.', '• Report-bot reports are never auto-published — they stay for your review.'),
       '',
