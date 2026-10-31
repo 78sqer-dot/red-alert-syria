@@ -5,6 +5,7 @@ import { EXTRA_SVG } from './target-svgs.js?v=2';
 import { icon } from './icons.js';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
 import { squadLayout } from './aircraft-layout.js';
+import { flightPath, flightPosition } from '/shared/flight-path.js?v=1';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
@@ -298,6 +299,7 @@ export class AlertMap {
     if (!map.getSource('ras-mask')) map.addSource('ras-mask', { type: 'geojson', data: maskFeature(border) });
     if (!map.getSource('ras-govs')) map.addSource('ras-govs', { type: 'geojson', data: govs });
     if (!map.getSource('ras-zones')) map.addSource('ras-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    if (!map.getSource('ras-flight-paths')) map.addSource('ras-flight-paths', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
 
     if (this.opts.layer !== 'satellite') {
       add({ id: 'ras-hillshade', type: 'hillshade', source: 'ras-dem-hs', paint: { 'hillshade-exaggeration': dark ? 0.18 : 0.28, 'hillshade-shadow-color': dark ? '#000000' : '#5a5a70', 'hillshade-highlight-color': dark ? '#2a2a35' : '#ffffff', 'hillshade-accent-color': dark ? '#000000' : '#6a6a80' } });
@@ -314,10 +316,12 @@ export class AlertMap {
     add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.22 : 0.17, 0.05) } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.8, 0.3), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 11, 1.6] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.85, 0.3), 'line-width': 1.8, 'line-dasharray': [3, 4] } });
+    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': '#3b82f6', 'line-opacity': 0.62, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.4, 10, 2.4], 'line-dasharray': [2, 2] } });
     this._startGlow();
     this.applyToggles();
     this.updateZones();
     this.refreshMarkerGroups();
+    this.syncMovementTracks();
   }
 
   /** services map mode (public/js/services.js): hide the news markers and circles until the user goes back */
@@ -326,13 +330,14 @@ export class AlertMap {
     this.el.classList.toggle('news-off', this.newsHidden);
     if (on) this.closePopup();
     const map = this.map; if (!map) return;
-    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'none' : 'visible');
+    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-path-line']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'none' : 'visible');
+    this.syncMovementTracks();
   }
   applyToggles() {
     const map = this.map;
     if (!map || !map.getLayer('ras-border')) return;
     const vis = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
-    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash']) vis(id, !this.newsHidden);
+    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-path-line']) vis(id, !this.newsHidden);
     vis('ras-gov-line', this.opts.showGov);
     vis('ras-mask', this.opts.focusSyria);
     // 3D kept light so it stays smooth: one shared low-zoom DEM, gentle exaggeration and tilt, and on phones
@@ -357,6 +362,7 @@ export class AlertMap {
     this.alerts = alerts;
     this.selectedId = selectedId;
     this.syncMovementNotice();
+    this.syncMovementTracks();
     if (this.ready) this.render();
   }
 
@@ -376,7 +382,7 @@ export class AlertMap {
       const notice = document.createElement('button');
       notice.type = 'button';
       notice.className = 'map-flight-status';
-      notice.innerHTML = '<span class="map-flight-label"></span><span class="map-flight-flow" dir="ltr"></span>';
+      notice.innerHTML = '<span class="map-flight-main"><span class="map-flight-label"></span><span class="map-flight-flow" dir="ltr"></span></span><small class="map-flight-note"></small>';
       notice.addEventListener('click', (event) => {
         event.stopPropagation();
         const id = notice.dataset.alertId;
@@ -405,10 +411,81 @@ export class AlertMap {
     flow.replaceChildren(...(alert.flight_direction === 'leaving_syria' ? [destination, arrow, plane] : [plane, arrow, destination]));
     const label = movements.length > 1 ? `${direction} (+${movements.length - 1})` : direction;
     this.movementNotice.querySelector('.map-flight-label').textContent = label;
+    this.movementNotice.querySelector('.map-flight-note').textContent = lang === 'en' ? 'Schematic route · location unspecified' : 'مسار توضيحي · الموقع غير محدد';
     this.movementNotice.dataset.alertId = alert.id;
     this.movementNotice.classList.toggle('is-leaving', alert.flight_direction === 'leaving_syria');
-    this.movementNotice.setAttribute('aria-label', `${direction}: ${country}`);
+    this.movementNotice.setAttribute('aria-label', `${direction}: ${country} — ${lang === 'en' ? 'schematic route, not a live track' : 'مسار توضيحي وليس تتبعاً مباشراً'}`);
     this.movementNotice.title = this.movementNotice.getAttribute('aria-label');
+  }
+
+  // Direction-only reports deliberately have no location pin; these animated aircraft follow a
+  // clearly labelled schematic path so viewers can see entering/approaching/leaving motion.
+  syncMovementTracks() {
+    const map = this.map;
+    const source = map?.getSource('ras-flight-paths');
+    if (!map || !source) return;
+    const M = ml();
+    if (!this.movementTracks) this.movementTracks = new Map();
+    const active = this.newsHidden ? [] : this.alerts
+      .filter((a) => a.type === 'air_movement' && a.is_active && FLIGHT_DIRECTIONS[a.flight_direction]
+        && !Number.isFinite(a.location?.latitude) && !Number.isFinite(a.location?.longitude))
+      .sort((a, b) => (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0))
+      .slice(0, 3);
+    const features = [];
+    const keep = new Set();
+    const reducedMotion = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    active.forEach((alert, index) => {
+      const path = flightPath(alert.flight_direction);
+      if (path.length < 2) return;
+      keep.add(alert.id);
+      features.push({ type: 'Feature', properties: { id: alert.id }, geometry: { type: 'LineString', coordinates: path } });
+      const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
+      const color = aircraft === 'uav' ? '#8b95a3' : '#3b82f6';
+      const signature = `${aircraft}|${alert.flight_direction}`;
+      let track = this.movementTracks.get(alert.id);
+      if (track && track.signature !== signature) {
+        cancelAnimationFrame(track.frame);
+        track.marker.remove();
+        this.movementTracks.delete(alert.id);
+        track = null;
+      }
+      if (!track) {
+        const el = document.createElement('div');
+        el.className = `map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'}`;
+        el.setAttribute('aria-hidden', 'true');
+        el.title = this.opts.lang === 'en' ? 'Schematic route · not a live track' : 'مسار توضيحي · ليس مساراً حقيقياً';
+        const halo = document.createElement('span'); halo.className = 'map-flight-track-halo';
+        const airframe = document.createElement('span'); airframe.className = 'map-flight-track-airframe';
+        airframe.innerHTML = svgTag(aircraft, 25, `fill="${color}" class="map-flight-track-svg"`);
+        el.append(halo, airframe);
+        const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat(path[0]).addTo(map);
+        track = { marker, element: el, airframe, signature, start: performance.now() + index * 2200, frame: 0, last: 0 };
+        this.movementTracks.set(alert.id, track);
+      }
+      const tick = (now) => {
+        if (!this.movementTracks?.has(alert.id)) return;
+        if (now - track.last >= 1000 / 24 && !this.el.classList.contains('is-moving')) {
+          track.last = now;
+          const progress = reducedMotion ? 0.72 : ((Math.max(0, now - track.start) % 10_000) / 10_000);
+          const pos = flightPosition(path, progress);
+          if (pos) {
+            track.marker.setLngLat([pos.lon, pos.lat]);
+            track.marker.setRotation((pos.bearing || 0) - (aircraft === 'uav' ? 0 : 45));
+            track.element.style.opacity = reducedMotion ? '1' : String(Math.max(0.28, Math.min(1, Math.min(progress * 9, (1 - progress) * 7))));
+          }
+        }
+        if (reducedMotion) { track.frame = 0; return; }
+        track.frame = requestAnimationFrame(tick);
+      };
+      if (!track.frame) track.frame = requestAnimationFrame(tick);
+    });
+    for (const [id, track] of this.movementTracks) {
+      if (keep.has(id)) continue;
+      cancelAnimationFrame(track.frame);
+      track.marker.remove();
+      this.movementTracks.delete(id);
+    }
+    source.setData({ type: 'FeatureCollection', features });
   }
 
   selectMarker(id) {
