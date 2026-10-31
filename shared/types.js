@@ -66,8 +66,8 @@ export const ALERT_TYPES = {
   },
   assassination: {
     ar: 'اغتيال', en: 'Assassination', button_ar: 'اغتيال', button_en: 'Assassination',
-    emoji: '🎯', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
-    marker: 'icon', glyph: 'weapon', icon: '#b91c1c', size: 32, zone: false, tag_ar: 'اغتيال', tag_en: 'Assassination',
+    emoji: '', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
+    marker: 'icon', glyph: 'pistol', icon: '#111827', size: 32, zone: false, tag_ar: 'اغتيال', tag_en: 'Assassination',
   },
   artillery: {
     ar: 'قصف مدفعي', en: 'Artillery shelling', button_ar: 'قصف مدفعي', button_en: 'Artillery',
@@ -126,8 +126,8 @@ export const ALERT_TYPES = {
   },
   shooting: {
     ar: 'إطلاق نار', en: 'Gunfire', button_ar: 'إطلاق نار', button_en: 'Gunfire',
-    emoji: '🔊', color: '#dc2626', ring: '#991b1b', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'weapon', icon: '#dc2626', size: 32, zone: false, tag_ar: 'إطلاق_نار', tag_en: 'Gunfire',
+    emoji: '', color: '#dc2626', ring: '#991b1b', group: 'civil', parent: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'pistol', icon: '#111827', size: 32, zone: false, tag_ar: 'إطلاق_نار', tag_en: 'Gunfire',
   },
   quake: {
     ar: 'زلزال', en: 'Earthquake', button_ar: 'زلزال', button_en: 'Earthquake',
@@ -203,9 +203,16 @@ export function typeOf(key) {
   return ALERT_TYPES[key] || ALERT_TYPES.breaking;
 }
 
-// Keep assassination markers neutral: never turn report text into a pistol or rifle drawing.
+// Use a monochrome firearm silhouette; specialize to a rifle only when the report explicitly says so.
 export function assassinationWeaponGlyph(alert) {
-  return alert?.type === 'assassination' ? 'weapon' : null;
+  if (alert?.type !== 'assassination') return null;
+  const text = [alert.title, alert.title_en, alert.description, alert.description_en, alert.details, alert.text]
+    .filter(Boolean).join(' ').toLowerCase().normalize('NFKC')
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[إأآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+  const rifle = /(?:كلاشنكوف|كلاشينكوف|بندقيه|\b(?:assault\s+)?rifles?\b|\bkalashnikov\b|\bak(?:[- ]?(?:47|74|m))?\b)/i.test(text);
+  const pistol = /(?:مسدس|طبنجه|\bpistols?\b|\bhandguns?\b|\brevolvers?\b)/i.test(text);
+  return rifle && !pistol ? 'rifle' : 'pistol';
 }
 
 export function dimColor(hex, alpha = 0.12) {

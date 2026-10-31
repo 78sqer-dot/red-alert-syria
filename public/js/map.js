@@ -1,7 +1,7 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=21';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=22';
 import { SVG } from './marker-svgs.js?v=18';
-import { EXTRA_SVG } from './target-svgs.js?v=6';
+import { EXTRA_SVG } from './target-svgs.js?v=7';
 import { icon } from './icons.js?v=2';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
 import { squadLayout } from './aircraft-layout.js';
@@ -665,7 +665,9 @@ export class AlertMap {
 
   markerEl(a) {
     const t = typeOf(a.type);
-    const glyph = a.marker_glyph === 'weapon' ? 'weapon' : a.type === 'assassination' ? assassinationWeaponGlyph(a) : t.glyph;
+    const glyph = a.type === 'assassination' ? assassinationWeaponGlyph(a)
+      : a.type === 'shooting' ? 'pistol'
+        : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${t.marker}`;
     el.style.setProperty('--c', t.color);
@@ -818,7 +820,8 @@ export class AlertMap {
         continue;
       }
       if (z < 10.5) continue;
-      const px = Math.max(8, Math.min(12, Math.round((o.km * 1000) / mpp)));
+      // Match the visible circle's radius exactly; do not keep the drone orbit near its center.
+      const px = Math.max(10, Math.round((o.km * 1000) / mpp));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
     if (z >= 10.5 && this.sats) for (const m of this.sats.values()) {

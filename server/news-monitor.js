@@ -393,7 +393,8 @@ function cardText(d, lang = 'ar') {
   lines.push(d.test
     ? tr(lang, '🧪 <b>تجربة — هذه مسودة تجريبية، لن يُنشر شيء</b>', '🧪 <b>TEST — a test draft, nothing will be published</b>')
     : tr(lang, '📡 <b>رصد إخباري — مسودة جاهزة للنشر</b>', '📡 <b>News monitor — draft ready to publish</b>'));
-  lines.push('', `<b>${alertEmoji({ type: d.type, hazard: d.hazard })} ${esc(lang === 'en' ? t.en : t.ar)}</b>`);
+  const typeEmoji = alertEmoji({ type: d.type, hazard: d.hazard });
+  lines.push('', `<b>${typeEmoji ? `${typeEmoji} ` : ''}${esc(lang === 'en' ? t.en : t.ar)}</b>`);
   if (locs.length > 1) {
     lines.push(`📍 <b>${tr(lang, `المناطق (${locs.length})`, `Areas (${locs.length})`)}:</b>`);
     for (const l of locs) lines.push(`• ${esc(fmtLoc(l))}`);

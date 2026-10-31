@@ -332,6 +332,8 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .ic { position: absolute; left: 0; top: 0; width: 30px; height: 30px; transform: translate(-50%, -50%); transition: transform .15s; }
 .ic-svg { display: block; fill: var(--ic); overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.75)) drop-shadow(0 1px 2px rgba(255,255,255,.6)); }
 html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
+.ic-pistol, .ic-rifle { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #f8fafc; border: 1px solid #111827; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
+.ic-pistol .ic-svg, .ic-rifle .ic-svg { width: 24px; height: 24px; fill: #111827; filter: none; }
 .mk:hover .ic, .mk.sel .ic { transform: translate(-50%, -50%) scale(1.25); }
 .mk.sel .ic-svg { filter: drop-shadow(0 0 1px rgba(0,0,0,.8)) drop-shadow(0 0 6px var(--ic)); }
 .mk.inactive .ic { opacity: .55; }

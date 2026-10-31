@@ -18,7 +18,8 @@ test('drone marker resumes its circular flight at detailed zoom', () => {
   assert.match(css, /\.maplibregl-map\.zoom-detail \.uav\s*\{\s*animation:\s*uavOrbit 9s linear infinite;\s*\}/);
   assert.doesNotMatch(css, /uavHover/);
   assert.match(mapJs, /classList\.toggle\('zoom-detail', z >= 10\.5\)/);
-  assert.match(mapJs, /if \(z < 10\.5\) continue;/);
+  assert.match(mapJs, /if \(z < 10\.5\) continue;\s*\/\/ Match the visible circle's radius exactly; do not keep the drone orbit near its center\.\s*const px = Math\.max\(10, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\);/);
+  assert.doesNotMatch(mapJs, /Math\.min\(12, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
   assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });
 

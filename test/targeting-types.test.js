@@ -6,6 +6,7 @@ import { NEWS_TYPES, keywordTypes, refineType, ruleClassify } from '../server/ne
 import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
 import { SVG } from '../public/js/marker-svgs.js';
+import { markerSvg } from '../server/alert-image.js';
 
 const mapSource = readFileSync(new URL('../public/js/map.js', import.meta.url), 'utf8');
 const mapCss = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
@@ -81,34 +82,37 @@ test('military vehicle incursion has a vehicle marker and stays manual-only', ()
   assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'vehicle incursion is not automatically classified from news');
 });
 
-test('assassination uses a neutral target symbol and appears in the strikes filter', () => {
+test('assassination uses a black firearm drawing and appears in the strikes filter', () => {
   const type = ALERT_TYPES.assassination;
   assert.ok(TYPE_KEYS.includes('assassination'));
   assert.ok(ALERT_GROUPS.strikes.types.includes('assassination'));
-  assert.equal(type.emoji, '🎯', 'assassination uses a target symbol instead of a pistol');
+  assert.equal(type.emoji, '', 'leave the Telegram button text-only instead of a colored emoji');
   assert.equal(type.marker, 'icon');
-  assert.equal(type.glyph, 'weapon');
-  assert.match(EXTRA_SVG.weapon, /<path/);
-  assert.equal(EXTRA_SVG.rifle, undefined);
-  assert.equal(EXTRA_SVG.pistol, undefined);
+  assert.equal(type.glyph, 'pistol');
+  assert.equal(type.icon, '#111827');
+  assert.match(EXTRA_SVG.rifle, /<path/);
+  assert.match(EXTRA_SVG.pistol, /<path/);
   assert.ok(NEWS_TYPES.includes('assassination'));
 });
 
-test('shooting alerts use a sound symbol and neither type exposes a pistol emoji', () => {
-  assert.equal(ALERT_TYPES.shooting.emoji, '🔊');
-  assert.equal(alertEmoji({ type: 'shooting' }), '🔊');
-  assert.equal(ALERT_TYPES.assassination.emoji, '🎯');
-  assert.notEqual(ALERT_TYPES.shooting.emoji, '🔫');
-  assert.notEqual(ALERT_TYPES.assassination.emoji, '🔫');
+test('shooting and assassination expose no colored emoji and use firearm drawings in channel images', () => {
+  assert.equal(ALERT_TYPES.shooting.emoji, '');
+  assert.equal(alertEmoji({ type: 'shooting' }), '');
+  assert.equal(ALERT_TYPES.assassination.emoji, '');
+  const pistol = markerSvg('shooting', 100, 100, 1, null, { type: 'shooting' });
+  assert.match(pistol, /fill="#f8fafc"/);
+  assert.match(pistol, /<g fill="#111827">[\s\S]*M56 176/);
+  const rifle = markerSvg('assassination', 100, 100, 1, null, { type: 'assassination', description: 'استخدم بندقية كلاشنكوف' });
+  assert.match(rifle, /<g fill="#111827">[\s\S]*M24 222/);
 });
 
-test('assassination map marker stays neutral even when the report names a pistol or rifle', () => {
+test('assassination drawing follows an explicitly named rifle; otherwise it uses the requested pistol silhouette', () => {
   const alert = (description) => ({ type: 'assassination', title: 'اغتيال في المنطقة', description });
-  assert.equal(assassinationWeaponGlyph(alert('استخدم المهاجم بندقية كلاشنكوف AK-47.')), 'weapon');
-  assert.equal(assassinationWeaponGlyph(alert('أُطلق النار بمسدس بحسب البلاغ.')), 'weapon');
-  assert.equal(assassinationWeaponGlyph(alert('The report explicitly says handgun.')), 'weapon');
-  assert.equal(assassinationWeaponGlyph(alert('أُطلق النار على الضحية من دون تحديد نوع السلاح.')), 'weapon');
-  assert.equal(assassinationWeaponGlyph(alert('ذكر البلاغ بندقية ومسدساً معاً.')), 'weapon');
+  assert.equal(assassinationWeaponGlyph(alert('استخدم المهاجم بندقية كلاشنكوف AK-47.')), 'rifle');
+  assert.equal(assassinationWeaponGlyph(alert('أُطلق النار بمسدس بحسب البلاغ.')), 'pistol');
+  assert.equal(assassinationWeaponGlyph(alert('The report explicitly says handgun.')), 'pistol');
+  assert.equal(assassinationWeaponGlyph(alert('أُطلق النار على الضحية من دون تحديد نوع السلاح.')), 'pistol');
+  assert.equal(assassinationWeaponGlyph(alert('ذكر البلاغ بندقية ومسدساً معاً.')), 'pistol');
   assert.equal(assassinationWeaponGlyph({ type: 'attack', title: 'AK-47' }), null);
 });
 

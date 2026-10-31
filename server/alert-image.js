@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
-import { ALERT_TYPES } from '../shared/types.js';
+import { ALERT_TYPES, assassinationWeaponGlyph } from '../shared/types.js';
 import { SVG as BASE_GLYPHS } from '../public/js/marker-svgs.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
 import { zonePoints, alertZones } from './places.js';
@@ -153,21 +153,32 @@ async function fetchTile(z, x, y, timeoutMs) {
 }
 
 // ------------------------------------------------------------------ marker for point alerts
-function markerSvg(type, cx, cy, k = 1, glyphOverride = null) {
+export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = null) {
   const t = ALERT_TYPES[type] || ALERT_TYPES.breaking;
-  const g = GLYPHS[glyphOverride] || GLYPHS[t.glyph] || GLYPHS.other || '';
+  const firearm = type === 'assassination' || type === 'shooting';
+  const glyphKey = type === 'assassination' ? (assassinationWeaponGlyph(alert) || t.glyph)
+    : type === 'shooting' ? 'pistol' : glyphOverride || t.glyph;
+  const g = GLYPHS[glyphKey] || GLYPHS[t.glyph] || GLYPHS.other || '';
   const r = 30 * k; const s = r * 1.2;
-  const bg = t.marker === 'static' ? (t.disc || t.color) : (t.icon || t.color);
+  const bg = firearm ? '#f8fafc' : t.marker === 'static' ? (t.disc || t.color) : (t.icon || t.color);
+  const fill = firearm ? '#111827' : '#ffffff';
   return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${t.color}" opacity="0.16"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="#ffffff" opacity="0.95"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${bg}"/>`
-    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#ffffff">${g}</g></svg>`;
+    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="${fill}">${g}</g></svg>`;
 }
 function politicalMarkerSvg(cx, cy) {
   const g = GLYPHS[ALERT_TYPES.political.glyph] || GLYPHS.other || '';
   const r = 28; const s = r * 1.18;
   return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#64748b" stroke="#ffffff" stroke-width="4"/>`
     + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#ffffff">${g}</g></svg>`;
+}
+function firearmHeaderSvg(type, alert, cx, cy) {
+  const key = type === 'assassination' ? assassinationWeaponGlyph(alert) || 'pistol' : 'pistol';
+  const g = GLYPHS[key] || GLYPHS.pistol || '';
+  const s = 42;
+  return `<circle cx="${cx}" cy="${cy}" r="27" fill="#f8fafc" stroke="#ffffff" stroke-width="3"/>`
+    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#111827">${g}</g></svg>`;
 }
 
 // ------------------------------------------------------------------ main
@@ -228,10 +239,10 @@ export async function alertImageSvg(alert, opts = {}) {
       o.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" fill-opacity="0.2" stroke="${col}" stroke-width="${r > 40 ? 4.5 : 3}"${dashed ? ' stroke-dasharray="14 9"' : ''}/>`);
     }
     // a single area keeps its type icon; several areas show just their glowing circles (the title names the type)
-    if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph)); }
+    if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph, alert)); }
   } else if (!country) {
     const [x, y] = px(center.lat, center.lon);
-    o.push(type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph));
+    o.push(type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));
   }
   // attribution (required by the tile licence)
   o.push(`<rect x="${W - 210}" y="${HEAD + MAP_H - 26}" width="210" height="26" fill="#ffffff" opacity="0.75"/>`);
@@ -250,9 +261,12 @@ export async function alertImageSvg(alert, opts = {}) {
   const place = opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
   const titleSize = head.length > 16 ? 44 : 52;
   const hz = type === 'weather' && HAZARD_ICON[alert.meta?.hazard] ? alert.meta.hazard : '';
+  const firearm = type === 'assassination' || type === 'shooting';
   const IC = titleSize; // icon box, same height as the title
   if (hz) o.push(hazardIconSvg(hz, en ? 36 : W - 36 - IC, 74 - IC * 0.86, IC, '#ffffff'));
-  const tx = en ? 36 + (hz ? IC + 14 : 0) : W - 36 - (hz ? IC + 14 : 0); const anchor = en ? 'start' : 'end';
+  else if (firearm) o.push(firearmHeaderSvg(type, alert, en ? 62 : W - 62, 68));
+  const hasHeaderIcon = !!hz || firearm;
+  const tx = en ? 36 + (hasHeaderIcon ? IC + 14 : 0) : W - 36 - (hasHeaderIcon ? IC + 14 : 0); const anchor = en ? 'start' : 'end';
   o.push(`<text x="${tx}" y="74" font-family="${FF}" font-size="${titleSize}" font-weight="800" fill="#ffffff" text-anchor="${anchor}"${en ? '' : ' direction="rtl"'}>${ttx(head)}</text>`);
   // severity dot + label + place
   const sub = `${en ? lvl.en : lvl.ar}`;
