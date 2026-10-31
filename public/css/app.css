@@ -248,6 +248,11 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .ctrl-btn { width: 38px; height: 38px; display: grid; place-content: center; color: var(--text-primary); border-bottom: 1px solid var(--border-subtle); transition: background .15s; }
 .ctrl-btn:last-child { border-bottom: 0; }
 .ctrl-btn:hover { background: var(--bg-card-hover); }
+.map-flight-status { position: absolute; top: 54px; left: 12px; z-index: 15; display: flex; align-items: center; gap: 8px; max-width: min(290px, calc(100% - 24px)); padding: 8px 10px; border: 1px solid color-mix(in srgb, #3b82f6 45%, var(--border)); border-radius: 12px; background: var(--bg-glass); color: var(--text-primary); box-shadow: var(--shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); cursor: pointer; }
+.map-flight-label { font-size: 12px; font-weight: 800; }
+.map-flight-flow { display: inline-flex; align-items: center; gap: 5px; padding-inline-start: 8px; border-inline-start: 1px solid var(--border); color: #3b82f6; font-weight: 900; white-space: nowrap; }
+.map-flight-plane, .map-flight-plane svg { display: block; width: 22px; height: 22px; }
+.map-flight-destination { color: var(--text-primary); font-size: 12px; }
 
 .about-pill { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 12; height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; background: var(--bg-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 12.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
 .about-pill b { color: var(--text-primary); font-weight: 800; }
@@ -360,8 +365,10 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 
 /* popup */
 .maplibregl-popup { z-index: 15; max-width: min(290px, calc(100% - 24px)) !important; }
+.maplibregl-popup.pp-alert-popup { max-width: min(360px, calc(100% - 16px)) !important; }
 .maplibregl-popup-content { overflow-wrap: anywhere; }
 .maplibregl-popup-content { background: var(--bg-elevated); color: var(--text-primary); border-radius: 12px; padding: 12px 12px 10px; box-shadow: var(--shadow-lg); border: 1px solid var(--border); font-family: var(--font-arabic); width: 270px; }
+.pp-alert-popup .maplibregl-popup-content { box-sizing: border-box; width: min(360px, calc(100vw - 24px)); max-height: min(65vh, 520px); max-height: min(65dvh, 520px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--bg-elevated); }
 .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--bg-elevated); }
 .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--bg-elevated); }
@@ -371,7 +378,7 @@ html[dir='rtl'] .maplibregl-popup-close-button { left: 6px; right: auto; }
 .maplibregl-popup-close-button:hover { background: var(--bg-subtle); }
 .pp-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding-inline-end: 30px; flex-wrap: wrap; row-gap: 4px; }
 .pp-title { font-weight: 800; font-size: 14px; line-height: 1.5; margin: 0; }
-.pp-desc { font-size: 12px; color: var(--text-secondary); margin: 3px 0 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.pp-desc { display: block; overflow: visible; overflow-wrap: anywhere; font-size: 12px; line-height: 1.55; color: var(--text-secondary); margin: 3px 0 0; white-space: pre-line; }
 .pp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .pp-share { height: 30px; padding: 0 12px; border-radius: 8px; background: #25d366; color: #fff; font-weight: 800; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .pp-more { font-size: 12px; font-weight: 700; color: var(--red); }
@@ -569,8 +576,8 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
 /* civil sub-type icons: thin white halo so they stay readable over busy city maps */
 .ic-car_crash .ic-svg, .ic-protest .ic-svg, .ic-fire .ic-svg, .ic-explosion .ic-svg { filter: drop-shadow(0 0 1.2px #fff) drop-shadow(0 0 1.2px #fff) drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
 
-/* performance: animations pause while the map moves; animated parts get their own layer */
-.is-moving .mk *, .is-moving .mk::before, .is-moving .mk::after { animation-play-state: paused !important; }
+/* performance: pause marker effects during both pan and zoom gestures */
+.is-moving .mk *, .is-moving .mk::before, .is-moving .mk::after, .is-zooming .mk *, .is-zooming .mk::before, .is-zooming .mk::after { animation-play-state: paused !important; }
 .uav, .squad .sq, .ic-svg { will-change: transform; }
 .maplibregl-canvas-container .maplibregl-popup.pp-gest { z-index: 60; }
 /* ---------------------------------------------------------------- contact links (owner-controlled) */
@@ -653,7 +660,7 @@ html.dark .wa-btn svg { color: #2fe079; }
   .zp::before { animation: none; opacity: .55; transform: scale(1.25); }
   .zp::after { display: none; }
 }
-.pp-areas { font-size: 12px; font-weight: 700; line-height: 1.55; margin: 3px 0 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pp-areas { display: block; overflow: visible; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; line-height: 1.55; margin: 3px 0 0; }
 
 /* ---------------------------------------------------------------- services sheet (public/js/services.js) */
 .svc-sheet .about-inner { padding-top: 6px; }

@@ -1350,7 +1350,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (d.type !== 'air_movement') return;
     await askFlightDirection(ctx, d);
   }));
-  bot.callbackQuery(/^bsel:(iraq|jordan|lebanon|turkey)$/, needDraft(async (ctx, d) => {
+  bot.callbackQuery(/^bsel:(iraq|jordan|lebanon|turkey|palestine)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'border') return;
     d.border = ctx.match[1];
     const marker = BORDER_MARKERS[d.border];

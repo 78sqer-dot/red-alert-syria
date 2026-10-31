@@ -1,5 +1,5 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf } from '/shared/types.js?v=16';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=17';
 import { SVG } from './marker-svgs.js?v=18';
 import { EXTRA_SVG } from './target-svgs.js?v=2';
 import { icon } from './icons.js';
@@ -198,7 +198,8 @@ export class AlertMap {
     stylePromise.then((style) => {
       if (this.map) this.map.setStyle(style, { diff: false });
     }).catch((e) => console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e));
-    const zoomTier = () => {
+    let lastOrbitUpdate = 0;
+    const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
       c.classList.toggle('zoom-detail', z >= 11);
@@ -207,13 +208,21 @@ export class AlertMap {
       c.classList.toggle('zoom-far', z < 7.5);
       // like the original: below zoom 11 only the glowing circle shows; from 11 up the drone appears
       // and flies along the circle's edge, so its orbit follows the ring while pinching
-      this._orbitPx(); // drones from zoom 11, warplane flight path at every zoom
+      const now = performance.now();
+      if (forceOrbit || now - lastOrbitUpdate >= 33) {
+        lastOrbitUpdate = now;
+        this._orbitPx(); // keep flight paths responsive without remeasuring every zoom event
+      }
       // small icons at every zoom, getting a little smaller as you zoom in (like the original)
       const mks = Math.max(0.42, Math.min(0.56, 0.56 - (z - 6) * 0.025)).toFixed(2);
       if (mks !== this._mks) { this._mks = mks; c.style.setProperty('--mks', mks); } // restyle markers only when the size step changes
     };
-    this.map.on('zoom', zoomTier);
-    this.map.on('zoomend', () => { this._queueZones(); });
+    this.map.on('zoom', () => zoomTier());
+    this.map.on('zoomend', () => {
+      this.el.classList.remove('is-zooming');
+      zoomTier(true);
+      this._queueZones();
+    });
     // pulse rings are re-sized when the zoom settles; hidden meanwhile so they never look out of scale
     this.map.on('zoomstart', () => this.el.classList.add('is-zooming'));
     // pause the marker animations while a gesture/flight is running so the map itself stays smooth
@@ -223,7 +232,7 @@ export class AlertMap {
       this.refreshMarkerGroups();
     });
     this.map.on('resize', () => this._queueZones());
-    zoomTier();
+    zoomTier(true);
     this.map.on('styleimagemissing', (e) => {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
@@ -236,11 +245,14 @@ export class AlertMap {
       if (hit) { this._popupAt = { id: hit.id, ll: [hit.lon, hit.lat] }; return this.onSelect(hit.id, { fromMap: true, fly: false }); }
       this.onSelect(null, { fromMap: true });
     });
-    this.map.on('mousemove', (e) => {
-      const c = this.map.getCanvas();
-      const want = this.zoneAt(e.lngLat) ? 'pointer' : '';
-      if (c.style.cursor !== want) c.style.cursor = want;
-    });
+    // Hover hit-testing is useful for desktop cursors, but costs work during touch/pan gestures.
+    if (!window.matchMedia?.('(pointer: coarse)').matches) {
+      this.map.on('mousemove', (e) => {
+        const c = this.map.getCanvas();
+        const want = this.zoneAt(e.lngLat) ? 'pointer' : '';
+        if (c.style.cursor !== want) c.style.cursor = want;
+      });
+    }
     // Markers are DOM elements: show them as soon as the style is parsed,
     // without waiting for every basemap tile (or forever, if a tile server is down).
     await new Promise((res) => {
@@ -344,7 +356,59 @@ export class AlertMap {
   setAlerts(alerts, selectedId) {
     this.alerts = alerts;
     this.selectedId = selectedId;
+    this.syncMovementNotice();
     if (this.ready) this.render();
+  }
+
+  // Direction-only reports carry no coordinates by design, so show the movement as a map UI cue, not a pin.
+  syncMovementNotice() {
+    const movements = this.alerts
+      .filter((a) => a.type === 'air_movement' && a.is_active && FLIGHT_DIRECTIONS[a.flight_direction]
+        && !Number.isFinite(a.location?.latitude) && !Number.isFinite(a.location?.longitude))
+      .sort((a, b) => (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0));
+    const alert = movements[0];
+    if (!alert) {
+      this.movementNotice?.remove();
+      this.movementNotice = null;
+      return;
+    }
+    if (!this.movementNotice) {
+      const notice = document.createElement('button');
+      notice.type = 'button';
+      notice.className = 'map-flight-status';
+      notice.innerHTML = '<span class="map-flight-label"></span><span class="map-flight-flow" dir="ltr"></span>';
+      notice.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const id = notice.dataset.alertId;
+        if (id) this.onSelect(id, { fromMap: true, fly: false });
+      });
+      this.el.append(notice);
+      this.movementNotice = notice;
+    }
+    const lang = this.opts.lang === 'en' ? 'en' : 'ar';
+    const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
+    const country = lang === 'en' ? 'Syria' : 'سوريا';
+    const plane = document.createElement('span');
+    plane.className = 'map-flight-plane';
+    plane.setAttribute('aria-hidden', 'true');
+    const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
+    const fill = aircraft === 'uav' ? '#6b7280' : '#2476c9';
+    plane.innerHTML = svgTag(aircraft, 22, `fill="${fill}" class="map-flight-svg"`);
+    const arrow = document.createElement('span');
+    arrow.className = 'map-flight-arrow';
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = '→';
+    const destination = document.createElement('b');
+    destination.className = 'map-flight-destination';
+    destination.textContent = country;
+    const flow = this.movementNotice.querySelector('.map-flight-flow');
+    flow.replaceChildren(...(alert.flight_direction === 'leaving_syria' ? [destination, arrow, plane] : [plane, arrow, destination]));
+    const label = movements.length > 1 ? `${direction} (+${movements.length - 1})` : direction;
+    this.movementNotice.querySelector('.map-flight-label').textContent = label;
+    this.movementNotice.dataset.alertId = alert.id;
+    this.movementNotice.classList.toggle('is-leaving', alert.flight_direction === 'leaving_syria');
+    this.movementNotice.setAttribute('aria-label', `${direction}: ${country}`);
+    this.movementNotice.title = this.movementNotice.getAttribute('aria-label');
   }
 
   selectMarker(id) {
@@ -728,7 +792,7 @@ export class AlertMap {
     this._popupAt = null;
     const m = at ? null : this.markers.get(alert.id);
     const off = m ? m.getOffset() : { x: 0, y: 0 };
-    this.popup = new M.Popup({ closeButton: true, closeOnClick: false, maxWidth: '290px', offset: { bottom: [off.x, off.y - 26], top: [off.x, off.y + 26], left: [off.x + 26, off.y], right: [off.x - 26, off.y] }, focusAfterOpen: false })
+    this.popup = new M.Popup({ className: 'pp-alert-popup', closeButton: true, closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 24px))', offset: { bottom: [off.x, off.y - 26], top: [off.x, off.y + 26], left: [off.x + 26, off.y], right: [off.x - 26, off.y] }, focusAfterOpen: false })
       .setLngLat(at || [alert.location.longitude, alert.location.latitude])
       .setDOMContent(htmlToNode(this.popupHtml(alert)))
       .addTo(this.map);
@@ -737,7 +801,14 @@ export class AlertMap {
     // put the card inside the map's gesture layer (like the markers): pinch / drag that start on the card
     // now zoom and pan the map instead of being swallowed (on phones the card covers the middle of the map)
     const pe = this.popup.getElement();
-    if (pe) { pe.classList.add('pp-gest'); this.map.getCanvasContainer().appendChild(pe); }
+    if (pe) {
+      pe.classList.add('pp-gest');
+      const content = pe.querySelector('.maplibregl-popup-content');
+      content?.addEventListener('wheel', (event) => event.stopPropagation(), { passive: true });
+      content?.addEventListener('touchstart', (event) => { if (content.scrollHeight > content.clientHeight + 2) event.stopPropagation(); }, { passive: true });
+      content?.addEventListener('touchmove', (event) => { if (content.scrollHeight > content.clientHeight + 2) event.stopPropagation(); }, { passive: true });
+      this.map.getCanvasContainer().appendChild(pe);
+    }
     this.popup.on('close', () => {
       if (this.popup && this.popup._alertId === alert.id) this.popup = null;
     });

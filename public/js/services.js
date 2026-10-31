@@ -3,12 +3,13 @@
 // Everything here is additive: the alert map keeps working even if this module fails.
 import { settings } from './settings.js?v=2';
 import { WX_ICONS, WX_LABEL } from '/shared/wx-icons.js';
+import { weatherWarningFeatures } from '/shared/weather-map.js?v=1';
 
 const S = {
   ar: {
     services: 'الخدمات', prices: 'الأسعار', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', nearby: 'قريب مني', weather: 'الطقس',
     sheetTitle: 'خدمات يومية', sheetSub: 'أسعار اليوم، الطقس، الكهرباء، حالة الطرق والمعابر، وأقرب مشفى وصيدلية وكازية وفرن.',
-    showWx: 'خريطة المركز الرسمية', wxSub: 'الطقس والتحذيرات من المركز الوطني للأرصاد الجوية السوري. لا نعرض درجات أو توقعات من مزودات خارجية.', wxNow: 'الطقس الآن', today: 'اليوم', tomorrow: 'بكرا', wind: 'رياح', hum: 'رطوبة', kmh: 'كم/س', mm: 'ملم', rainP: 'احتمال المطر', gusts: 'هبّات', mountains: 'مناطق جبلية', wxErr: 'تعذّر تحميل بيانات المركز، جرّب بعد شوي.', wxWarn: 'تحذيرات رسمية', wxOfficial: 'تحذير رسمي', wxModel: 'تحذير توقّعي', wxLocal: 'تحذير منشور', wxSource: 'المصدر الرسمي', wxLocalSource: 'منشور التنبيه على تيليغرام', wxIssued: 'صدر', wxExpires: 'ينتهي', wxDailyLink: 'النشرة الجوية الرسمية', wxMapLink: 'خريطة المركز الرسمية', wxNoAlerts: 'لا توجد حالياً تنبيهات رسمية نشطة ظاهرة في موجز المركز.', snowCm: 'ثلج', cm: 'سم',
+    showWx: 'عرض التحذيرات على الخريطة', wxSub: 'الطقس والتحذيرات من المركز الوطني للأرصاد الجوية السوري. لا نعرض درجات أو توقعات من مزودات خارجية.', wxNow: 'الطقس الآن', today: 'اليوم', tomorrow: 'بكرا', wind: 'رياح', hum: 'رطوبة', kmh: 'كم/س', mm: 'ملم', rainP: 'احتمال المطر', gusts: 'هبّات', mountains: 'مناطق جبلية', wxErr: 'تعذّر تحميل بيانات المركز، جرّب بعد شوي.', wxWarn: 'تحذيرات رسمية', wxOfficial: 'تحذير رسمي', wxModel: 'تحذير توقّعي', wxLocal: 'تحذير منشور', wxSource: 'المصدر الرسمي', wxLocalSource: 'منشور التنبيه على تيليغرام', wxIssued: 'صدر', wxExpires: 'ينتهي', wxDailyLink: 'النشرة الجوية الرسمية', wxMapLink: 'خريطة المركز الرسمية', wxNoAlerts: 'لا توجد حالياً تنبيهات رسمية نشطة ظاهرة في موجز المركز.', snowCm: 'ثلج', cm: 'سم',
     market: 'سعر السوق الموازي (عام)', official: 'نشرة مصرف سورية المركزي', officialSource: 'صفحة المركزي الرسمية على فيسبوك', officialIssued: 'نشرة بتاريخ', officialChecked: 'آخر تحقق', buy: 'شراء', sell: 'مبيع',
     usd: 'دولار', eur: 'يورو', try: 'ليرة تركية', sar: 'ريال سعودي', aed: 'درهم إماراتي',
     gold: 'الذهب (للغرام)', k24: 'عيار 24', k21: 'عيار 21', k18: 'عيار 18', ounce: 'الأونصة عالمياً',
@@ -39,7 +40,7 @@ const S = {
   en: {
     services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me', weather: 'Weather',
     sheetTitle: 'Daily services', sheetSub: 'Today\'s prices, weather, electricity, road status, and the nearest hospital, pharmacy, fuel station and bakery.',
-    showWx: 'Official weather map', wxSub: 'Weather and warnings are from Syria’s National Meteorological Center. We do not show temperatures or forecasts from third-party providers.', wxNow: 'Weather now', today: 'Today', tomorrow: 'Tomorrow', wind: 'Wind', hum: 'Humidity', kmh: 'km/h', mm: 'mm', rainP: 'Chance of rain', gusts: 'Gusts', mountains: 'Mountain areas', wxErr: 'Could not load the official weather data; try again shortly.', wxWarn: 'Official warnings', wxOfficial: 'Official warning', wxModel: 'Forecast warning', wxLocal: 'Published alert', wxSource: 'Official source', wxLocalSource: 'Alert channel post', wxIssued: 'Issued', wxExpires: 'Valid until', wxDailyLink: 'Official daily bulletin', wxMapLink: 'Official meteorological map', wxNoAlerts: 'No active official warnings are currently visible in the Center’s feed.', snowCm: 'Snow', cm: 'cm',
+    showWx: 'Show warnings on the map', wxSub: 'Weather and warnings are from Syria’s National Meteorological Center. We do not show temperatures or forecasts from third-party providers.', wxNow: 'Weather now', today: 'Today', tomorrow: 'Tomorrow', wind: 'Wind', hum: 'Humidity', kmh: 'km/h', mm: 'mm', rainP: 'Chance of rain', gusts: 'Gusts', mountains: 'Mountain areas', wxErr: 'Could not load the official weather data; try again shortly.', wxWarn: 'Official warnings', wxOfficial: 'Official warning', wxModel: 'Forecast warning', wxLocal: 'Published alert', wxSource: 'Official source', wxLocalSource: 'Alert channel post', wxIssued: 'Issued', wxExpires: 'Valid until', wxDailyLink: 'Official daily bulletin', wxMapLink: 'Official meteorological map', wxNoAlerts: 'No active official warnings are currently visible in the Center’s feed.', snowCm: 'Snow', cm: 'cm',
     market: 'Parallel market (Syria, general)', official: 'Central Bank of Syria bulletin', officialSource: 'Official Central Bank Facebook page', officialIssued: 'Bulletin date', officialChecked: 'Last checked', buy: 'Buy', sell: 'Sell',
     usd: 'US dollar', eur: 'Euro', try: 'Turkish lira', sar: 'Saudi riyal', aed: 'UAE dirham',
     gold: 'Gold (per gram)', k24: '24K', k21: '21K', k18: '18K', ounce: 'World ounce',
@@ -236,13 +237,26 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     return { type: 'FeatureCollection', features: powerByGov().map((g) => ({ type: 'Feature', properties: { code: g.code, level: g.level, name: g.name, own: g.items.length ? 1 : 0 }, geometry: { type: 'Point', coordinates: [g.lon, g.lat] } })) };
   }
   const wxName = (p) => (LANG === 'en' ? p.en || p.ar : p.ar);
-  const wxWarns = (p) => (st.wx?.warnings || []).filter((w) => w.govs.includes(p.gov));
+  const wxWarns = (p) => (st.wx?.warnings || []).filter((w) => (w.govs || []).some((code) => String(code) === String(p.gov)));
   function wxGeo() {
     const pts = st.wx?.points || [];
-    return { type: 'FeatureCollection', features: pts.filter((p) => p.now && Number.isFinite(p.now.t)).map((p) => {
+    const features = pts.filter((p) => p.now && Number.isFinite(p.now.t)).map((p) => {
       const ws = wxWarns(p);
-      return { type: 'Feature', properties: { id: p.id, main: p.main, icon: 'svc-wx-' + p.now.k, tt: `${p.now.t}°`, name: wxName(p), warn: ws.length ? Math.max(...ws.map((w) => w.level)) : 0 }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } };
-    }) };
+      return { type: 'Feature', properties: { id: p.id, gov: String(p.gov), main: p.main, icon: 'svc-wx-' + p.now.k, tt: `${p.now.t}°`, name: wxName(p), warn: ws.length ? Math.max(...ws.map((w) => w.level)) : 0 }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } };
+    });
+    const byGov = new Map(features.map((f) => [f.properties.gov, f]));
+    for (const warning of weatherWarningFeatures(st.wx?.warnings || [], GOV_C, LANG)) {
+      const current = byGov.get(warning.properties.gov);
+      if (current) {
+        current.properties.warn = Math.max(current.properties.warn || 0, warning.properties.warn || 0);
+        current.properties.warning = 1;
+        current.properties.main = 1;
+      } else {
+        features.push(warning);
+        byGov.set(warning.properties.gov, warning);
+      }
+    }
+    return { type: 'FeatureCollection', features };
   }
   function paintWx() { const src = map()?.getSource?.('svc-wx'); if (src) src.setData(wxGeo()); }
   function paintPower() { const src = map()?.getSource?.('svc-pw'); if (src) src.setData(powerGeo()); }
@@ -475,6 +489,18 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     }
     return h;
   }
+  function wxWarningMapHtml(code, warnings) {
+    const center = GOV_C[code];
+    const name = LANG === 'en' ? center?.[3] : center?.[2];
+    let h = `<div class="pp-top"><span class="badge" style="--c:#f59e0b">${esc(L.wxWarn)}</span></div><p class="pp-title">${esc(name || '')}</p>`;
+    for (const w of warnings) {
+      const details = LANG === 'en' ? w.details_en : w.details;
+      const label = w.local ? L.wxLocal : w.official ? L.wxOfficial : L.wxModel;
+      const stamps = [w.at && `${L.wxIssued}: ${when(w.at)}`, w.expires_at && `${L.wxExpires}: ${when(w.expires_at)}`].filter(Boolean);
+      h += `<div class="wx-warn" style="--c:${WARN_C(w.level)}">${esc(w.emoji || '⚠️')} <b>${esc(LANG === 'en' ? w.en : w.ar)}</b><small>${esc(label)}${w.url ? ` · <a href="${esc(w.url)}" target="_blank" rel="noopener noreferrer">${esc(L.wxSource)}</a>` : ''}</small>${stamps.length ? `<small>${esc(stamps.join(' · '))}</small>` : ''}${details ? `<small>${esc(details.slice(0, 360))}</small>` : ''}</div>`;
+    }
+    return h;
+  }
   function focusWx(p) {
     const m = map(); if (!m) return;
     m.flyTo({ center: [p.lon, p.lat], zoom: Math.max(m.getZoom(), p.main ? 7.6 : 9), essential: true });
@@ -503,7 +529,15 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     m.on('click', 'svc-road-pt', roadClick); m.on('click', 'svc-road-ln', roadClick);
     const pwClick = (e) => { const f = e.features?.[0]; const g = f && powerByGov().find((x) => x.code === f.properties.code); if (g) popup([g.lon, g.lat], powerPopHtml(g)); };
     m.on('click', 'svc-pw-i', pwClick); m.on('click', 'svc-pw-c', pwClick);
-    const wxClick = (e) => { const f = e.features?.[0]; const p = f && st.wx?.points.find((x) => x.id === f.properties.id); if (p) popup([p.lon, p.lat], wxPopHtml(p)); };
+    const wxClick = (e) => {
+      const f = e.features?.[0]; if (!f) return;
+      const p = (st.wx?.points || []).find((x) => x.id === f.properties.id);
+      if (p) return popup([p.lon, p.lat], wxPopHtml(p));
+      const code = f.properties.warning ? String(f.properties.gov) : '';
+      const center = GOV_C[code];
+      const warnings = (st.wx?.warnings || []).filter((w) => (w.govs || []).some((gov) => String(gov) === code));
+      if (center && warnings.length) popup([center[1], center[0]], wxWarningMapHtml(code, warnings));
+    };
     m.on('click', 'svc-wx-i', wxClick); m.on('click', 'svc-wx-x', wxClick);
     let zt = 0; m.on('zoomend', () => { if (st.mode && GROUPS[st.mode]) { clearTimeout(zt); zt = setTimeout(renderBar, 120); } });
     for (const id of SVC_LAYERS) {
@@ -597,6 +631,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   }
   function weatherHtml() {
     let h = `<p class="svc-note" style="margin-top:0">${esc(L.wxSub)}</p>`;
+    h += modeBtnWide('weather', L.showWx);
     const j = st.wx;
     if (!j) return h + `<div class="svc-empty">${esc(st.wxErr ? L.wxErr : L.loading)}</div>`;
     const dailyUrl = j.official?.url || 'https://climweb.med.gov.sy/منتجاتنا/النشرة-اليومية/';

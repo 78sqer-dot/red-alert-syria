@@ -111,14 +111,16 @@ export const BORDER_REGIONS = {
   jordan: { ar: 'الحدود السورية–الأردنية', en: 'Syrian–Jordanian border' },
   lebanon: { ar: 'الحدود السورية–اللبنانية', en: 'Syrian–Lebanese border' },
   turkey: { ar: 'الحدود السورية–التركية', en: 'Syrian–Turkish border' },
+  palestine: { ar: 'الحدود السورية–الفلسطينية', en: 'Syrian–Palestinian border' },
 };
 
-// Representative border-crossing pins (from the site's crossing map); the alert is not placed at a governorate center.
+// Border alerts use exact map locations rather than governorate centers.
 export const BORDER_MARKERS = {
   iraq: { lat: 34.3958, lon: 40.9773, ar: 'قرب معبر البوكمال', en: 'Near Al-Bukamal crossing' },
   jordan: { lat: 32.5424, lon: 36.2029, ar: 'قرب معبر نصيب', en: 'Near Nasib crossing' },
   lebanon: { lat: 33.6579, lon: 35.9777, ar: 'قرب معبر جديدة يابوس', en: 'Near Jdeidet Yabous crossing' },
   turkey: { lat: 36.2305, lon: 36.6927, ar: 'قرب معبر باب الهوى', en: 'Near Bab al-Hawa crossing' },
+  palestine: { lat: 33.113, lon: 35.817, ar: 'على خط الحدود قرب القنيطرة', en: 'On the border line near Quneitra' },
 };
 
 export const FLIGHT_DIRECTIONS = {

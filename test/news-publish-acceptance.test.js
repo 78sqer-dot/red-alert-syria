@@ -19,6 +19,14 @@ const { buildAlertInput, createBot, channelKeyboard, channelPost } = await impor
 const { BORDER_MARKERS } = await import('../shared/types.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { newsState } = await import('../server/news-monitor.js');
+const syriaBorder = JSON.parse(fs.readFileSync(new URL('../public/data/syria-border.geojson', import.meta.url), 'utf8'));
+
+test('Syrian–Palestinian border alert pin lies on the actual Syria border geometry', () => {
+  const ring = syriaBorder.features[0].geometry.coordinates[0];
+  const pin = BORDER_MARKERS.palestine;
+  const nearest = Math.min(...ring.map(([lon, lat]) => Math.hypot(lon - pin.lon, lat - pin.lat)));
+  assert.ok(nearest < 0.001, `border pin should be on the mapped boundary; nearest vertex distance was ${nearest}`);
+});
 
 const ownerId = 8270709633;
 const owner = { id: ownerId, is_bot: false, first_name: 'Local owner', language_code: 'ar' };
@@ -109,11 +117,18 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('t:border');
   assert.ok(buttons().some((button) => button.callback_data === 'bsel:iraq'));
   assert.ok(buttons().some((button) => button.callback_data === 'bsel:turkey'));
+  assert.ok(buttons().some((button) => button.callback_data === 'bsel:palestine'));
   await tap('bsel:turkey');
   assert.doesNotMatch(lastUi().payload.text, /اختر المحافظة/);
   assert.match(lastUi().payload.text, /باب الهوى/);
   await tap('skip');
   assert.match(lastUi().payload.text, /باب الهوى/);
+  await tap('home');
+  await tap('t:border');
+  await tap('bsel:palestine');
+  assert.doesNotMatch(lastUi().payload.text, /اختر المحافظة/);
+  assert.match(lastUi().payload.text, /القنيطرة/);
+  await tap('skip');
   await tap('t:warplane');
   assert.ok(buttons().some((button) => button.callback_data === 'airmode:over'));
   assert.ok(buttons().some((button) => button.callback_data === 'airmode:move'));
@@ -143,6 +158,12 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(borderInput.location.scope, 'point');
   assert.equal(borderInput.location.latitude, BORDER_MARKERS.turkey.lat);
   assert.equal(borderInput.location.longitude, BORDER_MARKERS.turkey.lon);
+  const palestineInput = buildAlertInput({
+    type: 'border', border: 'palestine', location: { scope: 'point', name_ar: BORDER_MARKERS.palestine.ar, name_en: BORDER_MARKERS.palestine.en, latitude: BORDER_MARKERS.palestine.lat, longitude: BORDER_MARKERS.palestine.lon }, extra: [], ttlMin: 120,
+  }, { id: ownerId, name: 'test' });
+  assert.match(palestineInput.title, /السورية–الفلسطينية/);
+  assert.equal(palestineInput.location.latitude, BORDER_MARKERS.palestine.lat);
+  assert.equal(palestineInput.location.longitude, BORDER_MARKERS.palestine.lon);
   const flightInput = buildAlertInput({
     type: 'warplane', location: { scope: 'place', name_ar: 'درعا', name_en: 'Daraa' }, extra: [], ttlMin: 60,
   }, { id: ownerId, name: 'test' });
@@ -162,9 +183,13 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(movementInput.location.latitude, null);
   assert.equal(movementInput.location.longitude, null);
   const borderAlert = store.addAlert(borderInput);
+  const palestineAlert = store.addAlert(palestineInput);
   assert.equal(publicAlert(borderAlert).border, 'turkey');
   assert.equal(publicAlert(borderAlert).location.latitude, BORDER_MARKERS.turkey.lat);
   assert.equal(publicAlert(borderAlert).location.longitude, BORDER_MARKERS.turkey.lon);
+  assert.equal(publicAlert(palestineAlert).border, 'palestine');
+  assert.equal(publicAlert(palestineAlert).location.latitude, BORDER_MARKERS.palestine.lat);
+  assert.equal(publicAlert(palestineAlert).location.longitude, BORDER_MARKERS.palestine.lon);
   const flightAlert = store.addAlert(flightInput);
   assert.equal(publicAlert(flightAlert).flight_direction, undefined);
   const droneAlert = store.addAlert(droneInput);
@@ -174,7 +199,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(publicAlert(movementAlert).aircraft, 'uav');
   assert.equal(publicAlert(movementAlert).scope, 'country');
   assert.equal(Number.isFinite(publicAlert(movementAlert).location?.latitude), false, 'direction-only alerts have no map pin coordinates');
-  addedAlertIds.push(borderAlert.id, flightAlert.id, droneAlert.id, movementAlert.id);
+  addedAlertIds.push(borderAlert.id, palestineAlert.id, flightAlert.id, droneAlert.id, movementAlert.id);
 
   const before = new Set(store.state.alerts.map((alert) => alert.id));
   newsState().drafts[draftId] = {
