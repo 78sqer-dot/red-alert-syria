@@ -97,8 +97,8 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     assert.ok(input.title_en, `${type} must have an English publish title`);
   }
   const socialRow = channelKeyboard({ id: 'test-social-buttons' }).inline_keyboard.find((row) => row.some((button) => button.url?.includes('/boost/')));
-  assert.equal(socialRow?.length, 2, 'boost and WhatsApp channel buttons share one professional row');
-  assert.equal(socialRow[1].url, 'https://whatsapp.com/channel/0029VbDl95H5fM5V2HJ2PO10');
+  assert.equal(socialRow?.length, 1, 'only the Telegram boost button remains in the footer');
+  assert.equal(socialRow[0].url, 'https://t.me/boost/Red_Alert_Syria');
   const channelText = channelPost({
     id: 'test-channel-footer', type: 'warplane', timestamp: new Date().toISOString(),
     place: { scope: 'place', name_ar: 'صمدانية شرقية', name_en: 'Samdaniyah Sharqiyah', governorate_ar: 'القنيطرة', governorate_en: 'Quneitra' }, extra: [],

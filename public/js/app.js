@@ -174,7 +174,6 @@ function hydrateStatic() {
   });
   $('#btnTheme').title = T.darkMode;
   $('#btnReport').title = T.reportTitle;
-  $('#btnWa').title = T.waChannel; $('#btnWa').setAttribute('aria-label', T.waChannel);
   $('#btnContact').title = T.contactUs; $('#btnContact').setAttribute('aria-label', T.contactUs);
   const refreshButton = $('#btnRefresh');
   refreshButton.title = T.refreshSite;
@@ -520,7 +519,6 @@ function contactRows() {
   const c = state.contacts || {};
   const num = c.phone ? `<span dir="ltr" class="mono">${esc(c.phone)}</span>` : '';
   const rows = [];
-  if (c.wa) rows.push({ href: c.wa, cls: 'wa', ic: 'whatsapp', t: T.waChannel, d: esc(T.waChannelSub) });
   if (c.waChat) rows.push({ href: c.waChat, cls: 'wa', ic: 'whatsapp', t: T.waChat, d: num });
   if (c.tel) rows.push({ href: c.tel, cls: 'tel', ic: 'phone', t: T.callUs, d: num, self: true });
   if (c.tg) rows.push({ href: c.tg, cls: 'tgs', ic: 'headset', t: T.tgSupport, d: `<span dir="ltr">@${esc(c.tg.split('/').pop())}</span>` });
@@ -541,8 +539,6 @@ function showSupportModal() {
 }
 function renderContacts() {
   const c = state.contacts || {};
-  const wa = $('#btnWa');
-  if (wa) { wa.hidden = !c.wa; if (c.wa) wa.href = c.wa; }
   const ct = $('#btnContact');
   if (ct) ct.hidden = !(c.waChat || c.tel || c.tg);
   if ($('#drawer')?.classList.contains('open')) renderDrawer();

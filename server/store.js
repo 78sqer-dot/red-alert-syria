@@ -509,7 +509,6 @@ class Store extends EventEmitter {
     const c = this.contacts;
     const mode = c.phoneMode || 'both';
     const o = {};
-    if (c.wa) o.wa = c.wa;
     if (c.phone) {
       o.phone = c.phone;
       if (mode !== 'tel') o.waChat = 'https://wa.me/' + c.phone.slice(1);

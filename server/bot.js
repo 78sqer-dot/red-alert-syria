@@ -111,8 +111,7 @@ export function channelKeyboard(alert) {
   if (url) kb.url('🗺 عرض على الخريطة', url);
   if (config.reportBotUsername) kb.url('📨 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
   kb.row()
-    .url('🚀 عزّز القناة', 'https://t.me/boost/Red_Alert_Syria')
-    .url('🟢 قناة واتساب', 'https://whatsapp.com/channel/0029VbDl95H5fM5V2HJ2PO10');
+    .url('🚀 عزّز القناة', 'https://t.me/boost/Red_Alert_Syria');
   return kb;
 }
 function draftSummary(d, lang) {
