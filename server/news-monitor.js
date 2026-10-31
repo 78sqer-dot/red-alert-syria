@@ -143,6 +143,7 @@ const REPORT_TYPE_TERMS = {
   uav_strike: ['استهداف بمسيرة', 'استهداف بطائرة مسيرة', 'غارة بمسيرة', 'قصف بمسيرة', 'drone strike', 'uav strike'],
   assassination: ['اغتيال', 'اغتيل', 'محاولة اغتيال', 'assassination', 'assassinated'],
   warplane: ['طيران حربي', 'الطيران الحربي', 'طائرة حربية', 'طائرات حربية', 'غارة جوية', 'غارات جوية', 'قصف جوي', 'warplane', 'airstrike'],
+  military_incursion: ['توغل آليات عسكرية', 'رتل عسكري', 'دورية عسكرية', 'تحرك آليات عسكرية', 'آليات عسكرية', 'military vehicle incursion', 'military convoy', 'armored vehicles'],
   artillery: ['قصف مدفعي', 'مدفعية', 'قذائف', 'قصف', 'shelling'],
   attack: ['هجوم', 'اشتباك', 'اقتحام', 'مسلح', 'attack', 'clash'],
   explosion: ['انفجار', 'تفجير', 'عبوة ناسفة', 'explosion', 'blast'],

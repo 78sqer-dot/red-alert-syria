@@ -599,6 +599,7 @@ export function publicAlert(a) {
     flight_direction: FLIGHT_DIRECTIONS[a.meta?.flightDirection] ? a.meta.flightDirection : undefined,
     aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
     drones: a.type === 'uav' ? droneLevel(a) : undefined,
+    vehicle_count: a.type === 'military_incursion' && Number.isInteger(a.meta?.vehicleCount) ? a.meta.vehicleCount : undefined,
     title: a.title,
     title_en: a.title_en,
     description: cleanAlertText(a.description) || undefined,

@@ -34,9 +34,28 @@ const SUB_MENU_MIN = 40; // districts with more towns than this get a ناحية
 const DURATIONS = [15, 30, 60, 90, 120, 180, 360, 720];
 const REPORT_COOLDOWN_MS = 2 * 60_000;
 
-export const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+export const esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const clean = (s, max = 900) => String(s || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim().slice(0, max);
 const hashTag = (s) => '#' + String(s || '').replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '');
+
+const VEHICLE_COUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
+const VEHICLE_COUNT_MAX = 999;
+function parseVehicleCount(value) {
+  const normalized = String(value ?? '').replace(/[٠-٩۰-۹]/g, (digit) => {
+    const code = digit.charCodeAt(0);
+    return String(code >= 0x06f0 ? code - 0x06f0 : code - 0x0660);
+  }).trim();
+  if (!/^\d{1,3}$/.test(normalized)) return null;
+  const count = Number(normalized);
+  return count >= 1 && count <= VEHICLE_COUNT_MAX ? count : null;
+}
+function vehicleCountPhrase(count, lang) {
+  const digits = new Intl.NumberFormat(lang === 'en' ? 'en' : 'ar-SY', { useGrouping: false }).format(count);
+  if (lang === 'en') return `${digits} ${count === 1 ? 'vehicle' : 'vehicles'}`;
+  if (count === 1) return 'آلية واحدة';
+  if (count === 2) return 'آليتان';
+  return `${digits} ${count >= 3 && count <= 10 ? 'آليات' : 'آلية'}`;
+}
 
 const sessions = new Map(); // userId -> draft
 // pending reports live in the store (store.reportPut/Take): they survive restarts and deploys
@@ -85,7 +104,7 @@ const fmtDate = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.tim
 //   (no footer; map and channel links remain on the inline buttons)
 export function channelPost(alert, { ended = false } = {}) {
   const t = typeOf(alert.type);
-  let title = (TITLES[alert.type] || {}).ar || t.ar;
+  let title = alert.meta?.channelTitle || (TITLES[alert.type] || {}).ar || t.ar;
   if (alert.place?.head_ar) title = alert.place.head_ar;
   if (alert.type === 'air_movement') {
     const aircraft = FLIGHT_AIRCRAFT[alert.meta?.aircraft || alert.aircraft];
@@ -93,6 +112,7 @@ export function channelPost(alert, { ended = false } = {}) {
     title = [aircraft?.ar, direction?.ar].filter(Boolean).join(' — ') || title;
   }
   if (alert.type === 'quake') { const m = alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1]); if (Number.isFinite(m)) title = `زلزال بقوة ${m.toFixed(1)}`; }
+  if (alert.type === 'military_incursion' && Number.isInteger(alert.meta?.vehicleCount)) title += ` — ${vehicleCountPhrase(alert.meta.vehicleCount, 'ar')}`;
   const p = alert.place || {};
   const hasPlace = p.scope && p.scope !== 'country';
   const sections = [`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b> - ${alertEmoji(alert)}`];
@@ -120,6 +140,9 @@ function draftSummary(d, lang) {
   const civilEmoji = d.type === 'civil' ? CIVIL_EMOJIS[d.civilEmoji]?.emoji : '';
   const lines = [`<b>${esc(d.type === 'road' ? roadLabel(d.road, lang) : typeLabel(d.type, lang))}</b>${civilEmoji ? ` ${civilEmoji}` : ''}`];
   if (d.border && BORDER_REGIONS[d.border]) lines.push(`🛂 <b>${esc(lang === 'en' ? BORDER_REGIONS[d.border].en : BORDER_REGIONS[d.border].ar)}</b>`);
+  if (d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0) {
+    lines.push(`🚙 <b>${lang === 'en' ? 'Vehicle count' : 'عدد الآليات'}:</b> ${esc(vehicleCountPhrase(d.vehicleCount, lang))}`);
+  }
   if (d.type === 'air_movement') {
     const aircraft = FLIGHT_AIRCRAFT[d.aircraft];
     const direction = FLIGHT_DIRECTIONS[d.flightDirection];
@@ -403,7 +426,7 @@ function newDraft(ctx, type) {
   const d = {
     type,
     mode: staff(ctx) ? 'publish' : 'report',
-    step: type === 'breaking' ? 'text' : type === 'border' ? 'border' : type === 'air_movement' ? 'aircraft' : ['uav', 'warplane'].includes(type) ? 'flightmode' : 'gov',
+    step: type === 'military_incursion' ? 'vehicle_count' : type === 'breaking' ? 'text' : type === 'border' ? 'border' : type === 'air_movement' ? 'aircraft' : ['uav', 'warplane'].includes(type) ? 'flightmode' : 'gov',
     ttlMin: typeOf(type).ttlMin,
     location: null,
     extra: [], // further areas of the same alert (publishing bot)
@@ -421,6 +444,34 @@ const getDraft = (ctx) => {
   return d;
 };
 
+function vehicleCountKeyboard(ctx) {
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard();
+  for (const count of VEHICLE_COUNT_OPTIONS) {
+    kb.text(String(count), `vehc:${count}`);
+    if (count % 4 === 0) kb.row();
+  }
+  kb.text(en ? '✍️ Other number' : '✍️ عدد آخر', 'vehc:custom').row();
+  kb.text(L(ctx).btnCancel, 'cancel');
+  return kb;
+}
+function vehicleCountInputKeyboard(ctx) {
+  const en = langOf(ctx) === 'en';
+  return new InlineKeyboard()
+    .text(en ? '↩️ Preset counts' : '↩️ الأعداد الجاهزة', 'vehc:back')
+    .text(L(ctx).btnCancel, 'cancel');
+}
+async function askVehicleCount(ctx, d) {
+  d.step = 'vehicle_count';
+  const en = langOf(ctx) === 'en';
+  await show(ctx, en ? '🚙 <b>Military vehicle incursion</b>\n\nChoose the number of vehicles:' : '🚙 <b>توغّل آليات عسكرية</b>\n\nاختر عدد الآليات:', vehicleCountKeyboard(ctx));
+}
+async function askVehicleCountInput(ctx, d) {
+  d.step = 'vehicle_count_input';
+  const en = langOf(ctx) === 'en';
+  await show(ctx, en ? 'Send a whole number from 1 to 999.' : 'أرسل عدد الآليات كرقم صحيح من 1 إلى 999.', vehicleCountInputKeyboard(ctx));
+}
+
 async function askLocation(ctx, d) {
   d.step = 'gov';
   const en = langOf(ctx) === 'en';
@@ -432,7 +483,10 @@ async function askLocation(ctx, d) {
       ? `📍 Choose the area ${leaving ? 'the aircraft is leaving from' : 'the aircraft is heading toward'}. The map pin will mark this area.${aircraft ? ` (${esc(aircraft.en)})` : ''}`
       : `📍 اختر المنطقة التي ${leaving ? 'يغادرها الطيران' : 'يتجه إليها الطيران'}، وسيظهر دبوس الخريطة عليها.${aircraft ? ` (${esc(aircraft.ar)})` : ''}`)
     : head + L(ctx).askGov(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`);
-  await show(ctx, targetPrompt, govKeyboard(ctx, d));
+  const quantity = d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0
+    ? `\n\n🚙 <b>${en ? 'Vehicle count' : 'عدد الآليات'}:</b> ${esc(vehicleCountPhrase(d.vehicleCount, langOf(ctx)))}`
+    : '';
+  await show(ctx, `${targetPrompt}${quantity}`, govKeyboard(ctx, d));
 }
 async function askBorder(ctx, d) {
   d.step = 'border';
@@ -557,6 +611,7 @@ export function buildAlertInput(d, author) {
   const flightTarget = d.type === 'air_movement' && d.flightTarget?.scope !== 'country' ? d.flightTarget : null;
   const flightTargetAr = flightTarget ? (d.flightDirection === 'leaving_syria' ? ` — من ${locName(flightTarget, 'ar')}` : ` — نحو ${locName(flightTarget, 'ar')}`) : '';
   const flightTargetEn = flightTarget ? (d.flightDirection === 'leaving_syria' ? ` — from ${locName(flightTarget, 'en')}` : ` — toward ${locName(flightTarget, 'en')}`) : '';
+  const vehicleCount = d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0 && d.vehicleCount <= VEHICLE_COUNT_MAX ? d.vehicleCount : null;
   const civilEmoji = d.type === 'civil' && CIVIL_EMOJIS[d.civilEmoji] ? d.civilEmoji : null;
   const baseTitle = d.type === 'air_movement'
     ? (aircraft?.ar || titles.ar)
@@ -566,8 +621,8 @@ export function buildAlertInput(d, author) {
     : wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
   return {
     type: d.type,
-    title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${flightTargetAr}`,
-    title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}`,
+    title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}`,
+    title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}`,
     extra,
     description: cleanAlertText(d.type === 'breaking' ? d.text : d.details),
     location: loc,
@@ -575,7 +630,7 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || civilEmoji ? {
+    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || civilEmoji || vehicleCount ? {
       meta: {
         ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
@@ -583,6 +638,7 @@ export function buildAlertInput(d, author) {
         ...(flight ? { flightDirection: d.flightDirection } : {}),
         ...(aircraft ? { aircraft: d.aircraft } : {}),
         ...(civilEmoji ? { civilEmoji } : {}),
+        ...(vehicleCount ? { vehicleCount } : {}),
       },
     } : {}),
   };
@@ -604,6 +660,57 @@ function channelCaption(alert, opts) {
     if (visibleLen(s) <= CAPTION_MAX) return s;
   }
   return channelPost({ ...alert, description: '' }, opts).slice(0, CAPTION_MAX);
+}
+const plainTelegramText = (value) => String(value ?? '')
+  .replace(/<[^>]+>/g, '')
+  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, String.fromCharCode(34))
+  .trim();
+function channelEditParts(value) {
+  const blocks = String(value || '').trim().split(/\n\s*\n+/).map((part) => part.trim()).filter(Boolean);
+  const first = blocks.shift() || '';
+  const [header = '', ...inlineLines] = first.split('\n');
+  const inlineBody = inlineLines.join('\n').trim();
+  const sections = [...(inlineBody ? [inlineBody] : []), ...blocks];
+  const isMetaBlock = (section) => {
+    const lines = section.split('\n').map((line) => line.trim()).filter(Boolean);
+    return lines.length > 0 && lines.every((line) => line.startsWith('📍') || /^(تاريخ|الساعة|انتهى|Date|Time|Ended)\s*:/i.test(line));
+  };
+  return { header: header.trim(), body: sections.filter((section) => !isMetaBlock(section)).join('\n\n').trim() };
+}
+function isConfiguredChannelMessage(message) {
+  if (!config.channel || !message?.chat) return false;
+  const channel = String(config.channel);
+  if (channel.startsWith('@')) return String(message.chat.username || '').toLowerCase() === channel.slice(1).toLowerCase();
+  return String(message.chat.id) === channel;
+}
+function channelEditPatch(alert, message) {
+  const content = String(message.text ?? message.caption ?? '').trim();
+  if (!content) return null;
+  const opts = { ended: !alert.is_active };
+  const expected = plainTelegramText(alert.channel_media === 'photo' ? channelCaption(alert, opts) : channelPost(alert, opts));
+  if (content === expected) return null;
+  const previous = channelEditParts(expected);
+  const edited = channelEditParts(content);
+  const stripIcon = (headline) => {
+    const suffix = ` - ${alertEmoji(alert)}`;
+    return headline.endsWith(suffix) ? headline.slice(0, -suffix.length).trim() : headline.trim();
+  };
+  const oldHeadline = stripIcon(previous.header);
+  const newHeadline = stripIcon(edited.header);
+  const patch = {};
+  if (newHeadline && newHeadline !== oldHeadline) {
+    const channelTitle = cleanAlertText(newHeadline);
+    patch.title = channelTitle;
+    patch.title_en = '';
+    patch.meta = { ...(alert.meta || {}), channelTitle };
+  }
+  // Compare with the actually published body (which may be caption-truncated), so a title-only edit
+  // never replaces a fuller map description with the shorter caption shown in Telegram.
+  if (edited.body !== previous.body) {
+    patch.description = cleanAlertText(edited.body);
+    patch.description_en = '';
+  }
+  return Object.keys(patch).length ? patch : null;
 }
 function withDeadline(promise, ms) {
   let t;
@@ -971,6 +1078,16 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     try { res = await prev(method, payload, signal); } catch (e) { res = { ok: false, description: e.description || e.message }; }
     if (res && res.ok === false) { console.warn('[bot] answerCallbackQuery ignored:', res.description); return { ok: true, result: true }; }
     return res;
+  });
+  if (role === 'admin') bot.on('edited_channel_post', (ctx) => {
+    const post = ctx.editedChannelPost;
+    if (!isConfiguredChannelMessage(post)) return;
+    const alert = store.state.alerts.find((item) => item.channel_message_id === post.message_id);
+    if (!alert) return;
+    const patch = channelEditPatch(alert, post);
+    if (!patch) return;
+    store.updateAlert(alert.id, patch);
+    console.log(`[channel-edit] ${alert.id}: synced ${Object.keys(patch).filter((key) => key !== 'meta').join(', ')}`);
   });
   bot.use(cleanChat(role)); // after each tap/message: only the current screen stays
   bot.use(async (ctx, next) => {
@@ -1361,6 +1478,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const d = newDraft(ctx, type);
     if (type === 'breaking') {
       await show(ctx, L(ctx).askBreaking, new InlineKeyboard().text(L(ctx).btnCancel, 'cancel'));
+    } else if (type === 'military_incursion') {
+      await askVehicleCount(ctx, d);
     } else if (type === 'border') await askBorder(ctx, d);
     else if (type === 'air_movement') await askFlightAircraft(ctx, d);
     else if (type === 'civil') await askCivilEmoji(ctx, d);
@@ -1377,6 +1496,17 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await ctx.answerCallbackQuery();
     return fn(ctx, d);
   };
+
+  bot.callbackQuery(/^vehc:(\d+|custom|back)$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'military_incursion') return;
+    const choice = ctx.match[1];
+    if (choice === 'back') return askVehicleCount(ctx, d);
+    if (choice === 'custom') return askVehicleCountInput(ctx, d);
+    const count = Number(choice);
+    if (!Number.isInteger(count) || !VEHICLE_COUNT_OPTIONS.includes(count)) return askVehicleCount(ctx, d);
+    d.vehicleCount = count;
+    return askLocation(ctx, d);
+  }));
 
   bot.callbackQuery(/^ce:(protection|people|housing|emergency|warning|medical)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'civil' || !CIVIL_EMOJIS[ctx.match[1]]) return;
@@ -1840,6 +1970,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const d = getDraft(ctx);
     if (!d) return home(ctx);
     const l = L(ctx);
+    if (d.step === 'vehicle_count_input') {
+      const count = parseVehicleCount(text);
+      if (!count) {
+        const en = langOf(ctx) === 'en';
+        return show(ctx, en ? 'Please send a whole number from 1 to 999.' : 'أدخل عدداً صحيحاً من 1 إلى 999.', vehicleCountInputKeyboard(ctx));
+      }
+      d.vehicleCount = count;
+      return askLocation(ctx, d);
+    }
     if (d.step === 'text') {
       if (text.length > 900) return ctx.reply(l.tooLong);
       d.text = text;

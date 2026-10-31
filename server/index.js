@@ -261,7 +261,7 @@ mountSeo(app, { limiter: apiLimiter });
 app.use((req, res) => res.status(404).type('text').send('Not found'));
 
 // ------------------------------------------------------------------ start
-const UPD = ['message', 'callback_query'];
+const UPD = ['message', 'callback_query', 'edited_channel_post'];
 const secretOf = (role) => (role === 'admin' ? config.webhookSecret : config.reportWebhookSecret);
 const tokenOf = (role) => (role === 'admin' ? config.botToken : config.reportBotToken);
 async function describe(role, b) {

@@ -5,6 +5,7 @@ import { ALERT_GROUPS, ALERT_TYPES, TYPE_KEYS, assassinationWeaponGlyph } from '
 import { NEWS_TYPES, keywordTypes, refineType, ruleClassify } from '../server/news-ai.js';
 import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
+import { SVG } from '../public/js/marker-svgs.js';
 
 const mapSource = readFileSync(new URL('../public/js/map.js', import.meta.url), 'utf8');
 const mapCss = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
@@ -65,6 +66,19 @@ test('border alert type is available in the map type filter', () => {
   assert.ok(TYPE_KEYS.includes('border'));
   assert.ok(ALERT_GROUPS.other.types.includes('border'));
   assert.equal(ALERT_TYPES.border.button_ar, 'الحدود');
+});
+
+test('military vehicle incursion has a vehicle marker and stays manual-only', () => {
+  const type = ALERT_TYPES.military_incursion;
+  assert.ok(TYPE_KEYS.includes('military_incursion'));
+  assert.ok(ALERT_GROUPS.other.types.includes('military_incursion'));
+  assert.equal(type.marker, 'icon');
+  assert.equal(type.glyph, 'tank');
+  assert.match(SVG.tank, /tk-body/);
+  assert.equal(type.zone, 'dashed');
+  assert.equal(type.color, '#71834a');
+  assert.match(mapSource, /military_incursion: 'shield'/);
+  assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'vehicle incursion is not automatically classified from news');
 });
 
 test('assassination has its own weapon marker and appears in the strikes filter', () => {

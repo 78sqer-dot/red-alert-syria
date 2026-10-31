@@ -22,7 +22,7 @@ const STYLE_URL = { light: 'https://tiles.openfreemap.org/styles/liberty', dark:
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 const ZONE_COLOR = { uav: '#ef233c', uav_strike: '#ff6b7a', airstrike: '#ef233c', breaking: '#ef233c' };
-const TYPE_ICON = { breaking: 'bolt', uav: 'drone', uav_strike: 'drone', airstrike: 'bomb', warplane: 'plane', helicopter: 'helicopter', air_movement: 'route', border: 'mapPin', missile: 'rocket', attack: 'swords', assassination: 'swords', artillery: 'target', explosion: 'bomb', civil: 'ambulance', accident: 'carCrash', protest: 'speaker', fire: 'flame', civil_plane: 'planeDep', quake: 'quake', weather: 'storm' };
+const TYPE_ICON = { breaking: 'bolt', uav: 'drone', uav_strike: 'drone', airstrike: 'bomb', warplane: 'plane', helicopter: 'helicopter', air_movement: 'route', border: 'mapPin', military_incursion: 'shield', missile: 'rocket', attack: 'swords', assassination: 'swords', artillery: 'target', explosion: 'bomb', civil: 'ambulance', accident: 'carCrash', protest: 'speaker', fire: 'flame', civil_plane: 'planeDep', quake: 'quake', weather: 'storm' };
 export const typeIcon = (t) => TYPE_ICON[t] || 'alert';
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
 // Round coloured disc with the original glyph (used by the map, the legend and toasts).

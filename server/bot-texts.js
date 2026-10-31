@@ -248,4 +248,5 @@ export const TITLES = {
   quake: { ar: 'زلزال', en: 'Earthquake' },
   weather: { ar: 'تحذير جوي', en: 'Weather warning' },
   border: { ar: 'تنبيه حدودي', en: 'Border alert' },
+  military_incursion: { ar: 'توغّل آليات عسكرية', en: 'Military vehicle incursion' },
 };

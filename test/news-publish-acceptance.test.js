@@ -16,7 +16,7 @@ process.env.ALERT_IMAGES = 'false';
 const { store, publicAlert } = await import('../server/store.js');
 await store.init(null);
 const { buildAlertInput, createBot, channelKeyboard, channelPost } = await import('../server/bot.js');
-const { BORDER_MARKERS } = await import('../shared/types.js');
+const { BORDER_MARKERS, ALERT_TYPES, ALERT_GROUPS } = await import('../shared/types.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { governorates } = await import('../server/places.js');
 const { newsState } = await import('../server/news-monitor.js');
@@ -66,6 +66,12 @@ const tap = async (data, user = owner, targetBot = bot) => targetBot.handleUpdat
     message: { message_id: 700, date: 0, chat: { id: user.id, type: 'private' }, from: targetBot.botInfo, text: 'Local test draft' },
   },
 });
+const sendText = async (text, user = owner, targetBot = bot) => targetBot.handleUpdate({
+  update_id: updateId++,
+  message: { message_id: ++messageId, date: 0, chat: { id: user.id, type: 'private' }, from: user, text },
+});
+const plainChannelText = (html) => String(html || '').replace(/<[^>]+>/g, '')
+  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, String.fromCharCode(34));
 
 test('home menu clears tracked private relay messages for this bot and chat only', async () => {
   store.convoAdd('admin', ownerId, 9101, 9102);
@@ -84,10 +90,12 @@ test('home menu clears tracked private relay messages for this bot and chat only
 
 test('every monitored alert type builds, and accepting the same mock draft twice posts once', async (t) => {
   const addedAlertIds = [];
+  const pendingReportIds = [];
   const draftId = 'a1b2c3d4e5';
   t.after(async () => {
     delete newsState().drafts[draftId];
     for (const id of addedAlertIds) store.deleteAlert(id);
+    for (const rid of pendingReportIds) store.reportTake(rid);
     await new Promise((resolve) => setTimeout(resolve, 350));
     await fs.promises.rm(dataDir, { recursive: true, force: true });
   });
@@ -97,6 +105,9 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     assert.ok(input.title, `${type} must have a publish title`);
     assert.ok(input.title_en, `${type} must have an English publish title`);
   }
+  assert.ok(ALERT_TYPES.military_incursion, 'military vehicle incursion is a registered manual alert type');
+  assert.ok(ALERT_GROUPS.other.types.includes('military_incursion'), 'the new type is filterable on the map');
+  assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'manual vehicle-incursion reports stay out of automatic news classification');
   const socialRow = channelKeyboard({ id: 'test-social-buttons' }).inline_keyboard.find((row) => row.some((button) => button.url?.includes('/boost/')));
   assert.equal(socialRow?.length, 1, 'only the Telegram boost button remains in the footer');
   assert.equal(socialRow[0].url, 'https://t.me/boost/Red_Alert_Syria');
@@ -124,6 +135,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 't:uav'));
   assert.ok(buttons().some((button) => button.callback_data === 't:helicopter'));
   assert.ok(buttons().some((button) => button.callback_data === 't:airstrike'));
+  assert.ok(buttons().some((button) => button.callback_data === 't:military_incursion'));
   assert.ok(buttons().some((button) => button.callback_data === 'cv' && button.text?.startsWith('🛡️ مدني')));
   assert.equal(buttons().some((button) => ['t:civil', 't:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting'].includes(button.callback_data)), false, 'civil choices stay inside the civil submenu');
   assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'aircraft direction is selected inside warplane/drone options, not as a separate main button');
@@ -132,8 +144,16 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     assert.match(lastUi()?.payload?.text || '', new RegExp(label), `${type} starts a manual publishing draft`);
     await tap('home');
   }
+  await tap('t:military_incursion');
+  assert.ok(buttons().some((button) => button.callback_data === 'vehc:1'));
+  assert.ok(buttons().some((button) => button.callback_data === 'vehc:12'));
+  assert.ok(buttons().some((button) => button.callback_data === 'vehc:custom'));
+  await tap('vehc:3');
+  assert.match(lastUi()?.payload?.text || '', /٣ آليات/, 'admin can choose a preset vehicle count before selecting a location');
+  await tap('home');
   await tap('home', reporter, reportBot);
   const reportButtons = lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+  assert.ok(reportButtons.some((button) => button.callback_data === 't:military_incursion'), 'vehicle incursion is available in the public report bot');
   for (const [type, label] of [['helicopter', 'طيران مروحي'], ['airstrike', 'غارة جوية']]) {
     const button = reportButtons.find((item) => item.callback_data === `t:${type}`);
     assert.ok(button, `${type} button is available in the public report bot`);
@@ -202,6 +222,26 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('skip', reporter, reportBot);
   assert.match(lastUi().payload.text, /نحو إدلب/);
 
+  await tap('home', reporter, reportBot);
+  await tap('t:military_incursion', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 'vehc:custom'));
+  await tap('vehc:custom', reporter, reportBot);
+  await sendText('٠', reporter, reportBot);
+  assert.match(lastUi().payload.text, /1 إلى 999/);
+  await sendText('١٥', reporter, reportBot);
+  assert.match(lastUi().payload.text, /١٥ آلية/);
+  await tap(`g:${idlib.code}`, reporter, reportBot);
+  await tap(`wg:${idlib.code}`, reporter, reportBot);
+  await tap('skip', reporter, reportBot);
+  assert.match(lastUi().payload.text, /١٥ آلية/);
+  const reviewStart = calls.length;
+  await tap('submit', reporter, reportBot);
+  const reviewCard = calls.slice(reviewStart).find((call) => call.method === 'sendMessage' && call.chatId === ownerId && /عدد الآليات/.test(call.payload.text || ''));
+  assert.ok(reviewCard, 'the admin review card includes the chosen vehicle count');
+  const reportCallback = reviewCard.payload.reply_markup.inline_keyboard.flat().find((button) => /^rap:/.test(button.callback_data || ''));
+  assert.ok(reportCallback, 'the report review card retains its decision callbacks');
+  pendingReportIds.push(reportCallback.callback_data.slice(4));
+
   const borderInput = buildAlertInput({
     type: 'border', border: 'turkey', location: { scope: 'point', name_ar: BORDER_MARKERS.turkey.ar, name_en: BORDER_MARKERS.turkey.en, latitude: BORDER_MARKERS.turkey.lat, longitude: BORDER_MARKERS.turkey.lon }, extra: [], ttlMin: 120,
   }, { id: ownerId, name: 'test' });
@@ -241,6 +281,12 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(targetedMovementInput.title_en, /toward Idlib/);
   assert.equal(targetedMovementInput.location.name_ar, 'إدلب');
   assert.equal(targetedMovementInput.location.latitude, idlibTarget.latitude);
+  const militaryInput = buildAlertInput({
+    type: 'military_incursion', vehicleCount: 15, location: idlibTarget, extra: [], ttlMin: 180,
+  }, { id: ownerId, name: 'test' });
+  assert.match(militaryInput.title, /١٥ آلية/);
+  assert.match(militaryInput.title_en, /15 vehicles/);
+  assert.equal(militaryInput.meta.vehicleCount, 15);
   const borderAlert = store.addAlert(borderInput);
   const palestineAlert = store.addAlert(palestineInput);
   assert.equal(publicAlert(borderAlert).border, 'turkey');
@@ -262,7 +308,66 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(publicAlert(targetedMovementAlert).flight_direction, 'toward_syria');
   assert.equal(publicAlert(targetedMovementAlert).place.name_ar, 'إدلب');
   assert.equal(publicAlert(targetedMovementAlert).location.latitude, idlibTarget.latitude);
-  addedAlertIds.push(borderAlert.id, palestineAlert.id, flightAlert.id, droneAlert.id, movementAlert.id, targetedMovementAlert.id);
+  const militaryAlert = store.addAlert(militaryInput);
+  assert.equal(publicAlert(militaryAlert).vehicle_count, 15);
+  assert.match(channelPost(militaryAlert), /١٥ آلية/);
+  addedAlertIds.push(borderAlert.id, palestineAlert.id, flightAlert.id, droneAlert.id, movementAlert.id, targetedMovementAlert.id, militaryAlert.id);
+
+  const channelSyncAlert = store.addAlert(buildAlertInput({
+    type: 'attack', location: idlibTarget, details: 'تفاصيل قديمة', extra: [], ttlMin: 180,
+  }, { id: ownerId, name: 'test' }));
+  store.updateAlert(channelSyncAlert.id, { channel_message_id: 8700, channel_media: 'photo' });
+  addedAlertIds.push(channelSyncAlert.id);
+  const oldCaption = plainChannelText(channelPost(channelSyncAlert));
+  const firstLine = oldCaption.split('\n')[0];
+  const editedCaption = oldCaption.replace(firstLine, firstLine.replace(' - ', ' محدث - ')).replace('تفاصيل قديمة', 'تفاصيل محدثة');
+  assert.notEqual(editedCaption, oldCaption);
+  let liveMapUpdate = null;
+  const captureMapUpdate = (item) => { if (item.id === channelSyncAlert.id) liveMapUpdate = item; };
+  store.on('update', captureMapUpdate);
+  await bot.handleUpdate({ update_id: updateId++, edited_channel_post: {
+    message_id: 8700, date: 0, edit_date: Math.floor(Date.now() / 1000),
+    chat: { id: -1001234567890, type: 'channel', username: 'mock_news_channel' }, caption: editedCaption,
+  } });
+  store.off('update', captureMapUpdate);
+  assert.equal(liveMapUpdate?.title, 'هجوم محدث');
+  assert.equal(liveMapUpdate?.description, 'تفاصيل محدثة');
+  assert.equal(liveMapUpdate?.type, 'attack', 'channel edits never reclassify the alert');
+  assert.equal(liveMapUpdate?.location.latitude, idlibTarget.latitude, 'channel edits retain map coordinates');
+  assert.equal(liveMapUpdate?.place.name_ar, 'إدلب', 'channel edits retain the stored place');
+  assert.equal(store.getAlert(channelSyncAlert.id).is_active, true);
+  assert.equal(store.getAlert(channelSyncAlert.id).meta.channelTitle, 'هجوم محدث');
+
+  liveMapUpdate = null;
+  store.on('update', captureMapUpdate);
+  await bot.handleUpdate({ update_id: updateId++, edited_channel_post: {
+    message_id: 8700, date: 0, edit_date: Math.floor(Date.now() / 1000),
+    chat: { id: -1001234567890, type: 'channel', username: 'other_channel' }, caption: 'تعديل من قناة أخرى',
+  } });
+  store.off('update', captureMapUpdate);
+  assert.equal(liveMapUpdate, null, 'edits from a different channel cannot change the map');
+
+  liveMapUpdate = null;
+  store.on('update', captureMapUpdate);
+  const generatedCaption = plainChannelText(channelPost(channelSyncAlert));
+  await bot.handleUpdate({ update_id: updateId++, edited_channel_post: {
+    message_id: 8700, date: 0, edit_date: Math.floor(Date.now() / 1000),
+    chat: { id: -1001234567890, type: 'channel', username: 'mock_news_channel' }, caption: generatedCaption,
+  } });
+  store.off('update', captureMapUpdate);
+  assert.equal(liveMapUpdate, null, 'the bot ignores its own generated channel-post edit echo');
+
+  store.updateAlert(channelSyncAlert.id, { channel_media: 'text' });
+  const oldTextPost = plainChannelText(channelPost(channelSyncAlert));
+  const editedTextPost = oldTextPost.replace('تفاصيل محدثة', 'تفاصيل نصية معدلة');
+  liveMapUpdate = null;
+  store.on('update', captureMapUpdate);
+  await bot.handleUpdate({ update_id: updateId++, edited_channel_post: {
+    message_id: 8700, date: 0, edit_date: Math.floor(Date.now() / 1000),
+    chat: { id: -1001234567890, type: 'channel', username: 'mock_news_channel' }, text: editedTextPost,
+  } });
+  store.off('update', captureMapUpdate);
+  assert.equal(liveMapUpdate?.description, 'تفاصيل نصية معدلة', 'plain-text channel edits are synchronized too');
 
   const before = new Set(store.state.alerts.map((alert) => alert.id));
   newsState().drafts[draftId] = {
