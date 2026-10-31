@@ -6,9 +6,12 @@ const QUNEITRA_SIDE = [35.90, 33.05];
 const DARA_NORTH = [36.05, 32.78];
 const DARA_CENTER = [36.105, 32.62];
 
-export function flightPath(direction) {
-  if (direction === 'toward_syria') return [OUTSIDE, BORDER_GATE].map((p) => [...p]);
-  const entering = [OUTSIDE, BORDER_GATE, QUNEITRA_SIDE, DARA_NORTH, DARA_CENTER].map((p) => [...p]);
+export function flightPath(direction, target = null) {
+  const base = [OUTSIDE, BORDER_GATE, QUNEITRA_SIDE, DARA_NORTH, DARA_CENTER].map((p) => [...p]);
+  const point = Array.isArray(target) ? target : target && Number.isFinite(target.longitude) && Number.isFinite(target.latitude)
+    ? [target.longitude, target.latitude] : null;
+  const entering = point ? [...base, [...point]] : base;
+  if (direction === 'toward_syria') return point ? [OUTSIDE, BORDER_GATE, [...point]].map((p) => [...p]) : [OUTSIDE, BORDER_GATE].map((p) => [...p]);
   if (direction === 'entering_syria') return entering;
   if (direction === 'leaving_syria') return entering.reverse();
   return [];

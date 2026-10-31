@@ -9,7 +9,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { store } from './store.js';
 
 const als = new AsyncLocalStorage();
-const MAX_PER_CHAT = 80;
+const MAX_PER_CHAT = 1000;
 const DELETE_WINDOW = 47.5 * 3600_000;
 const SEND = new Set(['sendMessage', 'sendPhoto', 'sendDocument', 'sendVideo', 'sendAnimation', 'sendVoice',
   'sendAudio', 'sendSticker', 'sendVideoNote', 'sendMediaGroup', 'copyMessage', 'sendLocation', 'sendContact']);
@@ -58,6 +58,8 @@ const isScreen = (method, p) => {
   const rm = p?.reply_markup;
   return !!(rm && ((rm.inline_keyboard && rm.inline_keyboard.length) || rm.keyboard));
 };
+const deleted = (result) => result === true;
+const alreadyGone = (error) => /message to delete not found|message not found|message to edit not found|message_id_invalid/i.test(String(error?.description || error?.message || ''));
 
 /** Install on a bot's Api (both bots, and any bot swapped in later). */
 export function installTracker(api, role) {
@@ -109,20 +111,30 @@ async function sweep(api, role, chat, before, softOnly = false, include = () => 
   const done = new Set();
   for (let i = 0; i < fresh.length; i += 100) {
     const part = fresh.slice(i, i + 100);
-    try { await api.deleteMessages(chat, part); part.forEach((id) => done.add(id)); } catch {
-      for (const id of part) { try { await api.deleteMessage(chat, id); } catch { /* gone already / too old */ } done.add(id); }
+    try {
+      const result = await api.deleteMessages(chat, part);
+      if (deleted(result)) part.forEach((id) => done.add(id));
+      else throw new Error('bulk delete not confirmed');
+    } catch {
+      for (const id of part) {
+        try { if (deleted(await api.deleteMessage(chat, id))) done.add(id); }
+        catch (e) { if (alreadyGone(e)) done.add(id); }
+      }
     }
   }
   for (const x of stale) { // older than 48 h: Telegram refuses deletion — blank it instead
-    try { await api.deleteMessage(chat, x.id); } catch {
+    try { if (deleted(await api.deleteMessage(chat, x.id))) done.add(x.id); }
+    catch (e) {
+      if (alreadyGone(e)) { done.add(x.id); continue; }
       if (!x.u) {
         try {
-          if (x.m) await api.editMessageCaption(chat, x.id, { caption: '▫️', reply_markup: { inline_keyboard: [] } });
-          else await api.editMessageText(chat, x.id, '▫️', { reply_markup: { inline_keyboard: [] } });
-        } catch { /* ignore */ }
+          const result = x.m
+            ? await api.editMessageCaption(chat, x.id, { caption: '▫️', reply_markup: { inline_keyboard: [] } })
+            : await api.editMessageText(chat, x.id, '▫️', { reply_markup: { inline_keyboard: [] } });
+          if (result) done.add(x.id);
+        } catch (editError) { if (alreadyGone(editError)) done.add(x.id); }
       }
     }
-    done.add(x.id);
   }
   forget(role, chat, [...done]);
   return done.size;

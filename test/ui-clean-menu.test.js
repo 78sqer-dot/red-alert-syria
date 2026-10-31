@@ -32,8 +32,8 @@ test('menu cleanup deletes old bot messages and preserves user, kept, pinned, an
   const deleted = [];
   const api = {
     getChat: async () => ({ pinned_message: { message_id: 105 } }),
-    deleteMessages: async (_chat, ids) => { deleted.push(...ids); },
-    deleteMessage: async (_chat, id) => { deleted.push(id); },
+    deleteMessages: async (_chat, ids) => { deleted.push(...ids); return true; },
+    deleteMessage: async (_chat, id) => { deleted.push(id); return true; },
   };
 
   const count = await cleanMenuMessages(api, 'admin', chat, 104);
@@ -55,4 +55,16 @@ test('menu cleanup fails closed if the pinned message cannot be checked', async 
   assert.equal(await cleanMenuMessages(api, 'report', chat), 0);
   assert.equal(deleteCalls, 0);
   assert.deepEqual(_test.bucket('report', chat).map((x) => x.id), [201]);
+});
+
+test('failed Telegram deletion remains tracked for the next menu cleanup', async () => {
+  const chat = 8270709635;
+  _test.bucket('admin', chat).push({ id: 301, t: Date.now(), s: 1, c: 1 });
+  const api = {
+    getChat: async () => ({}),
+    deleteMessages: async () => { throw new Error('temporary bulk deletion error'); },
+    deleteMessage: async () => { throw new Error('temporary single deletion error'); },
+  };
+  assert.equal(await cleanMenuMessages(api, 'admin', chat), 0);
+  assert.deepEqual(_test.bucket('admin', chat).map((x) => x.id), [301]);
 });

@@ -10,6 +10,7 @@ export const DEFAULT_SOURCES = [
   { u: 'AlarabyTvSy', name: 'التلفزيون العربي - سوريا' },
   { u: 'TelevisionSyria', name: 'تلفزيون سوريا' },
   { u: 'AlekhbariahSY', name: 'الإخبارية السورية' },
+  { u: 'sana_gov', name: 'وكالة الأنباء السورية (سانا)', general: true },
   { u: 'SyrSMOT', name: 'وزارة النقل السورية', general: true, roadOnly: true },
   { u: 'syrianmoi', name: 'وزارة الداخلية السورية', general: true, roadOnly: true },
   { u: 'ALMHARAR', name: 'شبكة أخبار سوريا الحرة', general: true },
@@ -76,19 +77,37 @@ export function parseChannelPage(html, u) {
   return { title, posts };
 }
 
-export async function fetchChannel(u, { timeoutMs = 15_000, fetchImpl = fetch } = {}) {
-  const res = await fetchImpl(`https://t.me/s/${encodeURIComponent(u)}`, {
-    headers: { 'User-Agent': UA, 'Accept-Language': 'ar,en;q=0.8', Accept: 'text/html' },
-    redirect: 'manual',
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  // a private / unknown username redirects to t.me/<u> (no preview)
-  if (res.status >= 300 && res.status < 400) { const e = new Error('no public preview'); e.code = 'nopreview'; throw e; }
-  if (!res.ok) { const e = new Error(`HTTP ${res.status}`); e.code = 'http'; throw e; }
-  const html = await res.text();
-  const out = parseChannelPage(html, u);
-  if (!out.posts.length && !/tgme_channel_info/.test(html)) { const e = new Error('no public preview'); e.code = 'nopreview'; throw e; }
-  return out;
+export async function fetchChannel(u, { timeoutMs = 15_000, fetchImpl = fetch, afterId = null, maxPages = 24 } = {}) {
+  const base = `https://t.me/s/${encodeURIComponent(u)}`;
+  const posts = new Map();
+  let title = '';
+  let before = null;
+  let oldest = Infinity;
+  let pages = 0;
+  let complete = true;
+  while (pages < (afterId == null ? 1 : maxPages)) {
+    const url = before == null ? base : `${base}?before=${before}`;
+    const res = await fetchImpl(url, {
+      headers: { 'User-Agent': UA, 'Accept-Language': 'ar,en;q=0.8', Accept: 'text/html' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    // a private / unknown username redirects to t.me/<u> (no preview)
+    if (res.status >= 300 && res.status < 400) { const e = new Error('no public preview'); e.code = 'nopreview'; throw e; }
+    if (!res.ok) { const e = new Error(`HTTP ${res.status}`); e.code = 'http'; throw e; }
+    const html = await res.text();
+    const page = parseChannelPage(html, u);
+    title ||= page.title;
+    if (!page.posts.length && pages === 0 && !/tgme_channel_info/.test(html)) { const e = new Error('no public preview'); e.code = 'nopreview'; throw e; }
+    pages++;
+    for (const post of page.posts) { posts.set(post.id, post); oldest = Math.min(oldest, post.id); }
+    if (afterId == null || !page.posts.length || oldest <= afterId) break;
+    const nextBefore = oldest;
+    if (nextBefore >= (before ?? Infinity)) break;
+    before = nextBefore;
+    if (pages >= maxPages) complete = false;
+  }
+  return { title, posts: [...posts.values()].sort((a, b) => a.id - b.id), complete, pages };
 }
 
 // Remove channel signatures, "subscribe" footers, links and hashtag decoration; keep the news itself.

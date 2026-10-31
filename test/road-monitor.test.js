@@ -28,6 +28,20 @@ test('road parsing accepts explicit closures and impassability but keeps negated
   assert.equal(parseRoadText('ازدحام مروري في دمشق'), null);
 });
 
+test('political post mentioning closed doors and a road to the future is not a road update', async () => {
+  const restore = freshStore();
+  try {
+    const text = 'الناطق السابق باسم تنظيم قسد المنحلة فرهاد الشامي يهاجم توم باراك:\n'
+      + '• توم براك هو المهندس الرئيسي للمذابح التي استهدفت الأكراد والعلويين والدروز، ويمثل دبلوماسية قذرة قائمة على الابتزاز والصفقات المظلمة والإكراه.\n'
+      + '• أساليبه المافياوية في إدارة الملف السوري والتلاعب بمصير الطوائف لن تبقى مخفية خلف الأبواب المغلقة إلى الأبد.\n'
+      + '• ستُكشف حتماً حقيقة صفقاته السرية والخلفية، ودوره في تأجيج النزاعات وإراقة الدماء في سوريا.\n'
+      + '• ابتعاد السوريين عن نفوذ هذا الرجل وأساليبه هو الطريق نحو مستقبل أكثر أماناً واستقراراً.';
+    assert.equal(parseRoadText(text), null);
+    assert.equal(await onRoadNewsPost(post('AbomosaabSharkea', text)), false);
+    assert.equal(store.state.svc?.roadWatch?.events?.length || 0, 0);
+  } finally { restore(); }
+});
+
 test('road-only status updates do not also enter the general breaking-news pipeline', () => {
   assert.equal(isRoadStatusOnlyPost('إغلاق الطريق بين دمشق ودرعا بسبب أعمال صيانة'), true);
   assert.equal(isRoadStatusOnlyPost('إغلاق الطريق بعد انفجار قرب حاجز في درعا'), false, 'a concrete incident remains eligible for the alert pipeline');

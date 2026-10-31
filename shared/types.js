@@ -17,10 +17,20 @@ export const ALERT_TYPES = {
     emoji: '🎯', color: '#ff6b7a', ring: '#e11d48', group: 'aerial', ttlMin: 120,
     marker: 'orbit', glyph: 'uav', zone: true, tag_ar: 'استهداف_بمسيّرة', tag_en: 'Drone_strike',
   },
+  airstrike: {
+    ar: 'غارة جوية', en: 'Airstrike', button_ar: 'غارة جوية', button_en: 'Airstrike',
+    emoji: '💥', color: '#ef233c', ring: '#b42332', group: 'strikes', ttlMin: 180,
+    marker: 'static', glyph: 'airstrike', disc: '#dc2626', zone: true, tag_ar: 'غارة_جوية', tag_en: 'Airstrike',
+  },
   warplane: {
     ar: 'طيران حربي', en: 'Warplane', button_ar: 'طيران حربي', button_en: 'Warplane',
     emoji: '✈️', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
     marker: 'squad', glyph: 'plane', zone: 'dashed', tag_ar: 'طيران_حربي', tag_en: 'Warplane',
+  },
+  helicopter: {
+    ar: 'طيران مروحي', en: 'Helicopter activity', button_ar: 'طيران مروحي', button_en: 'Helicopter',
+    emoji: '🚁', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
+    marker: 'helicopter', glyph: 'helicopter', zone: 'dashed', tag_ar: 'طيران_مروحي', tag_en: 'Helicopter',
   },
   air_movement: {
     ar: 'حركة طيران', en: 'Aircraft movement', button_ar: 'حركة طيران', button_en: 'Aircraft movement',
@@ -124,8 +134,8 @@ export const ZONE_KM = { place: 1.5, point: 1.5, village: 1.5, multi: 3, distric
 export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 
 export const ALERT_GROUPS = {
-  aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'air_movement', 'missile'] },
-  strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'assassination', 'artillery', 'explosion'] },
+  aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'helicopter', 'air_movement', 'missile'] },
+  strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'assassination', 'artillery', 'airstrike', 'explosion'] },
   civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border'] },

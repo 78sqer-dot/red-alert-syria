@@ -20,7 +20,7 @@ const ROAD_OUTLETS = new Map([
 const ROAD_CONTEXT = /(?:^|\s)(?:طريق|طرق|الطريق|اوتوستراد|جسر|highway|road|route)(?:\s|$)/;
 const CLOSED = /(?:قطع (?:ال)?طريق|اغلاق (?:ال)?طريق|اغلق (?:ال)?طريق|اغلقت (?:ال)?طريق|تسكير (?:ال)?طريق|غلق (?:ال)?طريق|(?:ال)?طريق (?:مغلق|مقطوع|مسكر)|(?:مغلق|مقطوع|مسكر) امام (?:حركه )?(?:السير|المرور)|road (?:is )?closed|highway (?:is )?closed|road blocked|highway blocked|road closure)/;
 const UNSAFE = /(?:غير سالك|غير صالح للسير|لا يمكن المرور|تعذر المرور|تعذر السير|ممنوع المرور|غير امن|صعوبه المرور|impassable|unsafe to travel)/;
-const STATUS_CUE = /(?:قطع (?:ال)?طريق|اغلاق|اغلق|اغلقت|تسكير|غلق|مغلق|مقطوع|مسكر|غير سالك|غير صالح للسير|لا يمكن المرور|تعذر المرور|تعذر السير|ممنوع المرور|صعوبه المرور|blocked|closure|impassable|unsafe to travel)/;
+const STATUS_CUE = /(?:^|\s)(?:قطع (?:ال)?طريق|اغلاق|اغلق(?:ت)?|تسكير|غلق|(?:ال)?مغلق(?:ه|ا)?|(?:ال)?مقطوع(?:ه|ا)?|(?:ال)?مسكر(?:ه|ا)?|غير سالك|غير صالح للسير|لا يمكن المرور|تعذر المرور|تعذر السير|ممنوع المرور|صعوبه المرور|blocked|closure|impassable|unsafe to travel)(?=\s|$)/;
 const OPEN_CUE = /(?:اعيد فتح|اعاده فتح|فتح الطريق|فتح (?:ال)?طريق|الطريق مفتوح|الطريق سالك|استئناف حركه السير|عادت حركه السير|reopened|open to traffic)/;
 const NEGATED = /(?:ليس|ليست|لم يعد|لم تعد|غير|لا يزال غير|لا توجد|نفى|ينفي) (?:الطريق )?(?:مغلق|مقطوع|مسكر|مغلقا|مقطوعا|اغلاق)/;
 const FUTURE = /(?:سيتم|سوف يتم|سيجري|يعتزم|تعتزم|يبدأ غدا|اعتبارا من غد|ابتداء من غد|will be closed|scheduled closure)/;
@@ -37,8 +37,12 @@ const save = () => store.persist({ backupSoon: true });
 
 /** Returns a clear current-state cue or a review-only ambiguous candidate. */
 export function parseRoadText(text) {
-  const n = N(text);
-  if (!ROAD_CONTEXT.test(n) || !STATUS_CUE.test(n)) return null;
+  // Telegram posts often contain unrelated bullets/quotes. Requiring road context and a status cue
+  // in the same clause prevents e.g. «الأبواب المغلقة» in a political post from pairing with
+  // «الطريق نحو مستقبل...» in another bullet and creating a false road card.
+  const clauses = String(text || '').split(/[\r\n.!؟?؛•]+/u).map((part) => N(part)).filter(Boolean);
+  const n = clauses.find((part) => ROAD_CONTEXT.test(part) && STATUS_CUE.test(part));
+  if (!n) return null;
   if (NEGATED.test(n)) return { road: null, reason: 'الخبر ينفي الإغلاق أو ينقل نفيه' };
   if (FUTURE.test(n)) return { road: null, reason: 'الخبر يتحدث عن إغلاق مستقبلي أو مخطط' };
   const closed = CLOSED.test(n);

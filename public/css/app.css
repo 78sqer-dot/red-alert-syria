@@ -311,16 +311,16 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 @media (pointer: coarse) {
   .mk::before { content: ''; position: absolute; left: 0; top: 0; width: 44px; height: 44px; transform: translate(-50%, -50%); border-radius: 50%; background: transparent; }
 }
-.news-pulse-ring { position: absolute; left: 0; top: 0; width: 25px; height: 25px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.7px solid #e11d2e; border-radius: 50%; background: rgba(225,29,46,.1); box-shadow: 0 0 2px rgba(225,29,46,.4), inset 0 0 3px rgba(225,29,46,.18); animation: newsPulseGlow 1.8s ease-in-out infinite; pointer-events: none; }
-.news-pulse-ring::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(225,29,46,.55); border-radius: inherit; animation: newsPulseWave 1.8s ease-out infinite; }
+.news-pulse-ring { position: absolute; left: 0; top: 0; width: 25px; height: 25px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.4px solid #e11d2e; border-radius: 50%; background: rgba(225,29,46,.045); box-shadow: 0 0 2px rgba(225,29,46,.2), inset 0 0 2px rgba(225,29,46,.1); animation: newsPulseGlow 2.5s ease-in-out infinite; pointer-events: none; }
+.news-pulse-ring::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(225,29,46,.3); border-radius: inherit; animation: newsPulseWave 2.5s ease-out infinite; }
 .news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 14px; height: 14px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.4px solid #fff; border-radius: 50%; background: #d7192d; box-shadow: 0 0 0 1px rgba(225,29,46,.2), 0 1px 2px rgba(0,0,0,.36); }
 .news-marker-svg { display: block; width: 9px; height: 9px; color: #fff; stroke: #fff; fill: none; }
 .mk:hover .news-marker-core, .mk.sel .news-marker-core { transform: translate(-50%, -50%) scale(1.12); }
 .mk.inactive .news-pulse-ring { animation: none; opacity: .55; }
 .is-moving .news-pulse-ring, .is-zooming .news-pulse-ring { animation-play-state: paused; }
-@keyframes newsPulseWave { 0%, 100% { transform: scale(1); opacity: 0; } 35% { opacity: .5; } }
-@keyframes newsPulseGlow { 0%, 100% { box-shadow: 0 0 2px rgba(225,29,46,.34), inset 0 0 2px rgba(225,29,46,.14); } 50% { box-shadow: 0 0 4px rgba(225,29,46,.56), inset 0 0 3px rgba(225,29,46,.26); } }
-@media (prefers-reduced-motion: reduce) { .news-pulse-ring, .news-pulse-ring::after { animation: none !important; } .news-pulse-ring { box-shadow: 0 0 4px rgba(225,29,46,.52), inset 0 0 3px rgba(225,29,46,.2); } }
+@keyframes newsPulseWave { 0%, 100% { transform: scale(1); opacity: 0; } 35% { opacity: .28; } }
+@keyframes newsPulseGlow { 0%, 100% { box-shadow: 0 0 2px rgba(225,29,46,.2), inset 0 0 2px rgba(225,29,46,.08); } 50% { box-shadow: 0 0 3px rgba(225,29,46,.34), inset 0 0 2px rgba(225,29,46,.15); } }
+@media (prefers-reduced-motion: reduce) { .news-pulse-ring, .news-pulse-ring::after { animation: none !important; } .news-pulse-ring { box-shadow: 0 0 2px rgba(225,29,46,.24), inset 0 0 2px rgba(225,29,46,.1); } }
 /* drone: exactly like the original — fixed 18px airframe, never scaled with zoom */
 .mk-orbit .mk-s { transform: none; }
 /* static disc — identical to the original .static-alert-icon */
@@ -395,6 +395,17 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 /* Keep an area-selected aircraft formation centered on the reported point. */
 @keyframes squadFlyCompact { 0% { transform: translateY(12px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-12px); opacity: 0; } }
 .squad .sq { animation-name: squadFlyCompact; }
+/* Helicopters use one recognizable top-down airframe, orbiting the alert area with animated rotors. */
+.mk-helicopter .mk-s { transform: scale(calc(var(--mks, .5) * 1.8)); }
+.heli-orbit { position: absolute; left: calc(0px - var(--orb, 14px)); top: calc(0px - var(--orb, 14px)); width: calc(var(--orb, 14px) + var(--orb, 14px)); height: calc(var(--orb, 14px) + var(--orb, 14px)); pointer-events: none; animation: heliOrbit 12s linear infinite; }
+.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 34px; height: 34px; transform: translate(-50%, -50%) rotate(90deg); pointer-events: auto; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)) drop-shadow(0 0 1px rgba(255,255,255,.65)); }
+.helicopter-svg { display: block; width: 34px; height: 34px; overflow: visible; }
+.helicopter-svg .heli-main-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .22s linear infinite; }
+.helicopter-svg .heli-tail-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .14s linear infinite reverse; }
+html.dark .heli-craft { filter: drop-shadow(0 1px 2px rgba(0,0,0,.95)) drop-shadow(0 0 1px rgba(255,255,255,.5)); }
+@keyframes heliOrbit { to { transform: rotate(1turn); } }
+@keyframes heliRotor { to { transform: rotate(1turn); } }
+.mk.inactive .heli-orbit, .mk.inactive .helicopter-svg .heli-main-rotor, .mk.inactive .helicopter-svg .heli-tail-rotor { animation: none !important; }
 .mk.inactive { filter: grayscale(1); opacity: .55; }
 .mk.inactive .uav, .mk.inactive .sq { animation: none !important; }
 .mk.inactive .sq { opacity: 1 !important; }
@@ -420,7 +431,7 @@ html[dir='rtl'] .maplibregl-popup-close-button { left: 6px; right: auto; }
 .pp-share { height: 30px; padding: 0 12px; border-radius: 8px; background: #25d366; color: #fff; font-weight: 800; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .pp-more { font-size: 12px; font-weight: 700; color: var(--red); }
 .maplibregl-popup.pp-alert-popup { max-width: min(392px, calc(100% - 16px)) !important; }
-.pp-alert-popup .maplibregl-popup-content { position: relative; box-sizing: border-box; width: min(380px, calc(100vw - 24px)); max-height: min(65vh, 520px); max-height: min(65dvh, 520px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 14px 14px 12px; border: 1px solid var(--border-subtle); border-radius: 16px; background: color-mix(in srgb, var(--bg-elevated) 98%, var(--red) 2%); box-shadow: 0 18px 44px rgba(17, 24, 39, .22), 0 4px 12px rgba(17, 24, 39, .12); }
+.pp-alert-popup .maplibregl-popup-content { position: relative; box-sizing: border-box; width: min(420px, calc(100vw - 32px)); max-height: min(62vh, 600px); max-height: min(62dvh, 600px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 17px 17px 14px; border: 1px solid var(--border-subtle); border-radius: 18px; background: color-mix(in srgb, var(--bg-elevated) 98%, var(--red) 2%); box-shadow: 0 20px 56px rgba(17, 24, 39, .24), 0 5px 16px rgba(17, 24, 39, .13); scrollbar-gutter: stable; }
 .pp-alert-popup .maplibregl-popup-content::before { content: ''; position: absolute; top: 0; inset-inline: 14px; height: 3px; border-radius: 0 0 4px 4px; background: linear-gradient(90deg, var(--blue), var(--red)); opacity: .9; pointer-events: none; }
 html.dark .pp-alert-popup .maplibregl-popup-content { box-shadow: 0 18px 46px rgba(0, 0, 0, .68), 0 4px 12px rgba(0, 0, 0, .42); }
 .maplibregl-popup-close-button { inset-inline-end: 9px; inset-inline-start: auto; top: 8px; width: 28px; height: 28px; border: 1px solid var(--border-subtle); border-radius: 50%; background: var(--bg-subtle); color: var(--text-muted); font-size: 17px; line-height: 24px; }
@@ -428,10 +439,10 @@ html[dir='rtl'] .maplibregl-popup-close-button { left: 9px; right: auto; }
 .pp-top { margin-bottom: 11px; padding-inline-end: 34px; row-gap: 6px; }
 .pp-top .badge { height: 26px; padding: 0 10px; border-radius: 999px; font-size: 11.5px; }
 .pp-top .time { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 9px; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--bg-secondary); font-size: 10.5px; }
-.pp-title { margin: 0 0 7px; color: var(--text-primary); font-weight: 900; font-size: 15px; line-height: 1.6; }
+.pp-title { margin: 0 0 7px; color: var(--text-primary); font-weight: 900; font-size: clamp(15px, 1.15rem, 18px); line-height: 1.65; letter-spacing: -.01em; }
 .pp .dist-chip { margin-top: 7px; }
 .pp-areas { display: block; max-width: 100%; width: fit-content; margin: 7px 0 0; padding: 6px 9px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--bg-secondary); color: var(--text-secondary); font-size: 11.5px; font-weight: 700; line-height: 1.65; overflow-wrap: anywhere; }
-.pp-desc { margin: 9px 0 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.75; }
+.pp-desc { margin: 9px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.8; }
 .pp-foot { gap: 9px; margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--border-subtle); }
 .pp-share { display: inline-flex; align-items: center; justify-content: center; min-width: 102px; min-height: 36px; padding: 0 11px; border: 1px solid color-mix(in srgb, #25d366 28%, var(--border-subtle)); border-radius: 10px; background: color-mix(in srgb, #25d366 11%, var(--bg-elevated)); color: #16743a; transition: background .15s, transform .15s; }
 .pp-share svg { flex: none; }
@@ -440,10 +451,12 @@ html.dark .pp-share { color: #94e2ac; }
 .pp-more { display: inline-flex; flex: 1; align-items: center; justify-content: center; min-height: 36px; padding: 0 13px; border: 1px solid var(--red-strong); border-radius: 10px; background: var(--red-strong); color: #fff; font-family: var(--font-arabic); font-size: 12px; font-weight: 800; box-shadow: 0 3px 9px color-mix(in srgb, var(--red) 22%, transparent); transition: filter .15s, transform .15s; }
 .pp-more:hover { filter: brightness(.96); transform: translateY(-1px); }
 @media (max-width: 480px) {
-  .pp-alert-popup .maplibregl-popup-content { width: min(360px, calc(100vw - 24px)); padding: 13px 12px 11px; }
-  .pp-title { font-size: 14.5px; }
-  .pp-foot { gap: 7px; }
-  .pp-more, .pp-share { min-height: 38px; }
+  .maplibregl-popup.pp-alert-popup { max-width: calc(100vw - 20px) !important; }
+  .pp-alert-popup .maplibregl-popup-content { width: min(420px, calc(100vw - 20px)); max-height: min(48vh, 440px); max-height: min(48dvh, 440px); padding: 14px 13px calc(12px + env(safe-area-inset-bottom, 0px)); border-radius: 16px; }
+  .pp-title { font-size: 15px; line-height: 1.65; }
+  .pp-desc { font-size: 12.5px; line-height: 1.75; }
+  .pp-foot { position: sticky; bottom: -12px; gap: 8px; margin-inline: -13px; padding: 10px 13px max(10px, env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--bg-elevated) 96%, transparent); backdrop-filter: blur(12px); }
+  .pp-more, .pp-share { min-height: 42px; }
 }
 .maplibregl-map.zoom-detail .mk-orbit:not(.mk-sat) .uav { animation: uavHover 2.8s ease-in-out infinite; }
 .maplibregl-map.zoom-detail .mk-sat .uav { animation: uavOrbit 9s linear infinite; animation-delay: var(--delay, 0s); }
@@ -580,7 +593,10 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-14px); } }
 @keyframes cardIn { from { opacity: 0; transform: translateY(-8px); background: color-mix(in srgb, var(--c) 18%, var(--bg-card)); } }
 @keyframes flash { 50% { filter: brightness(1.35); } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } .uav, .squad .sq { animation-duration: 7s !important; animation-iteration-count: infinite !important; } .ic-tank .tk-body, .ic-tank .tk-flash { animation-duration: 2.6s !important; animation-iteration-count: infinite !important; } .ic-alert_tri .ic-svg { animation-duration: 1.6s !important; animation-iteration-count: infinite !important; } .ic-ambulance .amb-siren { animation-duration: .9s !important; animation-iteration-count: infinite !important; } .ic-missile_ic .ic-svg { animation-duration: 1.8s !important; animation-iteration-count: infinite !important; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .mk-squad:not(.inactive) .squad .sq { animation: squadFlyZ 7s linear infinite !important; }
+}
 
 /* ---------------------------------------------------------------- responsive */
 @media (max-width: 1180px) {
@@ -706,28 +722,41 @@ html.dark .wa-btn svg { color: #2fe079; }
 .zp { width: var(--d, 16px); height: var(--d, 16px); pointer-events: none !important; contain: layout style; }
 .zp-fill {
   position: absolute; inset: 0; border-radius: 50%; background: var(--c, #ef233c);
-  opacity: .12; animation: zfillPulse 2.6s ease-in-out infinite; will-change: opacity; pointer-events: none;
+  opacity: .045; animation: zfillPulse 3.2s ease-in-out infinite; will-change: opacity; pointer-events: none;
 }
-@keyframes zfillPulse { 0%, 100% { opacity: .12; } 50% { opacity: .32; } }
+@keyframes zfillPulse { 0%, 100% { opacity: .045; } 50% { opacity: .12; } }
 .zp::before, .zp::after {
   content: ''; position: absolute; inset: 0; border-radius: 50%;
-  border: 2px solid var(--c, #ef233c);
-  background: radial-gradient(circle, transparent 52%, color-mix(in srgb, var(--c, #ef233c) 30%, transparent) 100%);
+  border: 1.5px solid var(--c, #ef233c);
+  background: radial-gradient(circle, transparent 68%, color-mix(in srgb, var(--c, #ef233c) 14%, transparent) 100%);
   opacity: 0; transform: scale(1);
-  animation: zpulse 2.6s cubic-bezier(.2, .6, .35, 1) infinite;
+  animation: zpulse 3.2s cubic-bezier(.2, .6, .35, 1) infinite;
   will-change: transform, opacity;
 }
-.zp::after { animation-delay: 1.3s; }
+.zp::after { animation-delay: 1.6s; }
 @keyframes zpulse {
-  0% { transform: scale(1); opacity: .8; }
-  100% { transform: scale(2.15); opacity: 0; }
+  0% { transform: scale(1); opacity: .4; }
+  100% { transform: scale(1.85); opacity: 0; }
 }
+/* Preserve the original blue aircraft-circle glow and pulse cadence for warplanes (and helicopters). */
+.zp.zp-aircraft .zp-fill { opacity: .12; animation: zfillPulseAircraft 2.6s ease-in-out infinite; }
+@keyframes zfillPulseAircraft { 0%, 100% { opacity: .12; } 50% { opacity: .32; } }
+.zp.zp-aircraft::before, .zp.zp-aircraft::after {
+  border-width: 2px;
+  background: radial-gradient(circle, transparent 52%, color-mix(in srgb, var(--c, #3b8eff) 30%, transparent) 100%);
+  animation: zpulseAircraft 2.6s cubic-bezier(.2, .6, .35, 1) infinite;
+}
+.zp.zp-aircraft::after { animation-delay: 1.3s; }
+@keyframes zpulseAircraft { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(2.15); opacity: 0; } }
 .map-wrap.is-zooming .zp, .is-zooming .zp { visibility: hidden; }
 .is-moving .zp::before, .is-moving .zp::after, .is-moving .zp-fill { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
-  .zp-fill { animation: none; opacity: .20; }
-  .zp::before { animation: none; opacity: .55; transform: scale(1.25); }
+  .zp-fill { animation: none; opacity: .04; }
+  .zp::before { animation: none; opacity: .22; transform: scale(1.06); }
   .zp::after { display: none; }
+  .zp.zp-aircraft .zp-fill { animation: none; opacity: .20; }
+  .zp.zp-aircraft::before { animation: none; opacity: .55; transform: scale(1.25); }
+  .heli-orbit, .helicopter-svg .heli-main-rotor, .helicopter-svg .heli-tail-rotor { animation: none !important; }
 }
 .pp-areas { display: block; overflow: visible; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; line-height: 1.55; margin: 3px 0 0; }
 

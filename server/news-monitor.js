@@ -20,7 +20,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
 
@@ -35,7 +35,7 @@ export function isRoadStatusOnlyPost(text) {
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
 // that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
-export const FILTER_VER = 6;
+export const FILTER_VER = 7;
 const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
@@ -103,6 +103,16 @@ export function newsState() {
       } else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
     }
     n.mig.northNews1 = new Date().toISOString();
+  }
+  // Add the verified official Syrian News Agency public feed to saved configurations once.
+  // Its first poll is baselined at the newest post, so no historic alerts are replayed.
+  if (!n.mig.sanaOfficial1) {
+    for (const s of DEFAULT_SOURCES.filter((x) => x.u.toLowerCase() === 'sana_gov')) {
+      const cur = n.sources.find((x) => x.u.toLowerCase() === s.u.toLowerCase());
+      if (cur) { cur.name = s.name; cur.general = true; }
+      else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
+    }
+    n.mig.sanaOfficial1 = new Date().toISOString();
   }
   setSourceNames(n.sources.map((s) => s.name));
   n.attr = false; // published text never names a source (sources stay in the owner's draft card only)
@@ -250,7 +260,7 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil'].includes(d.type)) return false;
+  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike'].includes(d.type)) return false;
   if (!d.loc || d.loc.scope === 'country' || !Number.isFinite(d.loc.latitude) || !Number.isFinite(d.loc.longitude)) return false;
   const ss = d.srcs || [];
   return ss.length >= 2 || ss.some((x) => !isLocalSrc(x));
@@ -292,10 +302,10 @@ function geoOf(locs) {
   return { pts, dists, govs, coarse, none: !locs.length };
 }
 const whereOf = (locs) => (locs.length ? locs.map((l) => [l.name_ar, l.scope !== 'governorate' ? l.governorate_ar : ''].filter(Boolean).join('، ')).join(' + ') : 'سوريا');
-const AIR = new Set(['uav', 'warplane', 'missile']);
-const STRIKE = new Set(['attack', 'artillery', 'explosion']);
+const AIR = new Set(['uav', 'warplane', 'helicopter', 'missile']);
+const STRIKE = new Set(['attack', 'artillery', 'airstrike', 'explosion']);
 const CIVIL = new Set(['civil', 'accident', 'fire', 'civil_plane', 'explosion']);
-const WINDOW_MIN = { uav: 120, uav_strike: 120, warplane: 120, missile: 180, attack: 360, assassination: 360, artillery: 360, explosion: 360, civil: 360, accident: 360, fire: 360, civil_plane: 240, protest: 480, breaking: 360, weather: 720 };
+const WINDOW_MIN = { uav: 120, uav_strike: 120, warplane: 120, helicopter: 120, airstrike: 180, missile: 180, attack: 360, assassination: 360, artillery: 360, explosion: 360, civil: 360, accident: 360, fire: 360, civil_plane: 240, protest: 480, breaking: 360, weather: 720 };
 const sameFamily = (a, b) => a === b || (AIR.has(a) && AIR.has(b)) || (STRIKE.has(a) && STRIKE.has(b)) || ((a === 'civil' || b === 'civil') && CIVIL.has(a) && CIVIL.has(b));
 const tokens = (s) => new Set(N(s).split(' ').filter((w) => w.length >= 3).map((w) => (w.startsWith('ال') && w.length > 4 ? w.slice(2) : w)));
 function textSim(a, b) {
@@ -624,7 +634,7 @@ async function mergeInto(d, it, locs = []) {
 }
 function explicitWeatherResult(it) {
   const info = weatherWarningInfo(it.text);
-  if (!info) return null;
+  if (!info || hasNonWeatherSignal(it.text)) return null;
   const nt = N(it.text);
   const gs = governorates.filter((g) => [g.ar, g.en, ...(g.alt || [])].some((x) => nt.includes(N(x)))).slice(0, 4);
   if (!gs.length) return null;
@@ -781,10 +791,16 @@ async function pollOnce() {
   for (const src of n.sources.filter((s) => s.on)) {
     if (R.stopped) return;
     try {
-      const r = await fetchChannel(src.u);
-      R.src[src.u] = { ok: true, at: Date.now(), n: r.posts.length };
-      const maxId = r.posts.reduce((m, p) => Math.max(m, p.id), 0);
       const last = n.last[src.u];
+      const r = await fetchChannel(src.u, { ...(last == null ? {} : { afterId: last }) });
+      if (r.complete === false) {
+        R.src[src.u] = { ok: false, at: Date.now(), n: r.posts.length, err: 'catch-up exceeds page limit; checkpoint preserved' };
+        console.warn(`[news] ${src.u}: catch-up page limit reached; keeping checkpoint ${last}`);
+        await sleep(700);
+        continue;
+      }
+      R.src[src.u] = { ok: true, at: Date.now(), n: r.posts.length, pages: r.pages || 1 };
+      const maxId = r.posts.reduce((m, p) => Math.max(m, p.id), 0);
       if (last == null) { n.last[src.u] = maxId; continue; } // a new source: start from now, no backlog
       for (const p of r.posts) if (p.id > last) fresh.push({ src, p });
       if (maxId > last) n.last[src.u] = maxId;

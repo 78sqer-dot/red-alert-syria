@@ -10,7 +10,7 @@ import { governorates } from './places.js';
 import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge } from './alert-image.js';
 import { EXTRA_POINTS, HAZARDS } from './weather.js';
-import { officialWeatherMeta, officialWeatherWarnings, DAILY_BULLETIN_INDEX } from './weather-official.js';
+import { officialWeatherMeta, officialWeatherWarnings, DAILY_BULLETIN_INDEX, CAP_FEED_URL } from './weather-official.js';
 import { WX_LABEL, WX_EMOJI, wxKind, wxIconSvg } from '../shared/wx-icons.js';
 import fs from 'node:fs';
 import path from 'node:path';

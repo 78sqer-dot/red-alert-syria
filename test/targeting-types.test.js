@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { ALERT_GROUPS, ALERT_TYPES, TYPE_KEYS, assassinationWeaponGlyph } from '../shared/types.js';
 import { NEWS_TYPES, keywordTypes, refineType, ruleClassify } from '../server/news-ai.js';
-import { sameIncident } from '../server/news-monitor.js';
+import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
+
+const mapSource = readFileSync(new URL('../public/js/map.js', import.meta.url), 'utf8');
+const mapCss = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
 
 test('map types keep drone targeting distinct and visually on-brand', () => {
   const drone = ALERT_TYPES.uav_strike;
@@ -22,6 +26,39 @@ test('aircraft movement is separate from unchanged hovering markers', () => {
   assert.equal(ALERT_TYPES.air_movement.marker, 'movement');
   assert.equal(ALERT_TYPES.air_movement.zone, false);
   assert.equal(Array.from(NEWS_TYPES).includes('air_movement'), false, 'manual movement reports are not auto-classified from news');
+});
+
+test('helicopter has its own monitored button and keeps the original warplane marker treatment', () => {
+  const warplane = ALERT_TYPES.warplane;
+  const helicopter = ALERT_TYPES.helicopter;
+  assert.ok(TYPE_KEYS.includes('helicopter'));
+  assert.ok(ALERT_GROUPS.aerial.types.includes('helicopter'));
+  assert.ok(NEWS_TYPES.includes('helicopter'));
+  assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
+  assert.equal(helicopter.glyph, 'helicopter');
+  assert.match(EXTRA_SVG.helicopter, /class="heli-main-rotor"/);
+  assert.match(EXTRA_SVG.helicopter, /class="heli-tail-rotor"/);
+  assert.deepEqual({ marker: warplane.marker, glyph: warplane.glyph, color: warplane.color, ring: warplane.ring, zone: warplane.zone }, {
+    marker: 'squad', glyph: 'plane', color: '#3b8eff', ring: '#1d4ed8', zone: 'dashed',
+  });
+  assert.equal(nightEligible({ type: 'helicopter', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, 'helicopter news stays for human review');
+});
+
+test('warplane keeps the original blue dashed-ring weight and flying motion', () => {
+  assert.match(mapSource, /'line-opacity': A\(0\.85, 0\.3\), 'line-width': 1\.8, 'line-dasharray': \[3, 4\]/);
+  assert.match(mapCss, /\.zp\.zp-aircraft \.zp-fill \{ opacity: \.12; animation: zfillPulseAircraft 2\.6s ease-in-out infinite; \}/);
+  assert.match(mapCss, /\.mk-squad:not\(\.inactive\) \.squad \.sq \{ animation: squadFlyZ 7s linear infinite !important; \}/);
+});
+
+test('airstrike is a separate red map alert and monitored button, distinct from warplane overflight', () => {
+  const strike = ALERT_TYPES.airstrike;
+  assert.ok(TYPE_KEYS.includes('airstrike'));
+  assert.ok(ALERT_GROUPS.strikes.types.includes('airstrike'));
+  assert.ok(NEWS_TYPES.includes('airstrike'));
+  assert.equal(strike.marker, 'static');
+  assert.equal(strike.zone, true);
+  assert.equal(strike.color, '#ef233c');
+  assert.equal(nightEligible({ type: 'airstrike', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, 'airstrike reports stay for human review');
 });
 
 test('border alert type is available in the map type filter', () => {
@@ -86,11 +123,66 @@ test('similar headlines in distant governorates are not merged as the same incid
   assert.equal(sameIncident(incident(unknown), incident(unknown)), true);
 });
 
-test('civil incident types are report-only and nested under the civil group', () => {
+test('civil incident types are nested under the civil group and enabled for news monitoring', () => {
   for (const key of ['arrest', 'death', 'martyrdom', 'brawl', 'shooting']) {
     assert.ok(TYPE_KEYS.includes(key));
     assert.ok(ALERT_GROUPS.civil.types.includes(key));
     assert.equal(ALERT_TYPES[key].parent, 'civil');
-    assert.equal(NEWS_TYPES.includes(key), false, `${key} must not enter automatic news classification`);
+    assert.equal(NEWS_TYPES.includes(key), true, `${key} should be watched by the automatic news monitor`);
+    assert.equal(nightEligible({ type: key, status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, `${key} remains human-reviewed`);
+    assert.equal(dayAutoReady({ type: key, status: 'pending', dayAutoAt: 0, loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, `${key} is not day-auto-published`);
   }
+});
+
+test('helicopter and airstrike are watched automatically but require human publication review', () => {
+  for (const key of ['helicopter', 'airstrike']) {
+    assert.ok(TYPE_KEYS.includes(key));
+    assert.equal(NEWS_TYPES.includes(key), true, `${key} is enabled in automatic news classification`);
+    const draft = { type: key, status: 'pending', dayAutoAt: 0, loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] };
+    assert.equal(nightEligible(draft), false, `${key} remains human-reviewed overnight`);
+    assert.equal(dayAutoReady(draft), false, `${key} is not auto-published during daytime`);
+  }
+});
+
+test('new civil news types classify separately and a protest march is not a drone', () => {
+  const samples = [
+    ['arrest', 'اعتقلت قوى الأمن شخصاً في محافظة درعا السورية اليوم.'],
+    ['death', 'وفاة رجل عُثر عليه في مدينة دمشق السورية اليوم.'],
+    ['martyrdom', 'استشهد شاب في محافظة إدلب السورية اليوم.'],
+    ['brawl', 'مشاجرة بالأيدي بين شبان في مدينة حلب السورية اليوم.'],
+    ['shooting', 'سماع إطلاق نار في حي المزة بدمشق السورية اليوم.'],
+    ['helicopter', 'تحليق طيران مروحي في أجواء مدينة حمص السورية اليوم.'],
+    ['airstrike', 'غارة جوية استهدفت موقعاً في ريف دمشق السورية اليوم.'],
+    ['protest', 'مسيرة شعبية احتجاجية في مدينة دمشق السورية اليوم.'],
+  ];
+  for (const [expected, text] of samples) {
+    assert.equal(ruleClassify(text)?.type, expected, `${text} should map to ${expected}`);
+  }
+  const march = samples.at(-1)[1];
+  assert.ok(keywordTypes(march).includes('protest'));
+  assert.equal(keywordTypes(march).includes('uav'), false);
+  assert.equal(refineType('uav', march), 'protest');
+  assert.equal(ruleClassify('إطلاق نار على حاجز في درعا السورية اليوم.')?.type, 'attack', 'targeted gunfire is still an attack');
+  const helicopter = 'تحليق طيران مروحي فوق مدينة حمص السورية اليوم.';
+  assert.equal(refineType('warplane', helicopter), 'helicopter', 'Gemini warplane fallback is corrected to the helicopter button');
+  assert.equal(ruleClassify('تحليق مروحية عسكرية فوق حمص السورية اليوم.')?.type, 'helicopter');
+  assert.equal(refineType('warplane', 'غارة بمروحية عسكرية على موقع في حمص السورية اليوم.'), 'airstrike', 'helicopter strikes do not become routine overflight activity');
+  assert.equal(refineType('warplane', 'غارة جوية على موقع في ريف دمشق السورية اليوم.'), 'airstrike', 'an actual airstrike gets its own button');
+  assert.equal(ruleClassify('غارة جوية استهدفت موقعاً في ريف دمشق السورية اليوم.')?.type, 'airstrike');
+  assert.equal(refineType('breaking', 'تحليق طيران حربي فوق ريف دمشق السورية اليوم.'), 'warplane', 'warplane overflight remains distinct from a strike');
+});
+
+test('specific ground incidents take precedence over a weather warning in the same post', () => {
+  const text = 'تحذير جوي رسمي: تحذر الأرصاد من رياح قوية في محافظة حلب السورية. واندلع حريق في مستودع بالمدينة اليوم.';
+  assert.equal(newsTest.explicitWeatherResult({ i: 1, text }), null);
+  assert.equal(ruleClassify(text)?.type, 'fire');
+  assert.equal(refineType('weather', text), 'fire');
+});
+
+test('nonviolent Israeli ground activity routes to breaking, while armed clashes remain attacks', () => {
+  const ground = 'توغلت دورية تابعة لجيش الاحتلال الإسرائيلي وأقامت ساتراً ترابياً في ريف القنيطرة جنوب سوريا اليوم.';
+  assert.equal(ruleClassify(ground)?.type, 'breaking');
+  assert.equal(refineType('attack', ground), 'breaking');
+  const clash = 'توغلت قوات الاحتلال الإسرائيلي في ريف القنيطرة جنوب سوريا واندلع اشتباك مع الأهالي اليوم.';
+  assert.equal(ruleClassify(clash)?.type, 'attack');
 });

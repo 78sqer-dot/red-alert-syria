@@ -209,7 +209,8 @@ function mainKeyboard(ctx) {
   const lang = langOf(ctx);
   const b = (k) => (lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar);
   const e = (k) => ALERT_TYPES[k].emoji;
-  const menuTypes = TYPE_KEYS
+  // This shared keyboard serves both the private publishing bot and the public reporting bot.
+  const menuTypes = [...new Set([...TYPE_KEYS, 'helicopter', 'airstrike'])]
     .filter((type) => type !== 'air_movement' && !['accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'].includes(type))
     .map((type) => (type === 'civil' ? 'civil_menu' : type));
   const kb = new InlineKeyboard();
@@ -833,17 +834,19 @@ async function relayCopy(fromApi, fromToken, toApi, chatId, msg, header, footer)
   const kind = Object.keys(RELAY_KINDS).find((k) => msg[k]);
   const body = msg.text || msg.caption || '';
   const txt = `${header}${body ? `\n\n${esc(body)}` : ''}${footer ? `\n\n${footer}` : ''}`;
-  if (!kind) return toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, _keep: 'r' });
+  const relayResult = (message, extraIds = []) => ({ ...message, _relayedIds: [...new Set([...extraIds, message?.message_id].filter(Boolean))] });
+  if (!kind) return relayResult(await toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, _keep: 'r' }));
   const fileId = kind === 'photo' ? msg.photo[msg.photo.length - 1].file_id : msg[kind].file_id;
   const f = await fromApi.getFile(fileId);
   const res = await fetch(`https://api.telegram.org/file/bot${fromToken}/${f.file_path}`);
   if (!res.ok) throw new Error('file download failed');
   const file = new InputFile(Buffer.from(await res.arrayBuffer()), msg.document?.file_name || f.file_path.split('/').pop());
   if (kind === 'video_note' || kind === 'sticker') {
-    await toApi[RELAY_KINDS[kind]](chatId, file, { _keep: 'r' });
-    return toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML', _keep: 'r' });
+    const media = await toApi[RELAY_KINDS[kind]](chatId, file, { _keep: 'r' });
+    const caption = await toApi.sendMessage(chatId, txt.slice(0, 4096), { parse_mode: 'HTML', _keep: 'r' });
+    return relayResult(caption, [media?.message_id]);
   }
-  return toApi[RELAY_KINDS[kind]](chatId, file, { caption: txt.slice(0, 1024), parse_mode: 'HTML', _keep: 'r' });
+  return relayResult(await toApi[RELAY_KINDS[kind]](chatId, file, { caption: txt.slice(0, 1024), parse_mode: 'HTML', _keep: 'r' }));
 }
 const reviewerIds = () => [...new Set([...config.ownerIds, ...store.state.editors])];
 
@@ -1004,11 +1007,12 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       const footer = rl ? '<i>↩️ To answer, just write your message here.</i>' : '<i>↩️ للرد، اكتب رسالتك هنا مباشرة.</i>';
       try {
         const m = await relayCopy(ctx.api, TOKENS.admin, APIS.report, uid, ctx.message, header, footer);
-        store.relayPut(`r:${uid}:${m.message_id}`, ctx.from.id);
+        const ids = m._relayedIds || [m.message_id];
+        for (const id of ids) store.relayPut(`r:${uid}:${id}`, ctx.from.id);
         store.openThread(uid, ctx.from.id);
         store.convoAdd('admin', ctx.chat.id, ctx.message.message_id); // staff's own reply
         ctx.ras.keepInput = true;
-        store.convoAdd('report', uid, m.message_id); // the copy the reporter received
+        store.convoAdd('report', uid, ...ids); // media and any separate caption/guide copy
         await sendTransient(ctx.api, ctx.chat.id, en ? '✅ Your reply was sent to the reporter.' : '✅ تم إرسال ردك إلى صاحب البلاغ.');
       } catch (e) {
         const d = String(e.description || e.message || '');
@@ -1040,8 +1044,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         const footer = sl ? '<i>↩️ Use "Reply" on this message to answer.</i>' : '<i>↩️ اعمل «رد» على هذه الرسالة لتجيبه.</i>';
         try {
           const m = await relayCopy(ctx.api, TOKENS.report, api, sid, msg, header, footer);
-          store.relayPut(`a:${sid}:${m.message_id}`, ctx.from.id);
-          store.convoAdd('admin', sid, m.message_id);
+          const ids = m._relayedIds || [m.message_id];
+          for (const id of ids) store.relayPut(`a:${sid}:${id}`, ctx.from.id);
+          store.convoAdd('admin', sid, ...ids);
           ok += 1;
         } catch (e) { console.warn('[relay] to staff failed', e.description || e.message); }
       }
@@ -1056,7 +1061,11 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!ctx.chat || ctx.chat.type !== 'private') return;
     const ids = store.convoTake(role, ctx.chat.id);
     for (let i = 0; i < ids.length; i += 10) {
-      await Promise.allSettled(ids.slice(i, i + 10).map((id) => ctx.api.deleteMessage(ctx.chat.id, id)));
+      const part = ids.slice(i, i + 10);
+      const results = await Promise.allSettled(part.map((id) => ctx.api.deleteMessage(ctx.chat.id, id)));
+      results.forEach((result, index) => {
+        if (result.status !== 'fulfilled' || result.value !== true) setKeep(role, ctx.chat.id, part[index], false);
+      });
     }
   };
   const home = async (ctx) => {

@@ -53,8 +53,8 @@ export function reloadLogo() { LOGO = loadLogo(); }
 
 // ------------------------------------------------------------------ texts per type
 const HEADLINE = {
-  ar: { breaking: 'خبر عاجل', uav: 'تحليق مسيّرة', uav_strike: 'استهداف بمسيّرة', warplane: 'تحليق طيران حربي', missile: 'إطلاق صواريخ', attack: 'هجوم', assassination: 'اغتيال', artillery: 'قصف مدفعي', explosion: 'انفجار', civil: 'تنبيه مدني', accident: 'حادث سير', protest: 'مظاهرة', fire: 'حريق', civil_plane: 'طائرة مدنية', quake: 'زلزال', weather: 'تحذير جوي' },
-  en: { breaking: 'Breaking news', uav: 'Drone activity', uav_strike: 'Drone strike', warplane: 'Warplane activity', missile: 'Missile launch', attack: 'Attack', assassination: 'Assassination', artillery: 'Artillery shelling', explosion: 'Explosion', civil: 'Civil alert', accident: 'Traffic accident', protest: 'Protest', fire: 'Fire', civil_plane: 'Civil aircraft', quake: 'Earthquake', weather: 'Weather warning' },
+  ar: { breaking: 'خبر عاجل', uav: 'تحليق مسيّرة', uav_strike: 'استهداف بمسيّرة', airstrike: 'غارة جوية', warplane: 'تحليق طيران حربي', helicopter: 'تحليق طيران مروحي', missile: 'إطلاق صواريخ', attack: 'هجوم', assassination: 'اغتيال', artillery: 'قصف مدفعي', explosion: 'انفجار', civil: 'تنبيه مدني', accident: 'حادث سير', protest: 'مظاهرة', fire: 'حريق', civil_plane: 'طائرة مدنية', quake: 'زلزال', weather: 'تحذير جوي' },
+  en: { breaking: 'Breaking news', uav: 'Drone activity', uav_strike: 'Drone strike', airstrike: 'Airstrike', warplane: 'Warplane activity', helicopter: 'Helicopter activity', missile: 'Missile launch', attack: 'Attack', assassination: 'Assassination', artillery: 'Artillery shelling', explosion: 'Explosion', civil: 'Civil alert', accident: 'Traffic accident', protest: 'Protest', fire: 'Fire', civil_plane: 'Civil aircraft', quake: 'Earthquake', weather: 'Weather warning' },
 };
 const LEVELS = {
   caution: { ar: 'حيطة وحذر', en: 'Caution', color: '#fdba74' },
@@ -74,10 +74,10 @@ const HAZARD_ICON = {
   dust: ['M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242', 'M16 17H7', 'M17 21H9'],
 };
 const hazardIconSvg = (k, x, y, size, color) => `<g transform="translate(${x} ${y}) scale(${size / 24})" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${HAZARD_ICON[k].map((d) => `<path d="${d}"/>`).join('')}</g>`;
-const LEVEL_OF = { breaking: 'urgent', uav: 'caution', uav_strike: 'danger', warplane: 'caution', missile: 'danger', attack: 'danger', assassination: 'danger', artillery: 'danger', explosion: 'danger', civil: 'notice', accident: 'notice', protest: 'notice', fire: 'notice', civil_plane: 'info', quake: 'notice', weather: 'caution' };
+const LEVEL_OF = { breaking: 'urgent', uav: 'caution', uav_strike: 'danger', airstrike: 'danger', warplane: 'caution', helicopter: 'caution', missile: 'danger', attack: 'danger', assassination: 'danger', artillery: 'danger', explosion: 'danger', civil: 'notice', accident: 'notice', protest: 'notice', fire: 'notice', civil_plane: 'info', quake: 'notice', weather: 'caution' };
 const NOTE = {
-  ar: { uav: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق لا على عدد المسيّرات', warplane: 'ملاحظة: الدائرة تدلّ على منطقة التحليق التقريبية', multi: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق المتأثرة', quake: 'ملاحظة: الدائرة تقريبية لمنطقة الشعور بالهزة، والمصدر مراصد الزلازل الدولية', weather: 'ملاحظة: الدائرة تقريبية للمنطقة المشمولة بالتحذير' },
-  en: { uav: 'Note: the number of circles shows the number of areas, not the number of drones', warplane: 'Note: the circle shows the approximate flight area', multi: 'Note: the number of circles shows the number of affected areas', quake: 'Note: the circle approximates where the shaking may be felt (international seismic agencies)', weather: 'Note: the circle approximates the warned area' },
+  ar: { uav: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق لا على عدد المسيّرات', warplane: 'ملاحظة: الدائرة تدلّ على منطقة التحليق التقريبية', airstrike: 'ملاحظة: الدائرة تحدد نطاق موقع الغارة التقريبي، لا مساحة الضرر المؤكدة', multi: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق المتأثرة', quake: 'ملاحظة: الدائرة تقريبية لمنطقة الشعور بالهزة، والمصدر مراصد الزلازل الدولية', weather: 'ملاحظة: الدائرة تقريبية للمنطقة المشمولة بالتحذير' },
+  en: { uav: 'Note: the number of circles shows the number of areas, not the number of drones', warplane: 'Note: the circle shows the approximate flight area', airstrike: 'Note: the circle marks the approximate reported strike location, not confirmed damage extent', multi: 'Note: the number of circles shows the number of affected areas', quake: 'Note: the circle approximates where the shaking may be felt (international seismic agencies)', weather: 'Note: the circle approximates the warned area' },
 };
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -268,7 +268,7 @@ export async function alertImageSvg(alert, opts = {}) {
   o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
   // ---- footer: note (multi-circle / aircraft) + time
   const notes = NOTE[en ? 'en' : 'ar'];
-  const note = type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : type === 'warplane' ? notes.warplane : '');
+  const note = type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
   const when = whenText(alert.timestamp || Date.now(), lang);
   const fy = HEAD + MAP_H;
   o.push(`<rect x="0" y="${fy}" width="${W}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${fy}" width="${W}" height="1.5" fill="#e2e8f0"/>`);

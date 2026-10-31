@@ -122,9 +122,27 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('home');
   assert.ok(buttons().some((button) => button.callback_data === 't:warplane'));
   assert.ok(buttons().some((button) => button.callback_data === 't:uav'));
+  assert.ok(buttons().some((button) => button.callback_data === 't:helicopter'));
+  assert.ok(buttons().some((button) => button.callback_data === 't:airstrike'));
   assert.ok(buttons().some((button) => button.callback_data === 'cv' && button.text?.startsWith('🛡️ مدني')));
   assert.equal(buttons().some((button) => ['t:civil', 't:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting'].includes(button.callback_data)), false, 'civil choices stay inside the civil submenu');
   assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'aircraft direction is selected inside warplane/drone options, not as a separate main button');
+  for (const [type, label] of [['helicopter', 'طيران مروحي'], ['airstrike', 'غارة جوية']]) {
+    await tap(`t:${type}`);
+    assert.match(lastUi()?.payload?.text || '', new RegExp(label), `${type} starts a manual publishing draft`);
+    await tap('home');
+  }
+  await tap('home', reporter, reportBot);
+  const reportButtons = lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+  for (const [type, label] of [['helicopter', 'طيران مروحي'], ['airstrike', 'غارة جوية']]) {
+    const button = reportButtons.find((item) => item.callback_data === `t:${type}`);
+    assert.ok(button, `${type} button is available in the public report bot`);
+    assert.ok(button.text.includes(label), `${type} button has a clear Arabic label`);
+    await tap(`t:${type}`, reporter, reportBot);
+    assert.match(lastUi()?.payload?.text || '', new RegExp(label), `${type} starts a report with the selected type`);
+    await tap('home', reporter, reportBot);
+  }
+  await tap('home');
   await tap('cv');
   for (const callback of ['t:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting', 't:civil']) {
     assert.ok(buttons().some((button) => button.callback_data === callback), `civil submenu includes ${callback}`);
