@@ -392,6 +392,9 @@ html.dark .sq-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.4)) drop-shado
 html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
 .fly-svg .amb-siren { animation: siren .9s steps(1) infinite; }
 @keyframes squadFly { 0% { transform: translateY(110px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-110px); opacity: 0; } }
+/* Keep an area-selected aircraft formation centered on the reported point. */
+@keyframes squadFlyCompact { 0% { transform: translateY(12px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-12px); opacity: 0; } }
+.squad .sq { animation-name: squadFlyCompact; }
 .mk.inactive { filter: grayscale(1); opacity: .55; }
 .mk.inactive .uav, .mk.inactive .sq { animation: none !important; }
 .mk.inactive .sq { opacity: 1 !important; }
@@ -416,6 +419,38 @@ html[dir='rtl'] .maplibregl-popup-close-button { left: 6px; right: auto; }
 .pp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .pp-share { height: 30px; padding: 0 12px; border-radius: 8px; background: #25d366; color: #fff; font-weight: 800; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .pp-more { font-size: 12px; font-weight: 700; color: var(--red); }
+.maplibregl-popup.pp-alert-popup { max-width: min(392px, calc(100% - 16px)) !important; }
+.pp-alert-popup .maplibregl-popup-content { position: relative; box-sizing: border-box; width: min(380px, calc(100vw - 24px)); max-height: min(65vh, 520px); max-height: min(65dvh, 520px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 14px 14px 12px; border: 1px solid var(--border-subtle); border-radius: 16px; background: color-mix(in srgb, var(--bg-elevated) 98%, var(--red) 2%); box-shadow: 0 18px 44px rgba(17, 24, 39, .22), 0 4px 12px rgba(17, 24, 39, .12); }
+.pp-alert-popup .maplibregl-popup-content::before { content: ''; position: absolute; top: 0; inset-inline: 14px; height: 3px; border-radius: 0 0 4px 4px; background: linear-gradient(90deg, var(--blue), var(--red)); opacity: .9; pointer-events: none; }
+html.dark .pp-alert-popup .maplibregl-popup-content { box-shadow: 0 18px 46px rgba(0, 0, 0, .68), 0 4px 12px rgba(0, 0, 0, .42); }
+.maplibregl-popup-close-button { inset-inline-end: 9px; inset-inline-start: auto; top: 8px; width: 28px; height: 28px; border: 1px solid var(--border-subtle); border-radius: 50%; background: var(--bg-subtle); color: var(--text-muted); font-size: 17px; line-height: 24px; }
+html[dir='rtl'] .maplibregl-popup-close-button { left: 9px; right: auto; }
+.pp-top { margin-bottom: 11px; padding-inline-end: 34px; row-gap: 6px; }
+.pp-top .badge { height: 26px; padding: 0 10px; border-radius: 999px; font-size: 11.5px; }
+.pp-top .time { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 9px; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--bg-secondary); font-size: 10.5px; }
+.pp-title { margin: 0 0 7px; color: var(--text-primary); font-weight: 900; font-size: 15px; line-height: 1.6; }
+.pp .dist-chip { margin-top: 7px; }
+.pp-areas { display: block; max-width: 100%; width: fit-content; margin: 7px 0 0; padding: 6px 9px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--bg-secondary); color: var(--text-secondary); font-size: 11.5px; font-weight: 700; line-height: 1.65; overflow-wrap: anywhere; }
+.pp-desc { margin: 9px 0 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.75; }
+.pp-foot { gap: 9px; margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--border-subtle); }
+.pp-share { display: inline-flex; align-items: center; justify-content: center; min-width: 102px; min-height: 36px; padding: 0 11px; border: 1px solid color-mix(in srgb, #25d366 28%, var(--border-subtle)); border-radius: 10px; background: color-mix(in srgb, #25d366 11%, var(--bg-elevated)); color: #16743a; transition: background .15s, transform .15s; }
+.pp-share svg { flex: none; }
+.pp-share:hover { background: color-mix(in srgb, #25d366 18%, var(--bg-elevated)); transform: translateY(-1px); }
+html.dark .pp-share { color: #94e2ac; }
+.pp-more { display: inline-flex; flex: 1; align-items: center; justify-content: center; min-height: 36px; padding: 0 13px; border: 1px solid var(--red-strong); border-radius: 10px; background: var(--red-strong); color: #fff; font-family: var(--font-arabic); font-size: 12px; font-weight: 800; box-shadow: 0 3px 9px color-mix(in srgb, var(--red) 22%, transparent); transition: filter .15s, transform .15s; }
+.pp-more:hover { filter: brightness(.96); transform: translateY(-1px); }
+@media (max-width: 480px) {
+  .pp-alert-popup .maplibregl-popup-content { width: min(360px, calc(100vw - 24px)); padding: 13px 12px 11px; }
+  .pp-title { font-size: 14.5px; }
+  .pp-foot { gap: 7px; }
+  .pp-more, .pp-share { min-height: 38px; }
+}
+.maplibregl-map.zoom-detail .mk-orbit:not(.mk-sat) .uav { animation: uavHover 2.8s ease-in-out infinite; }
+.maplibregl-map.zoom-detail .mk-sat .uav { animation: uavOrbit 9s linear infinite; animation-delay: var(--delay, 0s); }
+@keyframes uavHover { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(0,-2px,0); } }
+@keyframes squadFlyCompact { 0% { transform: translateY(2px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-2px); opacity: 0; } }
+.maplibregl-map .mk-squad .squad .sq { animation: squadFlyCompact 7s linear infinite; }
+.maplibregl-map .mk-fly .squad .sq { animation: squadFlyCompact 7s linear infinite; }
 .maplibregl-ctrl-scale { background: var(--bg-glass); color: var(--text-secondary); border-color: var(--text-secondary); font-family: var(--font-mono); font-size: 10px; }
 .maplibregl-ctrl-attrib { background: var(--bg-glass) !important; color: var(--text-muted); font-size: 10px; font-family: var(--font-arabic); }
 .maplibregl-ctrl-attrib a { color: var(--text-secondary); }

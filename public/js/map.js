@@ -676,7 +676,7 @@ export class AlertMap {
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 20, 'class="uav-svg"')}</div></div>`;
     } else if (t.marker === 'squad') {
       const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
-      el.innerHTML = `<div class="squad">${pl(16, 22, -8, 1)}${pl(14, 6, 12, 0.85)}${pl(14, 38, 12, 0.85)}</div>`;
+      el.innerHTML = `<div class="squad">${pl(16, 22, -16, 1)}${pl(14, 6, -3, 0.85)}${pl(14, 38, -3, 0.85)}</div>`;
     } else if (t.marker === 'fly') {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 22, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
     } else if (t.marker === 'movement') {
@@ -789,7 +789,7 @@ export class AlertMap {
     for (const [k, m] of this._pulses) if (!keep.has(k)) { m.remove(); this._pulses.delete(k); }
     if (!this.map.isZooming()) this.el.classList.remove('is-zooming');
   }
-  // orbit radius (px) of each drone = the on-screen radius of its glowing ring at the current zoom
+  // Scale aircraft markers while keeping supplemental drone copies close to their exact area anchors.
   _orbitPx() {
     if (!this._orb || !this.map) return;
     const z = this.map.getZoom();
@@ -809,13 +809,13 @@ export class AlertMap {
         continue;
       }
       if (z < 11) continue;
-      const px = Math.max(14, Math.round((o.km * 1000) / mpp));
+      const px = Math.max(8, Math.min(12, Math.round((o.km * 1000) / mpp)));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
     if (z >= 11 && this.sats) for (const m of this.sats.values()) {
       if (!Number.isFinite(m._zkm)) continue;
       const mpp = (40075016.686 * Math.cos((m._lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
-      const px = Math.max(14, Math.round((this._screenKm(m._zkm, m._lat) * 1000) / mpp));
+      const px = Math.max(8, Math.min(12, Math.round((this._screenKm(m._zkm, m._lat) * 1000) / mpp)));
       const el = m.getElement();
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }

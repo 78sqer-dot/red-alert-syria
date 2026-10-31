@@ -7,7 +7,7 @@ import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js';
 import { settings } from './settings.js?v=3';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=29';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=30';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
