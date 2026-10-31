@@ -369,9 +369,9 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 /* drone — grey airframe that orbits only at close zoom (like the original) */
 .uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
 .uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
-/* the drone stays hidden at country view and circles its target at detailed zoom */
+/* original: the drone sits still at country view and only circles its target from zoom 11 up */
 .maplibregl-map.zoom-detail .uav { animation: uavOrbit 9s linear infinite; }
-/* original (redalert.com.lb): .zoom-tier-far/.zoom-tier-mid .uav-svg { visibility: hidden } -> below detailed zoom
+/* original (redalert.com.lb): .zoom-tier-far/.zoom-tier-mid .uav-svg { visibility: hidden } -> below zoom 11
    only the glowing circle is shown; the tap target stays so the alert can still be opened */
 .maplibregl-map:not(.zoom-detail) .mk-orbit .uav { visibility: hidden; animation: none; }
 .mk-sat .uav, .maplibregl-map.zoom-detail .mk-sat .uav { animation-delay: var(--delay, 0s); }
