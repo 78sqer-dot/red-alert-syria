@@ -18,6 +18,7 @@ await store.init(null);
 const { buildAlertInput, createBot, channelKeyboard, channelPost } = await import('../server/bot.js');
 const { BORDER_MARKERS } = await import('../shared/types.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
+const { governorates } = await import('../server/places.js');
 const { newsState } = await import('../server/news-monitor.js');
 const syriaBorder = JSON.parse(fs.readFileSync(new URL('../public/data/syria-border.geojson', import.meta.url), 'utf8'));
 
@@ -122,10 +123,10 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 't:warplane'));
   assert.ok(buttons().some((button) => button.callback_data === 't:uav'));
   assert.ok(buttons().some((button) => button.callback_data === 'cv' && button.text?.startsWith('🛡️ مدني')));
-  assert.equal(buttons().some((button) => ['t:civil', 't:accident', 't:fire', 't:protest', 't:civil_plane'].includes(button.callback_data)), false, 'civil choices stay inside the civil submenu');
+  assert.equal(buttons().some((button) => ['t:civil', 't:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom'].includes(button.callback_data)), false, 'civil choices stay inside the civil submenu');
   assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'aircraft direction is selected inside warplane/drone options, not as a separate main button');
   await tap('cv');
-  for (const callback of ['t:accident', 't:fire', 't:protest', 't:civil_plane', 't:civil']) {
+  for (const callback of ['t:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:civil']) {
     assert.ok(buttons().some((button) => button.callback_data === callback), `civil submenu includes ${callback}`);
   }
   await tap('home');
@@ -160,11 +161,26 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 'flight:leaving_syria'));
   assert.equal(buttons().some((button) => button.callback_data === 'flight:from_area'), false, 'hovering over an area remains its own alert type');
   await tap('flight:entering_syria', reporter, reportBot);
-  assert.doesNotMatch(lastUi().payload.text, /اختر المحافظة/);
+  assert.match(lastUi().payload.text, /اختر المنطقة التي يتجه إليها الطيران/);
+  assert.ok(buttons().some((button) => button.callback_data?.startsWith('g:')), 'movement reports offer a governorate selector for the target area');
+  assert.ok(buttons().some((button) => button.callback_data === 'flightdest:none'), 'reporters can keep the direction general');
+  await tap('flightdest:none', reporter, reportBot);
   assert.match(lastUi().payload.text, /بلا تحديد منطقة أو دبوس/);
-  assert.equal(buttons().some((button) => button.callback_data?.startsWith('g:')), false, 'direction-only alerts never offer a governorate selector');
   await tap('skip', reporter, reportBot);
   assert.match(lastUi().payload.text, /بلا تحديد منطقة أو دبوس/);
+
+  const idlib = governorates.find((g) => g.ar === 'إدلب');
+  assert.ok(idlib, 'Idlib governorate is available in the area picker');
+  await tap('home', reporter, reportBot);
+  await tap('t:warplane', reporter, reportBot);
+  await tap('airmode:move', reporter, reportBot);
+  await tap('flight:toward_syria', reporter, reportBot);
+  await tap(`g:${idlib.code}`, reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === `wg:${idlib.code}`));
+  await tap(`wg:${idlib.code}`, reporter, reportBot);
+  assert.match(lastUi().payload.text, /إدلب/);
+  await tap('skip', reporter, reportBot);
+  assert.match(lastUi().payload.text, /نحو إدلب/);
 
   const borderInput = buildAlertInput({
     type: 'border', border: 'turkey', location: { scope: 'point', name_ar: BORDER_MARKERS.turkey.ar, name_en: BORDER_MARKERS.turkey.en, latitude: BORDER_MARKERS.turkey.lat, longitude: BORDER_MARKERS.turkey.lon }, extra: [], ttlMin: 120,
@@ -197,6 +213,14 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(movementInput.location.scope, 'country');
   assert.equal(movementInput.location.latitude, null);
   assert.equal(movementInput.location.longitude, null);
+  const idlibTarget = { scope: 'governorate', name_ar: 'إدلب', name_en: 'Idlib', governorate_ar: 'إدلب', governorate_en: 'Idlib', latitude: 35.93, longitude: 36.63 };
+  const targetedMovementInput = buildAlertInput({
+    type: 'air_movement', aircraft: 'warplane', flightDirection: 'toward_syria', flightTarget: idlibTarget, location: idlibTarget, extra: [], ttlMin: 60,
+  }, { id: ownerId, name: 'test' });
+  assert.match(targetedMovementInput.title, /نحو إدلب/);
+  assert.match(targetedMovementInput.title_en, /toward Idlib/);
+  assert.equal(targetedMovementInput.location.name_ar, 'إدلب');
+  assert.equal(targetedMovementInput.location.latitude, idlibTarget.latitude);
   const borderAlert = store.addAlert(borderInput);
   const palestineAlert = store.addAlert(palestineInput);
   assert.equal(publicAlert(borderAlert).border, 'turkey');
@@ -214,7 +238,11 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(publicAlert(movementAlert).aircraft, 'uav');
   assert.equal(publicAlert(movementAlert).scope, 'country');
   assert.equal(Number.isFinite(publicAlert(movementAlert).location?.latitude), false, 'direction-only alerts have no map pin coordinates');
-  addedAlertIds.push(borderAlert.id, palestineAlert.id, flightAlert.id, droneAlert.id, movementAlert.id);
+  const targetedMovementAlert = store.addAlert(targetedMovementInput);
+  assert.equal(publicAlert(targetedMovementAlert).flight_direction, 'toward_syria');
+  assert.equal(publicAlert(targetedMovementAlert).place.name_ar, 'إدلب');
+  assert.equal(publicAlert(targetedMovementAlert).location.latitude, idlibTarget.latitude);
+  addedAlertIds.push(borderAlert.id, palestineAlert.id, flightAlert.id, droneAlert.id, movementAlert.id, targetedMovementAlert.id);
 
   const before = new Set(store.state.alerts.map((alert) => alert.id));
   newsState().drafts[draftId] = {

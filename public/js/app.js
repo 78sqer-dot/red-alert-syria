@@ -1383,7 +1383,10 @@ async function boot() {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) refresh();
   });
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    const build = new URL(import.meta.url).searchParams.get('v') || 'dev';
+    navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(build)}`).catch(() => {});
+  }
 }
 // /ar/?at=32.62,36.10,9 -> open the map centred on that area (links from the "شو صاير بـ..." pages)
 function focusFromUrl() {

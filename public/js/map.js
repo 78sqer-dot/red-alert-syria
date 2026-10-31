@@ -493,6 +493,44 @@ export class AlertMap {
     source.setData({ type: 'FeatureCollection', features });
   }
 
+  bindMarkerTap(el, activate) {
+    let gesture = null;
+    let ignoreTouchClick = false;
+    let ignoreTimer = 0;
+    el.addEventListener('pointerdown', (e) => {
+      if ((e.pointerType === 'touch' || e.pointerType === 'pen') && e.isPrimary) {
+        gesture = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        ignoreTouchClick = false;
+        clearTimeout(ignoreTimer);
+      } else if (e.pointerType === 'mouse') {
+        gesture = null;
+        ignoreTouchClick = false;
+        clearTimeout(ignoreTimer);
+      }
+    }, { passive: true });
+    el.addEventListener('pointerup', (e) => {
+      if (!gesture || e.pointerId !== gesture.id) return;
+      const start = gesture;
+      gesture = null;
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 12) return;
+      ignoreTouchClick = true;
+      clearTimeout(ignoreTimer);
+      ignoreTimer = setTimeout(() => { ignoreTouchClick = false; }, 750);
+      activate();
+    }, { passive: true });
+    el.addEventListener('pointercancel', () => { gesture = null; }, { passive: true });
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ignoreTouchClick && e.detail > 0) {
+        ignoreTouchClick = false;
+        clearTimeout(ignoreTimer);
+        e.preventDefault();
+        return;
+      }
+      activate();
+    });
+  }
+
   selectMarker(id) {
     const group = groupAlerts(this.alerts, this.selectedId).find((g) => g.alerts.some((a) => a.id === id));
     this.onSelect(group ? nextAlertId(group, this.selectedId) : id, { fromMap: true });
@@ -551,10 +589,7 @@ export class AlertMap {
         const el = this.markerEl(a);
         m = new M.Marker({ element: el, anchor: 'center', offset: [0, 0] }).setLngLat([a.location.longitude, a.location.latitude]).addTo(this.map);
         m._sig = sig;
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.selectMarker(a.id);
-        });
+        this.bindMarkerTap(el, () => this.selectMarker(a.id));
         this.markers.set(a.id, m);
       } else {
         m.setLngLat([a.location.longitude, a.location.latitude]);
@@ -592,7 +627,7 @@ export class AlertMap {
             el.removeAttribute('tabindex');
             // spread the drones of one circle around it, and offset each circle a little
             el.style.setProperty('--delay', `${(-(9 * j) / per - i * 1.3).toFixed(2)}s`);
-            el.addEventListener('click', (e) => { e.stopPropagation(); this.onSelect(a.id, { fromMap: true }); });
+            this.bindMarkerTap(el, () => this.onSelect(a.id, { fromMap: true }));
             m = new M.Marker({ element: el, anchor: 'center' }).setLngLat([z.lon, z.lat]).addTo(this.map);
             m._sig = sig;
             this.sats.set(key, m);

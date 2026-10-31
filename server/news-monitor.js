@@ -91,6 +91,19 @@ export function newsState() {
     }
     n.mig.roadOfficial1 = new Date().toISOString();
   }
+  // Add the new North Syria / Idlib feeds to existing saved configurations once; new feeds start at
+  // their newest post, and an already-added source keeps the owner's enabled/paused choice.
+  if (!n.mig.northNews1) {
+    for (const s of DEFAULT_SOURCES.filter((x) => ['enabbaladi', 'syriadefence'].includes(x.u.toLowerCase()))) {
+      const cur = n.sources.find((x) => x.u.toLowerCase() === s.u.toLowerCase());
+      if (cur) {
+        cur.name = s.name;
+        cur.general = true;
+        if (s.local) cur.local = true;
+      } else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
+    }
+    n.mig.northNews1 = new Date().toISOString();
+  }
   setSourceNames(n.sources.map((s) => s.name));
   n.attr = false; // published text never names a source (sources stay in the owner's draft card only)
   if (!n.last || typeof n.last !== 'object') n.last = {};

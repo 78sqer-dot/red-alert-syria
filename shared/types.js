@@ -82,6 +82,21 @@ export const ALERT_TYPES = {
     emoji: '🛫', color: '#0284c7', ring: '#075985', group: 'civil', parent: 'civil', ttlMin: 60,
     marker: 'icon', glyph: 'airliner', icon: '#0284c7', zone: false, tag_ar: 'طائرة_مدنية', tag_en: 'Civil_aircraft',
   },
+  arrest: {
+    ar: 'اعتقال', en: 'Arrest', button_ar: 'اعتقال', button_en: 'Arrest',
+    emoji: '🚔', color: '#d97706', ring: '#92400e', group: 'civil', parent: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'civil_shield', icon: '#d97706', zone: false, tag_ar: 'اعتقال', tag_en: 'Arrest',
+  },
+  death: {
+    ar: 'وفاة', en: 'Death', button_ar: 'وفاة', button_en: 'Death',
+    emoji: '🕯️', color: '#6b7280', ring: '#374151', group: 'civil', parent: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'other', icon: '#6b7280', zone: false, tag_ar: 'وفاة', tag_en: 'Death',
+  },
+  martyrdom: {
+    ar: 'استشهاد', en: 'Martyrdom', button_ar: 'استشهاد', button_en: 'Martyrdom',
+    emoji: '🕊️', color: '#b91c1c', ring: '#7f1d1d', group: 'civil', parent: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'urgent_warning', icon: '#b91c1c', zone: false, tag_ar: 'استشهاد', tag_en: 'Martyrdom',
+  },
   quake: {
     ar: 'زلزال', en: 'Earthquake', button_ar: 'زلزال', button_en: 'Earthquake',
     emoji: '🌍', color: '#a16207', ring: '#713f12', group: 'nature', ttlMin: 180,
@@ -101,7 +116,7 @@ export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 export const ALERT_GROUPS = {
   aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'air_movement', 'missile'] },
   strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'assassination', 'artillery', 'explosion'] },
-  civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane'] },
+  civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border'] },
 };

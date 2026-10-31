@@ -308,6 +308,9 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 @keyframes flightMovementGlow { 50% { box-shadow: 0 0 20px color-mix(in srgb, var(--c) 72%, transparent), 0 2px 8px rgba(0,0,0,.35); } }
 @media (prefers-reduced-motion: reduce) { .flight-movement, .flight-movement::before { animation: none; } .flight-movement::before { opacity: .5; } }
 .mk-breaking-news .mk-s { transform: none; transition: none; }
+@media (pointer: coarse) {
+  .mk::before { content: ''; position: absolute; left: 0; top: 0; width: 44px; height: 44px; transform: translate(-50%, -50%); border-radius: 50%; background: transparent; }
+}
 .news-pulse-ring { position: absolute; left: 0; top: 0; width: 25px; height: 25px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.7px solid #e11d2e; border-radius: 50%; background: rgba(225,29,46,.1); box-shadow: 0 0 2px rgba(225,29,46,.4), inset 0 0 3px rgba(225,29,46,.18); animation: newsPulseGlow 1.8s ease-in-out infinite; pointer-events: none; }
 .news-pulse-ring::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(225,29,46,.55); border-radius: inherit; animation: newsPulseWave 1.8s ease-out infinite; }
 .news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 14px; height: 14px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.4px solid #fff; border-radius: 50%; background: #d7192d; box-shadow: 0 0 0 1px rgba(225,29,46,.2), 0 1px 2px rgba(0,0,0,.36); }

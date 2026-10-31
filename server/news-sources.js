@@ -2,8 +2,8 @@
 // channel (no account, no API key). It lists the ~20 latest posts with their id, time and text.
 // Every source is read by the server itself (Render, 24/7), independent of anyone's phone.
 
-// Default sources (verified 25 Oct 2026). `general: true` = channel also covers non-Syrian news, so a post
-// must mention Syria (a Syrian place / "سوريا") before it is even considered.
+// Default sources. `general: true` = channel also covers non-Syrian news, so a post must mention Syria
+// (a Syrian place / "سوريا") before it is even considered.
 export const DEFAULT_SOURCES = [
   { u: 'ajasyr', name: 'الجزيرة سوريا' },
   { u: 'alarabiya_sy', name: 'العربية سوريا' },
@@ -15,6 +15,9 @@ export const DEFAULT_SOURCES = [
   { u: 'ALMHARAR', name: 'شبكة أخبار سوريا الحرة', general: true },
   { u: 'HalabTodayTV', name: 'حلب اليوم', general: true },
   { u: 'alarabiyaBr', name: 'العربية عاجل', general: true },
+  // Additional Syrian reporting and humanitarian coverage for north Syria / Idlib.
+  { u: 'enabbaladi', name: 'عنب بلدي', general: true },
+  { u: 'SyriaDefence', name: 'الدفاع المدني السوري', general: true, local: true },
   // local / activist channels (fast regional coverage, less reliable): `local: true` = shown as
   // "محلي" in the draft card, never classified by the simple no-AI rules, and the AI is stricter with them.
   { u: 'zainaldinmaham1', name: 'زينو ياسر محاميد', general: true, local: true },

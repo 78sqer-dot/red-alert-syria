@@ -129,6 +129,11 @@ function draftSummary(d, lang) {
   if (d.type === 'breaking') lines.push('', esc(d.text || ''));
   if (d.type === 'air_movement' && (!loc || loc.scope === 'country')) {
     lines.push('', lang === 'en' ? '📍 No place selected — no map pin' : '📍 اتجاه عام — بلا تحديد منطقة أو دبوس على الخريطة');
+  } else if (d.type === 'air_movement' && d.flightTarget) {
+    const leaving = d.flightDirection === 'leaving_syria';
+    const label = lang === 'en' ? (leaving ? 'Departure area' : 'Destination area') : (leaving ? 'منطقة المغادرة' : 'الوجهة');
+    const place = locName(d.flightTarget, lang);
+    lines.push('', `📍 <b>${label}:</b> ${leaving ? esc(place) : `${lang === 'en' ? 'Toward ' : 'نحو '}${esc(place)}`}`);
   } else if (d.extra?.length) {
     lines.push('', `📍 <b>${lang === 'en' ? `Areas (${d.extra.length + 1})` : `المناطق (${d.extra.length + 1})`}:</b>`);
     for (const x of [loc, ...d.extra]) lines.push(`• ${esc(locName(x, lang))}`);
@@ -205,7 +210,7 @@ function mainKeyboard(ctx) {
   const b = (k) => (lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar);
   const e = (k) => ALERT_TYPES[k].emoji;
   const menuTypes = TYPE_KEYS
-    .filter((type) => type !== 'air_movement' && !['accident', 'protest', 'fire', 'civil_plane'].includes(type))
+    .filter((type) => type !== 'air_movement' && !['accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom'].includes(type))
     .map((type) => (type === 'civil' ? 'civil_menu' : type));
   const kb = new InlineKeyboard();
   for (let i = 0; i < menuTypes.length; i += 2) {
@@ -241,6 +246,7 @@ function govKeyboard(ctx, d) {
   });
   kb.row();
   if (d.adding) return kb.text(langOf(ctx) === 'en' ? '↩️ Back to preview' : '↩️ رجوع للمعاينة', 'addback');
+  if (d.selectingFlightTarget) kb.text(lang === 'en' ? '➡️ Keep direction only' : '➡️ اتجاه عام بلا منطقة', 'flightdest:none').row();
   if (d.type === 'breaking') kb.text(l.btnNoLocation, 'noloc').row();
   kb.text(l.btnCancel, 'cancel');
   return kb;
@@ -418,7 +424,14 @@ async function askLocation(ctx, d) {
   d.step = 'gov';
   const en = langOf(ctx) === 'en';
   const head = d.adding ? (en ? `➕ <b>Add another area</b> (${(d.extra?.length || 0) + 1} selected so far)\n\n` : `➕ <b>إضافة منطقة أخرى</b> (المحدد حتى الآن: ${(d.extra?.length || 0) + 1})\n\n`) : '';
-  await show(ctx, head + L(ctx).askGov(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`), govKeyboard(ctx, d));
+  const aircraft = FLIGHT_AIRCRAFT[d.aircraft] || FLIGHT_AIRCRAFT[d.type];
+  const leaving = d.flightDirection === 'leaving_syria';
+  const targetPrompt = d.selectingFlightTarget
+    ? (en
+      ? `📍 Choose the area ${leaving ? 'the aircraft is leaving from' : 'the aircraft is heading toward'}. The map pin will mark this area.${aircraft ? ` (${esc(aircraft.en)})` : ''}`
+      : `📍 اختر المنطقة التي ${leaving ? 'يغادرها الطيران' : 'يتجه إليها الطيران'}، وسيظهر دبوس الخريطة عليها.${aircraft ? ` (${esc(aircraft.ar)})` : ''}`)
+    : head + L(ctx).askGov(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`);
+  await show(ctx, targetPrompt, govKeyboard(ctx, d));
 }
 async function askBorder(ctx, d) {
   d.step = 'border';
@@ -436,7 +449,7 @@ async function askAerialMode(ctx, d) {
     .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row()
     .text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row()
     .text(L(ctx).btnCancel, 'cancel');
-  await show(ctx, en ? 'Choose hovering over an area, or select a movement direction only (no place or map pin):' : 'اختر تحليقًا فوق منطقة، أو حدّد اتجاه الحركة فقط (بلا منطقة أو دبوس على الخريطة):', kb);
+  await show(ctx, en ? 'Choose hovering over an area or aircraft movement. For movement, you can also select a destination area.' : 'اختر تحليقًا فوق منطقة أو حركة طيران. في مسار الحركة يمكنك أيضًا تحديد المنطقة المقصودة.', kb);
 }
 async function askFlightDirection(ctx, d) {
   d.step = 'flight';
@@ -447,7 +460,7 @@ async function askFlightDirection(ctx, d) {
     kb.text(`✈️ ${en ? name.en : name.ar}`, `flight:${key}`).row();
   }
   kb.text(L(ctx).btnCancel, 'cancel');
-  await show(ctx, en ? 'Choose the movement direction only:' : 'اختر اتجاه حركة الطائرة فقط:', kb);
+  await show(ctx, en ? 'Choose the movement direction, then select the area it is heading toward (or keep it general):' : 'اختر اتجاه الحركة، ثم حدّد المنطقة التي تتجه إليها الطائرة (أو أبقِ الاتجاه عاماً):', kb);
 }
 async function askFlightAircraft(ctx, d) {
   d.step = 'aircraft';
@@ -474,6 +487,13 @@ const locKey = (x) => (x ? `${x.scope}:${x.place_id || x.district || x.governora
 // a picked location: either the alert's (first) area, or one more area added from the preview
 async function pickLocation(ctx, d, loc) {
   if (!loc) return;
+  if (d.selectingFlightTarget) {
+    d.selectingFlightTarget = false;
+    d.flightTarget = loc;
+    d.location = loc;
+    d.extra = [];
+    return afterLocation(ctx, d);
+  }
   if (d.adding) {
     d.adding = false;
     if (!Array.isArray(d.extra)) d.extra = [];
@@ -501,7 +521,7 @@ async function afterLocation(ctx, d) {
     const kb0 = new InlineKeyboard().text(L(ctx).btnSkip, 'skip').row().text(L(ctx).btnBack, 'back:gov').text(L(ctx).btnCancel, 'cancel');
     return show(ctx, en ? `<b>${esc(roadLabel(d.road, 'en'))}</b> — ${esc(locName(d.location, 'en'))}\n\n📝 Write a short description, e.g. <i>closed at the bridge entrance because of …</i>, or skip.` : `<b>${esc(roadLabel(d.road, 'ar'))}</b> — ${esc(locName(d.location, 'ar'))}\n\n📝 اكتب وصف مختصر، مثلاً: <i>مسكّر عند مدخل الجسر بسبب …</i> أو <i>في حاجز تفتيش وازدحام</i>، أو اضغط «تخطي».`, kb0);
   }
-  const backKey = d.type === 'border' ? 'back:border' : d.type === 'air_movement' && d.location?.scope === 'country' ? 'back:flight' : 'back:gov';
+  const backKey = d.type === 'border' ? 'back:border' : d.type === 'air_movement' ? 'back:flight' : 'back:gov';
   const kb = new InlineKeyboard().text(L(ctx).btnSkip, 'skip').row().text(L(ctx).btnBack, backKey).text(L(ctx).btnCancel, 'cancel');
   const detailsLocation = d.type === 'air_movement' && d.location?.scope === 'country'
     ? (langOf(ctx) === 'en' ? 'general direction (no place or map pin)' : 'اتجاه عام — بلا تحديد منطقة أو دبوس خريطة')
@@ -533,6 +553,9 @@ export function buildAlertInput(d, author) {
   const border = BORDER_REGIONS[d.border];
   const flight = d.type === 'air_movement' ? FLIGHT_DIRECTIONS[d.flightDirection] : null;
   const aircraft = d.type === 'air_movement' ? FLIGHT_AIRCRAFT[d.aircraft] : null;
+  const flightTarget = d.type === 'air_movement' && d.flightTarget?.scope !== 'country' ? d.flightTarget : null;
+  const flightTargetAr = flightTarget ? (d.flightDirection === 'leaving_syria' ? ` — من ${locName(flightTarget, 'ar')}` : ` — نحو ${locName(flightTarget, 'ar')}`) : '';
+  const flightTargetEn = flightTarget ? (d.flightDirection === 'leaving_syria' ? ` — from ${locName(flightTarget, 'en')}` : ` — toward ${locName(flightTarget, 'en')}`) : '';
   const civilEmoji = d.type === 'civil' && CIVIL_EMOJIS[d.civilEmoji] ? d.civilEmoji : null;
   const baseTitle = d.type === 'air_movement'
     ? (aircraft?.ar || titles.ar)
@@ -542,8 +565,8 @@ export function buildAlertInput(d, author) {
     : wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
   return {
     type: d.type,
-    title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}`,
-    title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}`,
+    title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${flightTargetAr}`,
+    title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}`,
     extra,
     description: cleanAlertText(d.type === 'breaking' ? d.text : d.details),
     location: loc,
@@ -1255,7 +1278,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       .text(L(ctx).btnBack, 'home');
     await show(ctx, L(ctx).askTarget, kb);
   });
-  // civil sub-menu: general civil alert + traffic accident, protest, fire, civil aircraft
+  // Civil sub-menu: incident, safety and humanitarian reports.
   bot.callbackQuery('cv', async (ctx) => {
     await ctx.answerCallbackQuery();
     const lang = langOf(ctx);
@@ -1263,6 +1286,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const kb = new InlineKeyboard()
       .text(b('accident'), 't:accident').text(b('fire'), 't:fire').row()
       .text(b('protest'), 't:protest').text(b('civil_plane'), 't:civil_plane').row()
+      .text(b('arrest'), 't:arrest').text(b('death'), 't:death').row()
+      .text(b('martyrdom'), 't:martyrdom').row()
       .text(`🛡️ ${lang === 'en' ? 'Other civil alert' : 'تنبيه مدني آخر'}`, 't:civil').row()
       .text(L(ctx).btnBack, 'home');
     await show(ctx, L(ctx).askCivil, kb);
@@ -1385,6 +1410,16 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery(/^flight:(toward_syria|entering_syria|leaving_syria)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'air_movement' || !FLIGHT_DIRECTIONS[ctx.match[1]]) return;
     d.flightDirection = ctx.match[1];
+    d.flightTarget = null;
+    d.location = locationFrom({});
+    d.extra = [];
+    d.selectingFlightTarget = true;
+    await askLocation(ctx, d);
+  }));
+  bot.callbackQuery('flightdest:none', needDraft(async (ctx, d) => {
+    if (d.type !== 'air_movement' || !d.selectingFlightTarget) return;
+    d.selectingFlightTarget = false;
+    d.flightTarget = null;
     d.location = locationFrom({});
     d.extra = [];
     await afterLocation(ctx, d);
@@ -1484,6 +1519,11 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
   bot.callbackQuery('skip', needDraft((ctx, d) => showPreview(ctx, d)));
   bot.callbackQuery(/^back:(gov|dist|sub)$/, needDraft(async (ctx, d) => {
+    if (ctx.match[1] === 'gov' && d.type === 'air_movement' && d.flightDirection) {
+      d.selectingFlightTarget = true;
+      d.flightTarget = null;
+      d.location = locationFrom({});
+    }
     if (ctx.match[1] === 'sub' && d.dist && getDist(d.dist)) return showSubs(ctx, d, d.dist);
     if (ctx.match[1] === 'dist' && d.gov) {
       d.step = 'dist';
