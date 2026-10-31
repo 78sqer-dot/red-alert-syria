@@ -198,12 +198,38 @@ const kmBetween = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 const zoneCache = new Map();
-// circle radius sized to the place: big city > town > village > neighbourhood
+// circle radius sized to the place: big city > town > village / neighbourhood
 export function placeKm(loc) {
   if (Number.isFinite(loc?.area_km)) return loc.area_km; // a whole region (حوض اليرموك...)
   const r = Number.isFinite(loc?.rank) ? loc.rank : null;
   if (r == null) return 2.2;
   return r <= 1 ? 4.5 : r === 2 ? 3.2 : r === 3 ? 2.4 : r <= 5 ? 1.8 : 1.3;
+}
+const mentionToken = (token, first) => {
+  let value = normalizeArabic(token);
+  if (first) value = value.replace(/^(?:و|ف|ب|ك|ل)(?=\p{L})/u, '');
+  return stripAl(value);
+};
+/** Governorates explicitly named in a report; longer names win when they contain another name (ريف دمشق). */
+export function mentionedGovernorates(text) {
+  const tokens = normalizeArabic(text).split(/\s+/).filter(Boolean);
+  const matches = [];
+  for (const gov of governorates) {
+    const variants = [gov.ar, gov.en].map((name) => normalizeArabic(name).split(/\s+/).filter(Boolean).map((word) => stripAl(word)));
+    for (const words of variants) {
+      for (let start = 0; start <= tokens.length - words.length; start++) {
+        const hit = words.every((word, i) => mentionToken(tokens[start + i], i === 0) === word);
+        if (hit) matches.push({ start, end: start + words.length, gov });
+      }
+    }
+  }
+  matches.sort((a, b) => (b.end - b.start) - (a.end - a.start) || a.start - b.start);
+  const accepted = [];
+  for (const m of matches) {
+    if (accepted.some((x) => m.start < x.end && m.end > x.start)) continue;
+    accepted.push(m);
+  }
+  return [...new Map(accepted.sort((a, b) => a.start - b.start).map(({ gov }) => [gov.code, gov])).values()];
 }
 // every circle of an alert: its main area + each extra area picked in the bot (one or more circles each)
 export function alertZones(a) {
@@ -222,6 +248,24 @@ export function alertZones(a) {
   }
   if (a.location && Number.isFinite(a.location.latitude)) add({ ...(a.place || {}), ...a.location }, a.scope);
   for (const x of a.extra || []) if (x && Number.isFinite(x.latitude)) add(x, x.scope);
+  // If the report text names multiple Syrian governorates, show one representative circle in each.
+  // This complements (and never duplicates) the bot's explicit "add another area" coordinates.
+  const codeOf = (loc) => {
+    const code = String(loc?.governorate || loc?.gov || '');
+    if (govByCode.has(code)) return code;
+    const name = normalizeArabic(loc?.governorate_ar || loc?.gov_ar || '');
+    return governorates.find((g) => normalizeArabic(g.ar) === name || normalizeArabic(g.en) === name)?.code || '';
+  };
+  const covered = new Set([a.place, ...(a.extra || [])].map(codeOf).filter(Boolean));
+  const narrative = [a.description, a.description_en].filter(Boolean);
+  const text = (narrative.length ? narrative : [a.title, a.title_en]).filter(Boolean).join(' ');
+  for (const gov of mentionedGovernorates(text)) {
+    if (covered.has(gov.code)) continue;
+    const center = capitalOf(gov.code) || gov;
+    if (!Number.isFinite(center.lat) || !Number.isFinite(center.lon)) continue;
+    add({ latitude: center.lat, longitude: center.lon, rank: center.rank ?? 1 }, 'place');
+    covered.add(gov.code);
+  }
   return out;
 }
 export function zonePoints(loc, scope) {
