@@ -71,6 +71,7 @@ test('assassination has its own weapon marker and appears in the strikes filter'
   const type = ALERT_TYPES.assassination;
   assert.ok(TYPE_KEYS.includes('assassination'));
   assert.ok(ALERT_GROUPS.strikes.types.includes('assassination'));
+  assert.equal(type.emoji, '\u{1F52B}\uFE0E', 'request monochrome text presentation for the assassination button');
   assert.equal(type.marker, 'icon');
   assert.equal(type.glyph, 'weapon');
   assert.match(EXTRA_SVG.rifle, /<path/);

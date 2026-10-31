@@ -54,7 +54,7 @@ export const ALERT_TYPES = {
   },
   assassination: {
     ar: 'اغتيال', en: 'Assassination', button_ar: 'اغتيال', button_en: 'Assassination',
-    emoji: '🔫', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
+    emoji: '\u{1F52B}\uFE0E', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
     marker: 'icon', glyph: 'weapon', icon: '#b91c1c', size: 32, zone: false, tag_ar: 'اغتيال', tag_en: 'Assassination',
   },
   artillery: {
