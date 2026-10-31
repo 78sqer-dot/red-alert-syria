@@ -440,7 +440,7 @@ export class AlertMap {
       keep.add(alert.id);
       features.push({ type: 'Feature', properties: { id: alert.id }, geometry: { type: 'LineString', coordinates: path } });
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
-      const color = aircraft === 'uav' ? '#8b95a3' : '#3b82f6';
+      const color = aircraft === 'uav' ? '#ef4444' : '#3b82f6';
       const signature = `${aircraft}|${alert.flight_direction}`;
       let track = this.movementTracks.get(alert.id);
       if (track && track.signature !== signature) {
@@ -455,11 +455,16 @@ export class AlertMap {
         el.setAttribute('aria-hidden', 'true');
         el.title = this.opts.lang === 'en' ? 'Schematic route · not a live track' : 'مسار توضيحي · ليس مساراً حقيقياً';
         const halo = document.createElement('span'); halo.className = 'map-flight-track-halo';
-        const airframe = document.createElement('span'); airframe.className = 'map-flight-track-airframe';
-        airframe.innerHTML = svgTag(aircraft, 25, `fill="${color}" class="map-flight-track-svg"`);
-        el.append(halo, airframe);
+        const squad = document.createElement('span'); squad.className = 'map-flight-track-squad';
+        for (const slot of [{ name: 'is-lead', size: 26 }, { name: 'is-left', size: 22 }, { name: 'is-right', size: 22 }]) {
+          const airframe = document.createElement('span');
+          airframe.className = `map-flight-track-airframe ${slot.name}`;
+          airframe.innerHTML = svgTag(aircraft, slot.size, `fill="${color}" class="map-flight-track-svg"`);
+          squad.append(airframe);
+        }
+        el.append(halo, squad);
         const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat(path[0]).addTo(map);
-        track = { marker, element: el, airframe, signature, start: performance.now() + index * 2200, frame: 0, last: 0 };
+        track = { marker, element: el, signature, start: performance.now() + index * 2200, frame: 0, last: 0 };
         this.movementTracks.set(alert.id, track);
       }
       const tick = (now) => {
