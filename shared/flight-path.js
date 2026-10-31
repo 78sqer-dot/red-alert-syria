@@ -1,14 +1,16 @@
 // Schematic movement paths for direction-only reports. These are visual cues, not tracked aircraft coordinates.
-// The southwest gate is near the Syrian boundary by Quneitra; the path must never be read as a real flight track.
+// The southwest gate is near the Syrian boundary by Quneitra; the path is illustrative, never a real flight track.
 const OUTSIDE = [35.65, 33.10];
 const BORDER_GATE = [35.817, 33.113];
-const INSIDE = [36.05, 33.20];
-const DEEP_INSIDE = [36.24, 33.28];
+const QUNEITRA_SIDE = [35.90, 33.05];
+const DARA_NORTH = [36.05, 32.78];
+const DARA_CENTER = [36.105, 32.62];
 
 export function flightPath(direction) {
   if (direction === 'toward_syria') return [OUTSIDE, BORDER_GATE].map((p) => [...p]);
-  if (direction === 'entering_syria') return [OUTSIDE, BORDER_GATE, INSIDE, DEEP_INSIDE].map((p) => [...p]);
-  if (direction === 'leaving_syria') return [DEEP_INSIDE, INSIDE, BORDER_GATE, OUTSIDE].map((p) => [...p]);
+  const entering = [OUTSIDE, BORDER_GATE, QUNEITRA_SIDE, DARA_NORTH, DARA_CENTER].map((p) => [...p]);
+  if (direction === 'entering_syria') return entering;
+  if (direction === 'leaving_syria') return entering.reverse();
   return [];
 }
 
