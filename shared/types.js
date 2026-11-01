@@ -48,8 +48,8 @@ export const ALERT_TYPES = {
     marker: 'icon', glyph: 'alert_tri', icon: '#7c3aed', zone: false, tag_ar: 'حدود', tag_en: 'Border',
   },
   military_incursion: {
-    ar: 'توغّل آليات عسكرية', en: 'Military vehicle incursion',
-    button_ar: 'توغّل آليات عسكرية', button_en: 'Military vehicle incursion',
+    ar: 'توغل عسكري', en: 'Military incursion',
+    button_ar: 'توغل عسكري', button_en: 'Military incursion',
     emoji: '🪖', color: '#71834a', ring: '#4b5c2f', group: 'other', ttlMin: 180,
     marker: 'icon', glyph: 'tank', icon: '#71834a', disc: '#111827', size: 34, zone: 'dashed',
     tag_ar: 'توغل_آليات_عسكرية', tag_en: 'Military_vehicle_incursion',

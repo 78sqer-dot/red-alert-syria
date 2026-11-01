@@ -7,6 +7,7 @@ import { groupAlerts, nextAlertId } from './marker-layout.js';
 import { squadLayout } from './aircraft-layout.js';
 import { flightPath, flightPosition } from '/shared/flight-path.js?v=1';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
+import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=1';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
@@ -737,6 +738,8 @@ export class AlertMap {
     const pulses = [];
     const orb = (this._orb = new Map());
     const hits = (this._hits = []);
+    const featureKeys = new Set();
+    const pulseKeys = new Set();
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
@@ -753,8 +756,20 @@ export class AlertMap {
       zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);
         hits.push({ id: a.id, lon: z.lon, lat: z.lat, km, ts: Date.parse(a.timestamp) || 0, live: !!a.is_active });
-        features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [circlePolygon(z.lon, z.lat, km)] } });
-        if (a.is_active && pulses.length < 80) pulses.push({ key: `${a.id}:${i}`, lon: z.lon, lat: z.lat, km, color: props.color, classicAircraft: t.marker === 'squad' || t.marker === 'helicopter' });
+        const visualZone = { lon: z.lon, lat: z.lat, km };
+        const featureKey = zoneVisualKey(visualZone, props);
+        if (!featureKeys.has(featureKey)) {
+          featureKeys.add(featureKey);
+          features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [circlePolygon(z.lon, z.lat, km)] } });
+        }
+        const classicAircraft = t.marker === 'squad' || t.marker === 'helicopter';
+        if (a.is_active) {
+          const pulseKey = pulseVisualKey(visualZone, props.color, classicAircraft);
+          if (!pulseKeys.has(pulseKey) && pulses.length < 80) {
+            pulseKeys.add(pulseKey);
+            pulses.push({ key: pulseKey, lon: z.lon, lat: z.lat, km, color: props.color, classicAircraft });
+          }
+        }
       });
     }
     src.setData({ type: 'FeatureCollection', features });

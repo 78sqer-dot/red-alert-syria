@@ -220,7 +220,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 't:uav'));
   assert.ok(buttons().some((button) => button.callback_data === 't:helicopter'));
   assert.ok(buttons().some((button) => button.callback_data === 't:airstrike'));
-  assert.ok(buttons().some((button) => button.callback_data === 't:military_incursion'));
+  assert.ok(buttons().some((button) => button.callback_data === 'mi' && button.text?.endsWith('توغل عسكري')));
   assert.ok(buttons().some((button) => button.callback_data === 'cv' && button.text?.startsWith('🛡️ مدني')));
   assert.equal(buttons().some((button) => ['t:civil', 't:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting'].includes(button.callback_data)), false, 'civil choices stay inside the civil submenu');
   assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'aircraft direction is selected inside warplane/drone options, not as a separate main button');
@@ -229,6 +229,18 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     assert.match(lastUi()?.payload?.text || '', new RegExp(label), `${type} starts a manual publishing draft`);
     await tap('home');
   }
+  await tap('mi');
+  assert.ok(buttons().some((button) => button.callback_data === 'mi:general' && button.text?.includes('توغل عسكري فقط')));
+  assert.ok(buttons().some((button) => button.callback_data === 'mi:vehicles' && button.text?.includes('توغل آليات عسكرية فقط')));
+  await tap('mi:general');
+  assert.match(lastUi()?.payload?.text || '', /اختر المحافظة/);
+  assert.equal(buttons().some((button) => button.callback_data?.startsWith('vehc:')), false, 'general military-incursion route goes directly to area selection');
+  await tap(`g:${politicalIdlib.code}`);
+  await tap(`wg:${politicalIdlib.code}`);
+  await tap('skip');
+  assert.match(lastUi()?.payload?.text || '', /توغل عسكري/);
+  assert.doesNotMatch(lastUi()?.payload?.text || '', /عدد الآليات|Vehicle count/);
+  await tap('home');
   await tap('t:military_incursion');
   assert.ok(buttons().some((button) => button.callback_data === 'vehc:1'));
   assert.ok(buttons().some((button) => button.callback_data === 'vehc:12'));
@@ -238,7 +250,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('home');
   await tap('home', reporter, reportBot);
   const reportButtons = lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
-  assert.ok(reportButtons.some((button) => button.callback_data === 't:military_incursion'), 'vehicle incursion is available in the public report bot');
+  assert.ok(reportButtons.some((button) => button.callback_data === 'mi' && button.text?.endsWith('توغل عسكري')), 'general military incursion is available in the public report bot');
   for (const [type, label] of [['helicopter', 'طيران مروحي'], ['airstrike', 'غارة جوية']]) {
     const button = reportButtons.find((item) => item.callback_data === `t:${type}`);
     assert.ok(button, `${type} button is available in the public report bot`);
@@ -308,7 +320,10 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(lastUi().payload.text, /نحو إدلب/);
 
   await tap('home', reporter, reportBot);
-  await tap('t:military_incursion', reporter, reportBot);
+  await tap('mi', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 'mi:general' && button.text?.includes('توغل عسكري فقط')));
+  assert.ok(buttons().some((button) => button.callback_data === 'mi:vehicles' && button.text?.includes('توغل آليات عسكرية فقط')));
+  await tap('mi:vehicles', reporter, reportBot);
   assert.ok(buttons().some((button) => button.callback_data === 'vehc:custom'));
   await tap('vehc:custom', reporter, reportBot);
   await sendText('٠', reporter, reportBot);
@@ -372,6 +387,12 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(militaryInput.title, /١٥ آلية/);
   assert.match(militaryInput.title_en, /15 vehicles/);
   assert.equal(militaryInput.meta.vehicleCount, 15);
+  const generalIncursionInput = buildAlertInput({
+    type: 'military_incursion', location: idlibTarget, extra: [], ttlMin: 180,
+  }, { id: ownerId, name: 'test' });
+  assert.equal(generalIncursionInput.type, 'military_incursion', 'both submenu paths retain the historical alert type key');
+  assert.match(generalIncursionInput.title, /^توغل عسكري/);
+  assert.equal(generalIncursionInput.meta?.vehicleCount, undefined, 'the general route does not invent or require a vehicle count');
   const borderAlert = store.addAlert(borderInput);
   const palestineAlert = store.addAlert(palestineInput);
   assert.equal(publicAlert(borderAlert).border, 'turkey');
@@ -396,7 +417,11 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const militaryAlert = store.addAlert(militaryInput);
   assert.equal(publicAlert(militaryAlert).vehicle_count, 15);
   assert.match(channelPost(militaryAlert), /١٥ آلية/);
-  addedAlertIds.push(borderAlert.id, palestineAlert.id, flightAlert.id, droneAlert.id, movementAlert.id, targetedMovementAlert.id, militaryAlert.id);
+  const generalIncursionAlert = store.addAlert(generalIncursionInput);
+  assert.equal(publicAlert(generalIncursionAlert).type, 'military_incursion');
+  assert.equal(publicAlert(generalIncursionAlert).vehicle_count, undefined);
+  assert.match(channelPost(generalIncursionAlert), /<b>توغل عسكري<\/b>/);
+  addedAlertIds.push(borderAlert.id, palestineAlert.id, flightAlert.id, droneAlert.id, movementAlert.id, targetedMovementAlert.id, militaryAlert.id, generalIncursionAlert.id);
 
   const channelSyncAlert = store.addAlert(buildAlertInput({
     type: 'attack', location: idlibTarget, details: 'تفاصيل قديمة', extra: [], ttlMin: 180,

@@ -73,7 +73,10 @@ test('border alert type is available in the map type filter', () => {
 test('military vehicle incursion has a vehicle marker and stays manual-only', () => {
   const type = ALERT_TYPES.military_incursion;
   assert.ok(TYPE_KEYS.includes('military_incursion'));
+  assert.equal(TYPE_KEYS.includes('military_incursion_general'), false, 'the general submenu reuses the historical type instead of adding a migrated type');
   assert.ok(ALERT_GROUPS.other.types.includes('military_incursion'));
+  assert.equal(type.ar, 'توغل عسكري');
+  assert.equal(type.button_ar, 'توغل عسكري');
   assert.equal(type.marker, 'icon');
   assert.equal(type.glyph, 'tank');
   assert.match(SVG.tank, /tk-body/);

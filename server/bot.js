@@ -143,6 +143,7 @@ const fmtDate = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.tim
 export function channelPost(alert, { ended = false } = {}) {
   const t = typeOf(alert.type);
   let title = alert.meta?.channelTitle || (TITLES[alert.type] || {}).ar || t.ar;
+  if (alert.type === 'military_incursion' && !Number.isInteger(alert.meta?.vehicleCount)) title = 'توغل عسكري';
   if (alert.place?.head_ar) title = alert.place.head_ar;
   if (alert.type === 'air_movement') {
     const aircraft = FLIGHT_AIRCRAFT[alert.meta?.aircraft || alert.aircraft];
@@ -298,14 +299,14 @@ function mainKeyboard(ctx) {
   // This shared keyboard serves both the private publishing bot and the public reporting bot.
   const menuTypes = [...new Set([...TYPE_KEYS, 'helicopter', 'airstrike'])]
     .filter((type) => type !== 'air_movement' && !['accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'].includes(type))
-    .map((type) => (type === 'civil' ? 'civil_menu' : type));
+    .map((type) => (type === 'civil' ? 'civil_menu' : type === 'military_incursion' ? 'military_menu' : type));
   const kb = new InlineKeyboard();
   for (let i = 0; i < menuTypes.length; i += 2) {
     for (const item of menuTypes.slice(i, i + 2)) {
-      const type = item === 'civil_menu' ? 'civil' : item;
+      const type = item === 'civil_menu' ? 'civil' : item === 'military_menu' ? 'military_incursion' : item;
       const emoji = item === 'civil_menu' ? '🛡️' : e(type);
       const label = item === 'civil_menu' ? (lang === 'en' ? 'Civil' : 'مدني') : b(type);
-      kb.text(`${emoji ? `${emoji} ` : ''}${label}`, item === 'civil_menu' ? 'cv' : `t:${type}`);
+      kb.text(`${emoji ? `${emoji} ` : ''}${label}`, item === 'civil_menu' ? 'cv' : item === 'military_menu' ? 'mi' : `t:${type}`);
     }
     kb.row();
   }
@@ -676,7 +677,9 @@ async function showPreview(ctx, d) {
 }
 
 export function buildAlertInput(d, author) {
-  const titles = TITLES[d.type] || { ar: typeOf(d.type).ar, en: typeOf(d.type).en };
+  const titles = d.type === 'military_incursion'
+    ? { ar: 'توغل عسكري', en: 'Military incursion' }
+    : TITLES[d.type] || { ar: typeOf(d.type).ar, en: typeOf(d.type).en };
   const loc = d.location || locationFrom({});
   const wxNames = { rain: ['أمطار غزيرة', 'Heavy rain'], snow: ['ثلوج', 'Snow'], wind: ['رياح قوية', 'Strong winds'], storm: ['عواصف رعدية', 'Thunderstorms'], heat: ['موجة حر', 'Heatwave'], frost: ['صقيع', 'Frost'], dust: ['غبار', 'Dust'] };
   const wx = d.type === 'weather' ? wxNames[d.meta?.hazard] : null;
@@ -1578,6 +1581,29 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     else if (type === 'civil') await askCivilEmoji(ctx, d);
     else if (type === 'uav' || type === 'warplane') await askAerialMode(ctx, d);
     else await askLocation(ctx, d);
+  });
+
+  bot.callbackQuery('mi', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const en = langOf(ctx) === 'en';
+    const kb = new InlineKeyboard()
+      .text(en ? 'Military incursion only' : 'توغل عسكري فقط', 'mi:general').row()
+      .text(en ? 'Military vehicles only' : 'توغل آليات عسكرية فقط', 'mi:vehicles').row()
+      .text(L(ctx).btnHome, 'home');
+    await show(ctx, en ? 'Choose the military-incursion report type:' : 'اختر نوع بلاغ التوغل العسكري:', kb);
+  });
+  bot.callbackQuery(/^mi:(general|vehicles)$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!staff(ctx)) {
+      if (store.isBanned(ctx.from.id)) return show(ctx, L(ctx).banned, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
+      if (Date.now() - (lastReport.get(ctx.from.id) || 0) < REPORT_COOLDOWN_MS) return show(ctx, L(ctx).reportRate, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
+    }
+    const d = newDraft(ctx, 'military_incursion');
+    if (ctx.match[1] === 'general') {
+      d.step = 'gov';
+      return askLocation(ctx, d);
+    }
+    return askVehicleCount(ctx, d);
   });
 
   bot.callbackQuery(/^pcat:([a-z]+)$/, async (ctx) => {

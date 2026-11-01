@@ -15,7 +15,7 @@ test('fresh PWA and module-graph versions load updated map and firearm glyphs', 
   const appBuild = index.match(/\/js\/app\.js\?v=(\d+)/)?.[1];
   assert.equal(appBuild, '36', 'HTML must request the fresh app build to update installed PWA users');
   assert.match(app, /settings\.js\?v=4/);
-  assert.match(app, /map\.js\?v=41/);
+  assert.match(app, /map\.js\?v=42/);
   assert.match(app, /shared\/types\.js\?v=23/);
   assert.match(settings, /shared\/types\.js\?v=23/);
   assert.match(map, /shared\/types\.js\?v=23/);
