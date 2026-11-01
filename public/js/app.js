@@ -409,9 +409,9 @@ function select(id, { fromMap = false, fly = true } = {}) {
   state.selectedId = id;
   if (history.replaceState) history.replaceState(null, '', '#' + encodeURIComponent(id));
   const shown = isLive(a) ? a : { ...a, is_active: false };
-  amap && amap.select(shown, { fly: fly, popup: !isMobile() });
+  amap && amap.select(shown, { fly: fly, popup: true });
   showDetail();
-  if (isMobile()) setSheetOpen(true);
+  if (isMobile()) setSheetOpen(false);
   else if ($('#app').classList.contains('sb-hidden') && !fromMap) {
     toggleSidebar(true);
   }
