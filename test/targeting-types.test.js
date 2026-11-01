@@ -208,7 +208,7 @@ test('political developments use a neutral ring and marker only for explicit loc
   assert.match(EXTRA_SVG.political, /M34 190/);
   assert.equal(typeIcon('political'), 'news');
   assert.match(typeIconsSource, /political: 'news'/);
-  assert.match(mapSource, /political: '#475569'/, 'political ring is muted slate rather than a threat red');
+  assert.match(mapSource, /t\.ring \|\| t\.color/, 'political ring uses the configured muted slate color');
   assert.doesNotMatch(mapSource, /a\.type === 'political' \|\| t\.marker === 'movement'/);
   assert.match(mapSource, /a\.scope === 'country' \|\| !a\.location/);
   assert.match(mapSource, /const km = this\._screenKm\(z\.km, z\.lat\);/);

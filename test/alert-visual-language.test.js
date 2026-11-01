@@ -13,6 +13,7 @@ test('security alert emojis are present and semantically distinct', () => {
   assert.equal(ALERT_TYPES.warplane.emoji, '✈️');
   assert.equal(ALERT_TYPES.artillery.emoji, '💣');
   assert.notEqual(ALERT_TYPES.uav.emoji, ALERT_TYPES.warplane.emoji);
+  assert.equal(ALERT_TYPES.death.emoji, '🪦');
 });
 
 test('warplane keeps the three-aircraft formation while the drone keeps its current orbit', () => {

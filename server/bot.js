@@ -312,7 +312,7 @@ function mainKeyboard(ctx) {
   for (let i = 0; i < visibleMenuTypes.length; i += 2) {
     for (const item of visibleMenuTypes.slice(i, i + 2)) {
       const type = item === 'civil_menu' ? 'civil' : item === 'military_menu' ? 'military_incursion' : item === 'smuggling_menu' ? 'smuggling_weapons' : item;
-      const emoji = item === 'civil_menu' ? '🛡️' : item === 'smuggling_menu' ? '📦' : e(type);
+      const emoji = item === 'civil_menu' ? '🛡️' : item === 'smuggling_menu' ? '🚚' : e(type);
       const label = item === 'civil_menu' ? (lang === 'en' ? 'Civil' : 'مدني') : item === 'smuggling_menu' ? (lang === 'en' ? 'Smuggling' : 'تهريب') : b(type);
       const callback = item === 'civil_menu' ? 'cv' : item === 'military_menu' ? 'mi' : item === 'smuggling_menu' ? 'sm' : `t:${type}`;
       kb.text(`${emoji ? `${emoji} ` : ''}${label}`, callback);

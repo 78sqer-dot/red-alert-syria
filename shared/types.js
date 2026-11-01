@@ -129,7 +129,7 @@ export const ALERT_TYPES = {
   },
   death: {
     ar: 'وفاة', en: 'Death', button_ar: 'وفاة', button_en: 'Death',
-    emoji: '🕯️', color: '#6b7280', ring: '#374151', group: 'civil', parent: 'civil', ttlMin: 240,
+    emoji: '🪦', color: '#6b7280', ring: '#374151', group: 'civil', parent: 'civil', ttlMin: 240,
     marker: 'icon', glyph: 'candle', icon: '#6b7280', zone: false, tag_ar: 'وفاة', tag_en: 'Death',
   },
   martyrdom: {

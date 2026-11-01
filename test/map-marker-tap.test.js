@@ -26,5 +26,5 @@ test('map markers and pulse rings explicitly focus the selected alert', () => {
   assert.match(map, /this\.onSelect\(group \? nextAlertId\(group, this\.selectedId\) : id, \{ fromMap: true, fly: true \}\)/);
   assert.match(map, /return this\.onSelect\(hit\.id, \{ fromMap: true, fly: true \}\)/);
   assert.match(css, /\.mk::before\s*\{[^}]*width: 44px; height: 44px;/);
-  assert.match(map, /ZONE_COLOR\[a\.type\] \|\| t\.ring \|\| t\.color/);
+  assert.match(map, /t\.ring \|\| t\.color/);
 });

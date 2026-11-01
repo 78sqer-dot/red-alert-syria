@@ -1,5 +1,5 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=24';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=25';
 import { SVG } from './marker-svgs.js?v=18';
 import { EXTRA_SVG } from './target-svgs.js?v=8';
 import { icon } from './icons.js?v=3';
@@ -22,7 +22,6 @@ const SYRIA_BOUNDS = [[35.45, 32.25], [42.5, 37.4]];
 const STYLE_URL = { light: 'https://tiles.openfreemap.org/styles/liberty', dark: 'https://tiles.openfreemap.org/styles/dark' };
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
-const ZONE_COLOR = { uav: '#ef233c', uav_strike: '#ff6b7a', airstrike: '#ef233c', breaking: '#ef233c', political: '#475569' };
 export { typeIcon };
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
 // Round coloured disc with the original glyph (used by the map, the legend and toasts).
@@ -743,7 +742,7 @@ export class AlertMap {
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
       if (!t || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
-      const props = { color: t.zone === 'dashed' ? t.color : ZONE_COLOR[a.type] || t.ring || t.color || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
+      const props = { color: t.ring || t.color || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
       if (t.marker === 'orbit' || t.marker === 'squad' || t.marker === 'helicopter') {
