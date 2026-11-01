@@ -288,6 +288,21 @@ export function zonePoints(loc, scope) {
   return out;
 }
 
+/** Political map rings follow only locations explicitly selected for the report, never place names mentioned in its article text. */
+export function selectedAlertZones(a) {
+  const out = [];
+  const add = (loc, scope, base = {}) => {
+    if (!loc || !Number.isFinite(loc.latitude) || !Number.isFinite(loc.longitude)) return;
+    for (const z of zonePoints({ ...base, ...loc }, scope)) {
+      if (out.some((q) => kmBetween(q, z) < Math.max(0.6, Math.min(q.km, z.km) * 0.5))) continue;
+      out.push(z);
+    }
+  };
+  if (a?.location) add(a.location, a.scope, a.place || {});
+  for (const x of a?.extra || []) add(x, x?.scope);
+  return out;
+}
+
 // "📍 مركز منبج": the main city of a district / governorate (a single place, one circle on the map)
 export const centerOfDist = (code) => { const d = getDist(code); return d && d.center ? getPlace(d.center) : null; };
 export const capitalOf = (gov) => getPlace(CAPITALS[gov]) || null;

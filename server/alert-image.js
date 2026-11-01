@@ -10,7 +10,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { ALERT_TYPES, assassinationWeaponGlyph } from '../shared/types.js';
 import { SVG as BASE_GLYPHS } from '../public/js/marker-svgs.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
-import { zonePoints, alertZones } from './places.js';
+import { zonePoints, alertZones, selectedAlertZones } from './places.js';
 
 const GLYPHS = { ...BASE_GLYPHS, ...EXTRA_SVG };
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -192,10 +192,11 @@ export async function alertImageSvg(alert, opts = {}) {
   const country = type === 'political' ? !politicalLocation : alert.scope === 'country' || !Number.isFinite(loc.latitude);
   const center = country ? { lat: 34.85, lon: 38.6 } : { lat: loc.latitude, lon: loc.longitude };
   // every alert type: a glowing circle over each affected area (main area + extra areas)
-  const zoned = !country && type !== 'political';
+  const zoned = !country;
   let zones = [];
   if (zoned) {
-    zones = Array.isArray(alert.zones) && alert.zones.length ? alert.zones : alertZones({ ...alert, location: loc });
+    zones = type === 'political' ? selectedAlertZones({ ...alert, location: loc })
+      : Array.isArray(alert.zones) && alert.zones.length ? alert.zones : alertZones({ ...alert, location: loc });
     if (!zones.length) zones = [{ lat: center.lat, lon: center.lon, km: 2.2 }];
   }
   const view = chooseView(zoned ? zones : [{ lat: center.lat, lon: center.lon, km: 1.6 }], center);
@@ -229,8 +230,8 @@ export async function alertImageSvg(alert, opts = {}) {
   if (zoned) {
     const dashed = t.zone === 'dashed';
     const natural = type === 'quake' || type === 'weather';
-    const col = natural ? t.ring : dashed ? '#2563eb' : '#dc2626';
-    const fill = natural ? t.color : dashed ? '#3b82f6' : '#ef4444';
+    const col = type === 'political' ? t.ring : natural ? t.ring : dashed ? '#2563eb' : '#dc2626';
+    const fill = type === 'political' ? t.color : natural ? t.color : dashed ? '#3b82f6' : '#ef4444';
     o.push(`<defs><radialGradient id="zglow"><stop offset="0.5" stop-color="${fill}" stop-opacity="0.38"/><stop offset="0.75" stop-color="${fill}" stop-opacity="0.14"/><stop offset="1" stop-color="${fill}" stop-opacity="0"/></radialGradient></defs>`);
     for (const zn of zones) {
       const [x, y] = px(zn.lat, zn.lon);
@@ -239,7 +240,8 @@ export async function alertImageSvg(alert, opts = {}) {
       o.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" fill-opacity="0.2" stroke="${col}" stroke-width="${r > 40 ? 4.5 : 3}"${dashed ? ' stroke-dasharray="14 9"' : ''}/>`);
     }
     // a single area keeps its type icon; several areas show just their glowing circles (the title names the type)
-    if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph, alert)); }
+    if (type === 'political') { const [x, y] = px(center.lat, center.lon); o.push(politicalMarkerSvg(x, y)); }
+    else if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph, alert)); }
   } else if (!country) {
     const [x, y] = px(center.lat, center.lon);
     o.push(type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));

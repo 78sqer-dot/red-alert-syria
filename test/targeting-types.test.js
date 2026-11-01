@@ -10,6 +10,7 @@ import { markerSvg } from '../server/alert-image.js';
 
 const mapSource = readFileSync(new URL('../public/js/map.js', import.meta.url), 'utf8');
 const mapCss = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
+const alertImageSource = readFileSync(new URL('../server/alert-image.js', import.meta.url), 'utf8');
 
 test('map types keep drone targeting distinct and visually on-brand', () => {
   const drone = ALERT_TYPES.uav_strike;
@@ -181,7 +182,7 @@ test('helicopter and airstrike are watched automatically but require human publi
   }
 });
 
-test('political developments use a neutral marker without a hazard ring and have controlled subcategories', () => {
+test('political developments use a neutral ring and marker only for explicit localities', () => {
   const type = ALERT_TYPES.political;
   assert.ok(TYPE_KEYS.includes('political'));
   assert.ok(ALERT_GROUPS.political.types.includes('political'));
@@ -192,7 +193,12 @@ test('political developments use a neutral marker without a hazard ring and have
   assert.equal(type.color, '#64748b');
   assert.match(EXTRA_SVG.political, /M34 190/);
   assert.match(mapSource, /political: 'news'/);
-  assert.match(mapSource, /a\.type === 'political'/, 'political marker must not create a glowing hazard zone');
+  assert.match(mapSource, /political: '#475569'/, 'political ring is muted slate rather than a threat red');
+  assert.doesNotMatch(mapSource, /a\.type === 'political' \|\| t\.marker === 'movement'/);
+  assert.match(mapSource, /a\.scope === 'country' \|\| !a\.location/);
+  assert.match(mapSource, /const km = this\._screenKm\(z\.km, z\.lat\);/);
+  assert.match(alertImageSource, /zones = type === 'political' \? selectedAlertZones/);
+  assert.match(alertImageSource, /if \(type === 'political'\) \{ const \[x, y\] = px\(center\.lat, center\.lon\); o\.push\(politicalMarkerSvg\(x, y\)\); \}/);
   assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['statement', 'decision', 'negotiation', 'meeting', 'election']);
 });
 

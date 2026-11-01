@@ -21,7 +21,7 @@ const SYRIA_BOUNDS = [[35.45, 32.25], [42.5, 37.4]];
 const STYLE_URL = { light: 'https://tiles.openfreemap.org/styles/liberty', dark: 'https://tiles.openfreemap.org/styles/dark' };
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
-const ZONE_COLOR = { uav: '#ef233c', uav_strike: '#ff6b7a', airstrike: '#ef233c', breaking: '#ef233c' };
+const ZONE_COLOR = { uav: '#ef233c', uav_strike: '#ff6b7a', airstrike: '#ef233c', breaking: '#ef233c', political: '#475569' };
 const TYPE_ICON = { breaking: 'bolt', political: 'news', uav: 'drone', uav_strike: 'drone', airstrike: 'bomb', warplane: 'plane', helicopter: 'helicopter', air_movement: 'route', border: 'mapPin', military_incursion: 'shield', missile: 'rocket', attack: 'swords', assassination: 'swords', artillery: 'target', explosion: 'bomb', civil: 'ambulance', accident: 'carCrash', protest: 'speaker', fire: 'flame', civil_plane: 'planeDep', quake: 'quake', weather: 'storm' };
 export const typeIcon = (t) => TYPE_ICON[t] || 'alert';
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
@@ -739,9 +739,8 @@ export class AlertMap {
     const hits = (this._hits = []);
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
-      // Political reports are editorial/public-affairs items, not geolocated hazard zones.
-      // Other alert types retain their existing ring and aircraft behavior.
-      if (!t || a.type === 'political' || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude)) continue;
+      // Political reports get a muted editorial ring only around explicitly supplied coordinates.
+      if (!t || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       const props = { color: t.zone === 'dashed' ? t.color : ZONE_COLOR[a.type] || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];

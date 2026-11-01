@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
-import { alertZones, regionFix } from './places.js';
+import { alertZones, selectedAlertZones, regionFix } from './places.js';
 import { cleanAlertText } from './clean-text.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
 
@@ -658,8 +658,8 @@ export function publicAlert(a) {
     },
     areas: a.areas,
     scope: a.scope,
-    // Political reports may use one verified point, but are not hazard zones.
-    zones: a.location && a.type !== 'political' ? alertZones(a) : undefined,
+    // Political rings use only manually/explicitly selected areas; never infer locations from article mentions.
+    zones: a.location ? (a.type === 'political' ? selectedAlertZones(a) : alertZones(a)) : undefined,
     more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
     source_info: publicSourceInfo(a, sources),

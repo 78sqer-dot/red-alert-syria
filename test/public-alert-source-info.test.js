@@ -44,6 +44,25 @@ test('political alerts expose only five validated source links and use the first
   assert.equal('meta' in alert, false);
 });
 
+test('political map rings use explicitly selected areas only and never infer them from article text', () => {
+  const alert = publicAlert({
+    ...base,
+    type: 'political',
+    scope: 'place',
+    location: { latitude: 33.5138, longitude: 36.2765, rank: 1, name_ar: 'دمشق', name_en: 'Damascus' },
+    place: { name_ar: 'دمشق', name_en: 'Damascus', rank: 1 },
+    extra: [{ latitude: 35.531, longitude: 35.79, rank: 1, scope: 'place', name_ar: 'اللاذقية', name_en: 'Latakia' }],
+    description: 'مقال سياسي يذكر دمشق ودرعا وحلب وحمص، لكن الموقع المختار دمشق واللاذقية فقط.',
+  });
+  assert.equal(alert.zones.length, 2);
+  assert.deepEqual(alert.zones.map(({ lat, lon }) => [lat, lon]), [[33.5138, 36.2765], [35.531, 35.79]]);
+
+  const generalArticle = publicAlert({
+    ...base, type: 'political', title: 'تحليل سياسي عن دمشق وحلب ودرعا', description: 'رأي عام بلا موقع محدد.',
+  });
+  assert.equal(generalArticle.zones, undefined, 'a locationless article must not get an inferred marker or ring');
+});
+
 test('political source sanitizer rejects javascript/data schemes and invalid categories', () => {
   const alert = publicAlert({
     ...base, type: 'political', meta: { political: {
