@@ -117,7 +117,7 @@ const titleOf = (a) => (LANG === 'en' && a.title_en ? a.title_en : a.title);
 const descOf = (a) => (LANG === 'en' && a.description_en ? a.description_en : a.description) || '';
 // Published alerts show no hashtags (the owner's choice); kept as an empty list for the card layout.
 function tagsOf(a) {
-  if (a) return [];
+  if (!a) return [];
   const t = typeOf(a.type);
   const p = a.place || {};
   const areas = LANG === 'ar' ? a.areas || [] : [p.name_en, p.district_en, p.governorate_en].filter(Boolean);
@@ -149,6 +149,8 @@ const fbShare = (u) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURI
 const shareText = (a) => `🔴 ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}`;
 
 // ------------------------------------------------------------------ alerts selection
+const URGENT_TYPES = new Set(['breaking', 'uav_strike', 'airstrike', 'warplane', 'helicopter', 'air_movement', 'missile', 'attack', 'artillery', 'assassination', 'shooting', 'military_incursion']);
+const isUrgent = (a) => !!(a?.is_active && URGENT_TYPES.has(a.type));
 function visibleAlerts() {
   const s = settings.get();
   const list = [...state.alerts.values()].map((a) => (isLive(a) ? a : { ...a, is_active: false }));
@@ -156,7 +158,7 @@ function visibleAlerts() {
     .filter((a) => matchesGovernorate(a, s.governorate, GOV_C))
     .filter((a) => s.filter.includes(a.type))
     .filter((a) => a.is_active || s.showInactive)
-    .sort((x, y) => (y.is_active - x.is_active) || (isNear(y) - isNear(x)) || Date.parse(y.timestamp) - Date.parse(x.timestamp));
+    .sort((x, y) => (y.is_active - x.is_active) || (isUrgent(y) - isUrgent(x)) || (isNear(y) - isNear(x)) || Date.parse(y.timestamp) - Date.parse(x.timestamp));
 }
 
 // ------------------------------------------------------------------ static text & icons
@@ -231,7 +233,7 @@ function cardHtml(a, fresh) {
     <h3 class="card-title">${esc(titleOf(a))}</h3>
     ${distChip(a)}
     ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
-    <div class="card-foot"><div class="tags">${tagsOf(a).map((x) => `<span>${esc(x)}</span>`).join('')}</div>
+    <div class="card-foot"><div class="tags">${tagsOf(a).map((x) => `<span>${esc(x)}</span>`).join('')}</div><span class="card-state${a.is_active ? '' : ' off'}">${esc(a.is_active ? T.active : T.ended)}</span>
       <div class="card-actions">${hasLoc ? `<button class="ic-btn" data-act="map" title="${esc(T.showOnMap)}">${icon('map', 16)}</button>` : ''}<button class="ic-btn" data-act="share" title="${esc(T.share)}">${icon('share', 16)}</button></div>
     </div></article>`;
 }
@@ -249,15 +251,11 @@ function renderList() {
     const filtered = (s.filter.length < TYPE_KEYS.length || (s.governorate !== 'all' && GOV_C[s.governorate])) && state.alerts.size;
     box.innerHTML = `<div class="empty"><div class="radar"></div><h3>${esc(filtered ? T.noMatch : T.noAlerts)}</h3><p>${esc(filtered ? '' : T.noAlertsSub)}</p>${filtered ? `<button class="btn-sm" data-act="clear-filter">${esc(T.clearFilter)}</button>` : ''}</div>`;
   } else {
-    let html = '';
-    let sepShown = false;
-    for (const a of list) {
-      if (!a.is_active && !sepShown) {
-        html += `<div class="list-sep">${esc(T.ended)}</div>`;
-        sepShown = true;
-      }
-      html += cardHtml(a, freshIds.has(a.id));
-    }
+    const urgent = list.filter(isUrgent);
+    const latest = list.filter((a) => a.is_active && !isUrgent(a));
+    const ended = list.filter((a) => !a.is_active);
+    const section = (label, items) => items.length ? `<div class="list-section"><div class="list-sep">${esc(label)}<span class="section-count">${items.length}</span></div>${items.map((a) => cardHtml(a, freshIds.has(a.id))).join('')}</div>` : '';
+    const html = section(T.urgentNow, urgent) + section(T.latestNews, latest) + section(T.endedNews, ended);
     box.innerHTML = html;
   }
   freshIds = new Set();

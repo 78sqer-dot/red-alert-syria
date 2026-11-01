@@ -144,11 +144,18 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 11.5px; color: var(--blue); font-weight: 600; min-width: 0; }
 .tags span { white-space: nowrap; }
+.card-state { flex: none; color: var(--red); font-size: 10.5px; font-weight: 800; }
+.card-state::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-inline-end: 4px; border-radius: 50%; background: currentColor; animation: blink 1.4s infinite; }
+.card-state.off { color: var(--text-muted); }
+.card-state.off::before { animation: none; }
 .card-actions { display: flex; gap: 2px; flex: none; }
 .ic-btn { width: 28px; height: 28px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); transition: background .15s, color .15s; }
 .ic-btn:hover { background: var(--bg-subtle); color: var(--text-primary); }
 .list-sep { font-size: 11px; font-weight: 700; color: var(--text-muted); padding: 10px 4px 2px; display: flex; align-items: center; gap: 8px; }
 .list-sep::after { content: ''; flex: 1; height: 1px; background: var(--border-subtle); }
+.list-section + .list-section { margin-top: 4px; }
+.list-sep { text-transform: none; }
+.section-count { min-width: 18px; height: 18px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--bg-subtle); color: var(--text-secondary); font: 700 10px/1 var(--font-mono); }
 
 /* empty state */
 .empty { margin: auto; text-align: center; padding: 40px 20px; color: var(--text-secondary); }
