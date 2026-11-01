@@ -11,7 +11,10 @@ export function flightPath(direction, target = null) {
   const point = Array.isArray(target) ? target : target && Number.isFinite(target.longitude) && Number.isFinite(target.latitude)
     ? [target.longitude, target.latitude] : null;
   const entering = point ? [...base, [...point]] : base;
-  if (direction === 'toward_syria') return point ? [OUTSIDE, BORDER_GATE, [...point]].map((p) => [...p]) : [OUTSIDE, BORDER_GATE].map((p) => [...p]);
+  // "Toward Syria" only indicates approach to Syrian airspace. Do not treat the
+  // selected report location as a confirmed destination and draw an invented
+  // track across the country; detailed internal movement uses entering_syria.
+  if (direction === 'toward_syria') return [OUTSIDE, BORDER_GATE].map((p) => [...p]);
   if (direction === 'entering_syria') return entering;
   if (direction === 'leaving_syria') return entering.reverse();
   return [];

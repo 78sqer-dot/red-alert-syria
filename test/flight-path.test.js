@@ -15,13 +15,13 @@ test('toward-syria stops at the border while leaving-syria reverses the entry pa
   assert.deepEqual(flightPath('leaving_syria'), [...flightPath('entering_syria')].reverse());
 });
 
-test('direction paths follow a selected map destination and reverse for departure', () => {
+test('entering paths follow a selected map destination while approach stays at the border', () => {
   const target = { longitude: 36.63, latitude: 35.93 };
   const incoming = flightPath('entering_syria', target);
   const toward = flightPath('toward_syria', target);
   const leaving = flightPath('leaving_syria', target);
   assert.deepEqual(incoming.at(-1), [target.longitude, target.latitude]);
-  assert.deepEqual(toward.at(-1), [target.longitude, target.latitude]);
+  assert.deepEqual(toward, [[35.65, 33.10], [35.817, 33.113]]);
   assert.deepEqual(leaving, [...incoming].reverse());
   assert.notDeepEqual(incoming[0], incoming.at(-1));
 });
