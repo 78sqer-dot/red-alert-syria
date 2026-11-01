@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { flightPath, flightPosition } from '../shared/flight-path.js';
+import { aircraftRotation, flightPath, flightPosition } from '../shared/flight-path.js';
 
 test('entering-syria path crosses at Quneitra and continues south toward Daraa', () => {
   const path = flightPath('entering_syria');
@@ -37,6 +37,13 @@ test('movement interpolation follows the path and supplies a heading', () => {
   assert.ok([start.bearing, middle.bearing, end.bearing].every((x) => Number.isFinite(x) && x >= 0 && x < 360));
   assert.equal(end.lon, path.at(-1)[0]);
   assert.equal(end.lat, path.at(-1)[1]);
+});
+
+test('plane and UAV art headings align with north, east, south, and west movement', () => {
+  assert.deepEqual([0, 90, 180, 270].map((bearing) => aircraftRotation('uav', bearing)), [0, 90, 180, 270]);
+  assert.deepEqual([0, 90, 180, 270].map((bearing) => aircraftRotation('plane', bearing)), [315, 45, 135, 225]);
+  assert.equal(aircraftRotation('uav', 361), 1);
+  assert.equal(aircraftRotation('plane', Number.NaN), 0);
 });
 
 test('unknown directions do not create a fictitious route', () => {

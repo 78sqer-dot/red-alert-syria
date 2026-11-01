@@ -6,6 +6,13 @@ const QUNEITRA_SIDE = [35.90, 33.05];
 const DARA_NORTH = [36.05, 32.78];
 const DARA_CENTER = [36.105, 32.62];
 
+// The plane artwork points northeast (45°); the top-down UAV artwork points north (0°).
+export function aircraftRotation(aircraft, bearing) {
+  if (!Number.isFinite(bearing)) return 0;
+  const artworkForward = aircraft === 'uav' ? 0 : 45;
+  return ((bearing - artworkForward) % 360 + 360) % 360;
+}
+
 export function flightPath(direction, target = null) {
   const base = [OUTSIDE, BORDER_GATE, QUNEITRA_SIDE, DARA_NORTH, DARA_CENTER].map((p) => [...p]);
   const point = Array.isArray(target) ? target : target && Number.isFinite(target.longitude) && Number.isFinite(target.latitude)

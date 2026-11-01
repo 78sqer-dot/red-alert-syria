@@ -61,7 +61,9 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.ok(ALERT_GROUPS.aerial.types.includes('helicopter'));
   assert.ok(NEWS_TYPES.includes('helicopter'));
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
-  assert.equal(helicopter.glyph, 'helicopter');
+  assert.equal(helicopter.glyph, 'helicopter_sleek');
+  assert.match(EXTRA_SVG.helicopter_sleek, /class="heli-main-rotor"/);
+  assert.match(EXTRA_SVG.helicopter_sleek, /class="heli-tail-rotor"/);
   assert.match(EXTRA_SVG.helicopter, /class="heli-main-rotor"/);
   assert.match(EXTRA_SVG.helicopter, /class="heli-tail-rotor"/);
   assert.deepEqual({ marker: warplane.marker, glyph: warplane.glyph, color: warplane.color, ring: warplane.ring, zone: warplane.zone }, {
