@@ -25,7 +25,7 @@ test('a separate, stale, or malformed map click is not suppressed', () => {
 test('map markers and pulse rings explicitly focus the selected alert', () => {
   assert.match(map, /this\.onSelect\(group \? nextAlertId\(group, this\.selectedId\) : id, \{ fromMap: true, fly: true \}\)/);
   assert.match(map, /return this\.onSelect\(hit\.id, \{ fromMap: true, fly: true \}\)/);
-  assert.match(css, /\.mk::before\s*\{[^}]*width: 44px; height: 44px;/);
+  assert.match(css, /\.mk::before\s*\{[^}]*width: 56px; height: 56px;[^}]*pointer-events: auto;/);
   assert.match(map, /t\.ring \|\| t\.color/);
 });
 

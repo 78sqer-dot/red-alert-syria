@@ -8,6 +8,7 @@ import { icon } from './icons.js?v=4';
 import { settings } from './settings.js?v=7';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
 import { AlertMap, typeIcon, glyphDisc } from './map.js?v=48';
+import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
@@ -1199,7 +1200,11 @@ function bindEvents() {
     const k = i.dataset.s;
     if (k === 'notif') {
       if (i.checked) await enableNotifications();
-      else { settings.set({ notifications: { enabled: false } }); syncNotificationButton(); }
+      else {
+        settings.set({ notifications: { enabled: false } });
+        syncNotificationButton();
+        await disablePushSubscription({ serviceWorker: navigator.serviceWorker });
+      }
     } else if (k === 'sound') settings.set({ notifications: { sound: i.checked } });
     else if (k === 'vibration') settings.set({ notifications: { vibration: i.checked } });
     else if (k === 'ringtone') {

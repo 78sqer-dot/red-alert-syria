@@ -31,8 +31,9 @@ test('helicopter airframe is 25px while its orbit stays unscaled', () => {
   assert.match(mapJs, /svgTag\(t\.glyph,\s*25,\s*`fill=/);
 });
 
-test('helicopter uses the new top-down silhouette while previous glyphs remain available', () => {
-  assert.match(types, /helicopter:\s*\{[\s\S]*?glyph: 'helicopter_topdown'/);
+test('helicopter uses the simplified silhouette while legacy glyphs remain available', () => {
+  assert.match(types, /helicopter:\s*\{[\s\S]*?glyph: 'helicopter_simple'/);
+  assert.match(targetSvgs, /helicopter_simple:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter_topdown:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter_sleek:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter_sleek:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
