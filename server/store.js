@@ -64,6 +64,13 @@ class Store extends EventEmitter {
       }
       if (fixed) { console.log(`[store] moved ${fixed} alert(s) onto their region`); this.persist(); }
     } catch (e) { console.error('[store] region fix', e.message); }
+    let historyMigrated = false;
+    for (const a of this.state.alerts) {
+      if (Array.isArray(a.history) && a.history.length) continue;
+      a.history = [{ at: a.timestamp || new Date().toISOString(), kind: 'published', title: a.title, description: a.description || '', is_active: a.is_active !== false }];
+      historyMigrated = true;
+    }
+    if (historyMigrated) this.persist({ backupSoon: false });
     if (!Array.isArray(this.state.log)) this.state.log = this.state.alerts.map((a) => this._logEntry(a)).reverse();
     this.expireSweep();
     setInterval(() => this.expireSweep(), 30_000).unref();
