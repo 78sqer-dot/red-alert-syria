@@ -10,7 +10,7 @@ export const ALERT_TYPES = {
   political: {
     ar: 'تطور سياسي', en: 'Political development', button_ar: 'تطور سياسي', button_en: 'Political development',
     emoji: '🏛️', color: '#64748b', ring: '#475569', group: 'political', ttlMin: 360,
-    marker: 'icon', glyph: 'political', icon: '#475569', disc: '#334155', size: 32, zone: false, tag_ar: 'تطور_سياسي', tag_en: 'Political_development',
+    marker: 'icon', glyph: 'political', icon: '#475569', disc: '#334155', size: 25, zone: false, tag_ar: 'تطور_سياسي', tag_en: 'Political_development',
   },
   uav: {
     ar: 'مسيّرة', en: 'UAV / Drone', button_ar: 'مسيّرة', button_en: 'Drone',

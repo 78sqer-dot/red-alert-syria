@@ -1,5 +1,5 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=22';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=23';
 import { SVG } from './marker-svgs.js?v=18';
 import { EXTRA_SVG } from './target-svgs.js?v=7';
 import { icon } from './icons.js?v=2';
