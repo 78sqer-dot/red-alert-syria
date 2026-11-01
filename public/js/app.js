@@ -1,13 +1,13 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=18';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=27';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=28';
 import * as maplibregl from '/vendor/maplibre-gl.mjs?v=6.16.0';
 import { DICT } from './i18n.js?v=2';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=4';
 import { settings } from './settings.js?v=7';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=47';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=48';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
@@ -387,7 +387,7 @@ function popupHtml(a) {
     <div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <p class="pp-title">${esc(titleOf(a))}</p>
     ${distChip(a)}
-    ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">📍 ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
+    ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">${icon('locate', 13)} ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
     ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
     <a class="pp-share" href="https://wa.me/?text=${encodeURIComponent(shareText(a) + '\n' + shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.share)}</a></div></div>`;
@@ -409,7 +409,7 @@ function select(id, { fromMap = false, fly = true } = {}) {
   state.selectedId = id;
   if (history.replaceState) history.replaceState(null, '', '#' + encodeURIComponent(id));
   const shown = isLive(a) ? a : { ...a, is_active: false };
-  amap && amap.select(shown, { fly: fly, popup: true });
+  amap && amap.select(shown, { fly: fly, popup: !isMobile() });
   showDetail();
   if (isMobile()) setSheetOpen(false);
   else if ($('#app').classList.contains('sb-hidden') && !fromMap) {

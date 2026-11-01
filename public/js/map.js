@@ -1,7 +1,7 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=27';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=28';
 import { SVG } from './marker-svgs.js?v=18';
-import { EXTRA_SVG } from './target-svgs.js?v=10';
+import { EXTRA_SVG } from './target-svgs.js?v=11';
 import { icon } from './icons.js?v=4';
 import { typeIcon } from './type-icons.js?v=3';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
@@ -892,7 +892,8 @@ export class AlertMap {
       this.map.fitBounds([[w, s], [e, n]], { padding: this.padding(), maxZoom: 11, duration: 1100, essential: true });
     } else if (fly) {
       const z = { place: 11, point: 11.5, district: 9.5, governorate: 8 }[alert.scope] || 9;
-      this.map.flyTo({ center: target, zoom: Math.max(this.map.getZoom(), z), padding: this.padding(), speed: 1.4, essential: true });
+      const nextZoom = Math.min(13, Math.max(z, this.map.getZoom() + 0.9));
+      this.map.flyTo({ center: target, zoom: nextZoom, padding: this.padding(), speed: 1.4, essential: true });
     }
     if (popup) this.openPopup(alert);
   }
