@@ -218,7 +218,7 @@ function areaPage(area, lang) {
     ? `What is happening in ${name}${area.kind === 'city' ? ` (${govName})` : ''} right now: live alerts for drones, warplanes, shelling, missiles, attacks, accidents and fires on a free real-time map of Syria. ${s.d1} alerts in the last 24 hours.`
     : `شو عم يصير ${withBi(name)}${area.kind === 'city' ? ` (${govName})` : ''} هلق؟ تنبيهات عاجلة مباشرة: مسيّرات، طيران حربي، قصف، صواريخ، هجمات، حوادث وحرائق على خريطة سوريا المباشرة المجانية. ${arDigits(s.d1)} تنبيه آخر ٢٤ ساعة.`;
   const mapHref = `/${lang}/?at=${area.lat.toFixed(4)},${area.lon.toFixed(4)},${area.zoom}`;
-  const shareText = en ? `🔴 Live alerts in ${name}, Syria — Red Alert Syria` : `🔴 شو صاير ${withBi(name)} هلق؟ تنبيهات ${name} المباشرة على خريطة الإنذار الأحمر سوريا`;
+  const shareText = en ? `🚨 Live alerts in ${name}, Syria — Red Alert Syria` : `🚨 شو صاير ${withBi(name)} هلق؟ تنبيهات ${name} المباشرة على خريطة الإنذار الأحمر سوريا`;
   const activeIds = new Set(s.active.map((a) => a.id));
   const items = s.ev.slice(0, 25).map((e) => {
     const place = en ? (e.pe || e.pa || e.ge || '') : (e.pa || e.ga || '');
@@ -309,7 +309,7 @@ function alertSharePage(id, lang) {
   const place = en ? info.pe : info.pa;
   const gov = en ? info.ge : info.ga;
   const placeLine = [place, gov].filter((x, i, arr) => x && arr.indexOf(x) === i).join(en ? ', ' : '، ');
-  const title = `🔴 ${typeLabel(info.ty, lang)}${placeLine ? ` — ${placeLine}` : ''} | ${en ? 'Red Alert Syria' : 'الإنذار الأحمر سوريا'}`;
+  const title = `🚨 ${typeLabel(info.ty, lang)}${placeLine ? ` — ${placeLine}` : ''} | ${en ? 'Red Alert Syria' : 'الإنذار الأحمر سوريا'}`;
   const when = fmtWhen(info.ts, lang);
   const dtx = (en && info.desc_en) || info.desc;
   const desc = `${dtx ? dtx.slice(0, 160) + ' · ' : ''}${when} (${en ? 'Damascus time' : 'بتوقيت دمشق'}). ${en ? 'Live map of alerts across Syria — follow t.me/Red_Alert_Syria' : 'خريطة سوريا المباشرة للتنبيهات — تابعنا t.me/Red_Alert_Syria'}`;

@@ -27,6 +27,24 @@ test('map types keep drone targeting distinct and visually on-brand', () => {
   assert.equal(drone.tag_ar, 'استهداف_بمسيّرة');
 });
 
+test('news and report emojis suit the event, and map urgency uses a siren icon', () => {
+  assert.equal(ALERT_TYPES.breaking.emoji, '🚨');
+  assert.equal(ALERT_TYPES.uav.emoji, '🛩️', 'use a small aircraft symbol instead of a UFO');
+  assert.equal(ALERT_TYPES.artillery.emoji, '💣');
+  assert.equal(ALERT_TYPES.weather.emoji, '⛈️');
+  assert.equal(alertEmoji({ type: 'breaking' }), '🚨');
+  assert.equal(alertEmoji({ type: 'uav' }), '🛩️');
+  assert.equal(typeIcon('breaking'), 'urgent');
+  assert.ok(ICONS[typeIcon('breaking')], 'the map filter icon exists in the icon catalogue');
+  assert.equal(ALERT_TYPES.death.emoji, '🪦');
+  assert.equal(ALERT_TYPES.death.glyph, 'grave');
+  assert.equal(typeIcon('death'), 'grave');
+  assert.ok(ICONS.grave);
+  assert.match(EXTRA_SVG.grave, /M96 448V234/);
+  assert.equal(ALERT_TYPES.brawl.emoji, '👊');
+  assert.equal(ALERT_TYPES.brawl.glyph, 'fists');
+});
+
 test('aircraft movement is separate from unchanged hovering markers', () => {
   assert.ok(ALERT_GROUPS.aerial.types.includes('air_movement'));
   assert.equal(ALERT_TYPES.uav.marker, 'orbit');
@@ -43,7 +61,9 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.ok(ALERT_GROUPS.aerial.types.includes('helicopter'));
   assert.ok(NEWS_TYPES.includes('helicopter'));
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
-  assert.equal(helicopter.glyph, 'helicopter');
+  assert.equal(helicopter.glyph, 'helicopter_sleek');
+  assert.match(EXTRA_SVG.helicopter_sleek, /class="heli-main-rotor"/);
+  assert.match(EXTRA_SVG.helicopter_sleek, /class="heli-tail-rotor"/);
   assert.match(EXTRA_SVG.helicopter, /class="heli-main-rotor"/);
   assert.match(EXTRA_SVG.helicopter, /class="heli-tail-rotor"/);
   assert.deepEqual({ marker: warplane.marker, glyph: warplane.glyph, color: warplane.color, ring: warplane.ring, zone: warplane.zone }, {

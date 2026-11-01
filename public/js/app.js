@@ -1,13 +1,13 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=18';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=25';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=27';
 import * as maplibregl from '/vendor/maplibre-gl.mjs?v=6.16.0';
-import { DICT } from './i18n.js';
+import { DICT } from './i18n.js?v=2';
 import { matchesGovernorate } from './alert-region-filter.js';
-import { icon } from './icons.js?v=3';
-import { settings } from './settings.js?v=4';
+import { icon } from './icons.js?v=4';
+import { settings } from './settings.js?v=7';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=45';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=47';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
@@ -147,7 +147,7 @@ const isLive = (a) => a.is_active && (a.expires_at == null || Date.parse(a.expir
 const shareUrl = (a) => `${location.origin}/${LANG}/a/${encodeURIComponent(a.id)}`;
 const siteUrl = () => `${location.origin}/${LANG}/`;
 const fbShare = (u) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`;
-const shareText = (a) => `🔴 ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}`;
+const shareText = (a) => `🚨 ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}`;
 
 // ------------------------------------------------------------------ alerts selection
 const URGENT_TYPES = new Set(['breaking', 'uav_strike', 'airstrike', 'warplane', 'helicopter', 'air_movement', 'missile', 'attack', 'artillery', 'assassination', 'shooting', 'military_incursion']);
@@ -407,7 +407,7 @@ function select(id, { fromMap = false, fly = true } = {}) {
   const a = state.alerts.get(id);
   if (!a) return;
   state.selectedId = id;
-  if (history.replaceState) history.replaceState(null, '', '#' + id);
+  if (history.replaceState) history.replaceState(null, '', '#' + encodeURIComponent(id));
   const shown = isLive(a) ? a : { ...a, is_active: false };
   amap && amap.select(shown, { fly: fly, popup: true });
   showDetail();
@@ -415,6 +415,27 @@ function select(id, { fromMap = false, fly = true } = {}) {
   else if ($('#app').classList.contains('sb-hidden') && !fromMap) {
     toggleSidebar(true);
   }
+}
+const directAlertLookups = new Map();
+function openDirectAlert(id) {
+  if (!id) return;
+  if (state.alerts.has(id)) {
+    if (state.selectedId !== id) select(id);
+    return;
+  }
+  if (directAlertLookups.has(id)) return;
+  const request = fetch('/api/alerts/' + encodeURIComponent(id), { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      const alert = j?.alert;
+      if (!alert) return;
+      state.alerts.set(alert.id, alert);
+      refresh();
+      if (location.hash.slice(1) === id) select(alert.id);
+    })
+    .catch(() => {})
+    .finally(() => directAlertLookups.delete(id));
+  directAlertLookups.set(id, request);
 }
 function step(dir) {
   const list = visibleAlerts();
@@ -1055,6 +1076,7 @@ function bindEvents() {
     if (act === 'map') {
       if (isMobile()) setSheetOpen(false);
       state.selectedId = a.id;
+      if (history.replaceState) history.replaceState(null, '', '#' + encodeURIComponent(a.id));
       amap && amap.select(isLive(a) ? a : { ...a, is_active: false });
       $$('.card.sel').forEach((c) => c.classList.remove('sel'));
       card.classList.add('sel');
@@ -1063,7 +1085,10 @@ function bindEvents() {
     select(a.id);
   });
   $('#alertList').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && e.target.classList.contains('card')) select(e.target.dataset.id);
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('card')) {
+      e.preventDefault();
+      select(e.target.dataset.id);
+    }
   });
   $('#sbClose').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1238,7 +1263,11 @@ function bindEvents() {
   });
   window.addEventListener('hashchange', () => {
     const id = location.hash.slice(1);
-    if (id && id !== state.selectedId && state.alerts.has(id)) select(id);
+    if (!id) {
+      if (state.selectedId) select(null);
+      return;
+    }
+    if (id !== state.selectedId) openDirectAlert(id);
   });
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', (e) => {
     if (typeof settings.get().darkMode !== 'boolean') applyTheme(e.matches);
@@ -1333,16 +1362,7 @@ function connect() {
     startTicker();
     if (first) {
       const id = location.hash.slice(1);
-      if (id && state.alerts.has(id)) setTimeout(() => select(id), 600);
-      else if (id) {
-        fetch('/api/alerts/' + encodeURIComponent(id)).then((r) => (r.ok ? r.json() : null)).then((j2) => {
-          if (j2 && j2.alert) {
-            state.alerts.set(j2.alert.id, j2.alert);
-            refresh();
-            setTimeout(() => select(j2.alert.id), 600);
-          }
-        }).catch(() => {});
-      }
+      if (id) openDirectAlert(id);
     }
   });
   es.addEventListener('alert', (e) => {

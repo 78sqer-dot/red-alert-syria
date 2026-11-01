@@ -28,3 +28,11 @@ test('map markers and pulse rings explicitly focus the selected alert', () => {
   assert.match(css, /\.mk::before\s*\{[^}]*width: 44px; height: 44px;/);
   assert.match(map, /t\.ring \|\| t\.color/);
 });
+
+test('moving aircraft paths are clickable and keyboard accessible, with a visible selected ring', () => {
+  assert.match(map, /el\.setAttribute\('role', 'button'\)[\s\S]*?this\.bindMarkerTap\(el, \(\) => this\.onSelect\(alert\.id/);
+  assert.match(map, /e\.key !== 'Enter' && e\.key !== ' '/);
+  assert.match(map, /el\.classList\.toggle\('zp-selected', !!p\.selected\)/);
+  assert.match(css, /\.map-flight-track-marker\s*\{[^}]*pointer-events: auto;/);
+  assert.match(css, /\.zp\.zp-selected::before/);
+});

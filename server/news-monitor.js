@@ -430,7 +430,7 @@ function cardKb(d, lang = 'ar') {
   return kb;
 }
 const intenseOn = (d) => (typeof d.intense === 'boolean' ? d.intense : droneAuto(d.headline) > 1);
-const intenseLabel = (d, lang) => (lang === 'en' ? `🛸 Intensive flight: ${intenseOn(d) ? '✅ on' : '⬜ off'}` : `🛸 تحليق مكثف: ${intenseOn(d) ? '✅ مفعّل' : '⬜ لا'}`);
+const intenseLabel = (d, lang) => (lang === 'en' ? `${ALERT_TYPES.uav.emoji} Intensive flight: ${intenseOn(d) ? '✅ on' : '⬜ off'}` : `${ALERT_TYPES.uav.emoji} تحليق مكثف: ${intenseOn(d) ? '✅ مفعّل' : '⬜ لا'}`);
 function typeKb(d, lang = 'ar') {
   const kb = new InlineKeyboard();
   NEWS_TYPES.forEach((k, i) => { kb.text(`${d.type === k ? '• ' : ''}${ALERT_TYPES[k].emoji} ${lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`, `nw:s:${d.id}:${k}`); if (i % 2 === 1) kb.row(); });

@@ -35,7 +35,7 @@ export const ALERT_TYPES = {
   helicopter: {
     ar: 'طيران مروحي', en: 'Helicopter activity', button_ar: 'طيران مروحي', button_en: 'Helicopter',
     emoji: '🚁', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
-    marker: 'helicopter', glyph: 'helicopter', zone: 'dashed', tag_ar: 'طيران_مروحي', tag_en: 'Helicopter',
+    marker: 'helicopter', glyph: 'helicopter_sleek', zone: 'dashed', tag_ar: 'طيران_مروحي', tag_en: 'Helicopter',
   },
   air_movement: {
     ar: 'حركة طيران', en: 'Aircraft movement', button_ar: 'حركة طيران', button_en: 'Aircraft movement',
@@ -130,7 +130,7 @@ export const ALERT_TYPES = {
   death: {
     ar: 'وفاة', en: 'Death', button_ar: 'وفاة', button_en: 'Death',
     emoji: '🪦', color: '#6b7280', ring: '#374151', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'candle', icon: '#6b7280', zone: false, tag_ar: 'وفاة', tag_en: 'Death',
+    marker: 'icon', glyph: 'grave', icon: '#6b7280', zone: false, tag_ar: 'وفاة', tag_en: 'Death',
   },
   martyrdom: {
     ar: 'استشهاد', en: 'Martyrdom', button_ar: 'استشهاد', button_en: 'Martyrdom',
@@ -139,7 +139,7 @@ export const ALERT_TYPES = {
   },
   brawl: {
     ar: 'مشاجرة', en: 'Brawl', button_ar: 'مشاجرة', button_en: 'Brawl',
-    emoji: '🥊', color: '#7c3aed', ring: '#5b21b6', group: 'civil', parent: 'civil', ttlMin: 240,
+    emoji: '👊', color: '#7c3aed', ring: '#5b21b6', group: 'civil', parent: 'civil', ttlMin: 240,
     marker: 'icon', glyph: 'fists', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مشاجرة', tag_en: 'Brawl',
   },
   shooting: {
@@ -154,7 +154,7 @@ export const ALERT_TYPES = {
   },
   weather: {
     ar: 'تحذير جوي', en: 'Weather warning', button_ar: 'تحذير جوي', button_en: 'Weather',
-    emoji: '⛈', color: '#4f46e5', ring: '#3730a3', group: 'nature', ttlMin: 720,
+    emoji: '⛈️', color: '#4f46e5', ring: '#3730a3', group: 'nature', ttlMin: 720,
     marker: 'icon', glyph: 'storm', icon: '#4f46e5', disc: '#000000', zone: 'dashed', tag_ar: 'طقس', tag_en: 'Weather',
   },
 };

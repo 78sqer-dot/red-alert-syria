@@ -1,11 +1,11 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=25';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=27';
 import { SVG } from './marker-svgs.js?v=18';
-import { EXTRA_SVG } from './target-svgs.js?v=8';
-import { icon } from './icons.js?v=3';
-import { typeIcon } from './type-icons.js?v=1';
+import { EXTRA_SVG } from './target-svgs.js?v=10';
+import { icon } from './icons.js?v=4';
+import { typeIcon } from './type-icons.js?v=3';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
-import { flightPath, flightPosition } from '/shared/flight-path.js?v=1';
+import { aircraftRotation, flightPath, flightPosition } from '/shared/flight-path.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=1';
 const ml = () => window.maplibregl;
@@ -455,8 +455,11 @@ export class AlertMap {
       if (!track) {
         const el = document.createElement('div');
         el.className = `map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'}`;
-        el.setAttribute('aria-hidden', 'true');
-        el.title = this.opts.lang === 'en' ? 'Schematic route · not a live track' : 'مسار توضيحي · ليس مساراً حقيقياً';
+        el.setAttribute('role', 'button');
+        el.tabIndex = 0;
+        const movementTitle = this.opts.lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
+        el.setAttribute('aria-label', movementTitle);
+        el.title = `${movementTitle} · ${this.opts.lang === 'en' ? 'schematic route, not a live track' : 'مسار توضيحي وليس تتبعاً مباشراً'}`;
         const halo = document.createElement('span'); halo.className = 'map-flight-track-halo';
         const squad = document.createElement('span'); squad.className = 'map-flight-track-squad';
         for (const slot of [{ name: 'is-lead', size: 26 }, { name: 'is-left', size: 22 }, { name: 'is-right', size: 22 }]) {
@@ -467,6 +470,7 @@ export class AlertMap {
         }
         el.append(halo, squad);
         const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat(path[0]).addTo(map);
+        this.bindMarkerTap(el, () => this.onSelect(alert.id, { fromMap: true, fly: true }));
         track = { marker, element: el, signature, start: performance.now() + index * 2200, frame: 0, last: 0 };
         this.movementTracks.set(alert.id, track);
       }
@@ -478,7 +482,7 @@ export class AlertMap {
           const pos = flightPosition(path, progress);
           if (pos) {
             track.marker.setLngLat([pos.lon, pos.lat]);
-            track.marker.setRotation((pos.bearing || 0) - (aircraft === 'uav' ? 0 : 45));
+            track.marker.setRotation(aircraftRotation(aircraft, pos.bearing));
             track.element.style.opacity = reducedMotion ? '1' : String(Math.max(0.28, Math.min(1, Math.min(progress * 9, (1 - progress) * 7))));
           }
         }
@@ -527,6 +531,12 @@ export class AlertMap {
       activate();
     }, { passive: true });
     el.addEventListener('pointercancel', () => { gesture = null; }, { passive: true });
+    el.addEventListener('keydown', (e) => {
+      if ((e.key !== 'Enter' && e.key !== ' ') || e.repeat) return;
+      e.preventDefault();
+      e.stopPropagation();
+      activate();
+    });
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       if (ignoreTouchClick && e.detail > 0) {
@@ -734,6 +744,7 @@ export class AlertMap {
     if (!src) return;
     const features = [];
     const pulses = [];
+    const pulseByKey = new Map();
     const orb = (this._orb = new Map());
     const hits = (this._hits = []);
     const featureKeys = new Set();
@@ -763,14 +774,21 @@ export class AlertMap {
         const classicAircraft = t.marker === 'squad' || t.marker === 'helicopter';
         if (a.is_active) {
           const pulseKey = pulseVisualKey(visualZone, props.color, classicAircraft);
-          if (!pulseKeys.has(pulseKey) && pulses.length < 80) {
+          const existingPulse = pulseByKey.get(pulseKey);
+          if (existingPulse) {
+            existingPulse.alertIds.add(a.id);
+            if (a.id === this.selectedId) existingPulse.selected = true;
+          } else if (!pulseKeys.has(pulseKey) && pulses.length < 80) {
             pulseKeys.add(pulseKey);
-            pulses.push({ key: pulseKey, lon: z.lon, lat: z.lat, km, color: props.color, classicAircraft });
+            const pulse = { key: pulseKey, lon: z.lon, lat: z.lat, km, color: props.color, classicAircraft, selected: a.id === this.selectedId, alertIds: new Set([a.id]) };
+            pulseByKey.set(pulseKey, pulse);
+            pulses.push(pulse);
           }
         }
       });
     }
     src.setData({ type: 'FeatureCollection', features });
+    this._lastPulseData = pulses;
     this._syncPulses(pulses);
     this._orbitPx();
   }
@@ -800,6 +818,8 @@ export class AlertMap {
       }
       const el = m.getElement();
       el.classList.toggle('zp-aircraft', !!p.classicAircraft);
+      el.classList.toggle('zp-selected', !!p.selected);
+      el.style.zIndex = p.selected ? '3' : '1';
       if (el._d !== d) { el._d = d; el.style.setProperty('--d', d + 'px'); }
       if (el._c !== p.color) { el._c = p.color; el.style.setProperty('--c', p.color); }
     }
@@ -855,6 +875,7 @@ export class AlertMap {
     this.selectedId = alert ? alert.id : null;
     if (!this.ready) { this._pending = alert ? [alert, { fly, popup }] : null; return; }
     this.refreshMarkerGroups();
+    this._syncPulses((this._lastPulseData || []).map((p) => ({ ...p, selected: p.alertIds.has(this.selectedId) })));
     if (!alert) return this.closePopup();
     if (!alert.location || !Number.isFinite(alert.location.latitude)) return this.closePopup();
     if (fly) this._playArrival(alert.id);

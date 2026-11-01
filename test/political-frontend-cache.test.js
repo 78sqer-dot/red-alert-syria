@@ -13,16 +13,19 @@ const types = read('shared/types.js');
 
 test('fresh PWA and module-graph versions load updated map and firearm glyphs', () => {
   const appBuild = index.match(/\/js\/app\.js\?v=(\d+)/)?.[1];
-  assert.equal(appBuild, '38', 'HTML must request the fresh app build to update installed PWA users');
-  assert.match(index, /css\/app\.css\?v=29/);
-  assert.match(app, /settings\.js\?v=4/);
-  assert.match(app, /map\.js\?v=45/);
-  assert.match(app, /shared\/types\.js\?v=25/);
-  assert.match(settings, /shared\/types\.js\?v=25/);
-  assert.match(map, /shared\/types\.js\?v=25/);
-  assert.match(map, /target-svgs\.js\?v=8/);
-  assert.match(map, /icons\.js\?v=3/);
-  assert.match(map, /type-icons\.js\?v=1/);
+  assert.equal(appBuild, '41', 'HTML must request the fresh app build to update installed PWA users');
+  assert.match(index, /css\/app\.css\?v=30/);
+  assert.match(app, /settings\.js\?v=7/);
+  assert.match(app, /i18n\.js\?v=2/);
+  assert.match(app, /map\.js\?v=47/);
+  assert.match(app, /shared\/types\.js\?v=27/);
+  assert.match(settings, /shared\/types\.js\?v=27/);
+  assert.match(map, /shared\/types\.js\?v=27/);
+  assert.match(map, /target-svgs\.js\?v=10/);
+  assert.match(map, /flight-path\.js\?v=2/);
+  assert.match(app, /icons\.js\?v=4/);
+  assert.match(map, /icons\.js\?v=4/);
+  assert.match(map, /type-icons\.js\?v=3/);
 });
 
 test('political map icon uses its configured 25px size', () => {

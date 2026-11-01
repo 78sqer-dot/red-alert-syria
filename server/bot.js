@@ -449,7 +449,7 @@ function previewKeyboard(ctx, d) {
   // drones: "تحليق مكثف" = 2-3 drones over every circle on the map instead of one
   if (d.type === 'uav' && d.mode !== 'report') {
     const on = typeof d.intense === 'boolean' ? d.intense : droneAuto(d.details) > 1;
-    kb.text(enx ? `🛸 Intensive flight: ${on ? '✅ on' : '⬜ off'}` : `🛸 تحليق مكثف: ${on ? '✅ مفعّل' : '⬜ لا'}`, 'intense').row();
+    kb.text(enx ? `${ALERT_TYPES.uav.emoji} Intensive flight: ${on ? '✅ on' : '⬜ off'}` : `${ALERT_TYPES.uav.emoji} تحليق مكثف: ${on ? '✅ مفعّل' : '⬜ لا'}`, 'intense').row();
   }
   kb.text(l.btnEditDetails, 'editdetails').text(l.btnChangeLoc, 'back:gov').row();
   // publishing bot only: one alert can cover several areas, each with its own circle on the map
@@ -573,7 +573,7 @@ async function askBorder(ctx, d) {
 async function askAerialMode(ctx, d) {
   d.step = 'flightmode';
   const en = langOf(ctx) === 'en';
-  const aircraft = d.type === 'uav' ? '🛸' : '✈️';
+  const aircraft = d.type === 'uav' ? ALERT_TYPES.uav.emoji : ALERT_TYPES.warplane.emoji;
   const kb = new InlineKeyboard()
     .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row()
     .text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row()

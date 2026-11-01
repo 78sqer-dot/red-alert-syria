@@ -6,6 +6,7 @@ const css = await readFile(new URL('../public/css/app.css', import.meta.url), 'u
 const mapJs = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf8');
 const markerSvgs = await readFile(new URL('../public/js/marker-svgs.js', import.meta.url), 'utf8');
 const types = await readFile(new URL('../shared/types.js', import.meta.url), 'utf8');
+const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.meta.url), 'utf8');
 
 test('drone keeps the original top-down silhouette, fixed icon size and perimeter orbit', () => {
   assert.match(types, /uav:\s*\{[\s\S]*?glyph: 'uav'/);
@@ -28,4 +29,11 @@ test('helicopter airframe is 25px while its orbit stays unscaled', () => {
   assert.match(css, /\.heli-craft\s*\{[^}]*width:\s*25px;[^}]*height:\s*25px;/);
   assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*25px;[^}]*height:\s*25px;/);
   assert.match(mapJs, /svgTag\(t\.glyph,\s*25,\s*`fill=/);
+});
+
+test('helicopter uses a smooth alternate silhouette while the original glyph remains available', () => {
+  assert.match(types, /helicopter:\s*\{[\s\S]*?glyph: 'helicopter_sleek'/);
+  assert.match(targetSvgs, /helicopter_sleek:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
+  assert.match(targetSvgs, /helicopter:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
+  assert.match(mapJs, /setRotation\(aircraftRotation\(aircraft, pos\.bearing\)\)/);
 });
