@@ -693,6 +693,10 @@ export function publicAlert(a) {
     more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
     source_info: publicSourceInfo(a, sources),
+    verification: {
+      status: a.source === 'weather' || a.meta?.political?.official ? 'official' : a.source ? 'attributed' : 'unverified',
+      label: a.source === 'weather' || a.meta?.political?.official ? 'مصدر رسمي' : a.source ? 'منسوب إلى المصدر' : 'غير موثق مستقلًا',
+    },
     updates: Array.isArray(a.history) ? a.history.slice(-20).map((h) => ({ at: h.at, kind: h.kind, title: h.title, description: h.description, is_active: h.is_active })) : undefined,
     expires_at: a.expires_at,
     ended_at: a.ended_at,

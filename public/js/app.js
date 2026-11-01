@@ -293,6 +293,7 @@ function detailHtml(a) {
     ? fmtFull.format(new Date(a.political_source_timestamp)) : null;
   const updates = Array.isArray(a.updates) ? a.updates.slice().reverse() : [];
   const sourceInfoUrl = safeExternalUrl(a.source_info?.url);
+  const verificationLabel = a.verification?.status === 'official' ? (LANG === 'ar' ? 'مصدر رسمي' : 'Official source') : a.verification?.status === 'attributed' ? (LANG === 'ar' ? 'منسوب إلى المصدر' : 'Attributed to source') : (LANG === 'ar' ? 'غير موثق مستقلًا' : 'Not independently verified');
   const rows = [
     [T.type, `${badge(a)}`],
     [T.location, political && !hasLoc ? (LANG === 'ar' ? 'موقع غير محدد — بلا دبوس' : 'Location unspecified — no pin') : esc(placeName(a))],
@@ -305,6 +306,7 @@ function detailHtml(a) {
     ...(alertDist(a) ? [[LANG === 'ar' ? 'المسافة عنك' : 'Distance from you', distChip(a)]] : []),
     [T.time, esc(fmtFull.format(new Date(a.timestamp)))],
     [a.source_info?.kind === 'provider' ? T.dataProvider : T.publisher, sourceInfoUrl ? `<a href="${esc(sourceInfoUrl)}" target="_blank" rel="noopener noreferrer">${esc(a.source_info?.name)}</a>` : esc(a.source_info?.name || 'Red Alert Syria')],
+    [LANG === 'ar' ? 'حالة المصدر' : 'Source status', `<span class="verify-pill ${esc(a.verification?.status || 'unverified')}">${esc(verificationLabel)}</span>`],
     live ? [T.expires, a.expires_at ? esc(fmtTime.format(new Date(a.expires_at))) : T.noExpiry] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at || a.timestamp)))],
   ];
   return `<div class="d-card" style="--c:${t.color}">
