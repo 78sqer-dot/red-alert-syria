@@ -4,7 +4,7 @@
 export const ALERT_TYPES = {
   breaking: {
     ar: 'خبر عاجل', en: 'Breaking news', button_ar: 'خبر عاجل', button_en: 'Breaking',
-    emoji: '🔴', color: '#ff3b4e', ring: '#c81e2f', group: 'other', ttlMin: 120,
+    emoji: '🚨', color: '#ff3b4e', ring: '#c81e2f', group: 'other', ttlMin: 120,
     marker: 'icon', glyph: 'urgent_warning', icon: '#e11d2e', disc: '#000000', zone: true, tag_ar: 'عاجل', tag_en: 'Breaking',
   },
   political: {
@@ -14,7 +14,7 @@ export const ALERT_TYPES = {
   },
   uav: {
     ar: 'مسيّرة', en: 'UAV / Drone', button_ar: 'مسيّرة', button_en: 'Drone',
-    emoji: '🛸', color: '#ff6b7a', ring: '#e11d48', group: 'aerial', ttlMin: 90,
+    emoji: '🛩️', color: '#ff6b7a', ring: '#e11d48', group: 'aerial', ttlMin: 90,
     marker: 'orbit', glyph: 'uav', zone: true, tag_ar: 'مسيرة', tag_en: 'Drone',
   },
   uav_strike: {
@@ -39,12 +39,12 @@ export const ALERT_TYPES = {
   },
   air_movement: {
     ar: 'حركة طيران', en: 'Aircraft movement', button_ar: 'حركة طيران', button_en: 'Aircraft movement',
-    emoji: '🛫', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
+    emoji: '✈️', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
     marker: 'movement', glyph: 'plane', icon: '#3b8eff', zone: false, tag_ar: 'حركة_طيران', tag_en: 'Aircraft_movement',
   },
   border: {
     ar: 'تنبيه حدودي', en: 'Border alert', button_ar: 'الحدود', button_en: 'Border',
-    emoji: '🛂', color: '#7c3aed', ring: '#5b21b6', group: 'other', ttlMin: 120,
+    emoji: '🚧', color: '#7c3aed', ring: '#5b21b6', group: 'other', ttlMin: 120,
     marker: 'icon', glyph: 'alert_tri', icon: '#7c3aed', zone: false, tag_ar: 'حدود', tag_en: 'Border',
   },
   military_incursion: {
@@ -89,7 +89,7 @@ export const ALERT_TYPES = {
   },
   artillery: {
     ar: 'قصف مدفعي', en: 'Artillery shelling', button_ar: 'قصف مدفعي', button_en: 'Artillery',
-    emoji: '🎯', color: '#f97316', ring: '#f97316', group: 'strikes', ttlMin: 360,
+    emoji: '💣', color: '#f97316', ring: '#f97316', group: 'strikes', ttlMin: 360,
     marker: 'static', glyph: 'artillery', disc: '#f97316', zone: false, tag_ar: 'قصف_مدفعي', tag_en: 'Artillery',
   },
   explosion: {
