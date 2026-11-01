@@ -20,7 +20,7 @@ export const ALERT_TYPES = {
   uav_strike: {
     ar: 'استهداف بمسيّرة', en: 'Drone strike', button_ar: 'استهداف بمسيّرة', button_en: 'Drone strike',
     emoji: '🎯', color: '#ff6b7a', ring: '#e11d48', group: 'aerial', ttlMin: 120,
-    marker: 'orbit', glyph: 'uav', zone: true, tag_ar: 'استهداف_بمسيّرة', tag_en: 'Drone_strike',
+    marker: 'orbit', glyph: 'uav_strike', zone: true, tag_ar: 'استهداف_بمسيّرة', tag_en: 'Drone_strike',
   },
   airstrike: {
     ar: 'غارة جوية', en: 'Airstrike', button_ar: 'غارة جوية', button_en: 'Airstrike',
@@ -54,6 +54,24 @@ export const ALERT_TYPES = {
     marker: 'icon', glyph: 'tank', icon: '#71834a', disc: '#111827', size: 34, zone: 'dashed',
     tag_ar: 'توغل_آليات_عسكرية', tag_en: 'Military_vehicle_incursion',
   },
+  smuggling_weapons: {
+    ar: 'تهريب أسلحة', en: 'Weapons smuggling', button_ar: 'تهريب أسلحة', button_en: 'Weapons smuggling',
+    emoji: '🔫', color: '#c2410c', ring: '#9a3412', group: 'smuggling', ttlMin: 360,
+    marker: 'icon', glyph: 'smuggling_weapons', icon: '#c2410c', disc: '#7c2d12', size: 34, zone: false,
+    tag_ar: 'تهريب_أسلحة', tag_en: 'Weapons_smuggling',
+  },
+  smuggling_drugs: {
+    ar: 'تهريب مخدرات', en: 'Drug smuggling', button_ar: 'تهريب مخدرات', button_en: 'Drug smuggling',
+    emoji: '💊', color: '#7c3aed', ring: '#5b21b6', group: 'smuggling', ttlMin: 360,
+    marker: 'icon', glyph: 'smuggling_drugs', icon: '#7c3aed', disc: '#3b0764', size: 34, zone: false,
+    tag_ar: 'تهريب_مخدرات', tag_en: 'Drug_smuggling',
+  },
+  smuggling_explosives: {
+    ar: 'تهريب متفجرات', en: 'Explosives smuggling', button_ar: 'تهريب متفجرات', button_en: 'Explosives smuggling',
+    emoji: '🧨', color: '#d97706', ring: '#92400e', group: 'smuggling', ttlMin: 360,
+    marker: 'icon', glyph: 'smuggling_explosives', icon: '#d97706', disc: '#78350f', size: 34, zone: false,
+    tag_ar: 'تهريب_متفجرات', tag_en: 'Explosives_smuggling',
+  },
   missile: {
     ar: 'صواريخ', en: 'Missiles', button_ar: 'صواريخ', button_en: 'Missiles',
     emoji: '🚀', color: '#7f1d1d', ring: '#450a0a', group: 'aerial', ttlMin: 180,
@@ -62,7 +80,7 @@ export const ALERT_TYPES = {
   attack: {
     ar: 'هجوم', en: 'Attack', button_ar: 'هجوم', button_en: 'Attack',
     emoji: '⚔️', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
-    marker: 'static', glyph: 'airstrike', disc: '#dc2626', zone: false, tag_ar: 'هجوم', tag_en: 'Attack',
+    marker: 'static', glyph: 'crossed_swords', disc: '#dc2626', zone: false, tag_ar: 'هجوم', tag_en: 'Attack',
   },
   assassination: {
     ar: 'اغتيال', en: 'Assassination', button_ar: 'اغتيال', button_en: 'Assassination',
@@ -107,27 +125,27 @@ export const ALERT_TYPES = {
   arrest: {
     ar: 'اعتقال', en: 'Arrest', button_ar: 'اعتقال', button_en: 'Arrest',
     emoji: '🚔', color: '#d97706', ring: '#92400e', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'civil_shield', icon: '#d97706', zone: false, tag_ar: 'اعتقال', tag_en: 'Arrest',
+    marker: 'icon', glyph: 'handcuffs', icon: '#d97706', zone: false, tag_ar: 'اعتقال', tag_en: 'Arrest',
   },
   death: {
     ar: 'وفاة', en: 'Death', button_ar: 'وفاة', button_en: 'Death',
     emoji: '🕯️', color: '#6b7280', ring: '#374151', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'other', icon: '#6b7280', zone: false, tag_ar: 'وفاة', tag_en: 'Death',
+    marker: 'icon', glyph: 'candle', icon: '#6b7280', zone: false, tag_ar: 'وفاة', tag_en: 'Death',
   },
   martyrdom: {
     ar: 'استشهاد', en: 'Martyrdom', button_ar: 'استشهاد', button_en: 'Martyrdom',
     emoji: '🕊️', color: '#b91c1c', ring: '#7f1d1d', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'urgent_warning', icon: '#b91c1c', zone: false, tag_ar: 'استشهاد', tag_en: 'Martyrdom',
+    marker: 'icon', glyph: 'dove', icon: '#b91c1c', zone: false, tag_ar: 'استشهاد', tag_en: 'Martyrdom',
   },
   brawl: {
     ar: 'مشاجرة', en: 'Brawl', button_ar: 'مشاجرة', button_en: 'Brawl',
     emoji: '🥊', color: '#7c3aed', ring: '#5b21b6', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'other', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مشاجرة', tag_en: 'Brawl',
+    marker: 'icon', glyph: 'fists', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مشاجرة', tag_en: 'Brawl',
   },
   shooting: {
     ar: 'إطلاق نار', en: 'Gunfire', button_ar: 'إطلاق نار', button_en: 'Gunfire',
     emoji: '', color: '#dc2626', ring: '#991b1b', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'pistol', icon: '#111827', size: 32, zone: false, tag_ar: 'إطلاق_نار', tag_en: 'Gunfire',
+    marker: 'icon', glyph: 'gunfire', icon: '#111827', size: 32, zone: false, tag_ar: 'إطلاق_نار', tag_en: 'Gunfire',
   },
   quake: {
     ar: 'زلزال', en: 'Earthquake', button_ar: 'زلزال', button_en: 'Earthquake',
@@ -159,6 +177,7 @@ export const ALERT_GROUPS = {
   civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   political: { ar: 'تطورات سياسية', en: 'Political developments', types: ['political'] },
+  smuggling: { ar: 'تهريب', en: 'Smuggling', types: ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },
   other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border', 'military_incursion'] },
 };
 

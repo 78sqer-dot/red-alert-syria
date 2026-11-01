@@ -1,5 +1,15 @@
 // Extra map glyphs kept separate from the large shared marker catalogue.
 export const EXTRA_SVG = {
+  uav_strike: '<g><path d="M256 118 306 215 407 256 306 297 256 394 206 297 105 256 206 215z"/><circle cx="256" cy="256" r="42" fill="none" stroke="currentColor" stroke-width="24"/><circle cx="256" cy="256" r="214" fill="none" stroke="currentColor" stroke-width="18" stroke-dasharray="28 28"/></g>',
+  crossed_swords: '<g><path d="m112 78 42-42 278 278-42 42zM400 78l-42-42L80 314l42 42z"/><path d="m80 68 58-20 20 58-42 42-58-20zm272 272 42-42 58 20 20 58-58 20zm-224 0-42-42-58 20-20 58 58 20zm224-224 42 42 58-20 20-58-58-20z"/></g>',
+  handcuffs: '<g fill="none" stroke="currentColor" stroke-width="28"><circle cx="158" cy="256" r="100"/><circle cx="354" cy="256" r="100"/><path d="m250 204 24-22m-24 86 24 22M52 126 24 98m464 28 28-28M52 386l-28 28m464-28 28 28"/></g>',
+  candle: '<g><path d="M174 182h164v268H174z"/><path d="M256 182c-72-56-30-112 0-150 20 43 86 91 0 150z"/><path d="M145 238h222v22H145z"/></g>',
+  dove: '<g><path d="M50 318c104-28 162-115 196-254 48 53 86 72 132 57 34-11 58-31 86-61-8 76-44 128-103 154 50 13 94 6 137-20-41 102-111 157-212 169-86 10-157-13-212-66l-54 21 30-42z"/><path d="m226 274 91 57" fill="none" stroke="currentColor" stroke-width="20"/></g>',
+  fists: '<g><path d="M78 266v-92a38 38 0 0 1 76 0v-54a38 38 0 0 1 76 0v48a38 38 0 0 1 76 0v35a38 38 0 0 1 76 37v99a91 91 0 0 1-91 91H205a127 127 0 0 1-127-127z"/><path d="M154 228v58m76-58v58m76-39v39" fill="none" stroke="currentColor" stroke-width="18"/></g>',
+  gunfire: '<g><path d="M45 166h267l62-40h91v73h47v84h-47v42h-98l-58-47H45z"/><path d="M137 325v122h86l47-122m87-159v74m-18-12 43-38" fill="none" stroke="currentColor" stroke-width="25"/></g>',
+  smuggling_weapons: '<g><path d="M24 222h54v-34h43v34h43l19-22h145l19 10h43l15 14h91v18h-91l-15 14h-44l-20 17h-55l-12 48h-25l-15-57h-66l-19-15h-25l-22 20H77l12-25-65-12z"/><path d="M187 280h67l21 73-27 8-25-56h-36z"/><path d="M190 194h144v13H190z"/></g>',
+  smuggling_drugs: '<g><path d="M178 79a88 88 0 0 1 124 0l131 131a88 88 0 0 1-124 124L178 203a88 88 0 0 1 0-124zm28 28a48 48 0 0 0 0 68l131 131a48 48 0 0 0 68-68L274 107a48 48 0 0 0-68 0z"/><path d="m222 222 68-68 28 28-68 68z"/></g>',
+  smuggling_explosives: '<g><path d="m96 174 160-92 160 92v180l-160 92-160-92z"/><path d="m96 174 160 92 160-92M256 266v180" fill="none" stroke="currentColor" stroke-width="22"/><path d="M256 82V42m0 0 42 26-42 16-42-16 42-26z"/></g>',
   political: '<g><path d="M34 190 256 52l222 138H34z"/><path d="M52 204h408v28H52z"/><path d="M82 252h48v148H82zm74 0h48v148h-48zm74 0h48v148h-48zm74 0h48v148h-48zm74 0h48v148h-48z"/><path d="M45 412h422v30H45zM26 454h460v34H26z"/></g>',
   // Non-specific projectile/reticle: does not imply a rifle or pistol.
   weapon: '<g><path fill-rule="evenodd" d="M256 66a190 190 0 1 0 0 380a190 190 0 0 0 0-380zm0 38a152 152 0 1 1 0 304a152 152 0 0 1 0-304z"/><path d="M34 244h116v24H34zm328 0h116v24H362zM244 34h24v116h-24zm0 328h24v116h-24z"/><path d="M256 166l57 68v68l-57 44-57-44v-68z"/></g>',

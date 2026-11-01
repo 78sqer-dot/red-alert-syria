@@ -1,8 +1,9 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=23';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=24';
 import { SVG } from './marker-svgs.js?v=18';
-import { EXTRA_SVG } from './target-svgs.js?v=7';
-import { icon } from './icons.js?v=2';
+import { EXTRA_SVG } from './target-svgs.js?v=8';
+import { icon } from './icons.js?v=3';
+import { typeIcon } from './type-icons.js?v=1';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
 import { squadLayout } from './aircraft-layout.js';
 import { flightPath, flightPosition } from '/shared/flight-path.js?v=1';
@@ -23,8 +24,7 @@ const STYLE_URL = { light: 'https://tiles.openfreemap.org/styles/liberty', dark:
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 const ZONE_COLOR = { uav: '#ef233c', uav_strike: '#ff6b7a', airstrike: '#ef233c', breaking: '#ef233c', political: '#475569' };
-const TYPE_ICON = { breaking: 'bolt', political: 'news', uav: 'drone', uav_strike: 'drone', airstrike: 'bomb', warplane: 'plane', helicopter: 'helicopter', air_movement: 'route', border: 'mapPin', military_incursion: 'shield', missile: 'rocket', attack: 'swords', assassination: 'swords', artillery: 'target', explosion: 'bomb', civil: 'ambulance', accident: 'carCrash', protest: 'speaker', fire: 'flame', civil_plane: 'planeDep', quake: 'quake', weather: 'storm' };
-export const typeIcon = (t) => TYPE_ICON[t] || 'alert';
+export { typeIcon };
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
 // Round coloured disc with the original glyph (used by the map, the legend and toasts).
 export function glyphDisc(type, size = 34, iconSize = 18, cls = 'sai', glyphOverride = null) {

@@ -251,8 +251,26 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('home', reporter, reportBot);
   const reportButtons = lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
   assert.ok(reportButtons.some((button) => button.callback_data === 'mi' && button.text?.endsWith('توغل عسكري')), 'general military incursion is available in the public report bot');
+  assert.ok(reportButtons.some((button) => button.callback_data === 't:political' && button.text?.includes('تطور سياسي')), 'political reporting is available in the public report bot');
+  assert.ok(reportButtons.some((button) => button.callback_data === 'sm' && button.text?.includes('تهريب')), 'smuggling appears as one parent button in the public report bot');
+  for (const [user, targetBot, name] of [[owner, bot, 'admin'], [reporter, reportBot, 'public report']]) {
+    await tap('home', user, targetBot);
+    const root = lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+    assert.ok(root.some((button) => button.callback_data === 't:political'), `${name} menu exposes political reports`);
+    assert.ok(root.some((button) => button.callback_data === 'mi'), `${name} menu exposes military-incursion reports`);
+    assert.ok(root.some((button) => button.callback_data === 'sm'), `${name} menu exposes the smuggling parent button`);
+    await tap('sm', user, targetBot);
+    for (const [type, label] of [['smuggling_weapons', 'تهريب أسلحة'], ['smuggling_drugs', 'تهريب مخدرات'], ['smuggling_explosives', 'تهريب متفجرات']]) {
+      assert.ok(buttons().some((button) => button.callback_data === `t:${type}` && button.text?.includes(label)), `${name} smuggling submenu contains ${label}`);
+    }
+    await tap('t:smuggling_drugs', user, targetBot);
+    assert.match(lastUi()?.payload?.text || '', /تهريب مخدرات/);
+    assert.match(lastUi()?.payload?.text || '', /اختر المحافظة/);
+  }
+  await tap('home', reporter, reportBot);
+  const refreshedReportButtons = lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
   for (const [type, label] of [['helicopter', 'طيران مروحي'], ['airstrike', 'غارة جوية']]) {
-    const button = reportButtons.find((item) => item.callback_data === `t:${type}`);
+    const button = refreshedReportButtons.find((item) => item.callback_data === `t:${type}`);
     assert.ok(button, `${type} button is available in the public report bot`);
     assert.ok(button.text.includes(label), `${type} button has a clear Arabic label`);
     await tap(`t:${type}`, reporter, reportBot);

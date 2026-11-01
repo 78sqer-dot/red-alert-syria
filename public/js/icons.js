@@ -69,6 +69,16 @@ export const ICONS = {
   vibrate: { filled: false, body: "<path d=\"M3 5a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -14\" /><path d=\"M8 4l2 0\" /><path d=\"M9 17l0 .01\" /><path d=\"M21 6l-2 3l2 3l-2 3l2 3\" />" },
   route: { filled: false, body: "<path d=\"M3 19a2 2 0 1 0 4 0a2 2 0 0 0 -4 0\" /><path d=\"M19 7a2 2 0 1 0 0 -4a2 2 0 0 0 0 4\" /><path d=\"M11 19h5.5a3.5 3.5 0 0 0 0 -7h-8a3.5 3.5 0 0 1 0 -7h4.5\" />" },
   shield: { filled: false, body: "<path d=\"M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3\" /><path d=\"M12 3v18\" />" },
+  rifle: { filled: false, body: "<path d=\"M2 10h10l2-2h5l1 2h2v3h-2l-2 2h-4l-2-2H2z\"/><path d=\"M5 13v5m8-4 1 4m2-7h3\"/>" },
+  pistol: { filled: false, body: "<path d=\"M3 7h15l3 2v4h-6l-2 5h-3l2-5H3z\"/><path d=\"M8 7V5h8v2m-5 6v3\"/>" },
+  pills: { filled: false, body: "<path d=\"M5.3 18.7a4.5 4.5 0 0 1 0-6.4l7-7a4.5 4.5 0 0 1 6.4 6.4l-7 7a4.5 4.5 0 0 1-6.4 0z\"/><path d=\"m8.5 9.1 6.4 6.4\"/>" },
+  handcuffs: { filled: false, body: "<circle cx=\"7\" cy=\"12\" r=\"4.5\"/><circle cx=\"17\" cy=\"12\" r=\"4.5\"/><path d=\"m11.5 10.5 1.7-1.7m-1.7 4.7 1.7 1.7M4 5V3m16 2V3m-16 16v2m16-2v2\"/>" },
+  candle: { filled: false, body: "<path d=\"M8 10h8v11H8zM7 13h10m-5-3c-3-2-2-5 0-8 1 2 4 4 0 8z\"/>" },
+  dove: { filled: false, body: "<path d=\"M3 15c5-2 7-6 8-11 2 2 4 3 6 3 2 0 3-1 5-2-1 4-3 6-6 7 3 1 5 0 7-1-2 5-6 8-12 8-3 0-5-1-7-3l-2 1 1-2z\"/><path d=\"m10 13 4 2\"/>" },
+  fists: { filled: false, body: "<path d=\"M3 13V9a2 2 0 0 1 4 0V6a2 2 0 0 1 4 0v3a2 2 0 0 1 4 0v2a2 2 0 0 1 4 1v4a4 4 0 0 1-4 4H9a6 6 0 0 1-6-6z\"/><path d=\"M7 10v3m4-3v3m4-2v2\"/>" },
+  gunfire: { filled: false, body: "<path d=\"M3 9h13l3-2h3v4h2v4h-2v2h-5l-3-2H3z\"/><path d=\"M8 15v5h4l2-5M2 4l3 2m-3 9 3-2\"/>" },
+  tank: { filled: false, body: "<path d=\"M3 14h18v4H3zM6 14l2-5h7l3 5m-9-5V6h6l2 3m-3-3h7v2h-7\"/><circle cx=\"7\" cy=\"18\" r=\"1\"/><circle cx=\"17\" cy=\"18\" r=\"1\"/>" },
+  packageBomb: { filled: false, body: "<path d=\"m3 7 9-4 9 4v11l-9 3-9-3z\"/><path d=\"m3 7 9 4 9-4M12 11v10m4-15 2-3 3 1\"/><circle cx=\"17\" cy=\"15\" r=\"2\"/>" },
 };
 
 export function icon(name, size = 18, extra = '') {

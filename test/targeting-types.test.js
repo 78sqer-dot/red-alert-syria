@@ -2,13 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ALERT_GROUPS, ALERT_TYPES, POLITICAL_CATEGORIES, TYPE_KEYS, alertEmoji, assassinationWeaponGlyph } from '../shared/types.js';
-import { NEWS_TYPES, keywordTypes, refineType, ruleClassify } from '../server/news-ai.js';
+import { NEWS_TYPES, keywordTypes, nameInText, refineType, ruleClassify } from '../server/news-ai.js';
 import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
 import { SVG } from '../public/js/marker-svgs.js';
+import { ICONS } from '../public/js/icons.js';
+import { TYPE_ICON, typeIcon } from '../public/js/type-icons.js';
 import { markerSvg } from '../server/alert-image.js';
 
 const mapSource = readFileSync(new URL('../public/js/map.js', import.meta.url), 'utf8');
+const typeIconsSource = readFileSync(new URL('../public/js/type-icons.js', import.meta.url), 'utf8');
 const mapCss = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
 const alertImageSource = readFileSync(new URL('../server/alert-image.js', import.meta.url), 'utf8');
 
@@ -17,8 +20,10 @@ test('map types keep drone targeting distinct and visually on-brand', () => {
   assert.ok(TYPE_KEYS.includes('uav_strike'));
   assert.ok(ALERT_GROUPS.aerial.types.includes('uav_strike'));
   assert.equal(drone.marker, 'orbit');
-  assert.equal(drone.glyph, ALERT_TYPES.uav.glyph);
-  assert.equal(drone.color, ALERT_TYPES.uav.color);
+  assert.equal(drone.glyph, 'uav_strike');
+  assert.notEqual(drone.glyph, ALERT_TYPES.uav.glyph);
+  assert.equal(drone.color, ALERT_TYPES.uav.color, 'drone-strike keeps the existing alert red while using a distinct symbol');
+  assert.match(EXTRA_SVG.uav_strike, /stroke-dasharray/);
   assert.equal(drone.tag_ar, 'استهداف_بمسيّرة');
 });
 
@@ -82,7 +87,8 @@ test('military vehicle incursion has a vehicle marker and stays manual-only', ()
   assert.match(SVG.tank, /tk-body/);
   assert.equal(type.zone, 'dashed');
   assert.equal(type.color, '#71834a');
-  assert.match(mapSource, /military_incursion: 'shield'/);
+  assert.equal(typeIcon('military_incursion'), 'tank');
+  assert.match(typeIconsSource, /military_incursion: 'tank'/);
   assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'vehicle incursion is not automatically classified from news');
 });
 
@@ -195,7 +201,8 @@ test('political developments use a neutral ring and marker only for explicit loc
   assert.equal(type.zone, false);
   assert.equal(type.color, '#64748b');
   assert.match(EXTRA_SVG.political, /M34 190/);
-  assert.match(mapSource, /political: 'news'/);
+  assert.equal(typeIcon('political'), 'news');
+  assert.match(typeIconsSource, /political: 'news'/);
   assert.match(mapSource, /political: '#475569'/, 'political ring is muted slate rather than a threat red');
   assert.doesNotMatch(mapSource, /a\.type === 'political' \|\| t\.marker === 'movement'/);
   assert.match(mapSource, /a\.scope === 'country' \|\| !a\.location/);
@@ -231,6 +238,58 @@ test('new civil news types classify separately and a protest march is not a dron
   assert.equal(refineType('warplane', 'غارة جوية على موقع في ريف دمشق السورية اليوم.'), 'airstrike', 'an actual airstrike gets its own button');
   assert.equal(ruleClassify('غارة جوية استهدفت موقعاً في ريف دمشق السورية اليوم.')?.type, 'airstrike');
   assert.equal(refineType('breaking', 'تحليق طيران حربي فوق ريف دمشق السورية اليوم.'), 'warplane', 'warplane overflight remains distinct from a strike');
+});
+
+test('each alert type has a dedicated map glyph and registered site/filter icon', () => {
+  for (const type of TYPE_KEYS) {
+    const glyph = ALERT_TYPES[type].glyph;
+    assert.ok(EXTRA_SVG[glyph] || SVG[glyph], `${type} should have a map/card SVG glyph (${glyph})`);
+    assert.ok(Object.hasOwn(TYPE_ICON, type), `${type} should be registered in the shared icon map`);
+    assert.ok(ICONS[typeIcon(type)], `${type} should have a site/filter icon (${typeIcon(type)})`);
+  }
+  for (const type of ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives']) {
+    assert.ok(TYPE_KEYS.includes(type));
+    assert.ok(ALERT_GROUPS.smuggling.types.includes(type));
+    assert.equal(ALERT_TYPES[type].zone, false, `${type} is a point report, not an invented impact circle`);
+    assert.ok(NEWS_TYPES.includes(type), `${type} can be detected by news monitoring`);
+    const draft = { type, status: 'pending', dayAutoAt: 0, loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }, { u: 'alikhbaria' }] };
+    assert.equal(nightEligible(draft), false, `${type} is never auto-published`);
+    assert.equal(dayAutoReady(draft), false, `${type} requires human review`);
+  }
+  assert.equal(new Set(['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'].map(typeIcon)).size, 3);
+});
+
+test('Syrian smuggling stories classify by the explicitly named contraband, not as a generic alert', () => {
+  const samples = [
+    ['smuggling_weapons', 'أحبط حرس الحدود السوري محاولة تهريب أسلحة وذخائر قرب القامشلي في الحسكة السورية اليوم.'],
+    ['smuggling_drugs', 'ضبطت الجهات المختصة شحنة مخدرات وكبتاغون معدة للتهريب في مدينة حمص السورية اليوم.'],
+    ['smuggling_explosives', 'أحبطت دورية سورية محاولة تهريب عبوات ناسفة في ريف حمص السورية اليوم.'],
+  ];
+  for (const [expected, text] of samples) {
+    assert.ok(keywordTypes(text).includes(expected), `${expected} should appear among keyword matches`);
+    assert.equal(ruleClassify(text)?.type, expected, `${text} should route to ${expected}`);
+    assert.equal(refineType('breaking', text), expected, `a broad breaking label should refine to ${expected}`);
+  }
+  const possession = 'عثرت الجهات المختصة على أسلحة في مستودع بمدينة حمص السورية اليوم.';
+  assert.equal(keywordTypes(possession).some((type) => type.startsWith('smuggling_')), false, 'possession without explicit trafficking is not smuggling');
+  const ambiguous = 'أحبط حرس الحدود محاولة تهريب أسلحة ومخدرات في ريف حمص السورية اليوم.';
+  assert.equal(keywordTypes(ambiguous).some((type) => type.startsWith('smuggling_')), false, 'do not guess one category when several contraband types are named');
+});
+
+test('political announcements classify as political and never require an invented map location', () => {
+  const text = 'أعلنت الرئاسة السورية قراراً حكومياً بشأن تشكيل لجنة وطنية جديدة اليوم.';
+  assert.ok(keywordTypes(text).includes('political'));
+  assert.equal(ruleClassify(text)?.type, 'political');
+  assert.equal(refineType('breaking', text), 'political');
+  assert.deepEqual(ruleClassify(text)?.places, []);
+  assert.equal(ruleClassify('قرار سياسي في الأردن ولا صلة له بسوريا.')?.type, undefined, 'foreign political stories are rejected');
+});
+
+test('place-name validation requires an exact multiword locality rather than a shared generic word', () => {
+  assert.equal(nameInText('ريف دمشق', 'قالت مصادر محلية إن الطريق في ريف دمشق السورية أغلق مؤقتاً.'), true);
+  assert.equal(nameInText('ريف حلب', 'قالت مصادر محلية إن الطريق في ريف دمشق السورية أغلق مؤقتاً.'), false);
+  assert.equal(nameInText('درعا', 'أفادت مصادر محلية بوقوع حادث بدرعا السورية اليوم.'), true);
+  assert.equal(nameInText('محافظة الحسكة', 'أفادت مصادر محلية بوقوع حادث في الحسكة السورية اليوم.'), true);
 });
 
 test('specific ground incidents take precedence over a weather warning in the same post', () => {

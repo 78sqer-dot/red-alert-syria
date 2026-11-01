@@ -1,13 +1,13 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=18';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=23';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=24';
 import * as maplibregl from '/vendor/maplibre-gl.mjs?v=6.16.0';
 import { DICT } from './i18n.js';
 import { matchesGovernorate } from './alert-region-filter.js';
-import { icon } from './icons.js?v=2';
+import { icon } from './icons.js?v=3';
 import { settings } from './settings.js?v=4';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=42';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=43';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
@@ -478,7 +478,7 @@ function renderFilterPanel() {
     const on = def.types.filter((t) => s.filter.includes(t)).length;
     html += `<div class="grp"><label class="chk grp-h"><input type="checkbox" data-g="${g}" ${on === def.types.length ? 'checked' : ''} ${on > 0 && on < def.types.length ? 'data-ind="1"' : ''}/><span class="name">${esc(def[LANG])}</span></label>`;
     for (const t of def.types) {
-      html += `<label class="chk sub"><input type="checkbox" data-t="${t}" ${s.filter.includes(t) ? 'checked' : ''}/><span class="sw" style="--c:${ALERT_TYPES[t].color}"></span><span class="name">${esc(typeName(t))}</span><span class="cnt">${counts[t] || 0}</span></label>`;
+      html += `<label class="chk sub"><input type="checkbox" data-t="${t}" ${s.filter.includes(t) ? 'checked' : ''}/><span class="sw" style="--c:${ALERT_TYPES[t].color}"></span><span class="type-ico" style="color:${ALERT_TYPES[t].color}">${icon(typeIcon(t), 14)}</span><span class="name">${esc(typeName(t))}</span><span class="cnt">${counts[t] || 0}</span></label>`;
     }
     html += '</div>';
   }

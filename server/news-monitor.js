@@ -35,7 +35,7 @@ export function isRoadStatusOnlyPost(text) {
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
 // that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
-export const FILTER_VER = 8;
+export const FILTER_VER = 9;
 const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
@@ -262,7 +262,7 @@ const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
   if (d?.type === 'political') return false; // Political developments always require human review.
-  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike'].includes(d.type)) return false;
+  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'].includes(d.type)) return false;
   if (!d.loc || d.loc.scope === 'country' || !Number.isFinite(d.loc.latitude) || !Number.isFinite(d.loc.longitude)) return false;
   const ss = d.srcs || [];
   return ss.length >= 2 || ss.some((x) => !isLocalSrc(x));

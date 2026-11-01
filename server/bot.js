@@ -297,16 +297,22 @@ function mainKeyboard(ctx) {
   const b = (k) => (lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar);
   const e = (k) => ALERT_TYPES[k].emoji;
   // This shared keyboard serves both the private publishing bot and the public reporting bot.
-  const menuTypes = [...new Set([...TYPE_KEYS, 'helicopter', 'airstrike'])]
-    .filter((type) => type !== 'air_movement' && !['accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'].includes(type))
-    .map((type) => (type === 'civil' ? 'civil_menu' : type === 'military_incursion' ? 'military_menu' : type));
+  const menuTypes = [];
+  for (const type of [...new Set([...TYPE_KEYS, 'helicopter', 'airstrike'])]) {
+    if (type === 'air_movement' || ['accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'].includes(type)) continue;
+    if (type.startsWith('smuggling_')) { if (!menuTypes.includes('smuggling_menu')) menuTypes.push('smuggling_menu'); continue; }
+    menuTypes.push(type === 'civil' ? 'civil_menu' : type === 'military_incursion' ? 'military_menu' : type);
+  }
+  const priority = ['breaking', 'political', 'military_menu', 'smuggling_menu'];
+  const visibleMenuTypes = [...priority.filter((item) => menuTypes.includes(item)), ...menuTypes.filter((item) => !priority.includes(item))];
   const kb = new InlineKeyboard();
-  for (let i = 0; i < menuTypes.length; i += 2) {
-    for (const item of menuTypes.slice(i, i + 2)) {
-      const type = item === 'civil_menu' ? 'civil' : item === 'military_menu' ? 'military_incursion' : item;
-      const emoji = item === 'civil_menu' ? '🛡️' : e(type);
-      const label = item === 'civil_menu' ? (lang === 'en' ? 'Civil' : 'مدني') : b(type);
-      kb.text(`${emoji ? `${emoji} ` : ''}${label}`, item === 'civil_menu' ? 'cv' : item === 'military_menu' ? 'mi' : `t:${type}`);
+  for (let i = 0; i < visibleMenuTypes.length; i += 2) {
+    for (const item of visibleMenuTypes.slice(i, i + 2)) {
+      const type = item === 'civil_menu' ? 'civil' : item === 'military_menu' ? 'military_incursion' : item === 'smuggling_menu' ? 'smuggling_weapons' : item;
+      const emoji = item === 'civil_menu' ? '🛡️' : item === 'smuggling_menu' ? '📦' : e(type);
+      const label = item === 'civil_menu' ? (lang === 'en' ? 'Civil' : 'مدني') : item === 'smuggling_menu' ? (lang === 'en' ? 'Smuggling' : 'تهريب') : b(type);
+      const callback = item === 'civil_menu' ? 'cv' : item === 'military_menu' ? 'mi' : item === 'smuggling_menu' ? 'sm' : `t:${type}`;
+      kb.text(`${emoji ? `${emoji} ` : ''}${label}`, callback);
     }
     kb.row();
   }
@@ -1591,6 +1597,16 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       .text(en ? 'Military vehicles only' : 'توغل آليات عسكرية فقط', 'mi:vehicles').row()
       .text(L(ctx).btnHome, 'home');
     await show(ctx, en ? 'Choose the military-incursion report type:' : 'اختر نوع بلاغ التوغل العسكري:', kb);
+  });
+  bot.callbackQuery('sm', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const en = langOf(ctx) === 'en';
+    const kb = new InlineKeyboard();
+    for (const type of ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives']) {
+      kb.text(`${ALERT_TYPES[type].emoji} ${en ? ALERT_TYPES[type].button_en : ALERT_TYPES[type].button_ar}`, `t:${type}`).row();
+    }
+    kb.text(L(ctx).btnHome, 'home');
+    await show(ctx, en ? 'Choose the smuggling alert type:' : 'اختر نوع التهريب:', kb);
   });
   bot.callbackQuery(/^mi:(general|vehicles)$/, async (ctx) => {
     await ctx.answerCallbackQuery();

@@ -220,6 +220,7 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .chk input:indeterminate { background: var(--red); border-color: var(--red); }
 .chk input:indeterminate::after { width: 8px; height: 0; border: 0; border-top: 2px solid #fff; transform: none; opacity: 1; }
 .chk .sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 20%, transparent); }
+.chk .type-ico { width: 16px; height: 16px; display: grid; place-items: center; flex: none; }
 .chk .name { flex: 1; }
 .chk .cnt { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
 .chk.grp-h { font-weight: 800; }
