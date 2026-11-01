@@ -604,6 +604,9 @@ function renderDrawer() {
     <span class="field-label">${esc(T.alertTypes)} — <span style="font-weight:500">${esc(T.alertTypesSub)}</span></span>
     <div class="types-grid">${TYPE_KEYS.map((t) => `<label class="chk"><input type="checkbox" data-nt="${t}" ${n.types.includes(t) ? 'checked' : ''}/><span class="sw" style="--c:${ALERT_TYPES[t].color}"></span><span class="name">${esc(typeName(t))}</span></label>`).join('')}</div>
   </section>
+  <section class="s-card tg-notification-card"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.telegramAlerts)}</h3><p>${esc(T.telegramAlertsSub)}</p></div></div>
+    <div class="about-links"><a class="btn-sm tg" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegramNow)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTelegramNow)}</a></div>
+  </section>
   ${instSec}
   <section class="s-card"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.sound)}</h3><p>${esc(T.soundSub)}</p></div></div>
     ${tg('data-s="sound"', n.sound, T.playSound)}
@@ -1394,9 +1397,13 @@ async function boot() {
   startTicker();
   connect();
   fetch('/api/meta').then((r) => r.json()).then((m) => {
+    if (m.channel && safeExternalUrl(m.channel)) {
+      const channel = safeExternalUrl(m.channel);
+      $$('a[href="https://t.me/Red_Alert_Syria"]').forEach((a) => { a.href = channel; });
+    }
     if (m.bot) {
       BOT = m.bot;
-      $('#btnReport').href = `${m.bot}?start=report`;
+      $$('a[href^="https://t.me/Rad_Alert_Syria1_bot"]').forEach((a) => { a.href = `${m.bot}?start=report`; });
     }
   }).catch(() => {});
   initInstall({
