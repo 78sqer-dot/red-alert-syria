@@ -742,15 +742,15 @@ export class AlertMap {
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
-      if (!t || t.marker === 'movement' || t.marker === 'squad' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
+      if (!t || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       const props = { color: t.zone === 'dashed' ? t.color : ZONE_COLOR[a.type] || t.ring || t.color || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
-      if (t.marker === 'orbit' || t.marker === 'helicopter') {
+      if (t.marker === 'orbit' || t.marker === 'squad' || t.marker === 'helicopter') {
         // the drone circles the ring nearest to its own position (the alert's main place)
         let best = zs[0], bd = Infinity;
         for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
-        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, helicopter: t.marker === 'helicopter' });
+        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, squad: t.marker === 'squad', helicopter: t.marker === 'helicopter' });
       }
       zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);
