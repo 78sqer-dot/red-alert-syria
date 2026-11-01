@@ -860,15 +860,19 @@ export class AlertMap {
     if (!alert.location || !Number.isFinite(alert.location.latitude)) return this.closePopup();
     if (fly) this._playArrival(alert.id);
     const ll = [alert.location.longitude, alert.location.latitude];
+    // A circle click may target an additional affected locality rather than the alert's
+    // primary pin. Keep the camera and popup anchored to the exact circle the user tapped.
+    const tapped = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
+    const target = tapped || ll;
     const zs = Array.isArray(alert.zones) ? alert.zones : [];
-    if (fly && alert.more && alert.more.length && zs.length > 1) {
+    if (fly && !tapped && alert.more && alert.more.length && zs.length > 1) {
       // several areas: frame all of their circles
       let w = 180, e = -180, s = 90, n = -90;
       for (const q of zs) { const dl = q.km / 111, dn = q.km / (111 * Math.cos((q.lat * Math.PI) / 180)); w = Math.min(w, q.lon - dn); e = Math.max(e, q.lon + dn); s = Math.min(s, q.lat - dl); n = Math.max(n, q.lat + dl); }
       this.map.fitBounds([[w, s], [e, n]], { padding: this.padding(), maxZoom: 11, duration: 1100, essential: true });
     } else if (fly) {
       const z = { place: 11, point: 11.5, district: 9.5, governorate: 8 }[alert.scope] || 9;
-      this.map.flyTo({ center: ll, zoom: Math.max(this.map.getZoom(), z), padding: this.padding(), speed: 1.4, essential: true });
+      this.map.flyTo({ center: target, zoom: Math.max(this.map.getZoom(), z), padding: this.padding(), speed: 1.4, essential: true });
     }
     if (popup) this.openPopup(alert);
   }
@@ -880,7 +884,10 @@ export class AlertMap {
     const cos = Math.cos((ll.lat * Math.PI) / 180);
     for (const h of this._hits) {
       const dy = (ll.lat - h.lat) * 111.32, dx = (ll.lng - h.lon) * 111.32 * cos;
-      if (dx * dx + dy * dy > h.km * h.km) continue;
+      // Taps on a thin animated ring can land a few pixels outside the ideal
+      // geometric edge due to device-pixel rounding; keep the hit area forgiving.
+      const hitKm = Math.max(h.km + 0.25, h.km * 1.12);
+      if (dx * dx + dy * dy > hitKm * hitKm) continue;
       if (!best || h.km < best.km - 0.01 || (Math.abs(h.km - best.km) <= 0.01 && (h.live > best.live || (h.live === best.live && h.ts > best.ts)))) best = h;
     }
     return best;
