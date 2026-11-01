@@ -193,6 +193,7 @@ function hydrateStatic() {
   $('#resetView').title = T.resetView;
   $('#locateMe').title = T.myLocation;
   $('#btnSettingsM').title = T.settings;
+  syncNotificationButton();
 }
 
 // ------------------------------------------------------------------ connection status
@@ -706,6 +707,17 @@ async function enableNotifications() {
   }
   if ('Notification' in window && Notification.permission === 'denied') toast(T.permissionDenied);
   else toast(T.notifEnabled);
+  syncNotificationButton();
+}
+function syncNotificationButton() {
+  const b = $('#btnNotifications');
+  if (!b) return;
+  const n = settings.get().notifications;
+  const denied = 'Notification' in window && Notification.permission === 'denied';
+  const on = !!n.enabled && !denied;
+  b.classList.toggle('on', on);
+  b.setAttribute('aria-pressed', String(on));
+  b.title = on ? T.notifications : T.enableNotifications;
 }
 function notify(a) {
   const s = settings.get();
@@ -1077,6 +1089,12 @@ function bindEvents() {
   $('#zoomOut').addEventListener('click', () => amap && amap.zoomOut());
   $('#resetView').addEventListener('click', () => amap && amap.fitSyria());
   $('#btnSvc').addEventListener('click', (e) => { e.stopPropagation(); closeDropdowns(); svc && svc.open(); });
+  $('#btnNotifications').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const n = settings.get().notifications;
+    if (n.enabled && (!('Notification' in window) || Notification.permission !== 'denied')) return openDrawer();
+    await enableNotifications();
+  });
   $('#locateMe').addEventListener('click', () => {
     if (svc) return svc.locate();
     if (!navigator.geolocation) return;
@@ -1110,7 +1128,7 @@ function bindEvents() {
     const k = i.dataset.s;
     if (k === 'notif') {
       if (i.checked) await enableNotifications();
-      else settings.set({ notifications: { enabled: false } });
+      else { settings.set({ notifications: { enabled: false } }); syncNotificationButton(); }
     } else if (k === 'sound') settings.set({ notifications: { sound: i.checked } });
     else if (k === 'vibration') settings.set({ notifications: { vibration: i.checked } });
     else if (k === 'ringtone') {
