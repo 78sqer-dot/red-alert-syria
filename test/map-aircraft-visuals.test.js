@@ -23,9 +23,9 @@ test('drone marker resumes its circular flight at detailed zoom', () => {
   assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });
 
-test('helicopter airframe is compact while its orbit stays unscaled', () => {
+test('helicopter airframe is 25px while its orbit stays unscaled', () => {
   assert.match(css, /\.mk-helicopter \.mk-s\s*\{\s*transform:\s*none;\s*\}/);
-  assert.match(css, /\.heli-craft\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;/);
-  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;/);
-  assert.match(mapJs, /svgTag\(t\.glyph,\s*24,\s*`fill=/);
+  assert.match(css, /\.heli-craft\s*\{[^}]*width:\s*25px;[^}]*height:\s*25px;/);
+  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*25px;[^}]*height:\s*25px;/);
+  assert.match(mapJs, /svgTag\(t\.glyph,\s*25,\s*`fill=/);
 });

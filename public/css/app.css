@@ -308,9 +308,7 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 @keyframes flightMovementGlow { 50% { box-shadow: 0 0 20px color-mix(in srgb, var(--c) 72%, transparent), 0 2px 8px rgba(0,0,0,.35); } }
 @media (prefers-reduced-motion: reduce) { .flight-movement, .flight-movement::before { animation: none; } .flight-movement::before { opacity: .5; } }
 .mk-breaking-news .mk-s { transform: none; transition: none; }
-@media (pointer: coarse) {
-  .mk::before { content: ''; position: absolute; left: 0; top: 0; width: 44px; height: 44px; transform: translate(-50%, -50%); border-radius: 50%; background: transparent; }
-}
+.mk::before { content: ''; position: absolute; left: 0; top: 0; width: 44px; height: 44px; transform: translate(-50%, -50%); border-radius: 50%; background: transparent; }
 .news-pulse-ring { position: absolute; left: 0; top: 0; width: 25px; height: 25px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.4px solid #e11d2e; border-radius: 50%; background: rgba(225,29,46,.045); box-shadow: 0 0 2px rgba(225,29,46,.2), inset 0 0 2px rgba(225,29,46,.1); animation: newsPulseGlow 2.5s ease-in-out infinite; pointer-events: none; }
 .news-pulse-ring::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(225,29,46,.3); border-radius: inherit; animation: newsPulseWave 2.5s ease-out infinite; }
 .news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 14px; height: 14px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.4px solid #fff; border-radius: 50%; background: #d7192d; box-shadow: 0 0 0 1px rgba(225,29,46,.2), 0 1px 2px rgba(0,0,0,.36); }
@@ -400,8 +398,8 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 /* Helicopters use one recognizable top-down airframe, orbiting the alert area with animated rotors. */
 .mk-helicopter .mk-s { transform: none; }
 .heli-orbit { position: absolute; left: calc(0px - var(--orb, 14px)); top: calc(0px - var(--orb, 14px)); width: calc(var(--orb, 14px) + var(--orb, 14px)); height: calc(var(--orb, 14px) + var(--orb, 14px)); pointer-events: none; animation: heliOrbit 12s linear infinite; }
-.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%) rotate(90deg); pointer-events: auto; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)) drop-shadow(0 0 1px rgba(255,255,255,.65)); }
-.helicopter-svg { display: block; width: 24px; height: 24px; overflow: visible; }
+.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 25px; height: 25px; transform: translate(-50%, -50%) rotate(90deg); pointer-events: auto; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)) drop-shadow(0 0 1px rgba(255,255,255,.65)); }
+.helicopter-svg { display: block; width: 25px; height: 25px; overflow: visible; }
 .helicopter-svg .heli-main-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .22s linear infinite; }
 .helicopter-svg .heli-tail-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .14s linear infinite reverse; }
 html.dark .heli-craft { filter: drop-shadow(0 1px 2px rgba(0,0,0,.95)) drop-shadow(0 0 1px rgba(255,255,255,.5)); }

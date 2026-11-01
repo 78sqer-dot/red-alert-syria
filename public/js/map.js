@@ -249,7 +249,7 @@ export class AlertMap {
       if (this.newsHidden) return; // services map mode: the news is hidden
       // a tap inside any circle of an alert (main or extra affected area) opens that same alert
       const hit = this.zoneAt(e.lngLat);
-      if (hit) { this._popupAt = { id: hit.id, ll: [hit.lon, hit.lat] }; return this.onSelect(hit.id, { fromMap: true, fly: false }); }
+      if (hit) { this._popupAt = { id: hit.id, ll: [hit.lon, hit.lat] }; return this.onSelect(hit.id, { fromMap: true, fly: true }); }
       this.onSelect(null, { fromMap: true });
     });
     // Hover hit-testing is useful for desktop cursors, but costs work during touch/pan gestures.
@@ -543,7 +543,7 @@ export class AlertMap {
 
   selectMarker(id) {
     const group = groupAlerts(this.alerts, this.selectedId).find((g) => g.alerts.some((a) => a.id === id));
-    this.onSelect(group ? nextAlertId(group, this.selectedId) : id, { fromMap: true });
+    this.onSelect(group ? nextAlertId(group, this.selectedId) : id, { fromMap: true, fly: true });
   }
 
   refreshMarkerGroups() {
@@ -676,7 +676,7 @@ export class AlertMap {
     if (t.marker === 'orbit') {
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 20, 'class="uav-svg"')}</div></div>`;
     } else if (t.marker === 'helicopter') {
-      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 24, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
+      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 25, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (t.marker === 'squad') {
       const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(16, 22, -16, 1)}${pl(14, 6, -3, 0.85)}${pl(14, 38, -3, 0.85)}</div>`;
@@ -741,7 +741,7 @@ export class AlertMap {
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
       if (!t || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
-      const props = { color: t.zone === 'dashed' ? t.color : ZONE_COLOR[a.type] || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
+      const props = { color: t.zone === 'dashed' ? t.color : ZONE_COLOR[a.type] || t.ring || t.color || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
       if (t.marker === 'orbit' || t.marker === 'squad' || t.marker === 'helicopter') {
