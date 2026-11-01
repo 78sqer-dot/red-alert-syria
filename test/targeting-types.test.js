@@ -27,6 +27,17 @@ test('map types keep drone targeting distinct and visually on-brand', () => {
   assert.equal(drone.tag_ar, 'استهداف_بمسيّرة');
 });
 
+test('news and report emojis suit the event, and map urgency uses a siren icon', () => {
+  assert.equal(ALERT_TYPES.breaking.emoji, '🚨');
+  assert.equal(ALERT_TYPES.uav.emoji, '🛩️', 'use a small aircraft symbol instead of a UFO');
+  assert.equal(ALERT_TYPES.artillery.emoji, '💣');
+  assert.equal(ALERT_TYPES.weather.emoji, '⛈️');
+  assert.equal(alertEmoji({ type: 'breaking' }), '🚨');
+  assert.equal(alertEmoji({ type: 'uav' }), '🛩️');
+  assert.equal(typeIcon('breaking'), 'urgent');
+  assert.ok(ICONS[typeIcon('breaking')], 'the map filter icon exists in the icon catalogue');
+});
+
 test('aircraft movement is separate from unchanged hovering markers', () => {
   assert.ok(ALERT_GROUPS.aerial.types.includes('air_movement'));
   assert.equal(ALERT_TYPES.uav.marker, 'orbit');

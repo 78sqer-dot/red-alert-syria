@@ -1,6 +1,6 @@
 // One UI icon per alert type; map glyphs remain in target-svgs.js / marker-svgs.js.
 export const TYPE_ICON = Object.freeze({
-  breaking: 'alert',
+  breaking: 'urgent',
   political: 'news',
   uav: 'drone',
   uav_strike: 'target',

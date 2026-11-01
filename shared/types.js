@@ -154,7 +154,7 @@ export const ALERT_TYPES = {
   },
   weather: {
     ar: 'تحذير جوي', en: 'Weather warning', button_ar: 'تحذير جوي', button_en: 'Weather',
-    emoji: '⛈', color: '#4f46e5', ring: '#3730a3', group: 'nature', ttlMin: 720,
+    emoji: '⛈️', color: '#4f46e5', ring: '#3730a3', group: 'nature', ttlMin: 720,
     marker: 'icon', glyph: 'storm', icon: '#4f46e5', disc: '#000000', zone: 'dashed', tag_ar: 'طقس', tag_en: 'Weather',
   },
 };
