@@ -464,7 +464,7 @@ html.dark .pp-share { color: #94e2ac; }
 }
 .maplibregl-map.zoom-detail .mk-sat .uav { animation: uavOrbit 9s linear infinite; animation-delay: var(--delay, 0s); }
 @keyframes squadFlyCompact { 0% { transform: translateY(2px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-2px); opacity: 0; } }
-.maplibregl-map .mk-squad .squad .sq { animation: squadFlyCompact 7s linear infinite; }
+.maplibregl-map .mk-squad .squad .sq { animation: squadFlyZ 7s linear infinite; }
 .maplibregl-map .mk-fly .squad .sq { animation: squadFlyCompact 7s linear infinite; }
 .maplibregl-ctrl-scale { background: var(--bg-glass); color: var(--text-secondary); border-color: var(--text-secondary); font-family: var(--font-mono); font-size: 10px; }
 .maplibregl-ctrl-attrib { background: var(--bg-glass) !important; color: var(--text-muted); font-size: 10px; font-family: var(--font-arabic); }

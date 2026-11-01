@@ -56,6 +56,8 @@ test('warplane keeps the original blue dashed-ring weight and flying motion', ()
   assert.match(mapSource, /'line-opacity': A\(0\.85, 0\.3\), 'line-width': 1\.8, 'line-dasharray': \[3, 4\]/);
   assert.match(mapCss, /\.zp\.zp-aircraft \.zp-fill \{ opacity: \.12; animation: zfillPulseAircraft 2\.6s ease-in-out infinite; \}/);
   assert.match(mapCss, /\.mk-squad:not\(\.inactive\) \.squad \.sq \{ animation: squadFlyZ 7s linear infinite !important; \}/);
+  assert.match(mapCss, /\.maplibregl-map \.mk-squad \.squad \.sq \{ animation: squadFlyZ 7s linear infinite; \}/);
+  assert.doesNotMatch(mapCss, /\.maplibregl-map \.mk-squad \.squad \.sq \{ animation: squadFlyCompact/);
 });
 
 test('airstrike is a separate red map alert and monitored button, distinct from warplane overflight', () => {
