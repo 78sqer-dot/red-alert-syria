@@ -986,6 +986,11 @@ export class AlertMap {
     if (this.map.isMoving()) this.map.once('moveend', () => setTimeout(go, 30)); else go();
   }
   openPopup(alert) {
+    const controlPanel = document.querySelector('#mapCtrlPanel');
+    if (controlPanel) {
+      controlPanel.hidden = true;
+      document.querySelector('#mapControlsToggle')?.setAttribute('aria-expanded', 'false');
+    }
     this.closePopup();
     const at = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
     this._popupAt = null;

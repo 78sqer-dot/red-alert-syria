@@ -22,6 +22,7 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
 
 test('phone alert details use a safe-area-aware bottom sheet with usable actions', () => {
   assert.match(map, /if \(this\.dockMode\(\)\)\s*\{\s*this\.popup = this\.openDockHtml\(this\.popupHtml\(alert\)[\s\S]{0,130}cls: 'alert-dock'/);
+  assert.match(map, /openPopup\(alert\)\s*\{\s*const controlPanel = document\.querySelector\('#mapCtrlPanel'\);[\s\S]{0,180}controlPanel\.hidden = true/);
   assert.match(map, /env\(safe-area-inset-bottom, 0px\)/);
   assert.match(css, /\.pp-dock\.alert-dock[\s\S]{0,260}max-height: min\(58dvh, 520px\)/);
   assert.match(css, /\.pp-dock\.alert-dock \.pp-more, \.pp-dock\.alert-dock \.pp-share \{ min-height: 44px/);
