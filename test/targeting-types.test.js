@@ -52,12 +52,13 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.equal(nightEligible({ type: 'helicopter', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, 'helicopter news stays for human review');
 });
 
-test('warplane keeps the original blue dashed-ring weight and flying motion', () => {
-  assert.match(mapSource, /'line-opacity': A\(0\.85, 0\.3\), 'line-width': 1\.8, 'line-dasharray': \[3, 4\]/);
-  assert.match(mapCss, /\.zp\.zp-aircraft \.zp-fill \{ opacity: \.12; animation: zfillPulseAircraft 2\.6s ease-in-out infinite; \}/);
-  assert.match(mapCss, /\.mk-squad:not\(\.inactive\) \.squad \.sq \{ animation: squadFlyZ 7s linear infinite !important; \}/);
+test('warplane matches the Lebanon three-plane pass and has no static area ring', () => {
+  assert.match(mapSource, /t\.marker === 'movement' \|\| t\.marker === 'squad'/, 'warplane zone circles and pulses are not drawn');
+  assert.match(mapSource, /pl\(16, 22, -8, 1\)\}\$\{pl\(14, 6, 12, 0\.85\)\}\$\{pl\(14, 38, 12, 0\.85\)/, 'lead and wing aircraft keep the reference triangle');
+  assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
+  assert.match(mapCss, /@keyframes squadFlyZ \{\s*0% \{ transform: translateY\(110px\); opacity: 0; \}\s*12%, 88% \{ opacity: 1; \}\s*100% \{ transform: translateY\(-110px\); opacity: 0; \}\s*\}/);
   assert.match(mapCss, /\.maplibregl-map \.mk-squad \.squad \.sq \{ animation: squadFlyZ 7s linear infinite; \}/);
-  assert.doesNotMatch(mapCss, /\.maplibregl-map \.mk-squad \.squad \.sq \{ animation: squadFlyCompact/);
+  assert.doesNotMatch(mapCss, /--fy|--sqi|--sqf/, 'squad path and size are not altered by map zoom');
 });
 
 test('airstrike is a separate red map alert and monitored button, distinct from warplane overflight', () => {

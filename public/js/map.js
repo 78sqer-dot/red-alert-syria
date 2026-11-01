@@ -5,7 +5,6 @@ import { EXTRA_SVG } from './target-svgs.js?v=8';
 import { icon } from './icons.js?v=3';
 import { typeIcon } from './type-icons.js?v=1';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
-import { squadLayout } from './aircraft-layout.js';
 import { flightPath, flightPosition } from '/shared/flight-path.js?v=1';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=1';
@@ -680,7 +679,7 @@ export class AlertMap {
       el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 25, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (t.marker === 'squad') {
       const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
-      el.innerHTML = `<div class="squad">${pl(16, 22, -16, 1)}${pl(14, 6, -3, 0.85)}${pl(14, 38, -3, 0.85)}</div>`;
+      el.innerHTML = `<div class="squad">${pl(16, 22, -8, 1)}${pl(14, 6, 12, 0.85)}${pl(14, 38, 12, 0.85)}</div>`;
     } else if (t.marker === 'fly') {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 22, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
     } else if (t.marker === 'movement') {
@@ -743,15 +742,15 @@ export class AlertMap {
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
-      if (!t || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
+      if (!t || t.marker === 'movement' || t.marker === 'squad' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       const props = { color: t.zone === 'dashed' ? t.color : ZONE_COLOR[a.type] || t.ring || t.color || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
-      if (t.marker === 'orbit' || t.marker === 'squad' || t.marker === 'helicopter') {
+      if (t.marker === 'orbit' || t.marker === 'helicopter') {
         // the drone circles the ring nearest to its own position (the alert's main place)
         let best = zs[0], bd = Infinity;
         for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
-        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, squad: t.marker === 'squad', helicopter: t.marker === 'helicopter' });
+        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, helicopter: t.marker === 'helicopter' });
       }
       zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);
@@ -817,16 +816,6 @@ export class AlertMap {
       if (!m) continue;
       const mpp = (40075016.686 * Math.cos((o.lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
       const el = m.getElement();
-      if (o.squad) {
-        // Keep the full three-plane squad moving at country view too; shrink the planes and formation
-        // together as the visible flight ring gets smaller so they remain legible without crowding the map.
-        const r = Math.round((o.km * 1000) / mpp);
-        const layout = squadLayout(r);
-        if (el._fy !== layout.flightRadius) { el._fy = layout.flightRadius; el.style.setProperty('--fy', layout.flightRadius + 'px'); }
-        if (el._sqi !== layout.planeScale) { el._sqi = layout.planeScale; el.style.setProperty('--sqi', layout.planeScale.toFixed(2)); }
-        if (el._sqf !== layout.formationScale) { el._sqf = layout.formationScale; el.style.setProperty('--sqf', layout.formationScale.toFixed(2)); }
-        continue;
-      }
       if (o.helicopter) {
         // Keep the single helicopter on the actual visible perimeter of its alert circle.
         const px = Math.max(10, Math.round((o.km * 1000) / mpp));

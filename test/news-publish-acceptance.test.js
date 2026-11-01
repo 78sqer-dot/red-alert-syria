@@ -224,11 +224,19 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 'cv' && button.text?.startsWith('🛡️ مدني')));
   assert.equal(buttons().some((button) => ['t:civil', 't:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting'].includes(button.callback_data)), false, 'civil choices stay inside the civil submenu');
   assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'aircraft direction is selected inside warplane/drone options, not as a separate main button');
-  for (const [type, label] of [['helicopter', 'طيران مروحي'], ['airstrike', 'غارة جوية']]) {
-    await tap(`t:${type}`);
-    assert.match(lastUi()?.payload?.text || '', new RegExp(label), `${type} starts a manual publishing draft`);
-    await tap('home');
-  }
+  await tap('t:helicopter');
+  assert.match(lastUi()?.payload?.text || '', /طيران مروحي/, 'helicopter starts a manual publishing draft');
+  await tap('home');
+  await tap('t:airstrike');
+  assert.ok(buttons().some((button) => button.callback_data === 'as:singular' && button.text?.includes('غارة جوية')));
+  assert.ok(buttons().some((button) => button.callback_data === 'as:plural' && button.text?.includes('غارات جوية')));
+  await tap('as:singular');
+  assert.match(lastUi()?.payload?.text || '', /غارة جوية/, 'singular wording persists into location selection');
+  await tap('home');
+  await tap('t:airstrike');
+  await tap('as:plural');
+  assert.match(lastUi()?.payload?.text || '', /غارات جوية/, 'plural wording persists into location selection');
+  await tap('home');
   await tap('mi');
   assert.ok(buttons().some((button) => button.callback_data === 'mi:general' && button.text?.includes('توغل عسكري فقط')));
   assert.ok(buttons().some((button) => button.callback_data === 'mi:vehicles' && button.text?.includes('توغل آليات عسكرية فقط')));
@@ -269,14 +277,19 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   }
   await tap('home', reporter, reportBot);
   const refreshedReportButtons = lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
-  for (const [type, label] of [['helicopter', 'طيران مروحي'], ['airstrike', 'غارة جوية']]) {
-    const button = refreshedReportButtons.find((item) => item.callback_data === `t:${type}`);
-    assert.ok(button, `${type} button is available in the public report bot`);
-    assert.ok(button.text.includes(label), `${type} button has a clear Arabic label`);
-    await tap(`t:${type}`, reporter, reportBot);
-    assert.match(lastUi()?.payload?.text || '', new RegExp(label), `${type} starts a report with the selected type`);
-    await tap('home', reporter, reportBot);
-  }
+  const helicopterButton = refreshedReportButtons.find((item) => item.callback_data === 't:helicopter');
+  assert.ok(helicopterButton, 'helicopter button is available in the public report bot');
+  assert.ok(helicopterButton.text.includes('طيران مروحي'), 'helicopter button has a clear Arabic label');
+  await tap('t:helicopter', reporter, reportBot);
+  assert.match(lastUi()?.payload?.text || '', /طيران مروحي/);
+  await tap('home', reporter, reportBot);
+  assert.ok(refreshedReportButtons.some((item) => item.callback_data === 't:airstrike'), 'airstrike button is available in the public report bot');
+  await tap('t:airstrike', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 'as:singular' && button.text?.includes('غارة جوية')));
+  assert.ok(buttons().some((button) => button.callback_data === 'as:plural' && button.text?.includes('غارات جوية')));
+  await tap('as:plural', reporter, reportBot);
+  assert.match(lastUi()?.payload?.text || '', /غارات جوية/, 'public reporter can select plural airstrikes');
+  await tap('home', reporter, reportBot);
   await tap('home');
   await tap('cv');
   for (const callback of ['t:accident', 't:fire', 't:protest', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting', 't:civil']) {
@@ -392,6 +405,16 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(movementInput.location.latitude, null);
   assert.equal(movementInput.location.longitude, null);
   const idlibTarget = { scope: 'governorate', name_ar: 'إدلب', name_en: 'Idlib', governorate_ar: 'إدلب', governorate_en: 'Idlib', latitude: 35.93, longitude: 36.63 };
+  const singularStrikeInput = buildAlertInput({
+    type: 'airstrike', airstrikeForm: 'singular', location: idlibTarget, extra: [], ttlMin: 180,
+  }, { id: ownerId, name: 'test' });
+  const pluralStrikeInput = buildAlertInput({
+    type: 'airstrike', airstrikeForm: 'plural', location: idlibTarget, extra: [], ttlMin: 180,
+  }, { id: ownerId, name: 'test' });
+  assert.match(singularStrikeInput.title, /^غارة جوية/);
+  assert.match(singularStrikeInput.title_en, /^Airstrike/);
+  assert.match(pluralStrikeInput.title, /^غارات جوية/);
+  assert.match(pluralStrikeInput.title_en, /^Airstrikes/);
   const targetedMovementInput = buildAlertInput({
     type: 'air_movement', aircraft: 'warplane', flightDirection: 'toward_syria', flightTarget: idlibTarget, location: idlibTarget, extra: [], ttlMin: 60,
   }, { id: ownerId, name: 'test' });

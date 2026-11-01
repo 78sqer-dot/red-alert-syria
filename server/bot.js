@@ -109,6 +109,9 @@ export const botInfo = { admin: null, report: null }; // usernames, filled at st
 const L = (ctx) => T[store.userLang(ctx.from?.id)] || T.ar;
 const langOf = (ctx) => store.userLang(ctx.from?.id) === 'en' ? 'en' : 'ar';
 const typeLabel = (key, lang) => (key === 'road' ? (lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق') : `${typeOf(key).emoji} ${lang === 'en' ? typeOf(key).en : typeOf(key).ar}`);
+const draftTypeLabel = (d, lang) => d?.type === 'airstrike' && d.airstrikeForm
+  ? `${typeOf('airstrike').emoji} ${d.airstrikeForm === 'plural' ? (lang === 'en' ? 'Airstrikes' : 'غارات جوية') : (lang === 'en' ? 'Airstrike' : 'غارة جوية')}`
+  : typeLabel(d?.type, lang);
 const mapUrl = (id, lang = 'ar') => (config.publicUrl ? `${config.publicUrl}/${lang}/${id ? '#' + id : ''}` : '');
 
 // spelling-insensitive key: "داريّا" == "داريا", "حماه" == "حماة", "أعزاز" == "اعزاز"
@@ -193,7 +196,7 @@ function draftSummary(d, lang) {
   const l = T[lang];
   const loc = d.location;
   const civilEmoji = d.type === 'civil' ? CIVIL_EMOJIS[d.civilEmoji]?.emoji : '';
-  const lines = [`<b>${esc(d.type === 'road' ? roadLabel(d.road, lang) : typeLabel(d.type, lang))}</b>${civilEmoji ? ` ${civilEmoji}` : ''}`];
+  const lines = [`<b>${esc(d.type === 'road' ? roadLabel(d.road, lang) : draftTypeLabel(d, lang))}</b>${civilEmoji ? ` ${civilEmoji}` : ''}`];
   if (d.border && BORDER_REGIONS[d.border]) lines.push(`🛂 <b>${esc(lang === 'en' ? BORDER_REGIONS[d.border].en : BORDER_REGIONS[d.border].ar)}</b>`);
   if (d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0) {
     lines.push(`🚙 <b>${lang === 'en' ? 'Vehicle count' : 'عدد الآليات'}:</b> ${esc(vehicleCountPhrase(d.vehicleCount, lang))}`);
@@ -553,7 +556,7 @@ async function askLocation(ctx, d) {
     ? (en
       ? `📍 Choose the area ${leaving ? 'the aircraft is leaving from' : 'the aircraft is heading toward'}. The map pin will mark this area.${aircraft ? ` (${esc(aircraft.en)})` : ''}`
       : `📍 اختر المنطقة التي ${leaving ? 'يغادرها الطيران' : 'يتجه إليها الطيران'}، وسيظهر دبوس الخريطة عليها.${aircraft ? ` (${esc(aircraft.ar)})` : ''}`)
-    : head + L(ctx).askGov(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`);
+    : head + L(ctx).askGov(`<b>${esc(draftTypeLabel(d, langOf(ctx)))}</b>`);
   const quantity = d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0
     ? `\n\n🚙 <b>${en ? 'Vehicle count' : 'عدد الآليات'}:</b> ${esc(vehicleCountPhrase(d.vehicleCount, langOf(ctx)))}`
     : '';
@@ -576,6 +579,15 @@ async function askAerialMode(ctx, d) {
     .text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row()
     .text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en ? 'Choose hovering over an area or aircraft movement. For movement, you can also select a destination area.' : 'اختر تحليقًا فوق منطقة أو حركة طيران. في مسار الحركة يمكنك أيضًا تحديد المنطقة المقصودة.', kb);
+}
+async function askAirstrikeForm(ctx, d) {
+  d.step = 'airstrike_form';
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard()
+    .text(en ? '💥 Airstrike (one)' : '💥 غارة جوية', 'as:singular').row()
+    .text(en ? '💥 Airstrikes (multiple)' : '💥 غارات جوية', 'as:plural').row()
+    .text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en ? 'Choose the airstrike wording:' : 'اختر صيغة البلاغ:', kb);
 }
 async function askFlightDirection(ctx, d) {
   d.step = 'flight';
@@ -673,7 +685,7 @@ async function afterLocation(ctx, d) {
   const detailsLocation = d.type === 'air_movement' && d.location?.scope === 'country'
     ? (langOf(ctx) === 'en' ? 'general direction (no place or map pin)' : 'اتجاه عام — بلا تحديد منطقة أو دبوس خريطة')
     : locName(d.location, langOf(ctx));
-  await show(ctx, L(ctx).askDetails(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`, esc(detailsLocation), detailsExample(ctx, d)), kb);
+  await show(ctx, L(ctx).askDetails(`<b>${esc(draftTypeLabel(d, langOf(ctx)))}</b>`, esc(detailsLocation), detailsExample(ctx, d)), kb);
 }
 
 async function showPreview(ctx, d) {
@@ -683,7 +695,9 @@ async function showPreview(ctx, d) {
 }
 
 export function buildAlertInput(d, author) {
-  const titles = d.type === 'military_incursion'
+  const titles = d.type === 'airstrike' && d.airstrikeForm === 'plural'
+    ? { ar: 'غارات جوية', en: 'Airstrikes' }
+    : d.type === 'military_incursion'
     ? { ar: 'توغل عسكري', en: 'Military incursion' }
     : TITLES[d.type] || { ar: typeOf(d.type).ar, en: typeOf(d.type).en };
   const loc = d.location || locationFrom({});
@@ -1580,6 +1594,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await show(ctx, L(ctx).askBreaking, new InlineKeyboard().text(L(ctx).btnCancel, 'cancel'));
     } else if (type === 'political') {
       await askPoliticalCategory(ctx, d);
+    } else if (type === 'airstrike') {
+      await askAirstrikeForm(ctx, d);
     } else if (type === 'military_incursion') {
       await askVehicleCount(ctx, d);
     } else if (type === 'border') await askBorder(ctx, d);
@@ -1661,6 +1677,12 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return fn(ctx, d);
   };
 
+  bot.callbackQuery(/^as:(singular|plural)$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'airstrike') return;
+    d.airstrikeForm = ctx.match[1];
+    await askLocation(ctx, d);
+  }));
+
   bot.callbackQuery(/^vehc:(\d+|custom|back)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'military_incursion') return;
     const choice = ctx.match[1];
@@ -1734,7 +1756,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!getGov(gov)) return;
     d.gov = gov; d.step = 'dist';
     const lang = langOf(ctx);
-    await show(ctx, L(ctx).askDist(`<b>${esc(typeLabel(d.type, lang))}</b>`, esc(lang === 'en' ? getGov(gov).en : getGov(gov).ar)), distKeyboard(ctx, gov));
+    await show(ctx, L(ctx).askDist(`<b>${esc(draftTypeLabel(d, lang))}</b>`, esc(lang === 'en' ? getGov(gov).en : getGov(gov).ar)), distKeyboard(ctx, gov));
   }));
   bot.callbackQuery(/^wg:(\d+)$/, needDraft((ctx, d) => pickLocation(ctx, d, locationFrom({ govCode: ctx.match[1] }))));
   bot.callbackQuery(/^gc:(\d+)$/, needDraft((ctx, d) => {
@@ -1751,14 +1773,14 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const dd = getDist(dist);
     const ss = sub && getSub(sub);
     const where = (lang === 'en' ? dd.en : dd.ar) + (ss ? ' › ' + (lang === 'en' ? ss.en : ss.ar) : '') + (letter ? ` › ${letter}` : '');
-    const head = `<b>${esc(typeLabel(d.type, lang))}</b>`;
+    const head = `<b>${esc(draftTypeLabel(d, lang))}</b>`;
     await show(ctx, letters ? L(ctx).askLetter(head, esc(where)) : L(ctx).askPlace(head, esc(where), p, pages), kb);
   };
   const showSubs = async (ctx, d, dist) => {
     d.dist = dist; d.sub = ''; d.step = 'place';
     const lang = langOf(ctx);
     const dd = getDist(dist);
-    await show(ctx, L(ctx).askSub(`<b>${esc(typeLabel(d.type, lang))}</b>`, esc(lang === 'en' ? dd.en : dd.ar)), subKeyboard(ctx, dist));
+    await show(ctx, L(ctx).askSub(`<b>${esc(draftTypeLabel(d, lang))}</b>`, esc(lang === 'en' ? dd.en : dd.ar)), subKeyboard(ctx, dist));
   };
   bot.callbackQuery(/^d:(\d+)$/, needDraft((ctx, d) => (!getDist(ctx.match[1]) ? null : useSubs(ctx.match[1]) ? showSubs(ctx, d, ctx.match[1]) : showPlaces(ctx, d, ctx.match[1], 0))));
   bot.callbackQuery(/^s:(\d+):(\d+)$/, needDraft((ctx, d) => (getDist(ctx.match[1]) && getSub(ctx.match[2]) ? showPlaces(ctx, d, ctx.match[1], 0, ctx.match[2]) : null)));
@@ -1832,7 +1854,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (ctx.match[1] === 'dist' && d.gov) {
       d.step = 'dist';
       const lang = langOf(ctx);
-      return show(ctx, L(ctx).askDist(`<b>${esc(typeLabel(d.type, lang))}</b>`, esc(lang === 'en' ? getGov(d.gov).en : getGov(d.gov).ar)), distKeyboard(ctx, d.gov));
+      return show(ctx, L(ctx).askDist(`<b>${esc(draftTypeLabel(d, lang))}</b>`, esc(lang === 'en' ? getGov(d.gov).en : getGov(d.gov).ar)), distKeyboard(ctx, d.gov));
     }
     return askLocation(ctx, d);
   }));
@@ -1844,7 +1866,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     d.details = '';
     d.step = 'details';
     const kb = new InlineKeyboard().text(L(ctx).btnSkip, 'skip').row().text(L(ctx).btnCancel, 'cancel');
-    await show(ctx, L(ctx).askDetails(`<b>${esc(typeLabel(d.type, langOf(ctx)))}</b>`, esc(locName(d.location, langOf(ctx))), detailsExample(ctx, d)), kb);
+    await show(ctx, L(ctx).askDetails(`<b>${esc(draftTypeLabel(d, langOf(ctx)))}</b>`, esc(locName(d.location, langOf(ctx))), detailsExample(ctx, d)), kb);
   }));
   bot.callbackQuery('intense', needDraft(async (ctx, d) => {
     if (!staff(ctx) || d.type !== 'uav') return;
