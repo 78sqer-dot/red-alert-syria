@@ -833,12 +833,28 @@ export class AlertMap {
   }
 
   // ------------------------------------------------------------- selection / camera
+  _playArrival(id) {
+    const marker = this.markers.get(id)?.getElement();
+    if (!marker || marker.hidden) return;
+    clearTimeout(this._arrivalTimer);
+    this._arrivalElement?.classList.remove('focus-arrival');
+    marker.classList.remove('focus-arrival');
+    void marker.offsetWidth;
+    marker.classList.add('focus-arrival');
+    this._arrivalElement = marker;
+    this._arrivalTimer = setTimeout(() => {
+      marker.classList.remove('focus-arrival');
+      if (this._arrivalElement === marker) this._arrivalElement = null;
+      this._arrivalTimer = null;
+    }, 2400);
+  }
   select(alert, { fly = true, popup = true } = {}) {
     this.selectedId = alert ? alert.id : null;
     if (!this.ready) { this._pending = alert ? [alert, { fly, popup }] : null; return; }
     this.refreshMarkerGroups();
     if (!alert) return this.closePopup();
     if (!alert.location || !Number.isFinite(alert.location.latitude)) return this.closePopup();
+    if (fly) this._playArrival(alert.id);
     const ll = [alert.location.longitude, alert.location.latitude];
     const zs = Array.isArray(alert.zones) ? alert.zones : [];
     if (fly && alert.more && alert.more.length && zs.length > 1) {

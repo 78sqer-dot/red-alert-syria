@@ -326,6 +326,9 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .sai svg { display: block; }
 .mk:hover .sai, .mk.sel .sai { transform: translate(-50%, -50%) scale(1.15); }
 .mk.sel .sai { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent); }
+.mk.focus-arrival::after { content: ''; position: absolute; left: 0; top: 0; width: 34px; height: 34px; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, var(--c) 82%, white); border-radius: 50%; box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 18%, transparent); transform: translate(-50%, -50%) scale(.55); opacity: 0; pointer-events: none; animation: mapArrivalRipple 1.15s cubic-bezier(.18,.72,.28,1) 2; }
+@keyframes mapArrivalRipple { 0% { transform: translate(-50%, -50%) scale(.55); opacity: 0; } 18% { opacity: .78; } 100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mk.focus-arrival::after { animation: none; transform: translate(-50%, -50%) scale(1); opacity: .5; } }
 /* small silhouette icons (artillery tank, missile, ambulance, breaking) — same clean style as the drone/warplanes */
 .ic { position: absolute; left: 0; top: 0; width: 30px; height: 30px; transform: translate(-50%, -50%); transition: transform .15s; }
 .ic-svg { display: block; fill: var(--ic); overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.75)) drop-shadow(0 1px 2px rgba(255,255,255,.6)); }
