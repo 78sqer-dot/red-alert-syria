@@ -94,6 +94,7 @@ const state = {
   firstSnapshot: true,
   contacts: {},
   support: null,
+  search: '',
 };
 let amap = null;
 let svc = null; // 💱 ⚡ 🛣 🏥 public/js/services.js
@@ -151,12 +152,21 @@ const shareText = (a) => `🔴 ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}
 // ------------------------------------------------------------------ alerts selection
 const URGENT_TYPES = new Set(['breaking', 'uav_strike', 'airstrike', 'warplane', 'helicopter', 'air_movement', 'missile', 'attack', 'artillery', 'assassination', 'shooting', 'military_incursion']);
 const isUrgent = (a) => !!(a?.is_active && URGENT_TYPES.has(a.type));
+const searchKey = (value) => String(value || '').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').toLowerCase();
+function matchesSearch(a) {
+  const q = searchKey(state.search).trim();
+  if (!q) return true;
+  const p = a.place || {};
+  const text = [titleOf(a), descOf(a), typeName(a.type), p.name_ar, p.name_en, p.district_ar, p.district_en, p.governorate_ar, p.governorate_en, ...(a.areas || [])].join(' ');
+  return searchKey(text).includes(q);
+}
 function visibleAlerts() {
   const s = settings.get();
   const list = [...state.alerts.values()].map((a) => (isLive(a) ? a : { ...a, is_active: false }));
   return list
     .filter((a) => matchesGovernorate(a, s.governorate, GOV_C))
     .filter((a) => s.filter.includes(a.type))
+    .filter(matchesSearch)
     .filter((a) => a.is_active || s.showInactive)
     .sort((x, y) => (y.is_active - x.is_active) || (isUrgent(y) - isUrgent(x)) || (isNear(y) - isNear(x)) || Date.parse(y.timestamp) - Date.parse(x.timestamp));
 }
@@ -170,6 +180,8 @@ function hydrateStatic() {
     const v = T[el.dataset.t];
     if (typeof v === 'string') el.textContent = v;
   });
+  const search = $('#alertSearch');
+  if (search) search.placeholder = T.searchAlerts;
   const other = LANG === 'ar' ? 'en' : 'ar';
   const lb = $('#btnLang');
   lb.querySelector('.lbl').textContent = LANG === 'ar' ? 'EN' : 'ع';
@@ -247,8 +259,10 @@ function renderList() {
   $('#sbSub').textContent = (s.showInactive ? T.withInactive : T.activeOnMap) + (nearN ? (LANG === 'ar' ? ` · ${nearN} قريب منك` : ` · ${nearN} near you`) : '');
   $('#fabCount').textContent = n;
   const box = $('#alertList');
+  const search = $('#alertSearch');
+  if (search && search.value !== state.search) search.value = state.search;
   if (!list.length) {
-    const filtered = (s.filter.length < TYPE_KEYS.length || (s.governorate !== 'all' && GOV_C[s.governorate])) && state.alerts.size;
+    const filtered = state.search || (s.filter.length < TYPE_KEYS.length || (s.governorate !== 'all' && GOV_C[s.governorate])) && state.alerts.size;
     box.innerHTML = `<div class="empty"><div class="radar"></div><h3>${esc(filtered ? T.noMatch : T.noAlerts)}</h3><p>${esc(filtered ? '' : T.noAlertsSub)}</p>${filtered ? `<button class="btn-sm" data-act="clear-filter">${esc(T.clearFilter)}</button>` : ''}</div>`;
   } else {
     const urgent = list.filter(isUrgent);
@@ -950,6 +964,7 @@ async function copy(text) {
 
 // ------------------------------------------------------------------ events
 function bindEvents() {
+  $('#alertSearch')?.addEventListener('input', (e) => { state.search = e.target.value.slice(0, 80); renderList(); });
   $('#btnSettings').addEventListener('click', openDrawer);
   $('#btnSettingsM').addEventListener('click', openDrawer);
   $('#drawerClose').addEventListener('click', closeDrawer);
