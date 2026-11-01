@@ -1132,3 +1132,39 @@ html.dark .uav-svg {
   stroke: rgba(255,255,255,.98);
 }
 .sq-svg { transform: rotate(-45deg); }
+
+/* Compact controls: secondary actions expand from one button; Syria overview stays one tap away. */
+.map-ctrls { display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
+.map-ctrls > .ctrl-btn, .map-ctrl-panel .ctrl-btn { width: 42px; height: 42px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-glass); color: var(--text-primary); box-shadow: var(--shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: transform .16s ease, background .16s ease, box-shadow .16s ease; }
+.map-ctrls > .ctrl-btn:hover, .map-ctrl-panel .ctrl-btn:hover { transform: translateY(-2px); background: var(--bg-card-hover); box-shadow: var(--shadow-lg); }
+.map-ctrl-panel { position: absolute; bottom: calc(100% + 9px); inset-inline-start: 0; z-index: 16; display: flex; flex-direction: column; gap: 7px; padding: 8px; border: 1px solid var(--border); border-radius: 15px; background: var(--bg-glass); box-shadow: var(--shadow-lg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); animation: ddUp .18s cubic-bezier(.2, .8, .2, 1); }
+.map-ctrl-panel[hidden] { display: none !important; }
+#mapControlsToggle[aria-expanded='true'] { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
+.mk-event-emoji { display: grid; place-items: center; box-sizing: border-box; border: 2px solid var(--ic, #7c3aed); border-radius: 50%; background: #fff; color: #111827; font: 20px/1 "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; box-shadow: 0 2px 7px rgba(15, 23, 42, .3); }
+html.dark .mk-event-emoji { background: #f8fafc; }
+
+/* Softer, slower general-purpose alert pulse; aircraft retain their legacy blue cadence and glow. */
+.zp-fill { animation: none; opacity: .035; will-change: auto; }
+.zp::before, .zp::after { border-width: 1.25px; background: radial-gradient(circle, transparent 72%, color-mix(in srgb, var(--c, #ef233c) 8%, transparent) 100%); animation-duration: 3.6s; }
+@keyframes zpulse { 0% { transform: scale(1); opacity: .27; } 100% { transform: scale(1.65); opacity: 0; } }
+
+/* Phone alert details use a readable bottom sheet instead of a narrow map-anchored bubble. */
+.pp-dock.alert-dock { z-index: 30; border-radius: 18px; border-color: var(--border-subtle); background: color-mix(in srgb, var(--bg-elevated) 98%, var(--red) 2%); box-shadow: 0 18px 48px rgba(17, 24, 39, .26), 0 4px 14px rgba(17, 24, 39, .14); touch-action: pan-y; }
+.pp-dock.alert-dock .pp-dock-body { border-radius: 18px; padding: 16px 16px 10px; background: transparent; }
+.pp-dock.alert-dock .pp-dock-x { top: 9px; inset-inline-end: 9px; width: 34px; height: 34px; border: 1px solid var(--border-subtle); border-radius: 50%; background: var(--bg-secondary); font-size: 22px; }
+.pp-dock.alert-dock .pp-foot { position: sticky; bottom: -10px; margin-inline: -16px; padding: 10px 16px max(10px, env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--bg-elevated) 96%, transparent); backdrop-filter: blur(12px); }
+@media (max-width: 767px) {
+  .brand img { height: 28px; width: auto; }
+  .map-ctrls { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); gap: 7px; }
+  .map-ctrls > .ctrl-btn { width: 44px; height: 44px; border-radius: 14px; }
+  .map-ctrl-panel .ctrl-btn { width: 44px; height: 44px; }
+  .pp-dock.alert-dock { left: 10px; right: 10px; width: auto; max-width: 560px; max-height: min(58dvh, 520px); margin-inline: auto; }
+  .pp-dock.alert-dock .pp-dock-body { padding: 15px 14px 9px; }
+  .pp-dock.alert-dock .pp-title { font-size: 16px; line-height: 1.6; }
+  .pp-dock.alert-dock .pp-desc { font-size: 13px; line-height: 1.75; }
+  .pp-dock.alert-dock .pp-foot { margin-inline: -14px; padding-inline: 14px; }
+  .pp-dock.alert-dock .pp-more, .pp-dock.alert-dock .pp-share { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-ctrl-panel { animation: none; }
+}

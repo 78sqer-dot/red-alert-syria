@@ -35,9 +35,9 @@
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/vendor/maplibre-gl.css?v=6.16.0" />
-  <link rel="stylesheet" href="/css/app.css?v=31" />
+  <link rel="stylesheet" href="/css/app.css?v=32" />
   <script src="/js/boot.js"></script>
-  <script type="module" src="/js/app.js?v=45"></script>
+  <script type="module" src="/js/app.js?v=46"></script>
 </head>
 <body>
   <noscript><div class="noscript">يتطلب الموقع تفعيل JavaScript — This site requires JavaScript.</div></noscript>
@@ -84,12 +84,15 @@
           <button class="map-btn notif-map-btn" id="btnNotifications" type="button" aria-pressed="false"><span data-icon="bell"></span><span class="notif-map-label" data-t="enableNotifications"></span></button>
         </div>
 
-        <div class="map-ctrls">
-          <button class="ctrl-btn" id="zoomIn" type="button"><span data-icon="plus"></span></button>
-          <button class="ctrl-btn" id="zoomOut" type="button"><span data-icon="minus"></span></button>
-          <button class="ctrl-btn" id="resetView" type="button"><span data-icon="world"></span></button>
-          <button class="ctrl-btn" id="locateMe" type="button"><span data-icon="locate"></span></button>
-          <button class="ctrl-btn share-ctrl" id="shareSite" type="button"><span data-icon="share"></span></button>
+        <div class="map-ctrls" id="mapCtrls">
+          <button class="ctrl-btn" id="mapControlsToggle" type="button" aria-expanded="false" aria-controls="mapCtrlPanel"><span data-icon="apps" aria-hidden="true"></span></button>
+          <div class="map-ctrl-panel" id="mapCtrlPanel" role="group" hidden>
+            <button class="ctrl-btn map-control-action" id="zoomIn" type="button"><span data-icon="plus" aria-hidden="true"></span></button>
+            <button class="ctrl-btn map-control-action" id="zoomOut" type="button"><span data-icon="minus" aria-hidden="true"></span></button>
+            <button class="ctrl-btn map-control-action" id="locateMe" type="button"><span data-icon="locate" aria-hidden="true"></span></button>
+            <button class="ctrl-btn map-control-action share-ctrl" id="shareSite" type="button"><span data-icon="share" aria-hidden="true"></span></button>
+          </div>
+          <button class="ctrl-btn" id="resetView" type="button"><span data-icon="world" aria-hidden="true"></span></button>
         </div>
         <div class="site-share" id="siteShare" hidden></div>
 

@@ -5,7 +5,7 @@ import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert } from './store.js';
-import { ALERT_TYPES, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS } from '../shared/types.js';
+import { ALERT_TYPES, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, alertButtonLabel, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
@@ -625,7 +625,7 @@ async function askPoliticalCategory(ctx, d) {
   d.step = 'political_category';
   const en = langOf(ctx) === 'en';
   const kb = new InlineKeyboard();
-  for (const [key, label] of Object.entries(POLITICAL_CATEGORIES)) kb.text(en ? label.en : label.ar, `pcat:${key}`).row();
+  for (const [key, label] of Object.entries(POLITICAL_CATEGORIES)) kb.text([label.emoji, en ? label.en : label.ar].filter(Boolean).join(' '), `pcat:${key}`).row();
   kb.text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en
     ? '🏛 <b>Political development</b>\n\nChoose the category. Opinions and analysis are not news.'
@@ -1511,7 +1511,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery('target', async (ctx) => {
     await ctx.answerCallbackQuery();
     const lang = langOf(ctx);
-    const b = (k) => `${ALERT_TYPES[k].emoji} ${lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`;
+    const b = (k) => alertButtonLabel(k, lang);
     const kb = new InlineKeyboard()
       .text(b('uav_strike'), 't:uav_strike').row()
       .text(b('assassination'), 't:assassination').row()
@@ -1522,7 +1522,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery('cv', async (ctx) => {
     await ctx.answerCallbackQuery();
     const lang = langOf(ctx);
-    const b = (k) => `${ALERT_TYPES[k].emoji} ${lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`;
+    const b = (k) => alertButtonLabel(k, lang);
     const kb = new InlineKeyboard()
       .text(b('accident'), 't:accident').text(b('fire'), 't:fire').row()
       .text(b('protest'), 't:protest').text(b('civil_plane'), 't:civil_plane').row()
@@ -1609,8 +1609,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await ctx.answerCallbackQuery();
     const en = langOf(ctx) === 'en';
     const kb = new InlineKeyboard()
-      .text(en ? 'Military incursion only' : 'توغل عسكري فقط', 'mi:general').row()
-      .text(en ? 'Military vehicles only' : 'توغل آليات عسكرية فقط', 'mi:vehicles').row()
+      .text(en ? '🪖 Military incursion only' : '🪖 توغل عسكري فقط', 'mi:general').row()
+      .text(en ? '🚙 Military vehicles only' : '🚙 توغل آليات عسكرية فقط', 'mi:vehicles').row()
       .text(L(ctx).btnHome, 'home');
     await show(ctx, en ? 'Choose the military-incursion report type:' : 'اختر نوع بلاغ التوغل العسكري:', kb);
   });
@@ -1619,7 +1619,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const en = langOf(ctx) === 'en';
     const kb = new InlineKeyboard();
     for (const type of ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives']) {
-      kb.text(`${ALERT_TYPES[type].emoji} ${en ? ALERT_TYPES[type].button_en : ALERT_TYPES[type].button_ar}`, `t:${type}`).row();
+      kb.text(alertButtonLabel(type, en ? 'en' : 'ar'), `t:${type}`).row();
     }
     kb.text(L(ctx).btnHome, 'home');
     await show(ctx, en ? 'Choose the smuggling alert type:' : 'اختر نوع التهريب:', kb);

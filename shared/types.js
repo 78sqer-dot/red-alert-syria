@@ -110,7 +110,7 @@ export const ALERT_TYPES = {
   protest: {
     ar: 'مظاهرة', en: 'Protest', button_ar: 'مظاهرة', button_en: 'Protest',
     emoji: '📢', color: '#7c3aed', ring: '#5b21b6', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'protest', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مظاهرة', tag_en: 'Protest',
+    marker: 'icon', glyph: 'protest', mapEmoji: true, icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مظاهرة', tag_en: 'Protest',
   },
   fire: {
     ar: 'حريق', en: 'Fire', button_ar: 'حريق', button_en: 'Fire',
@@ -164,11 +164,11 @@ export const ZONE_KM = { place: 1.5, point: 1.5, village: 1.5, multi: 3, distric
 export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 
 export const POLITICAL_CATEGORIES = Object.freeze({
-  statement: { ar: 'تصريح أو موقف منسوب', en: 'Attributed statement or position' },
-  decision: { ar: 'قرار أو تعيين', en: 'Decision or appointment' },
-  negotiation: { ar: 'مفاوضات أو اتفاق', en: 'Negotiation or agreement' },
-  meeting: { ar: 'لقاء أو زيارة', en: 'Meeting or visit' },
-  election: { ar: 'انتخابات', en: 'Election' },
+  statement: { emoji: '💬', ar: 'تصريح أو موقف منسوب', en: 'Attributed statement or position' },
+  decision: { emoji: '📜', ar: 'قرار أو تعيين', en: 'Decision or appointment' },
+  negotiation: { emoji: '🤝', ar: 'مفاوضات أو اتفاق', en: 'Negotiation or agreement' },
+  meeting: { emoji: '👥', ar: 'لقاء أو زيارة', en: 'Meeting or visit' },
+  election: { emoji: '🗳️', ar: 'انتخابات', en: 'Election' },
 });
 
 export const ALERT_GROUPS = {
@@ -220,6 +220,12 @@ export const CIVIL_EMOJIS = {
 
 export function typeOf(key) {
   return ALERT_TYPES[key] || ALERT_TYPES.breaking;
+}
+
+export function alertButtonLabel(key, lang = 'ar') {
+  const type = typeOf(key);
+  const label = lang === 'en' ? type.button_en : type.button_ar;
+  return [type.emoji, label].filter(Boolean).join(' ');
 }
 
 // Use a monochrome firearm silhouette; specialize to a rifle only when the report explicitly says so.

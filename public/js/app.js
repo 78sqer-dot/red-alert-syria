@@ -1,13 +1,13 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=18';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=29';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=30';
 import * as maplibregl from '/vendor/maplibre-gl.mjs?v=6.16.0';
-import { DICT } from './i18n.js?v=2';
+import { DICT } from './i18n.js?v=3';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=4';
 import { settings } from './settings.js?v=7';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=48';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=49';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
@@ -202,6 +202,8 @@ function hydrateStatic() {
   $('#listFab').title = T.listToggle;
   $('#listFab').setAttribute('aria-label', T.listToggle);
   $('#zoomIn').title = T.zoomIn;
+  $('#mapControlsToggle').title = T.mapTools;
+  $('#mapControlsToggle').setAttribute('aria-label', T.mapTools);
   $('#shareSite').title = T.shareMap;
   $('#shareSite').setAttribute('aria-label', T.shareMap);
   $('#zoomOut').title = T.zoomOut;
@@ -988,6 +990,22 @@ async function copy(text) {
 
 // ------------------------------------------------------------------ events
 function bindEvents() {
+  const mapCtrlToggle = $('#mapControlsToggle');
+  const mapCtrlPanel = $('#mapCtrlPanel');
+  const setMapControlsOpen = (open) => {
+    mapCtrlPanel.hidden = !open;
+    mapCtrlToggle.setAttribute('aria-expanded', String(open));
+  };
+  mapCtrlToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMapControlsOpen(mapCtrlPanel.hidden);
+  });
+  mapCtrlPanel.addEventListener('click', (e) => {
+    if (e.target.closest('.map-control-action')) setMapControlsOpen(false);
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#mapCtrls')) setMapControlsOpen(false);
+  });
   $('#alertSearch')?.addEventListener('input', (e) => { state.search = e.target.value.slice(0, 80); renderList(); });
   $('#btnSettings').addEventListener('click', openDrawer);
   $('#btnSettingsM').addEventListener('click', openDrawer);
@@ -1009,6 +1027,7 @@ function bindEvents() {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (!mapCtrlPanel.hidden) { setMapControlsOpen(false); return; }
     if (!$('#tour').hidden) return endTour();
     if (!$('#modalBackdrop').hidden) return closeModal();
     if ($('#drawer').classList.contains('open')) return closeDrawer();
@@ -1136,6 +1155,7 @@ function bindEvents() {
   // share the whole map (native share sheet on phones, small panel elsewhere)
   $('#shareSite').addEventListener('click', async (e) => {
     e.stopPropagation();
+    setMapControlsOpen(false);
     if (navigator.share && isMobile()) {
       try { await navigator.share({ title: T.siteName, text: T.shareMapText, url: siteUrl() }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
     }
@@ -1157,9 +1177,9 @@ function bindEvents() {
     else if (e.target.closest('a')) setTimeout(() => { $('#siteShare').hidden = true; }, 300);
   });
   document.addEventListener('click', () => { const b = $('#siteShare'); if (b && !b.hidden) b.hidden = true; });
-  $('#zoomIn').addEventListener('click', () => amap && amap.zoomIn());
-  $('#zoomOut').addEventListener('click', () => amap && amap.zoomOut());
-  $('#resetView').addEventListener('click', () => amap && amap.fitSyria());
+  $('#zoomIn').addEventListener('click', () => { setMapControlsOpen(false); amap && amap.zoomIn(); });
+  $('#zoomOut').addEventListener('click', () => { setMapControlsOpen(false); amap && amap.zoomOut(); });
+  $('#resetView').addEventListener('click', () => { setMapControlsOpen(false); amap && amap.fitSyria(); });
   $('#btnSvc').addEventListener('click', (e) => { e.stopPropagation(); closeDropdowns(); svc && svc.open(); });
   $('#btnNotifications').addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -1168,6 +1188,7 @@ function bindEvents() {
     await enableNotifications();
   });
   $('#locateMe').addEventListener('click', () => {
+    setMapControlsOpen(false);
     if (svc) return svc.locate();
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition((p) => amap && amap.showMe(p.coords.longitude, p.coords.latitude), () => {}, { enableHighAccuracy: true, timeout: 10000 });

@@ -1,8 +1,9 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=29';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=30';
 import { SVG } from './marker-svgs.js?v=18';
 import { EXTRA_SVG } from './target-svgs.js?v=12';
 import { icon } from './icons.js?v=4';
+import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=3';
 import { groupAlerts, nextAlertId } from './marker-layout.js';
 import { aircraftRotation, flightPath, flightPosition } from '/shared/flight-path.js?v=2';
@@ -702,7 +703,9 @@ export class AlertMap {
       el.innerHTML = `<span class="news-pulse-ring" aria-hidden="true"></span><span class="news-marker-core">${svgTag(glyph, 24, 'class="news-marker-svg" fill="none"')}</span>`;
     } else if (t.marker === 'icon') {
       const sz = t.size || 30;
-      el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg"')}</div>`;
+      el.innerHTML = t.mapEmoji && t.emoji
+        ? `<div class="mk-event-emoji" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px" aria-hidden="true">${t.emoji}</div>`
+        : `<div class="ic ic-${glyph}" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg"')}</div>`;
     } else {
       el.innerHTML = glyphDisc(a.type, 34, 18, 'sai', a.marker_glyph);
     }
@@ -891,9 +894,9 @@ export class AlertMap {
       for (const q of zs) { const dl = q.km / 111, dn = q.km / (111 * Math.cos((q.lat * Math.PI) / 180)); w = Math.min(w, q.lon - dn); e = Math.max(e, q.lon + dn); s = Math.min(s, q.lat - dl); n = Math.max(n, q.lat + dl); }
       this.map.fitBounds([[w, s], [e, n]], { padding: this.padding(), maxZoom: 11, duration: 1100, essential: true });
     } else if (fly) {
-      const z = { place: 11, point: 11.5, district: 9.5, governorate: 8 }[alert.scope] || 9;
-      const nextZoom = Math.min(13, Math.max(z, this.map.getZoom() + 0.9));
-      this.map.flyTo({ center: target, zoom: nextZoom, padding: this.padding(), speed: 1.4, essential: true });
+      const center = this.map.getCenter();
+      const duration = alertTransitionDuration(distanceKm([center.lng, center.lat], target));
+      this.map.flyTo({ center: target, zoom: alertFocusZoom(alert.scope, this.map.getZoom()), padding: this.padding(), curve: 1.18, duration, essential: true });
     }
     if (popup) this.openPopup(alert);
   }
@@ -913,12 +916,12 @@ export class AlertMap {
     }
     return best;
   }
-  // Phone detection for mobile map rendering/3D performance; alert popups remain anchored to their map circles.
+  // Phone detection for mobile map rendering/3D performance; alert details use a compact bottom sheet on phones.
   dockMode() {
     const coarse = matchMedia('(pointer: coarse)').matches;
     return window.innerWidth < 768 || (coarse && Math.min(screen.width || 9999, screen.height || 9999) < 768);
   }
-  // Service cards remain docked on phones; alert-circle popups use MapLibre's point-anchored popup below.
+  // Service and alert detail cards use the same accessible dock on phones; desktop alerts remain point-anchored.
   openDockHtml(html, ll, { id = null, cls = '', onClose = null } = {}) {
     const card = document.createElement('div');
     card.className = 'pp-dock' + (cls ? ' ' + cls : '');
@@ -928,6 +931,9 @@ export class AlertMap {
     card.append(x, body);
     for (const old of this.el.querySelectorAll('.pp-dock')) old.remove();
     this.el.append(card);
+    card.addEventListener('wheel', (event) => event.stopPropagation(), { passive: true });
+    card.addEventListener('touchstart', (event) => { if (card.scrollHeight > card.clientHeight + 2) event.stopPropagation(); }, { passive: true });
+    card.addEventListener('touchmove', (event) => { if (card.scrollHeight > card.clientHeight + 2) event.stopPropagation(); }, { passive: true });
     document.body.classList.add('pp-docked');
     let tm = 0;
     const place = () => this.placeDock(card);
@@ -955,8 +961,11 @@ export class AlertMap {
       const r = sh.getBoundingClientRect();
       if (r.height && r.top > mr.top + 120 && r.top < mr.bottom) b = Math.max(b, mr.bottom - r.top + 10);
     }
-    card.style.bottom = b + 'px';
-    card.style.maxHeight = Math.max(140, mr.height - b - 76) + 'px';
+    card.style.bottom = `calc(${b}px + env(safe-area-inset-bottom, 0px))`;
+    const available = Math.max(160, mr.height - b - 76);
+    const visualHeight = window.visualViewport?.height || window.innerHeight;
+    const cap = card.classList.contains('alert-dock') ? Math.min(520, visualHeight * 0.58) : available;
+    card.style.maxHeight = Math.min(available, cap) + 'px';
     const cr = card.getBoundingClientRect();
     for (const c of document.querySelectorAll('.map-ctrls')) {
       c.style.transform = '';
@@ -977,10 +986,14 @@ export class AlertMap {
     if (this.map.isMoving()) this.map.once('moveend', () => setTimeout(go, 30)); else go();
   }
   openPopup(alert) {
-    const M = ml();
     this.closePopup();
     const at = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
     this._popupAt = null;
+    if (this.dockMode()) {
+      this.popup = this.openDockHtml(this.popupHtml(alert), at || [alert.location.longitude, alert.location.latitude], { id: alert.id, cls: 'alert-dock' });
+      return this.popup;
+    }
+    const M = ml();
     const m = at ? null : this.markers.get(alert.id);
     const off = m ? m.getOffset() : { x: 0, y: 0 };
     this.popup = new M.Popup({ className: 'pp-alert-popup', closeButton: true, closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 24px))', offset: { bottom: [off.x, off.y - 26], top: [off.x, off.y + 26], left: [off.x + 26, off.y], right: [off.x - 26, off.y] }, focusAfterOpen: false })

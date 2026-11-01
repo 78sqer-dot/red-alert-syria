@@ -13,7 +13,7 @@ const types = read('shared/types.js');
 
 test('PWA and module graph request versioned assets for current map and firearm glyphs', () => {
   const appBuild = index.match(/\/js\/app\.js\?v=(\d+)/)?.[1];
-  assert.ok(Number(appBuild) > 44, 'HTML must request a newer app build to update installed PWA users');
+  assert.ok(Number(appBuild) > 45, 'HTML must request a newer app build to update installed PWA users');
   assert.match(index, /\/css\/app\.css\?v=\d+/);
   assert.match(app, /settings\.js\?v=\d+/);
   assert.match(app, /i18n\.js\?v=\d+/);
@@ -22,6 +22,7 @@ test('PWA and module graph request versioned assets for current map and firearm 
   assert.match(app, /push-subscription\.js\?v=\d+/);
   assert.match(settings, /shared\/types\.js\?v=\d+/);
   assert.match(map, /shared\/types\.js\?v=\d+/);
+  assert.match(map, /shared\/map-motion\.js\?v=\d+/);
   assert.match(map, /target-svgs\.js\?v=\d+/);
   assert.match(map, /flight-path\.js\?v=\d+/);
   assert.match(app, /icons\.js\?v=\d+/);
@@ -33,7 +34,7 @@ test('political map icon uses its configured 25px size', () => {
   const politicalType = types.match(/political:\s*\{([^}]+)\}/)?.[1];
   assert.ok(politicalType, 'political alert type must be defined');
   assert.match(politicalType, /\bsize:\s*25\b/);
-  assert.match(map, /const sz = t\.size \|\| 30;[\s\S]{0,140}svgTag\(glyph, sz,/);
+  assert.match(map, /const sz = t\.size \|\| 30;[\s\S]{0,420}svgTag\(glyph, sz,/);
 });
 
 test('map flight selection plays a brief event-colored arrival ripple and respects reduced motion', () => {
