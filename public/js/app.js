@@ -327,11 +327,13 @@ function renderDetail() {
 }
 function showList() {
   state.view = 'list';
+  $('#app').classList.remove('detail-open');
   $('#viewList').hidden = false;
   $('#viewDetail').hidden = true;
 }
 function showDetail() {
   state.view = 'detail';
+  $('#app').classList.add('detail-open');
   $('#viewList').hidden = true;
   $('#viewDetail').hidden = false;
   renderDetail();
