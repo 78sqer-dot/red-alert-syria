@@ -24,7 +24,7 @@ export const TYPE_ICON = Object.freeze({
   fire: 'flame',
   civil_plane: 'planeDep',
   arrest: 'handcuffs',
-  death: 'candle',
+  death: 'grave',
   martyrdom: 'dove',
   brawl: 'fists',
   shooting: 'gunfire',
