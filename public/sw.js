@@ -29,5 +29,23 @@ self.addEventListener('fetch', (e) => {
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  e.waitUntil(self.clients.matchAll({ type: 'window' }).then((cs) => (cs[0] ? cs[0].focus() : self.clients.openWindow('/ar/'))));
+  const target = e.notification.data?.url || '/ar/';
+  e.waitUntil(self.clients.matchAll({ type: 'window' }).then((cs) => {
+    const same = cs.find((c) => 'focus' in c);
+    return same ? same.focus().then(() => same.navigate(target)) : self.clients.openWindow(target);
+  }));
+});
+
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch { data = { body: e.data?.text() || 'تنبيه جديد' }; }
+  e.waitUntil(self.registration.showNotification(data.title || 'Red Alert Syria', {
+    body: data.body || 'تنبيه جديد',
+    icon: '/img/icon-192.png',
+    badge: '/img/icon-192.png',
+    tag: data.tag || 'ras-alert',
+    renotify: data.event === 'new',
+    data: { url: data.url || '/ar/' },
+    vibrate: [180, 80, 180],
+  }));
 });

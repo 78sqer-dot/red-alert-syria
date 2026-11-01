@@ -277,6 +277,7 @@ function detailHtml(a) {
   const hasIndividualSourceDate = political && Array.isArray(a.political_sources) && a.political_sources.some((source) => typeof source?.timestamp === 'string' && Number.isFinite(Date.parse(source.timestamp)));
   const sourceTimestamp = political && !hasIndividualSourceDate && typeof a.political_source_timestamp === 'string' && Number.isFinite(Date.parse(a.political_source_timestamp))
     ? fmtFull.format(new Date(a.political_source_timestamp)) : null;
+  const updates = Array.isArray(a.updates) ? a.updates.slice().reverse() : [];
   const sourceInfoUrl = safeExternalUrl(a.source_info?.url);
   const rows = [
     [T.type, `${badge(a)}`],
@@ -300,6 +301,7 @@ function detailHtml(a) {
     </div>
     <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
     <div class="disclaimer" role="note">${esc(political ? (LANG === 'ar' ? 'منسوب للمصدر — لا يعني تحققاً مستقلاً' : 'Attributed to the source — this does not mean independent verification') : T.verificationNotRecorded)}</div>
+    ${updates.length > 1 ? `<div class="sec-label">${esc(LANG === 'ar' ? 'سجل الخبر والتحديثات' : 'News and update history')}</div><div class="update-history">${updates.map((u) => `<div class="update-item"><span class="update-dot"></span><div><b>${esc(u.kind === 'published' ? (LANG === 'ar' ? 'نشر الخبر' : 'Published') : u.kind === 'ended' ? (LANG === 'ar' ? 'انتهى التنبيه' : 'Alert ended') : (LANG === 'ar' ? 'تحديث' : 'Update'))}</b><time>${esc(fmtFull.format(new Date(u.at)))}</time>${u.description ? `<p>${esc(u.description)}</p>` : ''}</div></div>`).join('')}</div>` : ''}
     ${hasLoc ? `<div class="sec-label">${esc(T.coordinates)}</div>
     <div class="coords"><div class="coord"><div class="k">${esc(T.lat)}</div><div class="v">${fmtNum(a.location.latitude)}° N</div></div><div class="coord"><div class="k">${esc(T.lng)}</div><div class="v">${fmtNum(a.location.longitude)}° E</div></div></div>` : ''}
     <button class="btn-dark" data-act="share-toggle">${icon('share', 18)}${esc(T.shareAlert)}</button>
@@ -697,6 +699,31 @@ function showWelcome() {
 }
 
 // ------------------------------------------------------------------ notifications
+const vapidBytes = (key) => {
+  const pad = '='.repeat((4 - key.length % 4) % 4);
+  const raw = atob((key + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+};
+async function syncPushPreferences() {
+  try {
+    if (!('serviceWorker' in navigator) || !settings.get().notifications.enabled) return;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), preferences: { types: settings.get().notifications.types, governorate: settings.get().governorate, lang: LANG } }) });
+  } catch { /* local notifications remain available */ }
+}
+async function subscribeToPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+  const keyRes = await fetch('/api/push/public-key');
+  if (!keyRes.ok) return false;
+  const { publicKey } = await keyRes.json();
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidBytes(publicKey) });
+  const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), preferences: { types: settings.get().notifications.types, governorate: settings.get().governorate, lang: LANG } }) });
+  return r.ok;
+}
 async function enableNotifications() {
   unlockAudio();
   settings.set({ notifications: { enabled: true } });
@@ -704,7 +731,7 @@ async function enableNotifications() {
     try { await Notification.requestPermission(); } catch { /* ignore */ }
   }
   if ('Notification' in window && Notification.permission === 'denied') toast(T.permissionDenied);
-  else toast(T.notifEnabled);
+  else { try { await subscribeToPush(); } catch { /* permission may still support local notifications only */ } toast(T.notifEnabled); }
   syncNotificationButton();
 }
 function syncNotificationButton() {
@@ -956,6 +983,7 @@ function bindEvents() {
     const i = e.target;
     if (i.dataset.regionFilter !== undefined) {
       settings.set({ governorate: i.value });
+      syncPushPreferences();
       renderFilterPanel();
       refresh();
       return;
@@ -1143,6 +1171,7 @@ function bindEvents() {
       const set = new Set(settings.get().notifications.types);
       i.checked ? set.add(i.dataset.nt) : set.delete(i.dataset.nt);
       settings.set({ notifications: { types: TYPE_KEYS.filter((t) => set.has(t)) } });
+      syncPushPreferences();
     }
   });
   db.addEventListener('input', (e) => {

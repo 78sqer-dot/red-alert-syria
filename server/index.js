@@ -20,6 +20,7 @@ import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
 import { weatherDebug, checkWeather } from './weather.js';
 import { publicBorders } from './borders.js';
 import { startServices, publicRoads, publicPower } from './services.js';
+import { pushConfigured, pushPublicKey, saveSubscription, removeSubscription, sendPush } from './push.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -90,6 +91,20 @@ const streamLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: 
 app.use('/api/', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   next();
+});
+app.get('/api/push/public-key', apiLimiter, (req, res) => {
+  if (!pushConfigured) return res.status(404).json({ enabled: false });
+  res.json({ enabled: true, publicKey: pushPublicKey });
+});
+app.post('/api/push/subscribe', apiLimiter, express.json({ limit: '32kb' }), (req, res) => {
+  if (!pushConfigured) return res.status(503).json({ enabled: false });
+  const id = saveSubscription(store, req.body?.subscription, req.body?.preferences);
+  if (!id) return res.status(400).json({ error: 'invalid subscription' });
+  res.status(201).json({ ok: true, id });
+});
+app.delete('/api/push/subscribe', apiLimiter, express.json({ limit: '8kb' }), (req, res) => {
+  if (!pushConfigured) return res.status(404).end();
+  res.json({ ok: removeSubscription(store, req.body?.subscription || req.body?.endpoint) });
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size }));
@@ -195,8 +210,11 @@ const broadcast = (event, data) => {
   const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const c of clients) c.write(msg);
 };
-store.on('alert', (a) => broadcast('alert', a));
-store.on('update', (a) => broadcast('update', a));
+store.on('alert', (a) => { broadcast('alert', a); sendPush(store, a, 'new').catch((e) => console.warn('[push] new alert failed:', e.message)); });
+store.on('update', (a) => {
+  broadcast('update', a);
+  if (a.updates?.at(-1)?.kind === 'updated') sendPush(store, a, 'update').catch((e) => console.warn('[push] update failed:', e.message));
+});
 store.on('remove', (a) => broadcast('remove', a));
 store.on('roads', (r) => broadcast('roads', r)); // 🛣 road status layer
 store.on('power', (p) => broadcast('power', p));

@@ -17,3 +17,9 @@ services:
         value: "8270709633"
       - key: CHANNEL_ID
         value: "@Red_Alert_Syria"
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false

@@ -16,7 +16,7 @@ import { publicSupportSettings, sanitizeSupportSettings } from './support-config
 class Store extends EventEmitter {
   constructor() {
     super();
-    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 1, autoDel1h: true, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null }, support: sanitizeSupportSettings() }, log: [], relay: {}, threads: {} };
+    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 1, autoDel1h: true, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null }, support: sanitizeSupportSettings() }, push: { subscriptions: {} }, log: [], relay: {}, threads: {} };
     this.file = path.join(config.dataDir, 'state.json');
     this.backup = null; // { save(jsonString), load() -> jsonString|null }
     this._saveTimer = null;
@@ -118,6 +118,7 @@ class Store extends EventEmitter {
       // owner <-> reporter conversation links (message -> reporter id) and open threads
       relay: s.relay && typeof s.relay === 'object' ? s.relay : {},
       threads: s.threads && typeof s.threads === 'object' ? s.threads : {},
+      push: { subscriptions: s.push?.subscriptions && typeof s.push.subscriptions === 'object' ? s.push.subscriptions : {} },
       convo: s.convo && typeof s.convo === 'object' ? s.convo : {},
       // compact event log for statistics (kept 35 days, independent of the map's auto-delete)
       log: Array.isArray(s.log) ? s.log.filter((e) => e && e.ty && e.ts) : null,
@@ -201,6 +202,7 @@ class Store extends EventEmitter {
       source: input.source || 'telegram',
       meta: input.meta && typeof input.meta === 'object' ? { ...input.meta } : null,
       is_active: true,
+      history: [{ at: now.toISOString(), kind: 'published', title: input.title, description: input.description || '', is_active: true }],
       author: input.author || null,
       channel_message_id: null,
     };
@@ -217,10 +219,29 @@ class Store extends EventEmitter {
     return this.state.alerts.find((a) => a.id === id);
   }
 
+  pushSubscriptions() {
+    return Object.entries(this.state.push?.subscriptions || {});
+  }
+  savePushSubscription(id, subscription) {
+    (this.state.push ||= { subscriptions: {} }).subscriptions[id] = subscription;
+    this.persist();
+  }
+  removePushSubscription(id) {
+    if (!this.state.push?.subscriptions?.[id]) return false;
+    delete this.state.push.subscriptions[id];
+    this.persist();
+    return true;
+  }
+  _history(a, kind) {
+    const item = { at: new Date().toISOString(), kind, title: a.title, description: a.description || '', is_active: a.is_active !== false };
+    a.history = [...(Array.isArray(a.history) ? a.history : []), item].slice(-20);
+  }
+
   updateAlert(id, patch) {
     const a = this.getAlert(id);
     if (!a) return null;
     Object.assign(a, patch);
+    if (['title', 'title_en', 'description', 'description_en', 'location', 'extra', 'expires_at', 'is_active'].some((k) => k in patch)) this._history(a, 'updated');
     if ('channel_message_id' in patch) this._logPatch(id, { m: patch.channel_message_id || undefined });
     this.persist();
     this.emit('update', publicAlert(a));
@@ -232,6 +253,7 @@ class Store extends EventEmitter {
     if (!a || !a.is_active) return a;
     a.is_active = false;
     a.ended_at = new Date().toISOString();
+    this._history(a, 'ended');
     this.persist();
     this.emit('update', publicAlert(a));
     return a;
@@ -425,6 +447,7 @@ class Store extends EventEmitter {
       if (!a.is_active) continue;
       a.is_active = false;
       a.ended_at = new Date().toISOString();
+      this._history(a, 'ended');
       ended.push(a);
       this.emit('update', publicAlert(a));
     }
@@ -654,7 +677,7 @@ export function publicAlert(a) {
     place: {
       name_ar: p.name_ar, name_en: p.name_en,
       district_ar: p.district_ar, district_en: p.district_en,
-      governorate_ar: p.governorate_ar, governorate_en: p.governorate_en,
+      governorate_ar: p.governorate_ar, governorate_en: p.governorate_en, governorate: p.governorate,
     },
     areas: a.areas,
     scope: a.scope,
@@ -663,6 +686,7 @@ export function publicAlert(a) {
     more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
     source_info: publicSourceInfo(a, sources),
+    updates: Array.isArray(a.history) ? a.history.slice(-20).map((h) => ({ at: h.at, kind: h.kind, title: h.title, description: h.description, is_active: h.is_active })) : undefined,
     expires_at: a.expires_at,
     ended_at: a.ended_at,
     is_active: a.is_active,
