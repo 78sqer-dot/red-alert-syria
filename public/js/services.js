@@ -27,7 +27,7 @@ const S = {
     dataErr: 'تعذّر تحميل البيانات، جرّب بعد شوي.', directions: 'الاتجاهات', call: 'اتصال', hours: 'الدوام',
     osmNote: 'البيانات من OpenStreetMap وقد لا تكون كاملة أو محدّثة. تأكد بالاتصال قبل ما تروح.',
     svcLayers: 'الخدمات على الخريطة', modes: { pharmacy: 'الصيدليات', health: 'المشافي والمراكز الصحية', fuel: 'الكازيات', bakery: 'الأفران', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', weather: 'الطقس' },
-    backNews: 'رجوع للأخبار', zoomHint: (n) => `قرّب الخريطة لتشوف ${n}`, h24: 'مفتوحة 24 ساعة', showOnMap: 'اعرض على الخريطة', modeHint: 'طبقة الأخبار مخفية مؤقتاً أثناء عرض الخدمات', pwLvl: { cut: 'تقنين أشد / انقطاع', ok: 'تحسّن', mid: 'تحديث', none: 'لا يوجد تحديث' }, pwNat: 'تحديث عام لكل سوريا', mapPower: 'اعرض حالة الكهرباء على الخريطة',
+    backNews: 'رجوع للأخبار', zoomHint: (n) => `قرّب الخريطة لتشوف ${n}`, h24: 'مفتوحة 24 ساعة', showOnMap: 'اعرض على الخريطة', modeHint: 'الخريطة تعرض طبقة الخدمات بدل الأخبار مؤقتاً', pwLvl: { cut: 'تقنين أشد / انقطاع', ok: 'تحسّن', mid: 'تحديث', none: 'لا يوجد تحديث' }, pwNat: 'تحديث عام لكل سوريا', mapPower: 'اعرض حالة الكهرباء على الخريطة',
     away: (d) => `يبعد ${d}`, km: 'كم', m: 'م',
     locTitle: 'تحديد موقعك', locWhy: 'منستخدم موقعك بس على جهازك لنوريك وين إنت على الخريطة، وكم تبعد عنك التنبيهات والخدمات. ما منرسله ولا منخزّنه عندنا.',
     locGo: 'حدّد موقعي', locCancel: 'مو هلق', locWait: 'عم نحدّد موقعك…',
@@ -58,7 +58,7 @@ const S = {
     dataErr: 'Could not load the data, try again shortly.', directions: 'Directions', call: 'Call', hours: 'Hours',
     osmNote: 'Data from OpenStreetMap; it may be incomplete or outdated. Call before you go.',
     svcLayers: 'Services on the map', modes: { pharmacy: 'Pharmacies', health: 'Hospitals & clinics', fuel: 'Fuel stations', bakery: 'Bakeries', power: 'Electricity', roads: 'Roads', borders: 'Border crossings', weather: 'Weather' },
-    backNews: 'Back to the news', zoomHint: (n) => `Zoom in to see ${n.toLowerCase()}`, h24: 'Open 24 hours', showOnMap: 'Show on the map', modeHint: 'The news layer is temporarily hidden while services are displayed', pwLvl: { cut: 'More rationing / outage', ok: 'Improving', mid: 'Update', none: 'No update' }, pwNat: 'Nation-wide update', mapPower: 'Show electricity on the map',
+    backNews: 'Back to the news', zoomHint: (n) => `Zoom in to see ${n.toLowerCase()}`, h24: 'Open 24 hours', showOnMap: 'Show on the map', modeHint: 'The map is showing services instead of news for now', pwLvl: { cut: 'More rationing / outage', ok: 'Improving', mid: 'Update', none: 'No update' }, pwNat: 'Nation-wide update', mapPower: 'Show electricity on the map',
     away: (d) => `${d} away`, km: 'km', m: 'm',
     locTitle: 'Your location', locWhy: 'Your location is used only on your device to show where you are and how far alerts and services are. It is never sent to us or stored.',
     locGo: 'Find me', locCancel: 'Not now', locWait: 'Finding your location…',
@@ -119,15 +119,17 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   }
   // weather: fetched only when the weather mode / tab is used, kept 10 min on the device (server caches 30 min)
   function loadWx(force) {
-    if (st.wx && !force && Date.now() - st.wxAt < 10 * 60_000) return Promise.resolve(st.wx);
+    const cacheTtl = st.wxErr ? 2 * 60_000 : 10 * 60_000;
+    if (st.wx && !force && Date.now() - st.wxAt < cacheTtl) return Promise.resolve(st.wx);
     if (!st.wxLoading) {
       st.wxLoading = fetch('/api/weather').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((j) => {
         if (!j.ok || !Array.isArray(j.points)) throw new Error('bad');
         for (const p of j.points) if (p.main && GOV_C[p.gov]) { p.lat = GOV_C[p.gov][0]; p.lon = GOV_C[p.gov][1]; }
-        st.wx = j; st.wxAt = Date.now(); st.wxErr = false; paintWx();
+        st.wx = j; st.wxAt = Date.now(); st.wxErr = j.forecastsAvailable === false; paintWx();
         if (isOpen() && st.tab === 'weather') render();
+        if (st.wxErr && j.points.length === 0) throw new Error('weather forecast unavailable');
         return j;
-      }).catch((e) => { st.wxErr = true; if (isOpen() && st.tab === 'weather') render(); throw e; }).finally(() => { st.wxLoading = null; });
+      }).catch((e) => { st.wxErr = true; st.wxAt = Date.now(); if (isOpen() && st.tab === 'weather') render(); throw e; }).finally(() => { st.wxLoading = null; });
     }
     return st.wxLoading;
   }

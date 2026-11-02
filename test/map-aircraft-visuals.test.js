@@ -27,12 +27,17 @@ test('drone is hidden with impact circles alone at country zoom and orbits at de
   assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });
 
-test('helicopter uses a 24px airframe in its existing 25px orbit container', () => {
+test('helicopter starts at 18px, scales with zoom and follows its alert perimeter', () => {
   assert.match(css, /\.mk-helicopter \.mk-s\s*\{\s*transform:\s*none;\s*\}/);
-  assert.match(css, /\.heli-craft\s*\{[^}]*width:\s*25px;[^}]*height:\s*25px;/);
-  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*fill:\s*#6b7280;/);
+  assert.match(css, /\.heli-craft\s*\{[^}]*scale\(var\(--heli-scale, 1\)\)[^}]*transition: transform \.18s ease-out/);
+  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*18px;[^}]*height:\s*18px;[^}]*fill:\s*#6b7280;/);
+  assert.match(mapJs, /const helicopterScale = Math\.max\(1, Math\.min\(1\.34, 1 \+ \(z - 9\) \* 0\.08\)\)/);
+  assert.match(mapJs, /svgTag\(t\.glyph,\s*18,\s*`fill=/);
+  assert.match(css, /\.heli-orbit\s*\{[^}]*animation:\s*heliOrbit 12s linear infinite/);
+  assert.match(mapJs, /actual visible perimeter of its alert circle[\s\S]{0,180}setProperty\('--orb', px \+ 'px'\)/);
+  assert.match(mapJs, /el\.insertAdjacentHTML\('afterbegin', '<span class="news-pulse-ring"/);
+  assert.doesNotMatch(css, /\.heli-orbit::(?:before|after)/, 'the helicopter must not gain decorative orbit rings');
   assert.match(targetSvgs, /helicopter_simple:[\s\S]{0,220}heli-main-rotor[\s\S]{0,140}M40 246a10 10 0 0 1 0-20/);
-  assert.match(mapJs, /svgTag\(t\.glyph,\s*24,\s*`fill=/);
 });
 
 test('helicopter uses the simplified silhouette while legacy glyphs remain available', () => {

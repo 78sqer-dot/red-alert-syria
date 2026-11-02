@@ -343,7 +343,7 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .mk-breaking-news .news-pulse-ring { width: 38px; height: 38px; border-color: #ef233c; background: transparent; box-shadow: 0 0 5px rgba(239,35,60,.28); }
 .mk-breaking-news .news-pulse-ring::after { border-color: #ef233c; animation: urgentPulseWave 2s ease-out infinite; }
 .mk-breaking-news .news-marker-core { width: 26px; height: 26px; border-width: 1.7px; }
-.mk-breaking-news .news-marker-svg { width: 18px; height: 18px; filter: none; }
+.mk-breaking-news .news-marker-svg { width: 15px; height: 15px; filter: none; }
 @keyframes urgentPulseWave { 0% { transform: scale(.7); opacity: .72; } 100% { transform: scale(1.5); opacity: 0; } }
 .mk:hover .news-marker-core, .mk.sel .news-marker-core { transform: translate(-50%, -50%) scale(1.12); }
 .mk.inactive .news-pulse-ring { animation: none; opacity: .55; }
@@ -435,8 +435,8 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 /* Helicopters use one recognizable top-down airframe, orbiting the alert area with animated rotors. */
 .mk-helicopter .mk-s { transform: none; }
 .heli-orbit { position: absolute; left: calc(0px - var(--orb, 14px)); top: calc(0px - var(--orb, 14px)); width: calc(var(--orb, 14px) + var(--orb, 14px)); height: calc(var(--orb, 14px) + var(--orb, 14px)); pointer-events: none; animation: heliOrbit 12s linear infinite; }
-.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 25px; height: 25px; transform: translate(-50%, -50%) rotate(90deg); pointer-events: auto; filter: drop-shadow(0 1px 1.5px rgba(15,23,42,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4)); }
-.helicopter-svg { display: block; width: 24px; height: 24px; overflow: visible; fill: #6b7280; }
+.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 21px; height: 21px; transform: translate(-50%, -50%) rotate(90deg) scale(var(--heli-scale, 1)); transform-origin: center; transition: transform .18s ease-out; pointer-events: auto; filter: drop-shadow(0 1px 1.5px rgba(15,23,42,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4)); }
+.helicopter-svg { display: block; width: 18px; height: 18px; overflow: visible; fill: #6b7280; }
 .helicopter-svg .heli-main-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .32s linear infinite; }
 .helicopter-svg .heli-tail-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .22s linear infinite reverse; }
 html.dark .helicopter-svg { fill: #9ca3af; }
@@ -468,9 +468,11 @@ html[dir='rtl'] .maplibregl-popup-close-button { left: 6px; right: auto; }
 .pp-desc { display: block; overflow: visible; overflow-wrap: anywhere; font-size: 12px; line-height: 1.55; color: var(--text-secondary); margin: 3px 0 0; white-space: pre-line; }
 .pp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .pp-group-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
-.pp-group-nav button { display: inline-grid; place-items: center; width: 44px; min-width: 44px; min-height: 40px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); font: 800 21px/1 system-ui, sans-serif; cursor: pointer; touch-action: manipulation; }
-.pp-group-nav button:hover:not(:disabled), .pp-group-nav button:focus-visible { border-color: var(--blue); background: var(--bg-card-hover); }
-.pp-group-nav button:disabled { opacity: .42; cursor: default; }
+.pp-group-nav button { display: inline-grid; place-items: center; width: 44px; min-width: 44px; min-height: 44px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--text-secondary); font: 600 15px/1 system-ui, sans-serif; cursor: pointer; touch-action: manipulation; transition: color .16s ease, background-color .16s ease, transform .16s ease; }
+.pp-group-nav button:hover:not(:disabled), .pp-group-nav button:focus-visible { color: var(--blue); background: var(--bg-subtle); }
+.pp-group-nav button:focus-visible { outline: 2px solid color-mix(in srgb, var(--blue) 55%, transparent); outline-offset: 1px; }
+.pp-group-nav button:active:not(:disabled) { transform: scale(.94); }
+.pp-group-nav button:disabled { opacity: .34; cursor: default; }
 .pp-group-nav-count { color: var(--text-muted); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pp-share { height: 30px; padding: 0 12px; border-radius: 8px; background: #25d366; color: #fff; font-weight: 800; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .pp-more { font-size: 12px; font-weight: 700; color: var(--red); }

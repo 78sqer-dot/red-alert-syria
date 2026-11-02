@@ -29,6 +29,7 @@ const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسا�
 const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const LRM = '\u200E';
 const TTL = 30 * 60_000;
+const RETRY_MS = 2 * 60_000;
 const R = { data: null, at: 0, busy: null, err: '', retryAt: 0 };
 const WX_CACHE_KEY = 'wxDailyCache';
 
@@ -73,10 +74,9 @@ async function fetchAll() {
   const P = pointsList();
   const lat = P.map((p) => p.lat).join(','); const lon = P.map((p) => p.lon).join(',');
   const tz = encodeURIComponent(config.timezone || 'Asia/Damascus');
-  const [fc, aq] = await Promise.all([
-    getJson(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m,is_day,relative_humidity_2m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,snowfall_sum,wind_gusts_10m_max&timezone=${tz}&forecast_days=2`),
-    getJson(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=dust&hourly=dust&timezone=${tz}&forecast_days=2`).catch(() => null),
-  ]);
+  // Open-Meteo's free API allows one concurrent request per IP; serialize forecast and air-quality calls.
+  const fc = await getJson(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m,is_day,relative_humidity_2m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,snowfall_sum,wind_gusts_10m_max&timezone=${tz}&forecast_days=2`);
+  const aq = await getJson(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=dust&hourly=dust&timezone=${tz}&forecast_days=2`).catch(() => null);
   const fcs = Array.isArray(fc) ? fc : [fc];
   const aqs = aq ? (Array.isArray(aq) ? aq : [aq]) : [];
   const out = [];
@@ -114,7 +114,7 @@ export async function getWeather({ maxAge = TTL } = {}) {
   }
   if (!R.busy) {
     R.busy = fetchAll().then((d) => { R.data = d; R.at = Date.now(); R.err = ''; R.retryAt = 0; persistWeatherCache(); return d; })
-      .catch((e) => { R.err = e.message; R.retryAt = Date.now() + (e.message.includes('429') ? 15 * 60_000 : 2 * 60_000); if (R.data && Date.now() - R.at < 12 * 3600_000) return R.data; throw e; })
+      .catch((e) => { R.err = e.message; R.retryAt = Date.now() + RETRY_MS; if (R.data && Date.now() - R.at < 12 * 3600_000) return R.data; throw e; })
       .finally(() => { R.busy = null; });
   }
   return R.busy;

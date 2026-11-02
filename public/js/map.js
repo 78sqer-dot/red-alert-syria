@@ -204,6 +204,7 @@ export class AlertMap {
       if (this.map) this.map.setStyle(style, { diff: false });
     }).catch((e) => console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e));
     let lastOrbitUpdate = 0;
+    let lastHelicopterScale = '';
     const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
@@ -222,6 +223,9 @@ export class AlertMap {
       // small icons at every zoom, getting a little smaller as you zoom in (like the original)
       const mks = Math.max(0.42, Math.min(0.56, 0.56 - (z - 6) * 0.025)).toFixed(2);
       if (mks !== this._mks) { this._mks = mks; c.style.setProperty('--mks', mks); } // restyle markers only when the size step changes
+      // Helicopter airframe starts at 18px and grows to 24px at close zoom; its orbit radius remains tied to the alert circle.
+      const helicopterScale = Math.max(1, Math.min(1.34, 1 + (z - 9) * 0.08)).toFixed(2);
+      if (helicopterScale !== lastHelicopterScale) { lastHelicopterScale = helicopterScale; c.style.setProperty('--heli-scale', helicopterScale); }
     };
     this.map.on('zoom', () => zoomTier());
     this.map.on('zoomend', () => {
@@ -823,7 +827,7 @@ export class AlertMap {
     if (t.marker === 'orbit') {
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 24, 'class="uav-svg"')}</div></div>`;
     } else if (t.marker === 'helicopter') {
-      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 24, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
+      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 18, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (t.marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${t.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(18, -12, 1)}${pl(2, 8, 0.85)}${pl(34, 8, 0.85)}</div>`;

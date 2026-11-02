@@ -44,7 +44,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=56'/);
+  assert.match(app, /from '\.\/map\.js\?v=57'/);
 });
 
 test('tapping an individual map symbol zooms to its alert and opens details on phones', () => {
@@ -65,7 +65,9 @@ test('group alert popup has accessible previous and next buttons and opens on th
   assert.match(map, /groupPopupNavigationNode\(nav\)[\s\S]{0,1200}aria-live', 'polite'[\s\S]{0,700}pp-group-next/);
   assert.match(map, /root\?\.querySelector\('\.pp-title'\)[\s\S]{0,100}title\.before\(navNode\)/);
   assert.match(map, /this\.onSelect\(id, \{ fromMap: true, fly: false \}\)/);
-  assert.match(css, /\.pp-group-nav button \{[^}]*min-width: 44px; min-height: 40px/);
+  assert.match(css, /\.pp-group-nav button \{[^}]*min-width: 44px; min-height: 44px;[^}]*font: 600 15px\/1/);
+  assert.match(css, /transition: color \.16s ease, background-color \.16s ease, transform \.16s ease/);
+  assert.match(css, /\.pp-group-nav button:active:not\(:disabled\) \{ transform: scale\(\.94\); \}/);
 });
 
 test('general alert pulses are gentler while the legacy blue aircraft pulse remains specialized', () => {

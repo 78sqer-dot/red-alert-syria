@@ -28,10 +28,21 @@ test('weather map loads modeled data only when selected and keeps official warni
   assert.match(bulletinData, /return \{ ok: true, pts: \[\] \}/);
   assert.doesNotMatch(bulletinData, /getWeather\(\)/, 'modeled weather is not included in channel bulletins');
   assert.match(services, /if \(j\.forecastsAvailable === false\) h \+= `\<p class="svc-note"\>/);
-  assert.match(services, /modeHint: 'طبقة الأخبار مخفية مؤقتاً أثناء عرض الخدمات'/);
+  assert.match(services, /modeHint: 'الخريطة تعرض طبقة الخدمات بدل الأخبار مؤقتاً'/);
   assert.match(services, /wxForecastUnavailable: 'تعذّر جلب بيانات الطقس النموذجية حالياً/);
   assert.match(services, /wxForecastUnavailable: 'Modeled weather data are temporarily unavailable/);
-  assert.match(services, /modeHint: 'The news layer is temporarily hidden while services are displayed'/);
+  assert.match(services, /modeHint: 'The map is showing services instead of news for now'/);
+  const fetchStart = weatherServer.indexOf('async function fetchAll()');
+  const fetchEnd = weatherServer.indexOf('/** cached current + 2-day forecast', fetchStart);
+  const fetchBlock = weatherServer.slice(fetchStart, fetchEnd);
+  const forecastRequest = fetchBlock.indexOf('const fc = await getJson');
+  const airQualityRequest = fetchBlock.indexOf('const aq = await getJson');
+  assert.ok(forecastRequest >= 0 && airQualityRequest > forecastRequest, 'forecast and air-quality requests must be sequential');
+  assert.doesNotMatch(fetchBlock, /Promise\.all/, 'free Open-Meteo calls must not overlap');
+  assert.match(weatherServer, /const RETRY_MS = 2 \* 60_000/);
+  assert.match(weatherServer, /R\.retryAt = Date\.now\(\) \+ RETRY_MS/);
+  assert.match(services, /const cacheTtl = st\.wxErr \? 2 \* 60_000 : 10 \* 60_000/);
+  assert.match(services, /if \(st\.wxErr && j\.points\.length === 0\) throw/);
 });
 
 test('services toolbar and place icons exist and are registered for map display', () => {

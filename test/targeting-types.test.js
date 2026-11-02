@@ -62,6 +62,16 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.ok(NEWS_TYPES.includes('helicopter'));
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
   assert.equal(helicopter.glyph, 'helicopter_simple');
+  assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
+  assert.match(mapSource, /t\.marker === 'helicopter'[\s\S]{0,180}svgTag\(t\.glyph, 18,/);
+  assert.match(mapSource, /const helicopterScale = Math\.max\(1, Math\.min\(1\.34, 1 \+ \(z - 9\) \* 0\.08\)\)/);
+  assert.match(mapSource, /c\.style\.setProperty\('--heli-scale', helicopterScale\)/);
+  assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 18px; height: 18px/);
+  assert.match(mapCss, /\.heli-craft \{[^}]*scale\(var\(--heli-scale, 1\)\)/);
+  assert.match(mapCss, /\.heli-orbit \{[^}]*animation: heliOrbit 12s linear infinite/);
+  assert.match(mapCss, /\.helicopter-svg \.heli-main-rotor[^\n]*animation: heliRotor/);
+  assert.match(mapCss, /\.helicopter-svg \.heli-tail-rotor[^\n]*animation: heliRotor/);
+  assert.doesNotMatch(mapCss, /\.heli-orbit::(?:before|after)/, 'do not add decorative orbit rings');
   assert.match(EXTRA_SVG.helicopter_simple, /class="heli-main-rotor"/);
   assert.match(EXTRA_SVG.helicopter_simple, /class="heli-tail-rotor"/);
   assert.match(EXTRA_SVG.helicopter_topdown, /class="heli-main-rotor"/);

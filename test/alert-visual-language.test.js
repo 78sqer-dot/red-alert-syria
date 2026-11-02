@@ -83,7 +83,7 @@ test('map event glyphs are 24px and urgent news uses a small red triangle, black
   assert.match(css, /\.news-marker-core::after\s*\{[^}]*background:\s*#ef233c/);
   assert.match(css, /\.news-marker-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
   assert.match(css, /\.mk-breaking-news \.news-marker-core\s*\{\s*width: 26px; height: 26px; border-width: 1\.7px;/);
-  assert.match(css, /\.mk-breaking-news \.news-marker-svg\s*\{\s*width: 18px; height: 18px/);
+  assert.match(css, /\.mk-breaking-news \.news-marker-svg\s*\{\s*width: 15px; height: 15px/);
   assert.match(css, /\.mk-breaking-news \.news-pulse-ring\s*\{ width: 38px; height: 38px; border-color: #ef233c/);
   assert.match(css, /@keyframes urgentPulseWave/);
   assert.match(css, /\.ic-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
