@@ -1075,7 +1075,9 @@ export function registerNewsTools(bot, h) {
       try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
       return toast(ctx, t(ctx, '⚠️ تعذّر النشر — اضغط «نشر» مرة ثانية.', '⚠️ Publishing failed — tap Publish again.'), true);
     }
-    d.status = 'published'; d.alertId = alert?.id; d.by = ctx.from.id; n.stats.published++;
+    d.status = 'published'; d.alertId = alert?.id; d.by = ctx.from.id;
+    d.approvedBy = { id: ctx.from.id, name: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' '), username: ctx.from.username || null };
+    d.approvedAt = new Date().toISOString(); n.stats.published++;
     save();
     await closeCards(d, cur(ctx));
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
@@ -1236,6 +1238,17 @@ export function registerNewsTools(bot, h) {
 
   bot.on('callback_query:data', async (ctx, next) => { if (ctx.callbackQuery.data !== 'nws:sa') pend.delete(ctx.from.id); return next(); });
   bot.command('news', (ctx) => (h.owner(ctx) ? showMain(ctx) : ctx.reply(h.L(ctx).onlyOwner)));
+  bot.command('approvals', async (ctx) => {
+    if (!staff(ctx) || ctx.chat?.type !== 'private') return;
+    const rows = Object.values(newsState().drafts).filter((d) => d.status === 'published' && d.approvedAt)
+      .sort((a, b) => Date.parse(b.approvedAt) - Date.parse(a.approvedAt)).slice(0, 20);
+    const text = rows.length ? rows.map((d) => {
+      const who = d.approvedBy?.username ? `@${d.approvedBy.username}` : (d.approvedBy?.name || `ID ${d.by || d.approvedBy?.id || '?'}`);
+      const when = new Date(d.approvedAt).toLocaleString('ar-SY', { timeZone: 'Asia/Damascus' });
+      return `• ${esc(d.headline || d.title || d.id)}\n  اعتمده: ${esc(who)} — ${esc(when)}`;
+    }).join('\n\n') : 'لا توجد موافقات مسجلة بعد. سيبدأ السجل من الآن.';
+    await ctx.reply(`<b>سجل اعتماد المنشورات — للمشرفين فقط</b>\n\n${text}`, { parse_mode: 'HTML' });
+  });
   bot.callbackQuery('nws', (ctx) => onlyOwner(ctx, async () => { await toast(ctx, ''); await showMain(ctx); }));
   bot.callbackQuery(/^nws:(on|off)$/, (ctx) => onlyOwner(ctx, async () => {
     const n = newsState(); n.on = ctx.match[1] === 'on';
