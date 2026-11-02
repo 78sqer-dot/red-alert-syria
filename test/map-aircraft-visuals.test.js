@@ -24,10 +24,11 @@ test('drone marker resumes its circular flight at detailed zoom', () => {
   assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });
 
-test('helicopter airframe is 25px while its orbit stays unscaled', () => {
+test('helicopter uses a slim 22px airframe in a 25px orbit container', () => {
   assert.match(css, /\.mk-helicopter \.mk-s\s*\{\s*transform:\s*none;\s*\}/);
   assert.match(css, /\.heli-craft\s*\{[^}]*width:\s*25px;[^}]*height:\s*25px;/);
-  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*25px;[^}]*height:\s*25px;/);
+  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*22px;[^}]*height:\s*22px;[^}]*fill:\s*#6b7280;/);
+  assert.match(targetSvgs, /helicopter_simple:[\s\S]{0,220}heli-main-rotor[\s\S]{0,140}M40 246a10 10 0 0 1 0-20/);
   assert.match(mapJs, /svgTag\(t\.glyph,\s*25,\s*`fill=/);
 });
 
@@ -35,7 +36,6 @@ test('helicopter uses the simplified silhouette while legacy glyphs remain avail
   assert.match(types, /helicopter:\s*\{[\s\S]*?glyph: 'helicopter_simple'/);
   assert.match(targetSvgs, /helicopter_simple:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter_topdown:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
-  assert.match(targetSvgs, /helicopter_sleek:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter_sleek:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(mapJs, /setRotation\(aircraftRotation\(aircraft, pos\.bearing\)\)/);

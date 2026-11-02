@@ -28,6 +28,14 @@ test('warplane keeps the three-aircraft formation while the drone keeps its curr
 
 test('live alert circles use compositor-safe pulse layers and remain clickable through zone hit testing', () => {
   assert.match(map, /this\._syncPulses\(pulses\)/);
-  assert.match(map, /const hit = this\.zoneAt\(e\.lngLat\)/);
+  assert.match(map, /const hit = this\.zoneAt\(e\.lngLat, e\.point\)/);
   assert.match(css, /\.zp-fill[\s\S]*animation: zfillPulse/);
+});
+
+test('map alert icons use a clean white circular backing inside their event-colored pulse', () => {
+  assert.match(map, /glyphDisc\(a\.type, 34, 18, 'sai map-event-disc'/);
+  assert.match(css, /\.sai\.map-event-disc\s*\{[^}]*background:\s*#fff !important/);
+  assert.match(css, /\.ic\s*\{[^}]*border-radius:\s*50%;[^}]*background:\s*#fff/);
+  assert.match(css, /\.news-marker-core\s*\{[^}]*background:\s*#fff/);
+  assert.match(css, /\.mk-event-emoji\s*\{[^}]*background:\s*#fff/);
 });

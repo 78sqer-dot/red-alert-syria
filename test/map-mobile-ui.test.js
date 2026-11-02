@@ -20,12 +20,17 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
   assert.match(app, /e\.key !== 'Escape'[^\n]*[\s\S]{0,100}setMapControlsOpen\(false\)/);
 });
 
-test('phone alert details use a safe-area-aware bottom sheet with usable actions', () => {
-  assert.match(map, /if \(this\.dockMode\(\)\)\s*\{\s*this\.popup = this\.openDockHtml\(this\.popupHtml\(alert\)[\s\S]{0,130}cls: 'alert-dock'/);
+test('alert details stay centered on the map and their popup tip points to the event on every screen', () => {
+  assert.doesNotMatch(map, /cls: 'alert-dock'/);
+  assert.match(map, /new M\.Popup\(\{ className: 'pp-alert-popup', anchor: 'bottom'/);
+  assert.match(map, /if \(p\._alertId\)\s*\{[\s\S]{0,250}r\.left \+ r\.width \/ 2 - \(vis\.l \+ vis\.r\) \/ 2[\s\S]{0,180}r\.top \+ r\.height \/ 2 - \(top \+ bottom\) \/ 2/);
   assert.match(map, /openPopup\(alert\)\s*\{\s*const controlPanel = document\.querySelector\('#mapCtrlPanel'\);[\s\S]{0,180}controlPanel\.hidden = true/);
-  assert.match(map, /env\(safe-area-inset-bottom, 0px\)/);
-  assert.match(css, /\.pp-dock\.alert-dock[\s\S]{0,260}max-height: min\(58dvh, 520px\)/);
-  assert.match(css, /\.pp-dock\.alert-dock \.pp-more, \.pp-dock\.alert-dock \.pp-share \{ min-height: 44px/);
+  assert.match(css, /\.maplibregl-popup\.pp-alert-popup \{ z-index: 60; \}/);
+  assert.match(css, /\.pp-alert-popup \.maplibregl-popup-content \{ max-height: min\(62dvh, 600px\); \}/);
+  assert.match(css, /\.maplibregl-popup-anchor-bottom \.maplibregl-popup-tip \{ border-top-color: var\(--bg-elevated\); \}/);
+  assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip \{ opacity: 1/);
+  assert.match(css, /\.maplibregl-popup\.pp-alert-popup \{ max-width: calc\(100vw - 20px\) !important; \}/);
+  assert.match(css, /\.pp-alert-popup \.pp-more, \.pp-alert-popup \.pp-share \{ min-height: 44px/);
   assert.match(css, /\.brand img \{ height: 28px; width: auto; \}/);
 });
 

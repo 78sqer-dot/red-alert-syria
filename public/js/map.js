@@ -1,7 +1,7 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
 import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=30';
 import { SVG } from './marker-svgs.js?v=18';
-import { EXTRA_SVG } from './target-svgs.js?v=12';
+import { EXTRA_SVG } from './target-svgs.js?v=13';
 import { icon } from './icons.js?v=4';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=3';
@@ -9,6 +9,7 @@ import { groupAlerts, nextAlertId } from './marker-layout.js';
 import { aircraftRotation, flightPath, flightPosition } from '/shared/flight-path.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=1';
+import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
@@ -248,7 +249,7 @@ export class AlertMap {
       if (window.__svcHit && window.__svcHit(e)) return; // a road / service icon (public/js/services.js)
       if (this.newsHidden) return; // services map mode: the news is hidden
       // a tap inside any circle of an alert (main or extra affected area) opens that same alert
-      const hit = this.zoneAt(e.lngLat);
+      const hit = this.zoneAt(e.lngLat, e.point);
       if (hit) { this._popupAt = { id: hit.id, ll: [hit.lon, hit.lat] }; return this.onSelect(hit.id, { fromMap: true, fly: true }); }
       this.onSelect(null, { fromMap: true });
     });
@@ -256,7 +257,7 @@ export class AlertMap {
     if (!window.matchMedia?.('(pointer: coarse)').matches) {
       this.map.on('mousemove', (e) => {
         const c = this.map.getCanvas();
-        const want = this.zoneAt(e.lngLat) ? 'pointer' : '';
+        const want = this.zoneAt(e.lngLat, e.point) ? 'pointer' : '';
         if (c.style.cursor !== want) c.style.cursor = want;
       });
     }
@@ -707,7 +708,7 @@ export class AlertMap {
         ? `<div class="mk-event-emoji" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px" aria-hidden="true">${t.emoji}</div>`
         : `<div class="ic ic-${glyph}" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg"')}</div>`;
     } else {
-      el.innerHTML = glyphDisc(a.type, 34, 18, 'sai', a.marker_glyph);
+      el.innerHTML = glyphDisc(a.type, 34, 18, 'sai map-event-disc', a.marker_glyph);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
     // civil family: pinned to its exact place; a small tidy dot at country view, the icon from zoom 7.5 up
@@ -767,7 +768,9 @@ export class AlertMap {
       }
       zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);
-        hits.push({ id: a.id, lon: z.lon, lat: z.lat, km, ts: Date.parse(a.timestamp) || 0, live: !!a.is_active });
+        const mpp = (40075016.686 * Math.cos((z.lat * Math.PI) / 180)) / (512 * Math.pow(2, this.map.getZoom()));
+        const radiusPx = Math.max(5, (km * 1000) / mpp);
+        hits.push({ id: a.id, lon: z.lon, lat: z.lat, km, radiusPx, ts: Date.parse(a.timestamp) || 0, live: !!a.is_active });
         const visualZone = { lon: z.lon, lat: z.lat, km };
         const featureKey = zoneVisualKey(visualZone, props);
         if (!featureKeys.has(featureKey)) {
@@ -902,19 +905,12 @@ export class AlertMap {
   }
 
   // the alert circle under a map point: smallest circle first (the most precise area), then live, then newest
-  zoneAt(ll) {
+  zoneAt(ll, point = null) {
     if (!ll || !this._hits || !this._hits.length) return null;
-    let best = null;
-    const cos = Math.cos((ll.lat * Math.PI) / 180);
-    for (const h of this._hits) {
-      const dy = (ll.lat - h.lat) * 111.32, dx = (ll.lng - h.lon) * 111.32 * cos;
-      // Taps on a thin animated ring can land a few pixels outside the ideal
-      // geometric edge due to device-pixel rounding; keep the hit area forgiving.
-      const hitKm = Math.max(h.km + 0.25, h.km * 1.12);
-      if (dx * dx + dy * dy > hitKm * hitKm) continue;
-      if (!best || h.km < best.km - 0.01 || (Math.abs(h.km - best.km) <= 0.01 && (h.live > best.live || (h.live === best.live && h.ts > best.ts)))) best = h;
-    }
-    return best;
+    const tap = point && Number.isFinite(point.x) && Number.isFinite(point.y)
+      ? point
+      : this.map?.project([ll.lng, ll.lat]);
+    return zoneHitAt(this._hits, tap, (coords) => this.map.project(coords));
   }
   // Phone detection for mobile map rendering/3D performance; alert details use a compact bottom sheet on phones.
   dockMode() {
@@ -994,14 +990,10 @@ export class AlertMap {
     this.closePopup();
     const at = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
     this._popupAt = null;
-    if (this.dockMode()) {
-      this.popup = this.openDockHtml(this.popupHtml(alert), at || [alert.location.longitude, alert.location.latitude], { id: alert.id, cls: 'alert-dock' });
-      return this.popup;
-    }
     const M = ml();
     const m = at ? null : this.markers.get(alert.id);
     const off = m ? m.getOffset() : { x: 0, y: 0 };
-    this.popup = new M.Popup({ className: 'pp-alert-popup', closeButton: true, closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 24px))', offset: { bottom: [off.x, off.y - 26], top: [off.x, off.y + 26], left: [off.x + 26, off.y], right: [off.x - 26, off.y] }, focusAfterOpen: false })
+    this.popup = new M.Popup({ className: 'pp-alert-popup', anchor: 'bottom', closeButton: true, closeOnClick: false, maxWidth: 'min(420px, calc(100vw - 28px))', offset: { bottom: [off.x, off.y - 26], top: [off.x, off.y + 26], left: [off.x + 26, off.y], right: [off.x - 26, off.y] }, focusAfterOpen: false })
       .setLngLat(at || [alert.location.longitude, alert.location.latitude])
       .setDOMContent(htmlToNode(this.popupHtml(alert)))
       .addTo(this.map);
@@ -1070,11 +1062,17 @@ export class AlertMap {
     const m = 10 * scale;
     const r = el.getBoundingClientRect();
     let dx = 0; let dy = 0;
-    if (r.width > vis.r - vis.l - 2 * m) dx = r.left + r.width / 2 - (vis.l + vis.r) / 2;
-    else if (r.right > vis.r - m) dx = r.right - (vis.r - m);
-    else if (r.left < vis.l + m) dx = r.left - (vis.l + m);
-    if (r.top < top + m) dy = r.top - (top + m);
-    else if (r.bottom > bottom - m) dy = Math.min(r.bottom - (bottom - m), r.top - (top + m));
+    if (p._alertId) {
+      // Center the alert card in the usable map viewport; its MapLibre tip stays attached to the event coordinate.
+      dx = r.left + r.width / 2 - (vis.l + vis.r) / 2;
+      dy = r.top + r.height / 2 - (top + bottom) / 2;
+    } else {
+      if (r.width > vis.r - vis.l - 2 * m) dx = r.left + r.width / 2 - (vis.l + vis.r) / 2;
+      else if (r.right > vis.r - m) dx = r.right - (vis.r - m);
+      else if (r.left < vis.l + m) dx = r.left - (vis.l + m);
+      if (r.top < top + m) dy = r.top - (top + m);
+      else if (r.bottom > bottom - m) dy = Math.min(r.bottom - (bottom - m), r.top - (top + m));
+    }
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) { this._fitPanning = true; this._fitLeft = 0; this.map.panBy([dx / scale, dy / scale], { duration: 350 }); }
   }
 

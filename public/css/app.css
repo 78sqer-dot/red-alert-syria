@@ -333,8 +333,8 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .mk::before { content: ''; position: absolute; left: 0; top: 0; width: 56px; height: 56px; transform: translate(-50%, -50%); border-radius: 50%; background: transparent; pointer-events: auto; }
 .news-pulse-ring { position: absolute; left: 0; top: 0; width: 25px; height: 25px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.4px solid #e11d2e; border-radius: 50%; background: rgba(225,29,46,.045); box-shadow: 0 0 2px rgba(225,29,46,.2), inset 0 0 2px rgba(225,29,46,.1); animation: newsPulseGlow 2.5s ease-in-out infinite; pointer-events: none; }
 .news-pulse-ring::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(225,29,46,.3); border-radius: inherit; animation: newsPulseWave 2.5s ease-out infinite; }
-.news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 14px; height: 14px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.4px solid #fff; border-radius: 50%; background: #d7192d; box-shadow: 0 0 0 1px rgba(225,29,46,.2), 0 1px 2px rgba(0,0,0,.36); }
-.news-marker-svg { display: block; width: 9px; height: 9px; color: #fff; stroke: #fff; fill: none; }
+.news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 19px; height: 19px; box-sizing: border-box; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px rgba(225,29,46,.72), 0 2px 5px rgba(0,0,0,.3); }
+.news-marker-svg { display: block; width: 12px; height: 12px; color: #c81e2f; stroke: #c81e2f; fill: none; }
 .mk:hover .news-marker-core, .mk.sel .news-marker-core { transform: translate(-50%, -50%) scale(1.12); }
 .mk.inactive .news-pulse-ring { animation: none; opacity: .55; }
 .is-moving .news-pulse-ring, .is-zooming .news-pulse-ring { animation-play-state: paused; }
@@ -345,6 +345,9 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .mk-orbit .mk-s { transform: none; }
 /* static disc — identical to the original .static-alert-icon */
 .sai { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; border-radius: 50%; border: 3px solid; display: flex; align-items: center; justify-content: center; transition: transform .18s ease; }
+.sai.map-event-disc { background: #fff !important; color: #111827 !important; border-width: 2px; box-shadow: 0 2px 7px rgba(15,23,42,.28); }
+.sai.map-event-disc svg { fill: #111827 !important; }
+html.dark .sai.map-event-disc { background: #f8fafc !important; }
 .sai svg { display: block; }
 .mk:hover .sai, .mk.sel .sai { transform: translate(-50%, -50%) scale(1.15); }
 .mk.sel .sai { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent); }
@@ -352,8 +355,8 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 @keyframes mapArrivalRipple { 0% { transform: translate(-50%, -50%) scale(.55); opacity: 0; } 18% { opacity: .78; } 100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .mk.focus-arrival::after { animation: none; transform: translate(-50%, -50%) scale(1); opacity: .5; } }
 /* small silhouette icons (artillery tank, missile, ambulance, breaking) — same clean style as the drone/warplanes */
-.ic { position: absolute; left: 0; top: 0; width: 30px; height: 30px; transform: translate(-50%, -50%); transition: transform .15s; }
-.ic-svg { display: block; fill: var(--ic); overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.75)) drop-shadow(0 1px 2px rgba(255,255,255,.6)); }
+.ic { position: absolute; left: 0; top: 0; width: 30px; height: 30px; transform: translate(-50%, -50%); transition: transform .15s; box-sizing: border-box; display: grid; place-items: center; border: 1.5px solid color-mix(in srgb, var(--ic) 65%, #fff); border-radius: 50%; background: #fff; box-shadow: 0 2px 7px rgba(15,23,42,.25); }
+.ic-svg { display: block; width: 74%; height: 74%; fill: var(--ic); overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.75)) drop-shadow(0 1px 2px rgba(255,255,255,.6)); }
 html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
 .ic-pistol, .ic-rifle { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #f8fafc; border: 1px solid #111827; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
 .ic-pistol .ic-svg, .ic-rifle .ic-svg { width: 24px; height: 24px; fill: #111827; filter: none; }
@@ -421,11 +424,13 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 /* Helicopters use one recognizable top-down airframe, orbiting the alert area with animated rotors. */
 .mk-helicopter .mk-s { transform: none; }
 .heli-orbit { position: absolute; left: calc(0px - var(--orb, 14px)); top: calc(0px - var(--orb, 14px)); width: calc(var(--orb, 14px) + var(--orb, 14px)); height: calc(var(--orb, 14px) + var(--orb, 14px)); pointer-events: none; animation: heliOrbit 12s linear infinite; }
-.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 25px; height: 25px; transform: translate(-50%, -50%) rotate(90deg); pointer-events: auto; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)) drop-shadow(0 0 1px rgba(255,255,255,.65)); }
-.helicopter-svg { display: block; width: 25px; height: 25px; overflow: visible; }
+.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 25px; height: 25px; transform: translate(-50%, -50%) rotate(90deg); pointer-events: auto; filter: drop-shadow(0 1px 1.5px rgba(15,23,42,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4)); }
+.helicopter-svg { display: block; width: 22px; height: 22px; overflow: visible; fill: #6b7280; }
 .helicopter-svg .heli-main-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .32s linear infinite; }
 .helicopter-svg .heli-tail-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .22s linear infinite reverse; }
-html.dark .heli-craft { filter: drop-shadow(0 1px 2px rgba(0,0,0,.95)) drop-shadow(0 0 1px rgba(255,255,255,.5)); }
+html.dark .helicopter-svg { fill: #9ca3af; }
+.mk.sel .helicopter-svg { fill: var(--c); }
+html.dark .heli-craft { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.75)) drop-shadow(0 0 1px rgba(255,255,255,.42)); }
 @keyframes heliOrbit { to { transform: rotate(1turn); } }
 @keyframes heliRotor { to { transform: rotate(1turn); } }
 .mk.inactive .heli-orbit, .mk.inactive .helicopter-svg .heli-main-rotor, .mk.inactive .helicopter-svg .heli-tail-rotor { animation: none !important; }
@@ -1148,22 +1153,18 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .zp::before, .zp::after { border-width: 1.25px; background: radial-gradient(circle, transparent 72%, color-mix(in srgb, var(--c, #ef233c) 8%, transparent) 100%); animation-duration: 3.6s; }
 @keyframes zpulse { 0% { transform: scale(1); opacity: .27; } 100% { transform: scale(1.65); opacity: 0; } }
 
-/* Phone alert details use a readable bottom sheet instead of a narrow map-anchored bubble. */
-.pp-dock.alert-dock { z-index: 30; border-radius: 18px; border-color: var(--border-subtle); background: color-mix(in srgb, var(--bg-elevated) 98%, var(--red) 2%); box-shadow: 0 18px 48px rgba(17, 24, 39, .26), 0 4px 14px rgba(17, 24, 39, .14); touch-action: pan-y; }
-.pp-dock.alert-dock .pp-dock-body { border-radius: 18px; padding: 16px 16px 10px; background: transparent; }
-.pp-dock.alert-dock .pp-dock-x { top: 9px; inset-inline-end: 9px; width: 34px; height: 34px; border: 1px solid var(--border-subtle); border-radius: 50%; background: var(--bg-secondary); font-size: 22px; }
-.pp-dock.alert-dock .pp-foot { position: sticky; bottom: -10px; margin-inline: -16px; padding: 10px 16px max(10px, env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--bg-elevated) 96%, transparent); backdrop-filter: blur(12px); }
+/* Alert cards stay near the visual center, while the MapLibre tip remains attached to the exact event point. */
+.maplibregl-popup.pp-alert-popup { z-index: 60; }
+.pp-alert-popup .maplibregl-popup-content { max-height: min(62dvh, 600px); }
+.maplibregl-popup.pp-alert-popup .maplibregl-popup-tip { opacity: 1; filter: drop-shadow(0 2px 2px rgba(17, 24, 39, .12)); }
 @media (max-width: 767px) {
   .brand img { height: 28px; width: auto; }
   .map-ctrls { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); gap: 7px; }
   .map-ctrls > .ctrl-btn { width: 44px; height: 44px; border-radius: 14px; }
   .map-ctrl-panel .ctrl-btn { width: 44px; height: 44px; }
-  .pp-dock.alert-dock { left: 10px; right: 10px; width: auto; max-width: 560px; max-height: min(58dvh, 520px); margin-inline: auto; }
-  .pp-dock.alert-dock .pp-dock-body { padding: 15px 14px 9px; }
-  .pp-dock.alert-dock .pp-title { font-size: 16px; line-height: 1.6; }
-  .pp-dock.alert-dock .pp-desc { font-size: 13px; line-height: 1.75; }
-  .pp-dock.alert-dock .pp-foot { margin-inline: -14px; padding-inline: 14px; }
-  .pp-dock.alert-dock .pp-more, .pp-dock.alert-dock .pp-share { min-height: 44px; }
+  .maplibregl-popup.pp-alert-popup { max-width: calc(100vw - 20px) !important; }
+  .pp-alert-popup .maplibregl-popup-content { width: min(420px, calc(100vw - 20px)); max-height: min(48dvh, 440px); }
+  .pp-alert-popup .pp-more, .pp-alert-popup .pp-share { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .map-ctrl-panel { animation: none; }

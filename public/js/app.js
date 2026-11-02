@@ -7,7 +7,7 @@ import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=4';
 import { settings } from './settings.js?v=7';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=50';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=51';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
