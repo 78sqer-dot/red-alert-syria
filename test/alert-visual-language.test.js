@@ -21,18 +21,27 @@ test('security alert emojis are present and semantically distinct', () => {
 test('warplane keeps the three-aircraft formation and drones retain their orbiting silhouette', () => {
   assert.match(map, /t\.marker === 'orbit'/);
   assert.match(map, /t\.marker === 'squad'/);
-  assert.match(map, /pl\(16, 22, -8, 1\).*pl\(14, 6, 12, 0\.85\).*pl\(14, 38, 12, 0\.85\)/);
+  assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(24, -12, 1\).*pl\(4, 12, 0\.85\).*pl\(44, 12, 0\.85\)/);
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
   assert.match(css, /\.mk-squad \.squad \.sq\s*\{\s*scale: 1; animation: squadFlyZ 7s linear infinite;/);
   assert.match(svgs, /"uav":/);
   assert.match(svgs, /"plane":/);
 });
 
-test('schematic entry uses the same moving blue three-aircraft formation and pulse for planes and UAVs', () => {
+test('schematic movement uses one direction-aware moving three-aircraft group and one pulse halo at 24px', () => {
   assert.match(map, /const color = '#3b82f6';/);
-  assert.match(map, /\[\{ name: 'is-lead', size: 26 \}, \{ name: 'is-left', size: 22 \}, \{ name: 'is-right', size: 22 \}\]/);
-  assert.match(map, /flightPosition\(path, progress\)/);
+  assert.match(map, /\[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]/);
+  assert.match(map, /flightPosition\(path, alert\.flight_direction === 'toward_syria' \? 1 : 0\.5\)/);
+  assert.match(map, /is-\$\{alert\.flight_direction\.replace\(\/_\/g, '-'\)\}/);
+  assert.match(map, /const movementTrackIds = new Set\(this\.movementTrackAlerts\(\)\.map\(\(a\) => a\.id\)\)/);
+  assert.match(map, /movementTrackIds\.has\(a\.id\)/);
+  assert.match(map, /el\.append\(halo, squad\)/);
+  assert.match(css, /\.map-flight-track-marker\.is-toward-syria \.map-flight-track-squad/);
+  assert.match(css, /\.map-flight-track-marker\.is-entering-syria \.map-flight-track-squad/);
+  assert.match(css, /\.map-flight-track-marker\.is-leaving-syria \.map-flight-track-squad/);
+  assert.match(css, /@keyframes flightTrackTravel/);
   assert.match(css, /\.map-flight-track-halo\s*\{[^}]*animation: flightTrackPulse 1\.8s ease-out infinite/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[^\n]*map-flight-track-squad/);
   assert.doesNotMatch(css, /\.map-flight-track-marker\.is-uav\s*\{[^}]*--aircraft-color:\s*#ef4444/);
 });
 
@@ -63,7 +72,7 @@ test('live alert circles use compositor-safe pulse layers and remain clickable t
 });
 
 test('map alert icons use a clean white circular backing inside their event-colored pulse', () => {
-  assert.match(map, /glyphDisc\(a\.type, 34, 18, 'sai map-event-disc'/);
+  assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
   assert.match(css, /\.sai\.map-event-disc\s*\{[^}]*background:\s*#fff !important/);
   assert.match(css, /\.ic\s*\{[^}]*border-radius:\s*50%;[^}]*background:\s*#fff/);
   assert.match(css, /\.news-marker-core\s*\{[^}]*background:\s*#fff/);

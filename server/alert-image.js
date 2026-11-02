@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
-import { ALERT_TYPES, assassinationWeaponGlyph } from '../shared/types.js';
+import { ALERT_TYPES, assassinationWeaponGlyph, shootingWeaponGlyph } from '../shared/types.js';
 import { SVG as BASE_GLYPHS } from '../public/js/marker-svgs.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
 import { zonePoints, alertZones, selectedAlertZones } from './places.js';
@@ -157,7 +157,7 @@ export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = nul
   const t = ALERT_TYPES[type] || ALERT_TYPES.breaking;
   const incursionKind = alert?.meta?.incursionKind || (Number.isInteger(alert?.meta?.vehicleCount) ? 'vehicles' : null);
   const glyphKey = type === 'assassination' ? (assassinationWeaponGlyph(alert) || t.glyph)
-    : type === 'shooting' ? 'pistol'
+    : type === 'shooting' ? (shootingWeaponGlyph(alert) || t.glyph)
       : type === 'military_incursion' ? (incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
         : glyphOverride || t.glyph;
   const g = GLYPHS[glyphKey] || GLYPHS[t.glyph] || GLYPHS.other || '';
@@ -176,7 +176,7 @@ function politicalMarkerSvg(cx, cy) {
     + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#ffffff">${g}</g></svg>`;
 }
 function firearmHeaderSvg(type, alert, cx, cy) {
-  const key = type === 'assassination' ? assassinationWeaponGlyph(alert) || 'pistol' : 'pistol';
+  const key = type === 'assassination' ? assassinationWeaponGlyph(alert) || 'pistol' : shootingWeaponGlyph(alert) || 'pistol';
   const g = GLYPHS[key] || GLYPHS.pistol || '';
   const s = 42;
   return `<circle cx="${cx}" cy="${cy}" r="27" fill="#f8fafc" stroke="#ffffff" stroke-width="3"/>`

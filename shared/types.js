@@ -243,15 +243,24 @@ export function alertButtonLabel(key, lang = 'ar') {
 }
 
 // Use a monochrome firearm silhouette; specialize to a rifle only when the report explicitly says so.
-export function assassinationWeaponGlyph(alert) {
-  if (alert?.type !== 'assassination') return null;
+function describedFirearmGlyph(alert) {
   const text = [alert.title, alert.title_en, alert.description, alert.description_en, alert.details, alert.text]
     .filter(Boolean).join(' ').toLowerCase().normalize('NFKC')
     .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
     .replace(/[إأآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
-  const rifle = /(?:كلاشنكوف|كلاشينكوف|بندقيه|\b(?:assault\s+)?rifles?\b|\bkalashnikov\b|\bak(?:[- ]?(?:47|74|m))?\b)/i.test(text);
+  const rifle = /(?:كلاشنكوف|كلاشينكوف|كلاش|بندقيه|رشاش|\b(?:assault\s+)?rifles?\b|\bkalashnikov\b|\bak(?:[- ]?(?:47|74|m))?\b)/i.test(text);
   const pistol = /(?:مسدس|طبنجه|\bpistols?\b|\bhandguns?\b|\brevolvers?\b)/i.test(text);
   return rifle && !pistol ? 'rifle' : 'pistol';
+}
+
+export function assassinationWeaponGlyph(alert) {
+  return alert?.type === 'assassination' ? describedFirearmGlyph(alert) : null;
+}
+
+// Gunfire is an event label, not a weapon claim: use a pistol by default and
+// show a rifle only when the story explicitly identifies one.
+export function shootingWeaponGlyph(alert) {
+  return alert?.type === 'shooting' ? describedFirearmGlyph(alert) : null;
 }
 
 export function dimColor(hex, alpha = 0.12) {

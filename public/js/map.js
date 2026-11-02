@@ -1,5 +1,5 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=31';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=33';
 import { SVG } from './marker-svgs.js?v=18';
 import { EXTRA_SVG } from './target-svgs.js?v=13';
 import { icon } from './icons.js?v=4';
@@ -27,7 +27,7 @@ const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}
 export { typeIcon };
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
 // White urgent-style disc with a dark professional glyph and a category-coloured edge.
-export function glyphDisc(type, size = 34, iconSize = 18, cls = 'sai', glyphOverride = null) {
+export function glyphDisc(type, size = 34, iconSize = 24, cls = 'sai', glyphOverride = null) {
   const t = typeOf(type);
   const bg = '#f8fafc';
   const fg = '#111827';
@@ -322,7 +322,7 @@ export class AlertMap {
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.58, 0.22), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1.3] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.85, 0.3), 'line-width': 1.8, 'line-dasharray': [3, 4] } });
     add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.62, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.35, 10, 2.1], 'line-dasharray': [2, 2] } });
-    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', layout: { 'symbol-placement': 'line', 'symbol-spacing': 150, 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
+    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', layout: { 'symbol-placement': 'line', 'symbol-spacing': 70, 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
     this._startGlow();
     this.applyToggles();
     this.updateZones();
@@ -424,80 +424,77 @@ export class AlertMap {
     this.movementNotice.title = this.movementNotice.getAttribute('aria-label');
   }
 
-  // Aircraft movement gets a dashed, directional map line and keeps its original aircraft marker.
+  movementTrackAlerts() {
+    if (this.newsHidden) return [];
+    return this.alerts
+      .filter((a) => a.type === 'air_movement' && a.is_active && FLIGHT_DIRECTIONS[a.flight_direction]
+        && (Number.isFinite(a.location?.latitude) === Number.isFinite(a.location?.longitude)))
+      .sort((a, b) => (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0))
+      .slice(0, 3);
+  }
+
+  // Movement is schematic, not live tracking: one three-aircraft group flies along a visible,
+  // direction-aligned screen-space lane while the dashed map line shows the selected route.
   syncMovementTracks() {
     const map = this.map;
     const source = map?.getSource('ras-flight-paths');
     if (!map || !source) return;
     const M = ml();
     if (!this.movementTracks) this.movementTracks = new Map();
-    const active = this.newsHidden ? [] : this.alerts
-      .filter((a) => a.type === 'air_movement' && a.is_active && FLIGHT_DIRECTIONS[a.flight_direction]
-        && (Number.isFinite(a.location?.latitude) === Number.isFinite(a.location?.longitude)))
-      .sort((a, b) => (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0))
-      .slice(0, 3);
+    const active = this.movementTrackAlerts();
     const features = [];
     const keep = new Set();
-    const reducedMotion = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    active.forEach((alert, index) => {
+    active.forEach((alert) => {
       const hasTarget = Number.isFinite(alert.location?.latitude) && Number.isFinite(alert.location?.longitude);
       const path = flightPath(alert.flight_direction, hasTarget ? alert.location : null);
       if (path.length < 2) return;
+      const position = flightPosition(path, alert.flight_direction === 'toward_syria' ? 1 : 0.5);
+      if (!position) return;
       keep.add(alert.id);
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
       // Keep entry visuals consistent for warplanes and UAVs: a blue formation with a pulsing halo.
       const color = '#3b82f6';
       features.push({ type: 'Feature', properties: { id: alert.id, color, arrow: '➤' }, geometry: { type: 'LineString', coordinates: path } });
-      const signature = `${aircraft}|${alert.flight_direction}|${hasTarget ? `${alert.location.longitude},${alert.location.latitude}` : 'general'}`;
+      const lang = this.opts.lang === 'en' ? 'en' : 'ar';
+      const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
+      const routeNote = lang === 'en' ? 'schematic route, not a live track' : 'مسار توضيحي وليس تتبعاً مباشراً';
+      const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
+      const signature = `${lang}|${aircraft}|${alert.flight_direction}|${hasTarget ? `${alert.location.longitude},${alert.location.latitude}` : 'general'}`;
       let track = this.movementTracks.get(alert.id);
       if (track && track.signature !== signature) {
-        cancelAnimationFrame(track.frame);
+        if (track.frame) cancelAnimationFrame(track.frame);
         track.marker.remove();
         this.movementTracks.delete(alert.id);
         track = null;
       }
       if (!track) {
         const el = document.createElement('div');
-        el.className = `map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'}`;
+        el.className = `map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'} is-${alert.flight_direction.replace(/_/g, '-')}`;
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
-        const movementTitle = this.opts.lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
-        el.setAttribute('aria-label', movementTitle);
-        el.title = `${movementTitle} · ${this.opts.lang === 'en' ? 'schematic route, not a live track' : 'مسار توضيحي وليس تتبعاً مباشراً'}`;
+        el.setAttribute('aria-label', `${movementTitle} · ${direction}`);
+        el.title = `${direction} · ${routeNote}`;
         const halo = document.createElement('span'); halo.className = 'map-flight-track-halo';
         const squad = document.createElement('span'); squad.className = 'map-flight-track-squad';
-        for (const slot of [{ name: 'is-lead', size: 26 }, { name: 'is-left', size: 22 }, { name: 'is-right', size: 22 }]) {
+        for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
           const airframe = document.createElement('span');
           airframe.className = `map-flight-track-airframe ${slot.name}`;
           airframe.innerHTML = svgTag(aircraft, slot.size, `fill="${color}" class="map-flight-track-svg"`);
           squad.append(airframe);
         }
         el.append(halo, squad);
-        const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat(path[0]).addTo(map);
+        const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat([position.lon, position.lat]).addTo(map);
         this.bindMarkerTap(el, () => this.onSelect(alert.id, { fromMap: true, fly: true }));
-        track = { marker, element: el, signature, start: performance.now() + index * 2200, frame: 0, last: 0 };
+        track = { marker, element: el, signature };
         this.movementTracks.set(alert.id, track);
       }
-      const tick = (now) => {
-        if (!this.movementTracks?.has(alert.id)) return;
-        if (now - track.last >= 1000 / 24 && !this.el.classList.contains('is-moving')) {
-          track.last = now;
-          const progress = reducedMotion ? 0.72 : ((Math.max(0, now - track.start) % 10_000) / 10_000);
-          const pos = flightPosition(path, progress);
-          if (pos) {
-            track.marker.setLngLat([pos.lon, pos.lat]);
-            track.marker.setRotation(aircraftRotation(aircraft, pos.bearing));
-            track.element.style.opacity = reducedMotion ? '1' : String(Math.max(0.28, Math.min(1, Math.min(progress * 9, (1 - progress) * 7))));
-          }
-        }
-        if (reducedMotion) { track.frame = 0; return; }
-        track.frame = requestAnimationFrame(tick);
-      };
-      if (!track.frame) track.frame = requestAnimationFrame(tick);
+      track.marker.setLngLat([position.lon, position.lat]);
+      track.marker.setRotation(aircraftRotation(aircraft, position.bearing));
+      track.element.dataset.flightDirection = alert.flight_direction;
     });
     for (const [id, track] of this.movementTracks) {
       if (keep.has(id)) continue;
-      cancelAnimationFrame(track.frame);
+      if (track.frame) cancelAnimationFrame(track.frame);
       track.marker.remove();
       this.movementTracks.delete(id);
     }
@@ -615,6 +612,7 @@ export class AlertMap {
     popupContent?.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
     popupContent?.addEventListener('touchmove', (event) => event.stopPropagation(), { passive: true });
     this.bindClamp();
+    this.schedulePopupFit(1);
   }
 
   refreshMarkerGroups() {
@@ -662,8 +660,9 @@ export class AlertMap {
   render() {
     const M = ml();
     const seen = new Set();
+    const movementTrackIds = new Set(this.movementTrackAlerts().map((a) => a.id));
     for (const a of this.alerts) {
-      if (!a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
+      if (movementTrackIds.has(a.id) || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       seen.add(a.id);
       let m = this.markers.get(a.id);
       const sig = `${a.type}|${a.is_active}|${a.marker_glyph || ''}|${a.meta?.incursionKind || ''}|${a.meta?.vehicleCount || ''}|${a.meta?.patrolForm || ''}`;
@@ -748,7 +747,7 @@ export class AlertMap {
   markerEl(a) {
     const t = typeOf(a.type);
     const glyph = a.type === 'assassination' ? assassinationWeaponGlyph(a)
-      : a.type === 'shooting' ? 'pistol'
+      : a.type === 'shooting' ? shootingWeaponGlyph(a)
         : a.type === 'military_incursion' ? ((a.meta?.incursionKind || (Number.isInteger(a.meta?.vehicleCount) ? 'vehicles' : null)) === 'soldiers' ? 'soldiers' : (a.meta?.incursionKind === 'vehicles' || Number.isInteger(a.meta?.vehicleCount)) ? 'military_vehicle' : t.glyph)
         : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
@@ -761,8 +760,8 @@ export class AlertMap {
     } else if (t.marker === 'helicopter') {
       el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 25, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (t.marker === 'squad') {
-      const pl = (sz, x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, sz, `fill="${t.color}" class="sq-svg"`)}</div>`;
-      el.innerHTML = `<div class="squad">${pl(16, 22, -8, 1)}${pl(14, 6, 12, 0.85)}${pl(14, 38, 12, 0.85)}</div>`;
+      const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${t.color}" class="sq-svg"`)}</div>`;
+      el.innerHTML = `<div class="squad">${pl(24, -12, 1)}${pl(4, 12, 0.85)}${pl(44, 12, 0.85)}</div>`;
     } else if (t.marker === 'fly') {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 22, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
     } else if (t.marker === 'movement') {
@@ -778,7 +777,7 @@ export class AlertMap {
       const sz = t.size || 30;
       el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:#111827;width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg" fill="#111827"')}</div>`;
     } else {
-      el.innerHTML = glyphDisc(a.type, 34, 18, 'sai map-event-disc', a.marker_glyph);
+      el.innerHTML = glyphDisc(a.type, 34, 24, 'sai map-event-disc', a.marker_glyph);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
     if (!['squad', 'movement', 'fly'].includes(t.marker)) el.insertAdjacentHTML('afterbegin', '<span class="news-pulse-ring" aria-hidden="true"></span>');
@@ -1082,8 +1081,12 @@ export class AlertMap {
     this.popup.on('close', () => {
       if (this.popup && this.popup._alertId === alert.id) this.popup = null;
     });
-    // keep the card fully on screen: after it is laid out, and again whenever the map stops moving
-    this._fitLeft = 2; // one fit after layout, one after the opening flight lands
+    this.schedulePopupFit(2);
+    return this.popup;
+  }
+
+  schedulePopupFit(count = 1) {
+    this._fitLeft = count;
     requestAnimationFrame(() => requestAnimationFrame(() => this.fitPopup()));
     if (!this._fitBound) {
       this._fitBound = true;
@@ -1091,7 +1094,6 @@ export class AlertMap {
       this.map.on('moveend', (e) => { if (!e.originalEvent && !this._fitPanning && this._fitLeft > 0) this.fitPopup(); this._fitPanning = false; });
       window.addEventListener('orientationchange', () => { this._fitLeft = 1; setTimeout(() => this.fitPopup(), 400); });
     }
-    return this.popup;
   }
   // Pan the map just enough that the open popup lies completely inside the visible part of the map
   // (works with page zoom in phone "desktop site" mode, the top controls and bottom-positioned panels).
@@ -1131,8 +1133,8 @@ export class AlertMap {
     const m = 10 * scale;
     const r = el.getBoundingClientRect();
     let dx = 0; let dy = 0;
-    if (p._alertId) {
-      // Center the alert card in the usable map viewport; its MapLibre tip stays attached to the event coordinate.
+    if (p._alertId || p._groupKey) {
+      // Center alert details and grouped-alert choosers; the MapLibre tip stays attached to its map coordinate.
       dx = r.left + r.width / 2 - (vis.l + vis.r) / 2;
       dy = r.top + r.height / 2 - (top + bottom) / 2;
     } else {

@@ -25,7 +25,9 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(map, /new M\.Popup\(\{ className: 'pp-alert-popup', anchor: 'bottom'/);
   assert.match(map, /offset: \[0, 0\]/);
   assert.doesNotMatch(map, /off\.y\s*-\s*26/);
-  assert.match(map, /if \(p\._alertId\)\s*\{[\s\S]{0,250}r\.left \+ r\.width \/ 2 - \(vis\.l \+ vis\.r\) \/ 2[\s\S]{0,180}r\.top \+ r\.height \/ 2 - \(top \+ bottom\) \/ 2/);
+  assert.match(map, /if \(p\._alertId \|\| p\._groupKey\)\s*\{[\s\S]{0,250}r\.left \+ r\.width \/ 2 - \(vis\.l \+ vis\.r\) \/ 2[\s\S]{0,180}r\.top \+ r\.height \/ 2 - \(top \+ bottom\) \/ 2/);
+  assert.match(map, /this\.schedulePopupFit\(1\)/);
+  assert.match(map, /schedulePopupFit\(count = 1\)[\s\S]{0,140}this\.fitPopup\(\)/);
   assert.match(map, /openPopup\(alert\)\s*\{\s*const controlPanel = document\.querySelector\('#mapCtrlPanel'\);[\s\S]{0,180}controlPanel\.hidden = true/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \{ z-index: 60; \}/);
   assert.match(css, /\.pp-alert-popup \.maplibregl-popup-content \{ max-height: min\(62dvh, 600px\); \}/);

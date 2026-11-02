@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ALERT_GROUPS, ALERT_TYPES, POLITICAL_CATEGORIES, TYPE_KEYS, alertEmoji, assassinationWeaponGlyph } from '../shared/types.js';
+import { ALERT_GROUPS, ALERT_TYPES, POLITICAL_CATEGORIES, TYPE_KEYS, alertButtonLabel, alertEmoji, assassinationWeaponGlyph, shootingWeaponGlyph } from '../shared/types.js';
 import { NEWS_TYPES, keywordTypes, nameInText, refineType, ruleClassify } from '../server/news-ai.js';
 import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
@@ -76,11 +76,11 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.equal(nightEligible({ type: 'helicopter', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, 'helicopter news stays for human review');
 });
 
-test('warplane matches the Lebanon three-plane pass and keeps pulsing rings around the selected area', () => {
+test('warplane matches the Lebanon three-plane pass with 24px aircraft and keeps area pulses', () => {
   assert.doesNotMatch(mapSource, /t\.marker === 'movement' \|\| t\.marker === 'squad'/, 'warplane zone circles remain enabled');
   assert.match(mapSource, /t\.marker === 'orbit' \|\| t\.marker === 'squad' \|\| t\.marker === 'helicopter'/);
   assert.match(mapSource, /const classicAircraft = t\.marker === 'squad' \|\| t\.marker === 'helicopter'/, 'active warplane zones get aircraft pulse styling');
-  assert.match(mapSource, /pl\(16, 22, -8, 1\)\}\$\{pl\(14, 6, 12, 0\.85\)\}\$\{pl\(14, 38, 12, 0\.85\)/, 'lead and wing aircraft keep the reference triangle');
+  assert.match(mapSource, /pl\(24, -12, 1\)\}\$\{pl\(4, 12, 0\.85\)\}\$\{pl\(44, 12, 0\.85\)/, 'lead and wing aircraft keep the reference triangle at 24px');
   assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
   assert.match(mapCss, /@keyframes squadFlyZ \{\s*0% \{ transform: translateY\(110px\); opacity: 0; \}\s*12%, 88% \{ opacity: 1; \}\s*100% \{ transform: translateY\(-110px\); opacity: 0; \}\s*\}/);
   assert.match(mapCss, /\.maplibregl-map \.mk-squad \.squad \.sq \{ animation: squadFlyZ 7s linear infinite; \}/);
@@ -175,6 +175,20 @@ test('assassination drawing follows an explicitly named rifle; otherwise it uses
   assert.equal(assassinationWeaponGlyph(alert('أُطلق النار على الضحية من دون تحديد نوع السلاح.')), 'pistol');
   assert.equal(assassinationWeaponGlyph(alert('ذكر البلاغ بندقية ومسدساً معاً.')), 'pistol');
   assert.equal(assassinationWeaponGlyph({ type: 'attack', title: 'AK-47' }), null);
+});
+
+test('gunfire remains labeled as an event, with a pistol by default and a rifle only when reported', () => {
+  assert.equal(ALERT_TYPES.shooting.button_ar, 'إطلاق نار');
+  assert.equal(alertButtonLabel('shooting'), 'إطلاق نار', 'the Telegram button names the event, not an assumed weapon');
+  assert.equal(shootingWeaponGlyph({ type: 'shooting', title: 'سماع إطلاق نار في الحي' }), 'pistol');
+  assert.equal(shootingWeaponGlyph({ type: 'shooting', description: 'أُطلقت طلقات من بندقية كلاشنكوف AK-47' }), 'rifle');
+  assert.equal(shootingWeaponGlyph({ type: 'shooting', description: 'The report confirms an assault rifle was used' }), 'rifle');
+  assert.equal(shootingWeaponGlyph({ type: 'shooting', description: 'إطلاق نار بمسدس' }), 'pistol');
+  assert.equal(shootingWeaponGlyph({ type: 'attack', title: 'AK-47' }), null);
+  const unspecified = markerSvg('shooting', 100, 100, 1, null, { type: 'shooting', title: 'إطلاق نار' });
+  const identifiedRifle = markerSvg('shooting', 100, 100, 1, null, { type: 'shooting', description: 'بندقية كلاشنكوف' });
+  assert.match(unspecified, /<g fill="#111827">[\s\S]*M56 176/);
+  assert.match(identifiedRifle, /<g fill="#111827">[\s\S]*M24 222/);
 });
 
 test('Arabic drone-strike reports classify separately from routine drone sightings', () => {

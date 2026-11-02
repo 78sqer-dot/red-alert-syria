@@ -1,12 +1,12 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=18';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=31';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=33';
 import { DICT } from './i18n.js?v=3';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=4';
-import { settings } from './settings.js?v=8';
+import { settings } from './settings.js?v=9';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=52';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=53';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 

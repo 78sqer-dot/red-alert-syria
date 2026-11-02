@@ -41,5 +41,10 @@ test('helicopter uses the simplified silhouette while legacy glyphs remain avail
   assert.match(targetSvgs, /helicopter_topdown:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter_sleek:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
-  assert.match(mapJs, /setRotation\(aircraftRotation\(aircraft, pos\.bearing\)\)/);
+});
+
+test('schematic movement group follows the route bearing without implying a live aircraft location', () => {
+  assert.match(mapJs, /const position = flightPosition\(path, alert\.flight_direction === 'toward_syria' \? 1 : 0\.5\)/);
+  assert.match(mapJs, /track\.marker\.setLngLat\(\[position\.lon, position\.lat\]\)/);
+  assert.match(mapJs, /track\.marker\.setRotation\(aircraftRotation\(aircraft, position\.bearing\)\)/);
 });
