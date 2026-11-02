@@ -5,7 +5,7 @@ export const ALERT_TYPES = {
   breaking: {
     ar: 'خبر عاجل', en: 'Breaking news', button_ar: 'خبر عاجل', button_en: 'Breaking',
     emoji: '🚨', color: '#ff3b4e', ring: '#c81e2f', group: 'other', ttlMin: 120,
-    marker: 'icon', glyph: 'urgent_warning', icon: '#e11d2e', disc: '#000000', zone: true, tag_ar: 'عاجل', tag_en: 'Breaking',
+    marker: 'icon', glyph: 'alert_tri', icon: '#111827', disc: '#000000', zone: true, tag_ar: 'عاجل', tag_en: 'Breaking',
   },
   political: {
     ar: 'تطور سياسي', en: 'Political development', button_ar: 'تطور سياسي', button_en: 'Political development',
@@ -51,8 +51,14 @@ export const ALERT_TYPES = {
     ar: 'توغل عسكري', en: 'Military incursion',
     button_ar: 'توغل عسكري', button_en: 'Military incursion',
     emoji: '🪖', color: '#71834a', ring: '#4b5c2f', group: 'other', ttlMin: 180,
-    marker: 'icon', glyph: 'tank', icon: '#71834a', disc: '#111827', size: 34, zone: 'dashed',
-    tag_ar: 'توغل_آليات_عسكرية', tag_en: 'Military_vehicle_incursion',
+    marker: 'icon', glyph: 'military_vehicle', icon: '#111827', disc: '#111827', size: 30, zone: 'dashed',
+    tag_ar: 'توغل_عسكري', tag_en: 'Military_incursion',
+  },
+  patrol: {
+    ar: 'دورية', en: 'Military patrol', button_ar: 'دورية', button_en: 'Patrol',
+    emoji: '', color: '#526a7a', ring: '#354b5a', group: 'other', ttlMin: 180,
+    marker: 'icon', glyph: 'patrol', icon: '#111827', disc: '#111827', size: 30, zone: 'dashed',
+    tag_ar: 'دورية', tag_en: 'Patrol',
   },
   smuggling_weapons: {
     ar: 'تهريب أسلحة', en: 'Weapons smuggling', button_ar: 'تهريب أسلحة', button_en: 'Weapons smuggling',
@@ -82,6 +88,11 @@ export const ALERT_TYPES = {
     emoji: '⚔️', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
     marker: 'static', glyph: 'crossed_swords', disc: '#dc2626', zone: false, tag_ar: 'هجوم', tag_en: 'Attack',
   },
+  clashes: {
+    ar: 'اشتباكات مسلحة', en: 'Armed clashes', button_ar: 'اشتباكات', button_en: 'Armed clashes',
+    emoji: '⚔️', color: '#be123c', ring: '#881337', group: 'strikes', ttlMin: 240,
+    marker: 'static', glyph: 'clashes', disc: '#be123c', zone: false, tag_ar: 'اشتباكات', tag_en: 'Armed_clashes',
+  },
   assassination: {
     ar: 'اغتيال', en: 'Assassination', button_ar: 'اغتيال', button_en: 'Assassination',
     emoji: '', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
@@ -110,7 +121,7 @@ export const ALERT_TYPES = {
   protest: {
     ar: 'مظاهرة', en: 'Protest', button_ar: 'مظاهرة', button_en: 'Protest',
     emoji: '📢', color: '#7c3aed', ring: '#5b21b6', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'protest', mapEmoji: true, icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مظاهرة', tag_en: 'Protest',
+    marker: 'icon', glyph: 'protest', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مظاهرة', tag_en: 'Protest',
   },
   fire: {
     ar: 'حريق', en: 'Fire', button_ar: 'حريق', button_en: 'Fire',
@@ -176,12 +187,12 @@ export const POLITICAL_CATEGORIES = Object.freeze({
 
 export const ALERT_GROUPS = {
   aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'helicopter', 'air_movement', 'missile'] },
-  strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'assassination', 'artillery', 'airstrike', 'explosion'] },
+  strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'clashes', 'assassination', 'artillery', 'airstrike', 'explosion'] },
   civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   political: { ar: 'تطورات سياسية', en: 'Political developments', types: ['political'] },
   smuggling: { ar: 'تهريب', en: 'Smuggling', types: ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },
-  other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border', 'military_incursion'] },
+  other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border', 'military_incursion', 'patrol'] },
 };
 
 export const BORDER_REGIONS = {

@@ -112,13 +112,35 @@ test('military vehicle incursion has a vehicle marker and stays manual-only', ()
   assert.equal(type.ar, 'توغل عسكري');
   assert.equal(type.button_ar, 'توغل عسكري');
   assert.equal(type.marker, 'icon');
-  assert.equal(type.glyph, 'tank');
-  assert.match(SVG.tank, /tk-body/);
+  assert.equal(type.glyph, 'military_vehicle');
+  assert.match(EXTRA_SVG.military_vehicle, /M56 300/);
   assert.equal(type.zone, 'dashed');
   assert.equal(type.color, '#71834a');
-  assert.equal(typeIcon('military_incursion'), 'tank');
-  assert.match(typeIconsSource, /military_incursion: 'tank'/);
+  assert.equal(typeIcon('military_incursion'), 'militaryVehicle');
+  assert.ok(ICONS.militaryVehicle, 'the filter icon exists');
+  assert.match(typeIconsSource, /military_incursion: 'militaryVehicle'/);
+  assert.match(markerSvg('military_incursion', 100, 100, 1, null, { type: 'military_incursion', meta: { incursionKind: 'soldiers' } }), /M82 430/);
+  assert.match(markerSvg('military_incursion', 100, 100, 1, null, { type: 'military_incursion', meta: { incursionKind: 'vehicles' } }), /M56 300/);
   assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'vehicle incursion is not automatically classified from news');
+});
+
+test('military patrol is a separate monitored category with a clean icon and human review', () => {
+  const patrol = ALERT_TYPES.patrol;
+  const text = 'أفادت مصادر محلية برصد دورية عسكرية قرب بلدة كودنة في محافظة القنيطرة السورية اليوم.';
+  const plural = 'أفادت مصادر محلية برصد دوريات عسكرية قرب بلدة كودنة في محافظة القنيطرة السورية اليوم.';
+  assert.ok(TYPE_KEYS.includes('patrol'));
+  assert.ok(ALERT_GROUPS.other.types.includes('patrol'));
+  assert.ok(NEWS_TYPES.includes('patrol'));
+  assert.equal(patrol.glyph, 'patrol');
+  assert.equal(typeIcon('patrol'), 'patrol');
+  assert.ok(ICONS.patrol);
+  assert.match(EXTRA_SVG.patrol, /M61 292/);
+  assert.equal(ruleClassify(text)?.type, 'patrol');
+  assert.equal(ruleClassify(plural)?.type, 'patrol');
+  assert.equal(refineType('breaking', text), 'patrol');
+  const patrolDraft = { type: 'patrol', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
+  assert.equal(nightEligible(patrolDraft), false, 'patrol reports always require human review');
+  assert.equal(dayAutoReady({ ...patrolDraft, dayAutoAt: Date.now() - 1 }), false);
 });
 
 test('assassination uses a black firearm drawing and appears in the strikes filter', () => {
@@ -168,6 +190,32 @@ test('explicit assassination reports are not reduced to generic attack', () => {
   assert.ok(keywordTypes(text).includes('assassination'));
   assert.equal(ruleClassify(text)?.type, 'assassination');
   assert.equal(refineType('attack', text), 'assassination');
+});
+
+test('armed clashes have a distinct monitored type and stay separate from attacks and standalone gunfire', () => {
+  const clashes = 'أفادت مصادر محلية باندلاع اشتباكات مسلحة بين مجموعتين في ريف حلب السورية اليوم.';
+  const attack = 'أفادت مصادر محلية بوقوع هجوم مسلح على حاجز أمني في محافظة درعا السورية اليوم.';
+  const gunfire = 'أفادت مصادر محلية بسماع إطلاق نار في مدينة دمشق السورية اليوم.';
+  assert.ok(TYPE_KEYS.includes('clashes'));
+  assert.ok(ALERT_GROUPS.strikes.types.includes('clashes'));
+  assert.ok(NEWS_TYPES.includes('clashes'));
+  assert.equal(ALERT_TYPES.clashes.ar, 'اشتباكات مسلحة');
+  assert.equal(typeIcon('clashes'), 'clash');
+  assert.ok(ICONS.clash, 'the filter icon exists');
+  assert.ok(EXTRA_SVG.clashes, 'the map marker has a dedicated compact glyph');
+  assert.equal(ruleClassify(clashes)?.type, 'clashes');
+  assert.equal(refineType('attack', clashes), 'clashes');
+  assert.equal(ruleClassify(attack)?.type, 'attack');
+  assert.equal(refineType('attack', attack), 'attack');
+  assert.equal(ruleClassify(gunfire)?.type, 'shooting', 'gunfire without opposing sides remains a shooting report');
+});
+
+test('armed-clash news remains in human review when source or classifier evidence is insufficient', () => {
+  const loc = { scope: 'place', latitude: 36.2, longitude: 37.1 };
+  const oneLocalSource = { type: 'clashes', status: 'pending', loc, srcs: [{ u: 'local-example', local: true }] };
+  assert.equal(nightEligible(oneLocalSource), false, 'one local source does not qualify for overnight auto-publish');
+  assert.equal(dayAutoReady({ ...oneLocalSource, dayAutoAt: Date.now() - 1 }), false, 'the daytime gate keeps the same source check');
+  assert.equal(nightEligible({ ...oneLocalSource, rule: true, srcs: [{ u: 'national-a' }, { u: 'national-b' }] }), false, 'rules-only classification stays for a reviewer');
 });
 
 test('deduplication only joins identical precise types, not generic sightings or attacks', () => {
@@ -328,10 +376,10 @@ test('specific ground incidents take precedence over a weather warning in the sa
   assert.equal(refineType('weather', text), 'fire');
 });
 
-test('nonviolent Israeli ground activity routes to breaking, while armed clashes remain attacks', () => {
+test('nonviolent Israeli ground activity routes to breaking, while armed clashes use their dedicated type', () => {
   const ground = 'توغلت دورية تابعة لجيش الاحتلال الإسرائيلي وأقامت ساتراً ترابياً في ريف القنيطرة جنوب سوريا اليوم.';
   assert.equal(ruleClassify(ground)?.type, 'breaking');
   assert.equal(refineType('attack', ground), 'breaking');
   const clash = 'توغلت قوات الاحتلال الإسرائيلي في ريف القنيطرة جنوب سوريا واندلع اشتباك مع الأهالي اليوم.';
-  assert.equal(ruleClassify(clash)?.type, 'attack');
+  assert.equal(ruleClassify(clash)?.type, 'clashes');
 });

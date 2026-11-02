@@ -53,8 +53,8 @@ export function reloadLogo() { LOGO = loadLogo(); }
 
 // ------------------------------------------------------------------ texts per type
 const HEADLINE = {
-  ar: { breaking: 'خبر عاجل', uav: 'تحليق مسيّرة', uav_strike: 'استهداف بمسيّرة', airstrike: 'غارة جوية', warplane: 'تحليق طيران حربي', helicopter: 'تحليق طيران مروحي', missile: 'إطلاق صواريخ', attack: 'هجوم', assassination: 'اغتيال', artillery: 'قصف مدفعي', explosion: 'انفجار', civil: 'تنبيه مدني', accident: 'حادث سير', protest: 'مظاهرة', fire: 'حريق', civil_plane: 'طائرة مدنية', quake: 'زلزال', weather: 'تحذير جوي' },
-  en: { breaking: 'Breaking news', uav: 'Drone activity', uav_strike: 'Drone strike', airstrike: 'Airstrike', warplane: 'Warplane activity', helicopter: 'Helicopter activity', missile: 'Missile launch', attack: 'Attack', assassination: 'Assassination', artillery: 'Artillery shelling', explosion: 'Explosion', civil: 'Civil alert', accident: 'Traffic accident', protest: 'Protest', fire: 'Fire', civil_plane: 'Civil aircraft', quake: 'Earthquake', weather: 'Weather warning' },
+  ar: { breaking: 'خبر عاجل', uav: 'تحليق مسيّرة', uav_strike: 'استهداف بمسيّرة', airstrike: 'غارة جوية', warplane: 'تحليق طيران حربي', helicopter: 'تحليق طيران مروحي', missile: 'إطلاق صواريخ', attack: 'هجوم', clashes: 'اشتباكات مسلحة', assassination: 'اغتيال', artillery: 'قصف مدفعي', explosion: 'انفجار', civil: 'تنبيه مدني', accident: 'حادث سير', protest: 'مظاهرة', fire: 'حريق', civil_plane: 'طائرة مدنية', quake: 'زلزال', weather: 'تحذير جوي', military_incursion: 'توغل عسكري', patrol: 'دورية' },
+  en: { breaking: 'Breaking news', uav: 'Drone activity', uav_strike: 'Drone strike', airstrike: 'Airstrike', warplane: 'Warplane activity', helicopter: 'Helicopter activity', missile: 'Missile launch', attack: 'Attack', clashes: 'Armed clashes', assassination: 'Assassination', artillery: 'Artillery shelling', explosion: 'Explosion', civil: 'Civil alert', accident: 'Traffic accident', protest: 'Protest', fire: 'Fire', civil_plane: 'Civil aircraft', quake: 'Earthquake', weather: 'Weather warning', military_incursion: 'Military incursion', patrol: 'Patrol' },
 };
 const LEVELS = {
   caution: { ar: 'حيطة وحذر', en: 'Caution', color: '#fdba74' },
@@ -74,7 +74,7 @@ const HAZARD_ICON = {
   dust: ['M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242', 'M16 17H7', 'M17 21H9'],
 };
 const hazardIconSvg = (k, x, y, size, color) => `<g transform="translate(${x} ${y}) scale(${size / 24})" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${HAZARD_ICON[k].map((d) => `<path d="${d}"/>`).join('')}</g>`;
-const LEVEL_OF = { breaking: 'urgent', uav: 'caution', uav_strike: 'danger', airstrike: 'danger', warplane: 'caution', helicopter: 'caution', missile: 'danger', attack: 'danger', assassination: 'danger', artillery: 'danger', explosion: 'danger', civil: 'notice', accident: 'notice', protest: 'notice', fire: 'notice', civil_plane: 'info', quake: 'notice', weather: 'caution' };
+const LEVEL_OF = { breaking: 'urgent', uav: 'caution', uav_strike: 'danger', airstrike: 'danger', warplane: 'caution', helicopter: 'caution', missile: 'danger', attack: 'danger', clashes: 'danger', assassination: 'danger', artillery: 'danger', explosion: 'danger', civil: 'notice', accident: 'notice', protest: 'notice', fire: 'notice', civil_plane: 'info', quake: 'notice', weather: 'caution', military_incursion: 'caution', patrol: 'caution' };
 const NOTE = {
   ar: { uav: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق لا على عدد المسيّرات', warplane: 'ملاحظة: الدائرة تدلّ على منطقة التحليق التقريبية', airstrike: 'ملاحظة: الدائرة تحدد نطاق موقع الغارة التقريبي، لا مساحة الضرر المؤكدة', multi: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق المتأثرة', quake: 'ملاحظة: الدائرة تقريبية لمنطقة الشعور بالهزة، والمصدر مراصد الزلازل الدولية', weather: 'ملاحظة: الدائرة تقريبية للمنطقة المشمولة بالتحذير' },
   en: { uav: 'Note: the number of circles shows the number of areas, not the number of drones', warplane: 'Note: the circle shows the approximate flight area', airstrike: 'Note: the circle marks the approximate reported strike location, not confirmed damage extent', multi: 'Note: the number of circles shows the number of affected areas', quake: 'Note: the circle approximates where the shaking may be felt (international seismic agencies)', weather: 'Note: the circle approximates the warned area' },
@@ -155,13 +155,15 @@ async function fetchTile(z, x, y, timeoutMs) {
 // ------------------------------------------------------------------ marker for point alerts
 export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = null) {
   const t = ALERT_TYPES[type] || ALERT_TYPES.breaking;
-  const firearm = type === 'assassination' || type === 'shooting';
+  const incursionKind = alert?.meta?.incursionKind || (Number.isInteger(alert?.meta?.vehicleCount) ? 'vehicles' : null);
   const glyphKey = type === 'assassination' ? (assassinationWeaponGlyph(alert) || t.glyph)
-    : type === 'shooting' ? 'pistol' : glyphOverride || t.glyph;
+    : type === 'shooting' ? 'pistol'
+      : type === 'military_incursion' ? (incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
+        : glyphOverride || t.glyph;
   const g = GLYPHS[glyphKey] || GLYPHS[t.glyph] || GLYPHS.other || '';
   const r = 30 * k; const s = r * 1.2;
-  const bg = firearm ? '#f8fafc' : t.marker === 'static' ? (t.disc || t.color) : (t.icon || t.color);
-  const fill = firearm ? '#111827' : '#ffffff';
+  const bg = '#f8fafc';
+  const fill = '#111827';
   return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${t.color}" opacity="0.16"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="#ffffff" opacity="0.95"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${bg}"/>`

@@ -330,16 +330,17 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 @media (prefers-reduced-motion: reduce) { .flight-movement, .flight-movement::before { animation: none; } .flight-movement::before { opacity: .5; } }
 .mk-breaking-news .mk-s { transform: none; transition: none; }
 .mk::before { content: ''; position: absolute; left: 0; top: 0; width: 56px; height: 56px; transform: translate(-50%, -50%); border-radius: 50%; background: transparent; pointer-events: auto; }
-.news-pulse-ring { position: absolute; left: 0; top: 0; width: 25px; height: 25px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1.4px solid #e11d2e; border-radius: 50%; background: rgba(225,29,46,.045); box-shadow: 0 0 2px rgba(225,29,46,.2), inset 0 0 2px rgba(225,29,46,.1); animation: newsPulseGlow 2.5s ease-in-out infinite; pointer-events: none; }
-.news-pulse-ring::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(225,29,46,.3); border-radius: inherit; animation: newsPulseWave 2.5s ease-out infinite; }
-.news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 19px; height: 19px; box-sizing: border-box; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px rgba(225,29,46,.72), 0 2px 5px rgba(0,0,0,.3); }
-.news-marker-svg { display: block; width: 12px; height: 12px; color: #c81e2f; stroke: #c81e2f; fill: none; }
+.news-pulse-ring { position: absolute; left: 0; top: 0; width: 25px; height: 25px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--mks, .5)); border: 1.4px solid var(--c, #e11d2e); border-radius: 50%; background: color-mix(in srgb, var(--c, #e11d2e) 5%, transparent); box-shadow: 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 20%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 10%, transparent); animation: newsPulseGlow 2.5s ease-in-out infinite; pointer-events: none; }
+.mk-breaking-news .news-pulse-ring { transform: translate(-50%, -50%); }
+.news-pulse-ring::after { content: ''; position: absolute; inset: 0; border: 1px solid color-mix(in srgb, var(--c, #e11d2e) 34%, transparent); border-radius: inherit; animation: newsPulseWave 2.5s ease-out infinite; }
+.news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 19px; height: 19px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1px solid rgba(15,23,42,.14); border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.24); }
+.news-marker-svg { display: block; width: 12px; height: 12px; color: #111827; stroke: none; fill: #111827; }
 .mk:hover .news-marker-core, .mk.sel .news-marker-core { transform: translate(-50%, -50%) scale(1.12); }
 .mk.inactive .news-pulse-ring { animation: none; opacity: .55; }
 .is-moving .news-pulse-ring, .is-zooming .news-pulse-ring { animation-play-state: paused; }
 @keyframes newsPulseWave { 0%, 100% { transform: scale(1); opacity: 0; } 35% { opacity: .28; } }
-@keyframes newsPulseGlow { 0%, 100% { box-shadow: 0 0 2px rgba(225,29,46,.2), inset 0 0 2px rgba(225,29,46,.08); } 50% { box-shadow: 0 0 3px rgba(225,29,46,.34), inset 0 0 2px rgba(225,29,46,.15); } }
-@media (prefers-reduced-motion: reduce) { .news-pulse-ring, .news-pulse-ring::after { animation: none !important; } .news-pulse-ring { box-shadow: 0 0 2px rgba(225,29,46,.24), inset 0 0 2px rgba(225,29,46,.1); } }
+@keyframes newsPulseGlow { 0%, 100% { box-shadow: 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 20%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 8%, transparent); } 50% { box-shadow: 0 0 4px color-mix(in srgb, var(--c, #e11d2e) 38%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 15%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .news-pulse-ring, .news-pulse-ring::after { animation: none !important; } .news-pulse-ring { box-shadow: 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 24%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 10%, transparent); } }
 /* drone: exactly like the original — fixed 18px airframe, never scaled with zoom */
 .mk-orbit .mk-s { transform: none; }
 /* static disc — identical to the original .static-alert-icon */
@@ -396,8 +397,10 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 /* drone — grey airframe that orbits only at close zoom (like the original) */
 .uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
 .uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
-/* Keep one recognizable drone orbit visible at every zoom; hide only supplemental copies when zoomed out. */
+/* Country and mid zoom rely on the impact circle alone; reveal the orbiting drone only at detail zoom. */
 .maplibregl-map .mk-orbit:not(.mk-sat) .uav { animation: uavOrbit 9s linear infinite; }
+.maplibregl-map:not(.zoom-detail) .mk-orbit:not(.mk-sat) .uav { visibility: hidden; }
+.maplibregl-map.zoom-detail .mk-orbit:not(.mk-sat) .uav { visibility: visible; }
 .maplibregl-map:not(.zoom-detail) .mk-orbit.mk-sat { visibility: hidden; }
 .mk-sat .uav, .maplibregl-map.zoom-detail .mk-sat .uav { animation-delay: var(--delay, 0s); }
 /* the airframe circles the target and turns with its heading */

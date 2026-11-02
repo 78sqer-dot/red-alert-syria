@@ -233,6 +233,7 @@ export const TITLES = {
   air_movement: { ar: 'حركة طيران', en: 'Aircraft movement' },
   missile: { ar: 'صواريخ', en: 'Missiles' },
   attack: { ar: 'هجوم', en: 'Attack' },
+  clashes: { ar: 'اشتباكات مسلحة', en: 'Armed clashes' },
   assassination: { ar: 'اغتيال', en: 'Assassination' },
   artillery: { ar: 'قصف مدفعي', en: 'Artillery shelling' },
   explosion: { ar: 'انفجار', en: 'Explosion' },
@@ -249,5 +250,6 @@ export const TITLES = {
   quake: { ar: 'زلزال', en: 'Earthquake' },
   weather: { ar: 'تحذير جوي', en: 'Weather warning' },
   border: { ar: 'تنبيه حدودي', en: 'Border alert' },
-  military_incursion: { ar: 'توغّل آليات عسكرية', en: 'Military vehicle incursion' },
+  military_incursion: { ar: 'توغل عسكري', en: 'Military incursion' },
+  patrol: { ar: 'دورية', en: 'Patrol' },
 };

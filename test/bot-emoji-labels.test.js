@@ -7,11 +7,13 @@ const root = new URL('../', import.meta.url);
 const bot = readFileSync(new URL('server/bot.js', root), 'utf8');
 const map = readFileSync(new URL('public/js/map.js', root), 'utf8');
 
-test('the protest keeps its original megaphone emoji on the map and in bot labels', () => {
+test('protest keeps its megaphone in bot labels and uses the shared black map glyph', () => {
   assert.equal(ALERT_TYPES.protest.emoji, '📢');
-  assert.equal(ALERT_TYPES.protest.mapEmoji, true);
+  assert.equal(ALERT_TYPES.protest.mapEmoji, undefined);
+  assert.equal(ALERT_TYPES.protest.glyph, 'protest');
   assert.equal(alertButtonLabel('protest', 'ar'), '📢 مظاهرة');
-  assert.match(map, /t\.mapEmoji && t\.emoji[\s\S]{0,180}mk-event-emoji/);
+  assert.match(map, /class="ic ic-\$\{glyph\}" style="--ic:#111827/);
+  assert.doesNotMatch(map, /mapEmoji|mk-event-emoji/);
 });
 
 test('bot labels omit blank emoji placeholders and political categories have distinct symbols', () => {
@@ -20,7 +22,7 @@ test('bot labels omit blank emoji placeholders and political categories have dis
   assert.equal(alertButtonLabel('shooting', 'en'), 'Gunfire');
   assert.deepEqual(Object.values(POLITICAL_CATEGORIES).map((category) => category.emoji), ['💬', '📜', '🏛️', '📢', '🏢', '🤝', '👥', '🗳️']);
   assert.deepEqual(['government_announcement', 'official_announcement', 'official_entity'].map((key) => POLITICAL_CATEGORIES[key].ar), ['إعلان حكومي', 'إعلان رسمي', 'جهة رسمية']);
-  assert.match(bot, /alertButtonLabel\(k, lang\)/);
+  assert.match(bot, /alertButtonLabel\(item\.type, lang\)/);
   assert.match(bot, /\[label\.emoji, en \? label\.en : label\.ar\]\.filter\(Boolean\)\.join\(' '\)/);
-  assert.match(bot, /🚙 Military vehicles only/);
+  assert.match(bot, /🚙 Military vehicles/);
 });

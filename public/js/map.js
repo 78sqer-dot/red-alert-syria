@@ -26,11 +26,11 @@ const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 export { typeIcon };
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
-// Round coloured disc with the original glyph (used by the map, the legend and toasts).
+// White urgent-style disc with a dark professional glyph and a category-coloured edge.
 export function glyphDisc(type, size = 34, iconSize = 18, cls = 'sai', glyphOverride = null) {
   const t = typeOf(type);
-  const bg = t.disc || '#000000';
-  const fg = bg === '#000000' ? t.color : '#ffffff';
+  const bg = '#f8fafc';
+  const fg = '#111827';
   return `<span class="${cls}" style="width:${size}px;height:${size}px;background:${bg};border-color:${t.color};color:${fg}">${svgTag(glyphOverride || t.glyph, iconSize, `fill="${fg}"`)}</span>`;
 }
 
@@ -666,7 +666,7 @@ export class AlertMap {
       if (!a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       seen.add(a.id);
       let m = this.markers.get(a.id);
-      const sig = `${a.type}|${a.is_active}`;
+      const sig = `${a.type}|${a.is_active}|${a.marker_glyph || ''}|${a.meta?.incursionKind || ''}|${a.meta?.vehicleCount || ''}|${a.meta?.patrolForm || ''}`;
       if (m && m._sig !== sig) {
         m.remove();
         this.markers.delete(a.id);
@@ -749,6 +749,7 @@ export class AlertMap {
     const t = typeOf(a.type);
     const glyph = a.type === 'assassination' ? assassinationWeaponGlyph(a)
       : a.type === 'shooting' ? 'pistol'
+        : a.type === 'military_incursion' ? ((a.meta?.incursionKind || (Number.isInteger(a.meta?.vehicleCount) ? 'vehicles' : null)) === 'soldiers' ? 'soldiers' : (a.meta?.incursionKind === 'vehicles' || Number.isInteger(a.meta?.vehicleCount)) ? 'military_vehicle' : t.glyph)
         : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${t.marker}`;
@@ -772,16 +773,15 @@ export class AlertMap {
       el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 23)}${plane('is-left', 18)}${plane('is-right', 18)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
     } else if (a.type === 'breaking') {
       el.classList.add('mk-breaking-news');
-      el.innerHTML = `<span class="news-pulse-ring" aria-hidden="true"></span><span class="news-marker-core">${svgTag(glyph, 24, 'class="news-marker-svg" fill="none"')}</span>`;
+      el.innerHTML = `<span class="news-marker-core">${svgTag(glyph, 14, 'class="news-marker-svg" fill="#111827"')}</span>`;
     } else if (t.marker === 'icon') {
       const sz = t.size || 30;
-      el.innerHTML = t.mapEmoji && t.emoji
-        ? `<div class="mk-event-emoji" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px" aria-hidden="true">${t.emoji}</div>`
-        : `<div class="ic ic-${glyph}" style="--ic:${t.icon || t.color};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg"')}</div>`;
+      el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:#111827;width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg" fill="#111827"')}</div>`;
     } else {
       el.innerHTML = glyphDisc(a.type, 34, 18, 'sai map-event-disc', a.marker_glyph);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
+    if (!['squad', 'movement', 'fly'].includes(t.marker)) el.insertAdjacentHTML('afterbegin', '<span class="news-pulse-ring" aria-hidden="true"></span>');
     // civil family: pinned to its exact place; a small tidy dot at country view, the icon from zoom 7.5 up
     if (t.group === 'civil') {
       el.classList.add('mk-civ');

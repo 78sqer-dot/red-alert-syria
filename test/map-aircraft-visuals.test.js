@@ -15,8 +15,10 @@ test('drone keeps the original top-down silhouette, fixed icon size and perimete
   assert.match(css, /\.uav-svg\s*\{\s*stroke: rgba\(255,255,255,\.94\);\s*stroke-width: 18;/);
 });
 
-test('drone marker remains visible and circles at every zoom with a readable country-scale radius', () => {
+test('drone is hidden with impact circles alone at country zoom and orbits at detail zoom', () => {
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
+  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*visibility: hidden;/);
+  assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*visibility: visible;/);
   assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit\.mk-sat\s*\{\s*visibility: hidden;/);
   assert.doesNotMatch(css, /uavHover/);
   assert.match(mapJs, /classList\.toggle\('zoom-detail', z >= 10\.5\)/);

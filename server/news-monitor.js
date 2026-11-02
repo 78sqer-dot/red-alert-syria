@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
 import { config, isOwner } from './config.js';
 import { store } from './store.js';
-import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji } from '../shared/types.js';
+import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji, alertButtonLabel } from '../shared/types.js';
 import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
@@ -24,6 +24,23 @@ import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInTex
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
 
+const NEWS_GROUP_PRIORITY = ['aerial', 'strikes', 'civil', 'smuggling', 'political', 'nature', 'other'];
+const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', strikes: '💥', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
+const NEWS_TYPE_GROUPS = Object.freeze(Object.fromEntries(
+  [...new Set(NEWS_TYPES.map((type) => ALERT_TYPES[type]?.group || 'other'))]
+    .map((group) => [group, Object.freeze(NEWS_TYPES.filter((type) => (ALERT_TYPES[type]?.group || 'other') === group))]),
+));
+const newsTypeGroupKeys = () => [
+  ...NEWS_GROUP_PRIORITY.filter((group) => Object.hasOwn(NEWS_TYPE_GROUPS, group)),
+  ...Object.keys(NEWS_TYPE_GROUPS).filter((group) => !NEWS_GROUP_PRIORITY.includes(group)),
+];
+function newsGroupLabel(group, lang = 'ar') {
+  const title = group === 'other'
+    ? (lang === 'en' ? 'Urgent alerts' : 'أخبار عاجلة')
+    : (lang === 'en' ? (ALERT_GROUPS[group]?.en || group).replace(/\s*&\s*/g, ' and ') : ALERT_GROUPS[group]?.ar || group);
+  return `${NEWS_GROUP_EMOJI[group] || '🏷️'} ${title}`;
+}
+
 const ROAD_INCIDENT_WORDS = ['قصف', 'غارة', 'هجوم', 'اعتداء', 'اشتباك', 'انفجار', 'تفجير', 'استهداف', 'اطلاق نار', 'اغتيال', 'مقتل', 'قتلى', 'جرحى', 'اصابه', 'كمين', 'توغل', 'مداهمه', 'حادث', 'تصادم', 'انقلاب', 'حريق', 'احتجاج', 'مظاهره', 'قذائف', 'هاون'].map(normalizeArabic);
 /** True for a road-state update that belongs in the road monitor, not a general breaking alert. */
 export function isRoadStatusOnlyPost(text) {
@@ -35,7 +52,7 @@ export function isRoadStatusOnlyPost(text) {
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
 // that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
-export const FILTER_VER = 9;
+export const FILTER_VER = 10;
 const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
@@ -261,7 +278,7 @@ const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
   if (d?.type === 'political') return false; // Political developments always require human review.
-  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'].includes(d.type)) return false;
+  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol'].includes(d.type)) return false;
   if (!d.loc || d.loc.scope === 'country' || !Number.isFinite(d.loc.latitude) || !Number.isFinite(d.loc.longitude)) return false;
   const ss = d.srcs || [];
   return ss.length >= 2 || ss.some((x) => !isLocalSrc(x));
@@ -432,8 +449,25 @@ const intenseOn = (d) => (typeof d.intense === 'boolean' ? d.intense : droneAuto
 const intenseLabel = (d, lang) => (lang === 'en' ? `${ALERT_TYPES.uav.emoji} Intensive flight: ${intenseOn(d) ? '✅ on' : '⬜ off'}` : `${ALERT_TYPES.uav.emoji} تحليق مكثف: ${intenseOn(d) ? '✅ مفعّل' : '⬜ لا'}`);
 function typeKb(d, lang = 'ar') {
   const kb = new InlineKeyboard();
-  NEWS_TYPES.forEach((k, i) => { kb.text(`${d.type === k ? '• ' : ''}${ALERT_TYPES[k].emoji} ${lang === 'en' ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`, `nw:s:${d.id}:${k}`); if (i % 2 === 1) kb.row(); });
-  return kb.row().text(tr(lang, '↩️ رجوع', '↩️ Back'), 'nw:b:' + d.id);
+  const groups = newsTypeGroupKeys();
+  groups.forEach((group, i) => {
+    const selected = NEWS_TYPE_GROUPS[group].includes(d.type) ? '• ' : '';
+    kb.text(`${selected}${newsGroupLabel(group, lang)} (${NEWS_TYPE_GROUPS[group].length})`, `nw:tg:${d.id}:${group}`);
+    if (i % 2 === 1 && i < groups.length - 1) kb.row();
+  });
+  if (groups.length % 2 === 1) kb.row();
+  return kb.text(tr(lang, '↩️ رجوع للخبر', '↩️ Back to draft'), 'nw:b:' + d.id);
+}
+function typeGroupKb(d, group, lang = 'ar') {
+  const types = NEWS_TYPE_GROUPS[group] || [];
+  const kb = new InlineKeyboard();
+  types.forEach((type, i) => {
+    kb.text(`${d.type === type ? '• ' : ''}${alertButtonLabel(type, lang)}`, `nw:s:${d.id}:${type}`);
+    if (i % 2 === 1 && i < types.length - 1) kb.row();
+  });
+  if (types.length % 2 === 1 || types.length === 0) kb.row();
+  return kb.text(tr(lang, '↩️ مجموعات الأنواع', '↩️ Type groups'), `nw:tb:${d.id}`)
+    .row().text(tr(lang, '↩️ رجوع للخبر', '↩️ Back to draft'), `nw:b:${d.id}`);
 }
 function politicalCategoryKb(d, lang = 'ar') {
   const kb = new InlineKeyboard();
@@ -573,11 +607,14 @@ async function nightSummaryTick() {
 export function toBotDraft(d) {
   const n = newsState();
   const body = d.headline;
+  const patrolText = N(`${d.headline || ''} ${d.body || ''}`);
+  const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
     type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin,
     location: d.loc || locationFrom({}), extra: d.extra || [],
     details: d.type === 'breaking' ? '' : (d.body || body), text: d.type === 'breaking' ? body : '',
     created: Date.now(), source: 'news',
+    ...(patrolForm ? { patrolForm } : {}),
     ...(d.type === 'weather' && d.hazard ? { meta: { hazard: d.hazard } } : {}),
     ...(typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
     ...(d.type === 'political' ? {
@@ -1109,6 +1146,22 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, h.langOf(ctx) === 'en' ? POLITICAL_CATEGORIES[category].en : POLITICAL_CATEGORIES[category].ar);
     await refreshCards(d);
   });
+  bot.callbackQuery(/^nw:tg:(\w+):([a-z_]+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const [, id, group] = ctx.match;
+    const d = await findDraft(id);
+    if (!d || !Object.hasOwn(NEWS_TYPE_GROUPS, group)) return toast(ctx, '');
+    if (d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
+    await toast(ctx, '');
+    try { await ctx.editMessageReplyMarkup({ reply_markup: typeGroupKb(d, group, h.langOf(ctx)) }); } catch { /* ignore */ }
+  });
+  bot.callbackQuery(/^nw:tb:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    if (!d || d.status !== 'pending') return toast(ctx, '');
+    await toast(ctx, '');
+    try { await ctx.editMessageReplyMarkup({ reply_markup: typeKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
+  });
   bot.callbackQuery(/^nw:s:(\w+):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const [, id, type] = ctx.match;
@@ -1201,12 +1254,34 @@ export function registerNewsTools(bot, h) {
     kb.text(t(ctx, '♻️ المصادر الافتراضية', '♻️ Default sources'), 'nws:sr').row();
     return kb.text(t(ctx, '↩️ رجوع', '↩️ Back'), 'nws');
   };
-  const tyText = (ctx) => t(ctx, '🏷 <b>الأنواع المرصودة</b>\n\nاضغط النوع لإيقاف أو تشغيل رصده. الأنواع الموقوفة لا تصلك منها مسودات.', '🏷 <b>Watched types</b>\n\nTap a type to switch it on/off. No drafts arrive for switched-off types.');
+  const tyText = (ctx, group = null) => group
+    ? t(ctx, '🏷 <b>الأنواع المرصودة</b>\n\nاضغط النوع لتشغيل أو إيقاف رصده. الأنواع الموقوفة لا تصلك منها مسودات.', '🏷 <b>Watched types</b>\n\nTap a type to switch it on/off. No drafts arrive for switched-off types.')
+    : t(ctx, '🏷 <b>الأنواع المرصودة</b>\n\nاختر مجموعة لعرض أنواعها، ثم اضغط النوع لتشغيل أو إيقاف رصده.', '🏷 <b>Watched types</b>\n\nChoose a group to see its types, then tap a type to switch monitoring on or off.');
   const tyKb = (ctx) => {
     const n = newsState();
     const kb = new InlineKeyboard();
-    NEWS_TYPES.forEach((k, i) => { kb.text(`${n.types[k] ? '✅' : '⏸'} ${ALERT_TYPES[k].emoji} ${en(ctx) ? ALERT_TYPES[k].button_en : ALERT_TYPES[k].button_ar}`, 'nws:tt:' + k); if (i % 2 === 1) kb.row(); });
-    return kb.row().text(t(ctx, '↩️ رجوع', '↩️ Back'), 'nws');
+    const lang = en(ctx) ? 'en' : 'ar';
+    const groups = newsTypeGroupKeys();
+    groups.forEach((group, i) => {
+      const types = NEWS_TYPE_GROUPS[group];
+      const active = types.filter((type) => n.types[type]).length;
+      kb.text(`${newsGroupLabel(group, lang)} (${active}/${types.length})`, `nws:tg:${group}`);
+      if (i % 2 === 1 && i < groups.length - 1) kb.row();
+    });
+    if (groups.length % 2 === 1) kb.row();
+    return kb.text(t(ctx, '↩️ رجوع', '↩️ Back'), 'nws');
+  };
+  const tyGroupKb = (ctx, group) => {
+    const n = newsState();
+    const types = NEWS_TYPE_GROUPS[group] || [];
+    const lang = en(ctx) ? 'en' : 'ar';
+    const kb = new InlineKeyboard();
+    types.forEach((type, i) => {
+      kb.text(`${n.types[type] ? '✅' : '⏸'} ${alertButtonLabel(type, lang)}`, `nws:tt:${type}`);
+      if (i % 2 === 1 && i < types.length - 1) kb.row();
+    });
+    if (types.length % 2 === 1 || types.length === 0) kb.row();
+    return kb.text(t(ctx, '↩️ مجموعات الأنواع', '↩️ Type groups'), 'nws:ty');
   };
   const ngText = (ctx) => {
     const g = newsState().night;
@@ -1285,10 +1360,18 @@ export function registerNewsTools(bot, h) {
     await sendTestDraft(ctx.from.id);
   }));
   bot.callbackQuery('nws:ty', (ctx) => onlyOwner(ctx, async () => { await toast(ctx, ''); await h.show(ctx, tyText(ctx), tyKb(ctx)); }));
+  bot.callbackQuery(/^nws:tg:([a-z_]+)$/, (ctx) => onlyOwner(ctx, async () => {
+    const group = ctx.match[1];
+    if (!Object.hasOwn(NEWS_TYPE_GROUPS, group)) return toast(ctx, '');
+    await toast(ctx, ''); await h.show(ctx, tyText(ctx, group), tyGroupKb(ctx, group));
+  }));
   bot.callbackQuery(/^nws:tt:(\w+)$/, (ctx) => onlyOwner(ctx, async () => {
     const k = ctx.match[1]; const n = newsState();
     if (NEWS_TYPES.includes(k)) { n.types[k] = !n.types[k]; save(); }
-    await toast(ctx, '✅'); await h.show(ctx, tyText(ctx), tyKb(ctx));
+    const group = ALERT_TYPES[k]?.group;
+    await toast(ctx, '✅');
+    if (NEWS_TYPE_GROUPS[group]) await h.show(ctx, tyText(ctx, group), tyGroupKb(ctx, group));
+    else await h.show(ctx, tyText(ctx), tyKb(ctx));
   }));
   bot.callbackQuery('nws:src', (ctx) => onlyOwner(ctx, async () => { await toast(ctx, ''); await h.show(ctx, srcText(ctx), srcKb(ctx)); }));
   // 📍 local/activist ⇄ 🏛 main source: local ones are labelled in drafts and handled more strictly

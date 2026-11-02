@@ -25,6 +25,7 @@ import { pushConfigured, pushPublicKey, saveSubscription, removeSubscription, se
 const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
 const SHARED = path.join(ROOT, 'shared');
+const startupMaintenanceEnabled = process.env.RUN_STARTUP_MAINTENANCE === 'true';
 
 const ADMIN_DESC = '🔒 بوت النشر الخاص بإدارة Red Alert Syria (للمشرفين فقط).';
 const ADMIN_SHORT = 'بوت النشر الخاص — Red Alert Syria';
@@ -364,7 +365,7 @@ async function start() {
   // One-time clean start requested by the owner: remove every alert (active and ended) from the map,
   // the local file and the Telegram backup. Runs once (marker saved in the backup); channel posts stay.
   const WIPE_ID = 'wipe-all-alerts-2026-10-23';
-  if (!store.state.maint?.[WIPE_ID]) {
+  if (startupMaintenanceEnabled && !store.state.maint?.[WIPE_ID]) {
     const n = store.deleteMany(() => true).length;
     store.state.maint = { ...(store.state.maint || {}), [WIPE_ID]: new Date().toISOString() };
     store.persist();
@@ -406,6 +407,7 @@ async function start() {
     startPrices(() => bots.admin?.api); // 💱 morning prices bulletin (in-app scheduler, Damascus time)
     startServices(); // 🛣 road statuses expiry
     startQuakes(() => bots.admin?.api); // 🌍 earthquake alerts (EMSC + USGS, auto-posted)
+    if (startupMaintenanceEnabled) {
     // one-time owner request (2026-10-25): 3 explosions published as "civil" -> "explosion" (edit posts in place)
     {
       const RT_ID = 'retype-explosion-2026-10-25';
@@ -444,13 +446,14 @@ async function start() {
           console.log('[glyph] updated exact alert and edited channel photo in place');
         } catch (e) { console.error('[glyph] update failed', e.description || e.message); }
       };
-      startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
-      startTranslations(); // 🌐 English descriptions for /en/
       setTimeout(() => resyncChannelPosts(bots.admin.api).then(async (n) => {
         console.log(`[bot] channel posts re-synced: ${n}`);
         await correctWeaponGlyph();
       }).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
     }
+    }
+    startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
+    startTranslations(); // 🌐 English descriptions for /en/
   };
   const upAdmin = async (attempt = 1) => {
     try {
