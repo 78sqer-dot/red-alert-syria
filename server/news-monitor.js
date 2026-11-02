@@ -1079,6 +1079,11 @@ export function registerNewsTools(bot, h) {
     d.approvedBy = { id: ctx.from.id, name: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' '), username: ctx.from.username || null };
     d.approvedAt = new Date().toISOString(); n.stats.published++;
     save();
+    const ownerId = config.ownerIds?.[0];
+    if (ownerId && Number(ownerId) !== Number(ctx.from.id)) {
+      const reviewer = d.approvedBy.username ? `@${d.approvedBy.username}` : d.approvedBy.name;
+      try { await ctx.api.sendMessage(ownerId, `<b>تم اعتماد ونشر خبر جديد</b>\n${esc(d.headline || d.title || '')}\nالمشرف: ${esc(reviewer || String(ctx.from.id))}\nالوقت: ${esc(new Date(d.approvedAt).toLocaleString('ar-SY', { timeZone: 'Asia/Damascus' }))}`, { parse_mode: 'HTML' }); } catch (e) { console.warn('[news] owner approval notification failed', e.message); }
+    }
     await closeCards(d, cur(ctx));
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
     const kb = new InlineKeyboard();
