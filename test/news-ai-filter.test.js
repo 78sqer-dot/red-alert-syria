@@ -27,6 +27,22 @@ test('specific Syrian political developments pass only when political keywords a
   assert.ok(result.kt.includes('political'));
 });
 
+test('new political-button wording reaches classification only with Syrian context', () => {
+  const samples = [
+    'إعلان حكومي سوري جديد بشأن سياسة الدعم في محافظة حلب بعد اجتماع مجلس الوزراء اليوم',
+    'إعلان رسمي صادر عن جهة رسمية سورية حول قرار إداري جديد في دمشق اليوم',
+    'بيان صادر عن جهة رسمية سورية يوضح قراراً جديداً في محافظة حمص اليوم',
+  ];
+  for (const post of samples) {
+    const result = prefilter(post, { general: true });
+    assert.equal(result.ok, true, post);
+    assert.ok(result.kt.includes('political'), post);
+  }
+  const foreign = prefilter('إعلان حكومي أردني جديد بشأن قرار إداري في عمان اليوم بعد اجتماع مجلس الوزراء', { breaking: true });
+  assert.equal(foreign.ok, false);
+  assert.equal(foreign.why, 'not-syria');
+});
+
 test('foreign politics and generic political commentary do not pass the political prefilter', () => {
   const foreign = prefilter('أعلنت الحكومة الأردنية اليوم تعيين وزير جديد بعد صدور قرار رسمي في عمان', { breaking: true });
   assert.equal(foreign.ok, false);
