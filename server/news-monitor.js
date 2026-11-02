@@ -799,7 +799,8 @@ async function processQueue() {
     const batch = R.queue.splice(0, 20);
     if (!batch.length) return;
     batch.forEach((it, k) => { it.i = k + 1; });
-    const known = knownEvents(12).slice(0, 40);
+    // Keep the complete in-window event set for deterministic local matching; only cap the AI context.
+    const known = knownEvents(12);
     const key = NEWS_CFG.aiKey();
     let results = null;
     if (key && aiBudgetOk() && Date.now() - R.lastAiAt >= NEWS_CFG.aiMinGapMs) {
@@ -808,7 +809,7 @@ async function processQueue() {
       try {
         const prompt = buildPrompt(
           batch.map((it) => ({ i: it.i, source: it.src.name, local: !!it.src.local, ago: `${Math.max(0, Math.round((Date.now() - it.ts) / 60000))} min ago`, text: it.text })),
-          known.map((k, i) => ({ id: 'E' + (i + 1), type: k.type, where: k.where, ago: `${Math.round((Date.now() - k.ts) / 60000)} min ago`, headline: `${k.headline} [${k.status}]`.slice(0, 220) })),
+          known.slice(0, 40).map((k, i) => ({ id: 'E' + (i + 1), type: k.type, where: k.where, ago: `${Math.round((Date.now() - k.ts) / 60000)} min ago`, headline: `${k.headline} [${k.status}]`.slice(0, 220) })),
           nowDamascus(),
         );
         results = await callGemini(prompt, { key, models: NEWS_CFG.models() });
