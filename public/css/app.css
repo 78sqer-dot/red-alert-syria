@@ -396,14 +396,13 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 /* drone — grey airframe that orbits only at close zoom (like the original) */
 .uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
 .uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
-/* the drone stays hidden at country view and circles its target at detailed zoom */
-.maplibregl-map.zoom-detail .uav { animation: uavOrbit 9s linear infinite; }
-/* original (redalert.com.lb): .zoom-tier-far/.zoom-tier-mid .uav-svg { visibility: hidden } -> below detailed zoom
-   only the glowing circle is shown; the tap target stays so the alert can still be opened */
-.maplibregl-map:not(.zoom-detail) .mk-orbit .uav { visibility: hidden; animation: none; }
+/* Keep one recognizable drone orbit visible at every zoom; hide only supplemental copies when zoomed out. */
+.maplibregl-map .mk-orbit:not(.mk-sat) .uav { animation: uavOrbit 9s linear infinite; }
+.maplibregl-map:not(.zoom-detail) .mk-orbit.mk-sat { visibility: hidden; }
 .mk-sat .uav, .maplibregl-map.zoom-detail .mk-sat .uav { animation-delay: var(--delay, 0s); }
 /* the airframe circles the target and turns with its heading */
 @keyframes uavOrbit { from { transform: rotate(0deg) translateX(var(--orb, 20px)); } to { transform: rotate(-360deg) translateX(var(--orb, 20px)); } }
+@media (prefers-reduced-motion: reduce) { .maplibregl-map .mk-orbit .uav { animation: none !important; } }
 .uav-svg { display: block; fill: #6b7280; filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
 html.dark .uav-svg { fill: #9ca3af; filter: drop-shadow(0 0 1px rgba(0,0,0,.95)) drop-shadow(0 0 .5px rgba(0,0,0,.95)); }
 .mk.sel .uav-svg { fill: var(--c); }
@@ -460,6 +459,15 @@ html[dir='rtl'] .maplibregl-popup-close-button { left: 6px; right: auto; }
 .maplibregl-popup.pp-alert-popup { max-width: min(392px, calc(100% - 16px)) !important; }
 .pp-alert-popup .maplibregl-popup-content { position: relative; box-sizing: border-box; width: min(420px, calc(100vw - 32px)); max-height: min(62vh, 600px); max-height: min(62dvh, 600px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 17px 17px 14px; border: 1px solid var(--border-subtle); border-radius: 18px; background: color-mix(in srgb, var(--bg-elevated) 98%, var(--red) 2%); box-shadow: 0 20px 56px rgba(17, 24, 39, .24), 0 5px 16px rgba(17, 24, 39, .13); scrollbar-gutter: stable; }
 .pp-alert-popup .maplibregl-popup-content::before { content: ''; position: absolute; top: 0; inset-inline: 14px; height: 3px; border-radius: 0 0 4px 4px; background: linear-gradient(90deg, var(--blue), var(--red)); opacity: .9; pointer-events: none; }
+.maplibregl-popup.pp-group-popup { max-width: min(360px, calc(100vw - 24px)) !important; }
+.pp-group-popup .maplibregl-popup-content { box-sizing: border-box; width: min(360px, calc(100vw - 32px)); max-height: min(58vh, 480px); max-height: min(58dvh, 480px); overflow: hidden; padding: 14px; border: 1px solid var(--border-subtle); border-radius: 16px; background: var(--bg-elevated); box-shadow: var(--shadow-lg); }
+.alert-group-chooser { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.alert-group-heading { margin: 0; padding-inline-end: 32px; color: var(--text-primary); font-size: 14px; font-weight: 900; line-height: 1.5; }
+.alert-group-list { display: grid; gap: 7px; max-height: min(48vh, 390px); max-height: min(48dvh, 390px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.alert-group-item { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 9px 10px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--bg-card); color: var(--text-primary); text-align: start; cursor: pointer; }
+.alert-group-item:hover, .alert-group-item:focus-visible { border-color: var(--blue); background: var(--bg-card-hover); }
+.alert-group-title { font-size: 12px; font-weight: 800; line-height: 1.55; overflow-wrap: anywhere; }
+.alert-group-meta { color: var(--text-muted); font-size: 10.5px; line-height: 1.4; }
 html.dark .pp-alert-popup .maplibregl-popup-content { box-shadow: 0 18px 46px rgba(0, 0, 0, .68), 0 4px 12px rgba(0, 0, 0, .42); }
 .maplibregl-popup-close-button { inset-inline-end: 9px; inset-inline-start: auto; top: 8px; width: 28px; height: 28px; border: 1px solid var(--border-subtle); border-radius: 50%; background: var(--bg-subtle); color: var(--text-muted); font-size: 17px; line-height: 24px; }
 html[dir='rtl'] .maplibregl-popup-close-button { left: 9px; right: auto; }

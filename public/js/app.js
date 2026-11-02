@@ -1,7 +1,6 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=18';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=31';
-import * as maplibregl from '/vendor/maplibre-gl.mjs?v=6.16.0';
 import { DICT } from './i18n.js?v=3';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=4';
@@ -12,8 +11,6 @@ import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
-maplibregl.setWorkerUrl(new URL('/vendor/maplibre-gl-worker.mjs', location.origin).href);
-window.maplibregl = maplibregl;
 const T = DICT[LANG];
 const TZ = 'Asia/Damascus';
 const CHANNEL = 'https://t.me/Red_Alert_Syria';
@@ -1480,8 +1477,10 @@ async function boot() {
   else scheduleInstallCard(8000);
   window.__rasInstall = { show: () => showInstallCard(true), mode: installMode };
 
-  // wait for maplibre (deferred script)
-  // MapLibre is imported as an ES module; expose that instance for map.js.
+  // Let the lightweight interface paint before parsing MapLibre's large module on the main thread.
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const maplibregl = await import('/vendor/maplibre-gl.mjs?v=6.16.0');
+  maplibregl.setWorkerUrl(new URL('/vendor/maplibre-gl-worker.mjs', location.origin).href);
   window.maplibregl = maplibregl;
   amap = new AlertMap($('#map'), {
     lang: LANG,

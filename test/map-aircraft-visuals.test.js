@@ -15,11 +15,12 @@ test('drone keeps the original top-down silhouette, fixed icon size and perimete
   assert.match(css, /\.uav-svg\s*\{\s*stroke: rgba\(255,255,255,\.94\);\s*stroke-width: 18;/);
 });
 
-test('drone marker resumes its circular flight at detailed zoom', () => {
-  assert.match(css, /\.maplibregl-map\.zoom-detail \.uav\s*\{\s*animation:\s*uavOrbit 9s linear infinite;\s*\}/);
+test('drone marker remains visible and circles at every zoom with a readable country-scale radius', () => {
+  assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
+  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit\.mk-sat\s*\{\s*visibility: hidden;/);
   assert.doesNotMatch(css, /uavHover/);
   assert.match(mapJs, /classList\.toggle\('zoom-detail', z >= 10\.5\)/);
-  assert.match(mapJs, /if \(z < 10\.5\) continue;\s*\/\/ Match the visible circle's radius exactly; do not keep the drone orbit near its center\.\s*const px = Math\.max\(10, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\);/);
+  assert.match(mapJs, /const px = Math\.max\(z < 10\.5 \? 12 : 10, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
   assert.doesNotMatch(mapJs, /Math\.min\(12, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
   assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });

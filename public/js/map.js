@@ -5,7 +5,7 @@ import { EXTRA_SVG } from './target-svgs.js?v=13';
 import { icon } from './icons.js?v=4';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=3';
-import { groupAlerts, nextAlertId } from './marker-layout.js';
+import { groupAlerts } from './marker-layout.js';
 import { aircraftRotation, flightPath, flightPosition } from '/shared/flight-path.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=1';
@@ -555,7 +555,65 @@ export class AlertMap {
 
   selectMarker(id) {
     const group = groupAlerts(this.alerts, this.selectedId).find((g) => g.alerts.some((a) => a.id === id));
-    this.onSelect(group ? nextAlertId(group, this.selectedId) : id, { fromMap: true, fly: true });
+    if (group?.alerts.length > 1) return this.openGroupChooser(group);
+    this.onSelect(id, { fromMap: true, fly: true });
+  }
+
+  openGroupChooser(group) {
+    this.closePopup();
+    const lang = this.opts.lang === 'en' ? 'en' : 'ar';
+    const title = document.createElement('h3');
+    title.className = 'alert-group-heading';
+    title.textContent = lang === 'en' ? `${group.alerts.length} alerts at this location` : `${group.alerts.length} أخبار في هذا الموقع`;
+    const list = document.createElement('div');
+    list.className = 'alert-group-list';
+    list.setAttribute('role', 'list');
+    for (const alert of group.alerts) {
+      const row = document.createElement('div');
+      row.setAttribute('role', 'listitem');
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'alert-group-item';
+      const headline = document.createElement('span');
+      headline.className = 'alert-group-title';
+      headline.textContent = alert.title || (lang === 'en' ? 'Alert' : 'تنبيه');
+      const meta = document.createElement('span');
+      meta.className = 'alert-group-meta';
+      const type = typeOf(alert.type);
+      const label = lang === 'en' ? type.en : type.ar;
+      const time = alert.timestamp && Number.isFinite(Date.parse(alert.timestamp))
+        ? new Date(alert.timestamp).toLocaleTimeString(lang === 'en' ? 'en-US' : 'ar-SY', { hour: '2-digit', minute: '2-digit' })
+        : '';
+      meta.textContent = [label, time].filter(Boolean).join(' · ');
+      item.append(headline, meta);
+      item.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.closePopup();
+        this.onSelect(alert.id, { fromMap: true, fly: true });
+      });
+      row.append(item);
+      list.append(row);
+    }
+    const content = document.createElement('section');
+    content.className = 'alert-group-chooser';
+    content.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    content.setAttribute('aria-label', title.textContent);
+    content.append(title, list);
+    const { longitude, latitude } = group.representative.location;
+    const popup = new (ml().Popup)({ className: 'pp-group-popup', closeButton: true, closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 28px))', focusAfterOpen: true })
+      .setLngLat([longitude, latitude])
+      .setDOMContent(content)
+      .addTo(this.map);
+    this.popup = popup;
+    popup._groupKey = group.key;
+    popup._groupAlertIds = group.alerts.map((alert) => alert.id);
+    popup.on('close', () => { if (this.popup === popup) this.popup = null; });
+    popup.getElement()?.classList.add('pp-gest');
+    const popupContent = popup.getElement()?.querySelector('.maplibregl-popup-content');
+    popupContent?.addEventListener('wheel', (event) => event.stopPropagation(), { passive: true });
+    popupContent?.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
+    popupContent?.addEventListener('touchmove', (event) => event.stopPropagation(), { passive: true });
+    this.bindClamp();
   }
 
   refreshMarkerGroups() {
@@ -573,7 +631,7 @@ export class AlertMap {
         el.classList.toggle('sel', a.id === this.selectedId);
         el.style.zIndex = a.id === this.selectedId ? 50 : a.is_active ? 10 : 2;
         const count = group.alerts.length;
-        const hint = this.opts.lang === 'en' ? `${count} alerts here — click to switch` : `${count} تنبيهات في هذا الموقع — اضغط للتبديل`;
+        const hint = this.opts.lang === 'en' ? `${count} alerts here — click to choose` : `${count} أخبار في هذا الموقع — اضغط للاختيار`;
         el.title = count > 1 ? `${a.title} · ${hint}` : a.title;
         el.setAttribute('aria-label', el.title);
         el.dataset.alertId = a.id;
@@ -672,6 +730,11 @@ export class AlertMap {
       }
     }
     this.updateZones();
+    if (this.popup?._groupKey) {
+      const currentGroup = groupAlerts(this.alerts).find((group) => group.key === this.popup._groupKey);
+      const ids = this.popup._groupAlertIds || [];
+      if (!currentGroup || currentGroup.alerts.length !== ids.length || currentGroup.alerts.some((alert) => !ids.includes(alert.id))) this.closePopup();
+    }
     if (this.popup && this.popup._alertId && !seen.has(this.popup._alertId)) this.closePopup();
   }
 
@@ -848,9 +911,8 @@ export class AlertMap {
         if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
         continue;
       }
-      if (z < 10.5) continue;
-      // Match the visible circle's radius exactly; do not keep the drone orbit near its center.
-      const px = Math.max(10, Math.round((o.km * 1000) / mpp));
+      // Keep the orbit legible at country scale while following the real display circle when zoomed in.
+      const px = Math.max(z < 10.5 ? 12 : 10, Math.round((o.km * 1000) / mpp));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
     if (z >= 10.5 && this.sats) for (const m of this.sats.values()) {

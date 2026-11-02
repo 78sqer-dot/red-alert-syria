@@ -6,6 +6,8 @@ import { ALERT_TYPES } from '../shared/types.js';
 const map = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf8');
 const css = await readFile(new URL('../public/css/app.css', import.meta.url), 'utf8');
 const svgs = await readFile(new URL('../public/js/marker-svgs.js', import.meta.url), 'utf8');
+const app = await readFile(new URL('../public/js/app.js', import.meta.url), 'utf8');
+const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 
 test('security alert emojis are present and semantically distinct', () => {
   assert.equal(ALERT_TYPES.breaking.emoji, '🚨');
@@ -16,11 +18,11 @@ test('security alert emojis are present and semantically distinct', () => {
   assert.equal(ALERT_TYPES.death.emoji, '🪦');
 });
 
-test('warplane keeps the three-aircraft formation while the drone keeps its current orbit', () => {
+test('warplane keeps the three-aircraft formation and drones retain their orbiting silhouette', () => {
   assert.match(map, /t\.marker === 'orbit'/);
   assert.match(map, /t\.marker === 'squad'/);
   assert.match(map, /pl\(16, 22, -8, 1\).*pl\(14, 6, 12, 0\.85\).*pl\(14, 38, 12, 0\.85\)/);
-  assert.match(css, /\.maplibregl-map\.zoom-detail \.uav\s*\{\s*animation:\s*uavOrbit 9s linear infinite;/);
+  assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
   assert.match(css, /\.mk-squad \.squad \.sq\s*\{\s*scale: 1; animation: squadFlyZ 7s linear infinite;/);
   assert.match(svgs, /"uav":/);
   assert.match(svgs, /"plane":/);
@@ -32,6 +34,26 @@ test('schematic entry uses the same moving blue three-aircraft formation and pul
   assert.match(map, /flightPosition\(path, progress\)/);
   assert.match(css, /\.map-flight-track-halo\s*\{[^}]*animation: flightTrackPulse 1\.8s ease-out infinite/);
   assert.doesNotMatch(css, /\.map-flight-track-marker\.is-uav\s*\{[^}]*--aircraft-color:\s*#ef4444/);
+});
+
+test('drone orbit stays visible at country zoom while extra copies are hidden to prevent clutter', () => {
+  assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
+  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit\.mk-sat\s*\{\s*visibility: hidden;/);
+  assert.doesNotMatch(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit \.uav\s*\{\s*visibility: hidden/);
+  assert.match(map, /Math\.max\(z < 10\.5 \? 12 : 10, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
+});
+
+test('clicking a grouped alert opens an accessible chooser for every alert at that location', () => {
+  assert.match(map, /if \(group\?\.alerts\.length > 1\) return this\.openGroupChooser\(group\)/);
+  assert.match(map, /alert-group-list/);
+  assert.match(map, /item\.addEventListener\('click'/);
+  assert.match(map, /this\.onSelect\(alert\.id, \{ fromMap: true, fly: true \}\)/);
+});
+
+test('large map module is imported after the first interface paint rather than blocking initial module loading', () => {
+  assert.match(app, /requestAnimationFrame\(\(\) => requestAnimationFrame\(resolve\)\)/);
+  assert.match(app, /const maplibregl = await import\('\/vendor\/maplibre-gl\.mjs\?v=6\.16\.0'\)/);
+  assert.match(html, /rel="modulepreload"[^>]*maplibre-gl\.mjs[^>]*fetchpriority="low"/);
 });
 
 test('live alert circles use compositor-safe pulse layers and remain clickable through zone hit testing', () => {
