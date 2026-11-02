@@ -337,8 +337,9 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .news-pulse-ring { position: absolute; left: 0; top: 0; width: 25px; height: 25px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--mks, .5)); border: 1.4px solid var(--c, #e11d2e); border-radius: 50%; background: color-mix(in srgb, var(--c, #e11d2e) 5%, transparent); box-shadow: 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 20%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 10%, transparent); animation: newsPulseGlow 2.5s ease-in-out infinite; pointer-events: none; }
 .mk-breaking-news .news-pulse-ring { transform: translate(-50%, -50%); }
 .news-pulse-ring::after { content: ''; position: absolute; inset: 0; border: 1px solid color-mix(in srgb, var(--c, #e11d2e) 34%, transparent); border-radius: inherit; animation: newsPulseWave 2.5s ease-out infinite; }
-.news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 19px; height: 19px; box-sizing: border-box; transform: translate(-50%, -50%); border: 1px solid rgba(15,23,42,.14); border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.24); }
-.news-marker-svg { display: block; width: 12px; height: 12px; color: #111827; stroke: none; fill: #111827; }
+.news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; box-sizing: border-box; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px rgba(15,23,42,.58), 0 2px 5px rgba(0,0,0,.24); }
+.news-marker-core::after { content: ''; position: absolute; top: -3px; inset-inline-end: -3px; width: 8px; height: 8px; box-sizing: border-box; border: 1.5px solid #fff; border-radius: 50%; background: #ef233c; box-shadow: 0 0 0 1px rgba(15,23,42,.55); }
+.news-marker-svg { display: block; width: 24px; height: 24px; color: #111827; stroke: none; fill: #111827; filter: drop-shadow(0 0 1px #fff); }
 .mk:hover .news-marker-core, .mk.sel .news-marker-core { transform: translate(-50%, -50%) scale(1.12); }
 .mk.inactive .news-pulse-ring { animation: none; opacity: .55; }
 .is-moving .news-pulse-ring, .is-zooming .news-pulse-ring { animation-play-state: paused; }
@@ -360,7 +361,7 @@ html.dark .sai.map-event-disc { background: #f8fafc !important; }
 @media (prefers-reduced-motion: reduce) { .mk.focus-arrival::after { animation: none; transform: translate(-50%, -50%) scale(1); opacity: .5; } }
 /* small silhouette icons (artillery tank, missile, ambulance, breaking) — same clean style as the drone/warplanes */
 .ic { position: absolute; left: 0; top: 0; width: 30px; height: 30px; transform: translate(-50%, -50%); transition: transform .15s; box-sizing: border-box; display: grid; place-items: center; border: 1.5px solid color-mix(in srgb, var(--ic) 65%, #fff); border-radius: 50%; background: #fff; box-shadow: 0 2px 7px rgba(15,23,42,.25); }
-.ic-svg { display: block; width: 74%; height: 74%; fill: var(--ic); overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.75)) drop-shadow(0 1px 2px rgba(255,255,255,.6)); }
+.ic-svg { display: block; width: 24px; height: 24px; fill: var(--ic); overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.75)) drop-shadow(0 1px 2px rgba(255,255,255,.6)); }
 html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
 .ic-pistol, .ic-rifle { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #f8fafc; border: 1px solid #111827; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
 .ic-pistol .ic-svg, .ic-rifle .ic-svg { width: 24px; height: 24px; fill: #111827; filter: none; }

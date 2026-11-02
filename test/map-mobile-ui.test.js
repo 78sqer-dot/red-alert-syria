@@ -39,6 +39,20 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.brand img \{ height: 28px; width: auto; \}/);
 });
 
+test('tapping an individual map symbol zooms to its alert and opens details on phones', () => {
+  assert.match(map, /selectMarker\(id\)[\s\S]{0,500}if \(group\?\.alerts\.length > 1\) return this\.zoomToGroupChooser\(group\);[\s\S]{0,140}this\.onSelect\(id, \{ fromMap: true, fly: true \}\)/);
+  assert.match(map, /if \(fly\) \{[\s\S]{0,600}this\.map\.flyTo\(\{ center: target, zoom: alertFocusZoom/);
+  assert.match(map, /if \(popup\) this\.openPopup\(alert\)/);
+  assert.match(app, /amap && amap\.select\(shown, \{ fly: fly, popup: true \}\);[\s\S]{0,150}showDetail\(\);[\s\S]{0,120}if \(isMobile\(\)\) setSheetOpen\(false\)/);
+});
+
+test('count-marker taps zoom to the group before showing a bottom-anchored chooser on phones', () => {
+  assert.match(map, /if \(group\?\.alerts\.length > 1\) return this\.zoomToGroupChooser\(group\)/);
+  assert.match(map, /zoomToGroupChooser\(group\)[\s\S]{0,1000}this\.map\.once\('moveend', \(\) => this\.openGroupChooser\(group\)\)[\s\S]{0,180}this\.map\.flyTo/);
+  assert.match(map, /className: 'pp-group-popup', anchor: 'bottom', offset: \[0, 0\]/);
+  assert.equal((map.match(/if \(!ids\.length \|\| ids\.some\(\(id\) => !liveIds\.has\(String\(id\)\)\)\) this\.closePopup\(\);/g) || []).length, 2);
+});
+
 test('general alert pulses are gentler while the legacy blue aircraft pulse remains specialized', () => {
   assert.match(css, /\.zp-fill \{ animation: none; opacity: \.035/);
   assert.match(css, /@keyframes zpulse \{ 0% \{ transform: scale\(1\); opacity: \.27; \} 100% \{ transform: scale\(1\.65\); opacity: 0; \} \}/);

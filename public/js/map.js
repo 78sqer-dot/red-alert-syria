@@ -553,8 +553,20 @@ export class AlertMap {
 
   selectMarker(id) {
     const group = clusterAlertsByScreen(this.alerts, this.map, this.selectedId).find((g) => g.alerts.some((a) => a.id === id));
-    if (group?.alerts.length > 1) return this.openGroupChooser(group);
+    if (group?.alerts.length > 1) return this.zoomToGroupChooser(group);
     this.onSelect(id, { fromMap: true, fly: true });
+  }
+
+  zoomToGroupChooser(group) {
+    const located = group.alerts.filter((alert) => Number.isFinite(alert.location?.longitude) && Number.isFinite(alert.location?.latitude));
+    if (!located.length) return this.openGroupChooser(group);
+    this.closePopup();
+    const center = located.reduce((sum, alert) => [sum[0] + alert.location.longitude / located.length, sum[1] + alert.location.latitude / located.length], [0, 0]);
+    const currentZoom = this.map.getZoom();
+    const zoom = Math.min(17, Math.max(currentZoom + 2, 7.5));
+    if (zoom <= currentZoom + 0.01 && distanceKm([this.map.getCenter().lng, this.map.getCenter().lat], center) < 0.01) return this.openGroupChooser(group);
+    this.map.once('moveend', () => this.openGroupChooser(group));
+    this.map.flyTo({ center, zoom, padding: this.padding(), duration: 800, essential: true });
   }
 
   openGroupChooser(group) {
@@ -598,7 +610,7 @@ export class AlertMap {
     content.setAttribute('aria-label', title.textContent);
     content.append(title, list);
     const { longitude, latitude } = group.representative.location;
-    const popup = new (ml().Popup)({ className: 'pp-group-popup', closeButton: true, closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 28px))', focusAfterOpen: true })
+    const popup = new (ml().Popup)({ className: 'pp-group-popup', anchor: 'bottom', offset: [0, 0], closeButton: true, closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 28px))', focusAfterOpen: false })
       .setLngLat([longitude, latitude])
       .setDOMContent(content)
       .addTo(this.map);
@@ -620,9 +632,9 @@ export class AlertMap {
     // Same-location reports share a visible marker, without inventing positions.
     const groups = clusterAlertsByScreen(this.alerts, this.map, this.selectedId);
     if (this.popup?._groupKey) {
-      const current = groups.find((group) => group.key === this.popup._groupKey);
       const ids = this.popup._groupAlertIds || [];
-      if (!current || current.alerts.length !== ids.length || current.alerts.some((alert) => !ids.includes(alert.id))) this.closePopup();
+      const liveIds = new Set(this.alerts.map((alert) => String(alert.id)));
+      if (!ids.length || ids.some((id) => !liveIds.has(String(id)))) this.closePopup();
     }
     for (const group of groups) {
       for (const a of group.alerts) {
@@ -737,9 +749,9 @@ export class AlertMap {
     }
     this.updateZones();
     if (this.popup?._groupKey) {
-      const currentGroup = clusterAlertsByScreen(this.alerts, this.map).find((group) => group.key === this.popup._groupKey);
       const ids = this.popup._groupAlertIds || [];
-      if (!currentGroup || currentGroup.alerts.length !== ids.length || currentGroup.alerts.some((alert) => !ids.includes(alert.id))) this.closePopup();
+      const liveIds = new Set(this.alerts.map((alert) => String(alert.id)));
+      if (!ids.length || ids.some((id) => !liveIds.has(String(id)))) this.closePopup();
     }
     if (this.popup && this.popup._alertId && !seen.has(this.popup._alertId)) this.closePopup();
   }
@@ -772,7 +784,7 @@ export class AlertMap {
       el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 23)}${plane('is-left', 18)}${plane('is-right', 18)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
     } else if (a.type === 'breaking') {
       el.classList.add('mk-breaking-news');
-      el.innerHTML = `<span class="news-marker-core">${svgTag(glyph, 14, 'class="news-marker-svg" fill="#111827"')}</span>`;
+      el.innerHTML = `<span class="news-marker-core">${svgTag(glyph, 24, 'class="news-marker-svg" fill="#111827"')}</span>`;
     } else if (t.marker === 'icon') {
       const sz = t.size || 30;
       el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:#111827;width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg" fill="#111827"')}</div>`;

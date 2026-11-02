@@ -52,8 +52,9 @@ test('drone orbit stays visible at country zoom while extra copies are hidden to
   assert.match(map, /Math\.max\(z < 10\.5 \? 12 : 10, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
 });
 
-test('clicking a grouped alert opens an accessible chooser for every alert at that location', () => {
-  assert.match(map, /if \(group\?\.alerts\.length > 1\) return this\.openGroupChooser\(group\)/);
+test('tapping a grouped alert zooms to the cluster before opening an accessible chooser', () => {
+  assert.match(map, /if \(group\?\.alerts\.length > 1\) return this\.zoomToGroupChooser\(group\)/);
+  assert.match(map, /anchor: 'bottom', offset: \[0, 0\]/);
   assert.match(map, /alert-group-list/);
   assert.match(map, /item\.addEventListener\('click'/);
   assert.match(map, /this\.onSelect\(alert\.id, \{ fromMap: true, fly: true \}\)/);
@@ -71,10 +72,14 @@ test('live alert circles use compositor-safe pulse layers and remain clickable t
   assert.match(css, /\.zp-fill[\s\S]*animation: zfillPulse/);
 });
 
-test('map alert icons use a clean white circular backing inside their event-colored pulse', () => {
+test('map event glyphs are 24px and urgent news uses a white outline, black triangle, and red dot', () => {
   assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
+  assert.match(map, /svgTag\(glyph, 24, 'class="news-marker-svg" fill="#111827"'\)/);
   assert.match(css, /\.sai\.map-event-disc\s*\{[^}]*background:\s*#fff !important/);
   assert.match(css, /\.ic\s*\{[^}]*border-radius:\s*50%;[^}]*background:\s*#fff/);
-  assert.match(css, /\.news-marker-core\s*\{[^}]*background:\s*#fff/);
+  assert.match(css, /\.news-marker-core\s*\{[^}]*width:\s*32px; height:\s*32px;[^}]*border:\s*2px solid #fff;[^}]*background:\s*transparent/);
+  assert.match(css, /\.news-marker-core::after\s*\{[^}]*background:\s*#ef233c/);
+  assert.match(css, /\.news-marker-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
+  assert.match(css, /\.ic-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
   assert.match(css, /\.mk-event-emoji\s*\{[^}]*background:\s*#fff/);
 });
