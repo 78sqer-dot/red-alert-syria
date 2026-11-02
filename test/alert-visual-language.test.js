@@ -73,14 +73,19 @@ test('live alert circles use compositor-safe pulse layers and remain clickable t
   assert.match(css, /\.zp-fill[\s\S]*animation: zfillPulse/);
 });
 
-test('map event glyphs are 24px and urgent news uses a white outline, black triangle, and red dot', () => {
+test('map event glyphs are 24px and urgent news uses a small red triangle, black interior, and red pulse', () => {
   assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
-  assert.match(map, /svgTag\(glyph, 24, 'class="news-marker-svg" fill="#111827"'\)/);
+  assert.match(map, /const triangle = '<svg class="news-marker-svg" viewBox="0 0 24 24"/);
+  assert.match(map, /fill="#ef233c".*fill="#111827".*fill="#ef233c"/);
   assert.match(css, /\.sai\.map-event-disc\s*\{[^}]*background:\s*#fff !important/);
   assert.match(css, /\.ic\s*\{[^}]*border-radius:\s*50%;[^}]*background:\s*#fff/);
   assert.match(css, /\.news-marker-core\s*\{[^}]*width:\s*32px; height:\s*32px;[^}]*border:\s*2px solid #fff;[^}]*background:\s*transparent/);
   assert.match(css, /\.news-marker-core::after\s*\{[^}]*background:\s*#ef233c/);
   assert.match(css, /\.news-marker-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
+  assert.match(css, /\.mk-breaking-news \.news-marker-core\s*\{\s*width: 26px; height: 26px; border-width: 1\.7px;/);
+  assert.match(css, /\.mk-breaking-news \.news-marker-svg\s*\{\s*width: 18px; height: 18px/);
+  assert.match(css, /\.mk-breaking-news \.news-pulse-ring\s*\{ width: 38px; height: 38px; border-color: #ef233c/);
+  assert.match(css, /@keyframes urgentPulseWave/);
   assert.match(css, /\.ic-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
   assert.match(css, /\.mk-event-emoji\s*\{[^}]*background:\s*#fff/);
 });

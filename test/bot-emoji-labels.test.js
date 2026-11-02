@@ -16,6 +16,13 @@ test('protest keeps its megaphone in bot labels and uses the shared black map gl
   assert.doesNotMatch(map, /mapEmoji|mk-event-emoji/);
 });
 
+test('bot button omits the colored gun emoji while the underlying marker type keeps it', () => {
+  assert.equal(ALERT_TYPES.smuggling_weapons.emoji, '🔫');
+  assert.doesNotMatch(alertButtonLabel('smuggling_weapons', 'ar'), /🔫/);
+  assert.doesNotMatch(alertButtonLabel('smuggling_weapons', 'en'), /🔫/);
+  assert.match(bot, /alertButtonLabel\(item\.type, lang\)/);
+});
+
 test('bot labels omit blank emoji placeholders and political categories have distinct symbols', () => {
   assert.equal(ALERT_TYPES.shooting.emoji, '');
   assert.equal(alertButtonLabel('shooting', 'ar'), 'إطلاق نار');

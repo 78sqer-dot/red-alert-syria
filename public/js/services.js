@@ -9,7 +9,7 @@ const S = {
   ar: {
     services: 'الخدمات', prices: 'الأسعار', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', nearby: 'قريب مني', weather: 'الطقس',
     sheetTitle: 'خدمات يومية', sheetSub: 'أسعار اليوم، الطقس، الكهرباء، حالة الطرق والمعابر، وأقرب مشفى وصيدلية وكازية وفرن.',
-    showWx: 'عرض التحذيرات على الخريطة', wxSub: 'الطقس والتحذيرات من المركز الوطني للأرصاد الجوية السوري. لا نعرض درجات أو توقعات من مزودات خارجية.', wxNow: 'الطقس الآن', today: 'اليوم', tomorrow: 'بكرا', wind: 'رياح', hum: 'رطوبة', kmh: 'كم/س', mm: 'ملم', rainP: 'احتمال المطر', gusts: 'هبّات', mountains: 'مناطق جبلية', wxErr: 'تعذّر تحميل بيانات المركز، جرّب بعد شوي.', wxWarn: 'تحذيرات رسمية', wxOfficial: 'تحذير رسمي', wxModel: 'تحذير توقّعي', wxLocal: 'تحذير منشور', wxSource: 'المصدر الرسمي', wxLocalSource: 'منشور التنبيه على تيليغرام', wxIssued: 'صدر', wxExpires: 'ينتهي', wxDailyLink: 'النشرة الجوية الرسمية', wxMapLink: 'خريطة المركز الرسمية', wxNoAlerts: 'لا توجد حالياً تحذيرات جوية نشطة في موجز المركز.', wxForecastUnavailable: 'لا تتوفر حالياً درجات حرارة أو توقعات رقمية حديثة في موجز المركز. النشرة اليومية الرسمية عبر الرابط أعلاه؛ تحقق من تاريخها قبل اعتمادها.', snowCm: 'ثلج', cm: 'سم',
+    showWx: 'عرض الطقس والتحذيرات على الخريطة', wxSub: 'الحالة والتوقعات بيانات نموذجية من Open‑Meteo، أما التحذيرات الرسمية فمن المركز الوطني للأرصاد الجوية السوري. بيانات النموذج ليست رصداً مباشراً ولا تحذيراً رسمياً.', wxModelData: 'بيانات نموذجية وليست رصداً مباشراً', wxCredit: 'Open‑Meteo · CC BY 4.0', wxNow: 'الطقس الآن', today: 'اليوم', tomorrow: 'بكرا', wind: 'رياح', hum: 'رطوبة', kmh: 'كم/س', mm: 'ملم', rainP: 'احتمال المطر', gusts: 'هبّات', mountains: 'مناطق جبلية', wxErr: 'تعذّر تحميل بيانات الطقس، جرّب بعد شوي.', wxWarn: 'تحذيرات رسمية', wxOfficial: 'تحذير رسمي', wxModel: 'تحذير توقّعي', wxLocal: 'تحذير منشور', wxSource: 'المصدر الرسمي', wxLocalSource: 'منشور التنبيه على تيليغرام', wxIssued: 'صدر', wxExpires: 'ينتهي', wxDailyLink: 'النشرة الجوية الرسمية', wxMapLink: 'خريطة المركز الرسمية', wxNoAlerts: 'لا توجد حالياً تحذيرات جوية نشطة في موجز المركز.', wxForecastUnavailable: 'تعذّر جلب بيانات الطقس النموذجية حالياً. أعد اختيار طبقة الطقس للمحاولة مجدداً.', snowCm: 'ثلج', cm: 'سم',
     market: 'سعر السوق الموازي (عام)', official: 'نشرة مصرف سورية المركزي', officialSource: 'صفحة المركزي الرسمية على فيسبوك', officialIssued: 'نشرة بتاريخ', officialChecked: 'آخر تحقق', buy: 'شراء', sell: 'مبيع',
     usd: 'دولار', eur: 'يورو', try: 'ليرة تركية', sar: 'ريال سعودي', aed: 'درهم إماراتي',
     gold: 'الذهب (للغرام)', k24: 'عيار 24', k21: 'عيار 21', k18: 'عيار 18', ounce: 'الأونصة عالمياً',
@@ -19,7 +19,7 @@ const S = {
     powerEmpty: 'ما في تحديثات كهرباء من مصدر حكومي رسمي حالياً.', powerSource: 'المصدر الحكومي الرسمي', powerCalc: 'حاسبة فاتورة الكهرباء الرسمية', allSyria: 'عموم سوريا', allGovs: 'كل المحافظات',
     roadsEmpty: 'ما في حالات طرق مسجّلة حالياً.', roadsSub: 'حالات الطرق يلي نشرها فريق الرصد أو وصلتنا ببلاغات وتأكدنا منها، وبتنشال لحالها لما تخلص مدتها.',
     showRoads: 'عرض الطرق على الخريطة', showBorders: 'عرض المعابر على الخريطة', bordersSub: 'حالة المعابر الحدودية الرئيسية مع دول الجوار، يحدّثها فريق الرصد. الحالة اللي صار لها أكتر من 3 أيام بلا تحديث بتظهر «غير معروف».', bst: { open: 'مفتوح', busy: 'مفتوح مع ازدحام', partial: 'مفتوح جزئياً', closed: 'مغلق', unknown: 'غير معروف' }, updated: 'آخر تحديث', withC: 'مع', crossing: 'معبر', until: 'لحد', reportRoad: 'بلّغ عن طريق',
-    road: { closed: 'طريق مسكّر', danger: 'طريق خطر', open: 'طريق سالك' },
+    road: { closed: 'طريق مسكّر', danger: 'طريق خطر', open: 'طريق سالك', busy: 'زحمة سير' },
     cats: { health: 'مشافي ومراكز صحية', pharmacy: 'صيدليات', fuel: 'كازيات', bakery: 'أفران' },
     cat1: { hospital: 'مشفى', clinic: 'مركز صحي', pharmacy: 'صيدلية', fuel: 'كازية', bakery: 'فرن' },
     searchPh: 'ابحث باسم المشفى أو الصيدلية أو المنطقة…', nearest: 'الأقرب لموقعك', results: 'النتائج',
@@ -40,7 +40,7 @@ const S = {
   en: {
     services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me', weather: 'Weather',
     sheetTitle: 'Daily services', sheetSub: 'Today\'s prices, weather, electricity, road status, and the nearest hospital, pharmacy, fuel station and bakery.',
-    showWx: 'Show warnings on the map', wxSub: 'Weather and warnings are from Syria’s National Meteorological Center. We do not show temperatures or forecasts from third-party providers.', wxNow: 'Weather now', today: 'Today', tomorrow: 'Tomorrow', wind: 'Wind', hum: 'Humidity', kmh: 'km/h', mm: 'mm', rainP: 'Chance of rain', gusts: 'Gusts', mountains: 'Mountain areas', wxErr: 'Could not load the official weather data; try again shortly.', wxWarn: 'Official warnings', wxOfficial: 'Official warning', wxModel: 'Forecast warning', wxLocal: 'Published alert', wxSource: 'Official source', wxLocalSource: 'Alert channel post', wxIssued: 'Issued', wxExpires: 'Valid until', wxDailyLink: 'Official daily bulletin', wxMapLink: 'Official meteorological map', wxNoAlerts: 'There are currently no active weather warnings in the Center’s feed.', wxForecastUnavailable: 'No current numerical temperatures or forecasts are available in the Center’s feed. The official daily bulletin is linked above; check its publication date before relying on it.', snowCm: 'Snow', cm: 'cm',
+    showWx: 'Show weather and warnings on the map', wxSub: 'Current conditions and forecasts are modeled data from Open‑Meteo; official warnings are from Syria’s National Meteorological Center. Model data are not direct observations or official warnings.', wxModelData: 'Modeled data, not direct observations', wxCredit: 'Open‑Meteo · CC BY 4.0', wxNow: 'Current weather', today: 'Today', tomorrow: 'Tomorrow', wind: 'Wind', hum: 'Humidity', kmh: 'km/h', mm: 'mm', rainP: 'Chance of rain', gusts: 'Gusts', mountains: 'Mountain areas', wxErr: 'Could not load weather data; try again shortly.', wxWarn: 'Official warnings', wxOfficial: 'Official warning', wxModel: 'Forecast warning', wxLocal: 'Published alert', wxSource: 'Official source', wxLocalSource: 'Alert channel post', wxIssued: 'Issued', wxExpires: 'Valid until', wxDailyLink: 'Official daily bulletin', wxMapLink: 'Official meteorological map', wxNoAlerts: 'There are currently no active weather warnings in the Center’s feed.', wxForecastUnavailable: 'Modeled weather data are temporarily unavailable. Select the weather layer again to retry.', snowCm: 'Snow', cm: 'cm',
     market: 'Parallel market (Syria, general)', official: 'Central Bank of Syria bulletin', officialSource: 'Official Central Bank Facebook page', officialIssued: 'Bulletin date', officialChecked: 'Last checked', buy: 'Buy', sell: 'Sell',
     usd: 'US dollar', eur: 'Euro', try: 'Turkish lira', sar: 'Saudi riyal', aed: 'UAE dirham',
     gold: 'Gold (per gram)', k24: '24K', k21: '21K', k18: '18K', ounce: 'World ounce',
@@ -50,7 +50,7 @@ const S = {
     powerEmpty: 'No electricity updates from an official government source right now.', powerSource: 'Official government source', powerCalc: 'Official electricity bill calculator', allSyria: 'All Syria', allGovs: 'All governorates',
     roadsEmpty: 'No road statuses right now.', roadsSub: 'Road statuses published by our desk or confirmed from reports; they disappear when their time ends.',
     showRoads: 'Show roads on the map', showBorders: 'Show crossings on the map', bordersSub: 'Status of the main border crossings with neighbouring countries, updated by our desk. A status not updated for 3 days shows as “unknown”.', bst: { open: 'Open', busy: 'Open – heavy traffic', partial: 'Partially open', closed: 'Closed', unknown: 'Unknown' }, updated: 'Updated', withC: 'with', crossing: 'Crossing', until: 'until', reportRoad: 'Report a road',
-    road: { closed: 'Road closed', danger: 'Dangerous road', open: 'Road open' },
+    road: { closed: 'Road closed', danger: 'Dangerous road', open: 'Road open', busy: 'Traffic congestion' },
     cats: { health: 'Hospitals & clinics', pharmacy: 'Pharmacies', fuel: 'Fuel stations', bakery: 'Bakeries' },
     cat1: { hospital: 'Hospital', clinic: 'Clinic', pharmacy: 'Pharmacy', fuel: 'Fuel station', bakery: 'Bakery' },
     searchPh: 'Search a hospital, pharmacy or area…', nearest: 'Nearest to you', results: 'Results',
@@ -71,7 +71,7 @@ const S = {
 };
 const CAT_COLORS = { hospital: '#e11d48', clinic: '#db2777', pharmacy: '#059669', fuel: '#d97706', bakery: '#a16207' };
 const GROUPS = { health: ['hospital', 'clinic'], pharmacy: ['pharmacy'], fuel: ['fuel'], bakery: ['bakery'] };
-const ROAD_COLORS = { closed: '#ef4444', danger: '#f59e0b', open: '#22c55e' };
+const ROAD_COLORS = { closed: '#ef4444', danger: '#f59e0b', open: '#22c55e', busy: '#eab308' };
 const SVC_LAYERS = ['svc-poi-pt', 'svc-poi-cl', 'svc-road-pt', 'svc-road-ln', 'svc-bd-c', 'svc-pw-c', 'svc-pw-i', 'svc-wx-i', 'svc-wx-x'];
 // one service category at a time on the map ("map mode"); the news is hidden meanwhile
 const MODES = { pharmacy: { color: CAT_COLORS.pharmacy, icon: 'pharmacy' }, health: { color: CAT_COLORS.hospital, icon: 'hospital' }, fuel: { color: CAT_COLORS.fuel, icon: 'fuel' }, bakery: { color: CAT_COLORS.bakery, icon: 'bakery' }, power: { color: '#ca8a04', icon: 'bolt' }, roads: { color: '#ef4444', icon: 'route' }, borders: { color: '#16a34a', icon: 'door' }, weather: { color: '#0284c7', icon: 'sun' } };
@@ -295,6 +295,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       }
       if (!m.getLayer('svc-road-ln')) {
         m.addLayer({ id: 'svc-road-ln', type: 'line', source: 'svc-roads', filter: ['==', ['geometry-type'], 'LineString'], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['match', ['get', 'status'], 'closed', ROAD_COLORS.closed, 'open', ROAD_COLORS.open, ROAD_COLORS.danger], 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 3, 12, 6], 'line-dasharray': [1.6, 1.2], 'line-opacity': 0.9 } });
+        m.setPaintProperty('svc-road-ln', 'line-color', ['match', ['get', 'status'], 'closed', ROAD_COLORS.closed, 'open', ROAD_COLORS.open, 'busy', ROAD_COLORS.busy, ROAD_COLORS.danger]);
         m.addLayer({ id: 'svc-road-pt', type: 'symbol', source: 'svc-roads', filter: ['==', ['geometry-type'], 'Point'], layout: { 'icon-image': ['get', 'icon'], 'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 1, 12, 1.25], 'icon-allow-overlap': true } });
       }
       if (!m.getSource('svc-bd')) {
@@ -362,9 +363,10 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (!st.mode) { b.hidden = true; return; }
     const md = MODES[st.mode]; const name = L.modes[st.mode];
     const z = map()?.getZoom?.() || 0;
-    const hint = GROUPS[st.mode] && z < 9.5 ? L.zoomHint(name) : L.modeHint;
+    const hint = st.mode === 'weather' ? L.wxModelData : GROUPS[st.mode] && z < 9.5 ? L.zoomHint(name) : L.modeHint;
+    const wxCredit = st.mode === 'weather' ? `<a class="svc-bar-credit" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" aria-label="Open-Meteo, CC BY 4.0" title="${esc(L.wxCredit)}">Open‑Meteo</a>` : '';
     b.style.setProperty('--c', md.color);
-    b.innerHTML = `<button class="svc-bar-main" data-a="list"><i class="svc-bar-ic">${icon(md.icon === 'hospital' || md.icon === 'pharmacy' || md.icon === 'fuel' || md.icon === 'bakery' ? 'mapPin' : md.icon, 15)}</i><span><b>${esc(name)}</b><small>${esc(hint)}</small></span></button><button class="svc-bar-x" data-a="exit">${icon('x', 14)}<span>${esc(L.backNews)}</span></button>`;
+    b.innerHTML = `<button class="svc-bar-main" data-a="list"><i class="svc-bar-ic">${icon(md.icon === 'hospital' || md.icon === 'pharmacy' || md.icon === 'fuel' || md.icon === 'bakery' ? 'mapPin' : md.icon, 15)}</i><span><b>${esc(name)}</b><small>${esc(hint)}</small></span></button>${wxCredit}<button class="svc-bar-x" data-a="exit">${icon('x', 14)}<span>${esc(L.backNews)}</span></button>`;
     b.hidden = false;
   }
   function enterMode(k, { fly = true } = {}) {
@@ -480,7 +482,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     let h = `<div class="pp-top"><span class="badge" style="--c:${MODES.weather.color}">${esc(L.wxNow)}</span>${st.wx?.at ? `<span class="time">${esc(L.updated)} ${esc(fmtHM.format(new Date(st.wx.at)))}</span>` : ''}</div>
       <p class="pp-title">${esc(wxName(p))}</p>
       <div class="wx-now">${wxImg(n.k, 40)}<b dir="ltr">${T(n.t)}</b><span><em>${esc(lbl[n.k] || '')}</em><small><span class="nw">${esc(L.wind)} <bdi>${n.wind ?? '—'}</bdi> ${esc(L.kmh)}</span>${n.hum != null ? ` · <span class="nw">${esc(L.hum)} <bdi>${n.hum}%</bdi></span>` : ''}</small></span></div>
-      <div class="wx-days">${(p.days || []).slice(0, 2).map((d, i) => wxDayRow(d, i ? L.tomorrow : L.today)).join('')}</div>`;
+      <div class="wx-days">${(p.days || []).slice(0, 2).map((d, i) => wxDayRow(d, i ? L.tomorrow : L.today)).join('')}</div>
+      <p class="wx-credit">${esc(L.wxModelData)} · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open‑Meteo</a> · <a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></p>`;
     for (const w of ws) {
       const details = LANG === 'en' ? w.details_en : w.details;
       const label = w.local ? L.wxLocal : w.official ? L.wxOfficial : L.wxModel;
@@ -647,6 +650,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         return `<div class="wx-warn" style="--c:${WARN_C(w.level)}">${esc(w.emoji)} <b>${esc(LANG === 'en' ? w.en : w.ar)}</b><small>${esc(label)}${areas ? ` · ${esc(areas)}` : ''}${w.url ? ` · <a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.official ? L.wxSource : L.wxLocalSource)}</a>` : ''}</small>${stamps.length ? `<small>${esc(stamps.join(' · '))}</small>` : ''}${details ? `<small>${esc(details.slice(0, 220))}</small>` : ''}</div>`;
       }).join('');
     } else h += `<div class="svc-empty">${esc(L.wxNoAlerts)}</div>`;
+    h += `<p class="wx-credit">${esc(L.wxModelData)} · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open‑Meteo</a> · <a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></p>`;
     if (j.forecastsAvailable === false) h += `<p class="svc-note">${esc(L.wxForecastUnavailable)}</p>`;
     h += `<p class="svc-note">${esc(L.updated)}: ${esc(when(j.at))} · ${esc(j.src || '')}</p>`;
     return h;

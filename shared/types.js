@@ -239,7 +239,8 @@ export function typeOf(key) {
 export function alertButtonLabel(key, lang = 'ar') {
   const type = typeOf(key);
   const label = lang === 'en' ? type.button_en : type.button_ar;
-  return [type.emoji, label].filter(Boolean).join(' ');
+  const emoji = key === 'smuggling_weapons' ? '' : type.emoji;
+  return [emoji, label].filter(Boolean).join(' ');
 }
 
 // Use a monochrome firearm silhouette; specialize to a rifle only when the report explicitly says so.

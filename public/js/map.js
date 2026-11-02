@@ -164,6 +164,8 @@ export class AlertMap {
     this.alerts = [];
     this.selectedId = null;
     this.popup = null;
+    this._groupPopupNav = null;
+    this._replacingPopup = false;
     this._lastMarkerTap = null;
     this.onSelect = opts.onSelect || (() => {});
     this.popupHtml = opts.popupHtml || (() => '');
@@ -566,6 +568,7 @@ export class AlertMap {
 
   openGroupChooser(group) {
     this.closePopup();
+    this._groupPopupNav = null;
     const lang = this.opts.lang === 'en' ? 'en' : 'ar';
     const title = document.createElement('h3');
     title.className = 'alert-group-heading';
@@ -594,6 +597,7 @@ export class AlertMap {
       item.addEventListener('click', (event) => {
         event.stopPropagation();
         this.closePopup();
+        this._groupPopupNav = { ids: group.alerts.map((item) => String(item.id)), currentId: String(alert.id) };
         this.onSelect(alert.id, { fromMap: true, fly: true });
       });
       row.append(item);
@@ -621,6 +625,59 @@ export class AlertMap {
     popupContent?.addEventListener('touchmove', (event) => event.stopPropagation(), { passive: true });
     this.bindClamp();
     this.schedulePopupFit(1);
+  }
+
+  groupPopupNavigation(alertId) {
+    const nav = this._groupPopupNav;
+    if (!nav) return null;
+    const live = new Set(this.alerts.filter((alert) => alert.is_active && Number.isFinite(alert.location?.latitude) && Number.isFinite(alert.location?.longitude)).map((alert) => String(alert.id)));
+    nav.ids = nav.ids.filter((id) => live.has(String(id)));
+    const index = nav.ids.indexOf(String(alertId));
+    if (nav.ids.length < 2 || index < 0) { this._groupPopupNav = null; return null; }
+    nav.currentId = String(alertId);
+    return { ids: nav.ids, index, total: nav.ids.length };
+  }
+
+  groupPopupNavigationNode(nav) {
+    const lang = this.opts.lang === 'en' ? 'en' : 'ar';
+    const rtl = lang === 'ar';
+    const bar = document.createElement('nav');
+    bar.className = 'pp-group-nav';
+    bar.dir = rtl ? 'rtl' : 'ltr';
+    bar.setAttribute('aria-label', rtl ? 'التنقل بين أخبار المجموعة' : 'Navigate alerts in this group');
+    const previous = document.createElement('button');
+    previous.type = 'button';
+    previous.className = 'pp-group-prev';
+    previous.textContent = rtl ? '→' : '←';
+    previous.setAttribute('aria-label', rtl ? 'الخبر السابق' : 'Previous alert');
+    previous.title = previous.getAttribute('aria-label');
+    previous.disabled = nav.index === 0;
+    previous.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); this.moveGroupPopup(-1); });
+    const count = document.createElement('span');
+    count.className = 'pp-group-nav-count';
+    count.setAttribute('aria-live', 'polite');
+    count.setAttribute('aria-atomic', 'true');
+    count.textContent = rtl ? `${nav.index + 1} من ${nav.total}` : `${nav.index + 1} of ${nav.total}`;
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'pp-group-next';
+    next.textContent = rtl ? '←' : '→';
+    next.setAttribute('aria-label', rtl ? 'الخبر التالي' : 'Next alert');
+    next.title = next.getAttribute('aria-label');
+    next.disabled = nav.index === nav.total - 1;
+    next.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); this.moveGroupPopup(1); });
+    bar.append(previous, count, next);
+    return bar;
+  }
+
+  moveGroupPopup(delta) {
+    const current = this._groupPopupNav?.currentId;
+    const nav = this.groupPopupNavigation(current);
+    if (!nav) return;
+    const id = nav.ids[nav.index + delta];
+    if (!id) return;
+    this._groupPopupNav.currentId = id;
+    this.onSelect(id, { fromMap: true, fly: false });
   }
 
   refreshMarkerGroups() {
@@ -780,7 +837,8 @@ export class AlertMap {
       el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 24)}${plane('is-left', 24)}${plane('is-right', 24)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
     } else if (a.type === 'breaking') {
       el.classList.add('mk-breaking-news');
-      el.innerHTML = `<span class="news-marker-core">${svgTag(glyph, 24, 'class="news-marker-svg" fill="#111827"')}</span>`;
+      const triangle = '<svg class="news-marker-svg" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 1.3 23.2 21H.8Z" fill="#ef233c"/><path d="m12 6.1-7.2 12.7h14.4Z" fill="#111827"/><path d="M11 9h2v5h-2zm0 6h2v2h-2z" fill="#ef233c"/></svg>';
+      el.innerHTML = `<span class="news-marker-core">${triangle}</span>`;
     } else if (t.marker === 'icon') {
       const sz = 24;
       el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:#111827;width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg" fill="#111827"')}</div>`;
@@ -1064,14 +1122,25 @@ export class AlertMap {
       controlPanel.hidden = true;
       document.querySelector('#mapControlsToggle')?.setAttribute('aria-expanded', 'false');
     }
+    const groupNav = this.groupPopupNavigation(alert.id);
+    this._replacingPopup = true;
     this.closePopup();
+    this._replacingPopup = false;
+    if (!groupNav) this._groupPopupNav = null;
     const at = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
     this._popupAt = null;
     const M = ml();
+    const contentNode = htmlToNode(this.popupHtml(alert));
+    if (groupNav) {
+      const root = contentNode.querySelector('.pp');
+      const navNode = this.groupPopupNavigationNode(groupNav);
+      const title = root?.querySelector('.pp-title');
+      if (title) title.before(navNode); else root?.append(navNode);
+    }
     // Keep the tip endpoint on the exact marker / circle coordinate, without a visual gap.
     this.popup = new M.Popup({ className: 'pp-alert-popup', anchor: 'bottom', closeButton: true, closeOnClick: false, maxWidth: 'min(420px, calc(100vw - 28px))', offset: [0, 0], focusAfterOpen: false })
       .setLngLat(at || [alert.location.longitude, alert.location.latitude])
-      .setDOMContent(htmlToNode(this.popupHtml(alert)))
+      .setDOMContent(contentNode)
       .addTo(this.map);
     this.popup._alertId = alert.id;
     this.bindClamp();
@@ -1088,6 +1157,7 @@ export class AlertMap {
     }
     this.popup.on('close', () => {
       pe?._popupConnector?.remove();
+      if (!this._replacingPopup && this._groupPopupNav?.currentId === String(alert.id)) this._groupPopupNav = null;
       if (this.popup && this.popup._alertId === alert.id) this.popup = null;
     });
     this.schedulePopupFit(2);

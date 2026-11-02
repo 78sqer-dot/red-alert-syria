@@ -1,6 +1,6 @@
 // 🌤 Official weather warnings + daily morning weather bulletin.
-//  - publicWeather(): only official CAP warnings and links from Syria's National Meteorological Center.
-//  - Numeric forecast data is deliberately not published by the website or the morning bulletin.
+//  - publicWeather(): official CAP warnings plus Open-Meteo model points when the user opens the weather map.
+//  - Model data is clearly labeled and never converted into official alerts or channel posts.
 //  - Morning bulletin: a branded image + short caption in the channel (default 08:00 Damascus), its own
 //    post (the prices bulletin stays separate). On/off, time, preview and "post now" in the owner menu.
 import { InlineKeyboard, InputFile } from 'grammy';
@@ -168,13 +168,28 @@ export async function allWeatherWarnings({ waitMs = 0 } = {}) {
   return out;
 }
 export async function publicWeather() {
-  const [warnings, official] = await Promise.all([
+  const [warnings, official, modelPoints] = await Promise.all([
     officialWeatherWarnings({ waitMs: 2_000 }),
     officialWeatherMeta(),
+    getWeather().catch(() => null),
   ]);
-  return { ok: true, at: Date.now(), src: 'المركز الوطني للأرصاد الجوية', forecastsAvailable: false,
+  const points = Array.isArray(modelPoints) ? modelPoints : [];
+  return {
+    ok: true,
+    at: Date.now(),
+    src: 'المركز الوطني للأرصاد الجوية',
+    src_en: 'Syria National Meteorological Center',
+    forecastsAvailable: points.filter((p) => p?.now && Number.isFinite(p.now.t)).length >= 10,
+    forecastSource: {
+      name: 'Open-Meteo',
+      url: 'https://open-meteo.com/',
+      licenceUrl: 'https://open-meteo.com/en/licence',
+      updatedAt: R.at || null,
+    },
     official: { ...official, warningSource: 'المركز الوطني للأرصاد الجوية / وزارة الطوارئ وإدارة الكوارث', mapUrl: 'https://climweb.med.gov.sy/mapviewer' },
-    warnings: warnings.filter((w) => w.official), points: [] };
+    warnings: warnings.filter((w) => w.official),
+    points,
+  };
 }
 export const weatherNowDebug = () => ({ at: R.at, err: R.err, points: R.data?.length || 0 });
 

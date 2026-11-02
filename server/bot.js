@@ -1625,7 +1625,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const en = langOf(ctx) === 'en';
     const kb = new InlineKeyboard()
       .text(roadLabel('closed', langOf(ctx)), 'rd:closed').text(roadLabel('danger', langOf(ctx)), 'rd:danger').row()
-      .text(roadLabel('open', langOf(ctx)), 'rd:open').row();
+      .text(roadLabel('open', langOf(ctx)), 'rd:open').text(roadLabel('busy', langOf(ctx)), 'rd:busy').row();
     const live = staff(ctx) ? activeRoads() : [];
     if (live.length) kb.text(en ? `📋 Active road statuses (${live.length})` : `📋 حالات الطرق الفعالة (${live.length})`, 'rdl').row();
     kb.text(L(ctx).btnBack, 'home');
@@ -1634,7 +1634,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       : '🛣 <b>حالة طريق</b>\n\nشو وضع الطريق؟ بعدها اختار المكان (فيك تضيف أكتر من مكان على نفس الطريق).\nبتظهر على طبقة الطرق بالخريطة وبتنشال لحالها لما تخلص مدتها.', kb);
   };
   bot.callbackQuery('rd', async (ctx) => { await ctx.answerCallbackQuery(); await roadMenu(ctx); });
-  bot.callbackQuery(/^rd:(closed|danger|open)$/, async (ctx) => {
+  bot.callbackQuery(/^rd:(closed|danger|open|busy)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     if (!staff(ctx)) {
       if (store.isBanned(ctx.from.id)) return show(ctx, L(ctx).banned, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
@@ -1642,7 +1642,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     const d = newDraft(ctx, 'road');
     d.road = ctx.match[1];
-    d.ttlMin = d.road === 'open' ? 180 : 360;
+    d.ttlMin = d.road === 'open' || d.road === 'busy' ? 180 : 360;
     await askLocation(ctx, d);
   });
   bot.callbackQuery('rdl', async (ctx) => {

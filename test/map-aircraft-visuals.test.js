@@ -43,6 +43,13 @@ test('helicopter uses the simplified silhouette while legacy glyphs remain avail
   assert.match(targetSvgs, /helicopter:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
 });
 
+test('entry flight approaches its Syrian report area from the east as a schematic animation', () => {
+  assert.match(css, /\.map-flight-track-marker\.is-entering-syria \.map-flight-track-squad \{ animation: flightTrackEnterFromEast/);
+  assert.match(css, /@keyframes flightTrackEnterFromEast \{ 0% \{ transform: translateX\(44px\); opacity: 0; \}/);
+  assert.match(css, /Schematic east-to-west arrival at the selected Syrian report area; not a geographic\/live aircraft track/);
+  assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
+});
+
 test('schematic movement stays anchored to the report, reverses withdrawal and never fabricates a route', () => {
   assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
   assert.match(mapJs, /track\.marker\.setLngLat\(position\)/);

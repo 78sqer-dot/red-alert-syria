@@ -26,6 +26,7 @@ export const ROAD_STATUS = {
   closed: { emoji: '⛔', ar: 'طريق مسكّر', en: 'Road closed', color: '#ef4444' },
   danger: { emoji: '⚠️', ar: 'طريق خطر', en: 'Dangerous road', color: '#f59e0b' },
   open: { emoji: '✅', ar: 'طريق سالك', en: 'Road open', color: '#22c55e' },
+  busy: { emoji: '🚗', ar: 'زحمة سير', en: 'Traffic congestion', color: '#eab308' },
 };
 export const ROAD_DURATIONS = [60, 120, 360, 720, 1440, 2880];
 export const roadLabel = (st, lang = 'ar') => { const s = ROAD_STATUS[st] || ROAD_STATUS.danger; return `${s.emoji} ${lang === 'en' ? s.en : s.ar}`; };
