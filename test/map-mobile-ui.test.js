@@ -23,8 +23,8 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
 test('alert details stay centered on the map and their popup tip points to the event on every screen', () => {
   assert.doesNotMatch(map, /cls: 'alert-dock'/);
   assert.match(map, /new M\.Popup\(\{ className: 'pp-alert-popup', anchor: 'bottom'/);
-  assert.match(map, /offset: \{ bottom: \[off\.x, off\.y\]/);
-  assert.doesNotMatch(map, /offset: \{ bottom: \[off\.x, off\.y\s*-\s*26/);
+  assert.match(map, /offset: \[0, 0\]/);
+  assert.doesNotMatch(map, /off\.y\s*-\s*26/);
   assert.match(map, /if \(p\._alertId\)\s*\{[\s\S]{0,250}r\.left \+ r\.width \/ 2 - \(vis\.l \+ vis\.r\) \/ 2[\s\S]{0,180}r\.top \+ r\.height \/ 2 - \(top \+ bottom\) \/ 2/);
   assert.match(map, /openPopup\(alert\)\s*\{\s*const controlPanel = document\.querySelector\('#mapCtrlPanel'\);[\s\S]{0,180}controlPanel\.hidden = true/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \{ z-index: 60; \}/);
