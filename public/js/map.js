@@ -5,7 +5,7 @@ import { EXTRA_SVG } from './target-svgs.js?v=13';
 import { icon } from './icons.js?v=4';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=3';
-import { groupAlerts } from './marker-layout.js';
+import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { aircraftRotation, flightPath, flightPosition } from '/shared/flight-path.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=1';
@@ -227,6 +227,7 @@ export class AlertMap {
       this.el.classList.remove('is-zooming');
       zoomTier(true);
       this._queueZones();
+      this.refreshMarkerGroups();
     });
     // pulse rings are re-sized when the zoom settles; hidden meanwhile so they never look out of scale
     this.map.on('zoomstart', () => this.el.classList.add('is-zooming'));
@@ -236,7 +237,7 @@ export class AlertMap {
       this.el.classList.remove('is-moving');
       this.refreshMarkerGroups();
     });
-    this.map.on('resize', () => this._queueZones());
+    this.map.on('resize', () => { this._queueZones(); this.refreshMarkerGroups(); });
     zoomTier(true);
     this.map.on('styleimagemissing', (e) => {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
@@ -554,7 +555,7 @@ export class AlertMap {
   }
 
   selectMarker(id) {
-    const group = groupAlerts(this.alerts, this.selectedId).find((g) => g.alerts.some((a) => a.id === id));
+    const group = clusterAlertsByScreen(this.alerts, this.map, this.selectedId).find((g) => g.alerts.some((a) => a.id === id));
     if (group?.alerts.length > 1) return this.openGroupChooser(group);
     this.onSelect(id, { fromMap: true, fly: true });
   }
@@ -564,7 +565,7 @@ export class AlertMap {
     const lang = this.opts.lang === 'en' ? 'en' : 'ar';
     const title = document.createElement('h3');
     title.className = 'alert-group-heading';
-    title.textContent = lang === 'en' ? `${group.alerts.length} alerts at this location` : `${group.alerts.length} أخبار في هذا الموقع`;
+    title.textContent = lang === 'en' ? `${group.alerts.length} alerts at this location` : `${group.alerts.length} تنبيهات متقاربة على الخريطة`;
     const list = document.createElement('div');
     list.className = 'alert-group-list';
     list.setAttribute('role', 'list');
@@ -619,7 +620,13 @@ export class AlertMap {
   refreshMarkerGroups() {
     // Never write MapLibre's private _offset field: the library owns its Point.
     // Same-location reports share a visible marker, without inventing positions.
-    for (const group of groupAlerts(this.alerts, this.selectedId)) {
+    const groups = clusterAlertsByScreen(this.alerts, this.map, this.selectedId);
+    if (this.popup?._groupKey) {
+      const current = groups.find((group) => group.key === this.popup._groupKey);
+      const ids = this.popup._groupAlertIds || [];
+      if (!current || current.alerts.length !== ids.length || current.alerts.some((alert) => !ids.includes(alert.id))) this.closePopup();
+    }
+    for (const group of groups) {
       for (const a of group.alerts) {
         const marker = this.markers.get(a.id);
         if (!marker) continue;
@@ -631,7 +638,7 @@ export class AlertMap {
         el.classList.toggle('sel', a.id === this.selectedId);
         el.style.zIndex = a.id === this.selectedId ? 50 : a.is_active ? 10 : 2;
         const count = group.alerts.length;
-        const hint = this.opts.lang === 'en' ? `${count} alerts here — click to choose` : `${count} أخبار في هذا الموقع — اضغط للاختيار`;
+        const hint = this.opts.lang === 'en' ? `${count} nearby alerts — click to choose` : `${count} تنبيهات متقاربة — اضغط للاختيار`;
         el.title = count > 1 ? `${a.title} · ${hint}` : a.title;
         el.setAttribute('aria-label', el.title);
         el.dataset.alertId = a.id;
@@ -731,7 +738,7 @@ export class AlertMap {
     }
     this.updateZones();
     if (this.popup?._groupKey) {
-      const currentGroup = groupAlerts(this.alerts).find((group) => group.key === this.popup._groupKey);
+      const currentGroup = clusterAlertsByScreen(this.alerts, this.map).find((group) => group.key === this.popup._groupKey);
       const ids = this.popup._groupAlertIds || [];
       if (!currentGroup || currentGroup.alerts.length !== ids.length || currentGroup.alerts.some((alert) => !ids.includes(alert.id))) this.closePopup();
     }

@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupAlerts, nextAlertId } from '../public/js/marker-layout.js';
+import { clusterAlertsByScreen, groupAlerts, nextAlertId } from '../public/js/marker-layout.js';
 
 const attack = { id: 'attack', type: 'attack', location: { latitude: 36.69648, longitude: 38.95382 } };
 const protest = { id: 'protest', type: 'protest', location: { latitude: 36.69648, longitude: 38.95382 } };
+
+function screenMap() {
+  return { project: ([longitude, latitude]) => ({ x: longitude * 1000, y: latitude * 1000 }) };
+}
 
 test('Tall Abyad alerts share one representative at their exact unchanged coordinate', () => {
   const input = structuredClone([attack, protest]);
@@ -32,7 +36,24 @@ test('single alerts stay on their own coordinate and invalid locations are ignor
   assert.deepEqual(groups[0].representative.location, attack.location);
 });
 
-test('nearby but different published coordinates are not fanned out or merged', () => {
-  const nearby = { id: 'nearby', location: { latitude: 36.6967, longitude: 38.9539 } };
-  assert.equal(groupAlerts([attack, nearby]).length, 2);
+test('screen clustering groups nearby reports from any location without changing their coordinates', () => {
+  const first = { id: 'governorate-a-1', location: { latitude: 35, longitude: 37 } };
+  const nearby = { id: 'governorate-a-2', location: { latitude: 35.01, longitude: 37.02 } };
+  const far = { id: 'governorate-b', location: { latitude: 35.2, longitude: 37.2 } };
+  const input = [first, nearby, far];
+  const before = JSON.stringify(input);
+  const groups = clusterAlertsByScreen(input, screenMap());
+  assert.deepEqual(groups.map((group) => group.alerts.map((alert) => alert.id)), [['governorate-a-1', 'governorate-a-2'], ['governorate-b']]);
+  assert.equal(groups[0].key, JSON.stringify(['governorate-a-1', 'governorate-a-2']));
+  assert.deepEqual(groups[0].representative.location, first.location);
+  assert.equal(JSON.stringify(input), before);
+});
+
+test('selected nearby alert remains the visible representative and separate screen clusters stay separate', () => {
+  const first = { id: 'one', location: { latitude: 35, longitude: 37 } };
+  const second = { id: 'two', location: { latitude: 35.01, longitude: 37.02 } };
+  const [group] = clusterAlertsByScreen([first, second], screenMap(), 'two');
+  assert.equal(group.alerts.length, 2);
+  assert.equal(group.representative.id, 'two');
+  assert.equal(clusterAlertsByScreen([first, second], screenMap(), null, 5).length, 2);
 });
