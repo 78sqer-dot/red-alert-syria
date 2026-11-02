@@ -444,7 +444,8 @@ export class AlertMap {
       if (path.length < 2) return;
       keep.add(alert.id);
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
-      const color = aircraft === 'uav' ? '#ef4444' : '#3b82f6';
+      // Keep entry visuals consistent for warplanes and UAVs: a blue formation with a pulsing halo.
+      const color = '#3b82f6';
       features.push({ type: 'Feature', properties: { id: alert.id, color, arrow: '➤' }, geometry: { type: 'LineString', coordinates: path } });
       const signature = `${aircraft}|${alert.flight_direction}|${hasTarget ? `${alert.location.longitude},${alert.location.latitude}` : 'general'}`;
       let track = this.movementTracks.get(alert.id);

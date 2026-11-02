@@ -26,6 +26,14 @@ test('warplane keeps the three-aircraft formation while the drone keeps its curr
   assert.match(svgs, /"plane":/);
 });
 
+test('schematic entry uses the same moving blue three-aircraft formation and pulse for planes and UAVs', () => {
+  assert.match(map, /const color = '#3b82f6';/);
+  assert.match(map, /\[\{ name: 'is-lead', size: 26 \}, \{ name: 'is-left', size: 22 \}, \{ name: 'is-right', size: 22 \}\]/);
+  assert.match(map, /flightPosition\(path, progress\)/);
+  assert.match(css, /\.map-flight-track-halo\s*\{[^}]*animation: flightTrackPulse 1\.8s ease-out infinite/);
+  assert.doesNotMatch(css, /\.map-flight-track-marker\.is-uav\s*\{[^}]*--aircraft-color:\s*#ef4444/);
+});
+
 test('live alert circles use compositor-safe pulse layers and remain clickable through zone hit testing', () => {
   assert.match(map, /this\._syncPulses\(pulses\)/);
   assert.match(map, /const hit = this\.zoneAt\(e\.lngLat, e\.point\)/);

@@ -278,7 +278,6 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .map-flight-track-marker { position: relative; z-index: 31; display: grid; place-items: center; width: 72px; height: 66px; pointer-events: auto; cursor: pointer; touch-action: manipulation; --track-color: #3b82f6; --aircraft-color: #3b82f6; }
 .map-flight-track-marker:hover { filter: brightness(1.18); }
 .map-flight-track-marker:focus-visible { outline: 2px solid var(--track-color); outline-offset: 2px; border-radius: 50%; }
-.map-flight-track-marker.is-uav { --aircraft-color: #ef4444; }
 .map-flight-track-halo { position: absolute; inset: 10px; border: 2px solid color-mix(in srgb, var(--track-color) 82%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--track-color) 18%, transparent); box-shadow: 0 0 22px color-mix(in srgb, var(--track-color) 82%, transparent), inset 0 0 12px color-mix(in srgb, var(--track-color) 32%, transparent); animation: flightTrackPulse 1.8s ease-out infinite; }
 .map-flight-track-halo::after { content: ''; position: absolute; inset: 9px; border-radius: inherit; background: color-mix(in srgb, var(--track-color) 64%, transparent); box-shadow: 0 0 14px color-mix(in srgb, var(--track-color) 80%, transparent); animation: flightTrackCore 1.8s ease-in-out infinite; }
 .map-flight-track-squad { position: absolute; inset: 0; z-index: 1; }
