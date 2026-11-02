@@ -9,7 +9,7 @@ const S = {
   ar: {
     services: 'الخدمات', prices: 'الأسعار', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', nearby: 'قريب مني', weather: 'الطقس',
     sheetTitle: 'خدمات يومية', sheetSub: 'أسعار اليوم، الطقس، الكهرباء، حالة الطرق والمعابر، وأقرب مشفى وصيدلية وكازية وفرن.',
-    showWx: 'عرض التحذيرات على الخريطة', wxSub: 'الطقس والتحذيرات من المركز الوطني للأرصاد الجوية السوري. لا نعرض درجات أو توقعات من مزودات خارجية.', wxNow: 'الطقس الآن', today: 'اليوم', tomorrow: 'بكرا', wind: 'رياح', hum: 'رطوبة', kmh: 'كم/س', mm: 'ملم', rainP: 'احتمال المطر', gusts: 'هبّات', mountains: 'مناطق جبلية', wxErr: 'تعذّر تحميل بيانات المركز، جرّب بعد شوي.', wxWarn: 'تحذيرات رسمية', wxOfficial: 'تحذير رسمي', wxModel: 'تحذير توقّعي', wxLocal: 'تحذير منشور', wxSource: 'المصدر الرسمي', wxLocalSource: 'منشور التنبيه على تيليغرام', wxIssued: 'صدر', wxExpires: 'ينتهي', wxDailyLink: 'النشرة الجوية الرسمية', wxMapLink: 'خريطة المركز الرسمية', wxNoAlerts: 'لا توجد حالياً تنبيهات رسمية نشطة ظاهرة في موجز المركز.', snowCm: 'ثلج', cm: 'سم',
+    showWx: 'عرض التحذيرات على الخريطة', wxSub: 'الطقس والتحذيرات من المركز الوطني للأرصاد الجوية السوري. لا نعرض درجات أو توقعات من مزودات خارجية.', wxNow: 'الطقس الآن', today: 'اليوم', tomorrow: 'بكرا', wind: 'رياح', hum: 'رطوبة', kmh: 'كم/س', mm: 'ملم', rainP: 'احتمال المطر', gusts: 'هبّات', mountains: 'مناطق جبلية', wxErr: 'تعذّر تحميل بيانات المركز، جرّب بعد شوي.', wxWarn: 'تحذيرات رسمية', wxOfficial: 'تحذير رسمي', wxModel: 'تحذير توقّعي', wxLocal: 'تحذير منشور', wxSource: 'المصدر الرسمي', wxLocalSource: 'منشور التنبيه على تيليغرام', wxIssued: 'صدر', wxExpires: 'ينتهي', wxDailyLink: 'النشرة الجوية الرسمية', wxMapLink: 'خريطة المركز الرسمية', wxNoAlerts: 'لا توجد حالياً تحذيرات جوية نشطة في موجز المركز.', wxForecastUnavailable: 'ولا تتوفر حالياً درجات حرارة أو توقعات في بيانات المركز.', snowCm: 'ثلج', cm: 'سم',
     market: 'سعر السوق الموازي (عام)', official: 'نشرة مصرف سورية المركزي', officialSource: 'صفحة المركزي الرسمية على فيسبوك', officialIssued: 'نشرة بتاريخ', officialChecked: 'آخر تحقق', buy: 'شراء', sell: 'مبيع',
     usd: 'دولار', eur: 'يورو', try: 'ليرة تركية', sar: 'ريال سعودي', aed: 'درهم إماراتي',
     gold: 'الذهب (للغرام)', k24: 'عيار 24', k21: 'عيار 21', k18: 'عيار 18', ounce: 'الأونصة عالمياً',
@@ -27,7 +27,7 @@ const S = {
     dataErr: 'تعذّر تحميل البيانات، جرّب بعد شوي.', directions: 'الاتجاهات', call: 'اتصال', hours: 'الدوام',
     osmNote: 'البيانات من OpenStreetMap وقد لا تكون كاملة أو محدّثة. تأكد بالاتصال قبل ما تروح.',
     svcLayers: 'الخدمات على الخريطة', modes: { pharmacy: 'الصيدليات', health: 'المشافي والمراكز الصحية', fuel: 'الكازيات', bakery: 'الأفران', power: 'الكهرباء', roads: 'الطرق', borders: 'المعابر', weather: 'الطقس' },
-    backNews: 'رجوع للأخبار', zoomHint: (n) => `قرّب الخريطة لتشوف ${n}`, h24: 'مفتوحة 24 ساعة', showOnMap: 'اعرض على الخريطة', modeHint: 'الأخبار مخفية مؤقتاً', pwLvl: { cut: 'تقنين أشد / انقطاع', ok: 'تحسّن', mid: 'تحديث', none: 'لا يوجد تحديث' }, pwNat: 'تحديث عام لكل سوريا', mapPower: 'اعرض حالة الكهرباء على الخريطة',
+    backNews: 'رجوع للأخبار', zoomHint: (n) => `قرّب الخريطة لتشوف ${n}`, h24: 'مفتوحة 24 ساعة', showOnMap: 'اعرض على الخريطة', modeHint: 'طبقة الأخبار مخفية مؤقتاً أثناء عرض الخدمات', pwLvl: { cut: 'تقنين أشد / انقطاع', ok: 'تحسّن', mid: 'تحديث', none: 'لا يوجد تحديث' }, pwNat: 'تحديث عام لكل سوريا', mapPower: 'اعرض حالة الكهرباء على الخريطة',
     away: (d) => `يبعد ${d}`, km: 'كم', m: 'م',
     locTitle: 'تحديد موقعك', locWhy: 'منستخدم موقعك بس على جهازك لنوريك وين إنت على الخريطة، وكم تبعد عنك التنبيهات والخدمات. ما منرسله ولا منخزّنه عندنا.',
     locGo: 'حدّد موقعي', locCancel: 'مو هلق', locWait: 'عم نحدّد موقعك…',
@@ -40,7 +40,7 @@ const S = {
   en: {
     services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me', weather: 'Weather',
     sheetTitle: 'Daily services', sheetSub: 'Today\'s prices, weather, electricity, road status, and the nearest hospital, pharmacy, fuel station and bakery.',
-    showWx: 'Show warnings on the map', wxSub: 'Weather and warnings are from Syria’s National Meteorological Center. We do not show temperatures or forecasts from third-party providers.', wxNow: 'Weather now', today: 'Today', tomorrow: 'Tomorrow', wind: 'Wind', hum: 'Humidity', kmh: 'km/h', mm: 'mm', rainP: 'Chance of rain', gusts: 'Gusts', mountains: 'Mountain areas', wxErr: 'Could not load the official weather data; try again shortly.', wxWarn: 'Official warnings', wxOfficial: 'Official warning', wxModel: 'Forecast warning', wxLocal: 'Published alert', wxSource: 'Official source', wxLocalSource: 'Alert channel post', wxIssued: 'Issued', wxExpires: 'Valid until', wxDailyLink: 'Official daily bulletin', wxMapLink: 'Official meteorological map', wxNoAlerts: 'No active official warnings are currently visible in the Center’s feed.', snowCm: 'Snow', cm: 'cm',
+    showWx: 'Show warnings on the map', wxSub: 'Weather and warnings are from Syria’s National Meteorological Center. We do not show temperatures or forecasts from third-party providers.', wxNow: 'Weather now', today: 'Today', tomorrow: 'Tomorrow', wind: 'Wind', hum: 'Humidity', kmh: 'km/h', mm: 'mm', rainP: 'Chance of rain', gusts: 'Gusts', mountains: 'Mountain areas', wxErr: 'Could not load the official weather data; try again shortly.', wxWarn: 'Official warnings', wxOfficial: 'Official warning', wxModel: 'Forecast warning', wxLocal: 'Published alert', wxSource: 'Official source', wxLocalSource: 'Alert channel post', wxIssued: 'Issued', wxExpires: 'Valid until', wxDailyLink: 'Official daily bulletin', wxMapLink: 'Official meteorological map', wxNoAlerts: 'There are currently no active weather warnings in the Center’s feed.', wxForecastUnavailable: 'The Center’s current data does not provide temperatures or forecasts.', snowCm: 'Snow', cm: 'cm',
     market: 'Parallel market (Syria, general)', official: 'Central Bank of Syria bulletin', officialSource: 'Official Central Bank Facebook page', officialIssued: 'Bulletin date', officialChecked: 'Last checked', buy: 'Buy', sell: 'Sell',
     usd: 'US dollar', eur: 'Euro', try: 'Turkish lira', sar: 'Saudi riyal', aed: 'UAE dirham',
     gold: 'Gold (per gram)', k24: '24K', k21: '21K', k18: '18K', ounce: 'World ounce',
@@ -58,7 +58,7 @@ const S = {
     dataErr: 'Could not load the data, try again shortly.', directions: 'Directions', call: 'Call', hours: 'Hours',
     osmNote: 'Data from OpenStreetMap; it may be incomplete or outdated. Call before you go.',
     svcLayers: 'Services on the map', modes: { pharmacy: 'Pharmacies', health: 'Hospitals & clinics', fuel: 'Fuel stations', bakery: 'Bakeries', power: 'Electricity', roads: 'Roads', borders: 'Border crossings', weather: 'Weather' },
-    backNews: 'Back to the news', zoomHint: (n) => `Zoom in to see ${n.toLowerCase()}`, h24: 'Open 24 hours', showOnMap: 'Show on the map', modeHint: 'News hidden for now', pwLvl: { cut: 'More rationing / outage', ok: 'Improving', mid: 'Update', none: 'No update' }, pwNat: 'Nation-wide update', mapPower: 'Show electricity on the map',
+    backNews: 'Back to the news', zoomHint: (n) => `Zoom in to see ${n.toLowerCase()}`, h24: 'Open 24 hours', showOnMap: 'Show on the map', modeHint: 'The news layer is temporarily hidden while services are displayed', pwLvl: { cut: 'More rationing / outage', ok: 'Improving', mid: 'Update', none: 'No update' }, pwNat: 'Nation-wide update', mapPower: 'Show electricity on the map',
     away: (d) => `${d} away`, km: 'km', m: 'm',
     locTitle: 'Your location', locWhy: 'Your location is used only on your device to show where you are and how far alerts and services are. It is never sent to us or stored.',
     locGo: 'Find me', locCancel: 'Not now', locWait: 'Finding your location…',
@@ -647,6 +647,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         return `<div class="wx-warn" style="--c:${WARN_C(w.level)}">${esc(w.emoji)} <b>${esc(LANG === 'en' ? w.en : w.ar)}</b><small>${esc(label)}${areas ? ` · ${esc(areas)}` : ''}${w.url ? ` · <a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.official ? L.wxSource : L.wxLocalSource)}</a>` : ''}</small>${stamps.length ? `<small>${esc(stamps.join(' · '))}</small>` : ''}${details ? `<small>${esc(details.slice(0, 220))}</small>` : ''}</div>`;
       }).join('');
     } else h += `<div class="svc-empty">${esc(L.wxNoAlerts)}</div>`;
+    if (j.forecastsAvailable === false) h += `<p class="svc-note">${esc(L.wxForecastUnavailable)}</p>`;
     h += `<p class="svc-note">${esc(L.updated)}: ${esc(when(j.at))} · ${esc(j.src || '')}</p>`;
     return h;
   }

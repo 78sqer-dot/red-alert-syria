@@ -993,7 +993,8 @@ export class AlertMap {
     const M = ml();
     const m = at ? null : this.markers.get(alert.id);
     const off = m ? m.getOffset() : { x: 0, y: 0 };
-    this.popup = new M.Popup({ className: 'pp-alert-popup', anchor: 'bottom', closeButton: true, closeOnClick: false, maxWidth: 'min(420px, calc(100vw - 28px))', offset: { bottom: [off.x, off.y - 26], top: [off.x, off.y + 26], left: [off.x + 26, off.y], right: [off.x - 26, off.y] }, focusAfterOpen: false })
+    // Preserve the marker's real offset; a fixed extra offset makes the tip miss the event coordinate.
+    this.popup = new M.Popup({ className: 'pp-alert-popup', anchor: 'bottom', closeButton: true, closeOnClick: false, maxWidth: 'min(420px, calc(100vw - 28px))', offset: { bottom: [off.x, off.y], top: [off.x, off.y], left: [off.x, off.y], right: [off.x, off.y] }, focusAfterOpen: false })
       .setLngLat(at || [alert.location.longitude, alert.location.latitude])
       .setDOMContent(htmlToNode(this.popupHtml(alert)))
       .addTo(this.map);
