@@ -272,28 +272,25 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .map-flight-main { display: flex; align-items: center; gap: 8px; }
 .map-flight-label { font-size: 12px; font-weight: 800; }
 .map-flight-flow { display: inline-flex; align-items: center; gap: 5px; padding-inline-start: 8px; border-inline-start: 1px solid var(--border); color: #3b82f6; font-weight: 900; white-space: nowrap; }
-.map-flight-plane, .map-flight-plane svg { display: block; width: 22px; height: 22px; }
+.map-flight-plane, .map-flight-plane svg { display: block; width: 24px; height: 24px; }
 .map-flight-destination { color: var(--text-primary); font-size: 12px; }
 .map-flight-note { color: var(--text-muted); font-size: 9px; line-height: 1.3; }
-.map-flight-track-marker { position: relative; z-index: 31; display: grid; place-items: center; width: 72px; height: 66px; pointer-events: auto; cursor: pointer; touch-action: manipulation; --track-color: #3b82f6; --aircraft-color: #3b82f6; }
+.map-flight-track-marker { position: relative; z-index: 31; display: grid; place-items: center; width: 60px; height: 64px; pointer-events: auto; cursor: pointer; touch-action: manipulation; --track-color: #2476c9; --aircraft-color: #2476c9; }
 .map-flight-track-marker:hover { filter: brightness(1.18); }
 .map-flight-track-marker:focus-visible { outline: 2px solid var(--track-color); outline-offset: 2px; border-radius: 50%; }
-.map-flight-track-halo { position: absolute; inset: 10px; border: 2px solid color-mix(in srgb, var(--track-color) 82%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--track-color) 18%, transparent); box-shadow: 0 0 22px color-mix(in srgb, var(--track-color) 82%, transparent), inset 0 0 12px color-mix(in srgb, var(--track-color) 32%, transparent); animation: flightTrackPulse 1.8s ease-out infinite; }
-.map-flight-track-halo::after { content: ''; position: absolute; inset: 9px; border-radius: inherit; background: color-mix(in srgb, var(--track-color) 64%, transparent); box-shadow: 0 0 14px color-mix(in srgb, var(--track-color) 80%, transparent); animation: flightTrackCore 1.8s ease-in-out infinite; }
-.map-flight-track-squad { position: absolute; inset: 0; z-index: 1; --flight-from: translate(-106px, 106px); --flight-to: translate(106px, -106px); animation: flightTrackTravel 7s linear infinite; }
-.map-flight-track-marker.is-toward-syria .map-flight-track-squad { --flight-to: translate(0, 0); }
-.map-flight-track-marker.is-entering-syria .map-flight-track-squad { --flight-from: translate(-106px, 106px); --flight-to: translate(106px, -106px); }
-.map-flight-track-marker.is-leaving-syria .map-flight-track-squad { --flight-from: translate(-106px, 106px); --flight-to: translate(106px, -106px); }
-.map-flight-track-airframe { position: absolute; display: grid; place-items: center; filter: drop-shadow(0 1px 4px rgba(0,0,0,.72)); }
-.map-flight-track-airframe.is-lead { left: 50%; top: 0; width: 28px; height: 28px; transform: translateX(-50%); }
-.map-flight-track-airframe.is-left { left: 3px; top: 30px; width: 24px; height: 24px; }
-.map-flight-track-airframe.is-right { right: 3px; top: 30px; width: 24px; height: 24px; }
+.map-flight-track-visual { position: relative; display: block; width: 60px; height: 64px; transform: scale(calc(var(--mks, .5) * 1.3)); transform-origin: center; }
+.map-flight-track-squad { position: absolute; left: 2px; top: 10px; width: 56px; height: 44px; animation: flightTrackTravel 7s linear infinite; }
+.map-flight-track-marker.is-toward-syria .map-flight-track-squad { animation: flightTrackApproach 5s linear infinite; }
+.map-flight-track-airframe { position: absolute; display: grid; place-items: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
+.map-flight-track-airframe.is-lead { left: 50%; top: 0; width: 24px; height: 24px; transform: translateX(-50%); }
+.map-flight-track-airframe.is-left { left: 0; top: 20px; width: 24px; height: 24px; opacity: .85; }
+.map-flight-track-airframe.is-right { right: 0; top: 20px; width: 24px; height: 24px; opacity: .85; }
 .map-flight-track-svg { display: block; width: 100%; height: 100%; fill: var(--aircraft-color); }
-@keyframes flightTrackPulse { 0% { transform: scale(.72); opacity: .85; } 78%, 100% { transform: scale(1.42); opacity: 0; } }
-@keyframes flightTrackCore { 0%, 100% { opacity: .36; transform: scale(.78); } 50% { opacity: .74; transform: scale(1.08); } }
-@keyframes flightTrackTravel { 0% { transform: var(--flight-from); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: var(--flight-to); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .map-flight-track-halo, .map-flight-track-halo::after { animation: none; opacity: .55; } .map-flight-track-squad { animation: none; transform: none; opacity: 1; } }
-.is-moving .map-flight-track-halo, .is-moving .map-flight-track-halo::after, .is-moving .map-flight-track-squad, .is-zooming .map-flight-track-halo, .is-zooming .map-flight-track-halo::after, .is-zooming .map-flight-track-squad { animation-play-state: paused !important; }
+.map-flight-track-marker.is-plane .map-flight-track-svg { transform: rotate(-45deg); }
+@keyframes flightTrackTravel { 0% { transform: translateY(32px); opacity: 0; } 12%, 88% { opacity: 1; } 100% { transform: translateY(-32px); opacity: 0; } }
+@keyframes flightTrackApproach { 0% { transform: translateY(40px); opacity: 0; } 15% { opacity: 1; } 85% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(0); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .map-flight-track-squad { animation: none !important; transform: none; opacity: 1; } }
+.is-moving .map-flight-track-squad, .is-zooming .map-flight-track-squad { animation-play-state: paused !important; }
 .about-pill { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 12; height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; background: var(--bg-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 12.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
 .about-pill b { color: var(--text-primary); font-weight: 800; }
 .about-pill .sep { width: 1px; height: 16px; background: var(--border); }
@@ -320,12 +317,12 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .flight-movement { position: absolute; left: 0; top: 0; width: 40px; height: 40px; transform: translate(-50%, -50%); display: grid; place-items: center; border: 2px solid var(--c); border-radius: 50%; background: var(--bg-elevated); box-shadow: 0 0 15px color-mix(in srgb, var(--c) 58%, transparent), 0 2px 8px rgba(0,0,0,.35); animation: flightMovementGlow 2s ease-in-out infinite; transition: transform .16s ease; }
 .flight-movement::before { content: ''; position: absolute; inset: -6px; border: 2px solid color-mix(in srgb, var(--c) 78%, transparent); border-radius: 50%; opacity: 0; pointer-events: none; animation: flightMovementPulse 2s ease-out infinite; }
 .flight-aircraft { display: grid; place-items: center; width: 28px; height: 28px; }
-.flight-svg { display: block; width: 23px; height: 23px; }
+.flight-svg { display: block; width: 24px; height: 24px; }
 .flight-squad { position: absolute; left: -8px; top: -7px; width: 56px; height: 52px; pointer-events: none; }
 .flight-airframe { position: absolute; display: grid; place-items: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
-.flight-airframe.is-lead { left: 50%; top: 0; width: 25px; height: 25px; transform: translateX(-50%); }
-.flight-airframe.is-left { left: 3px; top: 25px; width: 20px; height: 20px; }
-.flight-airframe.is-right { right: 3px; top: 25px; width: 20px; height: 20px; }
+.flight-airframe.is-lead { left: 50%; top: 0; width: 24px; height: 24px; transform: translateX(-50%); }
+.flight-airframe.is-left { left: 3px; top: 25px; width: 24px; height: 24px; }
+.flight-airframe.is-right { right: 3px; top: 25px; width: 24px; height: 24px; }
 .flight-arrow { position: absolute; right: -7px; bottom: -5px; display: grid; place-items: center; width: 19px; height: 19px; border: 2px solid var(--bg-elevated); border-radius: 50%; background: var(--c); color: #fff; font: 900 12px/1 system-ui, sans-serif; }
 .mk:hover .flight-movement, .mk.sel .flight-movement { transform: translate(-50%, -50%) scale(1.15); }
 .mk.inactive .flight-movement { opacity: .55; }
@@ -431,7 +428,7 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 .mk-helicopter .mk-s { transform: none; }
 .heli-orbit { position: absolute; left: calc(0px - var(--orb, 14px)); top: calc(0px - var(--orb, 14px)); width: calc(var(--orb, 14px) + var(--orb, 14px)); height: calc(var(--orb, 14px) + var(--orb, 14px)); pointer-events: none; animation: heliOrbit 12s linear infinite; }
 .heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 25px; height: 25px; transform: translate(-50%, -50%) rotate(90deg); pointer-events: auto; filter: drop-shadow(0 1px 1.5px rgba(15,23,42,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4)); }
-.helicopter-svg { display: block; width: 22px; height: 22px; overflow: visible; fill: #6b7280; }
+.helicopter-svg { display: block; width: 24px; height: 24px; overflow: visible; fill: #6b7280; }
 .helicopter-svg .heli-main-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .32s linear infinite; }
 .helicopter-svg .heli-tail-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .22s linear infinite reverse; }
 html.dark .helicopter-svg { fill: #9ca3af; }
@@ -926,14 +923,14 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .pp-dock { background: var(--bg-elevated); border: 1px solid var(--border); }
 .pp-dock .pp-dock-body.maplibregl-popup-content { border: 0; }
 
-/* Match the original Lebanon warplane marker: fixed three-plane formation crossing a 220px lane. */
-.mk-squad .mk-s { transform: none; }
-.mk-squad .squad { height: 200px; top: -100px; transform: none; transform-origin: center; }
-.mk-squad .squad .sq { scale: 1; animation: squadFlyZ 7s linear infinite; }
+/* Reference-inspired three-plane pass, compact and scaled with the map rather than a 220px lane. */
+.mk-squad .mk-s { transform: scale(calc(var(--mks, .5) * 1.3)); }
+.mk-squad .squad { position: absolute; width: 60px; height: 80px; left: -30px; top: -40px; transform: none; transform-origin: center; }
+.mk-squad .squad .sq { width: 24px; height: 24px; scale: 1; animation: squadFlyZ 7s linear infinite; }
 @keyframes squadFlyZ {
-  0% { transform: translateY(110px); opacity: 0; }
+  0% { transform: translateY(32px); opacity: 0; }
   12%, 88% { opacity: 1; }
-  100% { transform: translateY(-110px); opacity: 0; }
+  100% { transform: translateY(-32px); opacity: 0; }
 }
 
 /* 3D terrain: flat DOM pulse rings cannot tilt with the ground (the drawn circles do), so they are hidden */
@@ -972,7 +969,7 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .pp-dock.svc-dock .pp-dock-body { padding-top: 10px; }
 .pp-dock.svc-dock .pp-top { padding-inline-end: 34px; }
 /* desktop popup slid back inside the map while zooming / panning: the tip no longer points at its spot */
-.maplibregl-popup.pp-clamped .maplibregl-popup-tip { opacity: 0; }
+.maplibregl-popup.pp-clamped .maplibregl-popup-tip { opacity: 0; visibility: hidden; animation: none !important; }
 .maplibregl-popup .maplibregl-popup-content { transition: none; }
 
 /* ⛽ fuel card: since / last-checked / staleness / diesel grades */
@@ -1176,8 +1173,13 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 /* Alert cards stay near the visual center, while the MapLibre tip remains attached to the exact event point. */
 .maplibregl-popup.pp-alert-popup { z-index: 60; }
 .pp-alert-popup .maplibregl-popup-content { max-height: min(62dvh, 600px); }
+.maplibregl-popup.pp-group-popup { z-index: 60; }
 .maplibregl-popup.pp-alert-popup .maplibregl-popup-tip { opacity: 1; filter: drop-shadow(0 2px 2px rgba(17, 24, 39, .12)); }
-.maplibregl-popup.pp-alert-popup.pp-clamped .maplibregl-popup-tip { opacity: 0; }
+.maplibregl-popup.pp-alert-popup.pp-clamped .maplibregl-popup-tip { opacity: 0; visibility: hidden; animation: none !important; }
+.pp-popup-connector { position: fixed; z-index: 59; width: 100vw; height: 100vh; overflow: visible; pointer-events: none; }
+.pp-popup-connector line { stroke: color-mix(in srgb, var(--bg-elevated) 72%, var(--text-muted)); stroke-width: 2; stroke-dasharray: 3 3; }
+.pp-popup-connector path { fill: var(--bg-elevated); stroke: var(--border-subtle); stroke-width: 1; stroke-linejoin: round; }
+.pp-popup-connector circle { fill: var(--red); stroke: var(--bg-elevated); stroke-width: 2; }
 @media (max-width: 767px) {
   .brand img { height: 28px; width: auto; }
   .map-ctrls { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); gap: 7px; }

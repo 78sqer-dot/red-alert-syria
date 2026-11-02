@@ -76,15 +76,16 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.equal(nightEligible({ type: 'helicopter', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, 'helicopter news stays for human review');
 });
 
-test('warplane matches the Lebanon three-plane pass with 24px aircraft and keeps area pulses', () => {
+test('warplane keeps a compact reference-inspired three-plane pass with 24px base icons and area pulses', () => {
   assert.doesNotMatch(mapSource, /t\.marker === 'movement' \|\| t\.marker === 'squad'/, 'warplane zone circles remain enabled');
   assert.match(mapSource, /t\.marker === 'orbit' \|\| t\.marker === 'squad' \|\| t\.marker === 'helicopter'/);
   assert.match(mapSource, /const classicAircraft = t\.marker === 'squad' \|\| t\.marker === 'helicopter'/, 'active warplane zones get aircraft pulse styling');
-  assert.match(mapSource, /pl\(24, -12, 1\)\}\$\{pl\(4, 12, 0\.85\)\}\$\{pl\(44, 12, 0\.85\)/, 'lead and wing aircraft keep the reference triangle at 24px');
+  assert.match(mapSource, /pl\(18, -12, 1\)\}\$\{pl\(2, 8, 0\.85\)\}\$\{pl\(34, 8, 0\.85\)/, 'lead and wing aircraft stay close together');
   assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
-  assert.match(mapCss, /@keyframes squadFlyZ \{\s*0% \{ transform: translateY\(110px\); opacity: 0; \}\s*12%, 88% \{ opacity: 1; \}\s*100% \{ transform: translateY\(-110px\); opacity: 0; \}\s*\}/);
+  assert.match(mapCss, /@keyframes squadFlyZ \{\s*0% \{ transform: translateY\(32px\); opacity: 0; \}\s*12%, 88% \{ opacity: 1; \}\s*100% \{ transform: translateY\(-32px\); opacity: 0; \}\s*\}/);
   assert.match(mapCss, /\.maplibregl-map \.mk-squad \.squad \.sq \{ animation: squadFlyZ 7s linear infinite; \}/);
-  assert.doesNotMatch(mapCss, /--fy|--sqi|--sqf/, 'squad path and size are not altered by map zoom');
+  assert.match(mapCss, /\.mk-squad \.mk-s \{ transform: scale\(calc\(var\(--mks, \.5\) \* 1\.3\)\); \}/);
+  assert.match(mapCss, /\.mk-squad \.squad \{[^}]*height: 80px;/, 'the oversized 200px container must not return');
 });
 
 test('airstrike is a separate red map alert and monitored button, distinct from warplane overflight', () => {

@@ -6,7 +6,6 @@ import { icon } from './icons.js?v=4';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=3';
 import { clusterAlertsByScreen } from './marker-layout.js?v=2';
-import { aircraftRotation, flightPath, flightPosition } from '/shared/flight-path.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=1';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
@@ -405,7 +404,7 @@ export class AlertMap {
     plane.setAttribute('aria-hidden', 'true');
     const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
     const fill = aircraft === 'uav' ? '#6b7280' : '#2476c9';
-    plane.innerHTML = svgTag(aircraft, 22, `fill="${fill}" class="map-flight-svg"`);
+    plane.innerHTML = svgTag(aircraft, 24, `fill="${fill}" class="map-flight-svg"`);
     const arrow = document.createElement('span');
     arrow.className = 'map-flight-arrow';
     arrow.setAttribute('aria-hidden', 'true');
@@ -428,13 +427,14 @@ export class AlertMap {
     if (this.newsHidden) return [];
     return this.alerts
       .filter((a) => a.type === 'air_movement' && a.is_active && FLIGHT_DIRECTIONS[a.flight_direction]
-        && (Number.isFinite(a.location?.latitude) === Number.isFinite(a.location?.longitude)))
+        && Number.isFinite(a.location?.latitude) && Number.isFinite(a.location?.longitude))
       .sort((a, b) => (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0))
       .slice(0, 3);
   }
 
-  // Movement is schematic, not live tracking: one three-aircraft group flies along a visible,
-  // direction-aligned screen-space lane while the dashed map line shows the selected route.
+  // Like the reference presentation, this is a CSS direction cue at the report's
+  // location, not a fabricated geographic route or a live aircraft position.
+  // Reports without coordinates retain the explicit location-unspecified notice.
   syncMovementTracks() {
     const map = this.map;
     const source = map?.getSource('ras-flight-paths');
@@ -442,24 +442,18 @@ export class AlertMap {
     const M = ml();
     if (!this.movementTracks) this.movementTracks = new Map();
     const active = this.movementTrackAlerts();
-    const features = [];
     const keep = new Set();
     active.forEach((alert) => {
-      const hasTarget = Number.isFinite(alert.location?.latitude) && Number.isFinite(alert.location?.longitude);
-      const path = flightPath(alert.flight_direction, hasTarget ? alert.location : null);
-      if (path.length < 2) return;
-      const position = flightPosition(path, alert.flight_direction === 'toward_syria' ? 1 : 0.5);
-      if (!position) return;
+      const position = [alert.location.longitude, alert.location.latitude];
+      const heading = alert.flight_direction === 'leaving_syria' ? 180 : 0;
       keep.add(alert.id);
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
-      // Keep entry visuals consistent for warplanes and UAVs: a blue formation with a pulsing halo.
-      const color = '#3b82f6';
-      features.push({ type: 'Feature', properties: { id: alert.id, color, arrow: '➤' }, geometry: { type: 'LineString', coordinates: path } });
+      const color = '#2476c9';
       const lang = this.opts.lang === 'en' ? 'en' : 'ar';
       const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
-      const routeNote = lang === 'en' ? 'schematic route, not a live track' : 'مسار توضيحي وليس تتبعاً مباشراً';
+      const routeNote = lang === 'en' ? 'illustrative direction, not a live track' : 'حركة توضيحية للاتجاه وليست تتبعاً مباشراً';
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
-      const signature = `${lang}|${aircraft}|${alert.flight_direction}|${hasTarget ? `${alert.location.longitude},${alert.location.latitude}` : 'general'}`;
+      const signature = `${lang}|${aircraft}|${alert.flight_direction}|${position.join(',')}`;
       let track = this.movementTracks.get(alert.id);
       if (track && track.signature !== signature) {
         if (track.frame) cancelAnimationFrame(track.frame);
@@ -474,7 +468,7 @@ export class AlertMap {
         el.tabIndex = 0;
         el.setAttribute('aria-label', `${movementTitle} · ${direction}`);
         el.title = `${direction} · ${routeNote}`;
-        const halo = document.createElement('span'); halo.className = 'map-flight-track-halo';
+        const visual = document.createElement('span'); visual.className = 'map-flight-track-visual';
         const squad = document.createElement('span'); squad.className = 'map-flight-track-squad';
         for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
           const airframe = document.createElement('span');
@@ -482,14 +476,15 @@ export class AlertMap {
           airframe.innerHTML = svgTag(aircraft, slot.size, `fill="${color}" class="map-flight-track-svg"`);
           squad.append(airframe);
         }
-        el.append(halo, squad);
-        const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat([position.lon, position.lat]).addTo(map);
+        visual.append(squad);
+        el.append(visual);
+        const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat(position).addTo(map);
         this.bindMarkerTap(el, () => this.onSelect(alert.id, { fromMap: true, fly: true }));
         track = { marker, element: el, signature };
         this.movementTracks.set(alert.id, track);
       }
-      track.marker.setLngLat([position.lon, position.lat]);
-      track.marker.setRotation(aircraftRotation(aircraft, position.bearing));
+      track.marker.setLngLat(position);
+      track.marker.setRotation(heading);
       track.element.dataset.flightDirection = alert.flight_direction;
     });
     for (const [id, track] of this.movementTracks) {
@@ -498,7 +493,7 @@ export class AlertMap {
       track.marker.remove();
       this.movementTracks.delete(id);
     }
-    source.setData({ type: 'FeatureCollection', features });
+    source.setData({ type: 'FeatureCollection', features: [] }); // clear obsolete invented route lines
   }
 
   bindMarkerTap(el, activate) {
@@ -617,8 +612,9 @@ export class AlertMap {
     this.popup = popup;
     popup._groupKey = group.key;
     popup._groupAlertIds = group.alerts.map((alert) => alert.id);
-    popup.on('close', () => { if (this.popup === popup) this.popup = null; });
-    popup.getElement()?.classList.add('pp-gest');
+    const popupElement = popup.getElement();
+    popup.on('close', () => { popupElement?._popupConnector?.remove(); if (this.popup === popup) this.popup = null; });
+    popupElement?.classList.add('pp-gest');
     const popupContent = popup.getElement()?.querySelector('.maplibregl-popup-content');
     popupContent?.addEventListener('wheel', (event) => event.stopPropagation(), { passive: true });
     popupContent?.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
@@ -768,25 +764,25 @@ export class AlertMap {
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
     if (t.marker === 'orbit') {
-      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 20, 'class="uav-svg"')}</div></div>`;
+      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 24, 'class="uav-svg"')}</div></div>`;
     } else if (t.marker === 'helicopter') {
-      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 25, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
+      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 24, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (t.marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${t.color}" class="sq-svg"`)}</div>`;
-      el.innerHTML = `<div class="squad">${pl(24, -12, 1)}${pl(4, 12, 0.85)}${pl(44, 12, 0.85)}</div>`;
+      el.innerHTML = `<div class="squad">${pl(18, -12, 1)}${pl(2, 8, 0.85)}${pl(34, 8, 0.85)}</div>`;
     } else if (t.marker === 'fly') {
-      el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 22, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
+      el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 24, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
     } else if (t.marker === 'movement') {
       const aircraftGlyph = a.aircraft === 'uav' ? 'uav' : 'plane';
       const arrow = a.flight_direction === 'entering_syria' ? '⇢' : a.flight_direction === 'leaving_syria' ? '⇠' : '➤';
       const movement = a.flight_direction === 'entering_syria' ? 'entering' : a.flight_direction === 'leaving_syria' ? 'leaving' : 'toward';
       const plane = (slot, size) => `<span class="flight-airframe ${slot}">${svgTag(aircraftGlyph, size, `fill="${t.color}" class="flight-svg"`)}</span>`;
-      el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 23)}${plane('is-left', 18)}${plane('is-right', 18)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
+      el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 24)}${plane('is-left', 24)}${plane('is-right', 24)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
     } else if (a.type === 'breaking') {
       el.classList.add('mk-breaking-news');
       el.innerHTML = `<span class="news-marker-core">${svgTag(glyph, 24, 'class="news-marker-svg" fill="#111827"')}</span>`;
     } else if (t.marker === 'icon') {
-      const sz = t.size || 30;
+      const sz = 24;
       el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:#111827;width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg" fill="#111827"')}</div>`;
     } else {
       el.innerHTML = glyphDisc(a.type, 34, 24, 'sai map-event-disc', a.marker_glyph);
@@ -1091,6 +1087,7 @@ export class AlertMap {
       this.map.getCanvasContainer().appendChild(pe);
     }
     this.popup.on('close', () => {
+      pe?._popupConnector?.remove();
       if (this.popup && this.popup._alertId === alert.id) this.popup = null;
     });
     this.schedulePopupFit(2);
@@ -1159,6 +1156,51 @@ export class AlertMap {
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) { this._fitPanning = true; this._fitLeft = 0; this.map.panBy([dx / scale, dy / scale], { duration: 350 }); }
   }
 
+  syncPopupConnector(pe, ct, moved) {
+    if (!pe.classList.contains('pp-alert-popup') && !pe.classList.contains('pp-group-popup')) return;
+    let svg = pe._popupConnector;
+    if (!moved) { svg?.remove(); delete pe._popupConnector; return; }
+    if (!this.popup?.getLngLat) return;
+    const point = this.map.project(this.popup.getLngLat());
+    const mapRect = this.map.getContainer().getBoundingClientRect();
+    const scale = this.map.getContainer().clientWidth ? mapRect.width / this.map.getContainer().clientWidth : 1;
+    const x = mapRect.left + point.x * scale; const y = mapRect.top + point.y * scale;
+    const r = ct.getBoundingClientRect();
+    // Never draw a line through the card when zoom/pan puts the anchor under it.
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) { svg?.remove(); delete pe._popupConnector; return; }
+    const radius = Math.min(20, r.width / 2, r.height / 2);
+    const ex = Math.max(r.left + radius, Math.min(x, r.right - radius));
+    const ey = Math.max(r.top + radius, Math.min(y, r.bottom - radius));
+    const edges = [];
+    if (y < r.top) edges.push({ x: ex, y: r.top, horizontal: true });
+    if (y > r.bottom) edges.push({ x: ex, y: r.bottom, horizontal: true });
+    if (x < r.left) edges.push({ x: r.left, y: ey, horizontal: false });
+    if (x > r.right) edges.push({ x: r.right, y: ey, horizontal: false });
+    const edge = edges.sort((a, b) => Math.hypot(x - a.x, y - a.y) - Math.hypot(x - b.x, y - b.y))[0];
+    if (!edge) return;
+    const length = Math.hypot(x - edge.x, y - edge.y) || 1;
+    const tx = edge.x + (x - edge.x) / length * Math.min(10, length);
+    const ty = edge.y + (y - edge.y) / length * Math.min(10, length);
+    if (!svg) {
+      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.classList.add('pp-popup-connector');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.innerHTML = '<line/><path/><circle r="3"/>';
+      document.body.appendChild(svg);
+      pe._popupConnector = svg;
+    }
+    svg.style.left = '0'; svg.style.top = '0';
+    svg.setAttribute('viewBox', `0 0 ${window.innerWidth} ${window.innerHeight}`);
+    const line = svg.querySelector('line');
+    line.setAttribute('x1', x); line.setAttribute('y1', y); line.setAttribute('x2', tx); line.setAttribute('y2', ty);
+    const ax = edge.horizontal ? edge.x - 5 : edge.x;
+    const ay = edge.horizontal ? edge.y : edge.y - 5;
+    const bx = edge.horizontal ? edge.x + 5 : edge.x;
+    const by = edge.horizontal ? edge.y : edge.y + 5;
+    svg.querySelector('path').setAttribute('d', `M ${ax} ${ay} L ${tx} ${ty} L ${bx} ${by} Z`);
+    const dot = svg.querySelector('circle'); dot.setAttribute('cx', x); dot.setAttribute('cy', y);
+  }
+
   // laptop / desktop: while the user zooms or pans, a popup whose point drifts toward (or past) the edge slides
   // back inside the visible map instead of leaving the screen; its tip hides while it is shifted
   clampPopups(reset = false) {
@@ -1179,11 +1221,25 @@ export class AlertMap {
       else if (R > vis.r - m) dx = vis.r - m - R;
       if (Tp < top + m) dy = top + m - Tp;
       else if (B > bottom - m) dy = Math.max(bottom - m - B, top + m - Tp);
+      if ((pe.classList.contains('pp-alert-popup') || pe.classList.contains('pp-group-popup')) && this.popup?.getLngLat) {
+        const cr = this.map.getContainer().getBoundingClientRect();
+        const point = this.map.project(this.popup.getLngLat());
+        const x = cr.left + point.x * scale; const y = cr.top + point.y * scale;
+        // A clamped card must not cover its own event. Prefer its normal position
+        // above the point, then the free area below; the external tail follows.
+        if (x > L + dx && x < R + dx && y > Tp + dy && y < B + dy) {
+          if (y - 12 - (B - Tp) >= top + m) dy = y - 12 - B;
+          else if (y + 12 + (B - Tp) <= bottom - m) dy = y + 12 - Tp;
+          else if (x - 12 - (R - L) >= vis.l + m) dx = x - 12 - R;
+          else if (x + 12 + (R - L) <= vis.r - m) dx = x + 12 - L;
+        }
+      }
       const nx = Math.round(dx / scale); const ny = Math.round(dy / scale);
       ct.dataset.sx = nx; ct.dataset.sy = ny;
       const moved = Math.abs(nx) > 2 || Math.abs(ny) > 2;
       ct.style.transform = moved ? `translate(${nx}px, ${ny}px)` : '';
       pe.classList.toggle('pp-clamped', moved);
+      this.syncPopupConnector(pe, ct, moved);
     }
   }
   bindClamp() {

@@ -21,28 +21,29 @@ test('security alert emojis are present and semantically distinct', () => {
 test('warplane keeps the three-aircraft formation and drones retain their orbiting silhouette', () => {
   assert.match(map, /t\.marker === 'orbit'/);
   assert.match(map, /t\.marker === 'squad'/);
-  assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(24, -12, 1\).*pl\(4, 12, 0\.85\).*pl\(44, 12, 0\.85\)/);
+  assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(18, -12, 1\).*pl\(2, 8, 0\.85\).*pl\(34, 8, 0\.85\)/);
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad \.sq\s*\{\s*scale: 1; animation: squadFlyZ 7s linear infinite;/);
+  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px;[^}]*animation: squadFlyZ 7s linear infinite;/);
   assert.match(svgs, /"uav":/);
   assert.match(svgs, /"plane":/);
 });
 
-test('schematic movement uses one direction-aware moving three-aircraft group and one pulse halo at 24px', () => {
-  assert.match(map, /const color = '#3b82f6';/);
+test('schematic movement uses one compact blue three-aircraft group at the report location without extra rings', () => {
+  assert.match(map, /const color = '#2476c9';/);
   assert.match(map, /\[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]/);
-  assert.match(map, /flightPosition\(path, alert\.flight_direction === 'toward_syria' \? 1 : 0\.5\)/);
+  assert.match(map, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
+  assert.match(map, /const heading = alert\.flight_direction === 'leaving_syria' \? 180 : 0/);
   assert.match(map, /is-\$\{alert\.flight_direction\.replace\(\/_\/g, '-'\)\}/);
   assert.match(map, /const movementTrackIds = new Set\(this\.movementTrackAlerts\(\)\.map\(\(a\) => a\.id\)\)/);
   assert.match(map, /movementTrackIds\.has\(a\.id\)/);
-  assert.match(map, /el\.append\(halo, squad\)/);
+  assert.match(map, /visual\.append\(squad\)/);
   assert.match(css, /\.map-flight-track-marker\.is-toward-syria \.map-flight-track-squad/);
-  assert.match(css, /\.map-flight-track-marker\.is-entering-syria \.map-flight-track-squad/);
-  assert.match(css, /\.map-flight-track-marker\.is-leaving-syria \.map-flight-track-squad/);
   assert.match(css, /@keyframes flightTrackTravel/);
-  assert.match(css, /\.map-flight-track-halo\s*\{[^}]*animation: flightTrackPulse 1\.8s ease-out infinite/);
+  assert.match(css, /@keyframes flightTrackApproach/);
+  assert.match(css, /\.map-flight-track-visual\s*\{[^}]*transform: scale\(calc\(var\(--mks, \.5\) \* 1\.3\)\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[^\n]*map-flight-track-squad/);
-  assert.doesNotMatch(css, /\.map-flight-track-marker\.is-uav\s*\{[^}]*--aircraft-color:\s*#ef4444/);
+  assert.doesNotMatch(css, /map-flight-track-halo|translate\(-106px|translate\(106px/);
+  assert.doesNotMatch(map, /flightPosition\(path|features\.push\(\{ type: 'Feature', properties: \{ id: alert\.id, color, arrow/);
 });
 
 test('drone orbit stays visible at country zoom while extra copies are hidden to prevent clutter', () => {

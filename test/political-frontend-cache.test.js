@@ -24,17 +24,17 @@ test('PWA and module graph request versioned assets for current map and firearm 
   assert.match(map, /shared\/types\.js\?v=\d+/);
   assert.match(map, /shared\/map-motion\.js\?v=\d+/);
   assert.match(map, /target-svgs\.js\?v=\d+/);
-  assert.match(map, /flight-path\.js\?v=\d+/);
+  assert.doesNotMatch(map, /flightPosition\(path/, 'CSS flight cues must not invent a geographic track');
   assert.match(app, /icons\.js\?v=\d+/);
   assert.match(map, /icons\.js\?v=\d+/);
   assert.match(map, /type-icons\.js\?v=\d+/);
 });
 
-test('political map icon uses its configured 25px size', () => {
+test('political map icon uses the shared 24px map size without mutating its other display configuration', () => {
   const politicalType = types.match(/political:\s*\{([^}]+)\}/)?.[1];
   assert.ok(politicalType, 'political alert type must be defined');
   assert.match(politicalType, /\bsize:\s*25\b/);
-  assert.match(map, /const sz = t\.size \|\| 30;[\s\S]{0,420}svgTag\(glyph, sz,/);
+  assert.match(map, /const sz = 24;[\s\S]{0,420}svgTag\(glyph, sz,/);
 });
 
 test('map flight selection plays a brief event-colored arrival ripple and respects reduced motion', () => {
