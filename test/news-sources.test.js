@@ -10,7 +10,7 @@ process.env.BOT_MODE = 'webhook';
 
 const { DEFAULT_SOURCES, fetchChannel, parseUsername } = await import('../server/news-sources.js');
 const { store } = await import('../server/store.js');
-const { newsState } = await import('../server/news-monitor.js');
+const { checkpointSourcePosts, newsState } = await import('../server/news-monitor.js');
 
 test('Enab Baladi and Syrian Civil Defence are monitored default sources', () => {
   const enab = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'enabbaladi');
@@ -36,6 +36,19 @@ test('official Syrian News Agency is added as a Syria-gated default source', () 
   assert.equal(parseUsername('@sana_gov'), sana.u);
 });
 
+test('three verified Syrian publishers fit within the existing 25-source cap', () => {
+  const hawar = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'hawarnews');
+  const zaman = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'zamanalwslnews');
+  const qasioun = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'qasiounar1');
+  assert.equal(DEFAULT_SOURCES.length, 25);
+  assert.deepEqual([hawar?.general, hawar?.local], [true, true]);
+  assert.equal(zaman?.general, true);
+  assert.equal(qasioun?.general, true);
+  assert.equal(parseUsername('@HawarNews'), hawar.u);
+  assert.equal(parseUsername('https://t.me/ZAMANALWSLnews'), zaman.u);
+  assert.equal(parseUsername('https://t.me/s/QasiounAr1'), qasioun.u);
+});
+
 test('one-time migration adds new feeds to saved configurations and preserves an existing paused source', () => {
   store.state.news = {
     on: true,
@@ -57,12 +70,31 @@ test('one-time migration adds new feeds to saved configurations and preserves an
   assert.ok(sana?.on, 'SANA is enabled in the existing source list');
   assert.ok(migrated.mig.sanaOfficial1, 'the official source migration is recorded once');
   assert.ok(migrated.mig.northNews1, 'the migration is recorded once');
+  const hawar = migrated.sources.find((source) => source.u.toLowerCase() === 'hawarnews');
+  const zaman = migrated.sources.find((source) => source.u.toLowerCase() === 'zamanalwslnews');
+  const qasioun = migrated.sources.find((source) => source.u.toLowerCase() === 'qasiounar1');
+  assert.ok(hawar?.on && hawar.local && hawar.general);
+  assert.ok(zaman?.on && zaman.general);
+  assert.ok(qasioun?.on && qasioun.general);
+  assert.ok(migrated.mig.verifiedFeeds1, 'the verified-feed migration is recorded once');
+  assert.ok(migrated.sources.length <= 25, 'the migration respects the cap');
 
   enab.on = false;
   delete migrated.mig.northNews1;
   store.state.news = migrated;
   const rerun = newsState();
   assert.equal(rerun.sources.find((source) => source.u.toLowerCase() === 'enabbaladi').on, false, 'the migration never re-enables a source the owner paused');
+});
+
+test('a new feed starts from its latest existing post and only the next post is fresh', () => {
+  const state = { last: {} };
+  const source = { u: 'HawarNews' };
+  const archive = [{ id: 510, text: 'old fixture' }, { id: 511, text: 'latest fixture' }];
+  assert.deepEqual(checkpointSourcePosts(state, source, archive), [], 'the first poll does not replay history');
+  assert.equal(state.last.HawarNews, 511);
+  const nextPoll = [...archive, { id: 512, text: 'new fixture' }];
+  assert.deepEqual(checkpointSourcePosts(state, source, nextPoll), [{ id: 512, text: 'new fixture' }]);
+  assert.equal(state.last.HawarNews, 512);
 });
 
 test('fetchChannel paginates back to the last seen Telegram post', async () => {

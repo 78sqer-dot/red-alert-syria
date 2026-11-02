@@ -17,13 +17,16 @@ const ROAD_OUTLETS = new Map([
   ['alarabiya_sy', 'alarabiya'], ['alarabiyabr', 'alarabiya'], ['alhadath_brk', 'alarabiya'],
   ['alarabytvsy', 'alaraby'], ['alarabytelevision', 'alaraby'], ['televisionsyria', 'syria-tv'],
 ]);
-const ROAD_CONTEXT = /(?:^|\s)(?:طريق|طرق|الطريق|اوتوستراد|جسر|highway|road|route)(?:\s|$)/;
+const ROAD_CONTEXT = /(?:^|\s)(?:طريق|طرق|الطريق|اوتوستراد|جسر|مرور|مروري|مروريه|السير|سير|highway|road|route)(?:\s|$)/;
 const CLOSED = /(?:قطع (?:ال)?طريق|اغلاق (?:ال)?طريق|اغلق (?:ال)?طريق|اغلقت (?:ال)?طريق|تسكير (?:ال)?طريق|غلق (?:ال)?طريق|(?:ال)?طريق (?:مغلق|مقطوع|مسكر)|(?:مغلق|مقطوع|مسكر) امام (?:حركه )?(?:السير|المرور)|road (?:is )?closed|highway (?:is )?closed|road blocked|highway blocked|road closure)/;
 const UNSAFE = /(?:غير سالك|غير صالح للسير|لا يمكن المرور|تعذر المرور|تعذر السير|ممنوع المرور|غير امن|صعوبه المرور|impassable|unsafe to travel)/;
-const STATUS_CUE = /(?:^|\s)(?:قطع (?:ال)?طريق|اغلاق|اغلق(?:ت)?|تسكير|غلق|(?:ال)?مغلق(?:ه|ا)?|(?:ال)?مقطوع(?:ه|ا)?|(?:ال)?مسكر(?:ه|ا)?|غير سالك|غير صالح للسير|لا يمكن المرور|تعذر المرور|تعذر السير|ممنوع المرور|صعوبه المرور|blocked|closure|impassable|unsafe to travel)(?=\s|$)/;
+const TRAFFIC_BUSY = /(?:ازدحام(?:\s+مروريه?)?|زحمه(?:\s+(?:سير|مرور))?|حركه\s+(?:السير|المرور)\s+(?:بطيئه|مزدحمه|متباطئه)|بطء\s+حركه\s+(?:السير|المرور)|traffic\s+(?:jam|congestion)|heavy traffic|slow traffic)/;
+const STATUS_CUE = /(?:^|\s)(?:قطع (?:ال)?طريق|اغلاق|اغلق(?:ت)?|تسكير|غلق|(?:ال)?مغلق(?:ه|ا)?|(?:ال)?مقطوع(?:ه|ا)?|(?:ال)?مسكر(?:ه|ا)?|غير سالك|غير صالح للسير|لا يمكن المرور|تعذر المرور|تعذر السير|ممنوع المرور|صعوبه المرور|ازدحام|زحمه|بطء|بطيئه|مزدحمه|متباطئه|slow traffic|heavy traffic|traffic jam|traffic congestion|blocked|closure|impassable|unsafe to travel)(?=\s|$)/;
 const OPEN_CUE = /(?:اعيد فتح|اعاده فتح|فتح الطريق|فتح (?:ال)?طريق|الطريق مفتوح|الطريق سالك|استئناف حركه السير|عادت حركه السير|reopened|open to traffic)/;
 const NEGATED = /(?:ليس|ليست|لم يعد|لم تعد|غير|لا يزال غير|لا توجد|نفى|ينفي) (?:الطريق )?(?:مغلق|مقطوع|مسكر|مغلقا|مقطوعا|اغلاق)/;
 const FUTURE = /(?:سيتم|سوف يتم|سيجري|يعتزم|تعتزم|يبدأ غدا|اعتبارا من غد|ابتداء من غد|will be closed|scheduled closure)/;
+const NO_BUSY = /(?:لا\s+(?:يوجد|وجود|توجد|تسجل|تشهد)\s+(?:اي\s+)?(?:ازدحام(?:\s+مروري)?|زحمه(?:\s+(?:سير|مرور))?)|انتهاء\s+(?:ال)?ازدحام|انحسار\s+(?:ال)?ازدحام|انسيابيه\s+(?:حركه\s+)?(?:السير|المرور)|حركه\s+(?:السير|المرور)\s+(?:طبيعيه|انسيابيه))/;
+const BUSY_FUTURE = /(?:متوقع|من المتوقع|يتوقع|توقعات|سيشهد|قد يشهد|anticipated|expected|forecast)/;
 const TERMINAL = new Set(['published', 'ignored', 'duplicate', 'pending-report', 'published-existing']);
 
 function watch() {
@@ -43,14 +46,21 @@ export function parseRoadText(text) {
   const clauses = String(text || '').split(/[\r\n.!؟?؛•]+/u).map((part) => N(part)).filter(Boolean);
   const n = clauses.find((part) => ROAD_CONTEXT.test(part) && STATUS_CUE.test(part));
   if (!n) return null;
+  const busyMentioned = TRAFFIC_BUSY.test(n);
+  if (busyMentioned && (NO_BUSY.test(n) || BUSY_FUTURE.test(n))) {
+    if (CLOSED.test(n) || UNSAFE.test(n)) return { road: null, reason: 'تتداخل حالة ازدحام غير حالية مع وصف إغلاق أو خطر؛ تحتاج مراجعة' };
+    return null;
+  }
   if (NEGATED.test(n)) return { road: null, reason: 'الخبر ينفي الإغلاق أو ينقل نفيه' };
   if (FUTURE.test(n)) return { road: null, reason: 'الخبر يتحدث عن إغلاق مستقبلي أو مخطط' };
   const closed = CLOSED.test(n);
   const unsafe = UNSAFE.test(n);
   if (OPEN_CUE.test(n)) return { road: null, reason: 'الخبر يذكر فتح الطريق أو عودة الحركة، والحالة تحتاج مراجعة' };
+  if (busyMentioned && (closed || unsafe)) return { road: null, reason: 'الخبر يجمع بين زحمة السير وإغلاق أو خطر؛ يحتاج مراجعة' };
   if (closed && unsafe) return { road: null, reason: 'وصف الحالة متضارب أو يجمع بين الإغلاق والخطر' };
   if (closed) return { road: 'closed', reason: null };
   if (unsafe) return { road: 'danger', reason: null };
+  if (busyMentioned) return { road: 'busy', reason: null };
   return { road: null, reason: 'لم تتضح حالة الطريق من صياغة الخبر' };
 }
 
@@ -160,7 +170,7 @@ function sourceLink(s) {
 }
 function reviewText(ev) {
   const srcs = (ev.sources || []).slice(0, 5).map((s) => sourceLink(s) ? `<a href="${esc(sourceLink(s))}">${esc(s.name)}</a>` : esc(s.name));
-  const status = ev.road === 'closed' ? '⛔ طريق مسكّر' : ev.road === 'danger' ? '⚠️ طريق غير سالك/خطر' : '🛣 حالة طريق تحتاج تحقق';
+  const status = ev.road === 'closed' ? '⛔ طريق مسكّر' : ev.road === 'danger' ? '⚠️ طريق غير سالك/خطر' : ev.road === 'busy' ? '🚗 زحمة سير' : '🛣 حالة طريق تحتاج تحقق';
   const action = ev.conflict ? 'توجد حالة طريق مختلفة ما زالت نشطة للموقع؛ راجعها من أدوات الطرق أولاً.' : ev.road && eventLocs(ev).length ? 'إذا راجعت المصدر، يمكنك إضافته إلى الخريطة فقط من الزر أدناه.' : 'تحقّق منه يدوياً من المصدر؛ لا يُنشر حتى تتضح الحالة والموقع.';
   return `🛣 <b>خبر طريق للمراجعة — لم يُنشر تلقائياً</b>\n\n${status}\n📍 ${esc(routeName(ev))}\n\n${esc(ev.note || ev.reason || 'تعذّر تحديد الحالة أو موقعها بدقة.')}${ev.reason ? `\n\n⚠️ ${esc(ev.reason)}` : ''}\n\n🗞 <b>المصادر:</b> ${srcs.join(' · ') || '—'}\n\n<i>النشر التلقائي يتطلب مصدراً رسمياً مؤهلاً أو مصدرين صحفيين مستقلين، وموقعاً واضحاً. ${esc(action)}</i>`;
 }
@@ -198,7 +208,7 @@ async function closeReview(ev, keep = null) {
   ev.cards = keep ? (ev.cards || []).filter(([c, m]) => c === keep[0] && m === keep[1]) : [];
 }
 function noticeText(ev, mode) {
-  const label = ev.road === 'closed' ? '⛔ طريق مسكّر' : '⚠️ طريق غير سالك/خطر';
+  const label = ev.road === 'closed' ? '⛔ طريق مسكّر' : ev.road === 'danger' ? '⚠️ طريق غير سالك/خطر' : ev.road === 'busy' ? '🚗 زحمة سير' : ev.road === 'open' ? '🟢 طريق مفتوح' : '🛣 حالة طريق تحتاج تحقق';
   const sources = (ev.sources || []).slice(0, 5).map((s) => sourceLink(s) ? `<a href="${esc(sourceLink(s))}">${esc(s.name)}</a>` : esc(s.name));
   const map = config.publicUrl ? `\n\n<a href="${esc(config.publicUrl)}/ar/#roads">🗺 فتح طبقة الطرق على الخريطة</a>` : '';
   const why = mode === 'official' ? 'مصدر رسمي أولي' : mode === 'two-independent' ? 'مصدران صحفيان مستقلان' : 'مراجعتك';

@@ -131,6 +131,26 @@ export function newsState() {
     }
     n.mig.sanaOfficial1 = new Date().toISOString();
   }
+  // Add three independently verified Syrian news feeds once. New feeds are baselined at their newest
+  // post on the first poll; existing paused choices stay paused, and the 25-source cap remains in force.
+  if (!n.mig.verifiedFeeds1) {
+    const verified = new Set(['hawarnews', 'zamanalwslnews', 'qasiounar1']);
+    for (const s of DEFAULT_SOURCES.filter((x) => verified.has(x.u.toLowerCase()))) {
+      const cur = n.sources.find((x) => x.u.toLowerCase() === s.u.toLowerCase());
+      if (cur) {
+        cur.name = s.name;
+        cur.general = true;
+        if (s.local) cur.local = true;
+      } else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
+    }
+    n.mig.verifiedFeeds1 = new Date().toISOString();
+  }
+  // Existing political drafts must remain human-reviewed when night eligibility is enabled.
+  // Only drafts created after this one-time activation checkpoint can qualify.
+  if (!n.mig.politicalNightAuto1) {
+    n.mig.politicalNightAuto1 = new Date().toISOString();
+    save(false);
+  }
   setSourceNames(n.sources.map((s) => s.name));
   if (!n.last || typeof n.last !== 'object') n.last = {};
   if (!n.seen || typeof n.seen !== 'object') n.seen = {};
@@ -277,14 +297,17 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (d?.type === 'political') return false; // Political developments always require human review.
   if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol'].includes(d.type)) return false;
+  if (d.type === 'political') {
+    const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
+    if (!POLITICAL_CATEGORIES[d.politicalCategory] || d.politicalNeedsCategory || !Number.isFinite(d.created) || !Number.isFinite(activatedAt) || d.created <= activatedAt) return false;
+  }
   if (!d.loc || d.loc.scope === 'country' || !Number.isFinite(d.loc.latitude) || !Number.isFinite(d.loc.longitude)) return false;
   const ss = d.srcs || [];
   return ss.length >= 2 || ss.some((x) => !isLocalSrc(x));
 }
 /** Daytime uses the same AI and source-confidence gate as overnight auto-publishing. */
-export function daytimeAutoEligible(d) { return Boolean(d && d.status === 'pending' && nightEligible(d)); }
+export function daytimeAutoEligible(d) { return Boolean(d && d.type !== 'political' && d.status === 'pending' && nightEligible(d)); }
 export function dayAutoDueAt(d, now = Date.now()) {
   return daytimeWindow(now) && daytimeAutoEligible(d) && !Number.isFinite(d.dayAutoAt) ? now + DAY_AUTO_DELAY_MS : null;
 }
@@ -851,6 +874,14 @@ async function rescanIfFilterChanged() {
   console.log(`[news] filter v${FILTER_VER}: rescan queued ${queued} recent post(s)`);
   if (R.queue.length) await processQueue();
 }
+export function checkpointSourcePosts(n, src, posts) {
+  const last = n.last[src.u];
+  const maxId = posts.reduce((max, post) => Math.max(max, post.id), 0);
+  if (last == null) { n.last[src.u] = maxId; return []; }
+  if (maxId > last) n.last[src.u] = maxId;
+  return posts.filter((post) => post.id > last);
+}
+
 async function pollOnce() {
   const n = newsState();
   if (!n.on || R.stopped) return;
@@ -869,10 +900,7 @@ async function pollOnce() {
         continue;
       }
       R.src[src.u] = { ok: true, at: Date.now(), n: r.posts.length, pages: r.pages || 1 };
-      const maxId = r.posts.reduce((m, p) => Math.max(m, p.id), 0);
-      if (last == null) { n.last[src.u] = maxId; continue; } // a new source: start from now, no backlog
-      for (const p of r.posts) if (p.id > last) fresh.push({ src, p });
-      if (maxId > last) n.last[src.u] = maxId;
+      for (const p of checkpointSourcePosts(n, src, r.posts)) fresh.push({ src, p });
     } catch (e) {
       R.src[src.u] = { ok: false, at: Date.now(), err: e.code === 'nopreview' ? 'no public preview' : String(e.message || e).slice(0, 80) };
     }
@@ -1215,8 +1243,8 @@ export function registerNewsTools(bot, h) {
     return [
       t(ctx, '📡 <b>الرصد الإخباري التلقائي</b>', '📡 <b>Automatic news monitor</b>'),
       '',
-      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>بالنهار، الخبر المؤهل يُنشر تلقائياً بعد دقيقتين إذا ما وافقت أو تجاهلت؛ وبالليل يبقى النشر التلقائي حسب إعداداته. الأخبار السياسية تبقى دائماً للمراجعة البشرية ولا تُنشر تلقائياً.</b> والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
-        'The server watches Syrian news channels around the clock; each new incident arrives as a ready draft (type, place, sources). <b>Eligible items may auto-publish after 2 minutes by day or under the overnight settings. Political developments always require human review and are never auto-published.</b> Repeated incidents never come twice.'),
+      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>بالنهار، الخبر المؤهل غير السياسي يُنشر تلقائياً بعد دقيقتين إذا ما راجعته؛ وبالليل قد يُنشر السياسي فقط إذا كان تصنيف Gemini حقيقياً، وفئته محددة، ومكانه السوري واضح، ومصدره مستوفياً للشروط. غير ذلك يبقى للمراجعة البشرية.</b> والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
+        'The server watches Syrian news channels around the clock; each new incident arrives as a ready draft (type, place, sources). <b>By day, eligible non-political news may auto-publish after 2 minutes if you have not reviewed it. At night, political news may publish only with a real Gemini classification, a valid category, a specific Syrian place, and the existing source checks; otherwise it stays for human review.</b> Repeated incidents never come twice.'),
       '',
       `${t(ctx, 'الحالة', 'Status')}: ${n.on ? t(ctx, '✅ يعمل', '✅ running') : t(ctx, '⏸ متوقف', '⏸ paused')}${n.on ? ` · ${t(ctx, 'آخر فحص', 'last check')} ${ago(R.lastPollAt, ctx)}` : ''}`,
       `${t(ctx, 'التصنيف', 'Classification')}: ${ai}`,
@@ -1288,10 +1316,10 @@ export function registerNewsTools(bot, h) {
     return [
       t(ctx, '🌙 <b>النشر الليلي التلقائي</b>', '🌙 <b>Night auto-publish</b>'),
       '',
-      t(ctx, 'بهالساعات (بتوقيت دمشق) المسودات المؤهلة بتنزل لحالها عالقناة والخريطة بنفس القالب وصورة الخريطة. الأخبار السياسية تبقى دائماً للمراجعة البشرية ولا تُنشر تلقائياً. المكرر ما بينزل، والتنبيه بينشال من الخريطة بوقته العادي.',
-        'During these hours (Damascus time), eligible drafts publish to the channel and map with the usual template. Political developments always require human review and are never auto-published. Duplicates never go out, and alerts leave the map on their normal timer.'),
+      t(ctx, 'بهالساعات (بتوقيت دمشق) المسودات المؤهلة بتنزل لحالها عالقناة والخريطة بنفس القالب وصورة الخريطة. الخبر السياسي ما بينزل تلقائياً بالنهار؛ بالليل ممكن ينزل فقط إذا كان تصنيف Gemini حقيقياً وفئته ومكانه السوري المحدد ومصدره مستوفية الشروط، وإلا بيبقى للمراجعة.',
+        'During these hours (Damascus time), eligible drafts publish to the channel and map with the usual template. Political news is not auto-published during the day; at night it qualifies only with a real Gemini classification, valid category, specific Syrian place, and the existing source checks. Otherwise it stays for review.'),
       '',
-      t(ctx, '• بينشر الخبر المؤهل فقط؛ خبر من مصدر محلي/ناشط وحيد أو تصنيف بسيط بدون Gemini بيضل مسودة. وكل خبر سياسي يبقى للمراجعة البشرية مهما تعددت مصادره.', '• Only eligible drafts auto-publish. A single local/activist source or rules-only classification stays a draft; political news always waits for human review regardless of source count.'),
+      t(ctx, '• بينشر الخبر المؤهل فقط؛ خبر من مصدر محلي/ناشط وحيد أو تصنيف بسيط بدون Gemini بيضل مسودة. الخبر السياسي غير المحدد الفئة أو الموقع، أو اللي ما استوفى شروط المصدر، بيضل للمراجعة.', '• Only eligible drafts auto-publish. A single local/activist source or rules-only classification stays a draft; political news with a missing category or place, or that fails the source checks, stays for review.'),
       t(ctx, '• كل منشور تلقائي بيوصلك إشعار صامت فيه زر ↩️ تراجع (بيحذفه من القناة والخريطة).', '• Each auto-post sends you a silent notice with ↩️ Undo (removes it from the channel and map).'),
       t(ctx, '• بلاغات بوت التبليغ ما بتنتشر تلقائياً — بتضل لمراجعتك.', '• Report-bot reports are never auto-published — they stay for your review.'),
       '',

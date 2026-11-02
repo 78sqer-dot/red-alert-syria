@@ -76,11 +76,13 @@ test('live alert circles use compositor-safe pulse layers and remain clickable t
 test('map event glyphs are 24px and urgent news uses a small red triangle, black interior, and red pulse', () => {
   assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
   assert.match(map, /const triangle = '<svg class="news-marker-svg" viewBox="0 0 24 24"/);
-  assert.match(map, /fill="#ef233c".*fill="#111827".*fill="#ef233c"/);
+  assert.match(map, /fill="#ef233c".*fill="#000000".*fill="#ef233c"/);
   assert.match(css, /\.sai\.map-event-disc\s*\{[^}]*background:\s*#fff !important/);
   assert.match(css, /\.ic\s*\{[^}]*border-radius:\s*50%;[^}]*background:\s*#fff/);
   assert.match(css, /\.news-marker-core\s*\{[^}]*width:\s*32px; height:\s*32px;[^}]*border:\s*2px solid #fff;[^}]*background:\s*transparent/);
   assert.match(css, /\.news-marker-core::after\s*\{[^}]*background:\s*#ef233c/);
+  assert.match(css, /\.mk-breaking-news \.news-marker-core\s*\{[^}]*border-color: #ef233c;[^}]*box-shadow: 0 0 0 1px rgba\(239,35,60,\.34\)/);
+  assert.match(css, /\.mk-breaking-news \.news-marker-core::after\s*\{ border-color: #ef233c; box-shadow: 0 0 0 1px rgba\(239,35,60,\.28\); \}/);
   assert.match(css, /\.news-marker-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
   assert.match(css, /\.mk-breaking-news \.news-marker-core\s*\{\s*width: 26px; height: 26px; border-width: 1\.7px;/);
   assert.match(css, /\.mk-breaking-news \.news-marker-svg\s*\{\s*width: 15px; height: 15px/);
@@ -88,4 +90,28 @@ test('map event glyphs are 24px and urgent news uses a small red triangle, black
   assert.match(css, /@keyframes urgentPulseWave/);
   assert.match(css, /\.ic-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
   assert.match(css, /\.mk-event-emoji\s*\{[^}]*background:\s*#fff/);
+});
+
+test('urgent marker core, red pulse and glow follow the shared map zoom scale', () => {
+  assert.match(css, /\.mk-breaking-news \.mk-s\s*\{\s*transform: scale\(var\(--mks, \.5\)\); transition: transform \.2s ease;/);
+  assert.match(css, /\.news-pulse-ring\s*\{[^}]*transform: translate\(-50%, -50%\) scale\(var\(--mks, \.5\)\)/);
+  assert.doesNotMatch(css, /\.mk-breaking-news \.news-pulse-ring\s*\{[^}]*transform:/);
+  assert.match(css, /\.mk-breaking-news \.news-pulse-ring\s*\{ width: 38px; height: 38px; border-color: #ef233c; background: transparent; box-shadow: 0 0 5px rgba\(239,35,60,\.28\); \}/);
+  assert.match(css, /\.mk-breaking-news \.news-pulse-ring::after\s*\{ border-color: #ef233c; animation: urgentPulseWave 2s ease-out infinite; \}/);
+  assert.match(map, /const mks = Math\.max\(0\.42, Math\.min\(0\.56,/);
+});
+
+test('map SVGs use each event type color instead of a hard-coded black glyph', () => {
+  assert.match(map, /const fg = t\.color;/, 'static discs use the category color');
+  assert.match(map, /const configuredIconColor = t\.icon \|\| t\.color/);
+  assert.match(map, /const iconColor = \['#111827', '#000000', '#000'\]\.includes\(configuredIconColor\.toLowerCase\(\)\) \? t\.color : configuredIconColor/);
+  assert.match(map, /style="--ic:\$\{iconColor\}/);
+  assert.match(map, /fill="\$\{iconColor\}"/);
+  assert.match(css, /\.sai\.map-event-disc \{[^}]*color: var\(--c\) !important/);
+  assert.match(css, /\.sai\.map-event-disc svg \{ fill: var\(--c\) !important; color: var\(--c\) !important; \}/);
+  assert.match(css, /\.ic-pistol \.ic-svg, \.ic-rifle \.ic-svg \{[^}]*fill: var\(--ic\)/);
+  assert.match(css, /\.uav-svg \{[^}]*fill: var\(--c, #6b7280\)/);
+  assert.match(css, /\.helicopter-svg \{[^}]*fill: var\(--c, #3b8eff\)/);
+  assert.match(css, /html\.dark \.mk\.sel \.uav-svg \{ fill: color-mix\(in srgb, var\(--c, #6b7280\) 72%, #fff\); \}/);
+  assert.match(css, /html\.dark \.mk\.sel \.helicopter-svg \{ fill: color-mix\(in srgb, var\(--c, #3b8eff\) 72%, #fff\); \}/);
 });

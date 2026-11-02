@@ -635,9 +635,12 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     return h;
   }
   function weatherHtml() {
-    let h = `<p class="svc-note" style="margin-top:0">${esc(L.wxSub)}</p>`;
-    h += modeBtnWide('weather', L.showWx);
     const j = st.wx;
+    const forecastSource = j?.forecastSource || {};
+    const provider = forecastSource.name || 'Open-Meteo';
+    const subtitle = L.wxSub.replace('Open‑Meteo', provider).replace('Open-Meteo', provider);
+    let h = `<p class="svc-note" style="margin-top:0">${esc(subtitle)}</p>`;
+    h += modeBtnWide('weather', L.showWx);
     if (!j) return h + `<div class="svc-empty">${esc(st.wxErr ? L.wxErr : L.loading)}</div>`;
     const dailyUrl = j.official?.url || 'https://climweb.med.gov.sy/منتجاتنا/النشرة-اليومية/';
     const mapUrl = j.official?.mapUrl || 'https://climweb.med.gov.sy/mapviewer';
@@ -652,7 +655,10 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         return `<div class="wx-warn" style="--c:${WARN_C(w.level)}">${esc(w.emoji)} <b>${esc(LANG === 'en' ? w.en : w.ar)}</b><small>${esc(label)}${areas ? ` · ${esc(areas)}` : ''}${w.url ? ` · <a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.official ? L.wxSource : L.wxLocalSource)}</a>` : ''}</small>${stamps.length ? `<small>${esc(stamps.join(' · '))}</small>` : ''}${details ? `<small>${esc(details.slice(0, 220))}</small>` : ''}</div>`;
       }).join('');
     } else h += `<div class="svc-empty">${esc(L.wxNoAlerts)}</div>`;
-    h += `<p class="wx-credit">${esc(L.wxModelData)} · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open‑Meteo</a> · <a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></p>`;
+    const providerUrl = forecastSource.url || 'https://open-meteo.com/';
+    const licenceUrl = forecastSource.licenceUrl || 'https://open-meteo.com/en/licence';
+    const adapted = forecastSource.adapted ? (LANG === 'en' ? ' (adapted)' : ' (محوّلة للعرض)') : '';
+    h += `<p class="wx-credit">${esc(L.wxModelData)} · <a href="${esc(providerUrl)}" target="_blank" rel="noopener noreferrer">${esc(provider + adapted)}</a> · <a href="${esc(licenceUrl)}" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></p>`;
     if (j.forecastsAvailable === false) h += `<p class="svc-note">${esc(L.wxForecastUnavailable)}</p>`;
     h += `<p class="svc-note">${esc(L.updated)}: ${esc(when(j.at))} · ${esc(j.src || '')}</p>`;
     return h;

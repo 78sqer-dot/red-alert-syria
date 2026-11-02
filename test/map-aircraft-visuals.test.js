@@ -30,7 +30,7 @@ test('drone is hidden with impact circles alone at country zoom and orbits at de
 test('helicopter starts at 18px, scales with zoom and follows its alert perimeter', () => {
   assert.match(css, /\.mk-helicopter \.mk-s\s*\{\s*transform:\s*none;\s*\}/);
   assert.match(css, /\.heli-craft\s*\{[^}]*scale\(var\(--heli-scale, 1\)\)[^}]*transition: transform \.18s ease-out/);
-  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*18px;[^}]*height:\s*18px;[^}]*fill:\s*#6b7280;/);
+  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*18px;[^}]*height:\s*18px;[^}]*fill:\s*var\(--c, #3b8eff\);/);
   assert.match(mapJs, /const helicopterScale = Math\.max\(1, Math\.min\(1\.34, 1 \+ \(z - 9\) \* 0\.08\)\)/);
   assert.match(mapJs, /svgTag\(t\.glyph,\s*18,\s*`fill=/);
   assert.match(css, /\.heli-orbit\s*\{[^}]*animation:\s*heliOrbit 12s linear infinite/);

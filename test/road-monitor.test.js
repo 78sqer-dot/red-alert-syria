@@ -25,7 +25,29 @@ test('road parsing accepts explicit closures and impassability but keeps negated
   assert.equal(parseRoadText('الطريق ليس مغلقاً في درعا').road, null);
   assert.equal(parseRoadText('سيتم إغلاق الطريق في حمص غداً').road, null);
   assert.equal(parseRoadText('أعيد فتح الطريق بعد إغلاق مؤقت في دمشق').road, null);
-  assert.equal(parseRoadText('ازدحام مروري في دمشق'), null);
+  assert.deepEqual(parseRoadText('ازدحام مروري في دمشق'), { road: 'busy', reason: null });
+  assert.deepEqual(parseRoadText('زحمة سير على طريق دمشق حمص'), { road: 'busy', reason: null });
+});
+
+test('explicit traffic congestion is routed to roads for review and never auto-added by a local feed', async () => {
+  const restore = freshStore();
+  try {
+    const text = 'زحمة سير شديدة على طريق دمشق حمص قرب بلدة القصير';
+    assert.deepEqual(parseRoadText(text), { road: 'busy', reason: null });
+    assert.equal(isRoadStatusOnlyPost(text), true, 'traffic congestion is removed from general breaking-news intake');
+    assert.equal(await onRoadNewsPost(post('AbomosaabSharkea', text, 501)), true);
+    const event = store.state.svc.roadWatch.events[0];
+    assert.equal(event.road, 'busy');
+    assert.equal(event.state, 'pending', 'a local report remains for human review');
+    assert.equal(store.state.svc.roads.length, 0, 'the synthetic report does not create a live map road');
+  } finally { restore(); }
+});
+
+test('negative and predicted congestion do not create current road-status events', () => {
+  assert.equal(parseRoadText('لا يوجد ازدحام مروري على طريق دمشق حمص'), null);
+  assert.equal(parseRoadText('ازدحام مروري متوقع غداً على طريق دمشق حمص'), null);
+  const mixed = parseRoadText('ازدحام مروري مع إغلاق الطريق بين دمشق وحمص');
+  assert.equal(mixed?.road, null, 'mixed congestion and closure wording is left for review');
 });
 
 test('political post mentioning closed doors and a road to the future is not a road update', async () => {

@@ -1,5 +1,5 @@
 // 🌤 Official weather warnings + daily morning weather bulletin.
-//  - publicWeather(): official CAP warnings plus Open-Meteo model points when the user opens the weather map.
+//  - publicWeather(): official CAP warnings plus Open-Meteo model points (MET Norway fallback) when the user opens the weather map.
 //  - Model data is clearly labeled and never converted into official alerts or channel posts.
 //  - Morning bulletin: a branded image + short caption in the channel (default 08:00 Damascus), its own
 //    post (the prices bulletin stays separate). On/off, time, preview and "post now" in the owner menu.
@@ -30,20 +30,27 @@ const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأرب
 const LRM = '\u200E';
 const TTL = 30 * 60_000;
 const RETRY_MS = 2 * 60_000;
-const R = { data: null, at: 0, busy: null, err: '', retryAt: 0 };
+const MET_TTL = 30 * 60_000;
+const MET_CONCURRENCY = 4;
+const OPEN_METEO = { name: 'Open-Meteo', url: 'https://open-meteo.com/', licenceUrl: 'https://open-meteo.com/en/licence', adapted: false };
+const MET_NORWAY = { name: 'MET Norway', url: 'https://api.met.no/weatherapi/locationforecast/2.0/documentation', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/', adapted: true };
+const R = { data: null, at: 0, busy: null, err: '', retryAt: 0, source: OPEN_METEO.name, nextFetchAt: 0, providerError: '', metCache: {} };
 const WX_CACHE_KEY = 'wxDailyCache';
 
 function restoreWeatherCache() {
   if (R.data) return;
   const c = store.state?.svc?.[WX_CACHE_KEY];
-  if (c?.v === 1 && Array.isArray(c.data) && c.data.length >= 10 && Number.isFinite(c.at)) {
+  if ([1, 2].includes(c?.v) && Array.isArray(c.data) && c.data.length >= 10 && Number.isFinite(c.at)) {
     R.data = c.data;
     R.at = c.at;
+    R.source = c.source === MET_NORWAY.name ? MET_NORWAY.name : OPEN_METEO.name;
+    R.nextFetchAt = Number.isFinite(c.nextFetchAt) ? c.nextFetchAt : c.at + TTL;
+    R.metCache = c.metCache && typeof c.metCache === 'object' ? c.metCache : {};
   }
 }
 function persistWeatherCache() {
   try {
-    (store.state.svc ||= {})[WX_CACHE_KEY] = { v: 1, at: R.at, data: R.data };
+    (store.state.svc ||= {})[WX_CACHE_KEY] = { v: 2, at: R.at, source: R.source, nextFetchAt: R.nextFetchAt, data: R.data, metCache: R.metCache };
     store.persist();
   } catch (e) { console.warn('[wx] cache persistence failed:', e.message); }
 }
@@ -64,13 +71,15 @@ async function getJson(url) {
   return r.json();
 }
 const round = (v) => (Number.isFinite(v) ? Math.round(v) : null);
+const tenth = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+const mpsToKmh = (v) => (Number.isFinite(v) ? Math.round(v * 3.6) : null);
 function pointsList() {
   return [
     ...governorates.filter((g) => Number.isFinite(g.lat)).map((g) => ({ id: g.code, gov: g.code, lat: g.lat, lon: g.lon, ar: g.ar, en: g.en, main: 1 })),
     ...EXTRA_POINTS.map((p, i) => ({ id: `x${i + 1}`, gov: p.gov, lat: p.lat, lon: p.lon, ar: p.label, en: p.en || p.label, main: 0 })),
   ];
 }
-async function fetchAll() {
+async function fetchOpenMeteoAll() {
   const P = pointsList();
   const lat = P.map((p) => p.lat).join(','); const lon = P.map((p) => p.lon).join(',');
   const tz = encodeURIComponent(config.timezone || 'Asia/Damascus');
@@ -103,14 +112,161 @@ async function fetchAll() {
   if (out.filter((p) => p.main).length < 10) throw new Error(`only ${out.length} points`);
   return out;
 }
+function metCode(symbol) {
+  const s = String(symbol || '').toLowerCase().replace(/_(?:day|night|polartwilight)$/, '');
+  if (!s) return 3;
+  if (s.includes('thunder')) return /heavy/.test(s) ? 99 : 95;
+  if (s.startsWith('clearsky')) return 0;
+  if (s.startsWith('fair')) return 1;
+  if (s.startsWith('partlycloudy')) return 2;
+  if (s.startsWith('cloudy')) return 3;
+  if (s.startsWith('fog')) return 45;
+  if (s.includes('snow')) return s.includes('showers') ? (/heavy/.test(s) ? 86 : 85) : (/heavy/.test(s) ? 75 : /light/.test(s) ? 71 : 73);
+  if (s.includes('sleet')) return /heavy/.test(s) ? 67 : /light/.test(s) ? 56 : 66;
+  if (s.includes('rain')) return s.includes('showers') ? (/heavy/.test(s) ? 82 : /light/.test(s) ? 80 : 81) : (/heavy/.test(s) ? 65 : /light/.test(s) ? 51 : 61);
+  return 3;
+}
+const localDay = (ms) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: config.timezone || 'Asia/Damascus', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(ms)).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+function localDaylight(symbol, ms) {
+  if (/_day$/.test(String(symbol || ''))) return 1;
+  if (/_night$/.test(String(symbol || ''))) return 0;
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone || 'Asia/Damascus', hour: '2-digit', hourCycle: 'h23' }).format(new Date(ms)));
+  return hour >= 6 && hour < 18 ? 1 : 0;
+}
+const metPeriod = (row) => row?.data?.next_1_hours || row?.data?.next_6_hours || row?.data?.next_12_hours || null;
+function metSeverity(code) {
+  if (code >= 95) return 6;
+  if (code >= 71 && code <= 86) return 5;
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 4;
+  if (code === 45 || code === 48) return 3;
+  if (code === 3) return 2;
+  if (code === 2) return 1;
+  return 0;
+}
+function normalizeMetPoint(json, point) {
+  const series = json?.properties?.timeseries;
+  if (!Array.isArray(series) || !series.length) throw new Error(`MET Norway returned no timeseries for ${point.id}`);
+  const first = series[0];
+  const firstDetails = first?.data?.instant?.details || {};
+  const firstPeriod = metPeriod(first);
+  const firstSymbol = firstPeriod?.summary?.symbol_code || '';
+  const firstTime = Date.parse(first.time) || Date.now();
+  const now = {
+    t: round(firstDetails.air_temperature), wind: mpsToKmh(firstDetails.wind_speed),
+    gust: mpsToKmh(firstDetails.wind_speed_of_gust), hum: round(firstDetails.relative_humidity),
+    day: localDaylight(firstSymbol, firstTime), code: metCode(firstSymbol), dust: 0,
+  };
+  if (!Number.isFinite(now.t)) throw new Error(`MET Norway returned no temperature for ${point.id}`);
+  now.k = wxKind({ code: now.code, wind: now.wind, gust: now.gust, dust: 0, day: now.day });
+
+  const byDay = new Map();
+  for (const row of series) {
+    const timestamp = Date.parse(row.time);
+    if (!Number.isFinite(timestamp)) continue;
+    const day = localDay(timestamp);
+    let bucket = byDay.get(day);
+    if (!bucket) { bucket = { day, max: null, min: null, rain: 0, pop: null, gust: null, code: 3, severity: -1 }; byDay.set(day, bucket); }
+    const data = row.data || {};
+    const instant = data.instant?.details || {};
+    const periods = [data.next_6_hours?.details, data.next_12_hours?.details].filter(Boolean);
+    const maxima = [instant.air_temperature, ...periods.map((details) => details.air_temperature_max)].filter(Number.isFinite);
+    const minima = [instant.air_temperature, ...periods.map((details) => details.air_temperature_min)].filter(Number.isFinite);
+    if (maxima.length) bucket.max = Math.max(bucket.max ?? -Infinity, ...maxima);
+    if (minima.length) bucket.min = Math.min(bucket.min ?? Infinity, ...minima);
+    const gust = mpsToKmh(instant.wind_speed_of_gust);
+    if (Number.isFinite(gust)) bucket.gust = Math.max(bucket.gust ?? 0, gust);
+    const period = metPeriod(row);
+    const symbol = period?.summary?.symbol_code || '';
+    const code = metCode(symbol);
+    if (metSeverity(code) > bucket.severity) { bucket.code = code; bucket.severity = metSeverity(code); }
+    const periodDetails = period?.details || {};
+    const amount = periodDetails.precipitation_amount;
+    if (Number.isFinite(amount) && !(String(symbol).includes('snow') && !String(symbol).includes('rain'))) bucket.rain += amount;
+    const pop = periodDetails.probability_of_precipitation;
+    if (Number.isFinite(pop)) bucket.pop = Math.max(bucket.pop ?? 0, pop);
+  }
+  const days = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(0, 2).map((bucket) => {
+    const day = { day: bucket.day, max: round(bucket.max), min: round(bucket.min), rain: tenth(bucket.rain), pop: round(bucket.pop), snow: null, gust: round(bucket.gust), code: bucket.code, dust: 0 };
+    day.k = wxKind({ code: day.code, gust: day.gust, dust: 0, day: 1, daily: true });
+    return day;
+  });
+  return { ...point, now, days };
+}
+async function mapLimit(items, limit, fn) {
+  const result = new Array(items.length); let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) { const index = cursor++; if (index >= items.length) return; result[index] = await fn(items[index]); }
+  }));
+  return result;
+}
+function header(response, name) { try { return response.headers?.get?.(name) || ''; } catch { return ''; } }
+function responseExpiry(response, now) {
+  const expires = Date.parse(header(response, 'expires'));
+  return Number.isFinite(expires) && expires > now ? expires : now + MET_TTL;
+}
+async function fetchMetPoint(point) {
+  const key = `${point.id}:${point.lat.toFixed(4)},${point.lon.toFixed(4)}`;
+  const cached = R.metCache[key]; const now = Date.now();
+  if (cached?.data && cached.expiresAt > now) return cached;
+  try {
+    const url = new URL('https://api.met.no/weatherapi/locationforecast/2.0/compact');
+    url.searchParams.set('lat', point.lat.toFixed(4)); url.searchParams.set('lon', point.lon.toFixed(4));
+    const headers = { 'User-Agent': `Red Alert Syria/1.0 (${siteUrl()})` };
+    if (cached?.lastModified) headers['If-Modified-Since'] = cached.lastModified;
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+    if (response.status === 304 && cached?.data) {
+      cached.expiresAt = responseExpiry(response, Date.now());
+      return cached;
+    }
+    if (!response.ok) throw new Error(`MET Norway HTTP ${response.status}`);
+    if (response.status === 203) console.warn('[wx] MET Norway Locationforecast endpoint is deprecated');
+    const data = normalizeMetPoint(await response.json(), point);
+    const entry = { data, expiresAt: responseExpiry(response, Date.now()), lastModified: header(response, 'last-modified'), updatedAt: Date.now() };
+    R.metCache[key] = entry;
+    return entry;
+  } catch (error) {
+    if (cached?.data && now - (cached.updatedAt || 0) < 12 * 3600_000) return { ...cached, expiresAt: now + 60_000 };
+    throw error;
+  }
+}
+async function fetchMetNorwayAll() {
+  const points = pointsList();
+  const entries = await mapLimit(points, MET_CONCURRENCY, async (point) => {
+    try { return await fetchMetPoint(point); } catch (error) { console.warn(`[wx] MET Norway ${point.id}: ${error.message}`); return null; }
+  });
+  const out = entries.map((entry) => entry?.data).filter(Boolean);
+  if (out.filter((point) => point.main).length < 10) throw new Error(`MET Norway returned only ${out.filter((point) => point.main).length} governorate points`);
+  const expiries = entries.map((entry) => entry?.expiresAt).filter(Number.isFinite);
+  R.nextFetchAt = expiries.length ? Math.min(...expiries) : Date.now() + MET_TTL;
+  return out;
+}
+async function fetchAll() {
+  try {
+    const points = await fetchOpenMeteoAll();
+    R.source = OPEN_METEO.name; R.nextFetchAt = Date.now() + TTL; R.providerError = '';
+    return points;
+  } catch (primaryError) {
+    R.providerError = primaryError.message;
+    try {
+      const points = await fetchMetNorwayAll();
+      R.source = MET_NORWAY.name;
+      return points;
+    } catch (fallbackError) {
+      throw new Error(`Open-Meteo: ${primaryError.message}; MET Norway: ${fallbackError.message}`);
+    }
+  }
+}
 /** cached current + 2-day forecast; `maxAge` lets the bulletin ask for fresher data */
 export async function getWeather({ maxAge = TTL } = {}) {
   restoreWeatherCache();
   const now = Date.now();
-  if (R.data && now - R.at < maxAge) return R.data;
+  if (R.data && (R.source === MET_NORWAY.name ? now < R.nextFetchAt : now - R.at < maxAge)) return R.data;
   if (R.retryAt && now < R.retryAt) {
     if (R.data && now - R.at < 12 * 3600_000) return R.data;
-    throw new Error(R.err || 'Open-Meteo temporarily unavailable');
+    throw new Error(R.err || 'Weather providers temporarily unavailable');
   }
   if (!R.busy) {
     R.busy = fetchAll().then((d) => { R.data = d; R.at = Date.now(); R.err = ''; R.retryAt = 0; persistWeatherCache(); return d; })
@@ -181,9 +337,7 @@ export async function publicWeather() {
     src_en: 'Syria National Meteorological Center',
     forecastsAvailable: points.filter((p) => p?.now && Number.isFinite(p.now.t)).length >= 10,
     forecastSource: {
-      name: 'Open-Meteo',
-      url: 'https://open-meteo.com/',
-      licenceUrl: 'https://open-meteo.com/en/licence',
+      ...(R.source === MET_NORWAY.name ? MET_NORWAY : OPEN_METEO),
       updatedAt: R.at || null,
     },
     official: { ...official, warningSource: 'المركز الوطني للأرصاد الجوية / وزارة الطوارئ وإدارة الكوارث', mapUrl: 'https://climweb.med.gov.sy/mapviewer' },
@@ -191,7 +345,7 @@ export async function publicWeather() {
     points,
   };
 }
-export const weatherNowDebug = () => ({ at: R.at, err: R.err, points: R.data?.length || 0 });
+export const weatherNowDebug = () => ({ at: R.at, nextFetchAt: R.nextFetchAt || null, source: R.source, providerError: R.providerError, err: R.err, points: R.data?.length || 0 });
 
 // ---------------------------------------------------------------- bulletin state
 export const WXB_TIMES = ['07:00', '07:30', '08:00', '08:30', '09:30'];

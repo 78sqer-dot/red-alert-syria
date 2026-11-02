@@ -19,6 +19,9 @@ export const DEFAULT_SOURCES = [
   // Additional Syrian reporting and humanitarian coverage for north Syria / Idlib.
   { u: 'enabbaladi', name: 'عنب بلدي', general: true },
   { u: 'SyriaDefence', name: 'الدفاع المدني السوري', general: true, local: true },
+  { u: 'HawarNews', name: 'وكالة هاوار للأنباء', general: true, local: true },
+  { u: 'ZAMANALWSLnews', name: 'زمان الوصل', general: true },
+  { u: 'QasiounAr1', name: 'قاسيون', general: true },
   // local / activist channels (fast regional coverage, less reliable): `local: true` = shown as
   // "محلي" in the draft card, never classified by the simple no-AI rules, and the AI is stricter with them.
   { u: 'zainaldinmaham1', name: 'زينو ياسر محاميد', general: true, local: true },

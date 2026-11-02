@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_RESPONSE_SCHEMA, buildPrompt, prefilter } from '../server/news-ai.js';
+import { AI_RESPONSE_SCHEMA, buildPrompt, keywordTypes, prefilter, refineType } from '../server/news-ai.js';
 
 test('Syria-only general feeds reject foreign weather warnings before the weather shortcut', () => {
   const foreign = prefilter('عاجل: تحذير جوي رسمي من عواصف رعدية وأمطار غزيرة في كييف يرجى الحذر', { general: true, breaking: true });
@@ -18,6 +18,20 @@ test('routine forecast posts do not pass the filter merely because they start wi
   const forecast = prefilter('عاجل: توقعات الطقس لليوم في دمشق ودرجات الحرارة المتوقعة', { general: true, breaking: true });
   assert.equal(forecast.ok, false);
   assert.equal(forecast.why, 'routine-weather');
+});
+
+test('generic drone overflight wording stays a UAV sighting, not a warplane', () => {
+  const text = 'رصد تحليق مسيرة استطلاع فوق ريف دمشق خلال ساعات الفجر';
+  const types = keywordTypes(text);
+  assert.ok(types.includes('uav'));
+  assert.equal(types.includes('warplane'), false, 'generic تحليق must not imply a military jet');
+  assert.equal(refineType('warplane', text), 'uav', 'an AI fallback to warplane is corrected to the explicit UAV type');
+});
+
+test('explicit military aircraft wording remains a warplane classification', () => {
+  const text = 'رصد تحليق طائرات حربية في أجواء ريف دمشق خلال ساعات الفجر';
+  assert.ok(keywordTypes(text).includes('warplane'));
+  assert.equal(refineType('uav', text), 'warplane', 'specific aircraft wording overrides a generic UAV fallback');
 });
 
 test('specific Syrian political developments pass only when political keywords are present', () => {

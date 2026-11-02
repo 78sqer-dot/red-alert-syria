@@ -25,11 +25,11 @@ const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 export { typeIcon };
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
-// White urgent-style disc with a dark professional glyph and a category-coloured edge.
+// White disc with a professional category-coloured glyph and edge.
 export function glyphDisc(type, size = 34, iconSize = 24, cls = 'sai', glyphOverride = null) {
   const t = typeOf(type);
   const bg = '#f8fafc';
-  const fg = '#111827';
+  const fg = t.color;
   return `<span class="${cls}" style="width:${size}px;height:${size}px;background:${bg};border-color:${t.color};color:${fg}">${svgTag(glyphOverride || t.glyph, iconSize, `fill="${fg}"`)}</span>`;
 }
 
@@ -841,11 +841,13 @@ export class AlertMap {
       el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 24)}${plane('is-left', 24)}${plane('is-right', 24)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
     } else if (a.type === 'breaking') {
       el.classList.add('mk-breaking-news');
-      const triangle = '<svg class="news-marker-svg" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 1.3 23.2 21H.8Z" fill="#ef233c"/><path d="m12 6.1-7.2 12.7h14.4Z" fill="#111827"/><path d="M11 9h2v5h-2zm0 6h2v2h-2z" fill="#ef233c"/></svg>';
+      const triangle = '<svg class="news-marker-svg" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 1.3 23.2 21H.8Z" fill="#ef233c"/><path d="m12 6.1-7.2 12.7h14.4Z" fill="#000000"/><path d="M11 9h2v5h-2zm0 6h2v2h-2z" fill="#ef233c"/></svg>';
       el.innerHTML = `<span class="news-marker-core">${triangle}</span>`;
     } else if (t.marker === 'icon') {
+      const configuredIconColor = t.icon || t.color;
+      const iconColor = ['#111827', '#000000', '#000'].includes(configuredIconColor.toLowerCase()) ? t.color : configuredIconColor;
       const sz = 24;
-      el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:#111827;width:${sz}px;height:${sz}px">${svgTag(glyph, sz, 'class="ic-svg" fill="#111827"')}</div>`;
+      el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, `class="ic-svg" fill="${iconColor}"`)}</div>`;
     } else {
       el.innerHTML = glyphDisc(a.type, 34, 24, 'sai map-event-disc', a.marker_glyph);
     }

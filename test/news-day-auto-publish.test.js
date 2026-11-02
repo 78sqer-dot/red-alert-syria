@@ -63,16 +63,30 @@ test('high-risk categories and drafts without a verified map point are held for 
   assert.equal(nightEligible(qualified({ loc: { scope: 'place', latitude: null, longitude: null } })), false);
 });
 
-test('political drafts are never auto-published by day or night, even with multiple sources and a clear map point', () => {
+test('qualified political news can auto-publish at night but remains excluded from daytime auto-publishing', () => {
+  const cutoff = Date.parse(newsState().mig.politicalNightAuto1);
   const political = qualified({
     type: 'political',
     politicalCategory: 'statement',
-    srcs: [{ u: 'main-a', local: false }, { u: 'main-b', local: false }],
+    created: cutoff + 1,
+    srcs: [{ u: 'main-a', local: false }],
   });
-  assert.equal(nightEligible(political), false);
+  assert.equal(nightEligible(political), true, 'real AI political classification with a category, precise Syrian place and trusted source qualifies at night');
   assert.equal(daytimeAutoEligible(political), false);
   assert.equal(dayAutoDueAt(political, daytimeStart), null);
   assert.equal(dayAutoReady({ ...political, dayAutoAt: daytimeStart }, daytimeStart + 1), false);
+});
+
+test('political news missing review requirements or predating activation remains held', () => {
+  const cutoff = Date.parse(newsState().mig.politicalNightAuto1);
+  const valid = qualified({ type: 'political', politicalCategory: 'statement', created: cutoff + 1 });
+  assert.equal(nightEligible({ ...valid, created: cutoff - 1 }), false, 'pre-existing pending political drafts do not become auto-publishable');
+  assert.equal(nightEligible({ ...valid, politicalCategory: null }), false, 'missing political category remains with a reviewer');
+  assert.equal(nightEligible({ ...valid, politicalNeedsCategory: true }), false);
+  assert.equal(nightEligible({ ...valid, rule: true }), false, 'rules-only classification remains with a reviewer');
+  assert.equal(nightEligible({ ...valid, test: true }), false, 'test drafts never qualify');
+  assert.equal(nightEligible({ ...valid, loc: { scope: 'country', latitude: null, longitude: null } }), false);
+  assert.equal(nightEligible({ ...valid, srcs: [{ u: 'local-only', local: true }] }), false, 'a single local source remains unqualified');
 });
 
 test('Syrian political news without a verified place remains a locationless review draft', async () => {

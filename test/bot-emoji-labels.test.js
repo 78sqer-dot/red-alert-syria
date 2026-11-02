@@ -7,12 +7,12 @@ const root = new URL('../', import.meta.url);
 const bot = readFileSync(new URL('server/bot.js', root), 'utf8');
 const map = readFileSync(new URL('public/js/map.js', root), 'utf8');
 
-test('protest keeps its megaphone in bot labels and uses the shared black map glyph', () => {
+test('protest keeps its megaphone in bot labels and uses the category-colored map glyph', () => {
   assert.equal(ALERT_TYPES.protest.emoji, '📢');
   assert.equal(ALERT_TYPES.protest.mapEmoji, undefined);
   assert.equal(ALERT_TYPES.protest.glyph, 'protest');
   assert.equal(alertButtonLabel('protest', 'ar'), '📢 مظاهرة');
-  assert.match(map, /class="ic ic-\$\{glyph\}" style="--ic:#111827/);
+  assert.match(map, /const iconColor = \['#111827', '#000000', '#000'\]\.includes\(configuredIconColor\.toLowerCase\(\)\) \? t\.color : configuredIconColor/);
   assert.doesNotMatch(map, /mapEmoji|mk-event-emoji/);
 });
 
