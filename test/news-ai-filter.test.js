@@ -39,7 +39,7 @@ test('foreign politics and generic political commentary do not pass the politica
 test('political prompt requires attribution and conservative Syrian categories without invented locations', () => {
   const { sys } = buildPrompt([{ i: 1, source: 'test', ago: 'now', text: 'تطور سياسي سوري محدد' }], [], 'now');
   assert.match(sys, /political_category/);
-  assert.match(sys, /statement, decision, negotiation, meeting, election/);
+  assert.match(sys, /statement, decision, government_announcement, official_announcement, official_entity, negotiation, meeting, election/);
   assert.match(sys, /places may be empty or contain only a place explicitly stated/);
   assert.match(sys, /opinion, analysis, commentary/);
   assert.match(sys, /foreign politics/);
@@ -48,6 +48,6 @@ test('political prompt requires attribution and conservative Syrian categories w
 test('Gemini response schema includes the political type and allowed category values', () => {
   const properties = AI_RESPONSE_SCHEMA.items.properties;
   assert.ok(properties.type.enum.includes('political'));
-  assert.deepEqual(properties.political_category.enum, ['statement', 'decision', 'negotiation', 'meeting', 'election', 'none']);
+  assert.deepEqual(properties.political_category.enum, ['statement', 'decision', 'government_announcement', 'official_announcement', 'official_entity', 'negotiation', 'meeting', 'election', 'none']);
   assert.ok(AI_RESPONSE_SCHEMA.items.required.includes('political_category'));
 });

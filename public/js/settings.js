@@ -1,5 +1,5 @@
 // Persistent user settings (stored on the device only)
-import { TYPE_KEYS } from '/shared/types.js?v=30';
+import { TYPE_KEYS } from '/shared/types.js?v=31';
 
 const KEY = 'ras-settings';
 const DEFAULTS = {

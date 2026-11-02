@@ -238,7 +238,7 @@ test('political developments use a neutral ring and marker only for explicit loc
   assert.match(mapSource, /const km = this\._screenKm\(z\.km, z\.lat\);/);
   assert.match(alertImageSource, /zones = type === 'political' \? selectedAlertZones/);
   assert.match(alertImageSource, /if \(type === 'political'\) \{ const \[x, y\] = px\(center\.lat, center\.lon\); o\.push\(politicalMarkerSvg\(x, y\)\); \}/);
-  assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['statement', 'decision', 'negotiation', 'meeting', 'election']);
+  assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['statement', 'decision', 'government_announcement', 'official_announcement', 'official_entity', 'negotiation', 'meeting', 'election']);
 });
 
 test('new civil news types classify separately and a protest march is not a drone', () => {

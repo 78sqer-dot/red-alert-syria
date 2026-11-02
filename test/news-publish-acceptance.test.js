@@ -148,14 +148,14 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.deepEqual(buttons().filter((button) => button.callback_data?.startsWith('pcat:')).map((button) => button.callback_data.slice(5)), Object.keys(POLITICAL_CATEGORIES));
   await tap('pcat:invalid');
   assert.ok(buttons().some((button) => button.callback_data === 'pcat:statement'), 'an invalid category callback leaves the category picker active');
-  await tap('pcat:statement');
+  await tap('pcat:government_announcement');
   assert.ok(buttons().some((button) => button.callback_data === 'pol:general'), 'general political news is offered as the default no-pin option');
   assert.ok(buttons().some((button) => button.callback_data === 'pol:location'), 'a confirmed location can be selected explicitly');
   await tap('pol:general');
   await sendText('بيان رسمي https://news.example/politics');
   assert.match(lastUi().payload.text, /موقع غير محدد — دون دبوس/);
   assert.match(lastUi().payload.text, /الرأي أو التحليل ليس خبراً/);
-  assert.match(lastUi().payload.text, /الفئة:<\/b> تصريح أو موقف منسوب/);
+  assert.match(lastUi().payload.text, /الفئة:<\/b> إعلان حكومي/);
   const politicalNewsDate = '2026-10-30T19:20:00.000Z';
   const attributedInput = buildAlertInput({
     type: 'political', politicalCategory: 'negotiation', location: { scope: 'country', latitude: null, longitude: null },
@@ -205,13 +205,13 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 'pcat:election'), 'the public report bot offers political categories');
   await tap('pcat:invalid', reporter, reportBot);
   assert.ok(buttons().some((button) => button.callback_data === 'pcat:meeting'), 'invalid public-bot category callbacks do not advance');
-  await tap('pcat:meeting', reporter, reportBot);
+  await tap('pcat:official_announcement', reporter, reportBot);
   await tap('pol:location', reporter, reportBot);
   assert.ok(buttons().some((button) => button.callback_data === 'pol:nopin'), 'location picker still permits an explicit no-pin choice');
   await tap(`g:${politicalIdlib.code}`, reporter, reportBot);
   await tap(`wg:${politicalIdlib.code}`, reporter, reportBot);
   await tap('skip', reporter, reportBot);
-  assert.match(lastUi().payload.text, /الفئة:<\/b> لقاء أو زيارة/);
+  assert.match(lastUi().payload.text, /الفئة:<\/b> إعلان رسمي/);
   assert.match(lastUi().payload.text, /إدلب/);
   assert.doesNotMatch(lastUi().payload.text, /No verified location|موقع غير محدد — دون دبوس/);
   await tap('home', reporter, reportBot);

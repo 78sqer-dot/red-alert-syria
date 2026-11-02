@@ -166,6 +166,9 @@ export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 export const POLITICAL_CATEGORIES = Object.freeze({
   statement: { emoji: '💬', ar: 'تصريح أو موقف منسوب', en: 'Attributed statement or position' },
   decision: { emoji: '📜', ar: 'قرار أو تعيين', en: 'Decision or appointment' },
+  government_announcement: { emoji: '🏛️', ar: 'إعلان حكومي', en: 'Government announcement' },
+  official_announcement: { emoji: '📢', ar: 'إعلان رسمي', en: 'Official announcement' },
+  official_entity: { emoji: '🏢', ar: 'جهة رسمية', en: 'Official entity' },
   negotiation: { emoji: '🤝', ar: 'مفاوضات أو اتفاق', en: 'Negotiation or agreement' },
   meeting: { emoji: '👥', ar: 'لقاء أو زيارة', en: 'Meeting or visit' },
   election: { emoji: '🗳️', ar: 'انتخابات', en: 'Election' },

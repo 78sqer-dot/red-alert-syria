@@ -1638,7 +1638,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return askVehicleCount(ctx, d);
   });
 
-  bot.callbackQuery(/^pcat:([a-z]+)$/, async (ctx) => {
+  bot.callbackQuery(/^pcat:([a-z_]+)$/, async (ctx) => {
     const d = getDraft(ctx);
     if (!d) { await ctx.answerCallbackQuery(L(ctx).expiredSession); return; }
     await ctx.answerCallbackQuery();

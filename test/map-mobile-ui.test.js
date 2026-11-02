@@ -31,6 +31,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.maplibregl-popup-content \{ max-height: min\(62dvh, 600px\); \}/);
   assert.match(css, /\.maplibregl-popup-anchor-bottom \.maplibregl-popup-tip \{ border-top-color: var\(--bg-elevated\); \}/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip \{ opacity: 1/);
+  assert.match(css, /\.maplibregl-popup\.pp-alert-popup\.pp-clamped \.maplibregl-popup-tip \{ opacity: 0; \}/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \{ max-width: calc\(100vw - 20px\) !important; \}/);
   assert.match(css, /\.pp-alert-popup \.pp-more, \.pp-alert-popup \.pp-share \{ min-height: 44px/);
   assert.match(css, /\.brand img \{ height: 28px; width: auto; \}/);

@@ -13,7 +13,7 @@ const types = read('shared/types.js');
 
 test('PWA and module graph request versioned assets for current map and firearm glyphs', () => {
   const appBuild = index.match(/\/js\/app\.js\?v=(\d+)/)?.[1];
-  assert.ok(Number(appBuild) > 45, 'HTML must request a newer app build to update installed PWA users');
+  assert.ok(Number(appBuild) > 48, 'HTML must request a newer app build to update installed PWA users');
   assert.match(index, /\/css\/app\.css\?v=\d+/);
   assert.match(app, /settings\.js\?v=\d+/);
   assert.match(app, /i18n\.js\?v=\d+/);

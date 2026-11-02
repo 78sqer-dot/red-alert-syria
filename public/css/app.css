@@ -1157,6 +1157,7 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .maplibregl-popup.pp-alert-popup { z-index: 60; }
 .pp-alert-popup .maplibregl-popup-content { max-height: min(62dvh, 600px); }
 .maplibregl-popup.pp-alert-popup .maplibregl-popup-tip { opacity: 1; filter: drop-shadow(0 2px 2px rgba(17, 24, 39, .12)); }
+.maplibregl-popup.pp-alert-popup.pp-clamped .maplibregl-popup-tip { opacity: 0; }
 @media (max-width: 767px) {
   .brand img { height: 28px; width: auto; }
   .map-ctrls { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); gap: 7px; }
