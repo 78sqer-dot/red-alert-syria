@@ -217,14 +217,7 @@ export function channelPost(alert, { ended = false } = {}) {
     const meta = alert.meta?.political || {};
     const category = POLITICAL_CATEGORIES[meta.category];
     if (category) sections.push(`🏛 <b>الفئة:</b> ${esc(category.ar)}`);
-    const sources = (Array.isArray(meta.sources) ? meta.sources : []).filter((s) => safeHttpUrl(s?.url)).slice(0, 5);
-    for (const source of sources) {
-      const url = safeHttpUrl(source.url);
-      const date = sourceIso(source.timestamp) || (!source.timestamp ? sourceIso(meta.sourceTimestamp) : null);
-      const when = date ? ` · تاريخ المصدر: ${esc(fmtDate(date))}` : '';
-      sections.push(`🔎 <b>المصدر:</b> ${esc(clean(source.name, 120) || 'مصدر إخباري')}${when}`);
-    }
-    if (!sources.length && sourceIso(meta.sourceTimestamp)) sections.push(`🗓 تاريخ المصدر: ${esc(fmtDate(sourceIso(meta.sourceTimestamp)))}`);
+    // Source citations remain in metadata and reviewer/admin cards, but not in public channel posts.
     sections.push('<i>منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل</i>');
   } else if (alert.source === 'news') {
     const sources = (Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []).filter((s) => safeHttpUrl(s?.url)).slice(0, 5);

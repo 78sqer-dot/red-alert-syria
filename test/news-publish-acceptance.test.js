@@ -19,7 +19,7 @@ const { buildAlertInput, createBot, channelKeyboard, channelPost, BOT_ALERT_MENU
 const { BORDER_MARKERS, ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES } = await import('../shared/types.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { governorates } = await import('../server/places.js');
-const { newsState, sendTestDraft, toBotDraft } = await import('../server/news-monitor.js');
+const { newsState, sendTestDraft, toBotDraft, _test: newsMonitorTest } = await import('../server/news-monitor.js');
 const syriaBorder = JSON.parse(fs.readFileSync(new URL('../public/data/syria-border.geojson', import.meta.url), 'utf8'));
 
 test('Syrian–Palestinian border alert pin lies on the actual Syria border geometry', () => {
@@ -317,11 +317,18 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const politicalPost = channelPost(politicalAlert);
   assert.match(politicalPost, /موقع غير محدد — دون دبوس/);
   assert.match(politicalPost, /الفئة:<\/b> مفاوضات أو اتفاق/);
-  assert.match(politicalPost, /🔎 <b>المصدر:<\/b> &lt;Official source&gt;/);
+  assert.doesNotMatch(politicalPost, /🔎 <b>المصدر:<\/b>|&lt;Official source&gt;|تاريخ المصدر/, 'political source names and citations stay out of public channel posts');
   assert.doesNotMatch(politicalPost, /<a\b|href=/, 'political source is plain text with no clickable link');
-  assert.match(politicalPost, /&lt;Official source&gt;/, 'source labels are escaped in channel HTML');
-  assert.match(politicalPost, /تاريخ المصدر/);
   assert.match(politicalPost, /منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل/);
+  assert.deepEqual(politicalAlert.meta.political.sources, [{ name: '<Official source>', url: 'https://official.example/news', timestamp: politicalNewsDate }], 'source metadata remains stored on the alert');
+  const politicalReviewCard = newsMonitorTest.cardText({
+    id: 'test-political-review-source', type: 'political', politicalCategory: 'negotiation',
+    loc: { scope: 'place', name_ar: 'دوما', governorate_ar: 'ريف دمشق' }, extra: [], headline: 'اتفاق معلن',
+    srcs: [{ u: 'official-news', name: '<Official source>', url: 'https://official.example/news' }],
+    ts: Date.parse(politicalNewsDate), created: Date.parse(politicalNewsDate),
+  }, 'ar');
+  assert.match(politicalReviewCard, /&lt;Official source&gt;/, 'reviewers can still see the safely escaped source name');
+  assert.match(politicalReviewCard, /href="https:\/\/official\.example\/news"/, 'reviewers retain the source link for credibility checks');
   const detailSourceInput = buildAlertInput({
     type: 'political', politicalCategory: 'statement', location: { scope: 'country', latitude: null, longitude: null },
     details: 'رابط يدوي https://manual.example/report', extra: [], ttlMin: 360,
