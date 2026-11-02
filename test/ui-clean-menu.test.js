@@ -19,7 +19,7 @@ test.after(async () => {
   await fs.promises.rm(dataDir, { recursive: true, force: true });
 });
 
-test('menu cleanup deletes old bot messages and preserves user, kept, pinned, and current messages', async () => {
+test('menu cleanup deletes tracked user and bot messages, including kept/current screens, but preserves pinned backup', async () => {
   const chat = 8270709633;
   _test.bucket('admin', chat).push(
     { id: 101, t: Date.now(), s: 1, c: 1 },                 // old bot menu screen
@@ -36,10 +36,23 @@ test('menu cleanup deletes old bot messages and preserves user, kept, pinned, an
     deleteMessage: async (_chat, id) => { deleted.push(id); return true; },
   };
 
-  const count = await cleanMenuMessages(api, 'admin', chat, 104);
-  assert.equal(count, 2);
-  assert.deepEqual(deleted, [101, 106]);
-  assert.deepEqual(_test.bucket('admin', chat).map((x) => x.id), [102, 103, 104, 105]);
+  const count = await cleanMenuMessages(api, 'admin', chat);
+  assert.equal(count, 5);
+  assert.deepEqual(deleted, [101, 102, 103, 104, 106]);
+  assert.deepEqual(_test.bucket('admin', chat).map((x) => x.id), [105]);
+});
+
+test('menu cleanup tracks and deletes the current user /menu command but never the pinned backup', async () => {
+  const chat = 8270709636;
+  const deleted = [];
+  const api = {
+    getChat: async () => ({ pinned_message: { message_id: 402 } }),
+    deleteMessages: async (_chat, ids) => { deleted.push(...ids); return true; },
+  };
+  const count = await cleanMenuMessages(api, 'report', chat, { message_id: 401, date: Math.floor(Date.now() / 1000) });
+  assert.equal(count, 1);
+  assert.deepEqual(deleted, [401]);
+  assert.equal((_test.bucket('report', chat) || []).length, 0);
 });
 
 test('menu cleanup fails closed if the pinned message cannot be checked', async () => {

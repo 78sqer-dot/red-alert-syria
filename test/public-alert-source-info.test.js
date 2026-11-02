@@ -22,6 +22,17 @@ test('other alerts identify the publisher without claiming independent verificat
   assert.equal('verification_status' in alert, false);
 });
 
+test('monitored news exposes its original validated publisher, not the selected alert category', () => {
+  const alert = publicAlert({
+    ...base, type: 'attack', source: 'news',
+    meta: { newsSources: [
+      { name: 'مصادر محلية', url: 'https://news.example/story', timestamp: '2026-11-02T09:00:00.000Z' },
+      { name: 'Unsafe', url: 'javascript:alert(1)' },
+    ] },
+  });
+  assert.deepEqual(alert.source_info, { kind: 'publisher', name: 'مصادر محلية', url: 'https://news.example/story' });
+});
+
 test('political alerts expose only five validated source links and use the first as source_info', () => {
   const sources = Array.from({ length: 7 }, (_, i) => ({
     name: `Source ${i + 1}`,

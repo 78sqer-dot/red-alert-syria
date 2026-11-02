@@ -1,9 +1,10 @@
-// Track private-chat messages for safe, targeted cleanup when the user opens the menu.
-// Only old bot messages are removed; user messages and explicitly kept cards stay untouched.
+// Track private-chat messages for targeted cleanup when the user opens the menu.
+// Menu cleanup includes tracked user messages and kept/open bot screens, but never the pinned backup.
 // Plain notices without buttons ("✅ done", "⚠️ wrong format") do not count as a new screen, so a
 // prompt stays visible while the user retries.
-// Kept: messages sent with `_keep: true` (pending report cards, relay conversation, the pinned
-// backup), and the user's relay messages (ctx.ras.keepInput). Telegram only lets bots delete
+// Kept messages sent with `_keep: true` (pending report cards, relay conversation, the pinned
+// backup), and the user's relay messages are retained during ordinary cleanup. Menu cleanup
+// explicitly includes these, except for the currently pinned message. Telegram only lets bots delete
 // messages younger than 48 h: older bot messages are blanked by editing them instead.
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { store } from './store.js';
@@ -100,10 +101,10 @@ export function setKeep(role, chat, id, keep = true) {
   if (it) { if (keep) it.k = 1; else delete it.k; save(); }
 }
 
-async function sweep(api, role, chat, before, softOnly = false, include = () => true) {
+async function sweep(api, role, chat, before, softOnly = false, include = () => true, includeKept = false) {
   const list = bucket(role, chat, false);
   if (!list) return 0;
-  const old = list.filter((x) => x.s < before && !x.k && (!softOnly || x.u || !x.c) && include(x));
+  const old = list.filter((x) => x.s < before && (includeKept || !x.k) && (!softOnly || x.u || !x.c) && include(x));
   if (!old.length) return 0;
   const now = Date.now();
   const fresh = old.filter((x) => now - x.t < DELETE_WINDOW).map((x) => x.id);
@@ -140,14 +141,26 @@ async function sweep(api, role, chat, before, softOnly = false, include = () => 
   return done.size;
 }
 
-/** Remove prior non-kept bot messages in private chats, preserving the current and pinned messages. */
-export async function cleanMenuMessages(api, role, chat, preserveId = null) {
+/** Remove all tracked messages in a private chat on menu, including the triggering user command.
+ * The currently pinned message (the automatic backup) is always protected.
+ */
+export async function cleanMenuMessages(api, role, chat, currentMessage = null) {
   const id = privId(chat);
-  if (id == null || typeof api?.getChat !== 'function') return 0;
+  if (id == null) return 0;
+  if (currentMessage?.message_id) {
+    const userMessage = currentMessage.from?.is_bot !== true;
+    add(role, id, {
+      id: currentMessage.message_id,
+      t: Number(currentMessage.date) > 0 ? Number(currentMessage.date) * 1000 : Date.now(),
+      s: next(),
+      ...(userMessage ? { u: 1 } : { c: 1, ...(currentMessage.photo ? { m: 1 } : {}) }),
+    });
+  }
+  if (typeof api?.getChat !== 'function') return 0;
   let pinnedId = null;
   try { pinnedId = Number((await api.getChat(id))?.pinned_message?.message_id) || null; }
   catch { return 0; } // fail closed: never delete screens if we cannot check the pinned message
-  return sweep(api, role, id, Infinity, false, (x) => !x.u && x.id !== preserveId && x.id !== pinnedId);
+  return sweep(api, role, id, Infinity, false, (x) => x.id !== pinnedId, true);
 }
 
 /** Middleware: wraps every update of a private chat. */

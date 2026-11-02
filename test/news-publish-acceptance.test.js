@@ -130,6 +130,14 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(channelText, /📍<b>صمدانية شرقية[\s\S]*?<\/b>\n\nتاريخ :/);
   assert.match(channelText, /تاريخ :  [^\n]+\n\nالساعة :/);
   assert.doesNotMatch(channelText, /الخريطة المباشرة|Red Alert Syria/);
+  const monitoredInput = buildAlertInput({
+    type: 'attack', source: 'news', srcs: [{ name: 'مصادر محلية', url: 'https://news.example/story' }],
+    location: { scope: 'country' }, extra: [], ttlMin: 60, details: 'تفاصيل الخبر',
+  }, { id: ownerId, name: 'test' });
+  const monitoredPost = channelPost({ ...monitoredInput, id: 'test-monitored-source', timestamp: new Date().toISOString(), place: { scope: 'country' } });
+  assert.match(monitoredPost, /🔎 <b>المصدر:<\/b> <a href="https:\/\/news\.example\/story">مصادر محلية<\/a>/);
+  assert.doesNotMatch(monitoredPost, /<b>المصدر:<\/b>[^\n]*هجوم/);
+  assert.deepEqual(monitoredInput.meta.newsSources.map(({ name, url }) => ({ name, url })), [{ name: 'مصادر محلية', url: 'https://news.example/story' }]);
   const endedText = channelPost({
     id: 'test-channel-ended', type: 'warplane', timestamp: '2026-10-30T20:40:00.000Z', ended_at: '2026-10-30T20:55:00.000Z',
     place: { scope: 'place', name_ar: 'صمدانية شرقية', name_en: 'Samdaniyah Sharqiyah', governorate_ar: 'القنيطرة', governorate_en: 'Quneitra' }, extra: [],

@@ -115,7 +115,6 @@ export function newsState() {
     n.mig.sanaOfficial1 = new Date().toISOString();
   }
   setSourceNames(n.sources.map((s) => s.name));
-  n.attr = false; // published text never names a source (sources stay in the owner's draft card only)
   if (!n.last || typeof n.last !== 'object') n.last = {};
   if (!n.seen || typeof n.seen !== 'object') n.seen = {};
   if (!n.drafts || typeof n.drafts !== 'object') n.drafts = {};

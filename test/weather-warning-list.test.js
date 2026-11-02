@@ -107,6 +107,7 @@ test('private weather menu lists active warnings and keeps delete confirmations 
     assert.equal(after.title, before.get(id).title, 'opening the list/confirmation does not change alert content');
   }
   assert.equal(calls.some(({ method, payload }) => payload.chat_id === process.env.CHANNEL_ID && /^(sendMessage|sendPhoto|editMessageText|editMessageCaption|deleteMessage)$/.test(method)), false, 'local UI verification makes no channel post/edit/delete calls');
+  const beforeHome = calls.length;
   await tap('home');
-  assert.equal(calls.some(({ method }) => method === 'deleteMessage' || method === 'deleteMessages'), false, 'menu navigation retains previous private-chat messages');
+  assert.ok(calls.slice(beforeHome).some(({ method }) => method === 'deleteMessages' || method === 'deleteMessage'), 'opening the menu deletes the previous private-chat screens');
 });

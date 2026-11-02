@@ -637,10 +637,33 @@ function politicalSources(a) {
   }
   return sources;
 }
+function monitoredNewsSources(a) {
+  if (a.source !== 'news') return [];
+  const raw = Array.isArray(a.meta?.newsSources) ? a.meta.newsSources : [];
+  const sources = [];
+  for (const source of raw) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) continue;
+    const name = typeof source.name === 'string'
+      ? source.name.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+      : '';
+    const url = safeHttpUrl(source.url);
+    if (!name || !url) continue;
+    const timestamp = safeSourceTimestamp(source.timestamp);
+    sources.push({ name, url, ...(timestamp ? { timestamp } : {}) });
+    if (sources.length === 5) break;
+  }
+  return sources;
+}
 /** Only expose a named provider when the alert was generated from a known feed. */
-function publicSourceInfo(a, sources) {
+function publicSourceInfo(a, sources, newsSources) {
   if (a.type === 'political') {
     const source = sources?.[0];
+    return source
+      ? { kind: 'publisher', name: source.name, url: source.url }
+      : { kind: 'publisher', name: 'Red Alert Syria' };
+  }
+  if (a.source === 'news') {
+    const source = newsSources?.[0];
     return source
       ? { kind: 'publisher', name: source.name, url: source.url }
       : { kind: 'publisher', name: 'Red Alert Syria' };
@@ -658,6 +681,7 @@ function publicSourceInfo(a, sources) {
 export function publicAlert(a) {
   const p = a.place || {};
   const sources = politicalSources(a);
+  const newsSources = monitoredNewsSources(a);
   const political = a.type === 'political' ? a.meta?.political : null;
   const category = political && Object.hasOwn(POLITICAL_CATEGORIES, political.category) ? political.category : undefined;
   const sourceTimestamp = safeSourceTimestamp(political?.sourceTimestamp);
@@ -692,7 +716,7 @@ export function publicAlert(a) {
     zones: a.location ? (a.type === 'political' ? selectedAlertZones(a) : alertZones(a)) : undefined,
     more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
-    source_info: publicSourceInfo(a, sources),
+    source_info: publicSourceInfo(a, sources, newsSources),
     verification: {
       status: a.source === 'weather' || a.meta?.political?.official ? 'official' : a.source ? 'attributed' : 'unverified',
       label: a.source === 'weather' || a.meta?.political?.official ? 'مصدر رسمي' : a.source ? 'منسوب إلى المصدر' : 'غير موثق مستقلًا',

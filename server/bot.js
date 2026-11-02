@@ -77,6 +77,17 @@ function politicalSourcesFor(d) {
   }
   return sources;
 }
+function monitoredSourcesFor(d) {
+  const sources = [];
+  for (const item of Array.isArray(d.srcs) ? d.srcs : []) {
+    const url = safeHttpUrl(item?.url);
+    const name = clean(item?.name || item?.u, 120);
+    if (!name || !url) continue;
+    sources.push({ name, url, timestamp: sourceIso(item?.ts) });
+    if (sources.length === 5) break;
+  }
+  return sources;
+}
 function langSourceName(d) { return d.lang === 'en' ? 'Source in report details' : 'مصدر مذكور في التفاصيل'; }
 function parseVehicleCount(value) {
   const normalized = String(value ?? '').replace(/[٠-٩۰-۹]/g, (digit) => {
@@ -177,6 +188,12 @@ export function channelPost(alert, { ended = false } = {}) {
     }
     if (!sources.length && sourceIso(meta.sourceTimestamp)) sections.push(`🗓 تاريخ المصدر: ${esc(fmtDate(sourceIso(meta.sourceTimestamp)))}`);
     sections.push('<i>منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل</i>');
+  } else if (alert.source === 'news') {
+    const sources = (Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []).filter((s) => safeHttpUrl(s?.url)).slice(0, 5);
+    for (const source of sources) {
+      const url = safeHttpUrl(source.url);
+      sections.push(`🔎 <b>المصدر:</b> <a href="${esc(url)}">${esc(clean(source.name, 120) || url)}</a>`);
+    }
   }
   sections.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
   sections.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
@@ -726,6 +743,7 @@ export function buildAlertInput(d, author) {
     sources: politicalSourcesFor(d),
     sourceTimestamp: sourceIso(d.politicalSourceTimestamp),
   } : null;
+  const monitoredSources = d.source === 'news' && d.type !== 'political' ? monitoredSourcesFor(d) : [];
   const baseTitle = d.type === 'air_movement'
     ? (aircraft?.ar || titles.ar)
     : wx ? `${titles.ar}: ${wx[0]}${named ? ` — ${loc.name_ar}` : ''}` : named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar;
@@ -743,7 +761,7 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || civilEmoji || vehicleCount || politicalMeta ? {
+    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || civilEmoji || vehicleCount || politicalMeta || monitoredSources.length ? {
       meta: {
         ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
@@ -753,6 +771,7 @@ export function buildAlertInput(d, author) {
         ...(civilEmoji ? { civilEmoji } : {}),
         ...(vehicleCount ? { vehicleCount } : {}),
         ...(politicalMeta ? { political: politicalMeta } : {}),
+        ...(monitoredSources.length ? { newsSources: monitoredSources } : {}),
       },
     } : {}),
   };
@@ -1300,8 +1319,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
   };
   const home = async (ctx) => {
+    if (ctx.message) ctx.ras.keepInput = true; // cleanMenuMessages tracks and deletes this command itself
     await clearConvo(ctx);
-    await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.callbackQuery?.message?.message_id);
+    await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.message || ctx.callbackQuery?.message);
     sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');
@@ -1311,8 +1331,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
   bot.command(['start', 'menu'], async (ctx) => {
     if (ctx.callbackQuery) return home(ctx);
+    if (ctx.message) ctx.ras.keepInput = true; // cleanMenuMessages tracks and deletes this command itself
     await clearConvo(ctx);
-    await cleanMenuMessages(ctx.api, role, ctx.chat?.id);
+    await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.message);
     sessions.delete(sk(ctx));
     const l = L(ctx);
     const name = esc(ctx.from.first_name || '');
