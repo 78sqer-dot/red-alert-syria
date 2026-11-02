@@ -135,7 +135,8 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     location: { scope: 'country' }, extra: [], ttlMin: 60, details: 'تفاصيل الخبر',
   }, { id: ownerId, name: 'test' });
   const monitoredPost = channelPost({ ...monitoredInput, id: 'test-monitored-source', timestamp: new Date().toISOString(), place: { scope: 'country' } });
-  assert.match(monitoredPost, /🔎 <b>المصدر:<\/b> <a href="https:\/\/news\.example\/story">مصادر محلية<\/a>/);
+  assert.match(monitoredPost, /🔎 <b>المصدر:<\/b> مصادر محلية/);
+  assert.doesNotMatch(monitoredPost, /<a\b|href=/, 'source is plain text with no clickable channel URL');
   assert.doesNotMatch(monitoredPost, /<b>المصدر:<\/b>[^\n]*هجوم/);
   assert.deepEqual(monitoredInput.meta.newsSources.map(({ name, url }) => ({ name, url })), [{ name: 'مصادر محلية', url: 'https://news.example/story' }]);
   const endedText = channelPost({
@@ -188,7 +189,8 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const politicalPost = channelPost(politicalAlert);
   assert.match(politicalPost, /موقع غير محدد — دون دبوس/);
   assert.match(politicalPost, /الفئة:<\/b> مفاوضات أو اتفاق/);
-  assert.match(politicalPost, /href="https:\/\/official\.example\/news"/);
+  assert.match(politicalPost, /🔎 <b>المصدر:<\/b> &lt;Official source&gt;/);
+  assert.doesNotMatch(politicalPost, /<a\b|href=/, 'political source is plain text with no clickable link');
   assert.match(politicalPost, /&lt;Official source&gt;/, 'source labels are escaped in channel HTML');
   assert.match(politicalPost, /تاريخ المصدر/);
   assert.match(politicalPost, /منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل/);
