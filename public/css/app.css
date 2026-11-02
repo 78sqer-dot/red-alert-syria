@@ -470,6 +470,11 @@ html[dir='rtl'] .maplibregl-popup-close-button { left: 6px; right: auto; }
 .maplibregl-popup.pp-group-popup { max-width: min(360px, calc(100vw - 24px)) !important; }
 .pp-group-popup .maplibregl-popup-content { box-sizing: border-box; width: min(360px, calc(100vw - 32px)); max-height: min(58vh, 480px); max-height: min(58dvh, 480px); overflow: hidden; padding: 14px; border: 1px solid var(--border-subtle); border-radius: 16px; background: var(--bg-elevated); box-shadow: var(--shadow-lg); }
 .alert-group-chooser { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pp-alert-popup .pp, .pp-group-popup .alert-group-chooser { transform-origin: 50% 100%; animation: popupEmergesFromEvent 380ms cubic-bezier(.2,.85,.25,1) both; }
+@keyframes popupEmergesFromEvent { 0% { opacity: 0; transform: translate3d(0, 10px, 0) scale(.94); } 68% { opacity: 1; transform: translate3d(0, -1px, 0) scale(1.012); } 100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+.maplibregl-popup.pp-alert-popup .maplibregl-popup-tip, .maplibregl-popup.pp-group-popup .maplibregl-popup-tip { filter: drop-shadow(0 1px 0 var(--border-subtle)) drop-shadow(0 3px 4px rgba(15,23,42,.22)); transform-origin: 50% 0; animation: popupTipFromEvent 240ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes popupTipFromEvent { 0% { opacity: 0; transform: translateY(-4px) scale(.72); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .pp-alert-popup .pp, .pp-group-popup .alert-group-chooser, .maplibregl-popup.pp-alert-popup .maplibregl-popup-tip, .maplibregl-popup.pp-group-popup .maplibregl-popup-tip { animation: none !important; transform: none; } }
 .alert-group-heading { margin: 0; padding-inline-end: 32px; color: var(--text-primary); font-size: 14px; font-weight: 900; line-height: 1.5; }
 .alert-group-list { display: grid; gap: 7px; max-height: min(48vh, 390px); max-height: min(48dvh, 390px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .alert-group-item { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 9px 10px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--bg-card); color: var(--text-primary); text-align: start; cursor: pointer; }
