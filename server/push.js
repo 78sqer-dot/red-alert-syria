@@ -45,8 +45,8 @@ function matches(alert, sub) {
   return true;
 }
 
-export async function sendPush(store, alert, event = 'new') {
-  if (!configured || !alert?.id) return { sent: 0, skipped: 0 };
+export async function dispatchPush(store, alert, event = 'new', sendNotification) {
+  if (!alert?.id || typeof sendNotification !== 'function') return { sent: 0, skipped: 0 };
   const title = event === 'update' ? '🔄 تحديث تنبيه — Red Alert Syria' : '🚨 تنبيه جديد — Red Alert Syria';
   const body = String(alert.title || alert.description || 'تنبيه جديد').slice(0, 240);
   const url = `/${alert.lang === 'en' ? 'en' : 'ar'}/#${encodeURIComponent(alert.id)}`;
@@ -55,7 +55,7 @@ export async function sendPush(store, alert, event = 'new') {
   for (const [id, sub] of store.pushSubscriptions()) {
     if (!matches(alert, sub)) { skipped++; continue; }
     try {
-      await webpush.sendNotification(sub, payload, { TTL: 300, urgency: event === 'new' ? 'high' : 'normal' });
+      await sendNotification(sub, payload, { TTL: 300, urgency: event === 'new' ? 'high' : 'normal' });
       sent++;
     } catch (err) {
       if ([404, 410].includes(err.statusCode)) store.removePushSubscription(id);
@@ -63,4 +63,9 @@ export async function sendPush(store, alert, event = 'new') {
     }
   }
   return { sent, skipped };
+}
+
+export async function sendPush(store, alert, event = 'new') {
+  if (!configured || !alert?.id) return { sent: 0, skipped: 0 };
+  return dispatchPush(store, alert, event, webpush.sendNotification);
 }

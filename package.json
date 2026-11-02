@@ -13,7 +13,9 @@
     "start": "node server/index.js",
     "dev": "BOT_MODE=polling node server/index.js",
     "sim": "node scripts/bot-sim.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:push-monitor": "node --test test/push-performance.test.js",
+    "monitor:web-push": "node scripts/monitor-web-push.mjs"
   },
   "license": "MIT",
   "dependencies": {
