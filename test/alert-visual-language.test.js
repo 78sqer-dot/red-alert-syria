@@ -29,7 +29,7 @@ test('warplane keeps the three-aircraft formation and drones retain their orbiti
 });
 
 test('schematic movement uses one compact blue three-aircraft group at the report location without extra rings', () => {
-  assert.match(map, /const color = '#2476c9';/);
+  assert.match(map, /const color = eventVisual\('air_movement'\)\.color;/);
   assert.match(map, /\[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]/);
   assert.match(map, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
   assert.match(map, /const heading = alert\.flight_direction === 'leaving_syria' \? 180 : 0/);
@@ -86,7 +86,7 @@ test('map event glyphs are 24px and urgent news uses a small red triangle, black
   assert.match(css, /\.news-marker-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
   assert.match(css, /\.mk-breaking-news \.news-marker-core\s*\{\s*width: 26px; height: 26px; border-width: 1\.7px;/);
   assert.match(css, /\.mk-breaking-news \.news-marker-svg\s*\{\s*width: 15px; height: 15px/);
-  assert.match(css, /\.mk-breaking-news \.news-pulse-ring\s*\{ width: 38px; height: 38px; border-color: #ef233c/);
+  assert.match(css, /\.mk-breaking-news \.news-pulse-ring\s*\{ width: 34px; height: 34px; border-color: #ef233c/);
   assert.match(css, /@keyframes urgentPulseWave/);
   assert.match(css, /\.ic-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
   assert.match(css, /\.mk-event-emoji\s*\{[^}]*background:\s*#fff/);
@@ -96,15 +96,14 @@ test('urgent marker core, red pulse and glow follow the shared map zoom scale', 
   assert.match(css, /\.mk-breaking-news \.mk-s\s*\{\s*transform: scale\(var\(--mks, \.5\)\); transition: transform \.2s ease;/);
   assert.match(css, /\.news-pulse-ring\s*\{[^}]*transform: translate\(-50%, -50%\) scale\(var\(--mks, \.5\)\)/);
   assert.doesNotMatch(css, /\.mk-breaking-news \.news-pulse-ring\s*\{[^}]*transform:/);
-  assert.match(css, /\.mk-breaking-news \.news-pulse-ring\s*\{ width: 38px; height: 38px; border-color: #ef233c; background: transparent; box-shadow: 0 0 5px rgba\(239,35,60,\.28\); \}/);
+  assert.match(css, /\.mk-breaking-news \.news-pulse-ring\s*\{ width: 34px; height: 34px; border-color: #ef233c; background: transparent; box-shadow: 0 0 5px rgba\(239,35,60,\.28\); \}/);
   assert.match(css, /\.mk-breaking-news \.news-pulse-ring::after\s*\{ border-color: #ef233c; animation: urgentPulseWave 2s ease-out infinite; \}/);
   assert.match(map, /const mks = Math\.max\(0\.42, Math\.min\(0\.56,/);
 });
 
 test('map SVGs use each event type color instead of a hard-coded black glyph', () => {
-  assert.match(map, /const fg = t\.color;/, 'static discs use the category color');
-  assert.match(map, /const configuredIconColor = t\.icon \|\| t\.color/);
-  assert.match(map, /const iconColor = \['#111827', '#000000', '#000'\]\.includes\(configuredIconColor\.toLowerCase\(\)\) \? t\.color : configuredIconColor/);
+  assert.match(map, /const fg = visual\.color;/, 'static discs use the category color');
+  assert.match(map, /const iconColor = visual\.color/);
   assert.match(map, /style="--ic:\$\{iconColor\}/);
   assert.match(map, /fill="\$\{iconColor\}"/);
   assert.match(css, /\.sai\.map-event-disc \{[^}]*color: var\(--c\) !important/);

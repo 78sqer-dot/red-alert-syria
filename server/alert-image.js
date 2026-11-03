@@ -1,13 +1,13 @@
 // Per-alert map card for the Telegram channel (like redalert.com.lb's channel images):
 // navy header (title + severity + place, logo + site domain), a light street/topographic map
-// zoomed on the affected place with the red impact circle(s) / marker, and a short note footer.
+// zoomed on the affected place with category-coloured impact circles / marker, and a short note footer.
 // Pure SVG -> PNG with resvg; map = raster tiles (CARTO Voyager, OSM fallback), cached in memory.
 // Swap the logo by replacing public/img/logo-wordmark.svg (or set ALERT_IMAGE_LOGO to an .svg/.png).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
-import { ALERT_TYPES, assassinationWeaponGlyph, shootingWeaponGlyph } from '../shared/types.js';
+import { ALERT_TYPES, assassinationWeaponGlyph, shootingWeaponGlyph, eventVisual } from '../shared/types.js';
 import { SVG as BASE_GLYPHS } from '../public/js/marker-svgs.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
 import { zonePoints, alertZones, selectedAlertZones } from './places.js';
@@ -155,6 +155,7 @@ async function fetchTile(z, x, y, timeoutMs) {
 // ------------------------------------------------------------------ marker for point alerts
 export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = null) {
   const t = ALERT_TYPES[type] || ALERT_TYPES.breaking;
+  const color = eventVisual(type).color;
   const incursionKind = alert?.meta?.incursionKind || (Number.isInteger(alert?.meta?.vehicleCount) ? 'vehicles' : null);
   const glyphKey = type === 'assassination' ? (assassinationWeaponGlyph(alert) || t.glyph)
     : type === 'shooting' ? (shootingWeaponGlyph(alert) || t.glyph)
@@ -163,16 +164,23 @@ export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = nul
   const g = GLYPHS[glyphKey] || GLYPHS[t.glyph] || GLYPHS.other || '';
   const r = 30 * k; const s = r * 1.2;
   const bg = '#f8fafc';
-  const fill = '#111827';
-  return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${t.color}" opacity="0.16"/>`
+  if (type === 'breaking') {
+    const triX = cx - s / 2; const triY = cy - s / 2;
+    const triangle = `<svg x="${triX}" y="${triY}" width="${s}" height="${s}" viewBox="0 0 24 24"><path d="M12 1.3 23.2 21H.8Z" fill="#ef233c"/><path d="m12 6.1-7.2 12.7h14.4Z" fill="#000000"/><path d="M11 9h2v5h-2zm0 6h2v2h-2z" fill="#ef233c"/></svg>`;
+    return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${color}" opacity="0.16"/>`
+      + `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="#ffffff" opacity="0.95"/>`
+      + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${bg}"/>${triangle}`;
+  }
+  return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${color}" opacity="0.16"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="#ffffff" opacity="0.95"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${bg}"/>`
-    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="${fill}">${g}</g></svg>`;
+    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="${color}">${g}</g></svg>`;
 }
 function politicalMarkerSvg(cx, cy) {
   const g = GLYPHS[ALERT_TYPES.political.glyph] || GLYPHS.other || '';
+  const color = eventVisual('political').color;
   const r = 28; const s = r * 1.18;
-  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#64748b" stroke="#ffffff" stroke-width="4"/>`
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}" stroke="#ffffff" stroke-width="4"/>`
     + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#ffffff">${g}</g></svg>`;
 }
 function firearmHeaderSvg(type, alert, cx, cy) {
@@ -231,9 +239,8 @@ export async function alertImageSvg(alert, opts = {}) {
   const px = (lat, lon) => [lon2x(lon, z) - left, lat2y(lat, z) - top + HEAD];
   if (zoned) {
     const dashed = t.zone === 'dashed';
-    const natural = type === 'quake' || type === 'weather';
-    const col = type === 'political' ? t.ring : natural ? t.ring : dashed ? '#2563eb' : '#dc2626';
-    const fill = type === 'political' ? t.color : natural ? t.color : dashed ? '#3b82f6' : '#ef4444';
+    const col = eventVisual(type).color;
+    const fill = col;
     o.push(`<defs><radialGradient id="zglow"><stop offset="0.5" stop-color="${fill}" stop-opacity="0.38"/><stop offset="0.75" stop-color="${fill}" stop-opacity="0.14"/><stop offset="1" stop-color="${fill}" stop-opacity="0"/></radialGradient></defs>`);
     for (const zn of zones) {
       const [x, y] = px(zn.lat, zn.lon);

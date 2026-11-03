@@ -15,7 +15,7 @@ process.env.ALERT_IMAGES = 'false';
 
 const { store, publicAlert } = await import('../server/store.js');
 await store.init(null);
-const { buildAlertInput, createBot, channelKeyboard, channelPost, BOT_ALERT_MENU_GROUPS, BOT_ALERT_MENU_DIRECT_TYPES } = await import('../server/bot.js');
+const { buildAlertInput, createBot, channelKeyboard, channelPost, publishInput, BOT_ALERT_MENU_GROUPS, BOT_ALERT_MENU_DIRECT_TYPES } = await import('../server/bot.js');
 const { BORDER_MARKERS, ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES } = await import('../shared/types.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { governorates } = await import('../server/places.js');
@@ -249,6 +249,28 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const socialRow = channelKeyboard({ id: 'test-social-buttons' }).inline_keyboard.find((row) => row.some((button) => button.url?.includes('/boost/')));
   assert.equal(socialRow?.length, 1, 'only the Telegram boost button remains in the footer');
   assert.equal(socialRow[0].url, 'https://t.me/boost/Red_Alert_Syria');
+  const legacyHeader = channelPost({ type: 'breaking', timestamp: new Date().toISOString(), place: { scope: 'country' } });
+  assert.match(legacyHeader, /^<b>خبر عاجل<\/b> - 🚨/, 'an already-published alert keeps the legacy header by default');
+  assert.doesNotMatch(legacyHeader, /🔴/, 'existing channel posts are not reformatted retroactively');
+  const futureBreaking = channelPost({ type: 'breaking', channel_format: 2, timestamp: new Date().toISOString(), place: { scope: 'country' } });
+  assert.match(futureBreaking, /^🔴 <b>خبر عاجل<\/b> - 🚨/, 'new breaking posts lead with the red category dot and retain one event symbol');
+  const futureWeather = channelPost({ type: 'weather', channel_format: 2, timestamp: new Date().toISOString(), meta: { hazard: 'snow' }, place: { scope: 'country' } });
+  assert.match(futureWeather, /^🟣 <b>تحذير جوي<\/b> - ❄️/, 'weather uses the purple dot and the report-specific hazard symbol');
+  const meetingInLebanon = channelPost({
+    type: 'political', channel_format: 2, title: 'زيارة رسمية', description: 'زيارة رسمية إلى لبنان',
+    timestamp: new Date().toISOString(), meta: { political: { category: 'meeting' } }, place: { scope: 'country' },
+  });
+  assert.match(meetingInLebanon, /^🟡 <b>تطور سياسي<\/b> - 🇱🇧/, 'a meeting gets a country flag only when the country is named in the report');
+  const meetingOnlyInDamascus = channelPost({
+    type: 'political', channel_format: 2, title: 'لقاء رسمي', description: 'لقاء مسؤولين سوريين في دمشق',
+    timestamp: new Date().toISOString(), meta: { political: { category: 'meeting' } }, place: { scope: 'country' },
+  });
+  assert.match(meetingOnlyInDamascus, /^🟡 <b>تطور سياسي<\/b> - 👥/, 'a city name or Syrian demonym does not trigger an inferred flag');
+  const meetingBetweenCountries = channelPost({
+    type: 'political', channel_format: 2, title: 'لقاء أردني لبناني', description: 'Meeting between Jordanian and Lebanese officials',
+    timestamp: new Date().toISOString(), meta: { political: { category: 'meeting' } }, place: { scope: 'country' },
+  });
+  assert.match(meetingBetweenCountries, /^🟡 <b>تطور سياسي<\/b> - 👥/, 'nationalities without a named country do not trigger a flag');
   const channelText = channelPost({
     id: 'test-channel-footer', type: 'warplane', timestamp: new Date().toISOString(),
     place: { scope: 'place', name_ar: 'صمدانية شرقية', name_en: 'Samdaniyah Sharqiyah', governorate_ar: 'القنيطرة', governorate_en: 'Quneitra' }, extra: [],
@@ -274,6 +296,18 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(endedText, /✅ انتهى/);
   assert.match(endedText, /الساعة :  [^\n]+\n\nانتهى :/);
   assert.ok(channelKeyboard({ id: 'test-channel-footer' }).inline_keyboard.flat().some((button) => button.text?.includes('عرض على الخريطة')));
+
+  const simulatedPosts = [];
+  const publishedFuture = await publishInput({
+    sendMessage: async (chatId, text, options) => {
+      simulatedPosts.push({ chatId, text, options });
+      return { message_id: ++messageId };
+    },
+  }, { type: 'breaking', title: 'خبر تجريبي', title_en: 'Synthetic breaking news', description: 'اختبار اصطناعي', location: { scope: 'country' }, extra: [], ttlMin: 60, source: 'telegram' });
+  addedAlertIds.push(publishedFuture.id);
+  assert.equal(publishedFuture.channel_format, 2, 'the new template version persists with the new alert');
+  assert.equal(simulatedPosts.length, 1, 'the publishing path calls only the local fake Telegram API');
+  assert.match(simulatedPosts[0].text, /^🔴 /, 'the normal publishing-bot path sends the new category header');
 
   const lastUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const buttons = () => lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
@@ -676,6 +710,25 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   } });
   store.off('update', captureMapUpdate);
   assert.equal(liveMapUpdate?.description, 'تفاصيل نصية معدلة', 'plain-text channel edits are synchronized too');
+
+  const versionedSyncAlert = store.addAlert(buildAlertInput({
+    type: 'attack', location: idlibTarget, details: 'تفاصيل إصدار جديد', extra: [], ttlMin: 180,
+  }, { id: ownerId, name: 'test' }));
+  store.updateAlert(versionedSyncAlert.id, { channel_message_id: 8701, channel_media: 'photo', channel_format: 2 });
+  addedAlertIds.push(versionedSyncAlert.id);
+  const versionedCaption = plainChannelText(channelPost(versionedSyncAlert));
+  const versionedHeader = versionedCaption.split('\n')[0];
+  const editedVersionedCaption = versionedCaption.replace(versionedHeader, versionedHeader.replace('هجوم', 'هجوم محدث')).replace('تفاصيل إصدار جديد', 'تفاصيل الإصدار الجديد المعدلة');
+  let versionedMapUpdate = null;
+  const captureVersionedMapUpdate = (item) => { if (item.id === versionedSyncAlert.id) versionedMapUpdate = item; };
+  store.on('update', captureVersionedMapUpdate);
+  await bot.handleUpdate({ update_id: updateId++, edited_channel_post: {
+    message_id: 8701, date: 0, edit_date: Math.floor(Date.now() / 1000),
+    chat: { id: -1001234567890, type: 'channel', username: 'mock_news_channel' }, caption: editedVersionedCaption,
+  } });
+  store.off('update', captureVersionedMapUpdate);
+  assert.equal(versionedMapUpdate?.title, 'هجوم محدث', 'channel edit parsing removes the category dot and event symbol');
+  assert.equal(versionedMapUpdate?.description, 'تفاصيل الإصدار الجديد المعدلة');
 
   const before = new Set(store.state.alerts.map((alert) => alert.id));
   newsState().drafts[draftId] = {

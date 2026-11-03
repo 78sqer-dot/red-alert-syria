@@ -195,6 +195,26 @@ export const ALERT_GROUPS = {
   other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border', 'military_incursion', 'patrol'] },
 };
 
+// Shared channel/map visual language. Event-specific ALERT_TYPES colors remain
+// available for legacy UI and severity; these colors are only for category coding.
+const EVENT_PALETTES = Object.freeze({
+  breaking: Object.freeze({ dot: '🔴', color: '#ef233c' }),
+  weather: Object.freeze({ dot: '🟣', color: '#6d28d9' }),
+  political: Object.freeze({ dot: '🟡', color: '#a16207' }),
+  aerial: Object.freeze({ dot: '🔵', color: '#2476c9' }),
+  strikes: Object.freeze({ dot: '🟠', color: '#c2410c' }),
+  civil: Object.freeze({ dot: '🟢', color: '#15803d' }),
+  quake: Object.freeze({ dot: '🟤', color: '#92400e' }),
+  security: Object.freeze({ dot: '⚫', color: '#374151' }),
+});
+const EVENT_CATEGORY_OVERRIDES = Object.freeze({ breaking: 'breaking', weather: 'weather', political: 'political', quake: 'quake', border: 'security', military_incursion: 'security', patrol: 'security', smuggling_weapons: 'security', smuggling_drugs: 'security', smuggling_explosives: 'security' });
+const ALERT_GROUP_BY_TYPE = new Map(Object.entries(ALERT_GROUPS).flatMap(([group, value]) => value.types.map((type) => [type, group])));
+export const EVENT_VISUALS = Object.freeze(Object.fromEntries(TYPE_KEYS.map((type) => {
+  const category = EVENT_CATEGORY_OVERRIDES[type] || ALERT_GROUP_BY_TYPE.get(type) || 'security';
+  return [type, Object.freeze({ category, ...EVENT_PALETTES[category] })];
+})));
+export const eventVisual = (type) => EVENT_VISUALS[type] || EVENT_VISUALS.breaking;
+
 export const BORDER_REGIONS = {
   iraq: { ar: 'الحدود السورية–العراقية', en: 'Syrian–Iraqi border' },
   jordan: { ar: 'الحدود السورية–الأردنية', en: 'Syrian–Jordanian border' },

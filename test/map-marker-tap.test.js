@@ -32,7 +32,7 @@ test('map markers and pulse rings explicitly focus the selected alert', () => {
   assert.match(map, /return this\.onSelect\(hit\.id, \{ fromMap: true, fly: true \}\)/);
   assert.match(css, /\.mk::before\s*\{[^}]*width: 56px; height: 56px;[^}]*pointer-events: auto;/);
   assert.match(css, /\.mk-count\s*\{[^}]*pointer-events: auto;/);
-  assert.match(map, /t\.ring \|\| t\.color/);
+  assert.match(map, /color: eventVisual\(a\.type\)\.color, active:/);
 });
 
 test('moving aircraft paths are clickable and keyboard accessible, with a visible selected ring', () => {

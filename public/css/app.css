@@ -339,7 +339,7 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; box-sizing: border-box; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px rgba(15,23,42,.58), 0 2px 5px rgba(0,0,0,.24); }
 .news-marker-core::after { content: ''; position: absolute; top: -3px; inset-inline-end: -3px; width: 8px; height: 8px; box-sizing: border-box; border: 1.5px solid #fff; border-radius: 50%; background: #ef233c; box-shadow: 0 0 0 1px rgba(15,23,42,.55); }
 .news-marker-svg { display: block; width: 24px; height: 24px; color: #111827; stroke: none; fill: #111827; filter: drop-shadow(0 0 1px #fff); }
-.mk-breaking-news .news-pulse-ring { width: 38px; height: 38px; border-color: #ef233c; background: transparent; box-shadow: 0 0 5px rgba(239,35,60,.28); }
+.mk-breaking-news .news-pulse-ring { width: 34px; height: 34px; border-color: #ef233c; background: transparent; box-shadow: 0 0 5px rgba(239,35,60,.28); }
 .mk-breaking-news .news-pulse-ring::after { border-color: #ef233c; animation: urgentPulseWave 2s ease-out infinite; }
 .mk-breaking-news .news-marker-core { width: 26px; height: 26px; border-width: 1.7px; border-color: #ef233c; box-shadow: 0 0 0 1px rgba(239,35,60,.34), 0 2px 5px rgba(239,35,60,.18); }
 .mk-breaking-news .news-marker-core::after { border-color: #ef233c; box-shadow: 0 0 0 1px rgba(239,35,60,.28); }
@@ -424,7 +424,7 @@ html.dark .mk.sel .uav-svg { fill: color-mix(in srgb, var(--c, #6b7280) 72%, #ff
 /* warplanes — squad of three flying across the zone */
 .squad { position: absolute; width: 72px; height: 200px; left: -36px; top: -100px; pointer-events: none; }
 .squad .sq { position: absolute; animation: squadFly 7s linear infinite; pointer-events: auto; }
-.sq-svg { display: block; fill: #2476c9; transform: rotate(-45deg); filter: drop-shadow(0 0 1px rgba(0,0,0,.7)) drop-shadow(0 1px 2px rgba(255,255,255,.65)); }
+.sq-svg { display: block; fill: var(--c, #2476c9); transform: rotate(-45deg); filter: drop-shadow(0 0 1px rgba(0,0,0,.7)) drop-shadow(0 1px 2px rgba(255,255,255,.65)); }
 html.dark .sq-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.4)) drop-shadow(0 1px 2px rgba(0,0,0,.85)); }
 /* civil — single craft-sized icon (same size as the drone) passing across the zone like the warplanes */
 .squad.solo .sq { left: 50% !important; margin-left: -11px; }

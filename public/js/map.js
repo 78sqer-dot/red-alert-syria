@@ -1,5 +1,5 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, typeOf, FLIGHT_DIRECTIONS } from '/shared/types.js?v=33';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=34';
 import { SVG } from './marker-svgs.js?v=18';
 import { EXTRA_SVG } from './target-svgs.js?v=13';
 import { icon } from './icons.js?v=4';
@@ -28,9 +28,10 @@ const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="$
 // White disc with a professional category-coloured glyph and edge.
 export function glyphDisc(type, size = 34, iconSize = 24, cls = 'sai', glyphOverride = null) {
   const t = typeOf(type);
+  const visual = eventVisual(type);
   const bg = '#f8fafc';
-  const fg = t.color;
-  return `<span class="${cls}" style="width:${size}px;height:${size}px;background:${bg};border-color:${t.color};color:${fg}">${svgTag(glyphOverride || t.glyph, iconSize, `fill="${fg}"`)}</span>`;
+  const fg = visual.color;
+  return `<span class="${cls}" style="width:${size}px;height:${size}px;background:${bg};border-color:${visual.color};color:${fg}">${svgTag(glyphOverride || t.glyph, iconSize, `fill="${fg}"`)}</span>`;
 }
 
 const styleCache = {};
@@ -454,7 +455,7 @@ export class AlertMap {
       const heading = alert.flight_direction === 'leaving_syria' ? 180 : 0;
       keep.add(alert.id);
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
-      const color = '#2476c9';
+      const color = eventVisual('air_movement').color;
       const lang = this.opts.lang === 'en' ? 'en' : 'ar';
       const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
       const routeNote = lang === 'en' ? 'illustrative direction, not a live track' : 'حركة توضيحية للاتجاه وليست تتبعاً مباشراً';
@@ -815,37 +816,37 @@ export class AlertMap {
 
   markerEl(a) {
     const t = typeOf(a.type);
+    const visual = eventVisual(a.type);
     const glyph = a.type === 'assassination' ? assassinationWeaponGlyph(a)
       : a.type === 'shooting' ? shootingWeaponGlyph(a)
         : a.type === 'military_incursion' ? ((a.meta?.incursionKind || (Number.isInteger(a.meta?.vehicleCount) ? 'vehicles' : null)) === 'soldiers' ? 'soldiers' : (a.meta?.incursionKind === 'vehicles' || Number.isInteger(a.meta?.vehicleCount)) ? 'military_vehicle' : t.glyph)
         : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${t.marker}`;
-    el.style.setProperty('--c', t.color);
+    el.style.setProperty('--c', visual.color);
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
     if (t.marker === 'orbit') {
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 24, 'class="uav-svg"')}</div></div>`;
     } else if (t.marker === 'helicopter') {
-      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 18, `fill="${t.color}" class="helicopter-svg"`)}</span></div>`;
+      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (t.marker === 'squad') {
-      const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${t.color}" class="sq-svg"`)}</div>`;
+      const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(18, -12, 1)}${pl(2, 8, 0.85)}${pl(34, 8, 0.85)}</div>`;
     } else if (t.marker === 'fly') {
-      el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 24, `fill="${t.icon || t.color}" class="fly-svg"`)}</div></div>`;
+      el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 24, `fill="${visual.color}" class="fly-svg"`)}</div></div>`;
     } else if (t.marker === 'movement') {
       const aircraftGlyph = a.aircraft === 'uav' ? 'uav' : 'plane';
       const arrow = a.flight_direction === 'entering_syria' ? '⇢' : a.flight_direction === 'leaving_syria' ? '⇠' : '➤';
       const movement = a.flight_direction === 'entering_syria' ? 'entering' : a.flight_direction === 'leaving_syria' ? 'leaving' : 'toward';
-      const plane = (slot, size) => `<span class="flight-airframe ${slot}">${svgTag(aircraftGlyph, size, `fill="${t.color}" class="flight-svg"`)}</span>`;
+      const plane = (slot, size) => `<span class="flight-airframe ${slot}">${svgTag(aircraftGlyph, size, `fill="${visual.color}" class="flight-svg"`)}</span>`;
       el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 24)}${plane('is-left', 24)}${plane('is-right', 24)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
     } else if (a.type === 'breaking') {
       el.classList.add('mk-breaking-news');
       const triangle = '<svg class="news-marker-svg" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 1.3 23.2 21H.8Z" fill="#ef233c"/><path d="m12 6.1-7.2 12.7h14.4Z" fill="#000000"/><path d="M11 9h2v5h-2zm0 6h2v2h-2z" fill="#ef233c"/></svg>';
       el.innerHTML = `<span class="news-marker-core">${triangle}</span>`;
     } else if (t.marker === 'icon') {
-      const configuredIconColor = t.icon || t.color;
-      const iconColor = ['#111827', '#000000', '#000'].includes(configuredIconColor.toLowerCase()) ? t.color : configuredIconColor;
+      const iconColor = visual.color;
       const sz = 24;
       el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, `class="ic-svg" fill="${iconColor}"`)}</div>`;
     } else {
@@ -856,7 +857,7 @@ export class AlertMap {
     // civil family: pinned to its exact place; a small tidy dot at country view, the icon from zoom 7.5 up
     if (t.group === 'civil') {
       el.classList.add('mk-civ');
-      el.insertAdjacentHTML('beforeend', `<span class="civ-dot" style="--ic:${t.icon || t.color}"></span>`);
+      el.insertAdjacentHTML('beforeend', `<span class="civ-dot" style="--ic:${visual.color}"></span>`);
     }
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -899,7 +900,7 @@ export class AlertMap {
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
       if (!t || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
-      const props = { color: t.ring || t.color || '#ef233c', active: !!a.is_active, dashed: t.zone === 'dashed' };
+      const props = { color: eventVisual(a.type).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
       if (t.marker === 'orbit' || t.marker === 'squad' || t.marker === 'helicopter') {

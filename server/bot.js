@@ -5,7 +5,7 @@ import { config, isOwner, envDefaults, applyProject } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert } from './store.js';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, alertButtonLabel, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS } from '../shared/types.js';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, alertButtonLabel, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS, eventVisual } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
@@ -181,6 +181,57 @@ const SEP = '━━━━━━━━━━━━━━━';
 const fmtClock = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 const fmtDay = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(iso));
 const fmtDate = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, day: 'numeric', month: 'long' }).format(new Date(iso));
+const MEETING_COUNTRIES = [
+  { code: 'LB', flag: '🇱🇧', names: ['لبنان', 'lebanon'] },
+  { code: 'JO', flag: '🇯🇴', names: ['الاردن', 'jordan'] },
+  { code: 'TR', flag: '🇹🇷', names: ['تركيا', 'turkey'] },
+  { code: 'IQ', flag: '🇮🇶', names: ['العراق', 'iraq'] },
+  { code: 'EG', flag: '🇪🇬', names: ['مصر', 'egypt'] },
+  { code: 'SA', flag: '🇸🇦', names: ['السعودية', 'المملكة العربية السعودية', 'saudi arabia'] },
+  { code: 'AE', flag: '🇦🇪', names: ['الامارات', 'الامارات العربية المتحدة', 'united arab emirates', 'uae'] },
+  { code: 'QA', flag: '🇶🇦', names: ['قطر', 'qatar'] },
+  { code: 'KW', flag: '🇰🇼', names: ['الكويت', 'kuwait'] },
+  { code: 'BH', flag: '🇧🇭', names: ['البحرين', 'bahrain'] },
+  { code: 'OM', flag: '🇴🇲', names: ['سلطنة عمان', 'oman'] },
+  { code: 'SY', flag: '🇸🇾', names: ['سوريا', 'syria'] },
+  { code: 'PS', flag: '🇵🇸', names: ['فلسطين', 'palestine'] },
+  { code: 'IR', flag: '🇮🇷', names: ['ايران', 'iran'] },
+  { code: 'RU', flag: '🇷🇺', names: ['روسيا', 'russia'] },
+  { code: 'US', flag: '🇺🇸', names: ['الولايات المتحدة', 'امريكا', 'united states', 'america'] },
+  { code: 'GB', flag: '🇬🇧', names: ['المملكة المتحدة', 'بريطانيا', 'united kingdom', 'great britain'] },
+  { code: 'FR', flag: '🇫🇷', names: ['فرنسا', 'france'] },
+  { code: 'DE', flag: '🇩🇪', names: ['المانيا', 'germany'] },
+  { code: 'CN', flag: '🇨🇳', names: ['الصين', 'china'] },
+  { code: 'UA', flag: '🇺🇦', names: ['اوكرانيا', 'ukraine'] },
+];
+const normalizeCountryText = (value) => String(value || '').normalize('NFKC').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').toLowerCase().replace(/\s+/g, ' ').trim();
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function explicitMeetingCountryFlag(alert) {
+  const text = normalizeCountryText([alert.title, alert.title_en, alert.description, alert.description_en].filter(Boolean).join(' '));
+  const hits = new Map();
+  for (const country of MEETING_COUNTRIES) {
+    for (const name of country.names) {
+      const pattern = new RegExp(`(^|[^\\p{L}\\p{N}])(${escapeRegExp(normalizeCountryText(name))})(?=$|[^\\p{L}\\p{N}])`, 'giu');
+      for (const match of text.matchAll(pattern)) {
+        const index = match.index + match[1].length;
+        const before = text.slice(Math.max(0, index - 24), index);
+        const locationMention = /(?:في|الي|الى|نحو|in|to|at)\s*$/iu.test(before);
+        const existing = hits.get(country.code) || { country, locationMention: false };
+        existing.locationMention ||= locationMention;
+        hits.set(country.code, existing);
+      }
+    }
+  }
+  if (hits.size === 1) return hits.values().next().value.country.flag;
+  const located = [...hits.values()].filter((hit) => hit.locationMention);
+  return located.length === 1 ? located[0].country.flag : '';
+}
+function channelEventSymbol(alert) {
+  if (alert.type !== 'political') return alertEmoji(alert);
+  const category = alert.meta?.political?.category;
+  if (category === 'meeting') return explicitMeetingCountryFlag(alert) || POLITICAL_CATEGORIES.meeting.emoji;
+  return POLITICAL_CATEGORIES[category]?.emoji || alertEmoji(alert);
+}
 // Channel post (format requested by the owner):
 //   تنبيه مدني - 🚑
 //   📍كويرس شرقي، الباب، حلب
@@ -206,8 +257,10 @@ export function channelPost(alert, { ended = false } = {}) {
   if (alert.type === 'military_incursion' && Number.isInteger(alert.meta?.vehicleCount)) title += ` — ${vehicleCountPhrase(alert.meta.vehicleCount, 'ar')}`;
   const p = alert.place || {};
   const hasPlace = p.scope && p.scope !== 'country';
-  const emoji = alertEmoji(alert);
-  const sections = [`${ended ? '✅ انتهى · ' : ''}<b>${esc(title)}</b>${emoji ? ` - ${emoji}` : ''}`];
+  const versioned = alert.channel_format === 2;
+  const emoji = versioned ? channelEventSymbol(alert) : alertEmoji(alert);
+  const dot = versioned ? `${eventVisual(alert.type).dot} ` : '';
+  const sections = [`${ended ? '✅ انتهى · ' : ''}${dot}<b>${esc(title)}</b>${emoji ? ` - ${emoji}` : ''}`];
   const desc = cleanAlertText(alert.description || '');
   if (alert.type === 'breaking') sections.push(`<b>${esc(desc || alert.title)}</b>`);
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
@@ -887,8 +940,15 @@ function channelEditPatch(alert, message) {
   const previous = channelEditParts(expected);
   const edited = channelEditParts(content);
   const stripIcon = (headline) => {
-    const suffix = ` - ${alertEmoji(alert)}`;
-    return headline.endsWith(suffix) ? headline.slice(0, -suffix.length).trim() : headline.trim();
+    let value = headline.trim();
+    const symbol = alert.channel_format === 2 ? channelEventSymbol(alert) : alertEmoji(alert);
+    const suffix = ` - ${symbol}`;
+    if (symbol && value.endsWith(suffix)) value = value.slice(0, -suffix.length).trim();
+    if (alert.channel_format === 2) {
+      const prefix = `${eventVisual(alert.type).dot} `;
+      if (value.startsWith(prefix)) value = value.slice(prefix.length).trim();
+    }
+    return value;
   };
   const oldHeadline = stripIcon(previous.header);
   const newHeadline = stripIcon(edited.header);
@@ -1032,6 +1092,9 @@ export async function publishInput(api, input, { toChannel = true } = {}) {
   const alert = store.addAlert(input);
   if (input.meta) alert.meta = input.meta;
   if (!toChannel || !config.channel) return alert;
+  // Persist the new public template version; alerts already present in storage keep their legacy headers.
+  alert.channel_format = 2;
+  store.persist();
   const text = channelPost(alert);
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
   let m = null; let media = 'text'; let uncertainPhotoSend = false;

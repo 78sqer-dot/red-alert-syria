@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ALERT_GROUPS, ALERT_TYPES, POLITICAL_CATEGORIES, TYPE_KEYS, alertButtonLabel, alertEmoji, assassinationWeaponGlyph, shootingWeaponGlyph } from '../shared/types.js';
+import { ALERT_GROUPS, ALERT_TYPES, POLITICAL_CATEGORIES, TYPE_KEYS, alertButtonLabel, alertEmoji, assassinationWeaponGlyph, shootingWeaponGlyph, eventVisual } from '../shared/types.js';
 import { NEWS_TYPES, keywordTypes, nameInText, refineType, ruleClassify } from '../server/news-ai.js';
 import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
@@ -167,15 +167,15 @@ test('assassination uses a black firearm drawing and appears in the strikes filt
   assert.ok(NEWS_TYPES.includes('assassination'));
 });
 
-test('shooting and assassination expose no colored emoji and use firearm drawings in channel images', () => {
+test('shooting and assassination expose no colored emoji and use category-colored firearm drawings in channel images', () => {
   assert.equal(ALERT_TYPES.shooting.emoji, '');
   assert.equal(alertEmoji({ type: 'shooting' }), '');
   assert.equal(ALERT_TYPES.assassination.emoji, '');
   const pistol = markerSvg('shooting', 100, 100, 1, null, { type: 'shooting' });
   assert.match(pistol, /fill="#f8fafc"/);
-  assert.match(pistol, /<g fill="#111827">[\s\S]*M56 176/);
+  assert.match(pistol, new RegExp(`<g fill="${eventVisual('shooting').color}">[\\s\\S]*M56 176`));
   const rifle = markerSvg('assassination', 100, 100, 1, null, { type: 'assassination', description: 'استخدم بندقية كلاشنكوف' });
-  assert.match(rifle, /<g fill="#111827">[\s\S]*M24 222/);
+  assert.match(rifle, new RegExp(`<g fill="${eventVisual('assassination').color}">[\\s\\S]*M24 222`));
 });
 
 test('assassination drawing follows an explicitly named rifle; otherwise it uses the requested pistol silhouette', () => {
@@ -198,8 +198,8 @@ test('gunfire remains labeled as an event, with a pistol by default and a rifle 
   assert.equal(shootingWeaponGlyph({ type: 'attack', title: 'AK-47' }), null);
   const unspecified = markerSvg('shooting', 100, 100, 1, null, { type: 'shooting', title: 'إطلاق نار' });
   const identifiedRifle = markerSvg('shooting', 100, 100, 1, null, { type: 'shooting', description: 'بندقية كلاشنكوف' });
-  assert.match(unspecified, /<g fill="#111827">[\s\S]*M56 176/);
-  assert.match(identifiedRifle, /<g fill="#111827">[\s\S]*M24 222/);
+  assert.match(unspecified, new RegExp(`<g fill="${eventVisual('shooting').color}">[\\s\\S]*M56 176`));
+  assert.match(identifiedRifle, new RegExp(`<g fill="${eventVisual('shooting').color}">[\\s\\S]*M24 222`));
 });
 
 test('Arabic drone-strike reports classify separately from routine drone sightings', () => {
@@ -293,7 +293,7 @@ test('helicopter and airstrike are watched automatically but require human publi
   }
 });
 
-test('political developments use a neutral ring and marker only for explicit localities', () => {
+test('political developments use the category color and marker only for explicit localities', () => {
   const type = ALERT_TYPES.political;
   assert.ok(TYPE_KEYS.includes('political'));
   assert.ok(ALERT_GROUPS.political.types.includes('political'));
@@ -305,7 +305,9 @@ test('political developments use a neutral ring and marker only for explicit loc
   assert.match(EXTRA_SVG.political, /M34 190/);
   assert.equal(typeIcon('political'), 'news');
   assert.match(typeIconsSource, /political: 'news'/);
-  assert.match(mapSource, /t\.ring \|\| t\.color/, 'political ring uses the configured muted slate color');
+  assert.equal(eventVisual('political').dot, '🟡');
+  assert.equal(eventVisual('political').color, '#a16207');
+  assert.match(mapSource, /color: eventVisual\(a\.type\)\.color, active:/, 'political rings use the shared category color');
   assert.doesNotMatch(mapSource, /a\.type === 'political' \|\| t\.marker === 'movement'/);
   assert.match(mapSource, /a\.scope === 'country' \|\| !a\.location/);
   assert.match(mapSource, /const km = this\._screenKm\(z\.km, z\.lat\);/);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ALERT_TYPES, POLITICAL_CATEGORIES, alertButtonLabel } from '../shared/types.js';
+import { ALERT_TYPES, POLITICAL_CATEGORIES, alertButtonLabel, eventVisual } from '../shared/types.js';
 
 const root = new URL('../', import.meta.url);
 const bot = readFileSync(new URL('server/bot.js', root), 'utf8');
@@ -12,7 +12,8 @@ test('protest keeps its megaphone in bot labels and uses the category-colored ma
   assert.equal(ALERT_TYPES.protest.mapEmoji, undefined);
   assert.equal(ALERT_TYPES.protest.glyph, 'protest');
   assert.equal(alertButtonLabel('protest', 'ar'), '📢 مظاهرة');
-  assert.match(map, /const iconColor = \['#111827', '#000000', '#000'\]\.includes\(configuredIconColor\.toLowerCase\(\)\) \? t\.color : configuredIconColor/);
+  assert.match(map, /const iconColor = visual\.color/);
+  assert.equal(eventVisual('protest').dot, '🟢');
   assert.doesNotMatch(map, /mapEmoji|mk-event-emoji/);
 });
 
