@@ -47,7 +47,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=65'/);
-  assert.match(html, /app\.css\?v=46/);
+  assert.match(html, /app\.css\?v=47/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
@@ -89,4 +89,11 @@ test('general alert pulses are gentler while the legacy blue aircraft pulse rema
   assert.match(css, /@keyframes zpulse \{ 0% \{ transform: scale\(1\); opacity: \.27; \} 100% \{ transform: scale\(1\.65\); opacity: 0; \} \}/);
   assert.match(css, /\.zp\.zp-aircraft::before, \.zp\.zp-aircraft::after[\s\S]{0,230}animation: zpulseAircraft 2\.6s/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
+});
+
+test('alert list shows loading placeholders before the first server snapshot and virtualizes offscreen cards', () => {
+  assert.match(app, /box\.setAttribute\('aria-busy', String\(state\.firstSnapshot\)\)/);
+  assert.match(app, /if \(state\.firstSnapshot\) \{[\s\S]{0,260}card-skeleton/);
+  assert.match(css, /\.card \{[^}]*content-visibility: auto; contain-intrinsic-size: auto 150px/);
+  assert.match(css, /\.card-skeleton/);
 });

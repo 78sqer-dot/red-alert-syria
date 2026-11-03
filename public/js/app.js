@@ -254,14 +254,17 @@ function renderList() {
   const list = visibleAlerts();
   const n = list.filter((a) => a.is_active).length;
   const s = settings.get();
-  $('#sbTitle').textContent = T.alertsCount(n);
+  $('#sbTitle').textContent = state.firstSnapshot ? T.status.connecting : T.alertsCount(n);
   const nearN = list.filter(isNear).length;
   $('#sbSub').textContent = (s.showInactive ? T.withInactive : T.activeOnMap) + (nearN ? (LANG === 'ar' ? ` · ${nearN} قريب منك` : ` · ${nearN} near you`) : '');
   $('#fabCount').textContent = n;
   const box = $('#alertList');
+  box.setAttribute('aria-busy', String(state.firstSnapshot));
   const search = $('#alertSearch');
   if (search && search.value !== state.search) search.value = state.search;
-  if (!list.length) {
+  if (state.firstSnapshot) {
+    box.innerHTML = `<div class="alert-skeletons" aria-hidden="true">${Array.from({ length: 4 }, () => '<div class="card-skeleton"><i></i><b></b><span></span><span></span></div>').join('')}</div>`;
+  } else if (!list.length) {
     const filtered = state.search || (s.filter.length < TYPE_KEYS.length || (s.governorate !== 'all' && GOV_C[s.governorate])) && state.alerts.size;
     box.innerHTML = `<div class="empty"><div class="radar"></div><h3>${esc(filtered ? T.noMatch : T.noAlerts)}</h3><p>${esc(filtered ? '' : T.noAlertsSub)}</p>${filtered ? `<button class="btn-sm" data-act="clear-filter">${esc(T.clearFilter)}</button>` : ''}</div>`;
   } else {
