@@ -53,8 +53,8 @@ export function reloadLogo() { LOGO = loadLogo(); }
 
 // ------------------------------------------------------------------ texts per type
 const HEADLINE = {
-  ar: { breaking: 'خبر عاجل', uav: 'تحليق مسيّرة', uav_strike: 'استهداف بمسيّرة', airstrike: 'غارة جوية', warplane: 'تحليق طيران حربي', helicopter: 'تحليق طيران مروحي', missile: 'إطلاق صواريخ', attack: 'هجوم', clashes: 'اشتباكات مسلحة', assassination: 'اغتيال', artillery: 'قصف مدفعي', explosion: 'انفجار', civil: 'تنبيه مدني', accident: 'حادث سير', protest: 'مظاهرة', protest_action: 'احتجاج', fire: 'حريق', civil_plane: 'طائرة مدنية', quake: 'زلزال', weather: 'تحذير جوي', military_incursion: 'توغل عسكري', patrol: 'دورية' },
-  en: { breaking: 'Breaking news', uav: 'Drone activity', uav_strike: 'Drone strike', airstrike: 'Airstrike', warplane: 'Warplane activity', helicopter: 'Helicopter activity', missile: 'Missile launch', attack: 'Attack', clashes: 'Armed clashes', assassination: 'Assassination', artillery: 'Artillery shelling', explosion: 'Explosion', civil: 'Civil alert', accident: 'Traffic accident', protest: 'Demonstration', protest_action: 'Protest', fire: 'Fire', civil_plane: 'Civil aircraft', quake: 'Earthquake', weather: 'Weather warning', military_incursion: 'Military incursion', patrol: 'Patrol' },
+  ar: { breaking: 'خبر عاجل', uav: 'تحليق مسيّرة', uav_strike: 'استهداف بمسيّرة', airstrike: 'غارة جوية', warplane: 'تحليق طيران حربي', helicopter: 'تحليق طيران مروحي', missile: 'إطلاق صواريخ', attack: 'هجوم', clashes: 'اشتباكات مسلحة', assassination: 'اغتيال', artillery: 'قصف مدفعي', explosion: 'انفجار', civil: 'تنبيه مدني', accident: 'حادث سير', protest: 'مظاهرة', protest_action: 'احتجاج', fire: 'حريق', civil_plane: 'طائرة مدنية', quake: 'زلزال', weather: 'تحذير جوي', military_incursion: 'توغل عسكري', patrol: 'دورية', kidnapping: 'اختطاف', signal_sweep: 'رصد/مسح الإشارة' },
+  en: { breaking: 'Breaking news', uav: 'Drone activity', uav_strike: 'Drone strike', airstrike: 'Airstrike', warplane: 'Warplane activity', helicopter: 'Helicopter activity', missile: 'Missile launch', attack: 'Attack', clashes: 'Armed clashes', assassination: 'Assassination', artillery: 'Artillery shelling', explosion: 'Explosion', civil: 'Civil alert', accident: 'Traffic accident', protest: 'Demonstration', protest_action: 'Protest', fire: 'Fire', civil_plane: 'Civil aircraft', quake: 'Earthquake', weather: 'Weather warning', military_incursion: 'Military incursion', patrol: 'Patrol', kidnapping: 'Kidnapping', signal_sweep: 'Signal sweep' },
 };
 const LEVELS = {
   caution: { ar: 'حيطة وحذر', en: 'Caution', color: '#fdba74' },
@@ -74,7 +74,7 @@ const HAZARD_ICON = {
   dust: ['M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242', 'M16 17H7', 'M17 21H9'],
 };
 const hazardIconSvg = (k, x, y, size, color) => `<g transform="translate(${x} ${y}) scale(${size / 24})" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${HAZARD_ICON[k].map((d) => `<path d="${d}"/>`).join('')}</g>`;
-const LEVEL_OF = { breaking: 'urgent', uav: 'caution', uav_strike: 'danger', airstrike: 'danger', warplane: 'caution', helicopter: 'caution', missile: 'danger', attack: 'danger', clashes: 'danger', assassination: 'danger', artillery: 'danger', explosion: 'danger', civil: 'notice', accident: 'notice', protest: 'notice', protest_action: 'notice', fire: 'notice', civil_plane: 'info', quake: 'notice', weather: 'caution', military_incursion: 'caution', patrol: 'caution' };
+const LEVEL_OF = { breaking: 'urgent', uav: 'caution', uav_strike: 'danger', airstrike: 'danger', warplane: 'caution', helicopter: 'caution', missile: 'danger', attack: 'danger', clashes: 'danger', assassination: 'danger', artillery: 'danger', explosion: 'danger', civil: 'notice', accident: 'notice', protest: 'notice', protest_action: 'notice', fire: 'notice', civil_plane: 'info', quake: 'notice', weather: 'caution', military_incursion: 'caution', patrol: 'caution', kidnapping: 'danger', signal_sweep: 'notice' };
 const NOTE = {
   ar: { uav: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق لا على عدد المسيّرات', warplane: 'ملاحظة: الدائرة تدلّ على منطقة التحليق التقريبية', airstrike: 'ملاحظة: الدائرة تحدد نطاق موقع الغارة التقريبي، لا مساحة الضرر المؤكدة', multi: 'ملاحظة: عدد الدوائر يدلّ على عدد المناطق المتأثرة', quake: 'ملاحظة: الدائرة تقريبية لمنطقة الشعور بالهزة، والمصدر مراصد الزلازل الدولية', weather: 'ملاحظة: الدائرة تقريبية للمنطقة المشمولة بالتحذير' },
   en: { uav: 'Note: the number of circles shows the number of areas, not the number of drones', warplane: 'Note: the circle shows the approximate flight area', airstrike: 'Note: the circle marks the approximate reported strike location, not confirmed damage extent', multi: 'Note: the number of circles shows the number of affected areas', quake: 'Note: the circle approximates where the shaking may be felt (international seismic agencies)', weather: 'Note: the circle approximates the warned area' },
@@ -157,10 +157,11 @@ export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = nul
   const t = ALERT_TYPES[type] || ALERT_TYPES.breaking;
   const color = eventVisual(type).color;
   const incursionKind = alert?.meta?.incursionKind || (Number.isInteger(alert?.meta?.vehicleCount) ? 'vehicles' : null);
+  const signalDrone = type === 'signal_sweep' && alert?.meta?.signalPlatform === 'uav';
   const glyphKey = type === 'assassination' ? (assassinationWeaponGlyph(alert) || t.glyph)
     : type === 'shooting' ? (shootingWeaponGlyph(alert) || t.glyph)
       : type === 'military_incursion' ? (incursionKind === 'barrier' ? 'military_barrier' : incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
-        : glyphOverride || t.glyph;
+        : signalDrone ? 'uav' : glyphOverride || t.glyph;
   const g = GLYPHS[glyphKey] || GLYPHS[t.glyph] || GLYPHS.other || '';
   const r = 30 * k; const s = r * 1.2;
   const bg = '#f8fafc';
@@ -174,7 +175,7 @@ export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = nul
   return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${color}" opacity="0.16"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="#ffffff" opacity="0.95"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${bg}"/>`
-    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="${color}">${g}</g></svg>`;
+    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="${color}" color="${color}">${g}</g></svg>`;
 }
 function politicalMarkerSvg(cx, cy) {
   const g = GLYPHS[ALERT_TYPES.political.glyph] || GLYPHS.other || '';
@@ -183,12 +184,11 @@ function politicalMarkerSvg(cx, cy) {
   return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}" stroke="#ffffff" stroke-width="4"/>`
     + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#ffffff">${g}</g></svg>`;
 }
-function firearmHeaderSvg(type, alert, cx, cy) {
-  const key = type === 'assassination' ? assassinationWeaponGlyph(alert) || 'pistol' : shootingWeaponGlyph(alert) || 'pistol';
-  const g = GLYPHS[key] || GLYPHS.pistol || '';
+function eventGlyphHeaderSvg(key, cx, cy) {
+  const g = GLYPHS[key] || GLYPHS.gunfire || '';
   const s = 42;
   return `<circle cx="${cx}" cy="${cy}" r="27" fill="#f8fafc" stroke="#ffffff" stroke-width="3"/>`
-    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#111827">${g}</g></svg>`;
+    + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#111827" color="#111827">${g}</g></svg>`;
 }
 
 // ------------------------------------------------------------------ main
@@ -270,15 +270,18 @@ export async function alertImageSvg(alert, opts = {}) {
   const mag = type === 'quake' ? (alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1])) : null;
   if (alert.place?.head_ar) head = en ? alert.place.head_en || head : alert.place.head_ar;
   if (Number.isFinite(mag)) head = en ? `M${mag.toFixed(1)} earthquake` : `زلزال بقوة ${arDigits(mag.toFixed(1))}`;
+  if (type === 'signal_sweep' && alert.meta?.signalPlatform === 'uav') head += en ? ' — Drone' : ' — مسيّرة';
   const short = en ? alert.place?.short_en : alert.place?.short_ar;
   const place = opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
   const titleSize = head.length > 16 ? 44 : 52;
   const hz = type === 'weather' && HAZARD_ICON[alert.meta?.hazard] ? alert.meta.hazard : '';
   const firearm = type === 'assassination' || type === 'shooting';
+  const hasSignalGlyph = type === 'signal_sweep';
   const IC = titleSize; // icon box, same height as the title
   if (hz) o.push(hazardIconSvg(hz, en ? 36 : W - 36 - IC, 74 - IC * 0.86, IC, '#ffffff'));
-  else if (firearm) o.push(firearmHeaderSvg(type, alert, en ? 62 : W - 62, 68));
-  const hasHeaderIcon = !!hz || firearm;
+  else if (firearm) o.push(eventGlyphHeaderSvg(type === 'assassination' ? assassinationWeaponGlyph(alert) || 'pistol' : shootingWeaponGlyph(alert) || 'gunfire', en ? 62 : W - 62, 68));
+  else if (hasSignalGlyph) o.push(eventGlyphHeaderSvg(alert.meta?.signalPlatform === 'uav' ? 'uav' : 'signal_sweep', en ? 62 : W - 62, 68));
+  const hasHeaderIcon = !!hz || firearm || hasSignalGlyph;
   const tx = en ? 36 + (hasHeaderIcon ? IC + 14 : 0) : W - 36 - (hasHeaderIcon ? IC + 14 : 0); const anchor = en ? 'start' : 'end';
   o.push(`<text x="${tx}" y="74" font-family="${FF}" font-size="${titleSize}" font-weight="800" fill="#ffffff" text-anchor="${anchor}"${en ? '' : ' direction="rtl"'}>${ttx(head)}</text>`);
   // severity dot + label + place

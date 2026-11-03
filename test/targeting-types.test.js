@@ -63,7 +63,7 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
   assert.equal(helicopter.glyph, 'helicopter_simple');
   assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
-  assert.match(mapSource, /t\.marker === 'helicopter'[\s\S]{0,180}svgTag\(t\.glyph, 18,/);
+  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\(t\.glyph, 18,/);
   assert.match(mapSource, /const helicopterScale = Math\.max\(1, Math\.min\(1\.34, 1 \+ \(z - 9\) \* 0\.08\)\)/);
   assert.match(mapSource, /c\.style\.setProperty\('--heli-scale', helicopterScale\)/);
   assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 18px; height: 18px/);
@@ -88,7 +88,7 @@ test('helicopter has its own monitored button and keeps the original warplane ma
 
 test('warplane keeps a compact reference-inspired three-plane pass with 24px base icons and area pulses', () => {
   assert.doesNotMatch(mapSource, /t\.marker === 'movement' \|\| t\.marker === 'squad'/, 'warplane zone circles remain enabled');
-  assert.match(mapSource, /t\.marker === 'orbit' \|\| t\.marker === 'squad' \|\| t\.marker === 'helicopter'/);
+  assert.match(mapSource, /marker === 'orbit' \|\| marker === 'squad' \|\| marker === 'helicopter'/);
   assert.match(mapSource, /const classicAircraft = t\.marker === 'squad' \|\| t\.marker === 'helicopter'/, 'active warplane zones get aircraft pulse styling');
   assert.match(mapSource, /pl\(18, -12, 1\)\}\$\{pl\(2, 8, 0\.85\)\}\$\{pl\(34, 8, 0\.85\)/, 'lead and wing aircraft stay close together');
   assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
@@ -159,6 +159,44 @@ test('military patrol is a separate monitored category with a clean icon and hum
   assert.equal(dayAutoReady({ ...patrolDraft, dayAutoAt: Date.now() - 1 }), false);
 });
 
+test('kidnapping is a distinct security type with a restraint icon and human review', () => {
+  const kidnapping = ALERT_TYPES.kidnapping;
+  assert.ok(TYPE_KEYS.includes('kidnapping'));
+  assert.ok(ALERT_GROUPS.other.types.includes('kidnapping'));
+  assert.equal(kidnapping.button_ar, 'اختطاف');
+  assert.equal(kidnapping.button_en, 'Kidnapping');
+  assert.equal(alertButtonLabel('kidnapping'), '⛓️ اختطاف');
+  assert.equal(kidnapping.glyph, 'handcuffs');
+  assert.equal(typeIcon('kidnapping'), 'handcuffs');
+  assert.ok(ICONS.handcuffs);
+  assert.ok(EXTRA_SVG.handcuffs);
+  assert.equal(eventVisual('kidnapping').category, 'security');
+  const kidnappingDraft = { type: 'kidnapping', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
+  assert.equal(nightEligible(kidnappingDraft), false, 'kidnapping reports always require human review overnight');
+  assert.equal(dayAutoReady({ ...kidnappingDraft, dayAutoAt: Date.now() - 1 }), false, 'kidnapping reports are never daytime auto-published');
+});
+
+test('signal sweep is a distinct non-jamming type; a drone glyph appears only when explicitly selected', () => {
+  const type = ALERT_TYPES.signal_sweep;
+  assert.ok(TYPE_KEYS.includes('signal_sweep'));
+  assert.ok(ALERT_GROUPS.other.types.includes('signal_sweep'));
+  assert.equal(type.button_ar, 'رصد/مسح الإشارة');
+  assert.equal(type.button_en, 'Signal sweep');
+  assert.equal(alertButtonLabel('signal_sweep'), '📡 رصد/مسح الإشارة');
+  assert.equal(type.glyph, 'signal_sweep');
+  assert.equal(typeIcon('signal_sweep'), 'radar');
+  assert.ok(ICONS.radar);
+  assert.ok(EXTRA_SVG.signal_sweep);
+  assert.equal(eventVisual('signal_sweep').category, 'security');
+  assert.equal(NEWS_TYPES.includes('signal_sweep'), false, 'signal reports do not enter automatic news classification');
+  const generic = markerSvg('signal_sweep', 100, 100, 1, null, { type: 'signal_sweep' });
+  const drone = markerSvg('signal_sweep', 100, 100, 1, null, { type: 'signal_sweep', meta: { signalPlatform: 'uav' } });
+  assert.ok(generic.includes(EXTRA_SVG.signal_sweep), 'an unspecified platform keeps the signal radar glyph');
+  assert.ok(drone.includes(SVG.uav), 'the selected platform reuses the existing drone silhouette');
+  assert.equal(nightEligible({ type: 'signal_sweep', status: 'pending', loc: { scope: 'place', latitude: 33, longitude: 35 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] }), false, 'signal-sweep reports always require human review');
+  assert.equal(dayAutoReady({ type: 'signal_sweep', status: 'pending', dayAutoAt: 0, loc: { scope: 'place', latitude: 33, longitude: 35 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] }), false, 'signal-sweep reports never auto-publish during daytime');
+});
+
 test('assassination uses a black firearm drawing and appears in the strikes filter', () => {
   const type = ALERT_TYPES.assassination;
   assert.ok(TYPE_KEYS.includes('assassination'));
@@ -172,15 +210,15 @@ test('assassination uses a black firearm drawing and appears in the strikes filt
   assert.ok(NEWS_TYPES.includes('assassination'));
 });
 
-test('shooting and assassination expose no colored emoji and use category-colored firearm drawings in channel images', () => {
+test('shooting and assassination expose no colored emoji; generic gunfire uses category-colored sound waves', () => {
   assert.equal(ALERT_TYPES.shooting.emoji, '');
   assert.equal(alertEmoji({ type: 'shooting' }), '');
   assert.equal(ALERT_TYPES.assassination.emoji, '');
   const pistol = markerSvg('shooting', 100, 100, 1, null, { type: 'shooting' });
   assert.match(pistol, /fill="#f8fafc"/);
-  assert.match(pistol, new RegExp(`<g fill="${eventVisual('shooting').color}">[\\s\\S]*M56 176`));
+  assert.match(pistol, new RegExp(`<g fill="${eventVisual('shooting').color}" color="${eventVisual('shooting').color}">[\\s\\S]*M70 200h96`));
   const rifle = markerSvg('assassination', 100, 100, 1, null, { type: 'assassination', description: 'استخدم بندقية كلاشنكوف' });
-  assert.match(rifle, new RegExp(`<g fill="${eventVisual('assassination').color}">[\\s\\S]*M24 222`));
+  assert.match(rifle, new RegExp(`<g fill="${eventVisual('assassination').color}" color="${eventVisual('assassination').color}">[\\s\\S]*M24 222`));
 });
 
 test('assassination drawing follows an explicitly named rifle; otherwise it uses the requested pistol silhouette', () => {
@@ -193,18 +231,20 @@ test('assassination drawing follows an explicitly named rifle; otherwise it uses
   assert.equal(assassinationWeaponGlyph({ type: 'attack', title: 'AK-47' }), null);
 });
 
-test('gunfire remains labeled as an event, with a pistol by default and a rifle only when reported', () => {
+test('gunfire remains an event with a non-weapon symbol by default and named firearms only when reported', () => {
   assert.equal(ALERT_TYPES.shooting.button_ar, 'إطلاق نار');
   assert.equal(alertButtonLabel('shooting'), 'إطلاق نار', 'the Telegram button names the event, not an assumed weapon');
-  assert.equal(shootingWeaponGlyph({ type: 'shooting', title: 'سماع إطلاق نار في الحي' }), 'pistol');
+  assert.equal(shootingWeaponGlyph({ type: 'shooting', title: 'سماع إطلاق نار في الحي' }), 'gunfire');
   assert.equal(shootingWeaponGlyph({ type: 'shooting', description: 'أُطلقت طلقات من بندقية كلاشنكوف AK-47' }), 'rifle');
   assert.equal(shootingWeaponGlyph({ type: 'shooting', description: 'The report confirms an assault rifle was used' }), 'rifle');
   assert.equal(shootingWeaponGlyph({ type: 'shooting', description: 'إطلاق نار بمسدس' }), 'pistol');
+  assert.equal(shootingWeaponGlyph({ type: 'shooting', title: 'Gunfire heard nearby without weapon details' }), 'gunfire');
   assert.equal(shootingWeaponGlyph({ type: 'attack', title: 'AK-47' }), null);
   const unspecified = markerSvg('shooting', 100, 100, 1, null, { type: 'shooting', title: 'إطلاق نار' });
   const identifiedRifle = markerSvg('shooting', 100, 100, 1, null, { type: 'shooting', description: 'بندقية كلاشنكوف' });
-  assert.match(unspecified, new RegExp(`<g fill="${eventVisual('shooting').color}">[\\s\\S]*M56 176`));
-  assert.match(identifiedRifle, new RegExp(`<g fill="${eventVisual('shooting').color}">[\\s\\S]*M24 222`));
+  assert.match(unspecified, new RegExp(`<g fill="${eventVisual('shooting').color}" color="${eventVisual('shooting').color}">[\\s\\S]*M70 200h96`));
+  assert.doesNotMatch(unspecified, /M56 176/, 'generic gunfire does not depict a pistol');
+  assert.match(identifiedRifle, new RegExp(`<g fill="${eventVisual('shooting').color}" color="${eventVisual('shooting').color}">[\\s\\S]*M24 222`));
 });
 
 test('Arabic drone-strike reports classify separately from routine drone sightings', () => {

@@ -60,6 +60,18 @@ export const ALERT_TYPES = {
     marker: 'icon', glyph: 'patrol', icon: '#111827', disc: '#111827', size: 30, zone: 'dashed',
     tag_ar: 'دورية', tag_en: 'Patrol',
   },
+  kidnapping: {
+    ar: 'اختطاف', en: 'Kidnapping', button_ar: 'اختطاف', button_en: 'Kidnapping',
+    emoji: '⛓️', color: '#7c2d12', ring: '#451a03', group: 'other', ttlMin: 360,
+    marker: 'icon', glyph: 'handcuffs', icon: '#7c2d12', disc: '#451a03', size: 32, zone: false,
+    tag_ar: 'اختطاف', tag_en: 'Kidnapping',
+  },
+  signal_sweep: {
+    ar: 'رصد/مسح الإشارة', en: 'Signal sweep', button_ar: 'رصد/مسح الإشارة', button_en: 'Signal sweep',
+    emoji: '📡', color: '#475569', ring: '#334155', group: 'other', ttlMin: 180,
+    marker: 'icon', glyph: 'signal_sweep', icon: '#475569', size: 24, zone: false,
+    tag_ar: 'رصد_الإشارة', tag_en: 'Signal_sweep',
+  },
   smuggling_weapons: {
     ar: 'تهريب أسلحة', en: 'Weapons smuggling', button_ar: 'تهريب أسلحة', button_en: 'Weapons smuggling',
     emoji: '🔫', color: '#c2410c', ring: '#9a3412', group: 'smuggling', ttlMin: 360,
@@ -197,7 +209,7 @@ export const ALERT_GROUPS = {
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   political: { ar: 'تطورات سياسية', en: 'Political developments', types: ['political'] },
   smuggling: { ar: 'تهريب', en: 'Smuggling', types: ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },
-  other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border', 'military_incursion', 'patrol'] },
+  other: { ar: 'أخرى', en: 'Other', types: ['breaking', 'border', 'military_incursion', 'patrol', 'kidnapping', 'signal_sweep'] },
 };
 
 // Shared channel/map visual language. Event-specific ALERT_TYPES colors remain
@@ -212,7 +224,7 @@ const EVENT_PALETTES = Object.freeze({
   quake: Object.freeze({ dot: '🟤', color: '#92400e' }),
   security: Object.freeze({ dot: '⚫', color: '#374151' }),
 });
-const EVENT_CATEGORY_OVERRIDES = Object.freeze({ breaking: 'breaking', weather: 'weather', political: 'political', quake: 'quake', border: 'security', military_incursion: 'security', patrol: 'security', smuggling_weapons: 'security', smuggling_drugs: 'security', smuggling_explosives: 'security' });
+const EVENT_CATEGORY_OVERRIDES = Object.freeze({ breaking: 'breaking', weather: 'weather', political: 'political', quake: 'quake', border: 'security', military_incursion: 'security', patrol: 'security', kidnapping: 'security', signal_sweep: 'security', smuggling_weapons: 'security', smuggling_drugs: 'security', smuggling_explosives: 'security' });
 const ALERT_GROUP_BY_TYPE = new Map(Object.entries(ALERT_GROUPS).flatMap(([group, value]) => value.types.map((type) => [type, group])));
 export const EVENT_VISUALS = Object.freeze(Object.fromEntries(TYPE_KEYS.map((type) => {
   const category = EVENT_CATEGORY_OVERRIDES[type] || ALERT_GROUP_BY_TYPE.get(type) || 'security';
@@ -268,7 +280,7 @@ export function alertButtonLabel(key, lang = 'ar') {
   return [emoji, label].filter(Boolean).join(' ');
 }
 
-// Use a monochrome firearm silhouette; specialize to a rifle only when the report explicitly says so.
+// Return a weapon silhouette only when the report explicitly identifies a firearm.
 function describedFirearmGlyph(alert) {
   const text = [alert.title, alert.title_en, alert.description, alert.description_en, alert.details, alert.text]
     .filter(Boolean).join(' ').toLowerCase().normalize('NFKC')
@@ -276,17 +288,17 @@ function describedFirearmGlyph(alert) {
     .replace(/[إأآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
   const rifle = /(?:كلاشنكوف|كلاشينكوف|كلاش|بندقيه|رشاش|\b(?:assault\s+)?rifles?\b|\bkalashnikov\b|\bak(?:[- ]?(?:47|74|m))?\b)/i.test(text);
   const pistol = /(?:مسدس|طبنجه|\bpistols?\b|\bhandguns?\b|\brevolvers?\b)/i.test(text);
-  return rifle && !pistol ? 'rifle' : 'pistol';
+  return rifle && !pistol ? 'rifle' : pistol ? 'pistol' : null;
 }
 
 export function assassinationWeaponGlyph(alert) {
-  return alert?.type === 'assassination' ? describedFirearmGlyph(alert) : null;
+  return alert?.type === 'assassination' ? describedFirearmGlyph(alert) || 'pistol' : null;
 }
 
-// Gunfire is an event label, not a weapon claim: use a pistol by default and
-// show a rifle only when the story explicitly identifies one.
+// Gunfire is an event, not a weapon claim: use sound waves by default and show a
+// firearm only when the report explicitly identifies one.
 export function shootingWeaponGlyph(alert) {
-  return alert?.type === 'shooting' ? describedFirearmGlyph(alert) : null;
+  return alert?.type === 'shooting' ? describedFirearmGlyph(alert) || 'gunfire' : null;
 }
 
 export function dimColor(hex, alpha = 0.12) {

@@ -11,7 +11,7 @@ const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.
 test('drone keeps the original top-down silhouette, fixed icon size and perimeter orbit', () => {
   assert.match(types, /uav:\s*\{[\s\S]*?glyph: 'uav'/);
   assert.ok(markerSvgs.includes('"uav": "<g> <ellipse cx=\\"256\\" cy=\\"256\\" rx=\\"18\\" ry=\\"140\\" />'));
-  assert.match(mapJs, /svgTag\(t\.glyph,\s*24,\s*'class="uav-svg"'\)/);
+  assert.match(mapJs, /svgTag\(glyph,\s*24,\s*'class="uav-svg"'\)/);
   assert.match(css, /\.uav-svg\s*\{\s*stroke: rgba\(255,255,255,\.94\);\s*stroke-width: 18;/);
 });
 

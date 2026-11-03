@@ -1,13 +1,13 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=35';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=36';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=14';
-import { icon } from './icons.js?v=4';
+import { EXTRA_SVG } from './target-svgs.js?v=15';
+import { icon } from './icons.js?v=5';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
-import { typeIcon } from './type-icons.js?v=4';
+import { typeIcon } from './type-icons.js?v=5';
 import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
-import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=1';
+import { zoneVisualKey, pulseVisualKey, countUniqueZoneCircles } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
@@ -685,6 +685,35 @@ export class AlertMap {
     this.onSelect(id, { fromMap: true, fly: false });
   }
 
+  zoneCircleCount(alert) {
+    const t = alert && ALERT_TYPES[alert.type];
+    if (!alert || !t || t.marker === 'movement' || alert.scope === 'country' || !alert.location
+      || !Number.isFinite(alert.location.latitude) || !Number.isFinite(alert.location.longitude)) return 0;
+    const zones = Array.isArray(alert.zones) && alert.zones.length
+      ? alert.zones
+      : [{ lat: alert.location.latitude, lon: alert.location.longitude, km: ZONE_KM[alert.scope] || ZONE_KM.place }];
+    return countUniqueZoneCircles(zones);
+  }
+
+  syncZoneCountBadge(el, alert) {
+    const count = this.zoneCircleCount(alert);
+    let badge = el.querySelector('.mk-zone-count');
+    if (count > 1) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'mk-zone-count';
+        badge.setAttribute('aria-hidden', 'true');
+        el.append(badge);
+      }
+      const lang = this.opts.lang === 'en' ? 'en' : 'ar';
+      const formatted = new Intl.NumberFormat(lang, { useGrouping: false }).format(count);
+      badge.textContent = lang === 'en' ? `${formatted} circles` : `${formatted} دوائر`;
+      badge.dataset.circleCount = String(count);
+      badge.dir = lang === 'en' ? 'ltr' : 'rtl';
+    } else if (badge) badge.remove();
+    return count;
+  }
+
   refreshMarkerGroups() {
     // Never write MapLibre's private _offset field: the library owns its Point.
     // Same-location reports share a visible marker, without inventing positions.
@@ -706,8 +735,14 @@ export class AlertMap {
         el.classList.toggle('sel', a.id === this.selectedId);
         el.style.zIndex = a.id === this.selectedId ? 50 : a.is_active ? 10 : 2;
         const count = group.alerts.length;
-        const hint = this.opts.lang === 'en' ? `${count} nearby alerts — click to choose` : `${count} تنبيهات متقاربة — اضغط للاختيار`;
-        el.title = count > 1 ? `${a.title} · ${hint}` : a.title;
+        const lang = this.opts.lang === 'en' ? 'en' : 'ar';
+        const hint = lang === 'en' ? `${count} nearby alerts — click to choose` : `${count} تنبيهات متقاربة — اضغط للاختيار`;
+        const zoneCount = this.zoneCircleCount(a);
+        const zoneHint = zoneCount > 1
+          ? (lang === 'en' ? `${zoneCount} affected circles` : `عدد الدوائر المتأثرة: ${new Intl.NumberFormat('ar', { useGrouping: false }).format(zoneCount)}`)
+          : '';
+        const hints = [count > 1 ? hint : '', zoneHint].filter(Boolean);
+        el.title = hints.length ? `${a.title} · ${hints.join(' · ')}` : a.title;
         el.setAttribute('aria-label', el.title);
         el.dataset.alertId = a.id;
         let badge = el.querySelector('.mk-count');
@@ -756,6 +791,7 @@ export class AlertMap {
       el.classList.toggle('sel', a.id === this.selectedId);
       el.style.zIndex = a.id === this.selectedId ? 50 : a.is_active ? 10 : 1;
       el.title = a.title;
+      this.syncZoneCountBadge(el, a);
     }
     this.refreshMarkerGroups();
     // drones: the alert's own marker flies over its main circle; every other circle of the same alert gets
@@ -818,25 +854,28 @@ export class AlertMap {
     const t = typeOf(a.type);
     const visual = eventVisual(a.type);
     const incursionKind = a.meta?.incursionKind || a.incursion_kind || (Number.isInteger(a.meta?.vehicleCount) || Number.isInteger(a.vehicle_count) ? 'vehicles' : null);
-    const glyph = a.type === 'assassination' ? assassinationWeaponGlyph(a)
+    const signalDrone = a.type === 'signal_sweep' && (a.signal_platform === 'uav' || a.meta?.signalPlatform === 'uav');
+    const marker = signalDrone ? 'orbit' : t.marker;
+    const glyph = signalDrone ? 'uav'
+      : a.type === 'assassination' ? assassinationWeaponGlyph(a)
       : a.type === 'shooting' ? shootingWeaponGlyph(a)
         : a.type === 'military_incursion' ? (incursionKind === 'barrier' ? 'military_barrier' : incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
         : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
-    el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${t.marker}`;
+    el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${marker}`;
     el.style.setProperty('--c', visual.color);
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
-    if (t.marker === 'orbit') {
-      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(t.glyph, 24, 'class="uav-svg"')}</div></div>`;
-    } else if (t.marker === 'helicopter') {
+    if (marker === 'orbit') {
+      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(glyph, 24, 'class="uav-svg"')}</div></div>`;
+    } else if (marker === 'helicopter') {
       el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span></div>`;
-    } else if (t.marker === 'squad') {
+    } else if (marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(18, -12, 1)}${pl(2, 8, 0.85)}${pl(34, 8, 0.85)}</div>`;
-    } else if (t.marker === 'fly') {
+    } else if (marker === 'fly') {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 24, `fill="${visual.color}" class="fly-svg"`)}</div></div>`;
-    } else if (t.marker === 'movement') {
+    } else if (marker === 'movement') {
       const aircraftGlyph = a.aircraft === 'uav' ? 'uav' : 'plane';
       const arrow = a.flight_direction === 'entering_syria' ? '⇢' : a.flight_direction === 'leaving_syria' ? '⇠' : '➤';
       const movement = a.flight_direction === 'entering_syria' ? 'entering' : a.flight_direction === 'leaving_syria' ? 'leaving' : 'toward';
@@ -846,15 +885,15 @@ export class AlertMap {
       el.classList.add('mk-breaking-news');
       const triangle = '<svg class="news-marker-svg" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 1.3 23.2 21H.8Z" fill="#ef233c"/><path d="m12 6.1-7.2 12.7h14.4Z" fill="#000000"/><path d="M11 9h2v5h-2zm0 6h2v2h-2z" fill="#ef233c"/></svg>';
       el.innerHTML = `<span class="news-marker-core">${triangle}</span>`;
-    } else if (t.marker === 'icon') {
+    } else if (marker === 'icon') {
       const iconColor = visual.color;
       const sz = 24;
-      el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, `class="ic-svg" fill="${iconColor}"`)}</div>`;
+      el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, `class="ic-svg" fill="${iconColor}" color="${iconColor}"`)}</div>`;
     } else {
       el.innerHTML = glyphDisc(a.type, 34, 24, 'sai map-event-disc', a.marker_glyph);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
-    if (!['squad', 'movement', 'fly'].includes(t.marker)) el.insertAdjacentHTML('afterbegin', '<span class="news-pulse-ring" aria-hidden="true"></span>');
+    if (!['squad', 'movement', 'fly'].includes(marker)) el.insertAdjacentHTML('afterbegin', '<span class="news-pulse-ring" aria-hidden="true"></span>');
     // civil family: pinned to its exact place; a small tidy dot at country view, the icon from zoom 7.5 up
     if (t.group === 'civil') {
       el.classList.add('mk-civ');
@@ -901,14 +940,15 @@ export class AlertMap {
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
       if (!t || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
+      const marker = a.type === 'signal_sweep' && (a.signal_platform === 'uav' || a.meta?.signalPlatform === 'uav') ? 'orbit' : t.marker;
       const props = { color: eventVisual(a.type).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
-      if (t.marker === 'orbit' || t.marker === 'squad' || t.marker === 'helicopter') {
+      if (marker === 'orbit' || marker === 'squad' || marker === 'helicopter') {
         // the drone circles the ring nearest to its own position (the alert's main place)
         let best = zs[0], bd = Infinity;
         for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
-        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, squad: t.marker === 'squad', helicopter: t.marker === 'helicopter' });
+        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, squad: marker === 'squad', helicopter: marker === 'helicopter' });
       }
       zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);

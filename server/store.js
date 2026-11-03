@@ -693,6 +693,7 @@ export function publicAlert(a) {
     border: BORDER_REGIONS[a.meta?.border] ? a.meta.border : undefined,
     flight_direction: FLIGHT_DIRECTIONS[a.meta?.flightDirection] ? a.meta.flightDirection : undefined,
     aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
+    signal_platform: a.type === 'signal_sweep' && a.meta?.signalPlatform === 'uav' ? 'uav' : undefined,
     drones: a.type === 'uav' ? droneLevel(a) : undefined,
     vehicle_count: a.type === 'military_incursion' && Number.isInteger(a.meta?.vehicleCount) ? a.meta.vehicleCount : undefined,
     incursion_kind: a.type === 'military_incursion'

@@ -11,6 +11,8 @@ export const TYPE_ICON = Object.freeze({
   border: 'mapPin',
   military_incursion: 'militaryVehicle',
   patrol: 'patrol',
+  kidnapping: 'handcuffs',
+  signal_sweep: 'radar',
   smuggling_weapons: 'rifle',
   smuggling_drugs: 'pills',
   smuggling_explosives: 'packageBomb',

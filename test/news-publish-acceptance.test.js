@@ -15,7 +15,7 @@ process.env.ALERT_IMAGES = 'false';
 
 const { store, publicAlert } = await import('../server/store.js');
 await store.init(null);
-const { buildAlertInput, createBot, channelKeyboard, channelPost, publishInput, BOT_ALERT_MENU_GROUPS, BOT_ALERT_MENU_DIRECT_TYPES } = await import('../server/bot.js');
+const { buildAlertInput, createBot, channelKeyboard, channelPost, publishInput, BOT_ALERT_MENU_GROUPS, BOT_ALERT_MENU_DIRECT_TYPES, BOT_ALERT_MENU_PATROL_CHILD_TYPES } = await import('../server/bot.js');
 const { BORDER_MARKERS, ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES } = await import('../shared/types.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { governorates } = await import('../server/places.js');
@@ -92,7 +92,7 @@ test('home menu clears tracked private relay messages for this bot and chat only
 });
 
 test('report menus expose every current alert type and keep aerial movement reachable', async () => {
-  const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
+  const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...BOT_ALERT_MENU_PATROL_CHILD_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
   assert.equal(new Set(routedTypes).size, routedTypes.length, 'each alert type has exactly one report-menu route');
   assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).sort(), 'the current menu covers the full shared alert registry');
 
@@ -100,11 +100,27 @@ test('report menus expose every current alert type and keep aerial movement reac
   await tap('home');
   const topKeyboard = keyboardAfter(start);
   const top = callbacksOf(topKeyboard);
-  for (const callback of ['t:breaking', 't:political', 'ag:aerial', 'target', 'ag:strikes', 'mi', 't:patrol', 'ag:protests', 'cv', 'sm', 'ag:nature', 't:border']) {
+  for (const callback of ['t:breaking', 't:political', 't:signal_sweep', 'ag:aerial', 'target', 'ag:strikes', 'mi', 't:patrol', 'ag:protests', 'cv', 'sm', 'ag:nature', 't:border']) {
     assert.ok(top.includes(callback), `main menu includes ${callback}`);
   }
   assert.ok(topKeyboard.flat().some((button) => button.callback_data === 'ag:protests' && button.text?.includes('مظاهرة')), 'protest parent is labeled «مظاهرة»');
   assert.equal(top.includes('t:air_movement'), false, 'air movement is chosen inside the aerial group, not misrouted directly');
+  assert.equal(top.includes('t:kidnapping'), false, 'kidnapping stays nested under patrol rather than becoming a top-level option');
+  start = calls.length;
+  await tap('t:patrol');
+  const patrolButtons = keyboardAfter(start).flat();
+  assert.ok(patrolButtons.some((button) => button.callback_data === 'pt:singular' && button.text?.includes('دورية واحدة')), 'the existing single-patrol choice remains');
+  assert.ok(patrolButtons.some((button) => button.callback_data === 'pt:plural' && button.text?.includes('عدة دوريات')), 'the existing multiple-patrol choice remains');
+  assert.ok(patrolButtons.some((button) => button.callback_data === 't:kidnapping' && button.text?.includes('اختطاف')), 'the admin patrol submenu adds the kidnapping child');
+  start = calls.length;
+  await tap('t:kidnapping');
+  const gov = governorates.find((item) => item.ar === 'حلب') || governorates[0];
+  await tap(`g:${gov.code}`);
+  await tap(`wg:${gov.code}`);
+  await tap('skip');
+  assert.match(keyboardAfter(start).flat().map((button) => button.callback_data).join(' '), /publish/, 'the admin flow reaches its normal publish review screen without publishing');
+  assert.match([...calls.slice(start)].reverse().find(({ payload }) => payload?.text)?.payload.text || '', /اختطاف/, 'the admin draft retains the kidnapping label');
+  await tap('cancel');
   start = calls.length;
   await tap('mi');
   assert.deepEqual(callbacksOf(keyboardAfter(start)).filter((value) => value.startsWith('mi:')).sort(), ['mi:barrier', 'mi:soldiers', 'mi:vehicles'], 'incursion menu offers soldiers, vehicle counts, and a barrier subtype');
@@ -127,17 +143,24 @@ test('public report bot exposes every current category and sends a clashes repor
   const publicReporter = { id: 8270709635, is_bot: false, first_name: 'Local clash reporter', language_code: 'ar' };
   const currentUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const currentButtons = () => currentUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
-  const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
+  const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...BOT_ALERT_MENU_PATROL_CHILD_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
   assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).sort(), 'the public menu routes every alert type exactly once');
 
   let start = calls.length;
   await tap('home', publicReporter, reportBot);
   const topKeyboard = keyboardAfter(start);
   const top = callbacksOf(topKeyboard);
-  for (const callback of ['t:breaking', 't:political', 'ag:aerial', 'target', 'ag:strikes', 'mi', 't:patrol', 'ag:protests', 'cv', 'sm', 'ag:nature', 't:border']) {
+  for (const callback of ['t:breaking', 't:political', 't:signal_sweep', 'ag:aerial', 'target', 'ag:strikes', 'mi', 't:patrol', 'ag:protests', 'cv', 'sm', 'ag:nature', 't:border']) {
     assert.ok(top.includes(callback), `public main menu includes ${callback}`);
   }
   assert.ok(topKeyboard.flat().some((button) => button.callback_data === 'ag:protests' && button.text?.includes('مظاهرة')), 'public protest parent is labeled «مظاهرة»');
+  assert.equal(top.includes('t:kidnapping'), false, 'public kidnapping choice stays under the patrol button');
+  start = calls.length;
+  await tap('t:patrol', publicReporter, reportBot);
+  const patrolButtons = keyboardAfter(start).flat();
+  assert.ok(patrolButtons.some((button) => button.callback_data === 'pt:singular' && button.text?.includes('دورية واحدة')), 'public patrol menu preserves single patrol');
+  assert.ok(patrolButtons.some((button) => button.callback_data === 'pt:plural' && button.text?.includes('عدة دوريات')), 'public patrol menu preserves multiple patrols');
+  assert.ok(patrolButtons.some((button) => button.callback_data === 't:kidnapping' && button.text?.includes('اختطاف')), 'public patrol menu exposes kidnapping');
   start = calls.length;
   await tap('mi', publicReporter, reportBot);
   assert.deepEqual(callbacksOf(keyboardAfter(start)).filter((value) => value.startsWith('mi:')).sort(), ['mi:barrier', 'mi:soldiers', 'mi:vehicles'], 'public incursion menu offers the barrier subtype');
@@ -180,6 +203,107 @@ test('public report bot exposes every current category and sends a clashes repor
   assert.equal(pending.draft.mode, 'report');
   assert.equal(store.activeAlerts().length, activeBefore, 'a public report is not auto-published to the map');
   assert.equal(calls.slice(start).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'a public report is not posted to the channel before review');
+  t.after(async () => {
+    store.reportTake(rid);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  });
+});
+
+test('kidnapping child reports retain their type and wait for human review', async (t) => {
+  const kidnappingReporter = { id: 8270709644, is_bot: false, first_name: 'Local kidnapping reporter', language_code: 'ar' };
+  const reportIdsBefore = new Set(Object.keys(store.state.reports || {}));
+  const activeBefore = store.activeAlerts().length;
+  const start = calls.length;
+  const currentUi = () => [...calls.slice(start)].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
+  const currentButtons = () => currentUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+
+  await tap('home', kidnappingReporter, reportBot);
+  await tap('t:patrol', kidnappingReporter, reportBot);
+  assert.ok(currentButtons().some((button) => button.callback_data === 't:kidnapping' && button.text?.includes('اختطاف')), 'kidnapping is nested inside the patrol menu');
+  await tap('t:kidnapping', kidnappingReporter, reportBot);
+  const gov = governorates.find((item) => item.ar === 'حلب') || governorates[0];
+  await tap(`g:${gov.code}`, kidnappingReporter, reportBot);
+  await tap(`wg:${gov.code}`, kidnappingReporter, reportBot);
+  await tap('skip', kidnappingReporter, reportBot);
+  assert.match(currentUi()?.payload?.text || '', /اختطاف/, 'the preview retains the dedicated kidnapping label');
+  assert.ok(currentButtons().some((button) => button.callback_data === 'submit'), 'the public flow offers submission for review');
+  assert.equal(currentButtons().some((button) => button.callback_data === 'publish'), false, 'the public flow has no direct publish action');
+  await tap('submit', kidnappingReporter, reportBot);
+
+  const rid = Object.keys(store.state.reports || {}).find((id) => !reportIdsBefore.has(id));
+  assert.ok(rid, 'the synthetic kidnapping report is saved in the editor review queue');
+  const pending = store.reportGet(rid);
+  assert.equal(pending.draft.type, 'kidnapping');
+  assert.equal(pending.draft.mode, 'report');
+  const approvedBuild = buildAlertInput(pending.draft, pending.from);
+  assert.equal(approvedBuild.type, 'kidnapping');
+  assert.match(approvedBuild.title, /^اختطاف/);
+  assert.match(approvedBuild.title_en, /^Kidnapping/);
+  assert.equal(store.activeAlerts().length, activeBefore, 'submission does not publish to the map');
+  assert.equal(calls.slice(start).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'submission does not post to the channel before review');
+  t.after(async () => {
+    store.reportTake(rid);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  });
+});
+
+test('signal-sweep offers an optional drone marker and public submissions remain human-reviewed', async (t) => {
+  const signalReporter = { id: 8270709645, is_bot: false, first_name: 'Local signal reporter', language_code: 'ar' };
+  const adminStart = calls.length;
+  const adminUi = () => [...calls.slice(adminStart)].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
+  const adminButtons = () => adminUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+  const activeBefore = store.activeAlerts().length;
+
+  await tap('home', owner, bot);
+  assert.ok(adminButtons().some((button) => button.callback_data === 't:signal_sweep'), 'signal sweep is directly available in the admin menu');
+  await tap('t:signal_sweep', owner, bot);
+  assert.ok(adminButtons().some((button) => button.callback_data === 'ss:uav' && button.text?.includes('مسيّرة')), 'admin can choose the drone marker');
+  assert.ok(adminButtons().some((button) => button.callback_data === 'ss:none' && button.text?.includes('بدون تحديد')), 'admin can leave the platform unspecified');
+  await tap('ss:none', owner, bot);
+  const gov = governorates.find((item) => item.ar === 'حلب') || governorates[0];
+  await tap(`g:${gov.code}`, owner, bot);
+  await tap(`wg:${gov.code}`, owner, bot);
+  await tap('skip', owner, bot);
+  assert.match(adminUi()?.payload?.text || '', /رصد\/مسح الإشارة/, 'the admin preview keeps the distinct signal-sweep type');
+  assert.doesNotMatch(adminUi()?.payload?.text || '', /مسيّرة/, 'no drone is inferred when the admin leaves the platform unspecified');
+  assert.ok(adminButtons().some((button) => button.callback_data === 'publish'), 'the admin reaches the usual deliberate publish review step');
+  assert.equal(store.activeAlerts().length, activeBefore, 'opening the admin preview does not publish');
+  assert.equal(calls.slice(adminStart).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'the admin draft is not posted automatically');
+  await tap('cancel', owner, bot);
+
+  const reportIdsBefore = new Set(Object.keys(store.state.reports || {}));
+  const publicStart = calls.length;
+  const publicUi = () => [...calls.slice(publicStart)].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
+  const publicButtons = () => publicUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+  await tap('home', signalReporter, reportBot);
+  assert.ok(publicButtons().some((button) => button.callback_data === 't:signal_sweep'), 'signal sweep is directly available in the public-report menu');
+  await tap('t:signal_sweep', signalReporter, reportBot);
+  assert.ok(publicButtons().some((button) => button.callback_data === 'ss:uav' && button.text?.includes('مسيّرة')), 'public reporter can explicitly select a drone');
+  await tap('ss:uav', signalReporter, reportBot);
+  await tap(`g:${gov.code}`, signalReporter, reportBot);
+  await tap(`wg:${gov.code}`, signalReporter, reportBot);
+  await tap('skip', signalReporter, reportBot);
+  assert.match(publicUi()?.payload?.text || '', /رصد\/مسح الإشارة/, 'the public preview keeps the distinct event type');
+  assert.match(publicUi()?.payload?.text || '', /مسيّرة/, 'the drone label appears only after explicit selection');
+  assert.ok(publicButtons().some((button) => button.callback_data === 'submit'), 'the public flow submits for review');
+  assert.equal(publicButtons().some((button) => button.callback_data === 'publish'), false, 'the public flow never offers direct publishing');
+  await tap('submit', signalReporter, reportBot);
+
+  const rid = Object.keys(store.state.reports || {}).find((id) => !reportIdsBefore.has(id));
+  assert.ok(rid, 'the synthetic signal report is saved for review');
+  const pending = store.reportGet(rid);
+  assert.equal(pending.draft.type, 'signal_sweep');
+  assert.equal(pending.draft.mode, 'report');
+  assert.equal(pending.draft.signalPlatform, 'uav', 'the explicit platform choice reaches the pending report');
+  const approvedBuild = buildAlertInput(pending.draft, pending.from);
+  assert.equal(approvedBuild.type, 'signal_sweep');
+  assert.equal(approvedBuild.meta?.signalPlatform, 'uav');
+  assert.match(approvedBuild.title, /مسيّرة/);
+  assert.equal(publicAlert(approvedBuild).signal_platform, 'uav', 'only the selected platform is exposed to map clients');
+  const unspecifiedBuild = buildAlertInput({ type: 'signal_sweep', location: { scope: 'country' }, extra: [], ttlMin: 60 }, { id: ownerId, name: 'test' });
+  assert.equal(unspecifiedBuild.meta, undefined, 'an unspecified signal report stores no inferred platform');
+  assert.equal(store.activeAlerts().length, activeBefore, 'submission does not publish to the map');
+  assert.equal(calls.slice(publicStart).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'submission does not post to the channel before review');
   t.after(async () => {
     store.reportTake(rid);
     await new Promise((resolve) => setTimeout(resolve, 350));
@@ -309,6 +433,13 @@ test('news-monitor type editor covers every bot alert type while settings stay m
   assert.equal(newsState().drafts[id].type, 'helicopter', 'the selected button stores the exact category key on the local test draft');
   await tap(`nw:s:${id}:patrol`);
   assert.equal(newsState().drafts[id].type, 'patrol', 'patrol is a direct bot category in the editor');
+  start = calls.length;
+  await tap(`nw:s:${id}:signal_sweep`);
+  const signalDraft = newsState().drafts[id];
+  assert.equal(signalDraft.type, 'signal_sweep', 'the editor can reclassify a draft as signal sweep');
+  assert.equal(signalDraft.status, 'pending', 'signal-sweep reclassification remains in human review');
+  assert.equal(NEWS_TYPES.includes('signal_sweep'), false, 'signal-sweep never enters automatic news classification');
+  assert.equal(calls.slice(start).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'signal-sweep reclassification never posts automatically');
   start = calls.length;
   await tap(`nw:tg:${id}:incursion`);
   await tap(`nw:si:${id}:barrier`);
@@ -876,7 +1007,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   addedAlertIds.push(...newAlerts.map((alert) => alert.id));
   assert.equal(newAlerts.length, 1, 'the repeated approval must not create another map alert');
   assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, 1, 'the repeated approval must not post to the channel twice');
-  assert.ok(calls.every((call) => !call.chatId || [ownerId, reporter.id, 8270709635, 8270709638, 8270709639, process.env.CHANNEL_ID].includes(call.chatId)), 'all Telegram API calls are intercepted locally');
+  assert.ok(calls.every((call) => !call.chatId || [ownerId, reporter.id, 8270709635, 8270709638, 8270709639, 8270709644, 8270709645, process.env.CHANNEL_ID].includes(call.chatId)), 'all Telegram API calls are intercepted locally');
 });
 
 test('clashes channel posts keep the dedicated label instead of the generic attack label', () => {

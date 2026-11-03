@@ -252,4 +252,6 @@ export const TITLES = {
   border: { ar: 'تنبيه حدودي', en: 'Border alert' },
   military_incursion: { ar: 'توغل عسكري', en: 'Military incursion' },
   patrol: { ar: 'دورية', en: 'Patrol' },
+  kidnapping: { ar: 'اختطاف', en: 'Kidnapping' },
+  signal_sweep: { ar: 'رصد/مسح الإشارة', en: 'Signal sweep' },
 };

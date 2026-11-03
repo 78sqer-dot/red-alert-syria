@@ -53,7 +53,8 @@ export const BOT_ALERT_MENU_GROUPS = Object.freeze({
   smuggling: Object.freeze([...ALERT_GROUPS.smuggling.types]),
   nature: Object.freeze([...ALERT_GROUPS.nature.types]),
 });
-export const BOT_ALERT_MENU_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'military_incursion', 'patrol']);
+export const BOT_ALERT_MENU_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'military_incursion', 'patrol', 'signal_sweep']);
+export const BOT_ALERT_MENU_PATROL_CHILD_TYPES = Object.freeze(['kidnapping']);
 const REPORT_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', protests: '📢', civil: '🛡️', smuggling: '🚚', nature: '🌦️' });
 function reportGroupLabel(group, lang) {
   const value = group === 'targeting' ? { ar: 'استهداف', en: 'Targeting' } : group === 'protests' ? { ar: 'مظاهرة', en: 'Protest & demonstration' } : ALERT_GROUPS[group];
@@ -153,6 +154,8 @@ const draftTypeLabel = (d, lang) => d?.type === 'airstrike' && d.airstrikeForm
   ? `${typeOf('airstrike').emoji} ${d.airstrikeForm === 'plural' ? (lang === 'en' ? 'Airstrikes' : 'غارات جوية') : (lang === 'en' ? 'Airstrike' : 'غارة جوية')}`
   : d?.type === 'patrol' && d.patrolForm
     ? (d.patrolForm === 'plural' ? (lang === 'en' ? 'Patrols' : 'دوريات') : (lang === 'en' ? 'Patrol' : 'دورية'))
+    : d?.type === 'signal_sweep' && d.signalPlatform === 'uav'
+      ? (lang === 'en' ? '📡 Signal sweep by drone' : '📡 رصد/مسح الإشارة بمسيّرة')
     : d?.type === 'military_incursion' && d.incursionKind === 'soldiers'
       ? (lang === 'en' ? 'Military soldier incursion' : 'توغل جنود')
     : d?.type === 'military_incursion' && d.incursionKind === 'vehicles'
@@ -258,6 +261,7 @@ export function channelPost(alert, { ended = false } = {}) {
   }
   if (alert.type === 'quake') { const m = alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1]); if (Number.isFinite(m)) title = `زلزال بقوة ${m.toFixed(1)}`; }
   if (alert.type === 'military_incursion' && Number.isInteger(alert.meta?.vehicleCount)) title += ` — ${vehicleCountPhrase(alert.meta.vehicleCount, 'ar')}`;
+  if (alert.type === 'signal_sweep' && alert.meta?.signalPlatform === 'uav') title += ' — مسيّرة';
   const p = alert.place || {};
   const hasPlace = p.scope && p.scope !== 'country';
   const versioned = alert.channel_format === 2;
@@ -410,6 +414,7 @@ function mainKeyboard(ctx) {
     { group: 'strikes', callback: 'ag:strikes' },
     { type: 'military_incursion', callback: 'mi' },
     { type: 'patrol', callback: 't:patrol' },
+    { type: 'signal_sweep', callback: 't:signal_sweep' },
     { group: 'protests', callback: 'ag:protests' },
     { group: 'civil', callback: 'cv' },
     { group: 'smuggling', callback: 'sm' },
@@ -605,7 +610,7 @@ function newDraft(ctx, type) {
   const d = {
     type,
     mode: staff(ctx) ? 'publish' : 'report',
-    step: type === 'political' ? 'political_category' : type === 'military_incursion' ? 'incursion_kind' : type === 'patrol' ? 'patrol_form' : type === 'breaking' ? 'text' : type === 'border' ? 'border' : type === 'air_movement' ? 'aircraft' : ['uav', 'warplane'].includes(type) ? 'flightmode' : 'gov',
+    step: type === 'political' ? 'political_category' : type === 'military_incursion' ? 'incursion_kind' : type === 'patrol' ? 'patrol_form' : type === 'signal_sweep' ? 'signal_platform' : type === 'breaking' ? 'text' : type === 'border' ? 'border' : type === 'air_movement' ? 'aircraft' : ['uav', 'warplane'].includes(type) ? 'flightmode' : 'gov',
     ttlMin: typeOf(type).ttlMin,
     location: null,
     extra: [], // further areas of the same alert (publishing bot)
@@ -662,8 +667,18 @@ async function askPatrolForm(ctx, d) {
   const kb = new InlineKeyboard()
     .text(en ? 'Single patrol' : 'دورية واحدة', 'pt:singular')
     .text(en ? 'Multiple patrols' : 'عدة دوريات', 'pt:plural').row()
+    .text(alertButtonLabel('kidnapping', en ? 'en' : 'ar'), 't:kidnapping').row()
     .text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en ? 'Choose the patrol count:' : 'اختر عدد الدوريات:', kb);
+}
+async function askSignalPlatform(ctx, d) {
+  d.step = 'signal_platform';
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard()
+    .text(en ? '🛩️ Drone' : '🛩️ مسيّرة', 'ss:uav').row()
+    .text(en ? 'No platform specified' : 'بدون تحديد وسيلة الرصد', 'ss:none').row()
+    .text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en ? '📡 Signal sweep: choose the reported platform, or leave it unspecified.' : '📡 رصد/مسح الإشارة: اختر الوسيلة المذكورة في البلاغ، أو اتركها بلا تحديد.', kb);
 }
 async function askVehicleCountInput(ctx, d) {
   d.step = 'vehicle_count_input';
@@ -824,6 +839,7 @@ export function buildAlertInput(d, author) {
     ? (d.incursionKind === 'vehicles' || Number.isInteger(d.vehicleCount) ? 'vehicles' : ['soldiers', 'barrier'].includes(d.incursionKind) ? d.incursionKind : null)
     : null;
   const patrolForm = d.type === 'patrol' ? (d.patrolForm === 'plural' ? 'plural' : 'singular') : null;
+  const signalPlatform = d.type === 'signal_sweep' && d.signalPlatform === 'uav' ? 'uav' : null;
   const titles = d.type === 'airstrike' && d.airstrikeForm === 'plural'
     ? { ar: 'غارات جوية', en: 'Airstrikes' }
     : d.type === 'patrol'
@@ -872,8 +888,8 @@ export function buildAlertInput(d, author) {
     : wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
   return {
     type: d.type,
-    title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}`,
-    title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}`,
+    title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}${signalPlatform ? ' — مسيّرة' : ''}`,
+    title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
     extra,
     description: cleanAlertText(d.type === 'breaking' ? d.text : d.details),
     location: loc,
@@ -881,7 +897,7 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || civilEmoji || vehicleCount || incursionKind || patrolForm || politicalMeta || monitoredSources.length ? {
+    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || politicalMeta || monitoredSources.length ? {
       meta: {
         ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
@@ -892,6 +908,7 @@ export function buildAlertInput(d, author) {
         ...(vehicleCount ? { vehicleCount } : {}),
         ...(incursionKind ? { incursionKind } : {}),
         ...(patrolForm ? { patrolForm } : {}),
+        ...(signalPlatform ? { signalPlatform } : {}),
         ...(politicalMeta ? { political: politicalMeta } : {}),
         ...(monitoredSources.length ? { newsSources: monitoredSources } : {}),
       },
@@ -1751,6 +1768,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await askMilitaryIncursionKind(ctx, d);
     } else if (type === 'patrol') {
       await askPatrolForm(ctx, d);
+    } else if (type === 'signal_sweep') {
+      await askSignalPlatform(ctx, d);
     } else if (type === 'border') await askBorder(ctx, d);
     else if (type === 'air_movement') await askFlightAircraft(ctx, d);
     else if (type === 'civil') await askCivilEmoji(ctx, d);
@@ -1830,6 +1849,13 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery(/^pt:(singular|plural)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'patrol') return;
     d.patrolForm = ctx.match[1];
+    await askLocation(ctx, d);
+  }));
+
+  bot.callbackQuery(/^ss:(uav|none)$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'signal_sweep' || d.step !== 'signal_platform') return;
+    if (ctx.match[1] === 'uav') d.signalPlatform = 'uav';
+    else delete d.signalPlatform;
     await askLocation(ctx, d);
   }));
 

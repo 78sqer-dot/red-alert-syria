@@ -80,7 +80,7 @@ export const ICONS = {
   grave: { filled: false, body: "<path d=\"M4 21h16M6 21V11a6 6 0 0 1 12 0v10M9 15h6m-6 3h6\"/>" },
   dove: { filled: false, body: "<path d=\"M3 15c5-2 7-6 8-11 2 2 4 3 6 3 2 0 3-1 5-2-1 4-3 6-6 7 3 1 5 0 7-1-2 5-6 8-12 8-3 0-5-1-7-3l-2 1 1-2z\"/><path d=\"m10 13 4 2\"/>" },
   fists: { filled: false, body: "<path d=\"M3 13V9a2 2 0 0 1 4 0V6a2 2 0 0 1 4 0v3a2 2 0 0 1 4 0v2a2 2 0 0 1 4 1v4a4 4 0 0 1-4 4H9a6 6 0 0 1-6-6z\"/><path d=\"M7 10v3m4-3v3m4-2v2\"/>" },
-  gunfire: { filled: false, body: "<path d=\"M3 9h13l3-2h3v4h2v4h-2v2h-5l-3-2H3z\"/><path d=\"M8 15v5h4l2-5M2 4l3 2m-3 9 3-2\"/>" },
+  gunfire: { filled: false, body: "<path d=\"M3 9h5l5-4v14l-5-4H3z\"/><path d=\"M16 9a5 5 0 0 1 0 6m3-9a9 9 0 0 1 0 12\"/>" },
   tank: { filled: false, body: "<path d=\"M3 14h18v4H3zM6 14l2-5h7l3 5m-9-5V6h6l2 3m-3-3h7v2h-7\"/><circle cx=\"7\" cy=\"18\" r=\"1\"/><circle cx=\"17\" cy=\"18\" r=\"1\"/>" },
   packageBomb: { filled: false, body: "<path d=\"m3 7 9-4 9 4v11l-9 3-9-3z\"/><path d=\"m3 7 9 4 9-4M12 11v10m4-15 2-3 3 1\"/><circle cx=\"17\" cy=\"15\" r=\"2\"/>" },
 };

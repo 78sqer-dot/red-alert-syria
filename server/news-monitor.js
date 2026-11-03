@@ -25,7 +25,7 @@ import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
 
 const NEWS_GROUP_PRIORITY = ['aerial', 'strikes', 'civil', 'smuggling', 'political', 'nature', 'other'];
-const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
+const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', patrol: '🚓', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
 const NEWS_TYPE_GROUPS = Object.freeze(Object.fromEntries(
   [...new Set(NEWS_TYPES.map((type) => ALERT_TYPES[type]?.group || 'other'))]
     .map((group) => [group, Object.freeze(NEWS_TYPES.filter((type) => (ALERT_TYPES[type]?.group || 'other') === group))]),
@@ -37,16 +37,17 @@ const EDIT_TYPE_GROUPS = Object.freeze({
   targeting: Object.freeze(['uav_strike', 'assassination']),
   strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination')),
   incursion: Object.freeze(['military_incursion']),
+  patrol: Object.freeze(['patrol', 'kidnapping']),
   protests: Object.freeze(['protest_action', 'protest']),
   civil: Object.freeze(ALERT_GROUPS.civil.types.filter((type) => type !== 'protest' && type !== 'protest_action')),
   smuggling: Object.freeze([...ALERT_GROUPS.smuggling.types]),
   nature: Object.freeze([...ALERT_GROUPS.nature.types]),
 });
-const EDIT_TYPE_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'patrol', 'border']);
+const EDIT_TYPE_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'signal_sweep']);
 const EDIT_TYPE_MENU = Object.freeze([
   { type: 'breaking' }, { type: 'political' }, { group: 'aerial' }, { group: 'targeting' },
-  { group: 'strikes' }, { group: 'incursion' }, { type: 'patrol' }, { group: 'protests' },
-  { group: 'civil' }, { group: 'smuggling' }, { group: 'nature' }, { type: 'border' },
+  { group: 'strikes' }, { group: 'incursion' }, { group: 'patrol' }, { group: 'protests' },
+  { group: 'civil' }, { group: 'smuggling' }, { group: 'nature' }, { type: 'border' }, { type: 'signal_sweep' },
 ]);
 const INCURSION_TYPE_CHOICES = Object.freeze([
   Object.freeze({ kind: 'general', ar: 'توغل عسكري', en: 'Military incursion' }),
@@ -65,6 +66,8 @@ function newsGroupLabel(group, lang = 'ar') {
       ? (lang === 'en' ? 'Targeting' : 'استهداف')
       : group === 'protests'
         ? (lang === 'en' ? 'Protest & demonstration' : 'مظاهرة')
+        : group === 'patrol'
+          ? (lang === 'en' ? 'Patrol' : 'دورية')
         : group === 'other'
     ? (lang === 'en' ? 'Urgent alerts' : 'أخبار عاجلة')
     : (lang === 'en' ? (ALERT_GROUPS[group]?.en || group).replace(/\s*&\s*/g, ' and ') : ALERT_GROUPS[group]?.ar || group);
@@ -335,7 +338,7 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol'].includes(d.type)) return false;
+  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
   if (d.type === 'political') {
     const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
     if (!POLITICAL_CATEGORIES[d.politicalCategory] || d.politicalNeedsCategory || !Number.isFinite(d.created) || !Number.isFinite(activatedAt) || d.created <= activatedAt) return false;
