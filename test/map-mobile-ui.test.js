@@ -47,7 +47,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=65'/);
-  assert.match(html, /app\.css\?v=48/);
+  assert.match(html, /app\.css\?v=49/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
@@ -66,6 +66,8 @@ test('alert symbols use shared category colors in badges, filters and map marker
   assert.match(app, /eventVisual\(t\)\.color/);
   assert.match(css, /\.badge svg \{ color: var\(--symbol-color, currentColor\)/);
   assert.match(map, /eventVisual\(a\.type\)/);
+  assert.doesNotMatch(app, /HAZARD_EMOJI\[a\.hazard\]/);
+  assert.match(css, /background: color-mix\(in srgb, var\(--c\) 4%, var\(--bg-card\)\)/);
 });
 
 test('tapping an individual map symbol zooms to its alert and opens details on phones', () => {

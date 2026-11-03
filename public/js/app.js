@@ -1,6 +1,6 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=21';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=37';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=37';
 import { DICT } from './i18n.js?v=3';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=5';
@@ -235,12 +235,12 @@ setInterval(updateConnAge, 15_000);
 // ------------------------------------------------------------------ list & detail
 function badge(a, live = false) {
   const t = typeOf(a.type);
-  return `<span class="badge${live ? ' live' : ''}" style="--c:${t.color};--symbol-color:${eventVisual(a.type).color}">${a.type === 'weather' && HAZARD_EMOJI[a.hazard] ? `<span class="bemo" aria-hidden="true">${HAZARD_EMOJI[a.hazard]}</span>` : icon(typeIcon(a.type), 13)}${esc(typeName(a.type))}</span>`;
+  return `<span class="badge${live ? ' live' : ''}" style="--c:${eventVisual(a.type).color};--symbol-color:${eventVisual(a.type).color}">${icon(typeIcon(a.type), 13)}${esc(typeName(a.type))}</span>`;
 }
 function cardHtml(a, fresh) {
   const t = typeOf(a.type);
   const hasLoc = a.location && Number.isFinite(a.location.latitude);
-  return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}${isNear(a) ? ' near' : ''}" data-id="${esc(a.id)}" style="--c:${t.color}" tabindex="0">
+  return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}${isNear(a) ? ' near' : ''}" data-id="${esc(a.id)}" style="--c:${eventVisual(a.type).color}" tabindex="0">
     <div class="card-top">${badge(a)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <h3 class="card-title">${esc(titleOf(a))}</h3>
     ${distChip(a)}
@@ -312,7 +312,7 @@ function detailHtml(a) {
     [LANG === 'ar' ? 'حالة المصدر' : 'Source status', `<span class="verify-pill ${esc(a.verification?.status || 'unverified')}">${esc(verificationLabel)}</span>`],
     live ? [T.expires, a.expires_at ? esc(fmtTime.format(new Date(a.expires_at))) : T.noExpiry] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at || a.timestamp)))],
   ];
-  return `<div class="d-card" style="--c:${t.color}">
+  return `<div class="d-card" style="--c:${eventVisual(a.type).color}">
       <div class="card-top">${badge(a, live)}<span class="time">${timeLine(a.timestamp)}</span></div>
       <h3 class="card-title">${esc(titleOf(a))}</h3>
       ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}

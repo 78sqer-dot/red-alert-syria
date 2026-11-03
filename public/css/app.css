@@ -126,7 +126,7 @@ html.dark .report-btn { color: #fff; }
 .sheet-handle { display: none; }
 
 /* alert card */
-.card { flex-shrink: 0; content-visibility: auto; contain-intrinsic-size: auto 150px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius); padding: 12px 12px 10px; cursor: pointer; position: relative; transition: background .15s, border-color .15s, box-shadow .15s, transform .15s; box-shadow: var(--shadow-sm); overflow: hidden; }
+.card { flex-shrink: 0; content-visibility: auto; contain-intrinsic-size: auto 150px; background: color-mix(in srgb, var(--c) 4%, var(--bg-card)); border: 1px solid color-mix(in srgb, var(--c) 16%, var(--border-subtle)); border-radius: var(--radius); padding: 12px 12px 10px; cursor: pointer; position: relative; transition: background .15s, border-color .15s, box-shadow .15s, transform .15s; box-shadow: var(--shadow-sm); overflow: hidden; }
 .alert-skeletons { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
 .card-skeleton { min-height: 122px; padding: 14px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--bg-card); box-shadow: var(--shadow-sm); overflow: hidden; }
 .card-skeleton i, .card-skeleton b, .card-skeleton span { display: block; position: relative; overflow: hidden; border-radius: 6px; background: var(--bg-subtle); }
@@ -137,7 +137,7 @@ html.dark .report-btn { color: #fff; }
 .card-skeleton i::after, .card-skeleton b::after, .card-skeleton span::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bg-card-hover) 75%, transparent), transparent); animation: skeletonShimmer 1.25s ease-in-out infinite; }
 @keyframes skeletonShimmer { to { transform: translateX(100%); } }
 .card::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; width: 3px; background: var(--c); opacity: .9; }
-.card:hover { background: var(--bg-card-hover); }
+.card:hover { background: color-mix(in srgb, var(--c) 7%, var(--bg-card-hover)); }
 .card.sel { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
 .card.inactive { opacity: .62; }
 .card.inactive::before { background: var(--text-muted); }
