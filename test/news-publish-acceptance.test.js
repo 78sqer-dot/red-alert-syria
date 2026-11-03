@@ -620,8 +620,10 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const politicalAlert = store.addAlert(attributedInput);
   addedAlertIds.push(politicalAlert.id);
   const politicalPost = channelPost(politicalAlert);
-  assert.match(politicalPost, /موقع غير محدد — دون دبوس/);
+  assert.match(politicalPost, /📍 <b>الموقع:<\/b> غير محدد — دون دبوس/);
   assert.match(politicalPost, /الفئة:<\/b> مفاوضات أو اتفاق/);
+  assert.match(politicalPost, /📅 <b>التاريخ:<\/b>/);
+  assert.match(politicalPost, /🕒 <b>الوقت:<\/b>/);
   assert.doesNotMatch(politicalPost, /🔎 <b>المصدر:<\/b>|&lt;Official source&gt;|تاريخ المصدر/, 'political source names and citations stay out of public channel posts');
   assert.doesNotMatch(politicalPost, /<a\b|href=/, 'political source is plain text with no clickable link');
   assert.match(politicalPost, /منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل/);

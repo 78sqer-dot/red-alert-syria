@@ -271,7 +271,7 @@ export function channelPost(alert, { ended = false } = {}) {
   const desc = cleanAlertText(alert.description || '');
   if (alert.type === 'breaking') sections.push(`<b>${esc(desc || alert.title)}</b>`);
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
-  else if (alert.type === 'political') sections.push('📍<b>موقع غير محدد — دون دبوس</b>');
+  else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (alert.type !== 'breaking' && desc) sections.push(`<blockquote>${esc(desc)}</blockquote>`);
   if (alert.type === 'political') {
     const meta = alert.meta?.political || {};
@@ -286,8 +286,13 @@ export function channelPost(alert, { ended = false } = {}) {
       sections.push(`🔎 <b>المصدر:</b> ${esc(clean(source.name, 120) || 'مصدر إخباري')}`);
     }
   }
-  sections.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
-  sections.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
+  if (alert.type === 'political') {
+    sections.push(`📅 <b>التاريخ:</b> ${esc(fmtDate(alert.timestamp))}`);
+    sections.push(`🕒 <b>الوقت:</b> ${esc(fmtClock(alert.timestamp))}`);
+  } else {
+    sections.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
+    sections.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
+  }
   if (ended) sections.push(`انتهى :  ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
   return sections.join('\n\n');
 }
