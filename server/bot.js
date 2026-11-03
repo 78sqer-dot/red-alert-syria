@@ -48,14 +48,15 @@ export const BOT_ALERT_MENU_GROUPS = Object.freeze({
   aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => type !== 'uav_strike')),
   targeting: Object.freeze(['uav_strike', 'assassination']),
   strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination')),
-  civil: Object.freeze([...ALERT_GROUPS.civil.types]),
+  protests: Object.freeze(['protest_action', 'protest']),
+  civil: Object.freeze(ALERT_GROUPS.civil.types.filter((type) => type !== 'protest' && type !== 'protest_action')),
   smuggling: Object.freeze([...ALERT_GROUPS.smuggling.types]),
   nature: Object.freeze([...ALERT_GROUPS.nature.types]),
 });
 export const BOT_ALERT_MENU_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'military_incursion', 'patrol']);
-const REPORT_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', civil: '🛡️', smuggling: '🚚', nature: '🌦️' });
+const REPORT_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', protests: '📢', civil: '🛡️', smuggling: '🚚', nature: '🌦️' });
 function reportGroupLabel(group, lang) {
-  const value = group === 'targeting' ? { ar: 'استهداف', en: 'Targeting' } : ALERT_GROUPS[group];
+  const value = group === 'targeting' ? { ar: 'استهداف', en: 'Targeting' } : group === 'protests' ? { ar: 'مظاهرة', en: 'Protest & demonstration' } : ALERT_GROUPS[group];
   if (!value) return group;
   return `${REPORT_GROUP_EMOJI[group] || '🏷️'} ${lang === 'en' ? value.en : value.ar}`;
 }
@@ -154,8 +155,10 @@ const draftTypeLabel = (d, lang) => d?.type === 'airstrike' && d.airstrikeForm
     ? (d.patrolForm === 'plural' ? (lang === 'en' ? 'Patrols' : 'دوريات') : (lang === 'en' ? 'Patrol' : 'دورية'))
     : d?.type === 'military_incursion' && d.incursionKind === 'soldiers'
       ? (lang === 'en' ? 'Military soldier incursion' : 'توغل جنود')
-      : d?.type === 'military_incursion' && d.incursionKind === 'vehicles'
-        ? (lang === 'en' ? 'Military vehicle incursion' : 'توغل آليات عسكرية')
+    : d?.type === 'military_incursion' && d.incursionKind === 'vehicles'
+      ? (lang === 'en' ? 'Military vehicle incursion' : 'توغل آليات عسكرية')
+      : d?.type === 'military_incursion' && d.incursionKind === 'barrier'
+        ? (lang === 'en' ? 'Military checkpoint' : 'حاجز عسكري')
         : typeLabel(d?.type, lang);
 const mapUrl = (id, lang = 'ar') => (config.publicUrl ? `${config.publicUrl}/${lang}/${id ? '#' + id : ''}` : '');
 
@@ -244,7 +247,7 @@ export function channelPost(alert, { ended = false } = {}) {
   let title = alert.meta?.channelTitle || (TITLES[alert.type] || {}).ar || t.ar;
   if (alert.type === 'military_incursion') {
     const kind = alert.meta?.incursionKind || (Number.isInteger(alert.meta?.vehicleCount) ? 'vehicles' : null);
-    title = kind === 'soldiers' ? 'توغل جنود' : kind === 'vehicles' ? 'توغل آليات عسكرية' : 'توغل عسكري';
+    title = kind === 'barrier' ? 'حاجز عسكري' : kind === 'soldiers' ? 'توغل جنود' : kind === 'vehicles' ? 'توغل آليات عسكرية' : 'توغل عسكري';
   }
   if (alert.type === 'patrol') title = alert.meta?.patrolForm === 'plural' ? 'دوريات' : 'دورية';
   if (alert.place?.head_ar) title = alert.place.head_ar;
@@ -407,6 +410,7 @@ function mainKeyboard(ctx) {
     { group: 'strikes', callback: 'ag:strikes' },
     { type: 'military_incursion', callback: 'mi' },
     { type: 'patrol', callback: 't:patrol' },
+    { group: 'protests', callback: 'ag:protests' },
     { group: 'civil', callback: 'cv' },
     { group: 'smuggling', callback: 'sm' },
     { group: 'nature', callback: 'ag:nature' },
@@ -648,6 +652,7 @@ async function askMilitaryIncursionKind(ctx, d) {
   const kb = new InlineKeyboard()
     .text(en ? '🪖 Soldiers' : '🪖 جنود', 'mi:soldiers')
     .text(en ? '🚙 Military vehicles' : '🚙 آليات عسكرية', 'mi:vehicles').row()
+    .text(en ? '🚧 Military checkpoint' : '🚧 حاجز', 'mi:barrier').row()
     .text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en ? 'Choose what the military incursion consists of:' : 'اختر ما يتكوّن منه التوغل العسكري:', kb);
 }
@@ -816,7 +821,7 @@ async function showPreview(ctx, d) {
 
 export function buildAlertInput(d, author) {
   const incursionKind = d.type === 'military_incursion'
-    ? (d.incursionKind === 'vehicles' || Number.isInteger(d.vehicleCount) ? 'vehicles' : d.incursionKind === 'soldiers' ? 'soldiers' : null)
+    ? (d.incursionKind === 'vehicles' || Number.isInteger(d.vehicleCount) ? 'vehicles' : ['soldiers', 'barrier'].includes(d.incursionKind) ? d.incursionKind : null)
     : null;
   const patrolForm = d.type === 'patrol' ? (d.patrolForm === 'plural' ? 'plural' : 'singular') : null;
   const titles = d.type === 'airstrike' && d.airstrikeForm === 'plural'
@@ -825,8 +830,10 @@ export function buildAlertInput(d, author) {
       ? (patrolForm === 'plural' ? { ar: 'دوريات', en: 'Patrols' } : { ar: 'دورية', en: 'Patrol' })
       : d.type === 'military_incursion' && incursionKind === 'soldiers'
         ? { ar: 'توغل جنود', en: 'Soldier incursion' }
-        : d.type === 'military_incursion' && incursionKind === 'vehicles'
-          ? { ar: 'توغل آليات عسكرية', en: 'Military vehicle incursion' }
+      : d.type === 'military_incursion' && incursionKind === 'vehicles'
+        ? { ar: 'توغل آليات عسكرية', en: 'Military vehicle incursion' }
+        : d.type === 'military_incursion' && incursionKind === 'barrier'
+          ? { ar: 'حاجز عسكري', en: 'Military checkpoint' }
           : d.type === 'military_incursion'
             ? { ar: 'توغل عسكري', en: 'Military incursion' }
     : TITLES[d.type] || { ar: typeOf(d.type).ar, en: typeOf(d.type).en };
@@ -1659,7 +1666,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const lang = langOf(ctx);
     await show(ctx, L(ctx).askTarget, reportGroupKeyboard('targeting', lang));
   });
-  bot.callbackQuery(/^ag:(aerial|strikes|nature)$/, async (ctx) => {
+  bot.callbackQuery(/^ag:(aerial|strikes|nature|protests)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     const group = ctx.match[1];
     const lang = langOf(ctx);
@@ -1667,6 +1674,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       aerial: { ar: 'اختر نوع النشاط الجوي:', en: 'Choose the aerial activity type:' },
       strikes: { ar: 'اختر نوع الهجوم أو القصف:', en: 'Choose the attack or shelling type:' },
       nature: { ar: 'اختر نوع تنبيه الزلازل أو الطقس:', en: 'Choose the earthquake or weather alert type:' },
+      protests: { ar: 'اختر بين الاحتجاج والمظاهرة:', en: 'Choose protest or demonstration:' },
     }[group];
     await show(ctx, lang === 'en' ? prompt.en : prompt.ar, reportGroupKeyboard(group, lang));
   });
@@ -1759,15 +1767,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const en = langOf(ctx) === 'en';
     await show(ctx, en ? 'Choose the smuggling alert type:' : 'اختر نوع التهريب:', reportGroupKeyboard('smuggling', en ? 'en' : 'ar'));
   });
-  bot.callbackQuery(/^mi:(soldiers|general|vehicles)$/, async (ctx) => {
+  bot.callbackQuery(/^mi:(soldiers|general|vehicles|barrier)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     if (!staff(ctx)) {
       if (store.isBanned(ctx.from.id)) return show(ctx, L(ctx).banned, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
       if (Date.now() - (lastReport.get(ctx.from.id) || 0) < REPORT_COOLDOWN_MS) return show(ctx, L(ctx).reportRate, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
     }
     const d = newDraft(ctx, 'military_incursion');
-    if (ctx.match[1] === 'soldiers' || ctx.match[1] === 'general') {
-      d.incursionKind = 'soldiers';
+    if (ctx.match[1] === 'soldiers' || ctx.match[1] === 'general' || ctx.match[1] === 'barrier') {
+      d.incursionKind = ctx.match[1] === 'barrier' ? 'barrier' : 'soldiers';
       d.step = 'gov';
       return askLocation(ctx, d);
     }

@@ -115,7 +115,7 @@ test('border alert type is available in the map type filter', () => {
   assert.equal(ALERT_TYPES.border.button_ar, 'الحدود');
 });
 
-test('military vehicle incursion has a vehicle marker and stays manual-only', () => {
+test('military incursion subtypes have distinct markers and remain manual-only', () => {
   const type = ALERT_TYPES.military_incursion;
   assert.ok(TYPE_KEYS.includes('military_incursion'));
   assert.equal(TYPE_KEYS.includes('military_incursion_general'), false, 'the general submenu reuses the historical type instead of adding a migrated type');
@@ -125,6 +125,7 @@ test('military vehicle incursion has a vehicle marker and stays manual-only', ()
   assert.equal(type.marker, 'icon');
   assert.equal(type.glyph, 'military_vehicle');
   assert.match(EXTRA_SVG.military_vehicle, /M56 300/);
+  assert.match(EXTRA_SVG.military_barrier, /M64 178/);
   assert.equal(type.zone, 'dashed');
   assert.equal(type.color, '#71834a');
   assert.equal(typeIcon('military_incursion'), 'militaryVehicle');
@@ -132,6 +133,10 @@ test('military vehicle incursion has a vehicle marker and stays manual-only', ()
   assert.match(typeIconsSource, /military_incursion: 'militaryVehicle'/);
   assert.match(markerSvg('military_incursion', 100, 100, 1, null, { type: 'military_incursion', meta: { incursionKind: 'soldiers' } }), /M82 430/);
   assert.match(markerSvg('military_incursion', 100, 100, 1, null, { type: 'military_incursion', meta: { incursionKind: 'vehicles' } }), /M56 300/);
+  assert.match(markerSvg('military_incursion', 100, 100, 1, null, { type: 'military_incursion', meta: { incursionKind: 'barrier' } }), /military_barrier|M64 178/);
+  assert.match(mapSource, /incursion_kind/);
+  assert.match(mapSource, /military_barrier/);
+  assert.match(alertImageSource, /incursionKind === 'barrier'/);
   assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'vehicle incursion is not automatically classified from news');
 });
 

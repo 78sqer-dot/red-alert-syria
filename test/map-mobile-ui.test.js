@@ -44,7 +44,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=59'/);
+  assert.match(app, /from '\.\/map\.js\?v=61'/);
 });
 
 test('tapping an individual map symbol zooms to its alert and opens details on phones', () => {

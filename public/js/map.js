@@ -1,10 +1,10 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=34';
-import { SVG } from './marker-svgs.js?v=18';
-import { EXTRA_SVG } from './target-svgs.js?v=13';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=35';
+import { SVG } from './marker-svgs.js?v=19';
+import { EXTRA_SVG } from './target-svgs.js?v=14';
 import { icon } from './icons.js?v=4';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
-import { typeIcon } from './type-icons.js?v=3';
+import { typeIcon } from './type-icons.js?v=4';
 import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=1';
@@ -735,7 +735,7 @@ export class AlertMap {
       if (movementTrackIds.has(a.id) || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       seen.add(a.id);
       let m = this.markers.get(a.id);
-      const sig = `${a.type}|${a.is_active}|${a.marker_glyph || ''}|${a.meta?.incursionKind || ''}|${a.meta?.vehicleCount || ''}|${a.meta?.patrolForm || ''}`;
+      const sig = `${a.type}|${a.is_active}|${a.marker_glyph || ''}|${a.meta?.incursionKind || a.incursion_kind || ''}|${a.meta?.vehicleCount || a.vehicle_count || ''}|${a.meta?.patrolForm || ''}`;
       if (m && m._sig !== sig) {
         m.remove();
         this.markers.delete(a.id);
@@ -817,9 +817,10 @@ export class AlertMap {
   markerEl(a) {
     const t = typeOf(a.type);
     const visual = eventVisual(a.type);
+    const incursionKind = a.meta?.incursionKind || a.incursion_kind || (Number.isInteger(a.meta?.vehicleCount) || Number.isInteger(a.vehicle_count) ? 'vehicles' : null);
     const glyph = a.type === 'assassination' ? assassinationWeaponGlyph(a)
       : a.type === 'shooting' ? shootingWeaponGlyph(a)
-        : a.type === 'military_incursion' ? ((a.meta?.incursionKind || (Number.isInteger(a.meta?.vehicleCount) ? 'vehicles' : null)) === 'soldiers' ? 'soldiers' : (a.meta?.incursionKind === 'vehicles' || Number.isInteger(a.meta?.vehicleCount)) ? 'military_vehicle' : t.glyph)
+        : a.type === 'military_incursion' ? (incursionKind === 'barrier' ? 'military_barrier' : incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
         : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${t.marker}`;

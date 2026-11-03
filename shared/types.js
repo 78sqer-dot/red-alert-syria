@@ -119,9 +119,14 @@ export const ALERT_TYPES = {
     marker: 'icon', glyph: 'car_crash', icon: '#f59e0b', size: 32, zone: false, tag_ar: 'حادث_سير', tag_en: 'Accident',
   },
   protest: {
-    ar: 'مظاهرة', en: 'Protest', button_ar: 'مظاهرة', button_en: 'Protest',
+    ar: 'مظاهرة', en: 'Demonstration', button_ar: 'مظاهرة', button_en: 'Demonstration',
+    emoji: '👥', color: '#7c3aed', ring: '#5b21b6', group: 'civil', parent: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'protest', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مظاهرة', tag_en: 'Demonstration',
+  },
+  protest_action: {
+    ar: 'احتجاج', en: 'Protest', button_ar: 'احتجاج', button_en: 'Protest',
     emoji: '📢', color: '#7c3aed', ring: '#5b21b6', group: 'civil', parent: 'civil', ttlMin: 240,
-    marker: 'icon', glyph: 'protest', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'مظاهرة', tag_en: 'Protest',
+    marker: 'icon', glyph: 'megaphone', icon: '#7c3aed', size: 32, zone: false, tag_ar: 'احتجاج', tag_en: 'Protest',
   },
   fire: {
     ar: 'حريق', en: 'Fire', button_ar: 'حريق', button_en: 'Fire',
@@ -188,7 +193,7 @@ export const POLITICAL_CATEGORIES = Object.freeze({
 export const ALERT_GROUPS = {
   aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'helicopter', 'air_movement', 'missile'] },
   strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'clashes', 'assassination', 'artillery', 'airstrike', 'explosion'] },
-  civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'] },
+  civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'protest_action', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   political: { ar: 'تطورات سياسية', en: 'Political developments', types: ['political'] },
   smuggling: { ar: 'تهريب', en: 'Smuggling', types: ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },

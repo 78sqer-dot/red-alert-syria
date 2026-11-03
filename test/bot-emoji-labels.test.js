@@ -7,11 +7,14 @@ const root = new URL('../', import.meta.url);
 const bot = readFileSync(new URL('server/bot.js', root), 'utf8');
 const map = readFileSync(new URL('public/js/map.js', root), 'utf8');
 
-test('protest keeps its megaphone in bot labels and uses the category-colored map glyph', () => {
-  assert.equal(ALERT_TYPES.protest.emoji, '📢');
+test('protest action and demonstration keep distinct bot labels and map glyphs', () => {
+  assert.equal(ALERT_TYPES.protest.emoji, '👥');
   assert.equal(ALERT_TYPES.protest.mapEmoji, undefined);
   assert.equal(ALERT_TYPES.protest.glyph, 'protest');
-  assert.equal(alertButtonLabel('protest', 'ar'), '📢 مظاهرة');
+  assert.equal(ALERT_TYPES.protest_action.emoji, '📢');
+  assert.equal(ALERT_TYPES.protest_action.glyph, 'megaphone');
+  assert.equal(alertButtonLabel('protest', 'ar'), '👥 مظاهرة');
+  assert.equal(alertButtonLabel('protest_action', 'ar'), '📢 احتجاج');
   assert.match(map, /const iconColor = visual\.color/);
   assert.equal(eventVisual('protest').dot, '🟢');
   assert.doesNotMatch(map, /mapEmoji|mk-event-emoji/);

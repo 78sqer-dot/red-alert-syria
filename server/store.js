@@ -695,6 +695,9 @@ export function publicAlert(a) {
     aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
     drones: a.type === 'uav' ? droneLevel(a) : undefined,
     vehicle_count: a.type === 'military_incursion' && Number.isInteger(a.meta?.vehicleCount) ? a.meta.vehicleCount : undefined,
+    incursion_kind: a.type === 'military_incursion'
+      ? (['soldiers', 'vehicles', 'barrier'].includes(a.meta?.incursionKind) ? a.meta.incursionKind : Number.isInteger(a.meta?.vehicleCount) ? 'vehicles' : undefined)
+      : undefined,
     ...(a.type === 'political' ? {
       ...(category ? { political_category: category } : {}),
       political_sources: sources,
