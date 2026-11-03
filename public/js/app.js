@@ -1,6 +1,6 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=21';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '/shared/types.js?v=37';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, HAZARD_EMOJI, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=37';
 import { DICT } from './i18n.js?v=3';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=5';
@@ -235,7 +235,7 @@ setInterval(updateConnAge, 15_000);
 // ------------------------------------------------------------------ list & detail
 function badge(a, live = false) {
   const t = typeOf(a.type);
-  return `<span class="badge${live ? ' live' : ''}" style="--c:${t.color}">${a.type === 'weather' && HAZARD_EMOJI[a.hazard] ? `<span class="bemo" aria-hidden="true">${HAZARD_EMOJI[a.hazard]}</span>` : icon(typeIcon(a.type), 13)}${esc(typeName(a.type))}</span>`;
+  return `<span class="badge${live ? ' live' : ''}" style="--c:${t.color};--symbol-color:${eventVisual(a.type).color}">${a.type === 'weather' && HAZARD_EMOJI[a.hazard] ? `<span class="bemo" aria-hidden="true">${HAZARD_EMOJI[a.hazard]}</span>` : icon(typeIcon(a.type), 13)}${esc(typeName(a.type))}</span>`;
 }
 function cardHtml(a, fresh) {
   const t = typeOf(a.type);
@@ -521,7 +521,7 @@ function renderFilterPanel() {
     const on = def.types.filter((t) => s.filter.includes(t)).length;
     html += `<div class="grp"><label class="chk grp-h"><input type="checkbox" data-g="${g}" ${on === def.types.length ? 'checked' : ''} ${on > 0 && on < def.types.length ? 'data-ind="1"' : ''}/><span class="name">${esc(def[LANG])}</span></label>`;
     for (const t of def.types) {
-      html += `<label class="chk sub"><input type="checkbox" data-t="${t}" ${s.filter.includes(t) ? 'checked' : ''}/><span class="sw" style="--c:${ALERT_TYPES[t].color}"></span><span class="type-ico" style="color:${ALERT_TYPES[t].color}">${icon(typeIcon(t), 14)}</span><span class="name">${esc(typeName(t))}</span><span class="cnt">${counts[t] || 0}</span></label>`;
+      html += `<label class="chk sub"><input type="checkbox" data-t="${t}" ${s.filter.includes(t) ? 'checked' : ''}/><span class="sw" style="--c:${ALERT_TYPES[t].color}"></span><span class="type-ico" style="color:${eventVisual(t).color}">${icon(typeIcon(t), 14)}</span><span class="name">${esc(typeName(t))}</span><span class="cnt">${counts[t] || 0}</span></label>`;
     }
     html += '</div>';
   }
