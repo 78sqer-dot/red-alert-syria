@@ -409,14 +409,21 @@ const HELI_W = RX(['طيران مروحي', 'الطيران المروحي', 'ت
 const HELI_ATTACK_W = RX(['غاره', 'غارات', 'قصف', 'هجوم', 'استهداف', 'اشتباك', 'اطلاق نار', 'اطلاق النار', 'انفجار', 'صاروخ', 'قذائف']);
 const PATROL_W = RX(['دوريه عسكريه', 'دوريات عسكريه', 'دوريه اسرائيليه', 'دوريات اسرائيليه', 'دوريه للجيش', 'دوريات للجيش', 'دوريه امنيه', 'دوريات امنيه', 'military patrol', 'military patrols', 'patrols']);
 export function refineType(type, text) {
-  const nt = ' ' + N(text) + ' ';
+  // The classifier sometimes puts only its selected button name in the generated
+  // headline. Treat that standalone label as metadata, not as evidence from the source.
+  const lines = String(text || '').split('\n');
+  const info = ALERT_TYPES[type] || {};
+  const labels = [info.button_ar, info.ar, info.tag_ar, info.button_en, info.en, info.tag_en].filter(Boolean).map(N);
+  const firstLabel = (lines[0] || '').replace(/^[^\p{L}\p{N}]+/u, '').replace(/[^\p{L}\p{N}]+$/u, '').trim();
+  const evidenceText = labels.includes(N(firstLabel)) ? lines.slice(1).join('\n') : String(text || '');
+  const nt = ' ' + N(evidenceText) + ' ';
   const any = (ws) => ws.some((w) => nt.includes(' ' + N(w) + ' ') || nt.includes(N(w)));
   if (any(PATROL_W) && ['breaking', 'civil', 'none'].includes(type) && !any([...CLASH_W, ...GUN_W, ...EXPL_W, ...AIRSTRIKE_W, ...UAV_STRIKE_W])) return 'patrol';
   if (any(CLASH_W) && ['attack', 'brawl', 'shooting', 'breaking', 'civil', 'weather', 'none', 'uav', 'warplane', 'helicopter'].includes(type)) return 'clashes';
-  const smuggling = detectedSmugglingType(text);
-  if (smuggling && !hasActualExplosion(text) && ['breaking', 'civil', 'arrest', 'explosion', 'none'].includes(type)) return smuggling;
+  const smuggling = detectedSmugglingType(evidenceText);
+  if (smuggling && !hasActualExplosion(evidenceText) && ['breaking', 'civil', 'arrest', 'explosion', 'none'].includes(type)) return smuggling;
   if (any(UAV_STRIKE_W) && ['warplane', 'helicopter', 'civil', 'breaking', 'weather', 'none', 'attack', 'airstrike', 'uav'].includes(type)) return 'uav_strike';
-  const kt = keywordTypes(text);
+  const kt = keywordTypes(evidenceText);
   const politicalOnly = kt.includes('political') && !kt.some((k) => !['political', 'breaking', 'civil', 'weather'].includes(k));
   if (politicalOnly && ['breaking', 'civil', 'attack', 'weather', 'none'].includes(type)) return 'political';
   if (any(AIRSTRIKE_W) && ['warplane', 'helicopter', 'civil', 'breaking', 'weather', 'none', 'attack'].includes(type)) return 'airstrike';
@@ -424,18 +431,9 @@ export function refineType(type, text) {
     if (any(HELI_ATTACK_W) && ['warplane', 'helicopter', 'uav', 'civil', 'breaking', 'weather', 'none'].includes(type)) return 'attack';
     if (['warplane', 'helicopter', 'uav', 'civil', 'breaking', 'weather', 'none', 'attack'].includes(type)) return 'helicopter';
   }
-  if (nonviolentIsraeliGroundActivity(text) && ['attack', 'civil', 'breaking'].includes(type)) return 'breaking';
-  const weather = weatherWarningInfo(text);
-  if (weather) {
-    // A wrong AI button label may be prepended as a one-line "headline" (e.g. مشاجرة)
-    // even though the source itself is an official weather warning. Ignore only that
-    // exact standalone label; real non-weather events in the source still take priority.
-    const lines = String(text || '').split('\n');
-    const buttonLabel = String(ALERT_TYPES[type]?.button_ar || ALERT_TYPES[type]?.ar || '').trim();
-    const firstLabel = (lines[0] || '').replace(/^[^\p{L}\p{N}]+/u, '').trim();
-    const sourceText = buttonLabel && N(firstLabel) === N(buttonLabel) ? lines.slice(1).join('\n') : text;
-    if (!hasNonWeatherSignal(sourceText)) return 'weather';
-  }
+  if (nonviolentIsraeliGroundActivity(evidenceText) && ['attack', 'civil', 'breaking'].includes(type)) return 'breaking';
+  const weather = weatherWarningInfo(evidenceText);
+  if (weather && !hasNonWeatherSignal(evidenceText)) return 'weather';
   // Recover explicit specific event types when Gemini has fallen back to civil/breaking/attack.
   if (['civil', 'breaking', 'attack', 'uav', 'warplane', 'weather', 'none'].includes(type)) {
     const specific = [

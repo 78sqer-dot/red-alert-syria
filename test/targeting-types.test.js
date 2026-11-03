@@ -478,7 +478,9 @@ test('specific ground incidents take precedence over a weather warning in the sa
 
 test('an erroneous standalone brawl button label does not override an official weather-warning draft', () => {
   const weather = 'تحذير جوي رسمي من عواصف مطرية رعدية غزيرة ورياح نشطة تؤثر على الحسكة وشمال الرقة';
-  assert.equal(refineType('brawl', `مشاجرة\n${weather}`), 'weather');
+  for (const [type, label] of [['brawl', 'مشاجرة'], ['warplane', 'طيران حربي'], ['political', 'تطور سياسي']]) {
+    assert.equal(refineType(type, `${label}\n${weather}`), 'weather', `${label} must not outweigh the source text`);
+  }
   assert.equal(refineType('brawl', `مشاجرة\n${weather}\nاندلعت مشاجرة في الحسكة`), 'brawl', 'a real second incident remains distinct');
 });
 
