@@ -425,7 +425,17 @@ export function refineType(type, text) {
     if (['warplane', 'helicopter', 'uav', 'civil', 'breaking', 'weather', 'none', 'attack'].includes(type)) return 'helicopter';
   }
   if (nonviolentIsraeliGroundActivity(text) && ['attack', 'civil', 'breaking'].includes(type)) return 'breaking';
-  if (weatherWarningInfo(text) && !hasNonWeatherSignal(text) && ['civil', 'breaking', 'weather', 'none'].includes(type)) return 'weather';
+  const weather = weatherWarningInfo(text);
+  if (weather) {
+    // A wrong AI button label may be prepended as a one-line "headline" (e.g. مشاجرة)
+    // even though the source itself is an official weather warning. Ignore only that
+    // exact standalone label; real non-weather events in the source still take priority.
+    const lines = String(text || '').split('\n');
+    const buttonLabel = String(ALERT_TYPES[type]?.button_ar || ALERT_TYPES[type]?.ar || '').trim();
+    const firstLabel = (lines[0] || '').replace(/^[^\p{L}\p{N}]+/u, '').trim();
+    const sourceText = buttonLabel && N(firstLabel) === N(buttonLabel) ? lines.slice(1).join('\n') : text;
+    if (!hasNonWeatherSignal(sourceText)) return 'weather';
+  }
   // Recover explicit specific event types when Gemini has fallen back to civil/breaking/attack.
   if (['civil', 'breaking', 'attack', 'uav', 'warplane', 'weather', 'none'].includes(type)) {
     const specific = [

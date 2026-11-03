@@ -276,7 +276,13 @@ export function channelPost(alert, { ended = false } = {}) {
   if (alert.type === 'political') {
     const meta = alert.meta?.political || {};
     const category = POLITICAL_CATEGORIES[meta.category];
-    if (category) sections.push(`🏛 <b>الفئة:</b> ${esc(category.ar)}`);
+    if (category) {
+      const text = `${title} ${desc}`;
+      const label = meta.category === 'decision'
+        ? (/(تعيين|عيّن|عينه|تكليف|تسمية)/.test(text) ? 'تعيين' : 'قرار')
+        : category.ar;
+      sections.push(`🏛 <b>الفئة:</b> ${esc(label)}`);
+    }
     // Source citations remain in metadata and reviewer/admin cards, but not in public channel posts.
     sections.push('<i>منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل</i>');
   } else if (alert.source === 'news') {

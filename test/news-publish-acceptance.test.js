@@ -624,6 +624,15 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(politicalPost, /الفئة:<\/b> مفاوضات أو اتفاق/);
   assert.match(politicalPost, /📅 <b>التاريخ:<\/b>/);
   assert.match(politicalPost, /🕒 <b>الوقت:<\/b>/);
+  const decisionAlert = store.addAlert(buildAlertInput({
+    type: 'political', politicalCategory: 'decision',
+    location: { scope: 'country', latitude: null, longitude: null },
+    details: 'وزارة المالية تصدر قراراً بالحجز الاحتياطي على الأموال.', extra: [], ttlMin: 360,
+  }, { id: ownerId, name: 'test' }));
+  addedAlertIds.push(decisionAlert.id);
+  const decisionPost = channelPost(decisionAlert);
+  assert.match(decisionPost, /الفئة:<\/b> قرار\n/);
+  assert.doesNotMatch(decisionPost, /قرار أو تعيين/, 'the public category uses the event-specific label, not the broad bot button label');
   assert.doesNotMatch(politicalPost, /🔎 <b>المصدر:<\/b>|&lt;Official source&gt;|تاريخ المصدر/, 'political source names and citations stay out of public channel posts');
   assert.doesNotMatch(politicalPost, /<a\b|href=/, 'political source is plain text with no clickable link');
   assert.match(politicalPost, /منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل/);

@@ -476,6 +476,12 @@ test('specific ground incidents take precedence over a weather warning in the sa
   assert.equal(refineType('weather', text), 'fire');
 });
 
+test('an erroneous standalone brawl button label does not override an official weather-warning draft', () => {
+  const weather = 'تحذير جوي رسمي من عواصف مطرية رعدية غزيرة ورياح نشطة تؤثر على الحسكة وشمال الرقة';
+  assert.equal(refineType('brawl', `مشاجرة\n${weather}`), 'weather');
+  assert.equal(refineType('brawl', `مشاجرة\n${weather}\nاندلعت مشاجرة في الحسكة`), 'brawl', 'a real second incident remains distinct');
+});
+
 test('nonviolent Israeli ground activity routes to breaking, while armed clashes use their dedicated type', () => {
   const ground = 'توغلت دورية تابعة لجيش الاحتلال الإسرائيلي وأقامت ساتراً ترابياً في ريف القنيطرة جنوب سوريا اليوم.';
   assert.equal(ruleClassify(ground)?.type, 'breaking');
