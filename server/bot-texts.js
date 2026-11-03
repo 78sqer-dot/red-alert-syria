@@ -237,6 +237,7 @@ export const TITLES = {
   assassination: { ar: 'اغتيال', en: 'Assassination' },
   artillery: { ar: 'قصف مدفعي', en: 'Artillery shelling' },
   explosion: { ar: 'انفجار', en: 'Explosion' },
+  detonation: { ar: 'تفجير', en: 'Detonation' },
   civil: { ar: 'تنبيه مدني', en: 'Civil alert' },
   accident: { ar: 'حادث سير', en: 'Traffic accident' },
   protest: { ar: 'مظاهرة', en: 'Protest' },

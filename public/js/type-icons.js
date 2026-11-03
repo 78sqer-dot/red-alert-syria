@@ -22,6 +22,7 @@ export const TYPE_ICON = Object.freeze({
   assassination: 'pistol',
   artillery: 'target',
   explosion: 'bomb',
+  detonation: 'bomb',
   civil: 'shield',
   accident: 'carCrash',
   protest: 'users',

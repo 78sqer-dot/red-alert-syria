@@ -63,6 +63,18 @@ test('high-risk categories and drafts without a verified map point are held for 
   assert.equal(nightEligible(qualified({ loc: { scope: 'place', latitude: null, longitude: null } })), false);
 });
 
+test('explosion retains its existing night and daytime auto-publish eligibility when otherwise qualified', () => {
+  const explosion = qualified({ type: 'explosion' });
+  assert.equal(nightEligible(explosion), true);
+  assert.equal(daytimeAutoEligible(explosion), true);
+});
+
+test('new detonation reports remain outside auto-publishing until explicitly approved', () => {
+  const detonation = qualified({ type: 'detonation' });
+  assert.equal(nightEligible(detonation), false);
+  assert.equal(daytimeAutoEligible(detonation), false);
+});
+
 test('qualified political news can auto-publish at night but remains excluded from daytime auto-publishing', () => {
   const cutoff = Date.parse(newsState().mig.politicalNightAuto1);
   const political = qualified({

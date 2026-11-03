@@ -338,7 +338,7 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
+  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
   if (d.type === 'political') {
     const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
     if (!POLITICAL_CATEGORIES[d.politicalCategory] || d.politicalNeedsCategory || !Number.isFinite(d.created) || !Number.isFinite(activatedAt) || d.created <= activatedAt) return false;
@@ -502,7 +502,7 @@ function cardText(d, lang = 'ar') {
 function cardKb(d, lang = 'ar') {
   const kb = new InlineKeyboard()
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
-    .text(tr(lang, '🏷 تغيير النوع', '🏷 Change type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id)
+    .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id)
   ;
   if (d.type === 'political') kb.row().text(tr(lang, '🏛 الفئة السياسية', '🏛 Political category'), 'nw:pc:' + d.id);
   // Telegram refuses a whole message when one button has an empty text: the extra row only for drones

@@ -6,6 +6,8 @@ const root = new URL('../', import.meta.url);
 const read = (file) => readFileSync(new URL(file, root), 'utf8');
 const html = read('public/index.html');
 const app = read('public/js/app.js');
+const settings = read('public/js/settings.js');
+const services = read('public/js/services.js');
 const map = read('public/js/map.js');
 const css = read('public/css/app.css');
 
@@ -44,8 +46,19 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=63'/);
+  assert.match(app, /from '\.\/map\.js\?v=64'/);
   assert.match(html, /app\.css\?v=44/);
+});
+
+test('changed type and icon modules use fresh cache keys', () => {
+  assert.match(app, /from '\.\/services\.js\?v=21'/);
+  assert.match(app, /from '\/shared\/types\.js\?v=37'/);
+  assert.match(app, /from '\.\/settings\.js\?v=12'/);
+  assert.match(services, /from '\.\/settings\.js\?v=12'/);
+  assert.match(map, /from '\/shared\/types\.js\?v=37'/);
+  assert.match(map, /from '\.\/target-svgs\.js\?v=17'/);
+  assert.match(map, /from '\.\/type-icons\.js\?v=6'/);
+  assert.match(settings, /from '\/shared\/types\.js\?v=37'/);
 });
 
 test('tapping an individual map symbol zooms to its alert and opens details on phones', () => {

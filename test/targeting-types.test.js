@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ALERT_GROUPS, ALERT_TYPES, POLITICAL_CATEGORIES, TYPE_KEYS, alertButtonLabel, alertEmoji, assassinationWeaponGlyph, shootingWeaponGlyph, eventVisual } from '../shared/types.js';
 import { NEWS_TYPES, keywordTypes, nameInText, refineType, ruleClassify } from '../server/news-ai.js';
+import { TITLES } from '../server/bot-texts.js';
 import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
 import { SVG } from '../public/js/marker-svgs.js';
@@ -410,6 +411,28 @@ test('each alert type has a dedicated map glyph and registered site/filter icon'
     assert.equal(dayAutoReady(draft), false, `${type} requires human review`);
   }
   assert.equal(new Set(['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'].map(typeIcon)).size, 3);
+});
+
+test('explosion and detonation remain distinct across bot, map, and alert-image types', () => {
+  assert.ok(TYPE_KEYS.includes('detonation'));
+  assert.ok(ALERT_GROUPS.strikes.types.includes('detonation'));
+  assert.equal(ALERT_TYPES.explosion.button_ar, 'انفجار');
+  assert.equal(ALERT_TYPES.detonation.button_ar, 'تفجير');
+  assert.equal(ALERT_TYPES.detonation.button_en, 'Detonation');
+  assert.equal(alertButtonLabel('explosion', 'ar'), '💥 انفجار');
+  assert.equal(alertButtonLabel('detonation', 'ar'), '💥 تفجير');
+  assert.equal(alertButtonLabel('detonation', 'en'), '💥 Detonation');
+  assert.deepEqual(TITLES.explosion, { ar: 'انفجار', en: 'Explosion' });
+  assert.deepEqual(TITLES.detonation, { ar: 'تفجير', en: 'Detonation' });
+  assert.equal(ALERT_TYPES.detonation.glyph, 'detonation_burst');
+  assert.match(markerSvg('detonation', 100, 100), /M256 40v144/);
+  assert.match(alertImageSource, /explosion: 'انفجار', detonation: 'تفجير'/);
+  assert.match(alertImageSource, /explosion: 'Explosion', detonation: 'Detonation'/);
+  assert.match(alertImageSource, /explosion: 'danger', detonation: 'danger'/);
+  assert.equal(NEWS_TYPES.includes('detonation'), false, 'the new type is not added to automatic classification');
+  const draft = { type: 'detonation', status: 'pending', loc: { scope: 'place', latitude: 33, longitude: 35 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
+  assert.equal(nightEligible(draft), false, 'detonation stays out of night auto-publishing');
+  assert.equal(dayAutoReady({ ...draft, dayAutoAt: Date.now() - 1 }), false, 'detonation stays out of daytime auto-publishing');
 });
 
 test('Syrian smuggling stories classify by the explicitly named contraband, not as a generic alert', () => {

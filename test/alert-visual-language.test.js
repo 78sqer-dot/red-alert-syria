@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ALERT_TYPES } from '../shared/types.js';
+import { ALERT_TYPES, eventVisual } from '../shared/types.js';
+import { EXTRA_SVG } from '../public/js/target-svgs.js';
+import { TYPE_ICON } from '../public/js/type-icons.js';
 
 const map = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf8');
 const css = await readFile(new URL('../public/css/app.css', import.meta.url), 'utf8');
@@ -16,6 +18,35 @@ test('security alert emojis are present and semantically distinct', () => {
   assert.equal(ALERT_TYPES.artillery.emoji, '💣');
   assert.notEqual(ALERT_TYPES.uav.emoji, ALERT_TYPES.warplane.emoji);
   assert.equal(ALERT_TYPES.death.emoji, '🪦');
+});
+
+test('explosion and detonation have distinct Arabic labels and strike-colored SVGs at standard map size', () => {
+  assert.equal(ALERT_TYPES.explosion.ar, 'انفجار');
+  assert.equal(ALERT_TYPES.explosion.button_ar, 'انفجار');
+  assert.equal(ALERT_TYPES.explosion.button_en, 'Explosion');
+  assert.equal(ALERT_TYPES.explosion.tag_ar, 'انفجار');
+  assert.equal(ALERT_TYPES.explosion.marker, 'icon');
+  assert.equal(ALERT_TYPES.explosion.glyph, 'explosion_modern');
+  assert.equal(TYPE_ICON.explosion, 'bomb');
+  assert.match(EXTRA_SVG.explosion_modern, /<path d="M256 30/);
+  assert.match(EXTRA_SVG.explosion_modern, /<circle cx="256" cy="256"/);
+  assert.equal(eventVisual('explosion').category, 'strikes');
+  assert.equal(eventVisual('explosion').color, '#c2410c');
+  assert.equal(ALERT_TYPES.detonation.ar, 'تفجير');
+  assert.equal(ALERT_TYPES.detonation.button_ar, 'تفجير');
+  assert.equal(ALERT_TYPES.detonation.button_en, 'Detonation');
+  assert.equal(ALERT_TYPES.detonation.tag_ar, 'تفجير');
+  assert.equal(ALERT_TYPES.detonation.en, 'Detonation');
+  assert.equal(ALERT_TYPES.detonation.marker, 'icon');
+  assert.equal(ALERT_TYPES.detonation.glyph, 'detonation_burst');
+  assert.equal(ALERT_TYPES.detonation.size, 24);
+  assert.notEqual(ALERT_TYPES.detonation.glyph, ALERT_TYPES.explosion.glyph);
+  assert.equal(TYPE_ICON.detonation, 'bomb');
+  assert.match(EXTRA_SVG.detonation_burst, /M256 40v144/);
+  assert.equal(eventVisual('detonation').category, 'strikes');
+  assert.equal(eventVisual('detonation').color, '#c2410c');
+  assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
+  assert.match(map, /const iconColor = visual\.color/);
 });
 
 test('warplane keeps the three-aircraft formation and drones retain their orbiting silhouette', () => {

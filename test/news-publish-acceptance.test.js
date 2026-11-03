@@ -135,12 +135,16 @@ test('report menus expose every current alert type and keep aerial movement reac
     const childButtons = keyboardAfter(start).flat();
     const children = callbacksOf([childButtons]).filter((value) => value.startsWith('t:')).sort();
     assert.deepEqual(children, BOT_ALERT_MENU_GROUPS[group].map((type) => `t:${type}`).sort(), `${group} buttons route to their own alert types`);
+    if (group === 'strikes') {
+      assert.ok(childButtons.some((button) => button.callback_data === 't:explosion' && button.text === '💥 انفجار'), 'admin bot keeps the existing «انفجار» option');
+      assert.ok(childButtons.some((button) => button.callback_data === 't:detonation' && button.text === '💥 تفجير'), 'admin bot exposes the distinct «تفجير» option');
+    }
     if (group === 'protests') assert.deepEqual(childButtons.filter((button) => ['t:protest_action', 't:protest'].includes(button.callback_data)).map((button) => [button.callback_data, button.text]), [['t:protest_action', '📢 احتجاج'], ['t:protest', '👥 مظاهرة']]);
   }
 });
 
-test('public report bot exposes every current category and sends a clashes report only to review', async (t) => {
-  const publicReporter = { id: 8270709635, is_bot: false, first_name: 'Local clash reporter', language_code: 'ar' };
+test('public report bot exposes both strike types and sends detonation reports only to review', async (t) => {
+  const publicReporter = { id: 8270709635, is_bot: false, first_name: 'Synthetic detonation reporter', language_code: 'ar' };
   const currentUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const currentButtons = () => currentUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...BOT_ALERT_MENU_PATROL_CHILD_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
@@ -178,6 +182,10 @@ test('public report bot exposes every current category and sends a clashes repor
     const childButtons = keyboardAfter(start).flat();
     const children = callbacksOf([childButtons]).filter((value) => value.startsWith('t:')).sort();
     assert.deepEqual(children, BOT_ALERT_MENU_GROUPS[group].map((type) => `t:${type}`).sort(), `public ${group} submenu routes every type`);
+    if (group === 'strikes') {
+      assert.ok(childButtons.some((button) => button.callback_data === 't:explosion' && button.text === '💥 انفجار'), 'public bot keeps the «انفجار» option');
+      assert.ok(childButtons.some((button) => button.callback_data === 't:detonation' && button.text === '💥 تفجير'), 'public bot exposes the distinct «تفجير» option');
+    }
     if (group === 'protests') assert.deepEqual(childButtons.filter((button) => ['t:protest_action', 't:protest'].includes(button.callback_data)).map((button) => [button.callback_data, button.text]), [['t:protest_action', '📢 احتجاج'], ['t:protest', '👥 مظاهرة']]);
   }
 
@@ -186,20 +194,21 @@ test('public report bot exposes every current category and sends a clashes repor
   start = calls.length;
   await tap('home', publicReporter, reportBot);
   await tap('ag:strikes', publicReporter, reportBot);
-  assert.ok(currentButtons().some((button) => button.callback_data === 't:clashes' && button.text?.includes('اشتباكات')), 'clashes has its own public button');
-  await tap('t:clashes', publicReporter, reportBot);
+  assert.ok(currentButtons().some((button) => button.callback_data === 't:explosion' && button.text === '💥 انفجار'), 'explosion has its own public button');
+  assert.ok(currentButtons().some((button) => button.callback_data === 't:detonation' && button.text === '💥 تفجير'), 'detonation has a separate public button');
+  await tap('t:detonation', publicReporter, reportBot);
   const gov = governorates.find((item) => item.ar === 'حلب') || governorates[0];
   await tap(`g:${gov.code}`, publicReporter, reportBot);
   await tap(`wg:${gov.code}`, publicReporter, reportBot);
   await tap('skip', publicReporter, reportBot);
-  assert.match(currentUi()?.payload?.text || '', /اشتباكات مسلحة/, 'the public preview retains the dedicated category label');
+  assert.match(currentUi()?.payload?.text || '', /تفجير/, 'the public preview retains the dedicated detonation category label');
   assert.ok(currentButtons().some((button) => button.callback_data === 'submit'), 'the public flow offers submit-for-review, not publish');
   await tap('submit', publicReporter, reportBot);
 
   const rid = Object.keys(store.state.reports || {}).find((id) => !reportIdsBefore.has(id));
   assert.ok(rid, 'submission is saved as a pending report for editors');
   const pending = store.reportGet(rid);
-  assert.equal(pending.draft.type, 'clashes');
+  assert.equal(pending.draft.type, 'detonation');
   assert.equal(pending.draft.mode, 'report');
   assert.equal(store.activeAlerts().length, activeBefore, 'a public report is not auto-published to the map');
   assert.equal(calls.slice(start).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'a public report is not posted to the channel before review');
@@ -391,9 +400,14 @@ test('public barrier reports retain the incursion type and wait for human review
 
 test('news-monitor type editor covers every bot alert type while settings stay monitor-only', async (t) => {
   const { id } = await sendTestDraft(ownerId);
-  t.after(() => { delete newsState().drafts[id]; });
+  const untouched = await sendTestDraft(ownerId);
+  const untouchedType = newsState().drafts[untouched.id].type;
+  t.after(() => { delete newsState().drafts[id]; delete newsState().drafts[untouched.id]; });
 
   let start = calls.length;
+  const storyButtons = newsMonitorTest.cardKb(newsState().drafts[id], 'ar').inline_keyboard.flat();
+  assert.ok(storyButtons.some((button) => button.callback_data === `nw:t:${id}` && button.text === '🏷 تغيير نوع هذا الخبر'), 'type change starts from the selected monitored story card');
+  assert.equal(storyButtons.some((button) => button.callback_data === `nw:t:${untouched.id}`), false, 'the selected story card cannot redirect the type edit to another draft');
   await tap(`nw:t:${id}`);
   const rootCallbacks = callbacksOf(keyboardAfter(start));
   const groups = Object.keys(newsMonitorTest.editableTypeGroups);
@@ -415,6 +429,10 @@ test('news-monitor type editor covers every bot alert type while settings stay m
     } else {
       assert.deepEqual(childCallbacks.filter((value) => value.startsWith(`nw:s:${id}:`)).sort(), newsMonitorTest.editableTypeGroups[group].map((type) => `nw:s:${id}:${type}`).sort(), `${group} exposes every bot alert type assigned to it`);
     }
+    if (group === 'strikes') {
+      assert.ok(childKeyboard.flat().some((button) => button.callback_data === `nw:s:${id}:explosion` && button.text === '💥 انفجار'), 'the monitored-news editor keeps «انفجار»');
+      assert.ok(childKeyboard.flat().some((button) => button.callback_data === `nw:s:${id}:detonation` && button.text === '💥 تفجير'), 'the monitored-news editor exposes the separate «تفجير» type');
+    }
   }
 
   start = calls.length;
@@ -427,6 +445,7 @@ test('news-monitor type editor covers every bot alert type while settings stay m
     watchedTypeCallbacks.push(...callbacksOf(keyboardAfter(start)).filter((value) => value.startsWith('nws:tt:')));
   }
   assert.deepEqual(watchedTypeCallbacks.sort(), NEWS_TYPES.map((type) => `nws:tt:${type}`).sort(), 'monitor settings expose every watched type under its group');
+  assert.equal(NEWS_TYPES.includes('detonation'), false, 'the new type is not added to automatic news classification');
 
   await tap(`nw:tg:${id}:aerial`);
   await tap(`nw:s:${id}:helicopter`);
@@ -440,6 +459,17 @@ test('news-monitor type editor covers every bot alert type while settings stay m
   assert.equal(signalDraft.status, 'pending', 'signal-sweep reclassification remains in human review');
   assert.equal(NEWS_TYPES.includes('signal_sweep'), false, 'signal-sweep never enters automatic news classification');
   assert.equal(calls.slice(start).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'signal-sweep reclassification never posts automatically');
+  start = calls.length;
+  await tap(`nw:tg:${id}:strikes`);
+  assert.ok(keyboardAfter(start).flat().some((button) => button.callback_data === `nw:s:${id}:explosion` && button.text === '💥 انفجار'), 'the selected story’s strike menu keeps explosion');
+  assert.ok(keyboardAfter(start).flat().some((button) => button.callback_data === `nw:s:${id}:detonation` && button.text === '💥 تفجير'), 'the selected story’s strike menu offers detonation');
+  await tap(`nw:s:${id}:detonation`);
+  const detonationDraft = newsState().drafts[id];
+  assert.equal(detonationDraft.type, 'detonation', 'the selected monitored story changes to the distinct detonation type');
+  assert.equal(detonationDraft.status, 'pending', 'reclassifying detonation leaves the story for human review');
+  assert.equal(NEWS_TYPES.includes('detonation'), false, 'detonation remains unavailable to automatic news classification');
+  assert.equal(newsState().drafts[untouched.id].type, untouchedType, 'the other monitored draft is unchanged');
+  assert.equal(calls.slice(start).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'changing a monitored story to detonation never auto-publishes it');
   start = calls.length;
   await tap(`nw:tg:${id}:incursion`);
   await tap(`nw:si:${id}:barrier`);
