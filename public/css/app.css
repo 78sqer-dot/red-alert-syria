@@ -76,8 +76,6 @@ html.dark .theme-btn .i-moon { display: none; }
 html[lang='en'] .lang-btn { font-family: var(--font-arabic); }
 .spacer { flex: 1; }
 .tg-btn svg { color: #229ed9; }
-.facebook-btn { text-decoration: none; }
-.facebook-mark { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: #1877f2; color: #fff; font-family: Arial, sans-serif; font-size: 13px; font-weight: 700; line-height: 1; }
 .report-btn { background: var(--orange); border-color: transparent; color: #111; }
 .report-btn:hover { background: #ff9d4d; }
 html.dark .report-btn { color: #fff; }
@@ -692,8 +690,6 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
   .topbar { padding: 0 8px; gap: 6px; }
   .brand img { height: 34px; }
   #btnSettings, .theme-btn, .tg-btn, .ticker { display: none; }
-  .facebook-btn { width: 34px; padding: 0; justify-content: center; }
-  .facebook-btn .lbl { display: none; }
   .m-settings { display: inline-flex; }
   .refresh-btn { width: 36px; padding: 0; justify-content: center; }
   .refresh-btn .lbl { display: none; }
