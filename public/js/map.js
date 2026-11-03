@@ -9,7 +9,6 @@ import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
-import { warplaneEastOffset } from '/shared/warplane-motion.js?v=1';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
@@ -207,7 +206,6 @@ export class AlertMap {
     }).catch((e) => console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e));
     let lastOrbitUpdate = 0;
     let lastHelicopterScale = '';
-    let lastWarplaneVectorUpdate = 0;
     const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
@@ -241,18 +239,11 @@ export class AlertMap {
     this.map.on('zoomstart', () => this.el.classList.add('is-zooming'));
     // pause the marker animations while a gesture/flight is running so the map itself stays smooth
     this.map.on('movestart', () => this.el.classList.add('is-moving'));
-    this.map.on('move', () => {
-      const now = performance.now();
-      if (now - lastWarplaneVectorUpdate < 50) return;
-      lastWarplaneVectorUpdate = now;
-      this.updateWarplaneVectors();
-    });
     this.map.on('moveend', () => {
       this.el.classList.remove('is-moving');
       this.refreshMarkerGroups();
-      this.updateWarplaneVectors();
     });
-    this.map.on('resize', () => { this._queueZones(); this.refreshMarkerGroups(); this.updateWarplaneVectors(); });
+    this.map.on('resize', () => { this._queueZones(); this.refreshMarkerGroups(); });
     zoomTier(true);
     this.map.on('styleimagemissing', (e) => {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
@@ -816,7 +807,6 @@ export class AlertMap {
         this.markers.delete(id);
       }
     }
-    this.updateWarplaneVectors();
     this.updateZones();
     if (this.popup?._groupKey) {
       const ids = this.popup._groupAlertIds || [];
@@ -824,26 +814,6 @@ export class AlertMap {
       if (!ids.length || ids.some((id) => !liveIds.has(String(id)))) this.closePopup();
     }
     if (this.popup && this.popup._alertId && !seen.has(this.popup._alertId)) this.closePopup();
-  }
-
-  updateWarplaneVectors() {
-    const map = this.map;
-    const container = map?.getContainer?.();
-    if (!container || !Array.isArray(this.alerts) || !this.markers?.size) return;
-    const mapScale = Number.parseFloat(getComputedStyle(container).getPropertyValue('--mks')) || Number.parseFloat(this._mks) || 0.5;
-    for (const alert of this.alerts) {
-      if (typeOf(alert.type).marker !== 'squad' || !Number.isFinite(alert.location?.latitude) || !Number.isFinite(alert.location?.longitude)) continue;
-      const marker = this.markers.get(alert.id);
-      if (!marker) continue;
-      const offset = warplaneEastOffset(map, alert.location, container.clientWidth, mapScale);
-      const el = marker.getElement();
-      el.style.setProperty('--flight-east-x', `${offset.x}px`);
-      el.style.setProperty('--flight-east-y', `${offset.y}px`);
-      // The squad enters from the projected-east side and crosses toward the pin.
-      // Point each airframe along that actual screen-space travel vector.
-      const heading = Math.atan2(-offset.y, -offset.x) * 180 / Math.PI;
-      el.style.setProperty('--flight-angle', `${heading}deg`);
-    }
   }
 
   markerEl(a) {
@@ -869,7 +839,7 @@ export class AlertMap {
       el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
-      el.innerHTML = `<div class="squad">${pl(18, -12, 1)}${pl(2, 8, 0.85)}${pl(34, 8, 0.85)}</div>`;
+      el.innerHTML = `<div class="squad">${pl(36, -12, 1)}${pl(20, 8, 0.85)}${pl(52, 8, 0.85)}</div>`;
     } else if (marker === 'fly') {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 24, `fill="${visual.color}" class="fly-svg"`)}</div></div>`;
     } else if (marker === 'movement') {
@@ -941,11 +911,11 @@ export class AlertMap {
       const props = { color: eventVisual(a.type).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
-      if (marker === 'orbit' || marker === 'squad' || marker === 'helicopter') {
-        // the drone circles the ring nearest to its own position (the alert's main place)
+      if (marker === 'orbit' || marker === 'helicopter') {
+        // Orbiting markers follow the ring nearest to their own position (the alert's main place).
         let best = zs[0], bd = Infinity;
         for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
-        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, squad: marker === 'squad', helicopter: marker === 'helicopter' });
+        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, helicopter: marker === 'helicopter' });
       }
       zs.forEach((z, i) => {
         const km = this._screenKm(z.km, z.lat);
@@ -1013,7 +983,7 @@ export class AlertMap {
     for (const [k, m] of this._pulses) if (!keep.has(k)) { m.remove(); this._pulses.delete(k); }
     if (!this.map.isZooming()) this.el.classList.remove('is-zooming');
   }
-  // Scale aircraft markers while keeping supplemental drone copies close to their exact area anchors.
+  // Scale drone/helicopter orbit radii while keeping supplemental drone copies near their area anchors.
   _orbitPx() {
     if (!this._orb || !this.map) return;
     const z = this.map.getZoom();

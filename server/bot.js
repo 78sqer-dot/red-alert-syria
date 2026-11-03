@@ -43,9 +43,10 @@ const VEHICLE_COUNT_MAX = 999;
 const politicalCategory = (key) => Object.hasOwn(POLITICAL_CATEGORIES, key) ? key : null;
 
 // Derive report choices from the current shared groups. Targeting stays separate
-// so drone strikes and assassinations remain distinct alert types.
+// so drone strikes and assassinations remain distinct alert types. Flight movement
+// stays available as a follow-up choice after selecting an aircraft, not as a separate group button.
 export const BOT_ALERT_MENU_GROUPS = Object.freeze({
-  aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => type !== 'uav_strike')),
+  aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => !['uav_strike', 'air_movement'].includes(type))),
   targeting: Object.freeze(['uav_strike', 'assassination']),
   strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination')),
   protests: Object.freeze(['protest_action', 'protest']),
