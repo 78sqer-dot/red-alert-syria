@@ -23,7 +23,8 @@ test('warplane keeps the three-aircraft formation and drones retain their orbiti
   assert.match(map, /t\.marker === 'squad'/);
   assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(18, -12, 1\).*pl\(2, 8, 0\.85\).*pl\(34, 8, 0\.85\)/);
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad\s*\{[\s\S]{0,300}animation: warplaneEastTurnBack 7s linear infinite;/);
+  assert.match(css, /\.mk-squad \.squad\s*\{[\s\S]{0,300}animation: warplaneEastPass 7s linear infinite;/);
+  assert.doesNotMatch(css, /warplaneEastTurnBack/);
   assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: none;/);
   assert.doesNotMatch(css, /squadFlyZ/);
   assert.match(svgs, /"uav":/);

@@ -92,8 +92,9 @@ test('warplane keeps a compact reference-inspired three-plane pass with 24px bas
   assert.match(mapSource, /const classicAircraft = t\.marker === 'squad' \|\| t\.marker === 'helicopter'/, 'active warplane zones get aircraft pulse styling');
   assert.match(mapSource, /pl\(18, -12, 1\)\}\$\{pl\(2, 8, 0\.85\)\}\$\{pl\(34, 8, 0\.85\)/, 'lead and wing aircraft stay close together');
   assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
-  assert.match(mapCss, /@keyframes warplaneEastTurnBack[\s\S]*?40% \{[^}]*rotate\(270deg\)[\s\S]*?46% \{[^}]*rotate\(450deg\)[\s\S]*?84% \{[^}]*flight-east-x/);
-  assert.match(mapCss, /\.mk-squad \.squad\s*\{[\s\S]{0,300}animation: warplaneEastTurnBack 7s linear infinite;/);
+  assert.match(mapCss, /@keyframes warplaneEastPass[\s\S]*?50% \{ transform: translate3d\(0, 0, 0\) rotate\(270deg\); opacity: 1; \}\s*86% \{ transform: translate3d\(calc\(0px - var\(--flight-east-x/);
+  assert.match(mapCss, /\.mk-squad \.squad\s*\{[\s\S]{0,300}animation: warplaneEastPass 7s linear infinite;/);
+  assert.doesNotMatch(mapCss, /warplaneEastTurnBack/);
   assert.match(mapCss, /\.mk-squad \.squad \.sq \{ width: 24px; height: 24px; scale: 1; animation: none; \}/);
   assert.match(mapSource, /warplaneEastOffset/);
   assert.doesNotMatch(mapCss, /squadFlyZ/);

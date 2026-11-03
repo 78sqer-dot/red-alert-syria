@@ -57,12 +57,18 @@ test('signal-sweep UAV uses the Lebanese four-arc emitter, separate from the gen
   assert.match(css, /\.signal-sweep-uav-svg \{ display: block; fill: #6b7280; color: #1a1a2e;/);
 });
 
-test('warplane is one tight formation that enters from east, turns at the pinned report and withdraws east', () => {
+test('warplane is one tight formation that passes straight from east across the pinned report and exits west', () => {
   assert.match(mapJs, /\$\{pl\(18, -12, 1\)\}\$\{pl\(2, 8, 0\.85\)\}\$\{pl\(34, 8, 0\.85\)\}/);
   assert.match(mapJs, /warplaneEastOffset/);
   assert.match(mapJs, /this\.map\.on\('move'[\s\S]{0,250}this\.updateWarplaneVectors\(\)/);
-  assert.match(css, /\.mk-squad \.squad \{[\s\S]*?animation: warplaneEastTurnBack 7s linear infinite;/);
-  assert.match(css, /@keyframes warplaneEastTurnBack[\s\S]*?40% \{[^}]*rotate\(270deg\)[\s\S]*?46% \{[^}]*rotate\(450deg\)[\s\S]*?84% \{[^}]*var\(--flight-east-x/);
+  assert.match(css, /\.mk-squad \.squad \{[\s\S]*?animation: warplaneEastPass 7s linear infinite;/);
+  const passFrames = css.match(/@keyframes warplaneEastPass \{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(passFrames, 'a dedicated straight-pass keyframe must exist');
+  assert.match(passFrames, /0%, 4%[\s\S]*var\(--flight-east-x/);
+  assert.match(passFrames, /50%[\s\S]*translate3d\(0, 0, 0\)/, 'the group passes through the report point');
+  assert.match(passFrames, /86%[\s\S]*calc\(0px - var\(--flight-east-x/, 'the group exits on the west side');
+  assert.match(passFrames, /92%, 100%[\s\S]*opacity: 0/, 'the group briefly disappears before repeating');
+  assert.doesNotMatch(passFrames, /rotate\(450deg\)/, 'the formation must not turn back at the report');
   assert.match(css, /\.mk-squad \.squad \.sq \{[^}]*animation: none;/);
   assert.doesNotMatch(css, /squadFlyZ/);
   assert.match(mapJs, /if \(!\['squad', 'movement', 'fly'\]\.includes\(marker\)\)/);
