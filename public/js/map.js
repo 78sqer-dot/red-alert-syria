@@ -7,7 +7,7 @@ import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map
 import { typeIcon } from './type-icons.js?v=6';
 import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
-import { zoneVisualKey, pulseVisualKey, countUniqueZoneCircles } from '/shared/zone-visuals.js?v=2';
+import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
 import { warplaneEastOffset } from '/shared/warplane-motion.js?v=1';
 const ml = () => window.maplibregl;
@@ -694,35 +694,6 @@ export class AlertMap {
     this.onSelect(id, { fromMap: true, fly: false });
   }
 
-  zoneCircleCount(alert) {
-    const t = alert && ALERT_TYPES[alert.type];
-    if (!alert || !t || t.marker === 'movement' || alert.scope === 'country' || !alert.location
-      || !Number.isFinite(alert.location.latitude) || !Number.isFinite(alert.location.longitude)) return 0;
-    const zones = Array.isArray(alert.zones) && alert.zones.length
-      ? alert.zones
-      : [{ lat: alert.location.latitude, lon: alert.location.longitude, km: ZONE_KM[alert.scope] || ZONE_KM.place }];
-    return countUniqueZoneCircles(zones);
-  }
-
-  syncZoneCountBadge(el, alert) {
-    const count = this.zoneCircleCount(alert);
-    let badge = el.querySelector('.mk-zone-count');
-    if (count > 1) {
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'mk-zone-count';
-        badge.setAttribute('aria-hidden', 'true');
-        el.append(badge);
-      }
-      const lang = this.opts.lang === 'en' ? 'en' : 'ar';
-      const formatted = new Intl.NumberFormat(lang, { useGrouping: false }).format(count);
-      badge.textContent = lang === 'en' ? `${formatted} circles` : `${formatted} دوائر`;
-      badge.dataset.circleCount = String(count);
-      badge.dir = lang === 'en' ? 'ltr' : 'rtl';
-    } else if (badge) badge.remove();
-    return count;
-  }
-
   refreshMarkerGroups() {
     // Never write MapLibre's private _offset field: the library owns its Point.
     // Same-location reports share a visible marker, without inventing positions.
@@ -746,11 +717,7 @@ export class AlertMap {
         const count = group.alerts.length;
         const lang = this.opts.lang === 'en' ? 'en' : 'ar';
         const hint = lang === 'en' ? `${count} nearby alerts — click to choose` : `${count} تنبيهات متقاربة — اضغط للاختيار`;
-        const zoneCount = this.zoneCircleCount(a);
-        const zoneHint = zoneCount > 1
-          ? (lang === 'en' ? `${zoneCount} affected circles` : `عدد الدوائر المتأثرة: ${new Intl.NumberFormat('ar', { useGrouping: false }).format(zoneCount)}`)
-          : '';
-        const hints = [count > 1 ? hint : '', zoneHint].filter(Boolean);
+        const hints = count > 1 ? [hint] : [];
         el.title = hints.length ? `${a.title} · ${hints.join(' · ')}` : a.title;
         el.setAttribute('aria-label', el.title);
         el.dataset.alertId = a.id;
@@ -800,7 +767,6 @@ export class AlertMap {
       el.classList.toggle('sel', a.id === this.selectedId);
       el.style.zIndex = a.id === this.selectedId ? 50 : a.is_active ? 10 : 1;
       el.title = a.title;
-      this.syncZoneCountBadge(el, a);
     }
     this.refreshMarkerGroups();
     // drones: the alert's own marker flies over its main circle; every other circle of the same alert gets
