@@ -63,3 +63,11 @@ test('services toolbar and place icons exist and are registered for map display'
   assert.match(services, /for \(const \[k, col\] of Object\.entries\(CAT_COLORS\)\) if \(!m\.hasImage\('svc-' \+ k\)\) m\.addImage\('svc-' \+ k, drawIcon\(k, col\)/);
   assert.match(services, /'icon-image': \['get', 'icon'\]/);
 });
+
+test('official warning cards show their start time and clarify source-button destinations', () => {
+  assert.match(services, /wxStarts: 'يبدأ'/);
+  assert.equal([...services.matchAll(/w\.onset && `\$\{L\.wxStarts\}/g)].length, 3);
+  assert.match(services, /Official daily bulletin index/);
+  assert.match(services, /منشور النشرة الرسمي للمصرف المركزي/);
+  assert.match(services, /تفاصيل التسعيرة لدى سانا/);
+});
