@@ -49,13 +49,14 @@ test('explosion and detonation have distinct Arabic labels and strike-colored SV
   assert.match(map, /const iconColor = visual\.color/);
 });
 
-test('warplane keeps the three-aircraft formation and drones retain their orbiting silhouette', () => {
+test('warplane keeps a three-aircraft orbit and drones retain their orbiting silhouette', () => {
   assert.match(map, /marker === 'orbit'/);
   assert.match(map, /t\.marker === 'squad'/);
-  assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(18, -12, 1\).*pl\(2, 8, 0\.85\).*pl\(34, 8, 0\.85\)/);
+  assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(36, -12, 1\).*pl\(20, 8, 0\.85\).*pl\(52, 8, 0\.85\)/);
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad\s*\{[\s\S]{0,300}animation: warplaneEastPass 7s linear infinite;/);
-  assert.doesNotMatch(css, /warplaneEastTurnBack/);
+  assert.match(css, /\.mk-squad \.squad\s*\{[\s\S]{0,300}animation: warplaneOrbit 6s linear infinite;/);
+  assert.match(css, /@keyframes warplaneOrbit\s*\{\s*from \{ transform: rotate\(0deg\) translateX\(20px\); \}\s*to \{ transform: rotate\(-360deg\) translateX\(20px\); \}/);
+  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad \.squad \{ visibility: hidden; \}/);
   assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: none;/);
   assert.doesNotMatch(css, /squadFlyZ/);
   assert.match(svgs, /"uav":/);

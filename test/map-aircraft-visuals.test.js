@@ -57,19 +57,19 @@ test('signal-sweep UAV uses the Lebanese four-arc emitter, separate from the gen
   assert.match(css, /\.signal-sweep-uav-svg \{ display: block; fill: #6b7280; color: #1a1a2e;/);
 });
 
-test('warplane is one tight formation that passes straight from east across the pinned report and exits west', () => {
-  assert.match(mapJs, /\$\{pl\(18, -12, 1\)\}\$\{pl\(2, 8, 0\.85\)\}\$\{pl\(34, 8, 0\.85\)\}/);
-  assert.match(mapJs, /warplaneEastOffset/);
-  assert.match(mapJs, /this\.map\.on\('move'[\s\S]{0,250}this\.updateWarplaneVectors\(\)/);
-  assert.match(css, /\.mk-squad \.squad \{[\s\S]*?animation: warplaneEastPass 7s linear infinite;/);
-  const passFrames = css.match(/@keyframes warplaneEastPass \{([\s\S]*?)\n\}/)?.[1];
-  assert.ok(passFrames, 'a dedicated straight-pass keyframe must exist');
-  assert.match(passFrames, /0%, 4%[\s\S]*var\(--flight-east-x/);
-  assert.match(passFrames, /50%[\s\S]*translate3d\(0, 0, 0\)/, 'the group passes through the report point');
-  assert.match(passFrames, /86%[\s\S]*calc\(0px - var\(--flight-east-x/, 'the group exits on the west side');
-  assert.match(passFrames, /92%, 100%[\s\S]*opacity: 0/, 'the group briefly disappears before repeating');
-  assert.doesNotMatch(passFrames, /rotate\(450deg\)/, 'the formation must not turn back at the report');
+test('warplane formation continuously orbits its pinned report like Lebanese map aircraft', () => {
+  assert.match(mapJs, /\$\{pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)\}/, 'the three-plane group is centered on its orbit');
+  assert.doesNotMatch(mapJs, /warplaneEastOffset|updateWarplaneVectors|--flight-east-[xy]|--flight-angle/, 'the old straight-pass vector is removed');
+  assert.match(css, /\.mk-squad \.squad \{[\s\S]*?animation: warplaneOrbit 6s linear infinite;/);
+  const orbitFrames = css.match(/@keyframes warplaneOrbit \{([\s\S]*?)\n\}/)?.[1];
+  assert.ok(orbitFrames, 'a dedicated orbit animation must exist');
+  assert.match(orbitFrames, /from \{ transform: rotate\(0deg\) translateX\(20px\); \}/);
+  assert.match(orbitFrames, /to \{ transform: rotate\(-360deg\) translateX\(20px\); \}/);
+  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad \.squad \{ visibility: hidden; \}/);
+  assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-squad \.squad \{ visibility: visible; \}/);
+  assert.match(css, /\.mk-squad \.mk-s \{ transform: none; transition: none; \}/, 'the orbit stays fixed in screen space');
   assert.match(css, /\.mk-squad \.squad \.sq \{[^}]*animation: none;/);
+  assert.match(css, /\.mk-squad \.squad \{[^}]*height: 72px;/);
   assert.doesNotMatch(css, /squadFlyZ/);
   assert.match(mapJs, /if \(!\['squad', 'movement', 'fly'\]\.includes\(marker\)\)/);
 });

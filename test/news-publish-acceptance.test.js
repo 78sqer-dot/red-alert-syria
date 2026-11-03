@@ -91,10 +91,11 @@ test('home menu clears tracked private relay messages for this bot and chat only
   assert.deepEqual(reportDeletes.map(({ chatId, payload }) => [chatId, payload.message_id]), [[reporter.id, 9103]]);
 });
 
-test('report menus expose every current alert type and keep aerial movement reachable', async () => {
+test('report menus omit the standalone air-movement button while retaining other report choices', async () => {
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...BOT_ALERT_MENU_PATROL_CHILD_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
   assert.equal(new Set(routedTypes).size, routedTypes.length, 'each alert type has exactly one report-menu route');
-  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).sort(), 'the current menu covers the full shared alert registry');
+  const reportableTypes = Object.keys(ALERT_TYPES).filter((type) => type !== 'air_movement');
+  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'all alert types except the removed standalone movement choice have a menu route');
 
   let start = calls.length;
   await tap('home');
@@ -104,7 +105,7 @@ test('report menus expose every current alert type and keep aerial movement reac
     assert.ok(top.includes(callback), `main menu includes ${callback}`);
   }
   assert.ok(topKeyboard.flat().some((button) => button.callback_data === 'ag:protests' && button.text?.includes('مظاهرة')), 'protest parent is labeled «مظاهرة»');
-  assert.equal(top.includes('t:air_movement'), false, 'air movement is chosen inside the aerial group, not misrouted directly');
+  assert.equal(top.includes('t:air_movement'), false, 'air movement is not a standalone top-level type');
   assert.equal(top.includes('t:kidnapping'), false, 'kidnapping stays nested under patrol rather than becoming a top-level option');
   start = calls.length;
   await tap('t:patrol');
@@ -148,7 +149,8 @@ test('public report bot exposes both strike types and sends detonation reports o
   const currentUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const currentButtons = () => currentUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...BOT_ALERT_MENU_PATROL_CHILD_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
-  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).sort(), 'the public menu routes every alert type exactly once');
+  const reportableTypes = Object.keys(ALERT_TYPES).filter((type) => type !== 'air_movement');
+  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'the public menu omits only the standalone air-movement type');
 
   let start = calls.length;
   await tap('home', publicReporter, reportBot);
@@ -682,9 +684,10 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 'mi' && button.text?.endsWith('توغل عسكري')));
   assert.ok(buttons().some((button) => button.callback_data === 'cv' && button.text?.startsWith('🛡️ مدني')));
   assert.equal(buttons().some((button) => ['t:civil', 't:accident', 't:fire', 't:protest', 't:protest_action', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting'].includes(button.callback_data)), false, 'category choices stay inside their submenus');
-  assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'aircraft direction is selected inside warplane/drone options, not as a separate main button');
+  assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'air movement is not a standalone main-menu button');
   await tap('ag:aerial', reporter, reportBot);
-  for (const type of ['t:warplane', 't:uav', 't:helicopter', 't:air_movement']) assert.ok(buttons().some((button) => button.callback_data === type), `aerial submenu contains ${type}`);
+  for (const type of ['t:warplane', 't:uav', 't:helicopter']) assert.ok(buttons().some((button) => button.callback_data === type), `aerial submenu contains ${type}`);
+  assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'aerial submenu omits the standalone movement option');
   await tap('t:helicopter', reporter, reportBot);
   assert.match(lastUi()?.payload?.text || '', /طيران مروحي/, 'helicopter starts a manual publishing draft');
   await tap('home');
