@@ -275,11 +275,11 @@ export function registerOwnerTools(bot, h) {
     const prev = Number(config.ownerIds[0]);
     const next = Number(p.id);
     store.setProject({ ownerId: next, prevOwnerId: prev });
-    applyProject(store.project);
+    applyProject(store.project, { soleOwner: true });
     store.removeEditor(next);
     if (p.keep) store.addEditor(prev); else store.removeEditor(prev);
     h.dropSessions(prev);
-    const env = renderLinked() ? await renderSetEnv({ OWNER_IDS: String(next) }) : null;
+    const env = renderLinked() ? await renderSetEnv({ OWNER_IDS: String(next), PRIMARY_OWNER_ID: String(next) }) : null;
     store.persist();
     store.flushBackup().catch(() => {});
     console.log(`[owner] project handed over ${prev} -> ${next} (keep=${p.keep})`);
@@ -469,7 +469,7 @@ export function registerOwnerTools(bot, h) {
     }
     pend.delete(ctx.from.id);
     const env = await renderSetEnv({
-      OWNER_IDS: config.ownerIds.join(','), BOT_TOKEN: config.botToken, REPORT_BOT_TOKEN: config.reportBotToken,
+      OWNER_IDS: config.ownerIds.join(','), PRIMARY_OWNER_ID: String(config.ownerIds[0] || ''), BOT_TOKEN: config.botToken, REPORT_BOT_TOKEN: config.reportBotToken,
       CHANNEL_ID: config.channel, CHANNEL_URL: config.channelUrl, REPORT_BOT_USERNAME: config.reportBotUsername,
     });
     await ctx.reply(env.ok

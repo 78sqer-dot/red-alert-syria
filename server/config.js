@@ -16,6 +16,12 @@ const derivedSecret = token
 
 const reportToken = process.env.REPORT_BOT_TOKEN || '';
 const reportSecret = reportToken ? crypto.createHash('sha256').update('ras-report-webhook:' + reportToken).digest('hex').slice(0, 48) : '';
+const primaryOwnerId = Number(process.env.PRIMARY_OWNER_ID);
+const hasPrimaryOwnerId = Number.isFinite(primaryOwnerId) && primaryOwnerId > 0;
+const configuredOwnerIds = [...new Set([
+  ...(hasPrimaryOwnerId ? [primaryOwnerId] : []),
+  ...list(process.env.OWNER_IDS || process.env.ADMIN_ID).map(Number).filter(Number.isFinite),
+])];
 export const config = {
   reportBotToken: reportToken,
   reportWebhookSecret: process.env.REPORT_WEBHOOK_SECRET || reportSecret,
@@ -27,7 +33,7 @@ export const config = {
   channel: process.env.CHANNEL_ID || '@Red_Alert_Syria',
   channelUrl: process.env.CHANNEL_URL || 'https://t.me/Red_Alert_Syria',
   reportBotUsername: (process.env.REPORT_BOT_USERNAME || 'Rad_Alert_Syria1_bot').replace(/^@/, ''),
-  ownerIds: list(process.env.OWNER_IDS || process.env.ADMIN_ID).map(Number).filter(Number.isFinite),
+  ownerIds: configuredOwnerIds,
   dataDir: process.env.DATA_DIR || new URL('../data/runtime', import.meta.url).pathname,
   telegramBackup: process.env.TELEGRAM_BACKUP !== 'false',
   // channel posts as a map image (set ALERT_IMAGES=false to post text only)
@@ -44,6 +50,7 @@ export const isOwner = (id) => config.ownerIds.includes(Number(id));
 const deriveSecret = (prefix, t) => (t ? crypto.createHash('sha256').update(prefix + t).digest('hex').slice(0, 48) : '');
 export const envDefaults = Object.freeze({
   ownerIds: [...config.ownerIds],
+  primaryOwnerId: hasPrimaryOwnerId ? primaryOwnerId : null,
   botToken: config.botToken,
   reportBotToken: config.reportBotToken,
   channel: config.channel,
@@ -51,9 +58,18 @@ export const envDefaults = Object.freeze({
   reportBotUsername: config.reportBotUsername,
 });
 // Apply saved overrides (or env defaults when a field is missing) to the live config object.
-export function applyProject(p = {}) {
+export function applyProject(p = {}, { soleOwner = false } = {}) {
   const ownerId = Number(p.ownerId);
-  config.ownerIds = Number.isFinite(ownerId) && ownerId > 0 ? [ownerId] : [...envDefaults.ownerIds];
+  const projectOwnerIds = Number.isFinite(ownerId) && ownerId > 0 ? [ownerId] : [];
+  if (soleOwner && projectOwnerIds.length) {
+    config.ownerIds = projectOwnerIds;
+  } else if (projectOwnerIds.length) {
+    config.ownerIds = envDefaults.primaryOwnerId
+      ? [...new Set([envDefaults.primaryOwnerId, ...projectOwnerIds])]
+      : projectOwnerIds;
+  } else {
+    config.ownerIds = [...envDefaults.ownerIds];
+  }
   config.botToken = p.botToken || envDefaults.botToken;
   config.reportBotToken = p.reportBotToken || envDefaults.reportBotToken;
   config.channel = p.channel || envDefaults.channel;
