@@ -511,51 +511,54 @@ function cardKb(d, lang = 'ar') {
 }
 const intenseOn = (d) => (typeof d.intense === 'boolean' ? d.intense : droneAuto(d.headline) > 1);
 const intenseLabel = (d, lang) => (lang === 'en' ? `${ALERT_TYPES.uav.emoji} Intensive flight: ${intenseOn(d) ? '✅ on' : '⬜ off'}` : `${ALERT_TYPES.uav.emoji} تحليق مكثف: ${intenseOn(d) ? '✅ مفعّل' : '⬜ لا'}`);
-function typeKb(d, lang = 'ar') {
+function typeKb(d, lang = 'ar', namespace = 'nw') {
+  const cb = (key) => `${namespace}:${key}:${d.id}`;
   const kb = new InlineKeyboard();
   EDIT_TYPE_MENU.forEach((item, i) => {
     if (item.type) {
       const selected = d.type === item.type ? '• ' : '';
-      kb.text(`${selected}${alertButtonLabel(item.type, lang)}`, `nw:s:${d.id}:${item.type}`);
+      kb.text(`${selected}${alertButtonLabel(item.type, lang)}`, `${cb('s')}:${item.type}`);
     } else {
       const types = EDIT_TYPE_GROUPS[item.group] || [];
       const selected = types.includes(d.type) ? '• ' : '';
       const count = item.group === 'incursion' ? INCURSION_TYPE_CHOICES.length : types.length;
-      kb.text(`${selected}${newsGroupLabel(item.group, lang)} (${count})`, `nw:tg:${d.id}:${item.group}`);
+      kb.text(`${selected}${newsGroupLabel(item.group, lang)} (${count})`, `${cb('tg')}:${item.group}`);
     }
     if (i % 2 === 1 && i < EDIT_TYPE_MENU.length - 1) kb.row();
   });
   if (EDIT_TYPE_MENU.length % 2 === 1) kb.row();
-  return kb.text(tr(lang, '↩️ رجوع للخبر', '↩️ Back to draft'), 'nw:b:' + d.id);
+  return kb.text(tr(lang, '↩️ رجوع للخبر', '↩️ Back to draft'), cb('b'));
 }
-function typeGroupKb(d, group, lang = 'ar') {
+function typeGroupKb(d, group, lang = 'ar', namespace = 'nw') {
+  const cb = (key) => `${namespace}:${key}:${d.id}`;
   const kb = new InlineKeyboard();
   const types = EDIT_TYPE_GROUPS[group] || [];
   if (group === 'incursion') {
     INCURSION_TYPE_CHOICES.forEach((choice, i) => {
       const selected = d.type === 'military_incursion' && (d.incursionKind || 'general') === choice.kind ? '• ' : '';
       const label = choice.kind === 'barrier' ? `🚧 ${choice[lang]}` : choice[lang];
-      kb.text(`${selected}${label}`, `nw:si:${d.id}:${choice.kind}`);
+      kb.text(`${selected}${label}`, `${cb('si')}:${choice.kind}`);
       if (i % 2 === 1 && i < INCURSION_TYPE_CHOICES.length - 1) kb.row();
     });
   } else {
     types.forEach((type, i) => {
-      kb.text(`${d.type === type ? '• ' : ''}${alertButtonLabel(type, lang)}`, `nw:s:${d.id}:${type}`);
+      kb.text(`${d.type === type ? '• ' : ''}${alertButtonLabel(type, lang)}`, `${cb('s')}:${type}`);
       if (i % 2 === 1 && i < types.length - 1) kb.row();
     });
   }
   const count = group === 'incursion' ? INCURSION_TYPE_CHOICES.length : types.length;
   if (count % 2 === 1 || count === 0) kb.row();
-  return kb.text(tr(lang, '↩️ مجموعات الأنواع', '↩️ Type groups'), `nw:tb:${d.id}`)
-    .row().text(tr(lang, '↩️ رجوع للخبر', '↩️ Back to draft'), `nw:b:${d.id}`);
+  return kb.text(tr(lang, '↩️ مجموعات الأنواع', '↩️ Type groups'), cb('tb'))
+    .row().text(tr(lang, '↩️ رجوع للخبر', '↩️ Back to draft'), cb('b'));
 }
-function politicalCategoryKb(d, lang = 'ar') {
+function politicalCategoryKb(d, lang = 'ar', namespace = 'nw') {
   const kb = new InlineKeyboard();
   Object.entries(POLITICAL_CATEGORIES).forEach(([key, value], i) => {
-    kb.text(`${d.politicalCategory === key ? '• ' : ''}${lang === 'en' ? value.en : value.ar}`, `nw:ps:${d.id}:${key}`);
+    const callback = namespace === 'nw' ? `nw:ps:${d.id}:${key}` : `nwp:pc:${d.id}:${key}`;
+    kb.text(`${d.politicalCategory === key ? '• ' : ''}${lang === 'en' ? value.en : value.ar}`, callback);
     if (i % 2 === 1) kb.row();
   });
-  return kb.row().text(tr(lang, '↩️ رجوع', '↩️ Back'), 'nw:b:' + d.id);
+  return kb.row().text(tr(lang, '↩️ رجوع', '↩️ Back'), `${namespace}:b:${d.id}`);
 }
 async function sendCards(d, only = null) {
   const a = api();
@@ -607,7 +610,9 @@ function noticeKb(d, lang = 'ar') {
   const u = postUrl(d.postId);
   if (u) kb.url(tr(lang, '📣 المنشور', '📣 Post'), u);
   if (R.H?.mapUrl && d.alertId) kb.url(tr(lang, '🗺 على الخريطة', '🗺 On the map'), R.H.mapUrl(d.alertId, lang));
-  return kb.row().text(tr(lang, '↩️ تراجع (حذف من القناة والخريطة)', '↩️ Undo (remove from channel + map)'), 'nw:u:' + d.id);
+  return kb.row()
+    .text(tr(lang, '🏷 تغيير نوع الخبر', '🏷 Change news type'), 'nw:pt:' + d.id).row()
+    .text(tr(lang, '↩️ تراجع (حذف من القناة والخريطة)', '↩️ Undo (remove from channel + map)'), 'nw:u:' + d.id);
 }
 async function nightPublish(d) {
   const a = api();
@@ -1144,6 +1149,111 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, text);
     try { await ctx.deleteMessage(); } catch { try { await ctx.editMessageText('✔️'); } catch { /* ignore */ } }
   };
+  const publishedNewsDraft = async (id) => {
+    const d = await findDraft(id);
+    return d?.auto && d.status === 'published' && !d.undone && d.alertId && store.getAlert(d.alertId) ? d : null;
+  };
+  const refreshPublishedNotices = async (d) => {
+    const a = api();
+    if (!a) return;
+    for (const [chat, mid] of d.notices || []) {
+      const lang = langOfId(chat);
+      try { await a.editMessageText(chat, mid, noticeText(d, lang), { parse_mode: 'HTML', reply_markup: noticeKb(d, lang), link_preview_options: { is_disabled: true } }); } catch { /* notice may have been removed */ }
+    }
+  };
+  const applyPublishedNewsType = async (ctx, d, type, { incursionKind = 'general', politicalCategory = null } = {}) => {
+    if (!ALERT_TYPES[type]) return toast(ctx, t(ctx, 'نوع غير صالح', 'Invalid type'), true);
+    const alert = store.getAlert(d.alertId);
+    if (!alert) return vanish(ctx, t(ctx, 'التنبيه لم يعد موجوداً على الخريطة', 'This alert is no longer on the map'));
+    const meta = { ...(alert.meta || {}) };
+    if (type !== 'military_incursion') { delete meta.incursionKind; delete meta.vehicleCount; }
+    else if (incursionKind === 'general') delete meta.incursionKind;
+    else meta.incursionKind = incursionKind;
+    if (type !== 'political') delete meta.political;
+    else meta.political = { ...(meta.political || {}), category: politicalCategory || d.politicalCategory };
+    if (type !== 'uav') delete meta.intense;
+    if (type !== 'weather') delete meta.hazard;
+    const { retypeAlerts } = await import('./bot.js');
+    let result;
+    try { [result] = await retypeAlerts(ctx.api, [d.alertId], type, { gapMs: 0, alertPatch: { meta: Object.keys(meta).length ? meta : null } }); }
+    catch (e) { console.error('[news] published type change failed', e.description || e.message); return toast(ctx, t(ctx, 'تعذّر تعديل الخبر المنشور', 'Could not update the published story'), true); }
+    // retypeAlerts updates the live map before attempting Telegram's in-place channel edit.
+    if (store.getAlert(d.alertId)?.type !== type) return toast(ctx, t(ctx, 'تعذّر تعديل الخبر المنشور', 'Could not update the published story'), true);
+    d.type = type;
+    delete d.pendingPublishedType;
+    if (type === 'military_incursion' && incursionKind !== 'general') d.incursionKind = incursionKind;
+    else delete d.incursionKind;
+    if (type === 'political') { d.politicalCategory = politicalCategory || d.politicalCategory; d.politicalNeedsCategory = !POLITICAL_CATEGORIES[d.politicalCategory]; }
+    else { delete d.politicalCategory; delete d.politicalNeedsCategory; }
+    const cached = newsState().alerts.find((item) => item.id === d.alertId);
+    if (cached) {
+      const updated = store.getAlert(d.alertId);
+      cached.type = type;
+      cached.politicalCategory = type === 'political' ? d.politicalCategory : undefined;
+      cached.headline = [updated?.title, updated?.description].filter(Boolean).join(' ');
+    }
+    save();
+    await refreshPublishedNotices(d);
+    await toast(ctx, result?.ok === false
+      ? t(ctx, 'تم تعديل الخريطة، لكن تعذّر تحديث منشور القناة', 'Map updated, but the channel post could not be edited')
+      : `${ALERT_TYPES[type].emoji} ${en(ctx) ? ALERT_TYPES[type].en : ALERT_TYPES[type].ar}`);
+  };
+  const requirePublishedOwner = async (ctx, id) => {
+    if (!h.owner(ctx)) { await toast(ctx, t(ctx, 'للأدمنية فقط', 'Admins only')); return null; }
+    const d = await publishedNewsDraft(id);
+    if (!d) { await vanish(ctx, t(ctx, 'هذا الخبر المنشور لم يعد متاحاً', 'This published story is no longer available')); return null; }
+    return d;
+  };
+  bot.callbackQuery(/^nw:pt:(\w+)$/, async (ctx) => {
+    const d = await requirePublishedOwner(ctx, ctx.match[1]);
+    if (!d) return;
+    await toast(ctx, '');
+    try { await ctx.editMessageReplyMarkup({ reply_markup: typeKb(d, h.langOf(ctx), 'nwp') }); } catch { /* notice may be gone */ }
+  });
+  bot.callbackQuery(/^nwp:tg:(\w+):([a-z_]+)$/, async (ctx) => {
+    const d = await requirePublishedOwner(ctx, ctx.match[1]);
+    if (!d) return;
+    const group = ctx.match[2];
+    if (!Object.hasOwn(EDIT_TYPE_GROUPS, group)) return toast(ctx, '');
+    await toast(ctx, '');
+    try { await ctx.editMessageReplyMarkup({ reply_markup: typeGroupKb(d, group, h.langOf(ctx), 'nwp') }); } catch { /* ignore */ }
+  });
+  bot.callbackQuery(/^nwp:tb:(\w+)$/, async (ctx) => {
+    const d = await requirePublishedOwner(ctx, ctx.match[1]);
+    if (!d) return;
+    await toast(ctx, '');
+    try { await ctx.editMessageReplyMarkup({ reply_markup: typeKb(d, h.langOf(ctx), 'nwp') }); } catch { /* ignore */ }
+  });
+  bot.callbackQuery(/^nwp:b:(\w+)$/, async (ctx) => {
+    const d = await requirePublishedOwner(ctx, ctx.match[1]);
+    if (!d) return;
+    delete d.pendingPublishedType; save();
+    await toast(ctx, '');
+    try { await ctx.editMessageText(noticeText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: noticeKb(d, h.langOf(ctx)), link_preview_options: { is_disabled: true } }); } catch { /* ignore */ }
+  });
+  bot.callbackQuery(/^nwp:si:(\w+):(general|soldiers|vehicles|barrier)$/, async (ctx) => {
+    const d = await requirePublishedOwner(ctx, ctx.match[1]);
+    if (!d) return;
+    await applyPublishedNewsType(ctx, d, 'military_incursion', { incursionKind: ctx.match[2] });
+  });
+  bot.callbackQuery(/^nwp:s:(\w+):(\w+)$/, async (ctx) => {
+    const d = await requirePublishedOwner(ctx, ctx.match[1]);
+    if (!d) return;
+    const type = ctx.match[2];
+    if (!ALERT_TYPES[type]) return toast(ctx, '');
+    if (type === 'political') {
+      d.pendingPublishedType = type; save();
+      await toast(ctx, '');
+      try { await ctx.editMessageReplyMarkup({ reply_markup: politicalCategoryKb(d, h.langOf(ctx), 'nwp') }); } catch { /* ignore */ }
+      return;
+    }
+    await applyPublishedNewsType(ctx, d, type);
+  });
+  bot.callbackQuery(/^nwp:pc:(\w+):([a-z_]+)$/, async (ctx) => {
+    const d = await requirePublishedOwner(ctx, ctx.match[1]);
+    if (!d || d.pendingPublishedType !== 'political' || !POLITICAL_CATEGORIES[ctx.match[2]]) return toast(ctx, '');
+    await applyPublishedNewsType(ctx, d, 'political', { politicalCategory: ctx.match[2] });
+  });
   bot.callbackQuery(/^nw:i:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const d = await findDraft(ctx.match[1]);
@@ -1542,4 +1652,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, nightSummaryTick, noticeText, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
