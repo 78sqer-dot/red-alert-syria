@@ -1,7 +1,7 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
 import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=36';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=15';
+import { EXTRA_SVG } from './target-svgs.js?v=16';
 import { icon } from './icons.js?v=5';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=5';
@@ -9,6 +9,7 @@ import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey, countUniqueZoneCircles } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
+import { warplaneEastOffset } from '/shared/warplane-motion.js?v=1';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
@@ -206,6 +207,7 @@ export class AlertMap {
     }).catch((e) => console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e));
     let lastOrbitUpdate = 0;
     let lastHelicopterScale = '';
+    let lastWarplaneVectorUpdate = 0;
     const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
@@ -239,11 +241,18 @@ export class AlertMap {
     this.map.on('zoomstart', () => this.el.classList.add('is-zooming'));
     // pause the marker animations while a gesture/flight is running so the map itself stays smooth
     this.map.on('movestart', () => this.el.classList.add('is-moving'));
+    this.map.on('move', () => {
+      const now = performance.now();
+      if (now - lastWarplaneVectorUpdate < 50) return;
+      lastWarplaneVectorUpdate = now;
+      this.updateWarplaneVectors();
+    });
     this.map.on('moveend', () => {
       this.el.classList.remove('is-moving');
       this.refreshMarkerGroups();
+      this.updateWarplaneVectors();
     });
-    this.map.on('resize', () => { this._queueZones(); this.refreshMarkerGroups(); });
+    this.map.on('resize', () => { this._queueZones(); this.refreshMarkerGroups(); this.updateWarplaneVectors(); });
     zoomTier(true);
     this.map.on('styleimagemissing', (e) => {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
@@ -841,6 +850,7 @@ export class AlertMap {
         this.markers.delete(id);
       }
     }
+    this.updateWarplaneVectors();
     this.updateZones();
     if (this.popup?._groupKey) {
       const ids = this.popup._groupAlertIds || [];
@@ -850,13 +860,29 @@ export class AlertMap {
     if (this.popup && this.popup._alertId && !seen.has(this.popup._alertId)) this.closePopup();
   }
 
+  updateWarplaneVectors() {
+    const map = this.map;
+    const container = map?.getContainer?.();
+    if (!container || !Array.isArray(this.alerts) || !this.markers?.size) return;
+    const mapScale = Number.parseFloat(getComputedStyle(container).getPropertyValue('--mks')) || Number.parseFloat(this._mks) || 0.5;
+    for (const alert of this.alerts) {
+      if (typeOf(alert.type).marker !== 'squad' || !Number.isFinite(alert.location?.latitude) || !Number.isFinite(alert.location?.longitude)) continue;
+      const marker = this.markers.get(alert.id);
+      if (!marker) continue;
+      const offset = warplaneEastOffset(map, alert.location, container.clientWidth, mapScale);
+      const el = marker.getElement();
+      el.style.setProperty('--flight-east-x', `${offset.x}px`);
+      el.style.setProperty('--flight-east-y', `${offset.y}px`);
+    }
+  }
+
   markerEl(a) {
     const t = typeOf(a.type);
     const visual = eventVisual(a.type);
     const incursionKind = a.meta?.incursionKind || a.incursion_kind || (Number.isInteger(a.meta?.vehicleCount) || Number.isInteger(a.vehicle_count) ? 'vehicles' : null);
     const signalDrone = a.type === 'signal_sweep' && (a.signal_platform === 'uav' || a.meta?.signalPlatform === 'uav');
     const marker = signalDrone ? 'orbit' : t.marker;
-    const glyph = signalDrone ? 'uav'
+    const glyph = signalDrone ? 'signal_sweep_uav'
       : a.type === 'assassination' ? assassinationWeaponGlyph(a)
       : a.type === 'shooting' ? shootingWeaponGlyph(a)
         : a.type === 'military_incursion' ? (incursionKind === 'barrier' ? 'military_barrier' : incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
@@ -867,7 +893,8 @@ export class AlertMap {
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
     if (marker === 'orbit') {
-      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(glyph, 24, 'class="uav-svg"')}</div></div>`;
+      const svgClass = signalDrone ? 'signal-sweep-uav-svg' : 'uav-svg';
+      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(glyph, 24, `class="${svgClass}"`)}</div></div>`;
     } else if (marker === 'helicopter') {
       el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (marker === 'squad') {

@@ -23,7 +23,9 @@ test('warplane keeps the three-aircraft formation and drones retain their orbiti
   assert.match(map, /t\.marker === 'squad'/);
   assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(18, -12, 1\).*pl\(2, 8, 0\.85\).*pl\(34, 8, 0\.85\)/);
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px;[^}]*animation: squadFlyZ 7s linear infinite;/);
+  assert.match(css, /\.mk-squad \.squad\s*\{[\s\S]{0,300}animation: warplaneEastTurnBack 7s linear infinite;/);
+  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: none;/);
+  assert.doesNotMatch(css, /squadFlyZ/);
   assert.match(svgs, /"uav":/);
   assert.match(svgs, /"plane":/);
 });
@@ -31,8 +33,11 @@ test('warplane keeps the three-aircraft formation and drones retain their orbiti
 test('a signal-sweep drone uses the standard 24px, type-colored orbit marker only when selected', () => {
   assert.match(map, /const signalDrone = a\.type === 'signal_sweep' &&/);
   assert.match(map, /const marker = signalDrone \? 'orbit' : t\.marker;/);
-  assert.match(map, /const glyph = signalDrone \? 'uav'/);
-  assert.match(map, /svgTag\(glyph, 24, 'class="uav-svg"'\)/);
+  assert.equal(ALERT_TYPES.uav.glyph, 'uav');
+  assert.equal(ALERT_TYPES.signal_sweep.glyph, 'signal_sweep');
+  assert.match(map, /const glyph = signalDrone \? 'signal_sweep_uav'/);
+  assert.match(map, /const svgClass = signalDrone \? 'signal-sweep-uav-svg' : 'uav-svg'/);
+  assert.match(map, /svgTag\(glyph, 24, `class="\$\{svgClass\}"`\)/);
   assert.match(map, /el\.style\.setProperty\('--c', visual\.color\)/);
 });
 
