@@ -1011,7 +1011,7 @@ function withDeadline(promise, ms) {
  * Change the type of already-published alerts (owner request): map + stored alert + statistics log,
  * and EDIT (never delete/repost) the existing channel post: new title/emoji, new map image, same buttons.
  */
-export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph = null } = {}) {
+export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph = null, alertPatch = null } = {}) {
   const out = [];
   const nt = TITLES[type];
   if (!nt || (markerGlyph && markerGlyph !== 'weapon')) return [{ ok: false, why: 'unknown type or marker glyph' }];
@@ -1020,7 +1020,7 @@ export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph =
     if (!a) { out.push({ id, ok: false, why: 'alert not found' }); continue; }
     const oldType = a.type;
     const ot = TITLES[a.type];
-    const patch = { type };
+    const patch = { ...(alertPatch && typeof alertPatch === 'object' ? alertPatch : {}), type };
     if (markerGlyph) patch.marker_glyph = markerGlyph;
     if (ot && a.type !== type) {
       if (typeof a.title === 'string' && a.title.startsWith(ot.ar)) patch.title = nt.ar + a.title.slice(ot.ar.length);

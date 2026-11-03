@@ -489,6 +489,40 @@ test('news-monitor type editor covers every bot alert type while settings stay m
   assert.equal(toBotDraft({ type: 'patrol', headline: 'رصد دورية عسكرية قرب كودنة' }).patrolForm, 'singular');
 });
 
+test('only admins can reclassify an auto-published news alert in place', async (t) => {
+  const alert = store.addAlert({
+    type: 'uav', title: 'نشاط طائرات مسيّرة — دمشق', title_en: 'Drone activity — Damascus',
+    description: 'خبر تجريبي منشور', location: { scope: 'place', name_ar: 'دمشق', name_en: 'Damascus', latitude: 33.5138, longitude: 36.2765 },
+    ttlMin: 60, source: 'news',
+  });
+  store.updateAlert(alert.id, { channel_message_id: 9911, channel_media: 'text', channel_format: 2 });
+  const id = 'publishedTypeAdminOnly';
+  const draft = newsState().drafts[id] = {
+    id, type: 'uav', status: 'published', auto: true, autoMode: 'day', autoAt: Date.now(),
+    alertId: alert.id, postId: 9911, headline: 'خبر تجريبي منشور', loc: alert.place, extra: [], srcs: [],
+    notices: [[ownerId, 7701]],
+  };
+  t.after(() => { delete newsState().drafts[id]; store.deleteAlert(alert.id); });
+
+  assert.ok(newsMonitorTest.noticeKb(draft, 'ar').inline_keyboard.flat().some((button) => button.callback_data === `nw:pt:${id}`), 'auto-published notice offers a type editor');
+  let start = calls.length;
+  await tap(`nw:pt:${id}`, reporter);
+  assert.equal(store.getAlert(alert.id).type, 'uav', 'non-admin tap cannot reclassify the published alert');
+  assert.equal(calls.slice(start).some(({ method, chatId }) => method === 'editMessageText' && chatId === '@mock_news_channel'), false, 'non-admin cannot trigger a channel edit');
+
+  start = calls.length;
+  await tap(`nw:pt:${id}`, owner);
+  assert.ok(callbacksOf(keyboardAfter(start)).includes(`nwp:s:${id}:breaking`), 'admin opens the published-story type menu');
+  start = calls.length;
+  await tap(`nwp:s:${id}:breaking`, owner);
+  assert.equal(store.getAlert(alert.id).type, 'breaking', 'the live alert changes type');
+  assert.equal(draft.type, 'breaking', 'the persistent news record follows the live alert');
+  const channelEdit = calls.slice(start).find(({ method, chatId }) => method === 'editMessageText' && chatId === '@mock_news_channel');
+  assert.ok(channelEdit, 'the existing channel message is edited, not reposted');
+  assert.match(channelEdit.payload.text, /عاجل/, 'the existing channel post receives the corrected type label');
+  assert.equal(calls.slice(start).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'reclassification never creates a duplicate post');
+});
+
 test('every monitored alert type builds, and accepting the same mock draft twice posts once', async (t) => {
   const addedAlertIds = [];
   const pendingReportIds = [];
