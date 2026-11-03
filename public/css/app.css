@@ -956,11 +956,11 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 }
 .mk-squad .squad .sq { width: 24px; height: 24px; scale: 1; animation: none; }
 @keyframes warplaneEastPass {
-  0%, 4% { transform: translate3d(var(--flight-east-x, 110px), var(--flight-east-y, 0px), 0) rotate(var(--flight-angle, 270deg)); opacity: 0; }
-  10% { transform: translate3d(var(--flight-east-x, 110px), var(--flight-east-y, 0px), 0) rotate(var(--flight-angle, 270deg)); opacity: 1; }
-  50% { transform: translate3d(0, 0, 0) rotate(var(--flight-angle, 270deg)); opacity: 1; }
-  86% { transform: translate3d(calc(0px - var(--flight-east-x, 110px)), calc(0px - var(--flight-east-y, 0px)), 0) rotate(var(--flight-angle, 270deg)); opacity: 1; }
-  92%, 100% { transform: translate3d(calc(0px - var(--flight-east-x, 110px)), calc(0px - var(--flight-east-y, 0px)), 0) rotate(var(--flight-angle, 270deg)); opacity: 0; }
+  0%, 4% { transform: translate3d(var(--flight-east-x, 110px), var(--flight-east-y, 0px), 0) rotate(var(--flight-angle, 180deg)); opacity: 0; }
+  10% { transform: translate3d(var(--flight-east-x, 110px), var(--flight-east-y, 0px), 0) rotate(var(--flight-angle, 180deg)); opacity: 1; }
+  50% { transform: translate3d(0, 0, 0) rotate(var(--flight-angle, 180deg)); opacity: 1; }
+  86% { transform: translate3d(calc(0px - var(--flight-east-x, 110px)), calc(0px - var(--flight-east-y, 0px)), 0) rotate(var(--flight-angle, 180deg)); opacity: 1; }
+  92%, 100% { transform: translate3d(calc(0px - var(--flight-east-x, 110px)), calc(0px - var(--flight-east-y, 0px)), 0) rotate(var(--flight-angle, 180deg)); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mk-squad .squad { animation: none !important; transform: none !important; opacity: 1 !important; }

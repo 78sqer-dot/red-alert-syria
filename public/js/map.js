@@ -873,8 +873,9 @@ export class AlertMap {
       const el = marker.getElement();
       el.style.setProperty('--flight-east-x', `${offset.x}px`);
       el.style.setProperty('--flight-east-y', `${offset.y}px`);
-      // Rotate the aircraft along the projected screen-space direction, including map rotation.
-      const heading = Math.atan2(-offset.x, offset.y) * 180 / Math.PI;
+      // The squad enters from the projected-east side and crosses toward the pin.
+      // Point each airframe along that actual screen-space travel vector.
+      const heading = Math.atan2(-offset.y, -offset.x) * 180 / Math.PI;
       el.style.setProperty('--flight-angle', `${heading}deg`);
     }
   }
