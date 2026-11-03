@@ -5,9 +5,10 @@ import { FLIGHT_DIRECTIONS } from '../shared/types.js';
 
 const bot = await readFile(new URL('../server/bot.js', import.meta.url), 'utf8');
 
-test('overflight and aircraft movement remain separate bot choices', () => {
+test('warplane menu omits aircraft movement while the UAV menu retains it', () => {
   assert.match(bot, /Hovering over the area[^\n]*airmode:over/);
-  assert.match(bot, /Aircraft movement[^\n]*airmode:move/);
+  assert.match(bot, /if \(d\.type === 'uav'\) kb\.text\(en \? `\$\{aircraft\} Aircraft movement` : `\$\{aircraft\} حركة طيران`, 'airmode:move'\)/);
+  assert.match(bot, /if \(ctx\.match\[1\] === 'move' && d\.type !== 'uav'\) return;/, 'stale warplane movement callbacks are rejected');
   assert.match(bot, /d\.aerialMode = 'over';[\s\S]{0,100}askLocation\(ctx, d\)/);
   assert.match(bot, /d\.type = 'air_movement';[\s\S]{0,100}askFlightDirection\(ctx, d\)/);
 });

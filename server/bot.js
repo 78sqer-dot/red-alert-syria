@@ -727,10 +727,13 @@ async function askAerialMode(ctx, d) {
   const en = langOf(ctx) === 'en';
   const aircraft = d.type === 'uav' ? ALERT_TYPES.uav.emoji : ALERT_TYPES.warplane.emoji;
   const kb = new InlineKeyboard()
-    .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row()
-    .text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row()
-    .text(L(ctx).btnCancel, 'cancel');
-  await show(ctx, en ? 'Choose hovering over an area or aircraft movement. For movement, you can also select a destination area.' : 'اختر تحليقًا فوق منطقة أو حركة طيران. في مسار الحركة يمكنك أيضًا تحديد المنطقة المقصودة.', kb);
+    .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row();
+  if (d.type === 'uav') kb.text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row();
+  kb.text(L(ctx).btnCancel, 'cancel');
+  const prompt = d.type === 'uav'
+    ? (en ? 'Choose hovering over an area or aircraft movement. For movement, you can also select a destination area.' : 'اختر تحليقًا فوق منطقة أو حركة طيران. في مسار الحركة يمكنك أيضًا تحديد المنطقة المقصودة.')
+    : (en ? 'Choose the area where the warplanes are flying over.' : 'اختر المنطقة التي يحلّق فوقها الطيران الحربي.');
+  await show(ctx, prompt, kb);
 }
 async function askAirstrikeForm(ctx, d) {
   d.step = 'airstrike_form';
@@ -1907,6 +1910,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
   bot.callbackQuery(/^airmode:(over|move)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'uav' && d.type !== 'warplane') return;
+    if (ctx.match[1] === 'move' && d.type !== 'uav') return;
     if (ctx.match[1] === 'over') {
       d.aerialMode = 'over';
       return askLocation(ctx, d);
