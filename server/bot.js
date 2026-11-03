@@ -601,6 +601,7 @@ function previewKeyboard(ctx, d) {
   const kb = new InlineKeyboard();
   const enx = langOf(ctx) === 'en';
   if (d.mode === 'report') kb.text(l.btnSubmit, 'submit').row();
+  else if (d.mode === 'edit_published') kb.text(enx ? '✅ Save format edit' : '✅ حفظ تعديل الصيغة', 'save_edit').row();
   else if (d.type === 'road') kb.text(enx ? '🗺 Publish on the map' : '🗺 نشر على الخريطة', 'publish').row().text(enx ? '📢 Map + channel' : '📢 الخريطة + القناة', 'publish:ch').row();
   else kb.text(l.btnPublish, 'publish').row();
   kb.text(l.btnDuration(d.ttlMin), 'dur').row();
@@ -1207,6 +1208,28 @@ export async function publishDraft(api, d, author) {
   }
   return publishInput(api, buildAlertInput(d, author));
 }
+/** Update an existing alert and its existing channel post in place. */
+export async function editPublishedAlert(api, id, d, author) {
+  const current = store.getAlert(id);
+  if (!current) throw new Error('published alert not found');
+  const input = buildAlertInput(d, author);
+  const patch = {
+    type: input.type,
+    title: input.title,
+    title_en: input.title_en,
+    description: input.description || '',
+    location: input.location?.latitude != null ? { latitude: input.location.latitude, longitude: input.location.longitude } : null,
+    place: input.location || null,
+    areas: input.areas || [],
+    extra: input.extra || [],
+    scope: input.location?.scope || 'country',
+    meta: { ...(current.meta || {}), ...(input.meta || {}) },
+  };
+  store.updateAlert(id, patch);
+  const updated = store.getAlert(id);
+  await refreshChannelPost(api, updated, !updated.is_active);
+  return updated;
+}
 /** add an alert to the map and (unless toChannel=false) post it to the channel */
 export async function publishInput(api, input, { toChannel = true } = {}) {
   const alert = store.addAlert(input);
@@ -1438,9 +1461,16 @@ const OH = {
   resync: () => resyncChannelPosts(APIS.admin).catch(() => {}),
   sendTransient: (api, chat, text, o) => sendTransient(api, chat, text, o),
   publishDraft: (api, d, author) => publishDraft(api, d, author),
+  editPublishedAlert: (api, id, d, author) => editPublishedAlert(api, id, d, author),
+  getAlert: (id) => store.getAlert(id),
   mapUrl: (id, lang) => mapUrl(id, lang),
   // open a ready draft (news monitor "✏️ edit first") in this user's normal publishing preview
   loadDraft: (ctx, d) => { const x = { ...d, mode: 'publish', created: Date.now(), msgId: null }; sessions.set(sk(ctx), x); return showPreview(ctx, x); },
+  loadPublishedDraft: (ctx, d, id) => {
+    const x = { ...d, mode: 'edit_published', publishedAlertId: id, created: Date.now(), msgId: null };
+    sessions.set(sk(ctx), x);
+    return showPreview(ctx, x);
+  },
 };
 export function createBot({ role = 'admin', token = config.botToken, reviewApi = null } = {}) {
   if (!token) return null;
@@ -2189,6 +2219,19 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await showPreview(ctx, d);
   }));
   bot.callbackQuery('preview', needDraft((ctx, d) => showPreview(ctx, d)));
+
+  bot.callbackQuery('save_edit', needDraft(async (ctx, d) => {
+    if (!staff(ctx) || d.mode !== 'edit_published' || !d.publishedAlertId || d.type === 'road') return;
+    if (d.type === 'breaking' && !d.text) return askLocation(ctx, d);
+    sessions.delete(sk(ctx));
+    try {
+      const alert = await editPublishedAlert(ctx.api, d.publishedAlertId, d, { id: ctx.from.id, name: ctx.from.first_name });
+      await show(ctx, `${langOf(ctx) === 'en' ? '✅ Published story format updated in place.' : '✅ تم تحديث صيغة الخبر المنشور في مكانه.'}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
+    } catch (e) {
+      console.error('[bot] published story edit failed:', e.description || e.message);
+      await show(ctx, langOf(ctx) === 'en' ? '⚠️ Could not update the published story.' : '⚠️ تعذّر تحديث الخبر المنشور.', new InlineKeyboard().text(L(ctx).btnHome, 'home'));
+    }
+  }));
 
   const publishRoadDraft = async (ctx, d, toChannel) => {
     if (!staff(ctx)) return;
