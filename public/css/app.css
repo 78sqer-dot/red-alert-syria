@@ -372,6 +372,7 @@ html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shad
 .ic-pistol, .ic-rifle { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #f8fafc; border: 1px solid color-mix(in srgb, var(--ic) 72%, #fff); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
 .ic-pistol .ic-svg, .ic-rifle .ic-svg { width: 24px; height: 24px; fill: var(--ic); filter: none; }
 .mk:hover .ic, .mk.sel .ic { transform: translate(-50%, -50%) scale(1.25); }
+.mk.t-military_incursion:hover .ic, .mk.t-military_incursion.sel .ic { transform: translate(-50%, -50%) scale(1); }
 .mk.sel .ic-svg { filter: drop-shadow(0 0 1px rgba(0,0,0,.8)) drop-shadow(0 0 6px var(--ic)); }
 .mk.inactive .ic { opacity: .55; }
 /* civil alerts: tiny dot at country view (keeps a small phone screen clean), icon when zoomed in */
