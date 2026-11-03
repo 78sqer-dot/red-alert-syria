@@ -831,7 +831,8 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('ag:aerial');
   await tap('t:warplane');
   assert.ok(buttons().some((button) => button.callback_data === 'airmode:over'));
-  assert.ok(buttons().some((button) => button.callback_data === 'airmode:move'));
+  assert.equal(buttons().some((button) => button.callback_data === 'airmode:move'), false, 'warplane submenu no longer offers aircraft movement');
+  assert.match(lastUi().payload.text, /اختر المنطقة التي يحلّق فوقها الطيران الحربي/);
   await tap('airmode:over');
   assert.match(lastUi().payload.text, /اختر المحافظة/);
   assert.equal(buttons().some((button) => button.callback_data?.startsWith('flight:')), false, 'warplane over area skips movement choices');
@@ -859,7 +860,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(idlib, 'Idlib governorate is available in the area picker');
   await tap('home', reporter, reportBot);
   await tap('ag:aerial', reporter, reportBot);
-  await tap('t:warplane', reporter, reportBot);
+  await tap('t:uav', reporter, reportBot);
   await tap('airmode:move', reporter, reportBot);
   await tap('flight:toward_syria', reporter, reportBot);
   await tap(`g:${idlib.code}`, reporter, reportBot);
