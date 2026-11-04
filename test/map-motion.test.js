@@ -9,6 +9,12 @@ test('alert focus uses scope-based zoom and does not creep closer with each sele
   assert.equal(alertFocusZoom('governorate', Number.NaN), 8);
 });
 
+test('orbiting UAV alerts force detail zoom even when their location scope is a governorate', () => {
+  assert.equal(alertFocusZoom('governorate', 8, 11.5), 11.5);
+  assert.equal(alertFocusZoom('governorate', Number.NaN, 11.5), 11.5);
+  assert.equal(alertFocusZoom('place', 6, 11.5), 11.5);
+});
+
 test('map transition duration is comfortable for local and long-distance alert changes', () => {
   assert.equal(alertTransitionDuration(0), 650);
   assert.ok(alertTransitionDuration(500) > alertTransitionDuration(100));

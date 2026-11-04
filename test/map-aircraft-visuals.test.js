@@ -8,11 +8,12 @@ const markerSvgs = await readFile(new URL('../public/js/marker-svgs.js', import.
 const types = await readFile(new URL('../shared/types.js', import.meta.url), 'utf8');
 const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.meta.url), 'utf8');
 
-test('drone keeps the original top-down silhouette, fixed icon size and perimeter orbit', () => {
+test('drone keeps its top-down silhouette, enlarged icon and perimeter orbit', () => {
   assert.match(types, /uav:\s*\{[\s\S]*?glyph: 'uav'/);
   assert.ok(markerSvgs.includes('"uav": "<g> <ellipse cx=\\"256\\" cy=\\"256\\" rx=\\"18\\" ry=\\"140\\" />'));
   assert.match(mapJs, /const svgClass = signalDrone \? 'signal-sweep-uav-svg' : 'uav-svg'/);
-  assert.match(mapJs, /svgTag\(glyph,\s*24,\s*`class="\$\{svgClass\}"`\)/);
+  assert.match(mapJs, /svgTag\(glyph,\s*36,\s*`class="\$\{svgClass\}"`\)/);
+  assert.match(css, /\.uav\s*\{[^}]*width: 44px; height: 44px;[^}]*margin: -22px 0 0 -22px;/);
   assert.match(css, /\.uav-svg\s*\{\s*stroke: rgba\(255,255,255,\.94\);\s*stroke-width: 18;/);
 });
 
@@ -55,6 +56,16 @@ test('signal-sweep UAV uses the Lebanese four-arc emitter, separate from the gen
   assert.ok(targetSvgs.includes('signal_sweep_uav: \'<g><circle cx="256" cy="200" r="34"></circle><rect x="240" y="226" width="32" height="250" rx="10"></rect>'));
   for (const path of ['M160 104a136 136 0 0 0 0 192', 'M352 104a136 136 0 0 1 0 192', 'M96 48a216 216 0 0 0 0 304', 'M416 48a216 216 0 0 1 0 304']) assert.ok(targetSvgs.includes(path));
   assert.match(css, /\.signal-sweep-uav-svg \{ display: block; fill: #6b7280; color: #1a1a2e;/);
+});
+
+test('signal-sweep map markers are enlarged for phone visibility', () => {
+  assert.match(mapJs, /if \(a\.type === 'signal_sweep'\)[\s\S]{0,180}width:40px;height:40px[\s\S]{0,100}svgTag\(glyph, 34,/);
+  assert.match(css, /\.mk\.t-signal_sweep \.ic-svg \{ width: 34px; height: 34px; \}/);
+});
+
+test('opening UAV alerts forces detail zoom for governorate-scoped reports', () => {
+  assert.match(mapJs, /const orbiting = typeOf\(alert\.type\)\.marker === 'orbit'[\s\S]*?alert\.signal_platform === 'uav'/);
+  assert.match(mapJs, /alertFocusZoom\(alert\.scope, this\.map\.getZoom\(\), orbiting \? 11\.5 : 0\)/);
 });
 
 test('warplane formation keeps the reference pass with bounded medium-sized, bright-blue airframes', () => {

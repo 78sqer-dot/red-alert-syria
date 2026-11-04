@@ -375,7 +375,7 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 @keyframes newsPulseWave { 0%, 100% { transform: scale(1); opacity: 0; } 35% { opacity: .28; } }
 @keyframes newsPulseGlow { 0%, 100% { box-shadow: 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 20%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 8%, transparent); } 50% { box-shadow: 0 0 4px color-mix(in srgb, var(--c, #e11d2e) 38%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 15%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .news-pulse-ring, .news-pulse-ring::after { animation: none !important; } .news-pulse-ring { box-shadow: 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 24%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 10%, transparent); } }
-/* drone: exactly like the original — fixed 18px airframe, never scaled with zoom */
+/* Drone: larger airframe remains legible on phones while its center continues along the alert perimeter. */
 .mk-orbit .mk-s { transform: none; }
 /* Static event discs keep a white background with a type-colored glyph and edge. */
 .sai { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; border-radius: 50%; border: 3px solid; display: flex; align-items: center; justify-content: center; transition: transform .18s ease; }
@@ -392,6 +392,7 @@ html.dark .sai.map-event-disc { background: #f8fafc !important; }
 /* small silhouette icons (artillery tank, missile, ambulance, breaking) — same clean style as the drone/warplanes */
 .ic { position: absolute; left: 0; top: 0; width: 30px; height: 30px; transform: translate(-50%, -50%); transition: transform .15s; box-sizing: border-box; display: grid; place-items: center; border: 1.5px solid color-mix(in srgb, var(--ic) 65%, #fff); border-radius: 50%; background: #fff; box-shadow: 0 2px 7px rgba(15,23,42,.25); }
 .ic-svg { display: block; width: 24px; height: 24px; fill: var(--ic); overflow: visible; filter: drop-shadow(0 0 1px rgba(0,0,0,.75)) drop-shadow(0 1px 2px rgba(255,255,255,.6)); }
+.mk.t-signal_sweep .ic-svg { width: 34px; height: 34px; }
 html.dark .ic-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 1px 2px rgba(0,0,0,.9)); }
 .ic-pistol, .ic-rifle { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #f8fafc; border: 1px solid color-mix(in srgb, var(--ic) 72%, #fff); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
 .ic-pistol .ic-svg, .ic-rifle .ic-svg { width: 24px; height: 24px; fill: var(--ic); filter: none; }
@@ -431,8 +432,8 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 @keyframes exCore { from { transform: scale(.8); opacity: .85; } to { transform: scale(1.06); opacity: 1; } }
 @keyframes exBurst { 0%, 100% { transform: scale(.88) rotate(0deg); } 45% { transform: scale(1.1) rotate(8deg); } }
 /* Drone — fixed-size type-colored airframe; its existing orbit behavior is unchanged. */
-.uav-box { position: absolute; width: 64px; height: 64px; left: -32px; top: -32px; }
-.uav { position: absolute; width: 30px; height: 30px; left: 50%; top: 50%; margin: -15px 0 0 -15px; display: flex; align-items: center; justify-content: center; will-change: transform; }
+.uav-box { position: absolute; width: 88px; height: 88px; left: -44px; top: -44px; }
+.uav { position: absolute; width: 44px; height: 44px; left: 50%; top: 50%; margin: -22px 0 0 -22px; display: flex; align-items: center; justify-content: center; will-change: transform; }
 /* Country and mid zoom rely on the impact circle alone; reveal the orbiting drone only at detail zoom. */
 .maplibregl-map .mk-orbit:not(.mk-sat) .uav { animation: uavOrbit 9s linear infinite; }
 .maplibregl-map:not(.zoom-detail) .mk-orbit:not(.mk-sat) .uav { visibility: hidden; }

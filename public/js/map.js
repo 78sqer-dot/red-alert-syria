@@ -924,7 +924,7 @@ export class AlertMap {
     el.setAttribute('tabindex', '0');
     if (marker === 'orbit') {
       const svgClass = signalDrone ? 'signal-sweep-uav-svg' : 'uav-svg';
-      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(glyph, 24, `class="${svgClass}"`)}</div></div>`;
+      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(glyph, 36, `class="${svgClass}"`)}</div></div>`;
     } else if (marker === 'helicopter') {
       el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span></div>`;
     } else if (marker === 'squad') {
@@ -947,7 +947,11 @@ export class AlertMap {
     } else if (marker === 'icon') {
       const iconColor = visual.color;
       const sz = 24;
-      el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, `class="ic-svg" fill="${iconColor}" color="${iconColor}"`)}</div>`;
+      if (a.type === 'signal_sweep') {
+        el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:40px;height:40px">${svgTag(glyph, 34, `class="ic-svg" fill="${iconColor}" color="${iconColor}"`)}</div>`;
+      } else {
+        el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, `class="ic-svg" fill="${iconColor}" color="${iconColor}"`)}</div>`;
+      }
     } else {
       el.innerHTML = glyphDisc(a.type, 34, 24, 'sai map-event-disc', a.marker_glyph);
     }
@@ -1139,6 +1143,8 @@ export class AlertMap {
     const target = tapped || ll;
     const zs = Array.isArray(alert.zones) ? alert.zones : [];
     const archiveRoute = isLegacyQuneitraArchiveAlert(alert) ? legacyQuneitraArchivePath(alert) : [];
+    const orbiting = typeOf(alert.type).marker === 'orbit'
+      || (alert.type === 'signal_sweep' && (alert.signal_platform === 'uav' || alert.meta?.signalPlatform === 'uav'));
     if (archiveRoute.length === 2 && fly) {
       this.closePopup();
       const longitudes = archiveRoute.map(([lon]) => lon);
@@ -1146,7 +1152,7 @@ export class AlertMap {
       this.map.fitBounds([[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]], {
         padding: this.padding(), maxZoom: 9, duration: 950, essential: true,
       });
-    } else if (fly && !tapped && alert.more && alert.more.length && zs.length > 1) {
+    } else if (fly && !tapped && !orbiting && alert.more && alert.more.length && zs.length > 1) {
       // several areas: frame all of their circles
       let w = 180, e = -180, s = 90, n = -90;
       for (const q of zs) { const dl = q.km / 111, dn = q.km / (111 * Math.cos((q.lat * Math.PI) / 180)); w = Math.min(w, q.lon - dn); e = Math.max(e, q.lon + dn); s = Math.min(s, q.lat - dl); n = Math.max(n, q.lat + dl); }
@@ -1154,7 +1160,7 @@ export class AlertMap {
     } else if (fly) {
       const center = this.map.getCenter();
       const duration = alertTransitionDuration(distanceKm([center.lng, center.lat], target));
-      this.map.flyTo({ center: target, zoom: alertFocusZoom(alert.scope, this.map.getZoom()), padding: this.padding(), curve: 1.18, duration, essential: true });
+      this.map.flyTo({ center: target, zoom: alertFocusZoom(alert.scope, this.map.getZoom(), orbiting ? 11.5 : 0), padding: this.padding(), curve: 1.18, duration, essential: true });
     }
     if (popup && archiveRoute.length !== 2) this.openPopup(alert);
     else if (archiveRoute.length === 2) this.closePopup();

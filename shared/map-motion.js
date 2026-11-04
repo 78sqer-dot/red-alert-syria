@@ -1,9 +1,9 @@
 const FOCUS_ZOOM = Object.freeze({ place: 11, point: 11.5, district: 9.5, governorate: 8 });
 
-export function alertFocusZoom(scope, currentZoom) {
+export function alertFocusZoom(scope, currentZoom, minFocusZoom = 0) {
   const preferred = FOCUS_ZOOM[scope] || 9;
-  if (!Number.isFinite(currentZoom)) return preferred;
-  return Math.min(13, Math.max(preferred, Math.min(currentZoom, preferred + 0.85)));
+  if (!Number.isFinite(currentZoom)) return Math.min(13, Math.max(preferred, minFocusZoom));
+  return Math.min(13, Math.max(preferred, minFocusZoom, Math.min(currentZoom, preferred + 0.85)));
 }
 
 export function alertTransitionDuration(distanceKm) {

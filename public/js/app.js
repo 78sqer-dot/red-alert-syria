@@ -6,7 +6,7 @@ import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=5';
 import { settings } from './settings.js?v=12';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=69';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=70';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=5';

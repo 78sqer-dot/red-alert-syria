@@ -89,7 +89,7 @@ test('a signal-sweep drone uses the standard 24px, type-colored orbit marker onl
   assert.equal(ALERT_TYPES.signal_sweep.glyph, 'signal_sweep');
   assert.match(map, /const glyph = signalDrone \? 'signal_sweep_uav'/);
   assert.match(map, /const svgClass = signalDrone \? 'signal-sweep-uav-svg' : 'uav-svg'/);
-  assert.match(map, /svgTag\(glyph, 24, `class="\$\{svgClass\}"`\)/);
+  assert.match(map, /svgTag\(glyph, 36, `class="\$\{svgClass\}"`\)/);
   assert.match(map, /el\.style\.setProperty\('--c', visual\.color\)/);
 });
 

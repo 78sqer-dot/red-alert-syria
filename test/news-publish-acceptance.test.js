@@ -1127,6 +1127,34 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(calls.every((call) => !call.chatId || [ownerId, reporter.id, 8270709635, 8270709638, 8270709639, 8270709644, 8270709645, process.env.CHANNEL_ID].includes(call.chatId)), 'all Telegram API calls are intercepted locally');
 });
 
+test('news draft ignore action marks the draft ignored without publishing it', async () => {
+  const draftId = 'ignore_action_check';
+  const beforeAlerts = store.state.alerts.length;
+  const beforeChannelPosts = calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length;
+  const beforeIgnored = newsState().stats.ignored || 0;
+  newsState().drafts[draftId] = {
+    id: draftId,
+    type: 'assassination',
+    status: 'pending',
+    headline: 'مسودة محلية لاختبار التجاهل',
+    body: '',
+    loc: { scope: 'place', name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib' },
+    extra: [],
+    ttlMin: 360,
+    srcs: [{ u: 'mock-source', local: false }],
+    cards: [],
+    created: Date.now(),
+  };
+
+  await tap(`nw:x:${draftId}`);
+
+  assert.equal(newsState().drafts[draftId].status, 'ignored', 'ignore callback moves a pending draft to ignored');
+  assert.equal(newsState().drafts[draftId].by, ownerId, 'the moderator who ignored it is recorded');
+  assert.equal(newsState().stats.ignored, beforeIgnored + 1, 'ignored statistics increment once');
+  assert.equal(store.state.alerts.length, beforeAlerts, 'ignoring does not create a map alert');
+  assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, beforeChannelPosts, 'ignoring does not publish to the Telegram channel');
+});
+
 test('clashes channel posts keep the dedicated label instead of the generic attack label', () => {
   const input = buildAlertInput({ type: 'clashes', location: { scope: 'country' }, extra: [], ttlMin: 240 }, { id: ownerId, name: 'test' });
   const post = channelPost({ ...input, id: 'test-clashes-label', timestamp: new Date().toISOString(), place: { scope: 'country' } });
