@@ -1,7 +1,8 @@
 // 💱 Daily prices bulletin: Central Bank exchange rates and official fuel decisions only, in NEW Syrian
 // lira (old lira = new × 100). Unofficial market quotes, gold and aggregator tariffs are not published.
 // Sources:
-//  - Central Bank of Syria: official page bulletins, read with Gemini and dated from the printed issue date.
+//  - Central Bank of Syria: official page bulletins; SANA's verified Telegram distribution is the fallback,
+//    read with Gemini and dated from the printed issue date.
 //  - Fuel: SANA's official feed for Ministry of Energy / pricing-committee decisions.
 // Wrong numbers are worse than none: every value is range-checked; with no verified official data, nothing is posted.
 import { InlineKeyboard, InputFile } from 'grammy';
@@ -24,6 +25,8 @@ const LOGO = (() => {
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
 const CB_FACEBOOK_PAGE_ID = '100069248257915';
 const CB_FACEBOOK_URL = 'https://www.facebook.com/cb.gov.sy/';
+const SANA_TELEGRAM_URL = 'https://t.me/s/sana_gov';
+const SANA_TELEGRAM_CHANNEL = 'sana_gov';
 const CB_FACEBOOK_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -193,16 +196,55 @@ export async function latestBulletinPosts() {
     if (owner && owner[1] !== CB_FACEBOOK_PAGE_ID) continue;
     seen.add(id);
     const img = JSON.parse(`"${m[2]}"`);
-    posts.push({ id, ts: Date.now(), img, url: `https://www.facebook.com/photo/?fbid=${id}` });
+    posts.push({ id, ts: Date.now(), img, url: `https://www.facebook.com/photo/?fbid=${id}`, source: 'facebook' });
     if (posts.length >= 8) break;
   }
   return posts;
+}
+/** Parse only SANA posts that explicitly announce the Central Bank's official exchange bulletin. */
+export function parseSanaBulletinPosts(html) {
+  const source = String(html || '');
+  const starts = [...source.matchAll(/<div class="tgme_widget_message_wrap[^\"]*"/g)].map((m) => m.index);
+  const posts = [];
+  for (let i = 0; i < starts.length; i++) {
+    const block = source.slice(starts[i], starts[i + 1] ?? source.length);
+    const id = block.match(new RegExp(`data-post="${SANA_TELEGRAM_CHANNEL}/(\\d+)"`))?.[1];
+    if (!id) continue;
+    const rawCaption = block.match(/<div class="tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/)?.[1] || '';
+    const caption = rawCaption.replace(/<br\s*\/?\s*>/gi, ' ').replace(/<[^>]+>/g, ' ')
+      .replace(/&amp;/g, '&').replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+    if (!caption.includes('النشرة الرسمية') || !caption.includes('مصرف سوريا المركزي') || !caption.includes('أسعار الصرف')) continue;
+    const img = block.match(/tgme_widget_message_photo[^>]*style="[^\"]*background-image:url\(['\"]?(https:\/\/cdn[^'\")]+)['\"]?\)/)?.[1];
+    if (!img) continue;
+    const ts = Date.parse(block.match(/<time[^>]+datetime="([^"]+)"/)?.[1] || '');
+    posts.push({ id, ts: Number.isFinite(ts) ? ts : Date.now(), img, url: `https://t.me/${SANA_TELEGRAM_CHANNEL}/${id}`, source: 'sana-telegram' });
+  }
+  return posts;
+}
+/** SANA is an official news agency; its channel republishes the bulletin image with an explicit caption. */
+export async function latestSanaBulletinPosts() {
+  let before = null;
+  for (let page = 0; page < 8; page++) {
+    const url = before ? `${SANA_TELEGRAM_URL}?before=${before}` : SANA_TELEGRAM_URL;
+    const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) });
+    if (!r.ok) throw new Error(`SANA Telegram HTTP ${r.status}`);
+    const html = await r.text();
+    const posts = parseSanaBulletinPosts(html);
+    if (posts.length) return posts.sort((a, b) => b.ts - a.ts);
+    const ids = [...html.matchAll(new RegExp(`data-post="${SANA_TELEGRAM_CHANNEL}/(\\d+)"`, 'g'))].map((m) => Number(m[1]));
+    if (!ids.length) break;
+    const oldest = Math.min(...ids);
+    if (!Number.isFinite(oldest) || oldest < 1 || oldest === before) break;
+    before = oldest;
+  }
+  return [];
 }
 export async function latestBulletinPost() { return (await latestBulletinPosts())[0] || null; }
 export async function ocrBulletin(imgUrl) {
   const key = process.env.GEMINI_API_KEY || '';
   if (!key) throw new Error('no GEMINI_API_KEY');
-  const ir = await fetch(imgUrl, { headers: { 'User-Agent': CB_FACEBOOK_HEADERS['User-Agent'], Referer: 'https://www.facebook.com/', Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' }, signal: AbortSignal.timeout(25_000) });
+  const ir = await fetch(imgUrl, { headers: { 'User-Agent': CB_FACEBOOK_HEADERS['User-Agent'], Referer: imgUrl.includes('telesco.pe') ? 'https://t.me/' : 'https://www.facebook.com/', Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' }, signal: AbortSignal.timeout(25_000) });
   if (!ir.ok) throw new Error(`image HTTP ${ir.status}`);
   const mimeType = (ir.headers.get('content-type') || 'image/jpeg').split(';')[0];
   if (!mimeType.startsWith('image/')) throw new Error(`unexpected image content type ${mimeType}`);
@@ -241,12 +283,16 @@ export function checkOfficial(o, sp) {
   return null;
 }
 export async function fetchOfficial(sp) {
-  const posts = await latestBulletinPosts();
-  if (!posts.length) throw new Error('no public Central Bank portrait photos found');
+  const sourceErrors = [];
+  let posts = [];
+  try { posts = await latestBulletinPosts(); } catch (e) { sourceErrors.push(`Facebook: ${e.message}`); }
+  try { posts.push(...await latestSanaBulletinPosts()); } catch (e) { sourceErrors.push(`SANA Telegram: ${e.message}`); }
+  const uniquePosts = [...new Map(posts.map((p) => [`${p.source}:${p.id}`, p])).values()];
+  if (!uniquePosts.length) throw new Error(`no official exchange bulletin images found${sourceErrors.length ? `: ${sourceErrors.join(' | ')}` : ''}`);
   const st = pricesState();
   const checkedAt = Date.now(); const errors = [];
-  for (const post of posts) {
-    if (st.official?.source === 'facebook' && st.official.post === post.id && st.official.usd) return { ...st.official, checkedAt };
+  for (const post of uniquePosts) {
+    if (st.official?.source === post.source && st.official.post === post.id && st.official.usd) return { ...st.official, checkedAt };
     if (R.ignoredPhotoIds.has(post.id)) continue;
     try {
       const o = await ocrBulletin(post.img);
@@ -260,7 +306,7 @@ export async function fetchOfficial(sp) {
       }
       R.ignoredPhotoIds.delete(post.id);
       return {
-        source: 'facebook', src: 'مصرف سورية المركزي — فيسبوك رسمي', post: post.id, url: post.url,
+        source: post.source, src: post.source === 'facebook' ? 'مصرف سورية المركزي — فيسبوك رسمي' : 'نشرة المصرف المركزي عبر قناة سانا الرسمية', post: post.id, url: post.url,
         date: imageDate, ts: post.ts, checkedAt, bulletinNo: String(o.bulletin_no || '').trim(),
         usd: { buy: o.usd_buy, sell: o.usd_sell },
         eur: o.eur_buy ? { buy: o.eur_buy, sell: o.eur_sell || null } : null,
@@ -271,8 +317,8 @@ export async function fetchOfficial(sp) {
       if (/Gemini OCR failed/.test(e.message)) break;
     }
   }
-  if (st.official?.source === 'facebook' && st.official.usd) return { ...st.official, checkedAt };
-  throw new Error(`no verified Facebook exchange bulletin among recent photos: ${errors.join(' | ').slice(0, 700) || 'no usable portrait image'}`);
+  if (['facebook', 'sana-telegram'].includes(st.official?.source) && st.official.usd) return { ...st.official, checkedAt };
+  throw new Error(`no verified official exchange bulletin: ${[...sourceErrors, ...errors].join(' | ').slice(0, 700) || 'no usable bulletin image'}`);
 }
 
 // ---------------------------------------------------------------- refresh loop
@@ -332,8 +378,12 @@ export async function refreshPrices({ force = false, forceOfficial = false } = {
 }
 export function pricesDebug() { const st = pricesState(); return { cfg: st.cfg, spAt: st.spAt, spErr: R.spErr, offErr: R.offErr, sypErr: R.sypErr, sanaErr: R.sanaErr, fuel: st.fuel ? { since: st.fuel.since, checked: st.fuel.checked, srcs: st.fuel.srcs, official: st.fuel.official, url: st.fuel.url, conflict: st.fuel.conflict, items: Object.fromEntries(Object.entries(st.fuel.items || {}).map(([k, v]) => [k, v.price])) } : null, official: trustedOfficial(st.official) ? { source: st.official.source, date: st.official.date, checkedAt: st.official.checkedAt, bulletinNo: st.official.bulletinNo, src: st.official.src, url: st.official.url, usd: st.official.usd, eur: st.official.eur, try: st.official.try } : null, usd: st.sp?.usd }; }
 const trustedOfficial = (o) => {
-  if (o?.source !== 'facebook') return null;
-  try { return ['facebook.com', 'www.facebook.com'].includes(new URL(o.url).hostname) ? o : null; } catch { return null; }
+  try {
+    const u = new URL(o?.url);
+    if (o?.source === 'facebook' && ['facebook.com', 'www.facebook.com'].includes(u.hostname)) return o;
+    if (o?.source === 'sana-telegram' && u.hostname === 't.me' && /^\/sana_gov\/\d+$/.test(u.pathname)) return o;
+  } catch { /* invalid source URL */ }
+  return null;
 };
 
 /** fuel for the site/bulletin: an official decision only; never fall back to a market quote. */
@@ -486,7 +536,7 @@ export function pricesCaption(st, now = Date.now()) {
     if (official.try) L.push(`🇹🇷 التركية — شراء <b>${ltrNum(fmtNew(official.try.buy))}</b> / مبيع <b>${ltrNum(fmtNew(official.try.sell))}</b>`);
     if (official.checkedAt) L.push(`<i>آخر تحقق: ${esc(checkedLabel(official.checkedAt))}</i>`);
   }
-  if (official?.url) L.push(`🔗 <a href="${esc(official.url)}">صفحة مصرف سورية المركزي الرسمية على فيسبوك</a>`);
+  if (official?.url) L.push(`🔗 <a href="${esc(official.url)}">${official.source === 'facebook' ? 'صفحة مصرف سورية المركزي الرسمية على فيسبوك' : 'نشرة المصرف المركزي عبر قناة سانا الرسمية'}</a>`);
   const FV = fuelOf(st, now);
   const F = FV && !FV.stale ? FV.items : {};
   if (F.benzin || F.diesel) {
