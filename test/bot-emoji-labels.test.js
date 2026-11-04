@@ -5,6 +5,7 @@ import { ALERT_TYPES, POLITICAL_CATEGORIES, alertButtonLabel, eventVisual } from
 
 const root = new URL('../', import.meta.url);
 const bot = readFileSync(new URL('server/bot.js', root), 'utf8');
+const monitor = readFileSync(new URL('server/news-monitor.js', root), 'utf8');
 const map = readFileSync(new URL('public/js/map.js', root), 'utf8');
 
 test('protest action and demonstration keep distinct bot labels and map glyphs', () => {
@@ -31,8 +32,9 @@ test('bot labels omit blank emoji placeholders and political categories have dis
   assert.equal(ALERT_TYPES.shooting.emoji, '');
   assert.equal(alertButtonLabel('shooting', 'ar'), 'إطلاق نار');
   assert.equal(alertButtonLabel('shooting', 'en'), 'Gunfire');
-  assert.deepEqual(Object.values(POLITICAL_CATEGORIES).map((category) => category.emoji), ['💬', '📜', '🏛️', '📢', '🏢', '🤝', '👥', '🗳️']);
+  assert.deepEqual(Object.values(POLITICAL_CATEGORIES).map((category) => category.emoji), ['🤝', '🖊️', '📜', '📄', '🫱🏻‍🫲🏼', '🪖', '💬', '🗣️', '📜', '👤', '📢', '🏛️', '🏢', '🤝', '👥', '🚶', '🗳️']);
   assert.deepEqual(['government_announcement', 'official_announcement', 'official_entity'].map((key) => POLITICAL_CATEGORIES[key].ar), ['إعلان حكومي', 'إعلان رسمي', 'جهة رسمية']);
+  assert.match(monitor, /value\.emoji\} \$\{lang === 'en' \? value\.en : value\.ar\}/);
   assert.match(bot, /alertButtonLabel\(item\.type, lang\)/);
   assert.match(bot, /\[label\.emoji, en \? label\.en : label\.ar\]\.filter\(Boolean\)\.join\(' '\)/);
   assert.match(bot, /🚙 Military vehicles/);

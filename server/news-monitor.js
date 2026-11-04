@@ -20,7 +20,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
 
@@ -79,6 +79,10 @@ function editableDraftTypeLabel(d, lang = 'ar') {
     if (choice) return choice[lang];
   }
   const type = ALERT_TYPES[d?.type];
+  if (d?.type === 'political') {
+    const category = POLITICAL_CATEGORIES[d.politicalCategory];
+    if (category) return lang === 'en' ? `Political development — ${category.en}` : `تطور سياسي — ${category.ar}`;
+  }
   return type ? (lang === 'en' ? type.en : type.ar) : String(d?.type || '');
 }
 
@@ -555,7 +559,8 @@ function politicalCategoryKb(d, lang = 'ar', namespace = 'nw') {
   const kb = new InlineKeyboard();
   Object.entries(POLITICAL_CATEGORIES).forEach(([key, value], i) => {
     const callback = namespace === 'nw' ? `nw:ps:${d.id}:${key}` : `nwp:pc:${d.id}:${key}`;
-    kb.text(`${d.politicalCategory === key ? '• ' : ''}${lang === 'en' ? value.en : value.ar}`, callback);
+    const label = lang === 'en' ? `“${value.en}”` : `«${value.ar}»`;
+    kb.text(`${d.politicalCategory === key ? '• ' : ''}${value.emoji} ${label}`, callback);
     if (i % 2 === 1) kb.row();
   });
   return kb.row().text(tr(lang, '↩️ رجوع', '↩️ Back'), `${namespace}:b:${d.id}`);
@@ -808,7 +813,9 @@ async function handleResult(it, r, known, pmap) {
   const locs = buildLocations(r, it);
   const tidy = (x) => cleanAlertText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/\s+/g, ' ').trim();
   const headline = (tidy(r.headline) || tidy(it.text.split('\n')[0])).slice(0, 160);
-  const politicalCategory = POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null;
+  const politicalCategory = r.type === 'political'
+    ? (inferPoliticalCategory(it.text) || (POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null))
+    : null;
   const cand = { type: r.type, politicalCategory, ts: it.ts, headline, geo: geoOf(locs) };
   if (target && !sameIncident(cand, target)) {
     note(it, `AI same_as rejected: event type/location/time mismatch (${r.same_as})`);
@@ -816,7 +823,7 @@ async function handleResult(it, r, known, pmap) {
     rejectedSameAs = true;
   }
   if (!target) target = known.find((k) => sameIncident(cand, k)) || null;
-  if (!target && r.new_incident === false && !rejectedSameAs && !(r.type === 'political' && !politicalCategory)) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
+  if (!target && r.new_incident === false && !rejectedSameAs && !(r.type === 'political' && (!politicalCategory || r.political_category === 'none'))) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
   if (target) {
     pmap.set(it.i, target);
     const d = target.draftId ? n.drafts[target.draftId] : null;

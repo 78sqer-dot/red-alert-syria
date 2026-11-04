@@ -197,13 +197,22 @@ export const ZONE_KM = { place: 1.5, point: 1.5, village: 1.5, multi: 3, distric
 export const TYPE_KEYS = Object.keys(ALERT_TYPES);
 
 export const POLITICAL_CATEGORIES = Object.freeze({
-  statement: { emoji: '💬', ar: 'تصريح أو موقف منسوب', en: 'Attributed statement or position' },
-  decision: { emoji: '📜', ar: 'قرار أو تعيين', en: 'Decision or appointment' },
-  government_announcement: { emoji: '🏛️', ar: 'إعلان حكومي', en: 'Government announcement' },
+  agreement: { emoji: '🤝', ar: 'اتفاق', en: 'Agreement' },
+  signing: { emoji: '🖊️', ar: 'توقيع', en: 'Signing' },
+  treaty: { emoji: '📜', ar: 'اتفاقية', en: 'Treaty / agreement' },
+  circular: { emoji: '📄', ar: 'تعميم', en: 'Circular' },
+  support: { emoji: '🫱🏻‍🫲🏼', ar: 'دعم', en: 'Support' },
+  military_cooperation: { emoji: '🪖', ar: 'تعاون عسكري', en: 'Military cooperation' },
+  statement: { emoji: '💬', ar: 'تصريح', en: 'Statement' },
+  position: { emoji: '🗣️', ar: 'موقف', en: 'Position' },
+  decision: { emoji: '📜', ar: 'قرار', en: 'Decision' },
+  appointment: { emoji: '👤', ar: 'تعيين', en: 'Appointment' },
   official_announcement: { emoji: '📢', ar: 'إعلان رسمي', en: 'Official announcement' },
+  government_announcement: { emoji: '🏛️', ar: 'إعلان حكومي', en: 'Government announcement' },
   official_entity: { emoji: '🏢', ar: 'جهة رسمية', en: 'Official entity' },
-  negotiation: { emoji: '🤝', ar: 'مفاوضات أو اتفاق', en: 'Negotiation or agreement' },
-  meeting: { emoji: '👥', ar: 'لقاء أو زيارة', en: 'Meeting or visit' },
+  negotiation: { emoji: '🤝', ar: 'مفاوضات', en: 'Negotiations' },
+  meeting: { emoji: '👥', ar: 'لقاء', en: 'Meeting' },
+  visit: { emoji: '🚶', ar: 'زيارة', en: 'Visit' },
   election: { emoji: '🗳️', ar: 'انتخابات', en: 'Election' },
 });
 

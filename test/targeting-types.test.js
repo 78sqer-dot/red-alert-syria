@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ALERT_GROUPS, ALERT_TYPES, POLITICAL_CATEGORIES, TYPE_KEYS, alertButtonLabel, alertEmoji, assassinationWeaponGlyph, shootingWeaponGlyph, eventVisual } from '../shared/types.js';
-import { NEWS_TYPES, keywordTypes, nameInText, refineType, ruleClassify } from '../server/news-ai.js';
+import { NEWS_TYPES, keywordTypes, nameInText, refineType, ruleClassify, inferPoliticalCategory } from '../server/news-ai.js';
 import { TITLES } from '../server/bot-texts.js';
 import { dayAutoReady, nightEligible, sameIncident, _test as newsTest } from '../server/news-monitor.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
@@ -364,7 +364,30 @@ test('political developments use the category color and marker only for explicit
   assert.match(mapSource, /const km = planeArea \? z\.km : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\);/, 'political and other non-warplane circles retain the original display cap');
   assert.match(alertImageSource, /zones = type === 'political' \? selectedAlertZones/);
   assert.match(alertImageSource, /if \(type === 'political'\) \{ const \[x, y\] = px\(center\.lat, center\.lon\); o\.push\(politicalMarkerSvg\(x, y\)\); \}/);
-  assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['statement', 'decision', 'government_announcement', 'official_announcement', 'official_entity', 'negotiation', 'meeting', 'election']);
+  assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['agreement', 'signing', 'treaty', 'circular', 'support', 'military_cooperation', 'statement', 'position', 'decision', 'appointment', 'official_announcement', 'government_announcement', 'official_entity', 'negotiation', 'meeting', 'visit', 'election']);
+});
+test('political source wording is mapped to the requested narrow category set', () => {
+  const samples = [
+    ['agreement', 'اتفاق بين الحكومة السورية والجهة المعنية'],
+    ['signing', 'توقيع اتفاق بين الجانبين في سوريا'],
+    ['treaty', 'اتفاقية جديدة تخص سوريا'],
+    ['circular', 'تعميم صادر عن جهة رسمية في سوريا'],
+    ['support', 'دعم حكومي مالي في سوريا'],
+    ['military_cooperation', 'تعاون عسكري سوري مشترك'],
+    ['statement', 'تصريح وزير سوري اليوم'],
+    ['position', 'موقف الحكومة السورية من التطورات'],
+    ['decision', 'قرار رسمي في سوريا'],
+    ['appointment', 'تعيين وزير في الحكومة السورية'],
+    ['official_announcement', 'إعلان رسمي صادر في سوريا'],
+    ['government_announcement', 'إعلان حكومي سوري جديد'],
+    ['official_entity', 'جهة رسمية سورية تعلن تحديثاً'],
+    ['negotiation', 'مفاوضات سورية جديدة'],
+    ['meeting', 'لقاء رسمي في دمشق'],
+    ['visit', 'زيارة رسمية لوزير سوري'],
+    ['election', 'انتخابات رئاسية سورية'],
+  ];
+  for (const [expected, sourceText] of samples) assert.equal(inferPoliticalCategory(sourceText), expected, sourceText);
+  assert.equal(inferPoliticalCategory('خبر سياسي عام بلا وصف محدد'), null, 'unclear categories remain for human review');
 });
 
 test('new civil news types classify separately and a protest march is not a drone', () => {

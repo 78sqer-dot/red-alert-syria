@@ -40,7 +40,7 @@ const KW = {
     'جرافات', 'جرافة', 'أعمال حفر', 'أعمال الحفر', 'عمليات الحفر', 'حفر خندق', 'خنادق', 'ساتر ترابي', 'سواتر', 'تجريف', 'جرف', 'تحصينات', 'نقطة عسكرية', 'قاعدة عسكرية', 'تمركز', 'نصب حاجز', 'حاجزا', 'رتل', 'تعزيزات عسكرية', 'انتشار عسكري', 'تفجير منزل', 'نسف'],
   civil: ['انهيار', 'غرق', 'فيضان', 'سيول', 'زلزال', 'هزه ارضيه', 'الدفاع المدني', 'انقاذ', 'تسمم', 'عاصفه', 'عواصف رعديه', 'عاصفه رعديه', 'اضطراب جوي', 'هطولات غزيره', 'امطار غزيره', 'وزاره الطوارئ'],
   // Deliberately narrow event cues; broad politics/opinion vocabulary is not enough on its own.
-  political: ['تصريح رسمي', 'بيان رسمي', 'موقف رسمي', 'اعلان رسمي', 'اعلانا رسميا', 'اعلان حكومي', 'اعلان حكومه', 'بيان حكومي', 'اعلان صادر عن جهه رسميه', 'بيان صادر عن جهه رسميه', 'جهة رسمية سورية', 'جهات رسمية سورية', 'مصدر رسمي سوري', 'مصادر رسمية سورية', 'تعميم رسمي', 'قال الرئيس', 'قال وزير', 'اعلن الرئيس', 'اعلنت الرئاسه', 'قرار حكومي', 'قرار رئاسي', 'تعيين', 'عينت الحكومه', 'مفاوضات', 'مباحثات', 'اتفاق بين', 'اتفاق سوري', 'التقي الرئيس', 'اجتمع الرئيس', 'لقاء رسمي', 'زياره رسميه', 'انتخابات سوريا', 'الانتخابات السوريه', 'انتخابات رئاسيه', 'syrian statement', 'syrian government decision', 'syria negotiations', 'syria election'],
+  political: ['تصريح رسمي', 'بيان رسمي', 'موقف رسمي', 'اعلان رسمي', 'اعلانا رسميا', 'اعلان حكومي', 'اعلان حكومه', 'بيان حكومي', 'اعلان صادر عن جهه رسميه', 'بيان صادر عن جهه رسميه', 'جهة رسمية سورية', 'جهات رسمية سورية', 'مصدر رسمي سوري', 'مصادر رسمية سورية', 'تعميم', 'قال الرئيس', 'قال وزير', 'اعلن الرئيس', 'اعلنت الرئاسه', 'قرار حكومي', 'قرار رئاسي', 'قرار وزاري', 'تعيين', 'عينت الحكومه', 'مفاوضات', 'مباحثات', 'اتفاق', 'اتفاقيه', 'توقيع', 'دعم حكومي', 'دعم سوريا', 'تعاون عسكري', 'التعاون العسكري', 'التقي الرئيس', 'اجتمع الرئيس', 'لقاء رسمي', 'زياره رسميه', 'انتخابات سوريا', 'الانتخابات السوريه', 'انتخابات رئاسيه', 'syrian statement', 'syrian government decision', 'syria negotiations', 'syria election'],
 };
 const KW_N = Object.fromEntries(Object.entries(KW).map(([k, a]) => [k, a.map(N)]));
 const has = (nt, w) => nt.includes(w);
@@ -67,6 +67,33 @@ export function keywordTypes(text) {
   const found = Object.keys(KW_N).filter((k) => !(k === 'uav' && protestMarch) && KW_N[k].some((w) => has(nt, w) || (w.replace(/\s+/g, '').length >= 5 && tight.includes(w.replace(/\s+/g, '')))));
   const smuggling = detectedSmugglingType(text);
   return smuggling && !found.includes(smuggling) ? [...found, smuggling] : found;
+}
+const POLITICAL_CATEGORY_CUES = [
+  ['military_cooperation', ['تعاون عسكري', 'التعاون العسكري', 'اتفاق دفاعي']],
+  ['election', ['انتخابات', 'انتخاب رئيس', 'انتخاب مجلس', 'الانتخابات']],
+  ['appointment', ['تعيين', 'تعيينات', 'عين وزير', 'تعيين وزير', 'تكليف محافظ', 'تسمية وزير']],
+  ['visit', ['زيارة رسمية', 'زيارة إلى', 'زار وزير', 'يزور وزير', 'وصل وزير إلى']],
+  ['meeting', ['لقاء رسمي', 'اجتماع رسمي', 'اجتمع مع', 'التقى مع', 'استقبل وفدا']],
+  ['negotiation', ['مفاوضات', 'مباحثات', 'جولة تفاوض', 'استئناف التفاوض']],
+  ['signing', ['توقيع اتفاق', 'توقيع اتفاقية', 'توقيع مذكرة', 'وقع اتفاق', 'وقعت اتفاق', 'جرى توقيع']],
+  ['treaty', ['اتفاقية', 'معاهدة']],
+  ['agreement', ['اتفاق', 'اتفاقا', 'اتفاق بين']],
+  ['circular', ['تعميم', 'توجيه عام', 'منشور رسمي']],
+  ['decision', ['قرار', 'قررت الحكومة', 'أصدر قرارا', 'صدور قرار']],
+  ['support', ['دعم حكومي', 'دعم مالي', 'دعم سياسي', 'دعم عسكري', 'تقديم الدعم']],
+  ['government_announcement', ['إعلان حكومي', 'أعلنت الحكومة', 'أعلنت وزارة', 'إعلان وزارة']],
+  ['official_announcement', ['إعلان رسمي', 'أعلن رسميا', 'بيان رسمي']],
+  ['official_entity', ['جهة رسمية', 'مصدر رسمي', 'وزارة المالية', 'وزارة الداخلية', 'رئاسة الجمهورية']],
+  ['statement', ['صرح', 'تصريح', 'قال الرئيس', 'قال الوزير', 'أفاد الوزير']],
+  ['position', ['موقف رسمي', 'موقف الحكومة', 'أكدت الحكومة موقف', 'رفضت الحكومة']],
+];
+/** Infer a narrow political category from source wording; null leaves the supplied category for review. */
+export function inferPoliticalCategory(text) {
+  const source = N(String(text || ''));
+  for (const [category, cues] of POLITICAL_CATEGORY_CUES) {
+    if (cues.some((cue) => source.includes(N(cue)))) return category;
+  }
+  return null;
 }
 export function hasNonWeatherSignal(text) {
   const kt = keywordTypes(text);
@@ -273,7 +300,7 @@ For EACH post return one object. Rules:
 2. Follow-ups are NOT new events: casualty updates ("ارتفاع حصيلة"), someone dying of wounds from an earlier incident, "the perpetrators were arrested", the hospital receiving the wounded of an incident already reported, a reporter's details/video of an incident already reported, re-posts, "again/مجدداً" reports of the same ongoing incident. For those: event=true, new_incident=false and same_as = the known event id (E…) or earlier post (P…) it follows up. Use new_incident=false only for a follow-up of an incident in KNOWN EVENTS / an earlier post, or a clear aftermath (casualty update, funeral, arrest of perpetrators) of an earlier incident; an activity that starts again after a pause ("يستأنف … بعد توقف") is a NEW incident. If a post is the same incident as a known event or an earlier post in this batch (same kind of incident, same area, close in time — even if described with different nearby village names, e.g. "حاجز مفرق خربا" = "قرب بلدة معربة" = "بصرى الشام" for one checkpoint attack in eastern Daraa countryside), set same_as to it.
 3. type: the most specific of:
 ${TYPE_HELP}
-Use type=political ONLY for a concrete, recent Syrian public-affairs development. Choose exactly one category: statement (attributed position), decision (official decision or appointment), negotiation (negotiation or agreement), meeting (identified meeting or visit), election, government_announcement (a specific government policy or public-affairs announcement), official_announcement (a formal announcement issued by a named official body), or official_entity (a specific action/update directly attributed to a named Syrian ministry or public authority). These categories are not a catch-all for routine public-service notices: weather warnings remain weather, and service complaints are not political. Set political_category to exactly one of statement, decision, government_announcement, official_announcement, official_entity, negotiation, meeting, election. If the post is a relevant Syrian political development but the subcategory is genuinely unclear, set type=political and political_category="none" so it is held for human review. For every non-political type set political_category="none". Never infer or invent a place for political news; places may be empty or contain only a place explicitly stated. Do not promote generic speeches, commentary, analysis, rumours, or foreign politics to political events.
+Use type=political ONLY for a concrete, recent Syrian public-affairs development. Choose exactly one source-supported category: agreement, signing, treaty, circular, support, military_cooperation, statement, position, decision, appointment, official_announcement, government_announcement, official_entity, negotiation, meeting, visit, or election. Use signing only when the source reports an act of signing; use treaty for an agreement/document called an اتفاقية or معاهدة without a signing event. Distinguish appointment from decision, meeting from visit, and a direct statement from an official position. These categories are not a catch-all for routine public-service notices: weather warnings remain weather, and service complaints are not political. If no category is clearly supported by the source, set type=political and political_category="none" so it is held for human review. For every non-political type set political_category="none". Never infer or invent a place for political news; places may be empty or contain only a place explicitly stated. Do not promote generic speeches, commentary, analysis, rumours, or foreign politics to political events.
 Pick the type of the core incident; it must be the most specific one. An explosion of any kind = explosion (never civil or attack), even when it hurts civilians. Any fire = fire (never civil), a road/vehicle crash = accident, a demonstration or public march = protest, a civil aircraft incident = civil_plane. Use civil only when none of these fits and use breaking only when no specific type fits. Do not classify a protest march as a drone. A standalone sound/report of gunfire with no target or victim = shooting; gunfire against a person, place or checkpoint = attack (or assassination when explicitly targeted killing). A non-armed physical quarrel = brawl. A new specific detention can be arrest; arrest of earlier incident perpetrators is a follow-up, not a new event. Use death/martyrdom only when no specific incident cause is reported. For the three smuggling types, require an explicit current smuggling/trafficking report, not mere possession, arrest, a weapons cache, or an explosion. Israeli army shelling = artillery; a completed air strike = airstrike; report only the presence or overflight of a military aircraft as warplane.
 4. places: where it happened, most specific first, max 4 — list every named village/town of the incident in the post (e.g. both villages of a road "طريق عين البيضة - جباتا الخشب"). name = the Arabic place name exactly as a Syrian would write it (town/village/neighbourhood; without words like "بلدة/مدينة/قرية/ريف/حي"), gov = its Syrian governorate in Arabic (one of: دمشق، ريف دمشق، حلب، حمص، حماة، اللاذقية، طرطوس، إدلب، درعا، السويداء، القنيطرة، دير الزور، الرقة، الحسكة). For a road between two cities ("أوتوستراد دمشق درعا") give the nearest named place in the post (e.g. "خبب") or the governorate. If only the governorate is known, give name = the governorate.
 5. headline: rewrite the news as ONE clean, neutral Arabic news sentence (max 140 characters) saying what happened and where — only the news itself. Never include: the channel/source/reporter name ("مراسل …", "أفاد مراسلنا", "درعا 24", "الجزيرة"…), calls to follow/subscribe/click, links, @usernames, hashtags, emojis, "متداول", greetings, or the poster's opinion.

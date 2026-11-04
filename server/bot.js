@@ -281,11 +281,7 @@ export function channelPost(alert, { ended = false } = {}) {
     const meta = alert.meta?.political || {};
     const category = POLITICAL_CATEGORIES[meta.category];
     if (category) {
-      const text = `${title} ${desc}`;
-      const label = meta.category === 'decision'
-        ? (/(تعيين|عيّن|عينه|تكليف|تسمية)/.test(text) ? 'تعيين' : 'قرار')
-        : category.ar;
-      sections.push(`🏛 <b>الفئة:</b> ${esc(label)}`);
+      sections.push(`🏛 <b>الفئة:</b> ${esc(category.emoji)} «${esc(category.ar)}»`);
     }
     // Source citations remain in metadata and reviewer/admin cards, but not in public channel posts.
     sections.push('<i>منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل</i>');

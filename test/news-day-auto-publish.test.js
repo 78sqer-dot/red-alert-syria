@@ -123,12 +123,12 @@ test('Syrian political news without a verified place remains a locationless revi
   assert.equal(draft.loc.scope, 'country');
   assert.equal(draft.loc.latitude, null);
   assert.equal(draft.loc.longitude, null);
-  assert.equal(draft.politicalCategory, null);
-  assert.equal(draft.politicalNeedsCategory, true);
+  assert.equal(draft.politicalCategory, 'negotiation', 'source wording fills the category when the model leaves it unclear');
+  assert.equal(draft.politicalNeedsCategory, false);
   assert.equal(nightEligible(draft), false);
   assert.equal(daytimeAutoEligible(draft), false);
   const botDraft = toBotDraft(draft);
-  assert.equal(botDraft.politicalCategory, null);
+  assert.equal(botDraft.politicalCategory, 'negotiation');
   assert.deepEqual(botDraft.politicalSources, [{ name: 'وكالة اختبار', url: item.url, timestamp: new Date(ts).toISOString() }]);
   assert.equal(botDraft.politicalSourceTimestamp, new Date(ts).toISOString());
 });
