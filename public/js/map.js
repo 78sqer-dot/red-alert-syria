@@ -9,8 +9,11 @@ import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
-import { directFlightPath } from '/shared/flight-path.js?v=2';
+import { directFlightPath, directFlightBearing } from '/shared/flight-path.js?v=3';
 const ml = () => window.maplibregl;
+const aircraftHeading = (alert, bearing) => alert.aircraft === 'uav'
+  ? (alert.flight_direction === 'leaving_syria' ? 180 : 0)
+  : (Number.isFinite(bearing) ? bearing : alert.flight_direction === 'entering_syria' ? 270 : alert.flight_direction === 'leaving_syria' ? 180 : 0);
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
 function htmlToNode(html) {
@@ -327,9 +330,9 @@ export class AlertMap {
     const A = (on, off) => ['case', ['get', 'active'], on, off];
     add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.11 : 0.08, 0.025) } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.58, 0.22), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1.3] } });
-    add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.85, 0.3), 'line-width': 1.8, 'line-dasharray': [3, 4] } });
-    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.9, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.35, 10, 2.1], 'line-dasharray': [2, 2] } });
-    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
+    add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['get', 'planeArea'], true], 1.5, 1.8], 'line-opacity': ['case', ['==', ['get', 'planeArea'], true], 0.7, A(0.85, 0.3)], 'line-dasharray': [3, 4] } });
+    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
+    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', filter: ['!=', ['get', 'planeRoute'], true], layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
     this._startGlow();
     this.applyToggles();
     this.updateZones();
@@ -454,7 +457,8 @@ export class AlertMap {
     const routeFeatures = [];
     active.forEach((alert) => {
       const position = [alert.location.longitude, alert.location.latitude];
-      const heading = alert.flight_direction === 'leaving_syria' ? 180 : 0;
+      const savedBearing = directFlightBearing(alert.location, alert.flight_target);
+      const heading = aircraftHeading(alert, savedBearing);
       keep.add(alert.id);
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
       const color = eventVisual('air_movement').color;
@@ -467,11 +471,11 @@ export class AlertMap {
       if (route.length === 2) routeFeatures.push({
         type: 'Feature',
         id: alert.id,
-        properties: { color: routeColor, arrow: '➤', alertId: alert.id, illustrative: true },
+        properties: { color: routeColor, arrow: '➤', alertId: alert.id, illustrative: true, planeRoute: aircraft !== 'uav' },
         geometry: { type: 'LineString', coordinates: route },
       });
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
-      const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${position.join(',')}|${route.join(';')}`;
+      const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${heading}|${position.join(',')}|${route.join(';')}`;
       let track = this.movementTracks.get(alert.id);
       if (track && track.signature !== signature) {
         if (track.frame) cancelAnimationFrame(track.frame);
@@ -488,12 +492,14 @@ export class AlertMap {
         el.title = `${direction} · ${routeNote}`;
         const visual = document.createElement('span'); visual.className = 'map-flight-track-visual';
         const squad = document.createElement('span'); squad.className = 'map-flight-track-squad';
+        const formation = document.createElement('span'); formation.className = 'map-flight-track-formation';
         for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
           const airframe = document.createElement('span');
           airframe.className = `map-flight-track-airframe ${slot.name}`;
           airframe.innerHTML = svgTag(aircraft, slot.size, `fill="${iconColor}" class="map-flight-track-svg"`);
-          squad.append(airframe);
+          formation.append(airframe);
         }
+        squad.append(formation);
         visual.append(squad);
         el.append(visual);
         const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat(position).addTo(map);
@@ -922,9 +928,10 @@ export class AlertMap {
     for (const a of this.alerts) {
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
-      if (!t || t.marker === 'movement' || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
+      const planeArea = a.type === 'warplane' || (a.type === 'air_movement' && a.aircraft !== 'uav');
+      if (!t || (t.marker === 'movement' && !(planeArea && a.is_active)) || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       const marker = a.type === 'signal_sweep' && (a.signal_platform === 'uav' || a.meta?.signalPlatform === 'uav') ? 'orbit' : t.marker;
-      const props = { color: eventVisual(a.type).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
+      const props = planeArea ? { color: '#3b8eff', active: !!a.is_active, dashed: true, planeArea: true } : { color: eventVisual(a.type).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
       if (marker === 'orbit' || marker === 'helicopter') {
@@ -934,20 +941,20 @@ export class AlertMap {
         orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, helicopter: marker === 'helicopter' });
       }
       zs.forEach((z, i) => {
-        // The reference's dashed warplane area needs more room at detail zoom. Only relax its
-        // display cap; reported z.km, centers and the number of locality circles stay untouched.
-        const km = this._screenKm(z.km, z.lat, marker === 'squad' ? 0.28 : 0.18);
+        // Aircraft areas keep the reference's geographic radius at every zoom; this does not
+        // change the saved z.km, circle centers or locality count. Other categories retain their cap.
+        const km = planeArea ? z.km : this._screenKm(z.km, z.lat, marker === 'squad' ? 0.28 : 0.18);
         const mpp = (40075016.686 * Math.cos((z.lat * Math.PI) / 180)) / (512 * Math.pow(2, this.map.getZoom()));
         const radiusPx = Math.max(5, (km * 1000) / mpp);
         hits.push({ id: a.id, lon: z.lon, lat: z.lat, km, radiusPx, ts: Date.parse(a.timestamp) || 0, live: !!a.is_active });
         const visualZone = { lon: z.lon, lat: z.lat, km };
-        const featureKey = zoneVisualKey(visualZone, props);
+        const featureKey = zoneVisualKey(visualZone, props) + (planeArea ? '|plane-area' : '');
         if (!featureKeys.has(featureKey)) {
           featureKeys.add(featureKey);
           features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [circlePolygon(z.lon, z.lat, km)] } });
         }
         const classicAircraft = t.marker === 'squad' || t.marker === 'helicopter';
-        if (a.is_active) {
+        if (a.is_active && !planeArea) {
           const pulseKey = pulseVisualKey(visualZone, props.color, classicAircraft);
           const existingPulse = pulseByKey.get(pulseKey);
           if (existingPulse) {

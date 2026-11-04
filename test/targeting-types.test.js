@@ -99,7 +99,7 @@ test('warplane keeps its three-plane reference pass and independent alert-zone c
   assert.match(mapCss, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.doesNotMatch(mapCss, /warplaneOrbit/);
   assert.doesNotMatch(mapSource, /warplaneEastOffset|updateWarplaneVectors/, 'the pass remains schematic rather than a fabricated geographic track');
-  assert.match(mapCss, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad \.squad \{ visibility: hidden; \}/);
+  assert.match(mapCss, /\.maplibregl-map \.mk-squad\.t-warplane \.squad \{ visibility: visible; \}/);
   assert.match(mapCss, /\.mk-squad \.mk-s \{ transform: none; transition: none; \}/, 'the formation stays fixed in screen space');
   assert.doesNotMatch(mapCss, /squadFlyZ/);
 });
@@ -361,7 +361,7 @@ test('political developments use the category color and marker only for explicit
   assert.match(mapSource, /color: eventVisual\(a\.type\)\.color, active:/, 'political rings use the shared category color');
   assert.doesNotMatch(mapSource, /a\.type === 'political' \|\| t\.marker === 'movement'/);
   assert.match(mapSource, /a\.scope === 'country' \|\| !a\.location/);
-  assert.match(mapSource, /const km = this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\);/, 'political and other non-warplane circles retain the original display cap');
+  assert.match(mapSource, /const km = planeArea \? z\.km : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\);/, 'political and other non-warplane circles retain the original display cap');
   assert.match(alertImageSource, /zones = type === 'political' \? selectedAlertZones/);
   assert.match(alertImageSource, /if \(type === 'political'\) \{ const \[x, y\] = px\(center\.lat, center\.lon\); o\.push\(politicalMarkerSvg\(x, y\)\); \}/);
   assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['statement', 'decision', 'government_announcement', 'official_announcement', 'official_entity', 'negotiation', 'meeting', 'election']);

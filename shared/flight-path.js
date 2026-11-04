@@ -21,6 +21,21 @@ export function directFlightPath(origin, destination) {
   return [from, to];
 }
 
+
+/** Bearing from saved direct-route endpoints only; invalid or absent routes have no bearing. */
+export function directFlightBearing(origin, destination) {
+  const path = directFlightPath(origin, destination);
+  if (path.length !== 2) return null;
+  const [[lon1, lat1], [lon2, lat2]] = path;
+  const phi1 = lat1 * Math.PI / 180;
+  const phi2 = lat2 * Math.PI / 180;
+  const deltaLon = (lon2 - lon1) * Math.PI / 180;
+  const y = Math.sin(deltaLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLon);
+  const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  return Number.isFinite(bearing) ? bearing : null;
+}
+
 // The plane artwork points northeast (45°); the top-down UAV artwork points north (0°).
 export function aircraftRotation(aircraft, bearing) {
   if (!Number.isFinite(bearing)) return 0;

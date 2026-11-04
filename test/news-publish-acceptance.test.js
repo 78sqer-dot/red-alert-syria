@@ -832,8 +832,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('ag:aerial');
   await tap('t:warplane');
   assert.ok(buttons().some((button) => button.callback_data === 'airmode:over'));
-  assert.ok(buttons().some((button) => button.callback_data === 'airmode:move'), 'warplane now offers the same movement flow as drones');
-  assert.match(lastUi().payload.text, /حركة طيران/);
+  assert.equal(buttons().some((button) => button.callback_data === 'airmode:move'), false, 'warplane submenu must not duplicate the main movement flow');
   await tap('airmode:over');
   assert.match(lastUi().payload.text, /اختر المحافظة/);
   assert.equal(buttons().some((button) => button.callback_data?.startsWith('flight:')), false, 'warplane over-area alerts remain separate from movement reports');
@@ -843,28 +842,30 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(idlib && daraa, 'synthetic governorate route endpoints are available');
   await tap('home');
   await tap('ag:aerial');
-  await tap('t:warplane');
-  await tap('airmode:move');
+  assert.ok(buttons().some((button) => button.callback_data === 't:air_movement' && /باتجاه سوريا/.test(button.text)), 'existing main direction button is retained');
+  await tap('t:air_movement');
+  await tap('flightair:warplane');
+  for (const mode of ['toward_syria', 'entering_syria', 'leaving_syria']) assert.ok(buttons().some((button) => button.callback_data === `flight:${mode}`), `main direction flow offers ${mode}`);
   await tap('flight:entering_syria');
   await tap(`g:${daraa.code}`);
   await tap(`wg:${daraa.code}`);
   await tap(`flightto:${idlib.code}`);
   await tap('skip');
-  assert.match(lastUi().payload.text, /موقع الرصد:<\/b> درعا/);
+  assert.match(lastUi().payload.text, /نقطة رصد تقريبية:<\/b> درعا/);
   assert.match(lastUi().payload.text, /الوجهة:<\/b> إدلب/);
   await tap('home');
   await tap('home', reporter, reportBot);
   await tap('ag:aerial', reporter, reportBot);
   await tap('t:uav', reporter, reportBot);
   assert.ok(buttons().some((button) => button.callback_data === 'airmode:over'));
-  assert.ok(buttons().some((button) => button.callback_data === 'airmode:move'));
-  await tap('airmode:move', reporter, reportBot);
+  await tap('t:air_movement', reporter, reportBot);
+  await tap('flightair:uav', reporter, reportBot);
   assert.ok(buttons().some((button) => button.callback_data === 'flight:toward_syria'));
   assert.ok(buttons().some((button) => button.callback_data === 'flight:entering_syria'));
   assert.ok(buttons().some((button) => button.callback_data === 'flight:leaving_syria'));
   assert.equal(buttons().some((button) => button.callback_data === 'flight:from_area'), false, 'hovering over an area remains its own alert type');
   await tap('flight:entering_syria', reporter, reportBot);
-  assert.match(lastUi().payload.text, /موقع الرصد/);
+  assert.match(lastUi().payload.text, /نقطة رصد تقريبية/);
   assert.ok(buttons().some((button) => button.callback_data?.startsWith('g:')), 'movement reports first ask for an observed location');
   await tap(`g:${daraa.code}`, reporter, reportBot);
   await tap(`wg:${daraa.code}`, reporter, reportBot);
@@ -886,7 +887,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap(`flightto:${idlib.code}`, reporter, reportBot);
   assert.match(lastUi().payload.text, /درعا/);
   await tap('skip', reporter, reportBot);
-  assert.match(lastUi().payload.text, /موقع الرصد:<\/b> درعا/);
+  assert.match(lastUi().payload.text, /نقطة رصد تقريبية:<\/b> درعا/);
   assert.match(lastUi().payload.text, /الوجهة:<\/b> إدلب/);
   assert.match(lastUi().payload.text, /توضيحي فقط/);
 
@@ -900,7 +901,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
       assert.ok(buttons().some((button) => button.callback_data === 'flight:entering_syria'));
       assert.ok(buttons().some((button) => button.callback_data === 'flight:leaving_syria'));
       await tap(`flight:${direction}`, user, targetBot);
-      assert.match(lastUi().payload.text, /موقع الرصد/, `${direction} is accepted by the selected bot flow`);
+      assert.match(lastUi().payload.text, /نقطة رصد تقريبية/, `${direction} is accepted by the selected bot flow`);
       await tap('cancel', user, targetBot);
     }
   }
@@ -1135,4 +1136,49 @@ test('clashes channel posts keep the dedicated label instead of the generic atta
   assert.equal(input.type, 'clashes');
   assert.match(post, /<b>اشتباكات مسلحة<\/b>/);
   assert.doesNotMatch(post, /<b>هجوم<\/b>/);
+});
+
+test('aerial movement accepts only a reporter-selected approximate external origin while other categories remain bounded', async () => {
+  const idlib = governorates.find((g) => g.ar === 'إدلب');
+  const sendPoint = (user, targetBot) => targetBot.handleUpdate({
+    update_id: updateId++,
+    message: { message_id: ++messageId, date: 0, chat: { id: user.id, type: 'private' }, from: user,
+      location: { latitude: 32.1234567, longitude: 34.8765432 } },
+  });
+  const lastText = () => [...calls].reverse().find(({ payload }) => typeof payload.text === 'string')?.payload.text || '';
+  const start = calls.length;
+  const freshReporter = { ...reporter, id: 999000000001 };
+  for (const [user, targetBot] of [[owner, bot], [freshReporter, reportBot]]) {
+    await tap('home', user, targetBot);
+    await tap('ag:aerial', user, targetBot);
+    let menuStart = calls.length;
+    await tap('t:uav', user, targetBot);
+    assert.ok(callbacksOf(keyboardAfter(menuStart)).includes('airmode:move'), `unrequested UAV submenu choice is preserved: ${JSON.stringify({ user: user.id, buttons: callbacksOf(keyboardAfter(menuStart)), text: lastText() })}`);
+    for (const aircraft of ['warplane', 'uav']) {
+      await tap('home', user, targetBot);
+      await tap('ag:aerial', user, targetBot);
+      await tap('t:air_movement', user, targetBot);
+      await tap(`flightair:${aircraft}`, user, targetBot);
+      await tap('flight:toward_syria', user, targetBot);
+      assert.match(lastText(), /نقطة رصد تقريبية/);
+      menuStart = calls.length;
+      await sendPoint(user, targetBot);
+      assert.ok(callbacksOf(keyboardAfter(menuStart)).includes(`flightto:${idlib.code}`), 'external observation pin is accepted and leads to Syrian destinations');
+      await tap(`flightto:${idlib.code}`, user, targetBot);
+      await tap('skip', user, targetBot);
+      assert.match(lastText(), /نقطة رصد تقريبية:<\/b> نقطة رصد تقريبية/);
+      assert.match(lastText(), /الوجهة:<\/b> إدلب/);
+    }
+    await tap('home', user, targetBot);
+    await tap('ag:aerial', user, targetBot);
+    await tap('t:warplane', user, targetBot);
+    await tap('airmode:over', user, targetBot);
+    await sendPoint(user, targetBot);
+    assert.match(lastText(), /خارج|ضمن|سوريا/, 'ordinary over-area alerts still reject an external point');
+    await tap('cancel', user, targetBot);
+  }
+  assert.equal(calls.slice(start).some(({ chatId }) => chatId === '@mock_news_channel'), false, 'menu and point checks never publish a channel post');
+  const source = fs.readFileSync(new URL('../server/bot.js', import.meta.url), 'utf8');
+  assert.match(source, /flightOrigin = d\.type === 'air_movement' && d\.selectingFlightOrigin === true/);
+  assert.match(source, /name_en: 'Approximate observation point', latitude: lat, longitude: lon/, 'origin coordinates are not snapped, rounded, or fabricated');
 });

@@ -75,7 +75,7 @@ test('warplane follows the three-aircraft reference pass while drones keep their
   assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite;/);
   assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(2\)\s*\{ left: 8px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
   assert.match(css, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
-  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad \.squad \{ visibility: hidden; \}/);
+  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad:not\(\.t-warplane\) \.squad \{ visibility: hidden; \}/);
   assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*animation: squadFly 7s linear infinite;/);
   assert.doesNotMatch(css, /warplaneOrbit|squadFlyZ/);
   assert.match(svgs, /"uav":/);
@@ -97,7 +97,7 @@ test('schematic movement uses one compact blue three-aircraft group at the repor
   assert.match(map, /const color = eventVisual\('air_movement'\)\.color;/);
   assert.match(map, /\[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]/);
   assert.match(map, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
-  assert.match(map, /const heading = alert\.flight_direction === 'leaving_syria' \? 180 : 0/);
+  assert.match(map, /const heading = aircraftHeading\(alert, savedBearing\)/);
   assert.match(map, /is-\$\{alert\.flight_direction\.replace\(\/_\/g, '-'\)\}/);
   assert.match(map, /const movementTrackIds = new Set\(this\.movementTrackAlerts\(\)\.map\(\(a\) => a\.id\)\)/);
   assert.match(map, /movementTrackIds\.has\(a\.id\)/);

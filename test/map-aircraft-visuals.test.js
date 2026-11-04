@@ -68,15 +68,15 @@ test('warplane formation keeps the reference pass with bounded medium-sized, bri
   assert.match(css, /\.mk-squad \.sq-svg, html\.dark \.mk-squad \.sq-svg \{ fill: #3b8eff; filter: none; \}/);
   assert.match(css, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.doesNotMatch(css, /warplaneOrbit/);
-  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad \.squad \{ visibility: hidden; \}/);
-  assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-squad \.squad \{ visibility: visible; \}/);
+  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad:not\(\.t-warplane\) \.squad \{ visibility: hidden; \}/);
+  assert.match(css, /\.maplibregl-map \.mk-squad\.t-warplane \.squad \{ visibility: visible; \}/);
   assert.match(css, /\.mk-squad \.mk-s \{ transform: none; transition: none; \}/, 'the group stays anchored in screen space while its planes pass');
   assert.match(css, /\.mk-squad \.squad \.sq \{ animation: none !important; transform: none !important; opacity: 1 !important; \}/, 'reduced-motion preferences stop each moving plane');
   assert.match(mapJs, /if \(!\['squad', 'movement', 'fly'\]\.includes\(marker\)\)/);
 });
 
 test('only the warplane area receives a larger display cap, without inflating reported radius', () => {
-  assert.match(mapJs, /this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\)/);
+  assert.match(mapJs, /planeArea \? z\.km : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\)/);
   const method = mapJs.match(/  _screenKm\(([^)]*)\) \{([\s\S]*?)\n  \}/);
   assert.ok(method, 'display-radius conversion remains independently testable');
   const screenKm = new Function(method[1], method[2]);
@@ -96,7 +96,7 @@ test('only the warplane area receives a larger display cap, without inflating re
 });
 
 test('entry flight marker keeps its schematic approach animation while the route line is separate', () => {
-  assert.match(css, /\.map-flight-track-marker\.is-entering-syria \.map-flight-track-squad \{ animation: flightTrackEnterFromEast/);
+  assert.match(css, /\.map-flight-track-marker\.is-plane\.is-entering-syria \.map-flight-track-squad \{ animation-name: flightTrackPlaneApproach/ );
   assert.match(css, /@keyframes flightTrackEnterFromEast \{ 0% \{ transform: translateX\(44px\); opacity: 0; \}/);
   assert.match(css, /Icon motion is schematic; any geographic line uses only separately selected endpoints, never live tracking/);
   assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
@@ -105,7 +105,7 @@ test('entry flight marker keeps its schematic approach animation while the route
 test('movement stays anchored to the observed location and draws only the selected direct route', () => {
   assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
   assert.match(mapJs, /track\.marker\.setLngLat\(position\)/);
-  assert.match(mapJs, /const heading = alert\.flight_direction === 'leaving_syria' \? 180 : 0/);
+  assert.match(mapJs, /const heading = aircraftHeading\(alert, savedBearing\)/);
   assert.match(mapJs, /track\.marker\.setRotation\(heading\)/);
   assert.match(mapJs, /maplibregl-marker map-flight-track-marker/);
   assert.match(css, /\.map-flight-track-marker \{ position: absolute;/);
@@ -116,7 +116,7 @@ test('movement stays anchored to the observed location and draws only the select
   assert.match(mapJs, /properties: \{ color: routeColor, arrow: '➤'/);
   assert.match(mapJs, /'symbol-placement': 'line-center'/);
   assert.match(mapJs, /'text-rotation-alignment': 'map', 'text-keep-upright': false/);
-  assert.match(mapJs, /'line-opacity': 0\.9/);
+  assert.match(mapJs, /'line-opacity': \['case', \['get', 'planeRoute'\], 0\.45, 0\.9\]/);
   assert.match(mapJs, /fill="\$\{iconColor\}" class="map-flight-track-svg"/);
   assert.match(mapJs, /source\.setData\(\{ type: 'FeatureCollection', features: routeFeatures \}\)/);
   assert.match(mapJs, /&& Number\.isFinite\(a\.location\?\.latitude\) && Number\.isFinite\(a\.location\?\.longitude\)/);

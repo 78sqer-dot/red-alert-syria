@@ -302,6 +302,20 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 @keyframes flightTrackTravel { 0% { transform: translateY(32px); opacity: 0; } 12%, 88% { opacity: 1; } 100% { transform: translateY(-32px); opacity: 0; } }
 @keyframes flightTrackApproach { 0% { transform: translateY(40px); opacity: 0; } 15% { opacity: 1; } 85% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(0); opacity: 0; } }
 @keyframes flightTrackEnterFromEast { 0% { transform: translateX(44px); opacity: 0; } 15% { opacity: 1; } 85% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(0); opacity: 0; } }
+.map-flight-track-marker.is-plane .map-flight-track-visual { height: 200px; transform: none; }
+.map-flight-track-marker.is-plane .map-flight-track-squad { top: 50%; }
+.map-flight-track-marker.is-plane.is-toward-syria .map-flight-track-squad { left: 50%; }
+.map-flight-track-marker.is-plane.is-entering-syria .map-flight-track-squad { left: 50%; }
+.map-flight-track-formation { position: absolute; inset: 0; }
+.map-flight-track-marker.is-plane .map-flight-track-formation { transform: scale(calc(var(--mks, .5) * 1.3)); transform-origin: top center; }
+.map-flight-track-marker.is-plane.is-toward-syria .map-flight-track-visual::before, .map-flight-track-marker.is-plane.is-entering-syria .map-flight-track-visual::before { content: ''; position: absolute; left: 50%; top: 50%; height: 135px; border-left: 1.5px dashed rgba(59,142,255,.45); pointer-events: none; }
+.map-flight-track-marker.is-plane:not(.is-toward-syria):not(.is-entering-syria) .map-flight-track-squad { animation-name: flightTrackPlaneTravel; }
+.map-flight-track-marker.is-plane.is-toward-syria .map-flight-track-squad { animation-name: flightTrackPlaneApproach; }
+.map-flight-track-marker.is-plane.is-entering-syria .map-flight-track-squad { animation-name: flightTrackPlaneApproach; }
+
+@keyframes flightTrackPlaneTravel { 0% { transform: translateY(110px); opacity: 0; } 12%, 88% { opacity: 1; } 100% { transform: translateY(-110px); opacity: 0; } }
+@keyframes flightTrackPlaneApproach { 0% { transform: translate(-50%, 150px); opacity: 0; } 15% { opacity: 1; } 85% { transform: translate(-50%, 76px); opacity: 1; } 100% { transform: translate(-50%, 76px); opacity: 0; } }
+@keyframes flightTrackPlaneEnterFromEast { 0% { transform: translateX(150px); opacity: 0; } 15% { opacity: 1; } 85% { transform: translateX(76px); opacity: 1; } 100% { transform: translateX(76px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .map-flight-track-squad { animation: none !important; transform: none; opacity: 1; } }
 .is-moving .map-flight-track-squad, .is-zooming .map-flight-track-squad { animation-play-state: paused !important; }
 .about-pill { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 12; height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; background: var(--bg-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 12.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
@@ -969,8 +983,10 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .mk-squad .squad .sq:nth-child(2) .sq-svg, .mk-squad .squad .sq:nth-child(3) .sq-svg { width: 22px; height: 22px; }
 /* Match the reference blue, without the dark drop-shadow muddying the small silhouettes. */
 .mk-squad .sq-svg, html.dark .mk-squad .sq-svg { fill: #3b8eff; filter: none; }
-.maplibregl-map:not(.zoom-detail) .mk-squad .squad { visibility: hidden; }
-.maplibregl-map.zoom-detail .mk-squad .squad { visibility: visible; }
+.mk-squad .mk-s { transform: none; }
+.mk-squad .sq-svg { transform: scale(calc(var(--mks, .5) * 1.5)) rotate(-45deg); transform-origin: center; }
+.maplibregl-map:not(.zoom-detail) .mk-squad:not(.t-warplane) .squad { visibility: hidden; }
+.maplibregl-map .mk-squad.t-warplane .squad { visibility: visible; }
 @media (prefers-reduced-motion: reduce) {
   .mk-squad .squad .sq { animation: none !important; transform: none !important; opacity: 1 !important; }
 }

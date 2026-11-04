@@ -334,7 +334,7 @@ function draftSummary(d, lang) {
   if (d.type === 'air_movement' && (!loc || loc.scope === 'country')) {
     lines.push('', lang === 'en' ? '📍 No observed location selected — no map pin' : '📍 لم يُحدّد موقع الرصد — بلا دبوس على الخريطة');
   } else if (d.type === 'air_movement' && d.flightTarget) {
-    const originLabel = lang === 'en' ? 'Observed location' : 'موقع الرصد';
+    const originLabel = lang === 'en' ? 'Approximate observation point' : 'نقطة رصد تقريبية';
     const destinationLabel = lang === 'en' ? 'Destination' : 'الوجهة';
     const general = d.flightTarget.scope === 'country';
     lines.push('', `📍 <b>${originLabel}:</b> ${esc(locName(loc, lang))}`);
@@ -715,8 +715,8 @@ async function askLocation(ctx, d) {
   const aircraft = FLIGHT_AIRCRAFT[d.aircraft] || FLIGHT_AIRCRAFT[d.type];
   const targetPrompt = d.selectingFlightOrigin
     ? (en
-      ? `📍 Choose the observed location for this route. This is the report location, not a live aircraft position.${aircraft ? ` (${esc(aircraft.en)})` : ''}`
-      : `📍 اختر <b>موقع الرصد</b> لهذا المسار. هذا موقع البلاغ وليس موقعاً مباشراً للطائرة.${aircraft ? ` (${esc(aircraft.ar)})` : ''}`)
+      ? `📍 Choose the approximate observation point for this route. Send a pinned map location; it may be outside Syria. This is not a live aircraft position.${aircraft ? ` (${esc(aircraft.en)})` : ''}`
+      : `📍 اختر <b>نقطة رصد تقريبية</b> لهذا المسار بإرسال نقطة تختارها من خريطة تيليغرام، ويمكن أن تكون خارج سوريا. هذه نقطة البلاغ وليست موقعاً مباشراً للطائرة.${aircraft ? ` (${esc(aircraft.ar)})` : ''}`)
     : d.selectingFlightTarget
     ? (en
       ? `📍 Choose the destination area.${aircraft ? ` (${esc(aircraft.en)})` : ''}`
@@ -741,9 +741,11 @@ async function askAerialMode(ctx, d) {
   const aircraft = d.type === 'uav' ? ALERT_TYPES.uav.emoji : ALERT_TYPES.warplane.emoji;
   const kb = new InlineKeyboard()
     .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row();
-  kb.text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row();
+  if (d.type !== 'warplane') kb.text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row();
   kb.text(L(ctx).btnCancel, 'cancel');
-  const prompt = en
+  const prompt = d.type === 'warplane'
+    ? (en ? 'Choose over-area activity. For a route, use “Toward Syria / governorate” under aerial activity.' : 'اختر التحليق فوق المنطقة. لإضافة مسار استخدم «باتجاه سوريا / محافظة» ضمن النشاط الجوي.')
+    : en
     ? 'Choose hovering over an area or aircraft movement. Movement lets you select an observed location and a Syrian destination.'
     : 'اختر تحليقًا فوق منطقة أو حركة طيران. في الحركة تحدد موقع الرصد ثم وجهة داخل سوريا.';
   await show(ctx, prompt, kb);
@@ -779,7 +781,7 @@ async function askFlightDestination(ctx, d) {
     kb.text(`📍 ${en ? g.en : g.ar}`, `flightto:${g.code}`);
     if (i % 2 === 1 && i < governorates.length - 1) kb.row();
   });
-  kb.row().text(en ? '↩️ Change observed location' : '↩️ تغيير موقع الرصد', 'flightto:back').text(L(ctx).btnCancel, 'cancel');
+  kb.row().text(en ? '↩️ Change approximate observation point' : '↩️ تغيير نقطة رصد تقريبية', 'flightto:back').text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en
     ? 'Choose a destination. “Syria (general)” has no precise endpoint, so the map will not invent a route line.'
     : 'اختر الوجهة. خيار «سوريا — اتجاه عام» لا يحدد نقطة دقيقة، لذلك لن نختلق خط مسار على الخريطة.', kb);
@@ -2392,9 +2394,14 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const d = getDraft(ctx);
     if (!d || !['gov', 'dist', 'place', 'details'].includes(d.step)) return;
     const { latitude: lat, longitude: lon } = ctx.message.location;
-    if (!insideSyriaBox(lat, lon)) return ctx.reply(L(ctx).outside);
+    const flightOrigin = d.type === 'air_movement' && d.selectingFlightOrigin === true;
+    const validPoint = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+    if (!validPoint || (!flightOrigin && !insideSyriaBox(lat, lon))) return ctx.reply(L(ctx).outside);
     d.msgId = null;
-    await pickLocation(ctx, d, locationFrom({ lat, lon }));
+    const loc = flightOrigin
+      ? { scope: 'point', name_ar: 'نقطة رصد تقريبية', name_en: 'Approximate observation point', latitude: lat, longitude: lon }
+      : locationFrom({ lat, lon });
+    await pickLocation(ctx, d, loc);
   });
 
   bot.on('message:text', async (ctx) => {
