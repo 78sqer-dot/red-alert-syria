@@ -93,10 +93,12 @@ test('a signal-sweep drone uses the standard 24px, type-colored orbit marker onl
   assert.match(map, /el\.style\.setProperty\('--c', visual\.color\)/);
 });
 
-test('schematic movement uses one compact blue three-aircraft group at the report location without extra rings', () => {
+test('schematic movement uses a three-aircraft group that follows its route inside the endpoint circle', () => {
   assert.match(map, /const color = eventVisual\('air_movement'\)\.color;/);
   assert.match(map, /\[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]/);
-  assert.match(map, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
+  assert.match(map, /const position = route\.length === 2 \? route\[0\] : reportPosition/);
+  assert.match(map, /routeArea: true/);
+  assert.match(map, /flightPosition\(route, progress\)/);
   assert.match(map, /const heading = isReferenceRoute && Number\.isFinite\(routeBearing\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
   assert.match(map, /is-\$\{alert\.flight_direction\.replace\(\/_\/g, '-'\)\}/);
   assert.match(map, /const movementTrackIds = new Set\(this\.movementTrackAlerts\(\)\.map\(\(a\) => a\.id\)\)/);

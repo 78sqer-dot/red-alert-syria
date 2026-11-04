@@ -312,6 +312,7 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .map-flight-track-marker.is-plane:not(.is-toward-syria):not(.is-entering-syria) .map-flight-track-squad { animation-name: flightTrackPlaneTravel; }
 .map-flight-track-marker.is-plane.is-toward-syria .map-flight-track-squad { animation-name: flightTrackPlaneApproach; }
 .map-flight-track-marker.is-plane.is-entering-syria .map-flight-track-squad { animation-name: flightTrackPlaneApproach; }
+.map-flight-track-marker.is-geographic .map-flight-track-squad { animation: none !important; transform: none !important; opacity: 1 !important; }
 
 @keyframes flightTrackPlaneTravel { 0% { transform: translateY(110px); opacity: 0; } 12%, 88% { opacity: 1; } 100% { transform: translateY(-110px); opacity: 0; } }
 @keyframes flightTrackPlaneApproach { 0% { transform: translate(-50%, 150px); opacity: 0; } 15% { opacity: 1; } 85% { transform: translate(-50%, 76px); opacity: 1; } 100% { transform: translate(-50%, 76px); opacity: 0; } }

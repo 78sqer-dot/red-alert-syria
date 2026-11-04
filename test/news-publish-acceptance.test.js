@@ -94,8 +94,8 @@ test('home menu clears tracked private relay messages for this bot and chat only
 test('report menus expose flight direction inside aerial activity, not as a standalone option', async () => {
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...BOT_ALERT_MENU_PATROL_CHILD_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
   assert.equal(new Set(routedTypes).size, routedTypes.length, 'each alert type has exactly one report-menu route');
-  const reportableTypes = Object.keys(ALERT_TYPES);
-  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'all alert types, including movement, have a nested menu route');
+  const reportableTypes = Object.keys(ALERT_TYPES).filter((type) => type !== 'civil_plane');
+  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'all reportable alert types except civil aircraft have a menu route');
 
   let start = calls.length;
   await tap('home');
@@ -136,6 +136,7 @@ test('report menus expose flight direction inside aerial activity, not as a stan
     const childButtons = keyboardAfter(start).flat();
     const children = callbacksOf([childButtons]).filter((value) => value.startsWith('t:')).sort();
     assert.deepEqual(children, BOT_ALERT_MENU_GROUPS[group].map((type) => `t:${type}`).sort(), `${group} buttons route to their own alert types`);
+    if (group === 'civil') assert.equal(children.includes('t:civil_plane'), false, 'civil aircraft is removed from the bot submenu');
     if (group === 'aerial') assert.ok(childButtons.some((button) => button.callback_data === 't:air_movement' && button.text?.includes('باتجاه')), 'aerial submenu labels the movement option as a direction toward Syria or a governorate');
     if (group === 'strikes') {
       assert.ok(childButtons.some((button) => button.callback_data === 't:explosion' && button.text === '«💥 انفجار»'), 'admin bot keeps the existing «انفجار» option');
@@ -143,6 +144,9 @@ test('report menus expose flight direction inside aerial activity, not as a stan
     }
     if (group === 'protests') assert.deepEqual(childButtons.filter((button) => ['t:protest_action', 't:protest'].includes(button.callback_data)).map((button) => [button.callback_data, button.text]), [['t:protest_action', '«📢 احتجاج»'], ['t:protest', '«👥 مظاهرة»']]);
   }
+  start = calls.length;
+  await tap('t:civil_plane');
+  assert.equal(calls.slice(start).some(({ method }) => method === 'sendMessage' || method === 'editMessageText'), false, 'a stale civil-aircraft callback cannot start a draft');
 });
 
 test('public report bot exposes both strike types and sends detonation reports only to review', async (t) => {
@@ -150,8 +154,8 @@ test('public report bot exposes both strike types and sends detonation reports o
   const currentUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const currentButtons = () => currentUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...BOT_ALERT_MENU_PATROL_CHILD_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
-  const reportableTypes = Object.keys(ALERT_TYPES);
-  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'the public menu routes movement inside aerial activity');
+  const reportableTypes = Object.keys(ALERT_TYPES).filter((type) => type !== 'civil_plane');
+  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'the public menu routes reportable types except civil aircraft');
 
   let start = calls.length;
   await tap('home', publicReporter, reportBot);
@@ -802,9 +806,10 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('home', reporter, reportBot);
   await tap('home');
   await tap('cv');
-  for (const callback of ['t:accident', 't:fire', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting', 't:civil']) {
+  for (const callback of ['t:accident', 't:fire', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:shooting', 't:civil']) {
     assert.ok(buttons().some((button) => button.callback_data === callback), `civil submenu includes ${callback}`);
   }
+  assert.equal(buttons().some((button) => button.callback_data === 't:civil_plane'), false, 'civil submenu no longer offers the civil aircraft button');
   assert.equal(buttons().some((button) => ['t:protest', 't:protest_action'].includes(button.callback_data)), false, 'protest choices have their own parent menu');
   assert.ok(buttons().some((button) => button.callback_data === 't:brawl' && button.text?.includes('مشاجرة')));
   assert.ok(buttons().some((button) => button.callback_data === 't:shooting' && button.text?.includes('إطلاق نار')));
@@ -840,6 +845,11 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const idlib = governorates.find((g) => g.ar === 'إدلب');
   const daraa = governorates.find((g) => g.ar === 'درعا');
   assert.ok(idlib && daraa, 'synthetic governorate route endpoints are available');
+  const sendOrigin = (user, targetBot) => targetBot.handleUpdate({
+    update_id: updateId++,
+    message: { message_id: ++messageId, date: 0, chat: { id: user.id, type: 'private' }, from: user,
+      location: { latitude: 32.1234567, longitude: 34.8765432 } },
+  });
   await tap('home');
   await tap('ag:aerial');
   assert.ok(buttons().some((button) => button.callback_data === 't:air_movement' && /باتجاه سوريا/.test(button.text)), 'existing main direction button is retained');
@@ -847,11 +857,13 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('flightair:warplane');
   for (const mode of ['toward_syria', 'entering_syria', 'leaving_syria']) assert.ok(buttons().some((button) => button.callback_data === `flight:${mode}`), `main direction flow offers ${mode}`);
   await tap('flight:entering_syria');
+  assert.match(lastUi().payload.text, /نقطة رصد تقريبية/);
+  await sendOrigin(owner, bot);
   assert.match(lastUi().payload.text, /اختر الوجهة/);
-  assert.equal(buttons().some((button) => button.callback_data?.startsWith('g:')), false, 'new routes do not ask for a manually selected origin');
+  assert.equal(buttons().some((button) => button.callback_data?.startsWith('g:')), false, 'destination choices use the flight destination menu');
   await tap(`flightto:${idlib.code}`);
   await tap('skip');
-  assert.match(lastUi().payload.text, /نقطة مرجعية تقريبية:<\/b> إسرائيل/);
+  assert.match(lastUi().payload.text, /نقطة رصد تقريبية:<\/b>/);
   assert.match(lastUi().payload.text, /الوجهة:<\/b> إدلب/);
   await tap('home');
   await tap('home', reporter, reportBot);
@@ -865,8 +877,9 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 'flight:leaving_syria'));
   assert.equal(buttons().some((button) => button.callback_data === 'flight:from_area'), false, 'hovering over an area remains its own alert type');
   await tap('flight:entering_syria', reporter, reportBot);
+  assert.match(lastUi().payload.text, /نقطة رصد تقريبية/);
+  await sendOrigin(reporter, reportBot);
   assert.match(lastUi().payload.text, /اختر الوجهة/);
-  assert.equal(buttons().some((button) => button.callback_data?.startsWith('g:')), false, 'movement reports go directly to the destination list');
   assert.ok(buttons().some((button) => button.callback_data === 'flightto:syria'));
   assert.ok(buttons().some((button) => button.callback_data === `flightto:${idlib.code}`));
   await tap('flightto:syria', reporter, reportBot);
@@ -879,11 +892,13 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 'flightair:warplane'), 'direction flow lets the reporter choose the aircraft type');
   await tap('flightair:warplane', reporter, reportBot);
   await tap('flight:toward_syria', reporter, reportBot);
+  assert.match(lastUi().payload.text, /نقطة رصد تقريبية/);
+  await sendOrigin(reporter, reportBot);
   assert.match(lastUi().payload.text, /اختر الوجهة/);
   await tap(`flightto:${idlib.code}`, reporter, reportBot);
-  assert.match(lastUi().payload.text, /إدلب/);
+  assert.match(lastUi().payload.text, /أضف <b>تفاصيل/);
   await tap('skip', reporter, reportBot);
-  assert.match(lastUi().payload.text, /نقطة مرجعية تقريبية:<\/b> إسرائيل/);
+  assert.match(lastUi().payload.text, /نقطة رصد تقريبية:<\/b>/);
   assert.match(lastUi().payload.text, /الوجهة:<\/b> إدلب/);
   assert.match(lastUi().payload.text, /توضيحي فقط/);
 
@@ -897,6 +912,8 @@ test('every monitored alert type builds, and accepting the same mock draft twice
       assert.ok(buttons().some((button) => button.callback_data === 'flight:entering_syria'));
       assert.ok(buttons().some((button) => button.callback_data === 'flight:leaving_syria'));
       await tap(`flight:${direction}`, user, targetBot);
+      assert.match(lastUi().payload.text, /نقطة رصد تقريبية/, `${direction} requests an observed origin`);
+      await sendOrigin(user, targetBot);
       assert.match(lastUi().payload.text, /اختر الوجهة/, `${direction} is accepted by the selected bot flow`);
       assert.ok(buttons().some((button) => button.callback_data?.startsWith('flightto:')));
       await tap('cancel', user, targetBot);
@@ -1163,7 +1180,7 @@ test('clashes channel posts keep the dedicated label instead of the generic atta
   assert.doesNotMatch(post, /<b>هجوم<\/b>/);
 });
 
-test('aerial movement uses the approximate Israel reference and destination directly in both bot flows', async () => {
+test('aerial movement captures a reported origin and selected destination in both bot flows', async () => {
   const idlib = governorates.find((g) => g.ar === 'إدلب');
   const sendPoint = (user, targetBot) => targetBot.handleUpdate({
     update_id: updateId++,
@@ -1186,14 +1203,16 @@ test('aerial movement uses the approximate Israel reference and destination dire
       await tap(`flightair:${aircraft}`, user, targetBot);
       menuStart = calls.length;
       await tap('flight:toward_syria', user, targetBot);
+      assert.match(lastText(), /نقطة رصد تقريبية/);
+      assert.match(lastText(), /ليست موقعاً مباشراً للطائرة/);
+      await sendPoint(user, targetBot);
       assert.match(lastText(), /اختر الوجهة/);
-      assert.match(lastText(), /مرجع تقريبي داخل إسرائيل|مرجعية تقريبية داخل إسرائيل/);
       const destinationCallbacks = callbacksOf(keyboardAfter(menuStart));
       assert.equal(destinationCallbacks.some((callback) => callback.startsWith('g:')), false);
       assert.ok(destinationCallbacks.includes(`flightto:${idlib.code}`), 'destination choices appear immediately');
       await tap(`flightto:${idlib.code}`, user, targetBot);
       await tap('skip', user, targetBot);
-      assert.match(lastText(), /نقطة مرجعية تقريبية:<\/b> إسرائيل/);
+      assert.match(lastText(), /نقطة رصد تقريبية:<\/b>/);
       assert.match(lastText(), /الوجهة:<\/b> إدلب/);
     }
     await tap('home', user, targetBot);
@@ -1205,7 +1224,10 @@ test('aerial movement uses the approximate Israel reference and destination dire
     await tap('cancel', user, targetBot);
   }
   assert.equal(calls.slice(start).some(({ chatId }) => chatId === '@mock_news_channel'), false, 'menu and point checks never publish a channel post');
+});
+
+
+test('new flight reports never create a guessed route origin', () => {
   const source = fs.readFileSync(new URL('../server/bot.js', import.meta.url), 'utf8');
-  assert.match(source, /d\.flightRouteOrigin = 'israel_approx_reference'/);
-  assert.match(source, /flightRouteOrigin = d\.type === 'air_movement'[\s\S]{0,220}flightTarget\?\.scope === 'governorate'/);
+  assert.doesNotMatch(source, /flightRouteOrigin\s*=/);
 });

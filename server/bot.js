@@ -50,7 +50,7 @@ export const BOT_ALERT_MENU_GROUPS = Object.freeze({
   targeting: Object.freeze(['uav_strike', 'assassination']),
   strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination')),
   protests: Object.freeze(['protest_action', 'protest']),
-  civil: Object.freeze(ALERT_GROUPS.civil.types.filter((type) => type !== 'protest' && type !== 'protest_action')),
+  civil: Object.freeze(ALERT_GROUPS.civil.types.filter((type) => type !== 'protest' && type !== 'protest_action' && type !== 'civil_plane')),
   smuggling: Object.freeze([...ALERT_GROUPS.smuggling.types]),
   nature: Object.freeze([...ALERT_GROUPS.nature.types]),
 });
@@ -330,30 +330,12 @@ function draftSummary(d, lang) {
   if (d.type === 'breaking') lines.push('', esc(d.text || ''));
   if (d.type === 'air_movement' && (!loc || loc.scope === 'country')) {
     lines.push('', lang === 'en' ? '📍 No observed location selected — no map pin' : '📍 لم يُحدّد موقع الرصد — بلا دبوس على الخريطة');
-    if (d.flightTarget?.scope === 'country') lines.push(lang === 'en'
-      ? '↗️ General direction only; no precise route line will be drawn.'
-      : '↗️ اتجاه عام فقط؛ لن يُرسم خط جغرافي بلا وجهة دقيقة.');
   } else if (d.type === 'air_movement' && d.flightTarget) {
+    const originLabel = lang === 'en' ? 'Approximate observation point' : 'نقطة رصد تقريبية';
+    const destinationLabel = lang === 'en' ? 'Destination' : 'الوجهة';
     const general = d.flightTarget.scope === 'country';
-    if (d.flightRouteOrigin === 'israel_approx_reference' && d.flightTarget.scope === 'governorate') {
-      const israel = lang === 'en' ? 'Israel' : 'إسرائيل';
-      if (d.flightDirection === 'leaving_syria') {
-        const departureLabel = lang === 'en' ? 'Departure area' : 'منطقة الانطلاق';
-        const destinationLabel = lang === 'en' ? 'Approx. reference destination' : 'وجهة مرجعية تقريبية';
-        lines.push('', `📍 <b>${departureLabel}:</b> ${esc(locName(d.flightTarget, lang))}`);
-        lines.push(`🎯 <b>${destinationLabel}:</b> ${esc(israel)}`);
-      } else {
-        const originLabel = lang === 'en' ? 'Approx. reference origin' : 'نقطة مرجعية تقريبية';
-        const destinationLabel = lang === 'en' ? 'Destination' : 'الوجهة';
-        lines.push('', `📍 <b>${originLabel}:</b> ${esc(israel)}`);
-        lines.push(`🎯 <b>${destinationLabel}:</b> ${esc(locName(d.flightTarget, lang))}`);
-      }
-    } else {
-      const originLabel = lang === 'en' ? 'Approximate observation point' : 'نقطة رصد تقريبية';
-      const destinationLabel = lang === 'en' ? 'Destination' : 'الوجهة';
-      lines.push('', `📍 <b>${originLabel}:</b> ${esc(locName(loc, lang))}`);
-      lines.push(`🎯 <b>${destinationLabel}:</b> ${esc(locName(d.flightTarget, lang))}`);
-    }
+    lines.push('', `📍 <b>${originLabel}:</b> ${esc(locName(loc, lang))}`);
+    lines.push(`🎯 <b>${destinationLabel}:</b> ${esc(locName(d.flightTarget, lang))}`);
     if (general) lines.push(lang === 'en'
       ? '↗️ General direction only; no precise route line will be drawn.'
       : '↗️ اتجاه عام فقط؛ لن يُرسم خط جغرافي بلا وجهة دقيقة.');
@@ -761,8 +743,8 @@ async function askAerialMode(ctx, d) {
   const prompt = d.type === 'warplane'
     ? (en ? 'Choose over-area activity. For a route, use “Toward Syria / governorate” under aerial activity.' : 'اختر التحليق فوق المنطقة. لإضافة مسار استخدم «باتجاه سوريا / محافظة» ضمن النشاط الجوي.')
     : en
-    ? 'Choose hovering over an area or aircraft movement. Movement asks for a Syrian destination; the map uses a clearly labeled approximate reference point inside Israel.'
-    : 'اختر التحليق فوق منطقة أو حركة طيران. في الحركة تختار وجهة داخل سوريا، وتستخدم الخريطة نقطة مرجعية تقريبية واضحة داخل إسرائيل.';
+    ? 'Choose hovering over an area or aircraft movement. Movement lets you select an observed location and a Syrian destination.'
+    : 'اختر تحليقًا فوق منطقة أو حركة طيران. في الحركة تحدد موقع الرصد ثم وجهة داخل سوريا.';
   await show(ctx, prompt, kb);
 }
 async function askAirstrikeForm(ctx, d) {
@@ -784,8 +766,8 @@ async function askFlightDirection(ctx, d) {
   }
   kb.text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en
-    ? 'Choose a direction. A selected Syrian governorate is connected by an illustrative line to an approximate reference point inside Israel; withdrawal reverses the direction. This is not a confirmed or live track.'
-    : 'اختر الاتجاه. عند تحديد محافظة سورية يظهر خط توضيحي بينها وبين نقطة مرجعية تقريبية داخل إسرائيل، وينعكس اتجاهه عند الانسحاب. هذا ليس مساراً مؤكداً أو تتبعاً مباشراً.', kb);
+    ? 'Choose a mode: toward Syria, entering Syrian airspace, or withdrawal from Syria. For a precise governorate destination, the illustrative arrow follows the line from the observed location to the selected destination; general Syria has no precise route.'
+    : 'اختر الوضع: باتجاه سوريا، دخول الأجواء السورية، أو انسحاب من سوريا. عند تحديد محافظة، يتبع السهم التوضيحي الخط من موقع الرصد إلى الوجهة؛ أما سوريا — اتجاه عام فلا ترسم خطًا دقيقًا.', kb);
 }
 async function askFlightDestination(ctx, d) {
   d.step = 'flight_destination';
@@ -796,17 +778,10 @@ async function askFlightDestination(ctx, d) {
     kb.text(`📍 ${en ? g.en : g.ar}`, `flightto:${g.code}`);
     if (i % 2 === 1 && i < governorates.length - 1) kb.row();
   });
-  const changeLabel = d.flightRouteOrigin === 'israel_approx_reference'
-    ? (en ? '↩️ Change movement direction' : '↩️ تغيير اتجاه الحركة')
-    : (en ? '↩️ Change approximate observation point' : '↩️ تغيير نقطة رصد تقريبية');
-  kb.row().text(changeLabel, 'flightto:back').text(L(ctx).btnCancel, 'cancel');
+  kb.row().text(en ? '↩️ Change approximate observation point' : '↩️ تغيير نقطة رصد تقريبية', 'flightto:back').text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en
-    ? (d.flightRouteOrigin === 'israel_approx_reference'
-      ? 'Choose a destination. A governorate draws an illustrative line from an approximate reference point inside Israel; “Syria (general)” has no endpoint. This is not a live track.'
-      : 'Choose a destination. The line will use the selected observation point; “Syria (general)” has no precise endpoint.')
-    : (d.flightRouteOrigin === 'israel_approx_reference'
-      ? 'اختر الوجهة. اختيار محافظة يرسم خطاً توضيحياً من نقطة مرجعية تقريبية داخل إسرائيل؛ «سوريا — اتجاه عام» بلا نقطة نهاية. هذا ليس تتبعاً مباشراً.'
-      : 'اختر الوجهة. سيستخدم الخط نقطة الرصد التي اخترتها؛ خيار «سوريا — اتجاه عام» لا يحدد نقطة نهاية دقيقة.'), kb);
+    ? 'Choose a destination. “Syria (general)” has no precise endpoint, so the map will not invent a route line.'
+    : 'اختر الوجهة. خيار «سوريا — اتجاه عام» لا يحدد نقطة دقيقة، لذلك لن نختلق خط مسار على الخريطة.', kb);
 }
 async function askFlightAircraft(ctx, d) {
   d.step = 'aircraft';
@@ -864,7 +839,6 @@ async function pickLocation(ctx, d, loc) {
   if (d.selectingFlightTarget) {
     d.selectingFlightTarget = false;
     d.flightTarget = loc;
-    d.location = loc;
     d.extra = [];
     return afterLocation(ctx, d);
   }
@@ -945,9 +919,6 @@ export function buildAlertInput(d, author) {
   const flight = d.type === 'air_movement' ? FLIGHT_DIRECTIONS[d.flightDirection] : null;
   const aircraft = d.type === 'air_movement' ? FLIGHT_AIRCRAFT[d.aircraft] : null;
   const flightTarget = d.type === 'air_movement' && d.flightTarget?.scope !== 'country' ? d.flightTarget : null;
-  const flightRouteOrigin = d.type === 'air_movement' && d.flightRouteOrigin === 'israel_approx_reference'
-    && flightTarget?.scope === 'governorate' && Number.isFinite(flightTarget.latitude) && Number.isFinite(flightTarget.longitude)
-    ? 'israel_approx_reference' : null;
   const flightTargetAr = flightTarget ? (d.flightDirection === 'leaving_syria' ? ` — من ${locName(flightTarget, 'ar')}` : ` — نحو ${locName(flightTarget, 'ar')}`) : '';
   const flightTargetEn = flightTarget ? (d.flightDirection === 'leaving_syria' ? ` — from ${locName(flightTarget, 'en')}` : ` — toward ${locName(flightTarget, 'en')}`) : '';
   const vehicleCount = d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0 && d.vehicleCount <= VEHICLE_COUNT_MAX ? d.vehicleCount : null;
@@ -983,7 +954,6 @@ export function buildAlertInput(d, author) {
         ...(flight ? { flightDirection: d.flightDirection } : {}),
         ...(aircraft ? { aircraft: d.aircraft } : {}),
         ...(d.type === 'air_movement' && d.flightTarget ? { flightTarget: d.flightTarget } : {}),
-        ...(flightRouteOrigin ? { flightRouteOrigin } : {}),
         ...(civilEmoji ? { civilEmoji } : {}),
         ...(vehicleCount ? { vehicleCount } : {}),
         ...(incursionKind ? { incursionKind } : {}),
@@ -1832,7 +1802,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery(/^t:(\w+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     const type = ctx.match[1];
-    if (!ALERT_TYPES[type]) return;
+    if (!ALERT_TYPES[type] || type === 'civil_plane') return;
     if (!staff(ctx)) {
       if (store.isBanned(ctx.from.id)) return show(ctx, L(ctx).banned, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
       if (Date.now() - (lastReport.get(ctx.from.id) || 0) < REPORT_COOLDOWN_MS) return show(ctx, L(ctx).reportRate, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
@@ -1995,23 +1965,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     d.flightTarget = null;
     d.location = locationFrom({});
     d.extra = [];
-    d.flightRouteOrigin = 'israel_approx_reference';
-    d.selectingFlightOrigin = false;
-    d.selectingFlightTarget = true;
-    await askFlightDestination(ctx, d);
+    d.selectingFlightOrigin = true;
+    d.selectingFlightTarget = false;
+    await askLocation(ctx, d);
   }));
   bot.callbackQuery(/^flightto:(syria|back|\d{1,2})$/, needDraft(async (ctx, d) => {
     if (d.type !== 'air_movement' || !d.selectingFlightTarget) return;
     const choice = ctx.match[1];
     if (choice === 'back') {
       d.selectingFlightTarget = false;
-      if (d.flightRouteOrigin === 'israel_approx_reference') {
-        d.flightRouteOrigin = null;
-        d.flightTarget = null;
-        d.location = locationFrom({});
-        d.extra = [];
-        return askFlightDirection(ctx, d);
-      }
       d.selectingFlightOrigin = true;
       d.location = locationFrom({});
       return askLocation(ctx, d);
@@ -2020,16 +1982,12 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!target) return askFlightDestination(ctx, d);
     d.selectingFlightTarget = false;
     d.flightTarget = target;
-    if (target.scope === 'country') d.flightRouteOrigin = null;
-    d.location = target;
     return afterLocation(ctx, d);
   }));
   bot.callbackQuery('flightdest:none', needDraft(async (ctx, d) => {
     if (d.type !== 'air_movement' || !d.selectingFlightTarget) return;
     d.selectingFlightTarget = false;
     d.flightTarget = null;
-    d.flightRouteOrigin = null;
-    d.location = locationFrom({});
     d.extra = [];
     await afterLocation(ctx, d);
   }));

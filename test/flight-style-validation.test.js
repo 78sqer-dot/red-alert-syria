@@ -10,7 +10,7 @@ test('aircraft route and area definitions are valid MapLibre styles in both them
   for (const dark of [false, true]) {
     const layers = [...map.matchAll(/add\((\{ id: 'ras-(?:zones|flight)[^\n]+)\);/g)]
       .map((match) => new Function('A', 'dark', `return (${match[1]});`)(A, dark));
-    assert.equal(layers.length, 7);
+    assert.equal(layers.length, 9);
     const sources = Object.fromEntries(layers.map((layer) => [layer.source, {
       type: 'geojson', data: { type: 'FeatureCollection', features: [] },
     }]));

@@ -12,22 +12,24 @@ test('warplanes and UAVs both offer movement while hovering stays separate', () 
   assert.match(bot, /d\.aerialMode = 'over';[\s\S]{0,100}askLocation\(ctx, d\)/);
 });
 
-test('new movement flow skips manual origin and asks directly for a Syrian destination', () => {
+test('new movement flow asks for the observed origin before offering a destination', () => {
   const start = bot.indexOf('bot.callbackQuery(/^flight:');
   const end = bot.indexOf('bot.callbackQuery(/^flightto:', start);
   const directionHandler = bot.slice(start, end);
-  assert.match(directionHandler, /d\.flightRouteOrigin = 'israel_approx_reference'/);
-  assert.match(directionHandler, /d\.selectingFlightTarget = true;[\s\S]{0,100}askFlightDestination\(ctx, d\)/);
-  assert.doesNotMatch(directionHandler, /askLocation\(ctx, d\)/);
+  assert.match(directionHandler, /d\.selectingFlightOrigin = true/);
+  assert.match(directionHandler, /d\.selectingFlightTarget = false/);
+  assert.match(directionHandler, /await askLocation\(ctx, d\)/);
+  assert.match(bot, /if \(d\.selectingFlightOrigin\)[\s\S]{0,200}d\.selectingFlightTarget = true;[\s\S]{0,100}d\.location = loc;[\s\S]{0,100}askFlightDestination\(ctx, d\)/);
   assert.match(bot, /flightto:\(syria\|back\|\\d\{1,2\}\)/);
   assert.match(bot, /locationFrom\(\{ govCode: choice \}\)/);
-  assert.match(bot, /d\.location = target/);
-  assert.match(bot, /d\.flightRouteOrigin === 'israel_approx_reference'[\s\S]{0,180}askFlightDirection\(ctx, d\)/);
-  assert.match(bot, /Change movement direction/);
+  assert.match(bot, /d\.flightTarget = target/);
+  assert.match(bot, /flightOrigin = d\.type === 'air_movement' && d\.selectingFlightOrigin === true/);
+  assert.match(bot, /name_ar: 'نقطة رصد تقريبية'[\s\S]{0,160}latitude: lat, longitude: lon/);
+  assert.doesNotMatch(bot, /flightRouteOrigin\s*=/, 'the bot must never invent a flight origin');
   assert.match(bot, /Illustrative direction only — not live tracking\./);
 });
 
-test('movement directions remain separate and supported', () => {
+test('movement directions remain separate and require a selected observation point', () => {
   const directions = ['toward_syria', 'entering_syria', 'leaving_syria'];
   assert.deepEqual(Object.keys(FLIGHT_DIRECTIONS), directions);
   assert.equal(FLIGHT_DIRECTIONS.toward_syria.ar, 'باتجاه سوريا');
@@ -36,5 +38,7 @@ test('movement directions remain separate and supported', () => {
   assert.equal(FLIGHT_DIRECTIONS.leaving_syria.en, 'Withdrawal into Israel');
   assert.match(bot, /flight:\(toward_syria\|entering_syria\|leaving_syria\)/);
   assert.match(bot, /d\.flightDirection = ctx\.match\[1\]/);
-  assert.match(bot, /اختر الاتجاه[\s\S]{0,180}نقطة مرجعية تقريبية داخل إسرائيل/);
+  assert.match(bot, /Choose the approximate observation point for this route/);
+  assert.match(bot, /اختر <b>نقطة رصد تقريبية<\/b> لهذا المسار/);
+  assert.match(bot, /ليست موقعاً مباشراً للطائرة/);
 });
