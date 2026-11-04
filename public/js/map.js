@@ -9,13 +9,13 @@ import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
-import { directFlightPath, directFlightBearing, referenceFlightPath, flightPathBearing, ISRAEL_APPROX_REFERENCE } from '/shared/flight-path.js?v=4';
+import { directFlightPath, directFlightBearing, referenceFlightPath, flightPathBearing, ISRAEL_APPROX_REFERENCE, LEGACY_QUNEITRA_ALERT_ID, isLegacyQuneitraArchiveAlert, legacyQuneitraArchivePath } from '/shared/flight-path.js?v=5';
 const ml = () => window.maplibregl;
 const aircraftHeading = (alert, bearing) => alert.aircraft === 'uav'
   ? (alert.flight_direction === 'leaving_syria' ? 180 : 0)
   : (Number.isFinite(bearing) ? bearing : alert.flight_direction === 'entering_syria' ? 270 : alert.flight_direction === 'leaving_syria' ? 180 : 0);
-// Client-only display override for the currently active Quneitra report; never changes its saved coordinates or post.
-const LEGACY_ISRAEL_REFERENCE_ALERTS = new Set(['be418c7b-510c-458e-b8d9-0c504730c50b']);
+// Client-only display override for the known Quneitra report; never changes its saved coordinates or post.
+const LEGACY_ISRAEL_REFERENCE_ALERTS = new Set([LEGACY_QUNEITRA_ALERT_ID]);
 const hasIsraelReferenceRoute = (alert) => alert?.flight_route_origin === 'israel_approx_reference'
   || LEGACY_ISRAEL_REFERENCE_ALERTS.has(alert?.id);
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
@@ -172,6 +172,7 @@ export class AlertMap {
     this.markers = new Map();
     this.alerts = [];
     this.selectedId = null;
+    this.selectedAlert = null;
     this.popup = null;
     this._groupPopupNav = null;
     this._replacingPopup = false;
@@ -383,6 +384,9 @@ export class AlertMap {
   setAlerts(alerts, selectedId) {
     this.alerts = alerts;
     this.selectedId = selectedId;
+    const selected = alerts.find((alert) => alert.id === selectedId);
+    if (selected) this.selectedAlert = selected;
+    else if (this.selectedAlert?.id !== selectedId) this.selectedAlert = null;
     this.syncMovementNotice();
     this.syncMovementTracks();
     if (this.ready) this.render();
@@ -556,6 +560,18 @@ export class AlertMap {
       track.marker.setRotation(heading);
       track.element.dataset.flightDirection = alert.flight_direction;
     });
+    const archivedAlert = !this.newsHidden && this.selectedAlert?.id === this.selectedId
+      && isLegacyQuneitraArchiveAlert(this.selectedAlert) ? this.selectedAlert : null;
+    const archivedRoute = archivedAlert ? legacyQuneitraArchivePath(archivedAlert) : [];
+    if (archivedRoute.length === 2) {
+      includesReferenceRoute = true;
+      routeFeatures.push({
+        type: 'Feature',
+        id: `archive-${LEGACY_QUNEITRA_ALERT_ID}`,
+        properties: { color: '#2476c9', arrow: '➤', alertId: archivedAlert.id, illustrative: true, planeRoute: true, referenceRoute: true, archived: true },
+        geometry: { type: 'LineString', coordinates: archivedRoute },
+      });
+    }
     for (const [id, track] of this.movementTracks) {
       if (keep.has(id)) continue;
       if (track.frame) cancelAnimationFrame(track.frame);
@@ -1108,7 +1124,9 @@ export class AlertMap {
   }
   select(alert, { fly = true, popup = true } = {}) {
     this.selectedId = alert ? alert.id : null;
+    this.selectedAlert = alert || null;
     if (!this.ready) { this._pending = alert ? [alert, { fly, popup }] : null; return; }
+    this.syncMovementTracks();
     this.refreshMarkerGroups();
     this._syncPulses((this._lastPulseData || []).map((p) => ({ ...p, selected: p.alertIds.has(this.selectedId) })));
     if (!alert) return this.closePopup();
@@ -1120,7 +1138,15 @@ export class AlertMap {
     const tapped = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
     const target = tapped || ll;
     const zs = Array.isArray(alert.zones) ? alert.zones : [];
-    if (fly && !tapped && alert.more && alert.more.length && zs.length > 1) {
+    const archiveRoute = isLegacyQuneitraArchiveAlert(alert) ? legacyQuneitraArchivePath(alert) : [];
+    if (archiveRoute.length === 2 && fly) {
+      this.closePopup();
+      const longitudes = archiveRoute.map(([lon]) => lon);
+      const latitudes = archiveRoute.map(([, lat]) => lat);
+      this.map.fitBounds([[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]], {
+        padding: this.padding(), maxZoom: 9, duration: 950, essential: true,
+      });
+    } else if (fly && !tapped && alert.more && alert.more.length && zs.length > 1) {
       // several areas: frame all of their circles
       let w = 180, e = -180, s = 90, n = -90;
       for (const q of zs) { const dl = q.km / 111, dn = q.km / (111 * Math.cos((q.lat * Math.PI) / 180)); w = Math.min(w, q.lon - dn); e = Math.max(e, q.lon + dn); s = Math.min(s, q.lat - dl); n = Math.max(n, q.lat + dl); }
@@ -1130,7 +1156,8 @@ export class AlertMap {
       const duration = alertTransitionDuration(distanceKm([center.lng, center.lat], target));
       this.map.flyTo({ center: target, zoom: alertFocusZoom(alert.scope, this.map.getZoom()), padding: this.padding(), curve: 1.18, duration, essential: true });
     }
-    if (popup) this.openPopup(alert);
+    if (popup && archiveRoute.length !== 2) this.openPopup(alert);
+    else if (archiveRoute.length === 2) this.closePopup();
   }
 
   // the alert circle under a map point: smallest circle first (the most precise area), then live, then newest

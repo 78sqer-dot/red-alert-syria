@@ -8,6 +8,35 @@ const DARA_CENTER = [36.105, 32.62];
 
 // A stable illustrative map anchor, not a reported or observed aircraft coordinate.
 export const ISRAEL_APPROX_REFERENCE = Object.freeze([35.50, 33.10]);
+export const LEGACY_QUNEITRA_ALERT_ID = 'be418c7b-510c-458e-b8d9-0c504730c50b';
+const near = (a, b) => Number.isFinite(a) && Math.abs(a - b) < 1e-6;
+/** Match only the known expired Sayda→Quneitra record; never infer an archive route for other alerts. */
+export function isLegacyQuneitraArchiveAlert(alert) {
+  const expiresAt = Date.parse(alert?.expires_at || '');
+  const endedAt = Date.parse(alert?.ended_at || '');
+  return alert?.id === LEGACY_QUNEITRA_ALERT_ID
+    && alert.is_active === false
+    && alert.type === 'air_movement'
+    && alert.aircraft === 'warplane'
+    && alert.flight_direction === 'toward_syria'
+    && alert.flight_target?.scope === 'governorate'
+    && alert.flight_target?.name_en === 'Quneitra'
+    && near(alert.flight_target?.longitude, 35.82461)
+    && near(alert.flight_target?.latitude, 33.12595)
+    && alert.place?.name_ar === 'صيدا'
+    && alert.place?.name_en === 'Sayda'
+    && near(alert.location?.longitude, 35.87609)
+    && near(alert.location?.latitude, 32.87622)
+    && Number.isFinite(expiresAt)
+    && Number.isFinite(endedAt)
+    && endedAt >= expiresAt;
+}
+/** Historical map overlay only; the saved alert location and activity are not changed. */
+export function legacyQuneitraArchivePath(alert) {
+  return isLegacyQuneitraArchiveAlert(alert)
+    ? referenceFlightPath('toward_syria', alert.flight_target)
+    : [];
+}
 
 /** Return only the two stored endpoints; general/country targets have no precise route. */
 export function directFlightPath(origin, destination) {

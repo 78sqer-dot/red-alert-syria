@@ -6,8 +6,8 @@ const map = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf
 const store = await readFile(new URL('../server/store.js', import.meta.url), 'utf8');
 const bot = await readFile(new URL('../server/bot.js', import.meta.url), 'utf8');
 
-test('the active Quneitra route override is client-only and leaves the original report marker at its saved coordinates', () => {
-  assert.match(map, /LEGACY_ISRAEL_REFERENCE_ALERTS = new Set\(\['be418c7b-510c-458e-b8d9-0c504730c50b'\]\)/);
+test('the legacy Quneitra route override is client-only and leaves the original report marker at its saved coordinates', () => {
+  assert.match(map, /LEGACY_ISRAEL_REFERENCE_ALERTS = new Set\(\[LEGACY_QUNEITRA_ALERT_ID\]\)/);
   assert.match(map, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
   assert.match(map, /referenceFlightPath\(alert\.flight_direction, alert\.flight_target\)/);
   assert.match(map, /reported location remains \$\{reportedPlace\}/);

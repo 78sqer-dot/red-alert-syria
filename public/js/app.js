@@ -6,9 +6,10 @@ import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=5';
 import { settings } from './settings.js?v=12';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=68';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=69';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
+import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=5';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
@@ -295,6 +296,7 @@ function detailHtml(a) {
   const sourceTimestamp = political && !hasIndividualSourceDate && typeof a.political_source_timestamp === 'string' && Number.isFinite(Date.parse(a.political_source_timestamp))
     ? fmtFull.format(new Date(a.political_source_timestamp)) : null;
   const updates = Array.isArray(a.updates) ? a.updates.slice().reverse() : [];
+  const archivedQuneitraRoute = isLegacyQuneitraArchiveAlert(a);
   const sourceInfoUrl = safeExternalUrl(a.source_info?.url);
   const verificationLabel = a.verification?.status === 'official' ? (LANG === 'ar' ? 'مصدر رسمي' : 'Official source') : a.verification?.status === 'attributed' ? (LANG === 'ar' ? 'منسوب إلى المصدر' : 'Attributed to source') : (LANG === 'ar' ? 'غير موثق مستقلًا' : 'Not independently verified');
   const rows = [
@@ -320,6 +322,7 @@ function detailHtml(a) {
     </div>
     <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
     <div class="disclaimer" role="note">${esc(political ? (LANG === 'ar' ? 'منسوب للمصدر — لا يعني تحققاً مستقلاً' : 'Attributed to the source — this does not mean independent verification') : T.verificationNotRecorded)}</div>
+    ${archivedQuneitraRoute ? `<div class="disclaimer" role="note"><strong>${esc(LANG === 'ar' ? 'مسار أرشيفي توضيحي فقط' : 'Illustrative archive route only')}</strong><br>${esc(LANG === 'ar' ? 'من مرجع تقريبي داخل إسرائيل إلى القنيطرة. يبقى موقع البلاغ الأصلي صيدا، والتنبيه منتهٍ وغير نشط. ليس مسار طيران حقيقيًا أو تتبعًا مباشرًا.' : 'From an approximate reference inside Israel to Quneitra. The original report location remains Sayda (Saida); this alert is expired and inactive. Not a real flight path or live track.')}</div>` : ''}
     ${updates.length > 1 ? `<div class="sec-label">${esc(LANG === 'ar' ? 'سجل الخبر والتحديثات' : 'News and update history')}</div><div class="update-history">${updates.map((u) => `<div class="update-item"><span class="update-dot"></span><div><b>${esc(u.kind === 'published' ? (LANG === 'ar' ? 'نشر الخبر' : 'Published') : u.kind === 'ended' ? (LANG === 'ar' ? 'انتهى التنبيه' : 'Alert ended') : (LANG === 'ar' ? 'تحديث' : 'Update'))}</b><time>${esc(fmtFull.format(new Date(u.at)))}</time>${u.description ? `<p>${esc(u.description)}</p>` : ''}</div></div>`).join('')}</div>` : ''}
     ${hasLoc ? `<div class="sec-label">${esc(T.coordinates)}</div>
     <div class="coords"><div class="coord"><div class="k">${esc(T.lat)}</div><div class="v">${fmtNum(a.location.latitude)}° N</div></div><div class="coord"><div class="k">${esc(T.lng)}</div><div class="v">${fmtNum(a.location.longitude)}° E</div></div></div>` : ''}
