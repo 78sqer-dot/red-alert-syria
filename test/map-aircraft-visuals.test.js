@@ -95,19 +95,23 @@ test('only the warplane area receives a larger display cap, without inflating re
   }
 });
 
-test('entry flight approaches its Syrian report area from the east as a schematic animation', () => {
+test('entry flight marker keeps its schematic approach animation while the route line is separate', () => {
   assert.match(css, /\.map-flight-track-marker\.is-entering-syria \.map-flight-track-squad \{ animation: flightTrackEnterFromEast/);
   assert.match(css, /@keyframes flightTrackEnterFromEast \{ 0% \{ transform: translateX\(44px\); opacity: 0; \}/);
-  assert.match(css, /Schematic east-to-west arrival at the selected Syrian report area; not a geographic\/live aircraft track/);
+  assert.match(css, /Icon motion is schematic; any geographic line uses only separately selected endpoints, never live tracking/);
   assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
 });
 
-test('schematic movement stays anchored to the report, reverses withdrawal and never fabricates a route', () => {
+test('movement stays anchored to the observed location and draws only the selected direct route', () => {
   assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
   assert.match(mapJs, /track\.marker\.setLngLat\(position\)/);
   assert.match(mapJs, /const heading = alert\.flight_direction === 'leaving_syria' \? 180 : 0/);
   assert.match(mapJs, /track\.marker\.setRotation\(heading\)/);
-  assert.match(mapJs, /source\.setData\(\{ type: 'FeatureCollection', features: \[\] \}\)/);
+  assert.match(mapJs, /maplibregl-marker map-flight-track-marker/);
+  assert.match(css, /\.map-flight-track-marker \{ position: absolute;/);
+  assert.match(mapJs, /directFlightPath\(alert\.location, alert\.flight_target\)/);
+  assert.match(mapJs, /geometry: \{ type: 'LineString', coordinates: route \}/);
+  assert.match(mapJs, /source\.setData\(\{ type: 'FeatureCollection', features: routeFeatures \}\)/);
   assert.match(mapJs, /&& Number\.isFinite\(a\.location\?\.latitude\) && Number\.isFinite\(a\.location\?\.longitude\)/);
   assert.match(css, /\.map-flight-track-marker\.is-plane \.map-flight-track-svg \{ transform: rotate\(-45deg\); \}/);
 });

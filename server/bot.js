@@ -332,14 +332,21 @@ function draftSummary(d, lang) {
   }
   if (d.type === 'breaking') lines.push('', esc(d.text || ''));
   if (d.type === 'air_movement' && (!loc || loc.scope === 'country')) {
-    lines.push('', lang === 'en' ? '📍 No place selected — no map pin' : '📍 اتجاه عام — بلا تحديد منطقة أو دبوس على الخريطة');
+    lines.push('', lang === 'en' ? '📍 No observed location selected — no map pin' : '📍 لم يُحدّد موقع الرصد — بلا دبوس على الخريطة');
+  } else if (d.type === 'air_movement' && d.flightTarget) {
+    const originLabel = lang === 'en' ? 'Observed location' : 'موقع الرصد';
+    const destinationLabel = lang === 'en' ? 'Destination' : 'الوجهة';
+    const general = d.flightTarget.scope === 'country';
+    lines.push('', `📍 <b>${originLabel}:</b> ${esc(locName(loc, lang))}`);
+    lines.push(`🎯 <b>${destinationLabel}:</b> ${esc(locName(d.flightTarget, lang))}`);
+    if (general) lines.push(lang === 'en'
+      ? '↗️ General direction only; no precise route line will be drawn.'
+      : '↗️ اتجاه عام فقط؛ لن يُرسم خط جغرافي بلا وجهة دقيقة.');
+    lines.push(lang === 'en'
+      ? 'Illustrative direction only — not live tracking.'
+      : 'اتجاه توضيحي فقط — وليس تتبعاً مباشراً.');
   } else if (d.type === 'political' && (!loc || loc.scope === 'country')) {
     lines.push('', lang === 'en' ? '📍 No verified location — no map pin' : '📍 موقع غير محدد — دون دبوس');
-  } else if (d.type === 'air_movement' && d.flightTarget) {
-    const leaving = d.flightDirection === 'leaving_syria';
-    const label = lang === 'en' ? (leaving ? 'Departure area' : 'Destination area') : (leaving ? 'منطقة المغادرة' : 'الوجهة');
-    const place = locName(d.flightTarget, lang);
-    lines.push('', `📍 <b>${label}:</b> ${leaving ? esc(place) : `${lang === 'en' ? 'Toward ' : 'نحو '}${esc(place)}`}`);
   } else if (d.extra?.length) {
     lines.push('', `📍 <b>${lang === 'en' ? `Areas (${d.extra.length + 1})` : `المناطق (${d.extra.length + 1})`}:</b>`);
     for (const x of [loc, ...d.extra]) lines.push(`• ${esc(locName(x, lang))}`);
@@ -706,11 +713,14 @@ async function askLocation(ctx, d) {
   const en = langOf(ctx) === 'en';
   const head = d.adding ? (en ? `➕ <b>Add another area</b> (${(d.extra?.length || 0) + 1} selected so far)\n\n` : `➕ <b>إضافة منطقة أخرى</b> (المحدد حتى الآن: ${(d.extra?.length || 0) + 1})\n\n`) : '';
   const aircraft = FLIGHT_AIRCRAFT[d.aircraft] || FLIGHT_AIRCRAFT[d.type];
-  const leaving = d.flightDirection === 'leaving_syria';
-  const targetPrompt = d.selectingFlightTarget
+  const targetPrompt = d.selectingFlightOrigin
     ? (en
-      ? `📍 Choose the area ${leaving ? 'the aircraft is leaving from' : 'the aircraft is heading toward'}. The map pin will mark this area.${aircraft ? ` (${esc(aircraft.en)})` : ''}`
-      : `📍 اختر المنطقة التي ${leaving ? 'يغادرها الطيران' : 'يتجه إليها الطيران'}، وسيظهر دبوس الخريطة عليها.${aircraft ? ` (${esc(aircraft.ar)})` : ''}`)
+      ? `📍 Choose the observed location for this route. This is the report location, not a live aircraft position.${aircraft ? ` (${esc(aircraft.en)})` : ''}`
+      : `📍 اختر <b>موقع الرصد</b> لهذا المسار. هذا موقع البلاغ وليس موقعاً مباشراً للطائرة.${aircraft ? ` (${esc(aircraft.ar)})` : ''}`)
+    : d.selectingFlightTarget
+    ? (en
+      ? `📍 Choose the destination area.${aircraft ? ` (${esc(aircraft.en)})` : ''}`
+      : `📍 اختر منطقة الوجهة.${aircraft ? ` (${esc(aircraft.ar)})` : ''}`)
     : head + L(ctx).askGov(`<b>${esc(draftTypeLabel(d, langOf(ctx)))}</b>`);
   const quantity = d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0
     ? `\n\n🚙 <b>${en ? 'Vehicle count' : 'عدد الآليات'}:</b> ${esc(vehicleCountPhrase(d.vehicleCount, langOf(ctx)))}`
@@ -731,11 +741,11 @@ async function askAerialMode(ctx, d) {
   const aircraft = d.type === 'uav' ? ALERT_TYPES.uav.emoji : ALERT_TYPES.warplane.emoji;
   const kb = new InlineKeyboard()
     .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row();
-  if (d.type === 'uav') kb.text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row();
+  kb.text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row();
   kb.text(L(ctx).btnCancel, 'cancel');
-  const prompt = d.type === 'uav'
-    ? (en ? 'Choose hovering over an area or aircraft movement. For movement, you can also select a destination area.' : 'اختر تحليقًا فوق منطقة أو حركة طيران. في مسار الحركة يمكنك أيضًا تحديد المنطقة المقصودة.')
-    : (en ? 'Choose the area where the warplanes are flying over.' : 'اختر المنطقة التي يحلّق فوقها الطيران الحربي.');
+  const prompt = en
+    ? 'Choose hovering over an area or aircraft movement. Movement lets you select an observed location and a Syrian destination.'
+    : 'اختر تحليقًا فوق منطقة أو حركة طيران. في الحركة تحدد موقع الرصد ثم وجهة داخل سوريا.';
   await show(ctx, prompt, kb);
 }
 async function askAirstrikeForm(ctx, d) {
@@ -756,7 +766,21 @@ async function askFlightDirection(ctx, d) {
     kb.text(`✈️ ${en ? name.en : name.ar}`, `flight:${key}`).row();
   }
   kb.text(L(ctx).btnCancel, 'cancel');
-  await show(ctx, en ? 'Choose the movement direction, then select the area it is heading toward (or keep it general):' : 'اختر اتجاه الحركة، ثم حدّد المنطقة التي تتجه إليها الطائرة (أو أبقِ الاتجاه عاماً):', kb);
+  await show(ctx, en ? 'Choose the reported direction. Next, select the observed location and a Syrian destination.' : 'اختر اتجاه الحركة، ثم حدّد موقع الرصد والوجهة السورية.' , kb);
+}
+async function askFlightDestination(ctx, d) {
+  d.step = 'flight_destination';
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard()
+    .text(en ? '🇸🇾 Syria (general direction)' : '🇸🇾 سوريا — اتجاه عام', 'flightto:syria').row();
+  governorates.forEach((g, i) => {
+    kb.text(`📍 ${en ? g.en : g.ar}`, `flightto:${g.code}`);
+    if (i % 2 === 1 && i < governorates.length - 1) kb.row();
+  });
+  kb.row().text(en ? '↩️ Change observed location' : '↩️ تغيير موقع الرصد', 'flightto:back').text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en
+    ? 'Choose a destination. “Syria (general)” has no precise endpoint, so the map will not invent a route line.'
+    : 'اختر الوجهة. خيار «سوريا — اتجاه عام» لا يحدد نقطة دقيقة، لذلك لن نختلق خط مسار على الخريطة.', kb);
 }
 async function askFlightAircraft(ctx, d) {
   d.step = 'aircraft';
@@ -804,6 +828,13 @@ const locKey = (x) => (x ? `${x.scope}:${x.place_id || x.district || x.governora
 // a picked location: either the alert's (first) area, or one more area added from the preview
 async function pickLocation(ctx, d, loc) {
   if (!loc) return;
+  if (d.selectingFlightOrigin) {
+    d.selectingFlightOrigin = false;
+    d.selectingFlightTarget = true;
+    d.location = loc;
+    d.extra = [];
+    return askFlightDestination(ctx, d);
+  }
   if (d.selectingFlightTarget) {
     d.selectingFlightTarget = false;
     d.flightTarget = loc;
@@ -915,13 +946,14 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || politicalMeta || monitoredSources.length ? {
+    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || politicalMeta || monitoredSources.length ? {
       meta: {
         ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
         ...(border ? { border: d.border } : {}),
         ...(flight ? { flightDirection: d.flightDirection } : {}),
         ...(aircraft ? { aircraft: d.aircraft } : {}),
+        ...(d.type === 'air_movement' && d.flightTarget ? { flightTarget: d.flightTarget } : {}),
         ...(civilEmoji ? { civilEmoji } : {}),
         ...(vehicleCount ? { vehicleCount } : {}),
         ...(incursionKind ? { incursionKind } : {}),
@@ -1913,7 +1945,6 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
   bot.callbackQuery(/^airmode:(over|move)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'uav' && d.type !== 'warplane') return;
-    if (ctx.match[1] === 'move' && d.type !== 'uav') return;
     if (ctx.match[1] === 'over') {
       d.aerialMode = 'over';
       return askLocation(ctx, d);
@@ -1934,8 +1965,24 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     d.flightTarget = null;
     d.location = locationFrom({});
     d.extra = [];
-    d.selectingFlightTarget = true;
+    d.selectingFlightOrigin = true;
+    d.selectingFlightTarget = false;
     await askLocation(ctx, d);
+  }));
+  bot.callbackQuery(/^flightto:(syria|back|\d{1,2})$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'air_movement' || !d.selectingFlightTarget) return;
+    const choice = ctx.match[1];
+    if (choice === 'back') {
+      d.selectingFlightTarget = false;
+      d.selectingFlightOrigin = true;
+      d.location = locationFrom({});
+      return askLocation(ctx, d);
+    }
+    const target = choice === 'syria' ? locationFrom({}) : locationFrom({ govCode: choice });
+    if (!target) return askFlightDestination(ctx, d);
+    d.selectingFlightTarget = false;
+    d.flightTarget = target;
+    return afterLocation(ctx, d);
   }));
   bot.callbackQuery('flightdest:none', needDraft(async (ctx, d) => {
     if (d.type !== 'air_movement' || !d.selectingFlightTarget) return;
@@ -2041,7 +2088,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery('skip', needDraft((ctx, d) => showPreview(ctx, d)));
   bot.callbackQuery(/^back:(gov|dist|sub)$/, needDraft(async (ctx, d) => {
     if (ctx.match[1] === 'gov' && d.type === 'air_movement' && d.flightDirection) {
-      d.selectingFlightTarget = true;
+      d.selectingFlightOrigin = true;
+      d.selectingFlightTarget = false;
       d.flightTarget = null;
       d.location = locationFrom({});
     }

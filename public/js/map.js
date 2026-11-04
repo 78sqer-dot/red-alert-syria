@@ -9,6 +9,7 @@ import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
+import { directFlightPath } from '/shared/flight-path.js?v=2';
 const ml = () => window.maplibregl;
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
@@ -439,8 +440,8 @@ export class AlertMap {
       .slice(0, 3);
   }
 
-  // Like the reference presentation, this is a CSS direction cue at the report's
-  // location, not a fabricated geographic route or a live aircraft position.
+  // The aircraft icon is a schematic direction cue anchored at the observation point.
+  // A separate straight line uses only saved origin/destination coordinates; neither is live tracking.
   // Reports without coordinates retain the explicit location-unspecified notice.
   syncMovementTracks() {
     const map = this.map;
@@ -450,6 +451,7 @@ export class AlertMap {
     if (!this.movementTracks) this.movementTracks = new Map();
     const active = this.movementTrackAlerts();
     const keep = new Set();
+    const routeFeatures = [];
     active.forEach((alert) => {
       const position = [alert.location.longitude, alert.location.latitude];
       const heading = alert.flight_direction === 'leaving_syria' ? 180 : 0;
@@ -459,8 +461,15 @@ export class AlertMap {
       const lang = this.opts.lang === 'en' ? 'en' : 'ar';
       const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
       const routeNote = lang === 'en' ? 'illustrative direction, not a live track' : 'حركة توضيحية للاتجاه وليست تتبعاً مباشراً';
+      const route = directFlightPath(alert.location, alert.flight_target);
+      if (route.length === 2) routeFeatures.push({
+        type: 'Feature',
+        id: alert.id,
+        properties: { color, arrow: '➤', alertId: alert.id, illustrative: true },
+        geometry: { type: 'LineString', coordinates: route },
+      });
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
-      const signature = `${lang}|${aircraft}|${alert.flight_direction}|${position.join(',')}`;
+      const signature = `${lang}|${aircraft}|${alert.flight_direction}|${position.join(',')}|${route.join(';')}`;
       let track = this.movementTracks.get(alert.id);
       if (track && track.signature !== signature) {
         if (track.frame) cancelAnimationFrame(track.frame);
@@ -470,7 +479,7 @@ export class AlertMap {
       }
       if (!track) {
         const el = document.createElement('div');
-        el.className = `map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'} is-${alert.flight_direction.replace(/_/g, '-')}`;
+        el.className = `maplibregl-marker map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'} is-${alert.flight_direction.replace(/_/g, '-')}`;
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
         el.setAttribute('aria-label', `${movementTitle} · ${direction}`);
@@ -500,7 +509,7 @@ export class AlertMap {
       track.marker.remove();
       this.movementTracks.delete(id);
     }
-    source.setData({ type: 'FeatureCollection', features: [] }); // clear obsolete invented route lines
+    source.setData({ type: 'FeatureCollection', features: routeFeatures });
   }
 
   bindMarkerTap(el, activate) {

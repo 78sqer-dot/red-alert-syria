@@ -832,12 +832,27 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('ag:aerial');
   await tap('t:warplane');
   assert.ok(buttons().some((button) => button.callback_data === 'airmode:over'));
-  assert.equal(buttons().some((button) => button.callback_data === 'airmode:move'), false, 'warplane submenu no longer offers aircraft movement');
-  assert.match(lastUi().payload.text, /اختر المنطقة التي يحلّق فوقها الطيران الحربي/);
+  assert.ok(buttons().some((button) => button.callback_data === 'airmode:move'), 'warplane now offers the same movement flow as drones');
+  assert.match(lastUi().payload.text, /حركة طيران/);
   await tap('airmode:over');
   assert.match(lastUi().payload.text, /اختر المحافظة/);
-  assert.equal(buttons().some((button) => button.callback_data?.startsWith('flight:')), false, 'warplane over area skips movement choices');
+  assert.equal(buttons().some((button) => button.callback_data?.startsWith('flight:')), false, 'warplane over-area alerts remain separate from movement reports');
 
+  const idlib = governorates.find((g) => g.ar === 'إدلب');
+  const daraa = governorates.find((g) => g.ar === 'درعا');
+  assert.ok(idlib && daraa, 'synthetic governorate route endpoints are available');
+  await tap('home');
+  await tap('ag:aerial');
+  await tap('t:warplane');
+  await tap('airmode:move');
+  await tap('flight:entering_syria');
+  await tap(`g:${daraa.code}`);
+  await tap(`wg:${daraa.code}`);
+  await tap(`flightto:${idlib.code}`);
+  await tap('skip');
+  assert.match(lastUi().payload.text, /موقع الرصد:<\/b> درعا/);
+  assert.match(lastUi().payload.text, /الوجهة:<\/b> إدلب/);
+  await tap('home');
   await tap('home', reporter, reportBot);
   await tap('ag:aerial', reporter, reportBot);
   await tap('t:uav', reporter, reportBot);
@@ -849,28 +864,31 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(buttons().some((button) => button.callback_data === 'flight:leaving_syria'));
   assert.equal(buttons().some((button) => button.callback_data === 'flight:from_area'), false, 'hovering over an area remains its own alert type');
   await tap('flight:entering_syria', reporter, reportBot);
-  assert.match(lastUi().payload.text, /اختر المنطقة التي يتجه إليها الطيران/);
-  assert.ok(buttons().some((button) => button.callback_data?.startsWith('g:')), 'movement reports offer a governorate selector for the target area');
-  assert.ok(buttons().some((button) => button.callback_data === 'flightdest:none'), 'reporters can keep the direction general');
-  await tap('flightdest:none', reporter, reportBot);
-  assert.match(lastUi().payload.text, /بلا تحديد منطقة أو دبوس/);
+  assert.match(lastUi().payload.text, /موقع الرصد/);
+  assert.ok(buttons().some((button) => button.callback_data?.startsWith('g:')), 'movement reports first ask for an observed location');
+  await tap(`g:${daraa.code}`, reporter, reportBot);
+  await tap(`wg:${daraa.code}`, reporter, reportBot);
+  assert.match(lastUi().payload.text, /اختر الوجهة/);
+  assert.ok(buttons().some((button) => button.callback_data === 'flightto:syria'));
+  assert.ok(buttons().some((button) => button.callback_data === `flightto:${idlib.code}`));
+  await tap('flightto:syria', reporter, reportBot);
   await tap('skip', reporter, reportBot);
-  assert.match(lastUi().payload.text, /بلا تحديد منطقة أو دبوس/);
+  assert.match(lastUi().payload.text, /لن يُرسم خط جغرافي/);
 
-  const idlib = governorates.find((g) => g.ar === 'إدلب');
-  assert.ok(idlib, 'Idlib governorate is available in the area picker');
   await tap('home', reporter, reportBot);
   await tap('ag:aerial', reporter, reportBot);
   await tap('t:air_movement', reporter, reportBot);
   assert.ok(buttons().some((button) => button.callback_data === 'flightair:warplane'), 'direction flow lets the reporter choose the aircraft type');
   await tap('flightair:warplane', reporter, reportBot);
   await tap('flight:toward_syria', reporter, reportBot);
-  await tap(`g:${idlib.code}`, reporter, reportBot);
-  assert.ok(buttons().some((button) => button.callback_data === `wg:${idlib.code}`));
-  await tap(`wg:${idlib.code}`, reporter, reportBot);
-  assert.match(lastUi().payload.text, /إدلب/);
+  await tap(`g:${daraa.code}`, reporter, reportBot);
+  await tap(`wg:${daraa.code}`, reporter, reportBot);
+  await tap(`flightto:${idlib.code}`, reporter, reportBot);
+  assert.match(lastUi().payload.text, /درعا/);
   await tap('skip', reporter, reportBot);
-  assert.match(lastUi().payload.text, /نحو إدلب/);
+  assert.match(lastUi().payload.text, /موقع الرصد:<\/b> درعا/);
+  assert.match(lastUi().payload.text, /الوجهة:<\/b> إدلب/);
+  assert.match(lastUi().payload.text, /توضيحي فقط/);
 
   await tap('home', reporter, reportBot);
   await tap('mi', reporter, reportBot);
@@ -928,6 +946,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(movementInput.location.latitude, null);
   assert.equal(movementInput.location.longitude, null);
   const idlibTarget = { scope: 'governorate', name_ar: 'إدلب', name_en: 'Idlib', governorate_ar: 'إدلب', governorate_en: 'Idlib', latitude: 35.93, longitude: 36.63 };
+  const daraaOrigin = { scope: 'governorate', name_ar: 'درعا', name_en: 'Daraa', governorate_ar: 'درعا', governorate_en: 'Daraa', latitude: 32.62, longitude: 36.1 };
   const singularStrikeInput = buildAlertInput({
     type: 'airstrike', airstrikeForm: 'singular', location: idlibTarget, extra: [], ttlMin: 180,
   }, { id: ownerId, name: 'test' });
@@ -939,12 +958,13 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(pluralStrikeInput.title, /^غارات جوية/);
   assert.match(pluralStrikeInput.title_en, /^Airstrikes/);
   const targetedMovementInput = buildAlertInput({
-    type: 'air_movement', aircraft: 'warplane', flightDirection: 'toward_syria', flightTarget: idlibTarget, location: idlibTarget, extra: [], ttlMin: 60,
+    type: 'air_movement', aircraft: 'warplane', flightDirection: 'toward_syria', flightTarget: idlibTarget, location: daraaOrigin, extra: [], ttlMin: 60,
   }, { id: ownerId, name: 'test' });
   assert.match(targetedMovementInput.title, /نحو إدلب/);
   assert.match(targetedMovementInput.title_en, /toward Idlib/);
-  assert.equal(targetedMovementInput.location.name_ar, 'إدلب');
-  assert.equal(targetedMovementInput.location.latitude, idlibTarget.latitude);
+  assert.equal(targetedMovementInput.location.name_ar, 'درعا');
+  assert.equal(targetedMovementInput.location.latitude, daraaOrigin.latitude);
+  assert.equal(targetedMovementInput.meta.flightTarget.name_ar, 'إدلب');
   const militaryInput = buildAlertInput({
     type: 'military_incursion', vehicleCount: 15, location: idlibTarget, extra: [], ttlMin: 180,
   }, { id: ownerId, name: 'test' });
@@ -976,8 +996,11 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(Number.isFinite(publicAlert(movementAlert).location?.latitude), false, 'direction-only alerts have no map pin coordinates');
   const targetedMovementAlert = store.addAlert(targetedMovementInput);
   assert.equal(publicAlert(targetedMovementAlert).flight_direction, 'toward_syria');
-  assert.equal(publicAlert(targetedMovementAlert).place.name_ar, 'إدلب');
-  assert.equal(publicAlert(targetedMovementAlert).location.latitude, idlibTarget.latitude);
+  assert.equal(publicAlert(targetedMovementAlert).place.name_ar, 'درعا');
+  assert.equal(publicAlert(targetedMovementAlert).location.latitude, daraaOrigin.latitude);
+  assert.deepEqual(publicAlert(targetedMovementAlert).flight_target, {
+    scope: 'governorate', name_ar: 'إدلب', name_en: 'Idlib', latitude: idlibTarget.latitude, longitude: idlibTarget.longitude,
+  });
   const militaryAlert = store.addAlert(militaryInput);
   assert.equal(publicAlert(militaryAlert).vehicle_count, 15);
   assert.match(channelPost(militaryAlert), /١٥ آلية/);

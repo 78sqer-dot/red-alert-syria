@@ -285,13 +285,13 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .map-flight-plane, .map-flight-plane svg { display: block; width: 24px; height: 24px; }
 .map-flight-destination { color: var(--text-primary); font-size: 12px; }
 .map-flight-note { color: var(--text-muted); font-size: 9px; line-height: 1.3; }
-.map-flight-track-marker { position: relative; z-index: 31; display: grid; place-items: center; width: 60px; height: 64px; pointer-events: auto; cursor: pointer; touch-action: manipulation; --track-color: #2476c9; --aircraft-color: #2476c9; }
+.map-flight-track-marker { position: absolute; z-index: 31; display: grid; place-items: center; width: 60px; height: 64px; pointer-events: auto; cursor: pointer; touch-action: manipulation; --track-color: #2476c9; --aircraft-color: #2476c9; }
 .map-flight-track-marker:hover { filter: brightness(1.18); }
 .map-flight-track-marker:focus-visible { outline: 2px solid var(--track-color); outline-offset: 2px; border-radius: 50%; }
 .map-flight-track-visual { position: relative; display: block; width: 60px; height: 64px; transform: scale(calc(var(--mks, .5) * 1.3)); transform-origin: center; }
 .map-flight-track-squad { position: absolute; left: 2px; top: 10px; width: 56px; height: 44px; animation: flightTrackTravel 7s linear infinite; }
 .map-flight-track-marker.is-toward-syria .map-flight-track-squad { animation: flightTrackApproach 5s linear infinite; }
-/* Schematic east-to-west arrival at the selected Syrian report area; not a geographic/live aircraft track. */
+/* Icon motion is schematic; any geographic line uses only separately selected endpoints, never live tracking. */
 .map-flight-track-marker.is-entering-syria .map-flight-track-squad { animation: flightTrackEnterFromEast 5s linear infinite; }
 .map-flight-track-airframe { position: absolute; display: grid; place-items: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
 .map-flight-track-airframe.is-lead { left: 50%; top: 0; width: 24px; height: 24px; transform: translateX(-50%); }

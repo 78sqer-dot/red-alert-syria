@@ -6,6 +6,21 @@ const QUNEITRA_SIDE = [35.90, 33.05];
 const DARA_NORTH = [36.05, 32.78];
 const DARA_CENTER = [36.105, 32.62];
 
+/** Return only the two stored endpoints; general/country targets have no precise route. */
+export function directFlightPath(origin, destination) {
+  const point = (location) => {
+    const longitude = location?.longitude;
+    const latitude = location?.latitude;
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)
+      || longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) return null;
+    return [longitude, latitude];
+  };
+  const from = point(origin);
+  const to = point(destination);
+  if (!from || !to || (from[0] === to[0] && from[1] === to[1])) return [];
+  return [from, to];
+}
+
 // The plane artwork points northeast (45°); the top-down UAV artwork points north (0°).
 export function aircraftRotation(aircraft, bearing) {
   if (!Number.isFinite(bearing)) return 0;

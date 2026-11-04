@@ -682,6 +682,19 @@ export function publicAlert(a) {
   const p = a.place || {};
   const sources = politicalSources(a);
   const newsSources = monitoredNewsSources(a);
+  const rawFlightTarget = a.type === 'air_movement' ? a.meta?.flightTarget : null;
+  const targetScope = ['country', 'governorate'].includes(rawFlightTarget?.scope) ? rawFlightTarget.scope : null;
+  const targetHasCoordinates = Number.isFinite(rawFlightTarget?.latitude) && Number.isFinite(rawFlightTarget?.longitude)
+    && rawFlightTarget.latitude >= -90 && rawFlightTarget.latitude <= 90
+    && rawFlightTarget.longitude >= -180 && rawFlightTarget.longitude <= 180;
+  const flightTarget = targetScope ? {
+    scope: targetScope,
+    name_ar: String(rawFlightTarget.name_ar || (targetScope === 'country' ? 'سوريا' : '')).slice(0, 100),
+    name_en: String(rawFlightTarget.name_en || (targetScope === 'country' ? 'Syria' : '')).slice(0, 100),
+    ...(targetScope === 'governorate' && targetHasCoordinates
+      ? { latitude: rawFlightTarget.latitude, longitude: rawFlightTarget.longitude }
+      : {}),
+  } : null;
   const political = a.type === 'political' ? a.meta?.political : null;
   const category = political && Object.hasOwn(POLITICAL_CATEGORIES, political.category) ? political.category : undefined;
   const sourceTimestamp = safeSourceTimestamp(political?.sourceTimestamp);
@@ -693,6 +706,7 @@ export function publicAlert(a) {
     border: BORDER_REGIONS[a.meta?.border] ? a.meta.border : undefined,
     flight_direction: FLIGHT_DIRECTIONS[a.meta?.flightDirection] ? a.meta.flightDirection : undefined,
     aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
+    ...(flightTarget ? { flight_target: flightTarget } : {}),
     signal_platform: a.type === 'signal_sweep' && a.meta?.signalPlatform === 'uav' ? 'uav' : undefined,
     drones: a.type === 'uav' ? droneLevel(a) : undefined,
     vehicle_count: a.type === 'military_incursion' && Number.isInteger(a.meta?.vehicleCount) ? a.meta.vehicleCount : undefined,
