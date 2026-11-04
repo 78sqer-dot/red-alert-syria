@@ -91,11 +91,11 @@ test('home menu clears tracked private relay messages for this bot and chat only
   assert.deepEqual(reportDeletes.map(({ chatId, payload }) => [chatId, payload.message_id]), [[reporter.id, 9103]]);
 });
 
-test('report menus omit the standalone air-movement button while retaining other report choices', async () => {
+test('report menus expose flight direction inside aerial activity, not as a standalone option', async () => {
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...BOT_ALERT_MENU_PATROL_CHILD_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
   assert.equal(new Set(routedTypes).size, routedTypes.length, 'each alert type has exactly one report-menu route');
-  const reportableTypes = Object.keys(ALERT_TYPES).filter((type) => type !== 'air_movement');
-  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'all alert types except the removed standalone movement choice have a menu route');
+  const reportableTypes = Object.keys(ALERT_TYPES);
+  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'all alert types, including movement, have a nested menu route');
 
   let start = calls.length;
   await tap('home');
@@ -136,6 +136,7 @@ test('report menus omit the standalone air-movement button while retaining other
     const childButtons = keyboardAfter(start).flat();
     const children = callbacksOf([childButtons]).filter((value) => value.startsWith('t:')).sort();
     assert.deepEqual(children, BOT_ALERT_MENU_GROUPS[group].map((type) => `t:${type}`).sort(), `${group} buttons route to their own alert types`);
+    if (group === 'aerial') assert.ok(childButtons.some((button) => button.callback_data === 't:air_movement' && button.text?.includes('باتجاه')), 'aerial submenu labels the movement option as a direction toward Syria or a governorate');
     if (group === 'strikes') {
       assert.ok(childButtons.some((button) => button.callback_data === 't:explosion' && button.text === '💥 انفجار'), 'admin bot keeps the existing «انفجار» option');
       assert.ok(childButtons.some((button) => button.callback_data === 't:detonation' && button.text === '💥 تفجير'), 'admin bot exposes the distinct «تفجير» option');
@@ -149,8 +150,8 @@ test('public report bot exposes both strike types and sends detonation reports o
   const currentUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const currentButtons = () => currentUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...BOT_ALERT_MENU_PATROL_CHILD_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
-  const reportableTypes = Object.keys(ALERT_TYPES).filter((type) => type !== 'air_movement');
-  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'the public menu omits only the standalone air-movement type');
+  const reportableTypes = Object.keys(ALERT_TYPES);
+  assert.deepEqual([...routedTypes].sort(), reportableTypes.sort(), 'the public menu routes movement inside aerial activity');
 
   let start = calls.length;
   await tap('home', publicReporter, reportBot);
@@ -721,7 +722,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'air movement is not a standalone main-menu button');
   await tap('ag:aerial', reporter, reportBot);
   for (const type of ['t:warplane', 't:uav', 't:helicopter']) assert.ok(buttons().some((button) => button.callback_data === type), `aerial submenu contains ${type}`);
-  assert.equal(buttons().some((button) => button.callback_data === 't:air_movement'), false, 'aerial submenu omits the standalone movement option');
+  assert.ok(buttons().some((button) => button.callback_data === 't:air_movement' && button.text?.includes('باتجاه')), 'aerial submenu includes the direction-to-Syria/governorate button');
   await tap('t:helicopter', reporter, reportBot);
   assert.match(lastUi()?.payload?.text || '', /طيران مروحي/, 'helicopter starts a manual publishing draft');
   await tap('home');
@@ -860,8 +861,9 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(idlib, 'Idlib governorate is available in the area picker');
   await tap('home', reporter, reportBot);
   await tap('ag:aerial', reporter, reportBot);
-  await tap('t:uav', reporter, reportBot);
-  await tap('airmode:move', reporter, reportBot);
+  await tap('t:air_movement', reporter, reportBot);
+  assert.ok(buttons().some((button) => button.callback_data === 'flightair:warplane'), 'direction flow lets the reporter choose the aircraft type');
+  await tap('flightair:warplane', reporter, reportBot);
   await tap('flight:toward_syria', reporter, reportBot);
   await tap(`g:${idlib.code}`, reporter, reportBot);
   assert.ok(buttons().some((button) => button.callback_data === `wg:${idlib.code}`));

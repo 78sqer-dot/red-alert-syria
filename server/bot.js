@@ -44,9 +44,9 @@ const politicalCategory = (key) => Object.hasOwn(POLITICAL_CATEGORIES, key) ? ke
 
 // Derive report choices from the current shared groups. Targeting stays separate
 // so drone strikes and assassinations remain distinct alert types. Flight movement
-// stays available as a follow-up choice after selecting an aircraft, not as a separate group button.
+// is an explicit choice inside the aerial submenu, not a top-level menu item.
 export const BOT_ALERT_MENU_GROUPS = Object.freeze({
-  aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => !['uav_strike', 'air_movement'].includes(type))),
+  aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => type !== 'uav_strike')),
   targeting: Object.freeze(['uav_strike', 'assassination']),
   strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination')),
   protests: Object.freeze(['protest_action', 'protest']),
@@ -66,7 +66,10 @@ function reportGroupKeyboard(group, lang) {
   const types = BOT_ALERT_MENU_GROUPS[group] || [];
   const kb = new InlineKeyboard();
   types.forEach((type, index) => {
-    kb.text(alertButtonLabel(type, lang), `t:${type}`);
+    const label = group === 'aerial' && type === 'air_movement'
+      ? (lang === 'en' ? '➤ Toward Syria / governorate' : '➤ باتجاه سوريا / محافظة')
+      : alertButtonLabel(type, lang);
+    kb.text(label, `t:${type}`);
     if (index % 2 === 1 && index < types.length - 1) kb.row();
   });
   if (types.length % 2 === 1 || types.length === 0) kb.row();
