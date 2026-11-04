@@ -23,6 +23,10 @@ test('new movement flow selects observation origin first and Syria/governorate d
 test('movement directions remain separate and supported', () => {
   const directions = ['toward_syria', 'entering_syria', 'leaving_syria'];
   assert.deepEqual(Object.keys(FLIGHT_DIRECTIONS), directions);
+  assert.equal(FLIGHT_DIRECTIONS.toward_syria.ar, 'باتجاه سوريا');
+  assert.match(FLIGHT_DIRECTIONS.entering_syria.ar, /دخول الأجواء السورية/);
+  assert.match(FLIGHT_DIRECTIONS.leaving_syria.ar, /انسحاب من سوريا/);
   assert.match(bot, /flight:\(toward_syria\|entering_syria\|leaving_syria\)/);
   assert.match(bot, /d\.flightDirection = ctx\.match\[1\]/);
+  assert.match(bot, /اختر الوضع:[\s\S]{0,180}السهم التوضيحي الخط من موقع الرصد إلى الوجهة/);
 });

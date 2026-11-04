@@ -328,8 +328,8 @@ export class AlertMap {
     add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.11 : 0.08, 0.025) } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.58, 0.22), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1.3] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.85, 0.3), 'line-width': 1.8, 'line-dasharray': [3, 4] } });
-    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.62, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.35, 10, 2.1], 'line-dasharray': [2, 2] } });
-    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', layout: { 'symbol-placement': 'line', 'symbol-spacing': 70, 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
+    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.9, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.35, 10, 2.1], 'line-dasharray': [2, 2] } });
+    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
     this._startGlow();
     this.applyToggles();
     this.updateZones();
@@ -458,6 +458,8 @@ export class AlertMap {
       keep.add(alert.id);
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
       const color = eventVisual('air_movement').color;
+      const iconColor = aircraft === 'uav' ? color : '#3b8eff';
+      const routeColor = aircraft === 'uav' ? '#e5484d' : '#2476c9';
       const lang = this.opts.lang === 'en' ? 'en' : 'ar';
       const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
       const routeNote = lang === 'en' ? 'illustrative direction, not a live track' : 'حركة توضيحية للاتجاه وليست تتبعاً مباشراً';
@@ -465,11 +467,11 @@ export class AlertMap {
       if (route.length === 2) routeFeatures.push({
         type: 'Feature',
         id: alert.id,
-        properties: { color, arrow: '➤', alertId: alert.id, illustrative: true },
+        properties: { color: routeColor, arrow: '➤', alertId: alert.id, illustrative: true },
         geometry: { type: 'LineString', coordinates: route },
       });
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
-      const signature = `${lang}|${aircraft}|${alert.flight_direction}|${position.join(',')}|${route.join(';')}`;
+      const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${position.join(',')}|${route.join(';')}`;
       let track = this.movementTracks.get(alert.id);
       if (track && track.signature !== signature) {
         if (track.frame) cancelAnimationFrame(track.frame);
@@ -489,7 +491,7 @@ export class AlertMap {
         for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
           const airframe = document.createElement('span');
           airframe.className = `map-flight-track-airframe ${slot.name}`;
-          airframe.innerHTML = svgTag(aircraft, slot.size, `fill="${color}" class="map-flight-track-svg"`);
+          airframe.innerHTML = svgTag(aircraft, slot.size, `fill="${iconColor}" class="map-flight-track-svg"`);
           squad.append(airframe);
         }
         visual.append(squad);

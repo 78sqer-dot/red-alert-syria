@@ -766,7 +766,9 @@ async function askFlightDirection(ctx, d) {
     kb.text(`✈️ ${en ? name.en : name.ar}`, `flight:${key}`).row();
   }
   kb.text(L(ctx).btnCancel, 'cancel');
-  await show(ctx, en ? 'Choose the reported direction. Next, select the observed location and a Syrian destination.' : 'اختر اتجاه الحركة، ثم حدّد موقع الرصد والوجهة السورية.' , kb);
+  await show(ctx, en
+    ? 'Choose a mode: toward Syria, entering Syrian airspace, or withdrawal from Syria. For a precise governorate destination, the illustrative arrow follows the line from the observed location to the selected destination; general Syria has no precise route.'
+    : 'اختر الوضع: باتجاه سوريا، دخول الأجواء السورية، أو انسحاب من سوريا. عند تحديد محافظة، يتبع السهم التوضيحي الخط من موقع الرصد إلى الوجهة؛ أما سوريا — اتجاه عام فلا ترسم خطًا دقيقًا.', kb);
 }
 async function askFlightDestination(ctx, d) {
   d.step = 'flight_destination';

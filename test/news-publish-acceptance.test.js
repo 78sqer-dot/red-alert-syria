@@ -890,6 +890,21 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(lastUi().payload.text, /الوجهة:<\/b> إدلب/);
   assert.match(lastUi().payload.text, /توضيحي فقط/);
 
+  for (const [targetBot, user, aircraft] of [[bot, owner, 'warplane'], [reportBot, reporter, 'uav']]) {
+    for (const direction of ['toward_syria', 'entering_syria', 'leaving_syria']) {
+      await tap('home', user, targetBot);
+      await tap('ag:aerial', user, targetBot);
+      await tap('t:air_movement', user, targetBot);
+      await tap(`flightair:${aircraft}`, user, targetBot);
+      assert.ok(buttons().some((button) => button.callback_data === 'flight:toward_syria'));
+      assert.ok(buttons().some((button) => button.callback_data === 'flight:entering_syria'));
+      assert.ok(buttons().some((button) => button.callback_data === 'flight:leaving_syria'));
+      await tap(`flight:${direction}`, user, targetBot);
+      assert.match(lastUi().payload.text, /موقع الرصد/, `${direction} is accepted by the selected bot flow`);
+      await tap('cancel', user, targetBot);
+    }
+  }
+
   await tap('home', reporter, reportBot);
   await tap('mi', reporter, reportBot);
   assert.ok(buttons().some((button) => button.callback_data === 'mi:soldiers' && button.text?.includes('جنود')));

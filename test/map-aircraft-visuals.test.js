@@ -111,6 +111,13 @@ test('movement stays anchored to the observed location and draws only the select
   assert.match(css, /\.map-flight-track-marker \{ position: absolute;/);
   assert.match(mapJs, /directFlightPath\(alert\.location, alert\.flight_target\)/);
   assert.match(mapJs, /geometry: \{ type: 'LineString', coordinates: route \}/);
+  assert.match(mapJs, /const routeColor = aircraft === 'uav' \? '#e5484d' : '#2476c9'/);
+  assert.match(mapJs, /const iconColor = aircraft === 'uav' \? color : '#3b8eff'/);
+  assert.match(mapJs, /properties: \{ color: routeColor, arrow: '➤'/);
+  assert.match(mapJs, /'symbol-placement': 'line-center'/);
+  assert.match(mapJs, /'text-rotation-alignment': 'map', 'text-keep-upright': false/);
+  assert.match(mapJs, /'line-opacity': 0\.9/);
+  assert.match(mapJs, /fill="\$\{iconColor\}" class="map-flight-track-svg"/);
   assert.match(mapJs, /source\.setData\(\{ type: 'FeatureCollection', features: routeFeatures \}\)/);
   assert.match(mapJs, /&& Number\.isFinite\(a\.location\?\.latitude\) && Number\.isFinite\(a\.location\?\.longitude\)/);
   assert.match(css, /\.map-flight-track-marker\.is-plane \.map-flight-track-svg \{ transform: rotate\(-45deg\); \}/);
