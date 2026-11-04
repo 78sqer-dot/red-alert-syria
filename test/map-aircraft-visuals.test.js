@@ -106,17 +106,20 @@ test('only the warplane area receives a larger display cap, without inflating re
   }
 });
 
-test('entry flight marker keeps its schematic approach animation while the route line is separate', () => {
-  assert.match(css, /\.map-flight-track-marker\.is-plane\.is-entering-syria \.map-flight-track-squad \{ animation-name: flightTrackPlaneApproach/ );
+test('geographic flight marker disables the old schematic entrance animation', () => {
+  assert.match(css, /\.map-flight-track-marker\.is-geographic \.map-flight-track-squad \{ animation: none !important; transform: none !important; opacity: 1 !important; \}/);
   assert.match(css, /@keyframes flightTrackEnterFromEast \{ 0% \{ transform: translateX\(44px\); opacity: 0; \}/);
   assert.match(css, /Icon motion is schematic; any geographic line uses only separately selected endpoints, never live tracking/);
-  assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
+  assert.match(mapJs, /const position = route\.length === 2 \? route\[0\] : reportPosition/);
 });
 
-test('movement stays anchored to the observed location and draws only the selected direct route', () => {
-  assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
+test('movement animates from the observation point to the selected destination and draws its route area', () => {
+  assert.match(mapJs, /const reportPosition = \[alert\.location\.longitude, alert\.location\.latitude\]/);
   assert.match(mapJs, /track\.marker\.setLngLat\(position\)/);
   assert.match(mapJs, /const heading = isReferenceRoute && Number\.isFinite\(routeBearing\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
+  assert.match(mapJs, /const position = route\.length === 2 \? route\[0\] : reportPosition/);
+  assert.match(mapJs, /const travelMs = 11000/);
+  assert.match(mapJs, /const point = flightPosition\(route, progress\)/);
   assert.match(mapJs, /track\.marker\.setRotation\(heading\)/);
   assert.match(mapJs, /maplibregl-marker map-flight-track-marker/);
   assert.match(css, /\.map-flight-track-marker \{ position: absolute;/);

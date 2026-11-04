@@ -9,7 +9,7 @@ import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
-import { directFlightPath, directFlightBearing, referenceFlightPath, flightPathBearing, ISRAEL_APPROX_REFERENCE, LEGACY_QUNEITRA_ALERT_ID, isLegacyQuneitraArchiveAlert, legacyQuneitraArchivePath } from '/shared/flight-path.js?v=5';
+import { directFlightPath, directFlightBearing, referenceFlightPath, flightPathBearing, flightPosition, ISRAEL_APPROX_REFERENCE, LEGACY_QUNEITRA_ALERT_ID, isLegacyQuneitraArchiveAlert, legacyQuneitraArchivePath } from '/shared/flight-path.js?v=5';
 const ml = () => window.maplibregl;
 const aircraftHeading = (alert, bearing) => alert.aircraft === 'uav'
   ? (alert.flight_direction === 'leaving_syria' ? 180 : 0)
@@ -336,7 +336,9 @@ export class AlertMap {
     add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.11 : 0.08, 0.025) } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.58, 0.22), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1.3] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['get', 'planeArea'], true], 1.5, 1.8], 'line-opacity': ['case', ['==', ['get', 'planeArea'], true], 0.7, A(0.85, 0.3)], 'line-dasharray': [3, 4] } });
-    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'referenceRoute'], 0.92, ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'referenceRoute'], 2.4, ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'referenceRoute'], 3.2, ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'referenceRoute'], ['literal', [4, 2]], ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
+    add({ id: 'ras-flight-area-fill', type: 'fill', source: 'ras-flight-paths', filter: ['==', ['get', 'routeArea'], true], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': dark ? 0.035 : 0.025 } });
+    add({ id: 'ras-flight-area-line', type: 'line', source: 'ras-flight-paths', filter: ['==', ['get', 'routeArea'], true], paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.7, 'line-width': 1.5, 'line-dasharray': [2, 3] } });
+    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', filter: ['all', ['!=', ['get', 'referenceOrigin'], true], ['!=', ['get', 'routeArea'], true]], paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'referenceRoute'], 0.92, ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'referenceRoute'], 2.4, ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'referenceRoute'], 3.2, ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'referenceRoute'], ['literal', [4, 2]], ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
     add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', filter: ['any', ['==', ['get', 'referenceRoute'], true], ['!=', ['get', 'planeRoute'], true]], layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
     add({ id: 'ras-flight-reference-point', type: 'circle', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], paint: { 'circle-radius': 4, 'circle-color': ['get', 'color'], 'circle-stroke-color': dark ? '#111827' : '#ffffff', 'circle-stroke-width': 1.6 } });
     add({ id: 'ras-flight-reference-label', type: 'symbol', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], layout: { 'text-field': ['get', 'label'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 10, 12], 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.96 } });
@@ -353,14 +355,14 @@ export class AlertMap {
     this.el.classList.toggle('news-off', this.newsHidden);
     if (on) this.closePopup();
     const map = this.map; if (!map) return;
-    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-path-line', 'ras-flight-direction-arrow', 'ras-flight-reference-point', 'ras-flight-reference-label']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'none' : 'visible');
+    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-area-fill', 'ras-flight-area-line', 'ras-flight-path-line', 'ras-flight-direction-arrow', 'ras-flight-reference-point', 'ras-flight-reference-label']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'none' : 'visible');
     this.syncMovementTracks();
   }
   applyToggles() {
     const map = this.map;
     if (!map || !map.getLayer('ras-border')) return;
     const vis = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
-    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-path-line', 'ras-flight-direction-arrow', 'ras-flight-reference-point', 'ras-flight-reference-label']) vis(id, !this.newsHidden);
+    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-area-fill', 'ras-flight-area-line', 'ras-flight-path-line', 'ras-flight-direction-arrow', 'ras-flight-reference-point', 'ras-flight-reference-label']) vis(id, !this.newsHidden);
     vis('ras-gov-line', this.opts.showGov);
     vis('ras-mask', this.opts.focusSyria);
     // 3D kept light so it stays smooth: one shared low-zoom DEM, gentle exaggeration and tilt, and on phones
@@ -477,9 +479,8 @@ export class AlertMap {
       .slice(0, 3);
   }
 
-  // The aircraft icon remains anchored to the saved report location. Reference routes are display-only;
-  // neither the route nor the icon is a live aircraft track.
-  // Reports without coordinates retain the explicit location-unspecified notice.
+  // The aircraft icon animates along an explicitly selected schematic route, never as live tracking.
+  // Reports without a precise origin or destination retain the saved point without inventing a route.
   syncMovementTracks() {
     const map = this.map;
     const source = map?.getSource('ras-flight-paths');
@@ -491,11 +492,12 @@ export class AlertMap {
     const routeFeatures = [];
     let includesReferenceRoute = false;
     active.forEach((alert) => {
-      const position = [alert.location.longitude, alert.location.latitude];
+      const reportPosition = [alert.location.longitude, alert.location.latitude];
       const isReferenceRoute = hasIsraelReferenceRoute(alert);
       const route = isReferenceRoute
         ? referenceFlightPath(alert.flight_direction, alert.flight_target)
         : directFlightPath(alert.location, alert.flight_target);
+      const position = route.length === 2 ? route[0] : reportPosition;
       const savedBearing = directFlightBearing(alert.location, alert.flight_target);
       const routeBearing = flightPathBearing(route);
       const heading = isReferenceRoute && Number.isFinite(routeBearing) ? routeBearing : aircraftHeading(alert, savedBearing);
@@ -522,6 +524,13 @@ export class AlertMap {
           properties: { color: routeColor, arrow: '➤', alertId: alert.id, illustrative: true, planeRoute: aircraft !== 'uav', referenceRoute: isReferenceRoute },
           geometry: { type: 'LineString', coordinates: route },
         });
+        const midpoint = [(route[0][0] + route[1][0]) / 2, (route[0][1] + route[1][1]) / 2];
+        const radiusKm = distanceKm(route[0], route[1]) / 2 + 2;
+        routeFeatures.push({
+          type: 'Feature', id: `${alert.id}-route-area`,
+          properties: { color: routeColor, alertId: alert.id, illustrative: true, routeArea: true },
+          geometry: { type: 'Polygon', coordinates: [circlePolygon(midpoint[0], midpoint[1], radiusKm)] },
+        });
       }
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
       const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${heading}|${position.join(',')}|${route.join(';')}`;
@@ -534,7 +543,7 @@ export class AlertMap {
       }
       if (!track) {
         const el = document.createElement('div');
-        el.className = `maplibregl-marker map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'} is-${alert.flight_direction.replace(/_/g, '-')}`;
+        el.className = `maplibregl-marker map-flight-track-marker ${route.length === 2 ? 'is-geographic' : ''} ${aircraft === 'uav' ? 'is-uav' : 'is-plane'} is-${alert.flight_direction.replace(/_/g, '-')}`;
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
         el.setAttribute('aria-label', `${movementTitle} · ${direction}`);
@@ -559,6 +568,26 @@ export class AlertMap {
       track.marker.setLngLat(position);
       track.marker.setRotation(heading);
       track.element.dataset.flightDirection = alert.flight_direction;
+      if (route.length === 2 && !track.frame) {
+        const started = performance.now();
+        const travelMs = 11000;
+        const cycleMs = 14500;
+        const animate = (now) => {
+          if (this.movementTracks.get(alert.id) !== track || !this.map) { track.frame = null; return; }
+          if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+            track.marker.setLngLat(route[0]); track.element.style.opacity = '1'; track.element.style.pointerEvents = 'auto'; track.frame = null; return;
+          }
+          const phase = (now - started) % cycleMs;
+          const progress = Math.min(1, phase / travelMs);
+          const point = flightPosition(route, progress);
+          if (point) { track.marker.setLngLat([point.lon, point.lat]); track.marker.setRotation(aircraftHeading(alert, point.bearing)); }
+          const opacity = phase >= travelMs ? 0 : phase > travelMs - 1400 ? (travelMs - phase) / 1400 : 1;
+          track.element.style.opacity = String(opacity);
+          track.element.style.pointerEvents = opacity > 0.15 ? 'auto' : 'none';
+          track.frame = requestAnimationFrame(animate);
+        };
+        track.frame = requestAnimationFrame(animate);
+      }
     });
     const archivedAlert = !this.newsHidden && this.selectedAlert?.id === this.selectedId
       && isLegacyQuneitraArchiveAlert(this.selectedAlert) ? this.selectedAlert : null;
