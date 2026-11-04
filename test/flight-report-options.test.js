@@ -12,11 +12,18 @@ test('warplanes and UAVs both offer movement while hovering stays separate', () 
   assert.match(bot, /d\.aerialMode = 'over';[\s\S]{0,100}askLocation\(ctx, d\)/);
 });
 
-test('new movement flow selects observation origin first and Syria/governorate destination second', () => {
-  assert.match(bot, /d\.selectingFlightOrigin = true;[\s\S]{0,100}askLocation\(ctx, d\)/);
-  assert.match(bot, /if \(d\.selectingFlightOrigin\)[\s\S]{0,220}askFlightDestination\(ctx, d\)/);
+test('new movement flow skips manual origin and asks directly for a Syrian destination', () => {
+  const start = bot.indexOf('bot.callbackQuery(/^flight:');
+  const end = bot.indexOf('bot.callbackQuery(/^flightto:', start);
+  const directionHandler = bot.slice(start, end);
+  assert.match(directionHandler, /d\.flightRouteOrigin = 'israel_approx_reference'/);
+  assert.match(directionHandler, /d\.selectingFlightTarget = true;[\s\S]{0,100}askFlightDestination\(ctx, d\)/);
+  assert.doesNotMatch(directionHandler, /askLocation\(ctx, d\)/);
   assert.match(bot, /flightto:\(syria\|back\|\\d\{1,2\}\)/);
   assert.match(bot, /locationFrom\(\{ govCode: choice \}\)/);
+  assert.match(bot, /d\.location = target/);
+  assert.match(bot, /d\.flightRouteOrigin === 'israel_approx_reference'[\s\S]{0,180}askFlightDirection\(ctx, d\)/);
+  assert.match(bot, /Change movement direction/);
   assert.match(bot, /Illustrative direction only — not live tracking\./);
 });
 
@@ -25,8 +32,9 @@ test('movement directions remain separate and supported', () => {
   assert.deepEqual(Object.keys(FLIGHT_DIRECTIONS), directions);
   assert.equal(FLIGHT_DIRECTIONS.toward_syria.ar, 'باتجاه سوريا');
   assert.match(FLIGHT_DIRECTIONS.entering_syria.ar, /دخول الأجواء السورية/);
-  assert.match(FLIGHT_DIRECTIONS.leaving_syria.ar, /انسحاب من سوريا/);
+  assert.equal(FLIGHT_DIRECTIONS.leaving_syria.ar, 'انسحاب إلى الداخل الإسرائيلي');
+  assert.equal(FLIGHT_DIRECTIONS.leaving_syria.en, 'Withdrawal into Israel');
   assert.match(bot, /flight:\(toward_syria\|entering_syria\|leaving_syria\)/);
   assert.match(bot, /d\.flightDirection = ctx\.match\[1\]/);
-  assert.match(bot, /اختر الوضع:[\s\S]{0,180}السهم التوضيحي الخط من موقع الرصد إلى الوجهة/);
+  assert.match(bot, /اختر الاتجاه[\s\S]{0,180}نقطة مرجعية تقريبية داخل إسرائيل/);
 });

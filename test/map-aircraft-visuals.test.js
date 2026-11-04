@@ -105,7 +105,7 @@ test('entry flight marker keeps its schematic approach animation while the route
 test('movement stays anchored to the observed location and draws only the selected direct route', () => {
   assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
   assert.match(mapJs, /track\.marker\.setLngLat\(position\)/);
-  assert.match(mapJs, /const heading = aircraftHeading\(alert, savedBearing\)/);
+  assert.match(mapJs, /const heading = isReferenceRoute && Number\.isFinite\(routeBearing\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
   assert.match(mapJs, /track\.marker\.setRotation\(heading\)/);
   assert.match(mapJs, /maplibregl-marker map-flight-track-marker/);
   assert.match(css, /\.map-flight-track-marker \{ position: absolute;/);
@@ -116,7 +116,7 @@ test('movement stays anchored to the observed location and draws only the select
   assert.match(mapJs, /properties: \{ color: routeColor, arrow: '➤'/);
   assert.match(mapJs, /'symbol-placement': 'line-center'/);
   assert.match(mapJs, /'text-rotation-alignment': 'map', 'text-keep-upright': false/);
-  assert.match(mapJs, /'line-opacity': \['case', \['get', 'planeRoute'\], 0\.45, 0\.9\]/);
+  assert.match(mapJs, /'line-opacity': \['case', \['get', 'referenceRoute'\], 0\.92, \['get', 'planeRoute'\], 0\.45, 0\.9\]/);
   assert.match(mapJs, /fill="\$\{iconColor\}" class="map-flight-track-svg"/);
   assert.match(mapJs, /source\.setData\(\{ type: 'FeatureCollection', features: routeFeatures \}\)/);
   assert.match(mapJs, /&& Number\.isFinite\(a\.location\?\.latitude\) && Number\.isFinite\(a\.location\?\.longitude\)/);

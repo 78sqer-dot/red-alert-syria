@@ -266,7 +266,7 @@ export const BORDER_MARKERS = {
 export const FLIGHT_DIRECTIONS = {
   toward_syria: { ar: 'باتجاه سوريا', en: 'Toward Syria' },
   entering_syria: { ar: 'دخول الأجواء السورية', en: 'Entering Syrian airspace' },
-  leaving_syria: { ar: 'انسحاب من سوريا', en: 'Withdrawal from Syria' },
+  leaving_syria: { ar: 'انسحاب إلى الداخل الإسرائيلي', en: 'Withdrawal into Israel' },
 };
 
 export const FLIGHT_AIRCRAFT = {

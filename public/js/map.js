@@ -1,5 +1,5 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=37';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=38';
 import { SVG } from './marker-svgs.js?v=19';
 import { EXTRA_SVG } from './target-svgs.js?v=17';
 import { icon } from './icons.js?v=5';
@@ -9,11 +9,15 @@ import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
-import { directFlightPath, directFlightBearing } from '/shared/flight-path.js?v=3';
+import { directFlightPath, directFlightBearing, referenceFlightPath, flightPathBearing, ISRAEL_APPROX_REFERENCE } from '/shared/flight-path.js?v=4';
 const ml = () => window.maplibregl;
 const aircraftHeading = (alert, bearing) => alert.aircraft === 'uav'
   ? (alert.flight_direction === 'leaving_syria' ? 180 : 0)
   : (Number.isFinite(bearing) ? bearing : alert.flight_direction === 'entering_syria' ? 270 : alert.flight_direction === 'leaving_syria' ? 180 : 0);
+// Client-only display override for the currently active Quneitra report; never changes its saved coordinates or post.
+const LEGACY_ISRAEL_REFERENCE_ALERTS = new Set(['be418c7b-510c-458e-b8d9-0c504730c50b']);
+const hasIsraelReferenceRoute = (alert) => alert?.flight_route_origin === 'israel_approx_reference'
+  || LEGACY_ISRAEL_REFERENCE_ALERTS.has(alert?.id);
 // Build popup DOM ourselves (content is already escaped) instead of Popup.setHTML,
 // so MapLibre's DOM.sanitize path (GHSA-jrc7-96c5-q579) is never used for alert content.
 function htmlToNode(html) {
@@ -331,8 +335,10 @@ export class AlertMap {
     add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.11 : 0.08, 0.025) } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.58, 0.22), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1.3] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['get', 'planeArea'], true], 1.5, 1.8], 'line-opacity': ['case', ['==', ['get', 'planeArea'], true], 0.7, A(0.85, 0.3)], 'line-dasharray': [3, 4] } });
-    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
-    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', filter: ['!=', ['get', 'planeRoute'], true], layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
+    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'referenceRoute'], 0.92, ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'referenceRoute'], 2.4, ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'referenceRoute'], 3.2, ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'referenceRoute'], ['literal', [4, 2]], ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
+    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', filter: ['any', ['==', ['get', 'referenceRoute'], true], ['!=', ['get', 'planeRoute'], true]], layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
+    add({ id: 'ras-flight-reference-point', type: 'circle', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], paint: { 'circle-radius': 4, 'circle-color': ['get', 'color'], 'circle-stroke-color': dark ? '#111827' : '#ffffff', 'circle-stroke-width': 1.6 } });
+    add({ id: 'ras-flight-reference-label', type: 'symbol', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], layout: { 'text-field': ['get', 'label'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 10, 12], 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.96 } });
     this._startGlow();
     this.applyToggles();
     this.updateZones();
@@ -346,14 +352,14 @@ export class AlertMap {
     this.el.classList.toggle('news-off', this.newsHidden);
     if (on) this.closePopup();
     const map = this.map; if (!map) return;
-    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-path-line', 'ras-flight-direction-arrow']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'none' : 'visible');
+    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-path-line', 'ras-flight-direction-arrow', 'ras-flight-reference-point', 'ras-flight-reference-label']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'none' : 'visible');
     this.syncMovementTracks();
   }
   applyToggles() {
     const map = this.map;
     if (!map || !map.getLayer('ras-border')) return;
     const vis = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
-    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-path-line', 'ras-flight-direction-arrow']) vis(id, !this.newsHidden);
+    for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-path-line', 'ras-flight-direction-arrow', 'ras-flight-reference-point', 'ras-flight-reference-label']) vis(id, !this.newsHidden);
     vis('ras-gov-line', this.opts.showGov);
     vis('ras-mask', this.opts.focusSyria);
     // 3D kept light so it stays smooth: one shared low-zoom DEM, gentle exaggeration and tilt, and on phones
@@ -409,7 +415,18 @@ export class AlertMap {
     }
     const lang = this.opts.lang === 'en' ? 'en' : 'ar';
     const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
-    const country = lang === 'en' ? 'Syria' : 'سوريا';
+    const isReferenceRoute = hasIsraelReferenceRoute(alert);
+    const targetName = lang === 'en' ? alert.flight_target?.name_en : alert.flight_target?.name_ar;
+    const destinationName = targetName || (lang === 'en' ? 'Syria' : 'سوريا');
+    const reportedPlace = lang === 'en'
+      ? (alert.place?.name_en || alert.location?.name_en || 'the original report location')
+      : (alert.place?.name_ar || alert.location?.name_ar || 'الموقع الأصلي للبلاغ');
+    const israelReferenceLabel = lang === 'en' ? 'Israel (approx. reference)' : 'إسرائيل (مرجع تقريبي)';
+    const routeNote = isReferenceRoute
+      ? (lang === 'en'
+        ? `Illustrative line from an approximate reference inside Israel; reported location remains ${reportedPlace}. Not a live track.`
+        : `خط توضيحي من مرجع تقريبي داخل إسرائيل؛ موقع البلاغ الأصلي يبقى ${reportedPlace}. ليس تتبعاً مباشراً.`)
+      : (lang === 'en' ? 'Schematic route · not a live track' : 'مسار توضيحي · ليس تتبعاً مباشراً');
     const plane = document.createElement('span');
     plane.className = 'map-flight-plane';
     plane.setAttribute('aria-hidden', 'true');
@@ -422,15 +439,28 @@ export class AlertMap {
     arrow.textContent = '→';
     const destination = document.createElement('b');
     destination.className = 'map-flight-destination';
-    destination.textContent = country;
+    destination.textContent = destinationName;
     const flow = this.movementNotice.querySelector('.map-flight-flow');
-    flow.replaceChildren(...(alert.flight_direction === 'leaving_syria' ? [destination, arrow, plane] : [plane, arrow, destination]));
+    if (isReferenceRoute && alert.flight_direction === 'leaving_syria') {
+      const source = document.createElement('b');
+      source.textContent = destinationName;
+      const arrowToIsrael = document.createElement('span');
+      arrowToIsrael.className = 'map-flight-arrow';
+      arrowToIsrael.setAttribute('aria-hidden', 'true');
+      arrowToIsrael.textContent = '→';
+      const israel = document.createElement('b');
+      israel.className = 'map-flight-destination';
+      israel.textContent = israelReferenceLabel;
+      flow.replaceChildren(source, arrow, plane, arrowToIsrael, israel);
+    } else {
+      flow.replaceChildren(...(alert.flight_direction === 'leaving_syria' ? [destination, arrow, plane] : [plane, arrow, destination]));
+    }
     const label = movements.length > 1 ? `${direction} (+${movements.length - 1})` : direction;
     this.movementNotice.querySelector('.map-flight-label').textContent = label;
-    this.movementNotice.querySelector('.map-flight-note').textContent = lang === 'en' ? 'Schematic route · location unspecified' : 'مسار توضيحي · الموقع غير محدد';
+    this.movementNotice.querySelector('.map-flight-note').textContent = routeNote;
     this.movementNotice.dataset.alertId = alert.id;
     this.movementNotice.classList.toggle('is-leaving', alert.flight_direction === 'leaving_syria');
-    this.movementNotice.setAttribute('aria-label', `${direction}: ${country} — ${lang === 'en' ? 'schematic route, not a live track' : 'مسار توضيحي وليس تتبعاً مباشراً'}`);
+    this.movementNotice.setAttribute('aria-label', `${direction}: ${destinationName} — ${routeNote}`);
     this.movementNotice.title = this.movementNotice.getAttribute('aria-label');
   }
 
@@ -443,8 +473,8 @@ export class AlertMap {
       .slice(0, 3);
   }
 
-  // The aircraft icon is a schematic direction cue anchored at the observation point.
-  // A separate straight line uses only saved origin/destination coordinates; neither is live tracking.
+  // The aircraft icon remains anchored to the saved report location. Reference routes are display-only;
+  // neither the route nor the icon is a live aircraft track.
   // Reports without coordinates retain the explicit location-unspecified notice.
   syncMovementTracks() {
     const map = this.map;
@@ -455,10 +485,16 @@ export class AlertMap {
     const active = this.movementTrackAlerts();
     const keep = new Set();
     const routeFeatures = [];
+    let includesReferenceRoute = false;
     active.forEach((alert) => {
       const position = [alert.location.longitude, alert.location.latitude];
+      const isReferenceRoute = hasIsraelReferenceRoute(alert);
+      const route = isReferenceRoute
+        ? referenceFlightPath(alert.flight_direction, alert.flight_target)
+        : directFlightPath(alert.location, alert.flight_target);
       const savedBearing = directFlightBearing(alert.location, alert.flight_target);
-      const heading = aircraftHeading(alert, savedBearing);
+      const routeBearing = flightPathBearing(route);
+      const heading = isReferenceRoute && Number.isFinite(routeBearing) ? routeBearing : aircraftHeading(alert, savedBearing);
       keep.add(alert.id);
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
       const color = eventVisual('air_movement').color;
@@ -466,14 +502,23 @@ export class AlertMap {
       const routeColor = aircraft === 'uav' ? '#e5484d' : '#2476c9';
       const lang = this.opts.lang === 'en' ? 'en' : 'ar';
       const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
-      const routeNote = lang === 'en' ? 'illustrative direction, not a live track' : 'حركة توضيحية للاتجاه وليست تتبعاً مباشراً';
-      const route = directFlightPath(alert.location, alert.flight_target);
-      if (route.length === 2) routeFeatures.push({
-        type: 'Feature',
-        id: alert.id,
-        properties: { color: routeColor, arrow: '➤', alertId: alert.id, illustrative: true, planeRoute: aircraft !== 'uav' },
-        geometry: { type: 'LineString', coordinates: route },
-      });
+      const reportedPlace = lang === 'en'
+        ? (alert.place?.name_en || alert.location?.name_en || 'the original report location')
+        : (alert.place?.name_ar || alert.location?.name_ar || 'الموقع الأصلي للبلاغ');
+      const routeNote = isReferenceRoute
+        ? (lang === 'en'
+          ? `Display-only route from an approximate reference inside Israel; reported location remains ${reportedPlace}. Not a live track.`
+          : `مسار عرض توضيحي من مرجع تقريبي داخل إسرائيل؛ موقع البلاغ الأصلي يبقى ${reportedPlace}. ليس تتبعاً مباشراً.`)
+        : (lang === 'en' ? 'illustrative direction, not a live track' : 'حركة توضيحية للاتجاه وليست تتبعاً مباشراً');
+      if (route.length === 2) {
+        if (isReferenceRoute) includesReferenceRoute = true;
+        routeFeatures.push({
+          type: 'Feature',
+          id: alert.id,
+          properties: { color: routeColor, arrow: '➤', alertId: alert.id, illustrative: true, planeRoute: aircraft !== 'uav', referenceRoute: isReferenceRoute },
+          geometry: { type: 'LineString', coordinates: route },
+        });
+      }
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
       const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${heading}|${position.join(',')}|${route.join(';')}`;
       let track = this.movementTracks.get(alert.id);
@@ -516,6 +561,15 @@ export class AlertMap {
       if (track.frame) cancelAnimationFrame(track.frame);
       track.marker.remove();
       this.movementTracks.delete(id);
+    }
+    if (includesReferenceRoute) {
+      const lang = this.opts.lang === 'en' ? 'en' : 'ar';
+      routeFeatures.push({
+        type: 'Feature',
+        id: 'israel-approx-reference-origin',
+        properties: { referenceOrigin: true, illustrative: true, color: '#2563eb', label: lang === 'en' ? 'Approx. reference · Israel' : 'مرجع تقريبي · إسرائيل' },
+        geometry: { type: 'Point', coordinates: [...ISRAEL_APPROX_REFERENCE] },
+      });
     }
     source.setData({ type: 'FeatureCollection', features: routeFeatures });
   }

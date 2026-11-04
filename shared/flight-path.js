@@ -6,6 +6,9 @@ const QUNEITRA_SIDE = [35.90, 33.05];
 const DARA_NORTH = [36.05, 32.78];
 const DARA_CENTER = [36.105, 32.62];
 
+// A stable illustrative map anchor, not a reported or observed aircraft coordinate.
+export const ISRAEL_APPROX_REFERENCE = Object.freeze([35.50, 33.10]);
+
 /** Return only the two stored endpoints; general/country targets have no precise route. */
 export function directFlightPath(origin, destination) {
   const point = (location) => {
@@ -30,6 +33,36 @@ export function directFlightBearing(origin, destination) {
   const phi1 = lat1 * Math.PI / 180;
   const phi2 = lat2 * Math.PI / 180;
   const deltaLon = (lon2 - lon1) * Math.PI / 180;
+  const y = Math.sin(deltaLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLon);
+  const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  return Number.isFinite(bearing) ? bearing : null;
+}
+
+/** Build an explicitly schematic Israel-reference route to a selected Syrian governorate. */
+export function referenceFlightPath(direction, target) {
+  const longitude = target?.longitude;
+  const latitude = target?.latitude;
+  if (target?.scope !== 'governorate' || !Number.isFinite(longitude) || !Number.isFinite(latitude)
+    || longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) return [];
+  const endpoint = [longitude, latitude];
+  const origin = [...ISRAEL_APPROX_REFERENCE];
+  if (endpoint[0] === origin[0] && endpoint[1] === origin[1]) return [];
+  if (direction === 'leaving_syria') return [endpoint, origin];
+  if (direction === 'toward_syria' || direction === 'entering_syria') return [origin, endpoint];
+  return [];
+}
+
+/** Bearing along the first segment of a validated line; never implies live tracking. */
+export function flightPathBearing(path) {
+  if (!Array.isArray(path) || path.length < 2) return null;
+  const [from, to] = path;
+  if (!Array.isArray(from) || !Array.isArray(to) || from.length < 2 || to.length < 2
+    || ![from[0], from[1], to[0], to[1]].every(Number.isFinite)
+    || (from[0] === to[0] && from[1] === to[1])) return null;
+  const phi1 = from[1] * Math.PI / 180;
+  const phi2 = to[1] * Math.PI / 180;
+  const deltaLon = (to[0] - from[0]) * Math.PI / 180;
   const y = Math.sin(deltaLon) * Math.cos(phi2);
   const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLon);
   const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;

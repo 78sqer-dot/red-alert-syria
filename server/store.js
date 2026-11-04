@@ -706,6 +706,8 @@ export function publicAlert(a) {
     border: BORDER_REGIONS[a.meta?.border] ? a.meta.border : undefined,
     flight_direction: FLIGHT_DIRECTIONS[a.meta?.flightDirection] ? a.meta.flightDirection : undefined,
     aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
+    ...(a.type === 'air_movement' && a.meta?.flightRouteOrigin === 'israel_approx_reference'
+      && flightTarget?.scope === 'governorate' && targetHasCoordinates ? { flight_route_origin: 'israel_approx_reference' } : {}),
     ...(flightTarget ? { flight_target: flightTarget } : {}),
     signal_platform: a.type === 'signal_sweep' && a.meta?.signalPlatform === 'uav' ? 'uav' : undefined,
     drones: a.type === 'uav' ? droneLevel(a) : undefined,
