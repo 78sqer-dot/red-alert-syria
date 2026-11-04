@@ -34,7 +34,8 @@ test('bot labels omit blank emoji placeholders and political categories have dis
   assert.equal(alertButtonLabel('shooting', 'en'), 'Gunfire');
   assert.deepEqual(Object.values(POLITICAL_CATEGORIES).map((category) => category.emoji), ['🤝', '🖊️', '📜', '📄', '🫱🏻‍🫲🏼', '🪖', '💬', '🗣️', '📜', '👤', '📢', '🏛️', '🏢', '🤝', '👥', '🚶', '🗳️']);
   assert.deepEqual(['government_announcement', 'official_announcement', 'official_entity'].map((key) => POLITICAL_CATEGORIES[key].ar), ['إعلان حكومي', 'إعلان رسمي', 'جهة رسمية']);
-  assert.match(monitor, /value\.emoji\} \$\{lang === 'en' \? value\.en : value\.ar\}/);
+  assert.match(monitor, /const label = lang === 'en' \? `“\$\{value\.en\}”` : `«\$\{value\.ar\}»`/);
+  assert.match(monitor, /\$\{value\.emoji\} \$\{label\}/);
   assert.match(bot, /alertButtonLabel\(item\.type, lang\)/);
   assert.match(bot, /\[label\.emoji, en \? label\.en : label\.ar\]\.filter\(Boolean\)\.join\(' '\)/);
   assert.match(bot, /🚙 Military vehicles/);
