@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ALERT_TYPES, eventVisual } from '../shared/types.js';
+import { ALERT_TYPES, alertEmoji, eventVisual } from '../shared/types.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
 import { TYPE_ICON } from '../public/js/type-icons.js';
 
@@ -18,6 +18,23 @@ test('security alert emojis are present and semantically distinct', () => {
   assert.equal(ALERT_TYPES.artillery.emoji, '💣');
   assert.notEqual(ALERT_TYPES.uav.emoji, ALERT_TYPES.warplane.emoji);
   assert.equal(ALERT_TYPES.death.emoji, '🪦');
+});
+
+test('requested event emojis map onto their own map alert types', () => {
+  assert.equal(alertEmoji({ type: 'airstrike' }), '💥');
+  assert.equal(alertEmoji({ type: 'explosion' }), '💥');
+  assert.equal(alertEmoji({ type: 'detonation' }), '💥');
+  assert.equal(alertEmoji({ type: 'weather' }), '⛈️');
+  assert.equal(alertEmoji({ type: 'fire' }), '🔥');
+  assert.equal(alertEmoji({ type: 'arrest' }), '🚔');
+  assert.equal(alertEmoji({ type: 'civil', civil_emoji: 'medical' }), '🚑');
+  assert.equal(alertEmoji({ type: 'artillery' }), '💣');
+  assert.match(map, /const eventEmoji = \['airstrike', 'artillery', 'explosion', 'detonation', 'weather', 'fire', 'arrest'\]\.includes\(a\.type\)/);
+  assert.match(map, /a\.type === 'civil' && alertEmoji\(a\) === '🚑'/);
+  assert.match(map, /a\.type === 'weather' \? t\.emoji : alertEmoji\(a\)/);
+  assert.match(map, /else if \(eventEmoji\) \{[\s\S]{0,400}else if \(marker === 'icon'\)/);
+  assert.match(map, /class="sai map-event-disc map-event-emoji"/);
+  assert.match(css, /\.sai\.map-event-emoji \{[^}]*font-size: 21px;/);
 });
 
 test('explosion and detonation have distinct Arabic labels and strike-colored SVGs at standard map size', () => {
@@ -54,9 +71,9 @@ test('warplane follows the three-aircraft reference pass while drones keep their
   assert.match(map, /t\.marker === 'squad'/);
   assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(36, -12, 1\).*pl\(20, 8, 0\.85\).*pl\(52, 8, 0\.85\)/);
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
-  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(2\)\s*\{ left: 6px !important; top: calc\(50% \+ 12px\) !important; width: 14px; height: 14px; \}/);
+  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 84px; height: 200px; left: -42px; top: -100px;/);
+  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite;/);
+  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(2\)\s*\{ left: 8px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
   assert.match(css, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad \.squad \{ visibility: hidden; \}/);
   assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*animation: squadFly 7s linear infinite;/);

@@ -93,9 +93,9 @@ test('warplane keeps its three-plane reference pass and independent alert-zone c
   assert.match(mapSource, /const classicAircraft = t\.marker === 'squad' \|\| t\.marker === 'helicopter'/, 'active warplane zones get aircraft pulse styling');
   assert.match(mapSource, /pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)/, 'one alert contains only a lead plane and two wing planes');
   assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
-  assert.match(mapCss, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
-  assert.match(mapCss, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite;/);
-  assert.match(mapCss, /\.mk-squad \.squad \.sq:nth-child\(3\)\s*\{ left: 38px !important; top: calc\(50% \+ 12px\) !important; width: 14px; height: 14px; \}/);
+  assert.match(mapCss, /\.mk-squad \.squad\s*\{[^}]*width: 84px; height: 200px; left: -42px; top: -100px;/);
+  assert.match(mapCss, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite;/);
+  assert.match(mapCss, /\.mk-squad \.squad \.sq:nth-child\(3\)\s*\{ left: 54px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
   assert.match(mapCss, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.doesNotMatch(mapCss, /warplaneOrbit/);
   assert.doesNotMatch(mapSource, /warplaneEastOffset|updateWarplaneVectors/, 'the pass remains schematic rather than a fabricated geographic track');
@@ -361,7 +361,7 @@ test('political developments use the category color and marker only for explicit
   assert.match(mapSource, /color: eventVisual\(a\.type\)\.color, active:/, 'political rings use the shared category color');
   assert.doesNotMatch(mapSource, /a\.type === 'political' \|\| t\.marker === 'movement'/);
   assert.match(mapSource, /a\.scope === 'country' \|\| !a\.location/);
-  assert.match(mapSource, /const km = this\._screenKm\(z\.km, z\.lat\);/);
+  assert.match(mapSource, /const km = this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\);/, 'political and other non-warplane circles retain the original display cap');
   assert.match(alertImageSource, /zones = type === 'political' \? selectedAlertZones/);
   assert.match(alertImageSource, /if \(type === 'political'\) \{ const \[x, y\] = px\(center\.lat, center\.lon\); o\.push\(politicalMarkerSvg\(x, y\)\); \}/);
   assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['statement', 'decision', 'government_announcement', 'official_announcement', 'official_entity', 'negotiation', 'meeting', 'election']);

@@ -367,6 +367,7 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .sai { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; border-radius: 50%; border: 3px solid; display: flex; align-items: center; justify-content: center; transition: transform .18s ease; }
 .sai.map-event-disc { background: #fff !important; color: var(--c) !important; border-width: 2px; box-shadow: 0 2px 7px rgba(15,23,42,.2); }
 .sai.map-event-disc svg { fill: var(--c) !important; color: var(--c) !important; }
+.sai.map-event-emoji { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; font-size: 21px; line-height: 1; color: initial !important; }
 html.dark .sai.map-event-disc { background: #f8fafc !important; }
 .sai svg { display: block; }
 .mk:hover .sai, .mk.sel .sai { transform: translate(-50%, -50%) scale(1.15); }
@@ -955,17 +956,19 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .pp-dock { background: var(--bg-elevated); border: 1px solid var(--border); }
 .pp-dock .pp-dock-body.maplibregl-popup-content { border: 0; }
 
-/* Lebanese-reference pass: three small planes enter from below, cross the pinned report, then exit above. */
+/* Reference-style pass with medium, bright-blue airframes that stay readable at detail zoom. */
 .mk-squad .mk-s { transform: none; transition: none; }
 .mk-squad .squad {
-  position: absolute; width: 60px; height: 200px; left: -30px; top: -100px;
+  position: absolute; width: 84px; height: 200px; left: -42px; top: -100px;
 }
-.mk-squad .squad .sq { width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite; }
-.mk-squad .squad .sq:first-child { left: 22px !important; top: calc(50% - 8px) !important; }
-.mk-squad .squad .sq:first-child .sq-svg { width: 16px; height: 16px; }
-.mk-squad .squad .sq:nth-child(2) { left: 6px !important; top: calc(50% + 12px) !important; width: 14px; height: 14px; }
-.mk-squad .squad .sq:nth-child(3) { left: 38px !important; top: calc(50% + 12px) !important; width: 14px; height: 14px; }
-.mk-squad .squad .sq:nth-child(2) .sq-svg, .mk-squad .squad .sq:nth-child(3) .sq-svg { width: 14px; height: 14px; }
+.mk-squad .squad .sq { width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite; }
+.mk-squad .squad .sq:first-child { left: 30px !important; top: calc(50% - 12px) !important; }
+.mk-squad .squad .sq:first-child .sq-svg { width: 24px; height: 24px; }
+.mk-squad .squad .sq:nth-child(2) { left: 8px !important; top: calc(50% + 16px) !important; width: 22px; height: 22px; }
+.mk-squad .squad .sq:nth-child(3) { left: 54px !important; top: calc(50% + 16px) !important; width: 22px; height: 22px; }
+.mk-squad .squad .sq:nth-child(2) .sq-svg, .mk-squad .squad .sq:nth-child(3) .sq-svg { width: 22px; height: 22px; }
+/* Match the reference blue, without the dark drop-shadow muddying the small silhouettes. */
+.mk-squad .sq-svg, html.dark .mk-squad .sq-svg { fill: #3b8eff; filter: none; }
 .maplibregl-map:not(.zoom-detail) .mk-squad .squad { visibility: hidden; }
 .maplibregl-map.zoom-detail .mk-squad .squad { visibility: visible; }
 @media (prefers-reduced-motion: reduce) {

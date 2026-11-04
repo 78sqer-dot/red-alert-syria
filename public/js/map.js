@@ -1,5 +1,5 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=37';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=37';
 import { SVG } from './marker-svgs.js?v=19';
 import { EXTRA_SVG } from './target-svgs.js?v=17';
 import { icon } from './icons.js?v=5';
@@ -822,6 +822,9 @@ export class AlertMap {
     const incursionKind = a.meta?.incursionKind || a.incursion_kind || (Number.isInteger(a.meta?.vehicleCount) || Number.isInteger(a.vehicle_count) ? 'vehicles' : null);
     const signalDrone = a.type === 'signal_sweep' && (a.signal_platform === 'uav' || a.meta?.signalPlatform === 'uav');
     const marker = signalDrone ? 'orbit' : t.marker;
+    const eventEmoji = ['airstrike', 'artillery', 'explosion', 'detonation', 'weather', 'fire', 'arrest'].includes(a.type)
+      ? (a.type === 'weather' ? t.emoji : alertEmoji(a))
+      : a.type === 'civil' && alertEmoji(a) === '🚑' ? alertEmoji(a) : null;
     const glyph = signalDrone ? 'signal_sweep_uav'
       : a.type === 'assassination' ? assassinationWeaponGlyph(a)
       : a.type === 'shooting' ? shootingWeaponGlyph(a)
@@ -852,6 +855,8 @@ export class AlertMap {
       el.classList.add('mk-breaking-news');
       const triangle = '<svg class="news-marker-svg" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 1.3 23.2 21H.8Z" fill="#ef233c"/><path d="m12 6.1-7.2 12.7h14.4Z" fill="#000000"/><path d="M11 9h2v5h-2zm0 6h2v2h-2z" fill="#ef233c"/></svg>';
       el.innerHTML = `<span class="news-marker-core">${triangle}</span>`;
+    } else if (eventEmoji) {
+      el.innerHTML = `<span class="sai map-event-disc map-event-emoji" style="width:34px;height:34px;border-color:${visual.color};--c:${visual.color}" aria-hidden="true">${eventEmoji}</span>`;
     } else if (marker === 'icon') {
       const iconColor = visual.color;
       const sz = 24;
@@ -882,11 +887,11 @@ export class AlertMap {
   // Keep every affected-area circle in proportion to the screen: it follows its real size on the
   // ground, but never shrinks below a visible dot at country view nor grows past a comfortable share
   // of the screen when zoomed in (laptop, phone and phone "desktop site" alike).
-  _screenKm(km, lat) {
+  _screenKm(km, lat, maxScreenShare = 0.18) {
     const c = this.map.getContainer();
     const vmin = Math.max(200, Math.min(c.clientWidth, c.clientHeight) || 600);
     const mpp = (40075016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * Math.pow(2, this.map.getZoom()));
-    const px = Math.min(vmin * 0.18, Math.max(5, (km * 1000) / mpp));
+    const px = Math.min(vmin * maxScreenShare, Math.max(5, (km * 1000) / mpp));
     return (px * mpp) / 1000;
   }
   _queueZones() {
@@ -918,7 +923,9 @@ export class AlertMap {
         orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, helicopter: marker === 'helicopter' });
       }
       zs.forEach((z, i) => {
-        const km = this._screenKm(z.km, z.lat);
+        // The reference's dashed warplane area needs more room at detail zoom. Only relax its
+        // display cap; reported z.km, centers and the number of locality circles stay untouched.
+        const km = this._screenKm(z.km, z.lat, marker === 'squad' ? 0.28 : 0.18);
         const mpp = (40075016.686 * Math.cos((z.lat * Math.PI) / 180)) / (512 * Math.pow(2, this.map.getZoom()));
         const radiusPx = Math.max(5, (km * 1000) / mpp);
         hits.push({ id: a.id, lon: z.lon, lat: z.lat, km, radiusPx, ts: Date.parse(a.timestamp) || 0, live: !!a.is_active });

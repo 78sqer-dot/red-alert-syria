@@ -57,14 +57,15 @@ test('signal-sweep UAV uses the Lebanese four-arc emitter, separate from the gen
   assert.match(css, /\.signal-sweep-uav-svg \{ display: block; fill: #6b7280; color: #1a1a2e;/);
 });
 
-test('warplane formation matches the Lebanese three-plane pass while remaining pinned to its report', () => {
+test('warplane formation keeps the reference pass with bounded medium-sized, bright-blue airframes', () => {
   assert.match(mapJs, /\$\{pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)\}/, 'the three-plane group is centered on its orbit');
   assert.doesNotMatch(mapJs, /warplaneEastOffset|updateWarplaneVectors|--flight-east-[xy]|--flight-angle/, 'the group is not given a fabricated geographic flight vector');
-  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
-  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad \.sq:first-child\s*\{ left: 22px !important; top: calc\(50% - 8px\) !important; \}/);
-  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(2\)\s*\{ left: 6px !important; top: calc\(50% \+ 12px\) !important; width: 14px; height: 14px; \}/);
-  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(3\)\s*\{ left: 38px !important; top: calc\(50% \+ 12px\) !important; width: 14px; height: 14px; \}/);
+  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 84px; height: 200px; left: -42px; top: -100px;/);
+  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite;/);
+  assert.match(css, /\.mk-squad \.squad \.sq:first-child\s*\{ left: 30px !important; top: calc\(50% - 12px\) !important; \}/);
+  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(2\)\s*\{ left: 8px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
+  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(3\)\s*\{ left: 54px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
+  assert.match(css, /\.mk-squad \.sq-svg, html\.dark \.mk-squad \.sq-svg \{ fill: #3b8eff; filter: none; \}/);
   assert.match(css, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.doesNotMatch(css, /warplaneOrbit/);
   assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad \.squad \{ visibility: hidden; \}/);
@@ -72,6 +73,26 @@ test('warplane formation matches the Lebanese three-plane pass while remaining p
   assert.match(css, /\.mk-squad \.mk-s \{ transform: none; transition: none; \}/, 'the group stays anchored in screen space while its planes pass');
   assert.match(css, /\.mk-squad \.squad \.sq \{ animation: none !important; transform: none !important; opacity: 1 !important; \}/, 'reduced-motion preferences stop each moving plane');
   assert.match(mapJs, /if \(!\['squad', 'movement', 'fly'\]\.includes\(marker\)\)/);
+});
+
+test('only the warplane area receives a larger display cap, without inflating reported radius', () => {
+  assert.match(mapJs, /this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\)/);
+  const method = mapJs.match(/  _screenKm\(([^)]*)\) \{([\s\S]*?)\n  \}/);
+  assert.ok(method, 'display-radius conversion remains independently testable');
+  const screenKm = new Function(method[1], method[2]);
+  for (const [width, height] of [[393, 720], [1280, 593], [980, 1740]]) {
+    const map = { getContainer: () => ({ clientWidth: width, clientHeight: height }), getZoom: () => 14 };
+    const context = { map };
+    const reportedKm = 20;
+    const original = screenKm.call(context, reportedKm, 33.3);
+    const aircraft = screenKm.call(context, reportedKm, 33.3, 0.28);
+    assert.ok(Math.abs(aircraft / original - 0.28 / 0.18) < 1e-10);
+    assert.ok(aircraft < reportedKm, 'a display cap never exceeds the actual reported radius');
+    const mpp = (40075016.686 * Math.cos(33.3 * Math.PI / 180)) / (512 * 2 ** 14);
+    assert.ok(Math.abs(aircraft * 1000 / mpp - Math.min(width, height) * 0.28) < 1e-9);
+    assert.equal(screenKm.call(context, 0.1, 33.3, 0.28), screenKm.call(context, 0.1, 33.3));
+    assert.equal(reportedKm, 20, 'the source radius is input only');
+  }
 });
 
 test('entry flight approaches its Syrian report area from the east as a schematic animation', () => {
