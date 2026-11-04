@@ -22,6 +22,13 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
   assert.match(app, /e\.key !== 'Escape'[^\n]*[\s\S]{0,100}setMapControlsOpen\(false\)/);
 });
 
+test('phone map controls and about pill share a lower safe-area-aware bottom row', () => {
+  assert.match(css, /\.map-ctrls \{ bottom: calc\(20px \+ env\(safe-area-inset-bottom, 0px\)\); gap: 7px;/);
+  assert.match(css, /\.about-pill \{\s*bottom: calc\(23px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(css, /\.map-ctrls > \.ctrl-btn \{ width: 44px; height: 44px;/);
+  assert.match(css, /\.map-ctrl-panel \{ position: absolute; bottom: calc\(100% \+ 9px\)/);
+});
+
 test('alert details stay centered on the map and their popup tip points to the event on every screen', () => {
   assert.doesNotMatch(map, /cls: 'alert-dock'/);
   assert.match(map, /new M\.Popup\(\{ className: 'pp-alert-popup', anchor: 'bottom'/);

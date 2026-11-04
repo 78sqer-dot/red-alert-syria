@@ -1118,7 +1118,7 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
   }
   .ctrl-btn { width: 40px; height: 40px; }
   .about-pill {
-    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(23px + env(safe-area-inset-bottom, 0px));
     height: 38px;
     min-height: 38px;
     max-width: calc(100% - 88px);
@@ -1224,7 +1224,7 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .pp-popup-connector circle { fill: var(--red); stroke: var(--bg-elevated); stroke-width: 2; }
 @media (max-width: 767px) {
   .brand img { height: 28px; width: auto; }
-  .map-ctrls { bottom: calc(104px + env(safe-area-inset-bottom, 0px)); gap: 7px; }
+  .map-ctrls { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); gap: 7px; }
   .map-ctrls > .ctrl-btn { width: 44px; height: 44px; border-radius: 14px; }
   .map-ctrl-panel .ctrl-btn { width: 44px; height: 44px; }
   .maplibregl-popup.pp-alert-popup { max-width: calc(100vw - 20px) !important; }
