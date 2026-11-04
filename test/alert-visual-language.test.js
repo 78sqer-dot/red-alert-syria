@@ -49,16 +49,18 @@ test('explosion and detonation have distinct Arabic labels and strike-colored SV
   assert.match(map, /const iconColor = visual\.color/);
 });
 
-test('warplane keeps a three-aircraft orbit and drones retain their orbiting silhouette', () => {
+test('warplane follows the three-aircraft reference pass while drones keep their orbiting silhouette', () => {
   assert.match(map, /marker === 'orbit'/);
   assert.match(map, /t\.marker === 'squad'/);
   assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(36, -12, 1\).*pl\(20, 8, 0\.85\).*pl\(52, 8, 0\.85\)/);
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad\s*\{[\s\S]{0,300}animation: warplaneOrbit 6s linear infinite;/);
-  assert.match(css, /@keyframes warplaneOrbit\s*\{\s*from \{ transform: rotate\(0deg\) translateX\(20px\); \}\s*to \{ transform: rotate\(-360deg\) translateX\(20px\); \}/);
+  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
+  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite;/);
+  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(2\)\s*\{ left: 6px !important; top: calc\(50% \+ 12px\) !important; width: 14px; height: 14px; \}/);
+  assert.match(css, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad \.squad \{ visibility: hidden; \}/);
-  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: none;/);
-  assert.doesNotMatch(css, /squadFlyZ/);
+  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*animation: squadFly 7s linear infinite;/);
+  assert.doesNotMatch(css, /warplaneOrbit|squadFlyZ/);
   assert.match(svgs, /"uav":/);
   assert.match(svgs, /"plane":/);
 });

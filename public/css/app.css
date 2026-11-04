@@ -955,23 +955,21 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .pp-dock { background: var(--bg-elevated); border: 1px solid var(--border); }
 .pp-dock .pp-dock-body.maplibregl-popup-content { border: 0; }
 
-/* Lebanese-reference motion: the three-plane formation continuously orbits the pinned report. */
+/* Lebanese-reference pass: three small planes enter from below, cross the pinned report, then exit above. */
 .mk-squad .mk-s { transform: none; transition: none; }
 .mk-squad .squad {
-  position: absolute; width: 72px; height: 72px; left: -36px; top: -36px;
-  transform-origin: center;
-  animation: warplaneOrbit 6s linear infinite;
-  will-change: transform;
+  position: absolute; width: 60px; height: 200px; left: -30px; top: -100px;
 }
-.mk-squad .squad .sq { width: 24px; height: 24px; scale: 1; animation: none; }
+.mk-squad .squad .sq { width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite; }
+.mk-squad .squad .sq:first-child { left: 22px !important; top: calc(50% - 8px) !important; }
+.mk-squad .squad .sq:first-child .sq-svg { width: 16px; height: 16px; }
+.mk-squad .squad .sq:nth-child(2) { left: 6px !important; top: calc(50% + 12px) !important; width: 14px; height: 14px; }
+.mk-squad .squad .sq:nth-child(3) { left: 38px !important; top: calc(50% + 12px) !important; width: 14px; height: 14px; }
+.mk-squad .squad .sq:nth-child(2) .sq-svg, .mk-squad .squad .sq:nth-child(3) .sq-svg { width: 14px; height: 14px; }
 .maplibregl-map:not(.zoom-detail) .mk-squad .squad { visibility: hidden; }
 .maplibregl-map.zoom-detail .mk-squad .squad { visibility: visible; }
-@keyframes warplaneOrbit {
-  from { transform: rotate(0deg) translateX(20px); }
-  to { transform: rotate(-360deg) translateX(20px); }
-}
 @media (prefers-reduced-motion: reduce) {
-  .mk-squad .squad { animation: none !important; transform: none !important; opacity: 1 !important; }
+  .mk-squad .squad .sq { animation: none !important; transform: none !important; opacity: 1 !important; }
 }
 
 /* 3D terrain: flat DOM pulse rings cannot tilt with the ground (the drawn circles do), so they are hidden */

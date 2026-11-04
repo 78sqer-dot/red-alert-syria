@@ -87,20 +87,21 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.equal(nightEligible({ type: 'helicopter', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, 'helicopter news stays for human review');
 });
 
-test('warplane keeps a compact three-plane formation on the Lebanese 20px, six-second orbit', () => {
+test('warplane keeps its three-plane reference pass and independent alert-zone circles', () => {
   assert.doesNotMatch(mapSource, /t\.marker === 'movement' \|\| t\.marker === 'squad'/, 'warplane zone circles remain enabled');
-  assert.match(mapSource, /marker === 'orbit' \|\| marker === 'helicopter'/, 'warplane orbit is independent of geographical alert radii');
+  assert.match(mapSource, /marker === 'orbit' \|\| marker === 'helicopter'/, 'drone orbit is independent of geographical alert radii');
   assert.match(mapSource, /const classicAircraft = t\.marker === 'squad' \|\| t\.marker === 'helicopter'/, 'active warplane zones get aircraft pulse styling');
-  assert.match(mapSource, /pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)/, 'lead and wing aircraft stay centered and close together');
+  assert.match(mapSource, /pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)/, 'one alert contains only a lead plane and two wing planes');
   assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
-  assert.match(mapCss, /@keyframes warplaneOrbit\s*\{\s*from \{ transform: rotate\(0deg\) translateX\(20px\); \}\s*to \{ transform: rotate\(-360deg\) translateX\(20px\); \}/);
-  assert.match(mapCss, /\.mk-squad \.squad\s*\{[\s\S]{0,300}animation: warplaneOrbit 6s linear infinite;/);
-  assert.match(mapCss, /\.mk-squad \.squad \.sq \{ width: 24px; height: 24px; scale: 1; animation: none; \}/);
-  assert.doesNotMatch(mapSource, /warplaneEastOffset|updateWarplaneVectors/, 'the old straight-pass projection is removed');
+  assert.match(mapCss, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
+  assert.match(mapCss, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite;/);
+  assert.match(mapCss, /\.mk-squad \.squad \.sq:nth-child\(3\)\s*\{ left: 38px !important; top: calc\(50% \+ 12px\) !important; width: 14px; height: 14px; \}/);
+  assert.match(mapCss, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
+  assert.doesNotMatch(mapCss, /warplaneOrbit/);
+  assert.doesNotMatch(mapSource, /warplaneEastOffset|updateWarplaneVectors/, 'the pass remains schematic rather than a fabricated geographic track');
   assert.match(mapCss, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad \.squad \{ visibility: hidden; \}/);
   assert.match(mapCss, /\.mk-squad \.mk-s \{ transform: none; transition: none; \}/, 'the formation stays fixed in screen space');
   assert.doesNotMatch(mapCss, /squadFlyZ/);
-  assert.match(mapCss, /\.mk-squad \.squad \{[^}]*height: 72px;/, 'the squad orbit has a compact screen-space container');
 });
 
 test('airstrike is a separate red map alert and monitored button, distinct from warplane overflight', () => {
