@@ -515,18 +515,19 @@ function cardKb(d, lang = 'ar') {
 }
 const intenseOn = (d) => (typeof d.intense === 'boolean' ? d.intense : droneAuto(d.headline) > 1);
 const intenseLabel = (d, lang) => (lang === 'en' ? `${ALERT_TYPES.uav.emoji} Intensive flight: ${intenseOn(d) ? '✅ on' : '⬜ off'}` : `${ALERT_TYPES.uav.emoji} تحليق مكثف: ${intenseOn(d) ? '✅ مفعّل' : '⬜ لا'}`);
+const quoteChoice = (label, lang) => lang === 'en' ? `“${label}”` : `«${label}»`;
 function typeKb(d, lang = 'ar', namespace = 'nw') {
   const cb = (key) => `${namespace}:${key}:${d.id}`;
   const kb = new InlineKeyboard();
   EDIT_TYPE_MENU.forEach((item, i) => {
     if (item.type) {
       const selected = d.type === item.type ? '• ' : '';
-      kb.text(`${selected}${alertButtonLabel(item.type, lang)}`, `${cb('s')}:${item.type}`);
+      kb.text(`${selected}${quoteChoice(alertButtonLabel(item.type, lang), lang)}`, `${cb('s')}:${item.type}`);
     } else {
       const types = EDIT_TYPE_GROUPS[item.group] || [];
       const selected = types.includes(d.type) ? '• ' : '';
       const count = item.group === 'incursion' ? INCURSION_TYPE_CHOICES.length : types.length;
-      kb.text(`${selected}${newsGroupLabel(item.group, lang)} (${count})`, `${cb('tg')}:${item.group}`);
+      kb.text(`${selected}${quoteChoice(`${newsGroupLabel(item.group, lang)} (${count})`, lang)}`, `${cb('tg')}:${item.group}`);
     }
     if (i % 2 === 1 && i < EDIT_TYPE_MENU.length - 1) kb.row();
   });
@@ -541,12 +542,12 @@ function typeGroupKb(d, group, lang = 'ar', namespace = 'nw') {
     INCURSION_TYPE_CHOICES.forEach((choice, i) => {
       const selected = d.type === 'military_incursion' && (d.incursionKind || 'general') === choice.kind ? '• ' : '';
       const label = choice.kind === 'barrier' ? `🚧 ${choice[lang]}` : choice[lang];
-      kb.text(`${selected}${label}`, `${cb('si')}:${choice.kind}`);
+      kb.text(`${selected}${quoteChoice(label, lang)}`, `${cb('si')}:${choice.kind}`);
       if (i % 2 === 1 && i < INCURSION_TYPE_CHOICES.length - 1) kb.row();
     });
   } else {
     types.forEach((type, i) => {
-      kb.text(`${d.type === type ? '• ' : ''}${alertButtonLabel(type, lang)}`, `${cb('s')}:${type}`);
+      kb.text(`${d.type === type ? '• ' : ''}${quoteChoice(alertButtonLabel(type, lang), lang)}`, `${cb('s')}:${type}`);
       if (i % 2 === 1 && i < types.length - 1) kb.row();
     });
   }
@@ -1497,7 +1498,7 @@ export function registerNewsTools(bot, h) {
     const lang = en(ctx) ? 'en' : 'ar';
     const kb = new InlineKeyboard();
     types.forEach((type, i) => {
-      kb.text(`${n.types[type] ? '✅' : '⏸'} ${alertButtonLabel(type, lang)}`, `nws:tt:${type}`);
+      kb.text(`${n.types[type] ? '✅' : '⏸'} ${quoteChoice(alertButtonLabel(type, lang), lang)}`, `nws:tt:${type}`);
       if (i % 2 === 1 && i < types.length - 1) kb.row();
     });
     if (types.length % 2 === 1 || types.length === 0) kb.row();

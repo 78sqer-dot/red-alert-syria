@@ -57,18 +57,19 @@ export const BOT_ALERT_MENU_GROUPS = Object.freeze({
 export const BOT_ALERT_MENU_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'military_incursion', 'patrol', 'signal_sweep']);
 export const BOT_ALERT_MENU_PATROL_CHILD_TYPES = Object.freeze(['kidnapping']);
 const REPORT_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', protests: '📢', civil: '🛡️', smuggling: '🚚', nature: '🌦️' });
+const quoteButtonLabel = (label, lang) => lang === 'en' ? `“${label}”` : `«${label}»`;
 function reportGroupLabel(group, lang) {
   const value = group === 'targeting' ? { ar: 'استهداف', en: 'Targeting' } : group === 'protests' ? { ar: 'مظاهرة', en: 'Protest & demonstration' } : ALERT_GROUPS[group];
   if (!value) return group;
-  return `${REPORT_GROUP_EMOJI[group] || '🏷️'} ${lang === 'en' ? value.en : value.ar}`;
+  return quoteButtonLabel(`${REPORT_GROUP_EMOJI[group] || '🏷️'} ${lang === 'en' ? value.en : value.ar}`, lang);
 }
 function reportGroupKeyboard(group, lang) {
   const types = BOT_ALERT_MENU_GROUPS[group] || [];
   const kb = new InlineKeyboard();
   types.forEach((type, index) => {
     const label = group === 'aerial' && type === 'air_movement'
-      ? (lang === 'en' ? '➤ Toward Syria / governorate' : '➤ باتجاه سوريا / محافظة')
-      : alertButtonLabel(type, lang);
+      ? quoteButtonLabel(lang === 'en' ? '➤ Toward Syria / governorate' : '➤ باتجاه سوريا / محافظة', lang)
+      : quoteButtonLabel(alertButtonLabel(type, lang), lang);
     kb.text(label, `t:${type}`);
     if (index % 2 === 1 && index < types.length - 1) kb.row();
   });
@@ -442,7 +443,7 @@ function mainKeyboard(ctx) {
   const kb = new InlineKeyboard();
   for (let i = 0; i < menuItems.length; i += 2) {
     for (const item of menuItems.slice(i, i + 2)) {
-      const label = item.group ? reportGroupLabel(item.group, lang) : alertButtonLabel(item.type, lang);
+      const label = item.group ? reportGroupLabel(item.group, lang) : quoteButtonLabel(alertButtonLabel(item.type, lang), lang);
       kb.text(label, item.callback);
     }
     kb.row();
@@ -685,7 +686,7 @@ async function askPatrolForm(ctx, d) {
   const kb = new InlineKeyboard()
     .text(en ? 'Single patrol' : 'دورية واحدة', 'pt:singular')
     .text(en ? 'Multiple patrols' : 'عدة دوريات', 'pt:plural').row()
-    .text(alertButtonLabel('kidnapping', en ? 'en' : 'ar'), 't:kidnapping').row()
+    .text(quoteButtonLabel(alertButtonLabel('kidnapping', en ? 'en' : 'ar'), en ? 'en' : 'ar'), 't:kidnapping').row()
     .text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en ? 'Choose the patrol count:' : 'اختر عدد الدوريات:', kb);
 }
