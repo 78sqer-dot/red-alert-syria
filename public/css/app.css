@@ -466,7 +466,7 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 .mk-helicopter .mk-s { transform: none; }
 .heli-orbit { position: absolute; left: calc(0px - var(--orb, 14px)); top: calc(0px - var(--orb, 14px)); width: calc(var(--orb, 14px) + var(--orb, 14px)); height: calc(var(--orb, 14px) + var(--orb, 14px)); pointer-events: none; animation: heliOrbit 12s linear infinite; }
 .heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 21px; height: 21px; transform: translate(-50%, -50%) rotate(90deg) scale(var(--heli-scale, 1)); transform-origin: center; transition: transform .18s ease-out; pointer-events: auto; filter: drop-shadow(0 1px 1.5px rgba(15,23,42,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4)); }
-.heli-craft-second { top: 100%; }
+.heli-craft-second { top: 100%; transform: translate(-50%, -50%) rotate(270deg) scale(var(--heli-scale, 1)); }
 .helicopter-svg { display: block; width: 18px; height: 18px; overflow: visible; fill: var(--c, #3b8eff); }
 .helicopter-svg .heli-main-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .32s linear infinite; }
 .helicopter-svg .heli-tail-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .22s linear infinite reverse; }
