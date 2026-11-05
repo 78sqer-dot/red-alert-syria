@@ -36,7 +36,8 @@ test('helicopter matches the 24px drone/signal glyph and shared pulse while foll
   assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*fill:\s*var\(--c, #3b8eff\);/);
   assert.doesNotMatch(mapJs, /helicopterScale|--heli-scale/);
   assert.match(mapJs, /svgTag\(t\.glyph,\s*24,\s*`fill=/);
-  assert.match(css, /\.heli-orbit\s*\{[^}]*animation:\s*heliOrbit 12s linear infinite/);
+  assert.match(css, /\.uav\s*\{[^}]*animation:\s*uavOrbit 9s linear infinite/);
+  assert.match(css, /\.heli-orbit\s*\{[^}]*animation:\s*heliOrbit 9s linear infinite/);
   assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: hidden; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-helicopter\.sel \{ visibility: visible; \}/);
   assert.match(mapJs, /classList\.toggle\('sel', a\.id === this\.selectedId\)/);

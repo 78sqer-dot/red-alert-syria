@@ -71,7 +71,8 @@ test('helicopter keeps its dedicated marker at fixed 24px with shared alert-circ
   assert.doesNotMatch(mapSource, /helicopterScale|--heli-scale/);
   assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 24px; height: 24px/);
   assert.match(mapCss, /\.heli-craft \{[^}]*width: 24px; height: 24px;[^}]*rotate\(90deg\)/);
-  assert.match(mapCss, /\.heli-orbit \{[^}]*animation: heliOrbit 12s linear infinite/);
+  assert.match(mapCss, /\.uav \{[^}]*animation: uavOrbit 9s linear infinite/);
+  assert.match(mapCss, /\.heli-orbit \{[^}]*animation: heliOrbit 9s linear infinite/);
   assert.match(mapCss, /\.helicopter-svg \.heli-main-rotor[^\n]*animation: heliRotor/);
   assert.match(mapCss, /\.helicopter-svg \.heli-tail-rotor[^\n]*animation: heliRotor/);
   assert.doesNotMatch(mapCss, /\.heli-orbit::(?:before|after)/, 'do not add decorative orbit rings');
