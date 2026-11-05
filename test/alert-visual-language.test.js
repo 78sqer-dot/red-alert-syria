@@ -84,7 +84,7 @@ test('warplane follows the three-aircraft reference pass while drones keep their
 
 test('a signal-sweep drone uses the standard 24px, type-colored orbit marker only when selected', () => {
   assert.match(map, /const signalDrone = a\.type === 'signal_sweep' &&/);
-  assert.match(map, /const marker = signalDrone \? 'orbit' : t\.marker;/);
+  assert.match(map, /const marker = alertMarkerKind\(a\);/);
   assert.equal(ALERT_TYPES.uav.glyph, 'uav');
   assert.equal(ALERT_TYPES.signal_sweep.glyph, 'signal_sweep');
   assert.match(map, /const glyph = signalDrone \? 'signal_sweep_uav'/);
@@ -115,7 +115,8 @@ test('drone orbit stays visible at country zoom while extra copies are hidden to
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
   assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit\.mk-sat\s*\{\s*visibility: hidden;/);
   assert.doesNotMatch(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit \.uav\s*\{\s*visibility: hidden/);
-  assert.match(map, /Math\.max\(z < 10\.5 \? 12 : 10, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
+  assert.match(map, /Math\.max\(5, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
+  assert.match(map, /const circleKm = this\._screenKm\(m\._zkm, m\._lat\);[\s\S]{0,100}Math\.round\(\(circleKm \* 1000\) \/ mpp\)/);
 });
 
 test('tapping a grouped alert zooms to the cluster before opening an accessible chooser', () => {

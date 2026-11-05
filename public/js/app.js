@@ -1,12 +1,12 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=23';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=40';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
 import { DICT } from './i18n.js?v=3';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=5';
 import { settings } from './settings.js?v=13';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=75';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=76';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';

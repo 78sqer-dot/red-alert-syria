@@ -1,5 +1,6 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=40';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=41';
+import { mapDroneCount } from '/shared/map-drone-visuals.js?v=1';
 import { SVG } from './marker-svgs.js?v=19';
 import { EXTRA_SVG } from './target-svgs.js?v=19';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
@@ -865,7 +866,7 @@ export class AlertMap {
     let satN = 0;
     for (const a of this.alerts) {
       if (typeOf(a.type).marker !== 'orbit' || !a.location || a.scope === 'country') continue;
-      const per = Math.max(1, Math.min(3, Number(a.drones) || 1));
+      const per = mapDroneCount(a);
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [];
       let mi = -1, bd = Infinity;
       zs.forEach((z, i) => { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; mi = i; } });
@@ -919,7 +920,7 @@ export class AlertMap {
     const visual = eventVisual(a.type);
     const incursionKind = a.meta?.incursionKind || a.incursion_kind || (Number.isInteger(a.meta?.vehicleCount) || Number.isInteger(a.vehicle_count) ? 'vehicles' : null);
     const signalDrone = a.type === 'signal_sweep' && (a.signal_platform === 'uav' || a.meta?.signalPlatform === 'uav');
-    const marker = signalDrone ? 'orbit' : t.marker;
+    const marker = alertMarkerKind(a);
     const eventEmoji = ['airstrike', 'artillery', 'explosion', 'detonation', 'weather', 'fire', 'arrest'].includes(a.type)
       ? (a.type === 'weather' ? t.emoji : alertEmoji(a))
       : a.type === 'civil' && alertEmoji(a) === '🚑' ? alertEmoji(a) : null;
@@ -935,7 +936,8 @@ export class AlertMap {
     el.setAttribute('tabindex', '0');
     if (marker === 'orbit') {
       const svgClass = signalDrone ? 'signal-sweep-uav-svg' : 'uav-svg';
-      el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(glyph, 36, `class="${svgClass}"`)}</div></div>`;
+      const svg = signalDrone ? svgTag(glyph, 36, `class="${svgClass}"`) : svgTag(glyph, 24, `class="${svgClass}"`);
+      el.innerHTML = `<div class="uav-box"><div class="uav">${svg}</div></div>`;
     } else if (marker === 'helicopter') {
       const craft = `<span class="heli-craft">${svgTag(t.glyph, 24, `fill="${visual.color}" class="helicopter-svg"`)}</span>`;
       const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${svgTag(t.glyph, 24, `fill="${visual.color}" class="helicopter-svg"`)}</span>` : '';
@@ -1017,7 +1019,7 @@ export class AlertMap {
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
       const planeArea = a.type === 'warplane' || (a.type === 'air_movement' && a.aircraft !== 'uav');
       if (!t || (t.marker === 'movement' && !(planeArea && a.is_active)) || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
-      const marker = a.type === 'signal_sweep' && (a.signal_platform === 'uav' || a.meta?.signalPlatform === 'uav') ? 'orbit' : t.marker;
+      const marker = alertMarkerKind(a);
       const props = planeArea ? { color: '#3b8eff', active: !!a.is_active, dashed: true, planeArea: true } : { color: eventVisual(a.type).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
@@ -1111,13 +1113,14 @@ export class AlertMap {
         continue;
       }
       // Keep the orbit legible at country scale while following the real display circle when zoomed in.
-      const px = Math.max(z < 10.5 ? 12 : 10, Math.round((o.km * 1000) / mpp));
+      const px = Math.max(5, Math.round((o.km * 1000) / mpp));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
     if (z >= 10.5 && this.sats) for (const m of this.sats.values()) {
       if (!Number.isFinite(m._zkm)) continue;
       const mpp = (40075016.686 * Math.cos((m._lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
-      const px = Math.max(8, Math.min(12, Math.round((this._screenKm(m._zkm, m._lat) * 1000) / mpp)));
+      const circleKm = this._screenKm(m._zkm, m._lat);
+      const px = Math.max(5, Math.round((circleKm * 1000) / mpp));
       const el = m.getElement();
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }
@@ -1156,9 +1159,8 @@ export class AlertMap {
     const target = tapped || ll;
     const zs = Array.isArray(alert.zones) ? alert.zones : [];
     const archiveRoute = isLegacyQuneitraArchiveAlert(alert) ? legacyQuneitraArchivePath(alert) : [];
-    const orbiting = typeOf(alert.type).marker === 'orbit'
-      || typeOf(alert.type).marker === 'helicopter'
-      || (alert.type === 'signal_sweep' && (alert.signal_platform === 'uav' || alert.meta?.signalPlatform === 'uav'));
+    const marker = alertMarkerKind(alert);
+    const orbiting = marker === 'orbit' || marker === 'helicopter';
     if (archiveRoute.length === 2 && fly) {
       this.closePopup();
       const longitudes = archiveRoute.map(([lon]) => lon);

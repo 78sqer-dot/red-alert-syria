@@ -293,6 +293,11 @@ export function typeOf(key) {
   return ALERT_TYPES[key] || ALERT_TYPES.breaking;
 }
 
+export function alertMarkerKind(alert) {
+  if (alert?.type === 'signal_sweep' && (alert.signal_platform === 'uav' || alert.meta?.signalPlatform === 'uav')) return 'orbit';
+  return typeOf(alert?.type).marker;
+}
+
 export function alertButtonLabel(key, lang = 'ar') {
   const type = typeOf(key);
   const label = lang === 'en' ? type.button_en : type.button_ar;
@@ -327,19 +332,19 @@ export const alertEmoji = (a) => (a?.type === 'weather' && HAZARD_EMOJI[a.hazard
   || (a?.type === 'civil' && CIVIL_EMOJIS[a.civil_emoji || a.meta?.civilEmoji]?.emoji)
   || typeOf(a?.type).emoji;
 
-// ---- drones on the map: 1 per circle normally; an intensive flight ("تحليق مكثف", "عدة مسيّرات") shows 2,
-// a swarm ("سرب") 3. meta.intense (the "تحليق مكثف" switch in the bot) overrides what the text says.
+// ---- drones on the map: 1 per circle normally; any "مكثف" / "كثيف" wording or multiple-drone text shows 2,
+// a swarm ("سرب") 3. An explicit owner switch can raise a normal report, but cannot suppress text evidence.
 const _dn = (s) => String(s || '').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
 export function droneAuto(text) {
   const t = _dn(text);
   if (/سرب|اسراب|swarm/.test(t)) return 3;
-  if (/مكثف|كثيف|عده مسيرات|عدد من المسيرات|عده طائرات مسيره|طائرات مسيره|مسيرات|طيران مسير مكثف|intens|several drones|multiple drones/.test(t)) return 2;
+  if (/مكثف|كثيف|عده مسيرات|عدد من المسيرات|عده طائرات مسيره|طائرات مسيره|مسيرات|طيران مسير مكثف|intens|several drones|multiple drones|several uavs|multiple uavs/.test(t)) return 2;
   return 1;
 }
 export function droneLevel(a) {
   if (!a || a.type !== 'uav') return 0;
   const auto = droneAuto(`${a.title || ''} ${a.description || ''}`);
   if (a.meta && a.meta.intense === true) return Math.max(2, auto);
-  if (a.meta && a.meta.intense === false) return 1;
+  if (a.meta && a.meta.intense === false) return Math.max(1, auto);
   return auto;
 }

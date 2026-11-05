@@ -8,11 +8,12 @@ const markerSvgs = await readFile(new URL('../public/js/marker-svgs.js', import.
 const types = await readFile(new URL('../shared/types.js', import.meta.url), 'utf8');
 const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.meta.url), 'utf8');
 
-test('drone keeps its top-down silhouette, enlarged icon and perimeter orbit', () => {
+test('drone keeps its top-down 24px silhouette and perimeter orbit', () => {
   assert.match(types, /uav:\s*\{[\s\S]*?glyph: 'uav'/);
   assert.ok(markerSvgs.includes('"uav": "<g> <ellipse cx=\\"256\\" cy=\\"256\\" rx=\\"18\\" ry=\\"140\\" />'));
   assert.match(mapJs, /const svgClass = signalDrone \? 'signal-sweep-uav-svg' : 'uav-svg'/);
-  assert.match(mapJs, /svgTag\(glyph,\s*36,\s*`class="\$\{svgClass\}"`\)/);
+  assert.match(mapJs, /signalDrone \? svgTag\(glyph,\s*36,[\s\S]{0,120}: svgTag\(glyph,\s*24,/);
+  assert.match(css, /\.uav-svg\s*\{[^}]*width: 24px; height: 24px;/);
   assert.match(css, /\.uav\s*\{[^}]*width: 44px; height: 44px;[^}]*margin: -22px 0 0 -22px;/);
   assert.match(css, /\.uav-svg\s*\{\s*stroke: rgba\(255,255,255,\.94\);\s*stroke-width: 18;/);
 });
@@ -24,7 +25,8 @@ test('drone is hidden with impact circles alone at country zoom and orbits at de
   assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit\.mk-sat\s*\{\s*visibility: hidden;/);
   assert.doesNotMatch(css, /uavHover/);
   assert.match(mapJs, /classList\.toggle\('zoom-detail', z >= 10\.5\)/);
-  assert.match(mapJs, /const px = Math\.max\(z < 10\.5 \? 12 : 10, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
+  assert.match(mapJs, /const px = Math\.max\(5, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
+  assert.match(mapJs, /const circleKm = this\._screenKm\(m\._zkm, m\._lat\);[\s\S]{0,100}const px = Math\.max\(5, Math\.round\(\(circleKm \* 1000\) \/ mpp\)\)/);
   assert.doesNotMatch(mapJs, /Math\.min\(12, Math\.round\(\(o\.km \* 1000\) \/ mpp\)\)/);
   assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });
@@ -72,8 +74,7 @@ test('signal-sweep map markers are enlarged for phone visibility', () => {
 });
 
 test('opening UAV and helicopter alerts forces detail zoom for governorate-scoped reports', () => {
-  assert.match(mapJs, /const orbiting = typeOf\(alert\.type\)\.marker === 'orbit'[\s\S]*?alert\.signal_platform === 'uav'/);
-  assert.match(mapJs, /const orbiting = typeOf\(alert\.type\)\.marker === 'orbit'[\s\S]*?typeOf\(alert\.type\)\.marker === 'helicopter'/);
+  assert.match(mapJs, /const marker = alertMarkerKind\(alert\);[\s\S]{0,120}const orbiting = marker === 'orbit' \|\| marker === 'helicopter';/);
   assert.match(mapJs, /alertFocusZoom\(alert\.scope, this\.map\.getZoom\(\), orbiting \? 11\.5 : 0\)/);
 });
 
