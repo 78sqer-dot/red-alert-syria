@@ -58,5 +58,5 @@ test('category recoloring preserves readable light/dark markers and approved siz
   assert.match(css, /\.mk-breaking-news \.news-pulse-ring \{ width: 34px; height: 34px; border-color: #ef233c/);
   assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
   assert.match(css, /\.ic-svg \{[^}]*width: 24px; height: 24px/);
-  assert.match(map, /const helicopterScale = Math\.max\(1, Math\.min\(1\.34, 1 \+ \(z - 9\) \* 0\.08\)\)/);
+  assert.match(css, /\.helicopter-svg \{[^}]*width: 24px; height: 24px/);
 });

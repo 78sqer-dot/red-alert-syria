@@ -55,7 +55,7 @@ test('aircraft movement is separate from unchanged hovering markers', () => {
   assert.equal(Array.from(NEWS_TYPES).includes('air_movement'), false, 'manual movement reports are not auto-classified from news');
 });
 
-test('helicopter has its own monitored button and keeps the original warplane marker treatment', () => {
+test('helicopter keeps its dedicated marker at fixed 24px with shared alert-circle pulses', () => {
   const warplane = ALERT_TYPES.warplane;
   const helicopter = ALERT_TYPES.helicopter;
   assert.ok(TYPE_KEYS.includes('helicopter'));
@@ -64,14 +64,13 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
   assert.equal(helicopter.glyph, 'helicopter_simple');
   assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
-  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\(t\.glyph, 18,/);
+  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\(t\.glyph, 24,/);
   assert.match(mapSource, /a\.helicopters > 1/);
   assert.match(mapSource, /heli-craft-second/);
-  assert.match(mapCss, /\.heli-craft-second \{ top: 100%; transform: translate\(-50%, -50%\) rotate\(270deg\) scale\(var\(--heli-scale, 1\)\); \}/);
-  assert.match(mapSource, /const helicopterScale = Math\.max\(1, Math\.min\(1\.34, 1 \+ \(z - 9\) \* 0\.08\)\)/);
-  assert.match(mapSource, /c\.style\.setProperty\('--heli-scale', helicopterScale\)/);
-  assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 18px; height: 18px/);
-  assert.match(mapCss, /\.heli-craft \{[^}]*scale\(var\(--heli-scale, 1\)\)/);
+  assert.match(mapCss, /\.heli-craft-second \{ top: 100%; transform: translate\(-50%, -50%\) rotate\(270deg\); \}/);
+  assert.doesNotMatch(mapSource, /helicopterScale|--heli-scale/);
+  assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 24px; height: 24px/);
+  assert.match(mapCss, /\.heli-craft \{[^}]*width: 24px; height: 24px;[^}]*rotate\(90deg\)/);
   assert.match(mapCss, /\.heli-orbit \{[^}]*animation: heliOrbit 12s linear infinite/);
   assert.match(mapCss, /\.helicopter-svg \.heli-main-rotor[^\n]*animation: heliRotor/);
   assert.match(mapCss, /\.helicopter-svg \.heli-tail-rotor[^\n]*animation: heliRotor/);
@@ -93,7 +92,7 @@ test('helicopter has its own monitored button and keeps the original warplane ma
 test('warplane keeps its three-plane reference pass and independent alert-zone circles', () => {
   assert.doesNotMatch(mapSource, /t\.marker === 'movement' \|\| t\.marker === 'squad'/, 'warplane zone circles remain enabled');
   assert.match(mapSource, /marker === 'orbit' \|\| marker === 'helicopter'/, 'drone orbit is independent of geographical alert radii');
-  assert.match(mapSource, /const classicAircraft = t\.marker === 'squad' \|\| t\.marker === 'helicopter'/, 'active warplane zones get aircraft pulse styling');
+  assert.match(mapSource, /const classicAircraft = t\.marker === 'squad';/, 'only warplanes retain specialized aircraft pulses; helicopters use the drone/signal pulse size');
   assert.match(mapSource, /pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)/, 'one alert contains only a lead plane and two wing planes');
   assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
   assert.match(mapCss, /\.mk-squad \.squad\s*\{[^}]*width: 84px; height: 200px; left: -42px; top: -100px;/);

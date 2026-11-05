@@ -465,9 +465,9 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 /* Helicopters use one recognizable top-down airframe, orbiting the alert area with animated rotors. */
 .mk-helicopter .mk-s { transform: none; }
 .heli-orbit { position: absolute; left: calc(0px - var(--orb, 14px)); top: calc(0px - var(--orb, 14px)); width: calc(var(--orb, 14px) + var(--orb, 14px)); height: calc(var(--orb, 14px) + var(--orb, 14px)); pointer-events: none; animation: heliOrbit 12s linear infinite; }
-.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 21px; height: 21px; transform: translate(-50%, -50%) rotate(90deg) scale(var(--heli-scale, 1)); transform-origin: center; transition: transform .18s ease-out; pointer-events: auto; filter: drop-shadow(0 1px 1.5px rgba(15,23,42,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4)); }
-.heli-craft-second { top: 100%; transform: translate(-50%, -50%) rotate(270deg) scale(var(--heli-scale, 1)); }
-.helicopter-svg { display: block; width: 18px; height: 18px; overflow: visible; fill: var(--c, #3b8eff); }
+.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%) rotate(90deg); transform-origin: center; pointer-events: auto; filter: drop-shadow(0 1px 1.5px rgba(15,23,42,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4)); }
+.heli-craft-second { top: 100%; transform: translate(-50%, -50%) rotate(270deg); }
+.helicopter-svg { display: block; width: 24px; height: 24px; overflow: visible; fill: var(--c, #3b8eff); }
 .helicopter-svg .heli-main-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .32s linear infinite; }
 .helicopter-svg .heli-tail-rotor { transform-box: fill-box; transform-origin: center; animation: heliRotor .22s linear infinite reverse; }
 html.dark .helicopter-svg { fill: color-mix(in srgb, var(--c, #3b8eff) 72%, #fff); }
@@ -831,7 +831,7 @@ html.dark .wa-btn svg { color: #2fe079; }
   0% { transform: scale(1); opacity: .4; }
   100% { transform: scale(1.85); opacity: 0; }
 }
-/* Preserve the original blue aircraft-circle glow and pulse cadence for warplanes (and helicopters). */
+/* Preserve the original blue aircraft-circle glow and pulse cadence for warplanes. */
 .zp.zp-aircraft .zp-fill { opacity: .12; animation: zfillPulseAircraft 2.6s ease-in-out infinite; }
 @keyframes zfillPulseAircraft { 0%, 100% { opacity: .12; } 50% { opacity: .32; } }
 .zp.zp-aircraft::before, .zp.zp-aircraft::after {

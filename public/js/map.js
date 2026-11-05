@@ -214,7 +214,6 @@ export class AlertMap {
       if (this.map) this.map.setStyle(style, { diff: false });
     }).catch((e) => console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e));
     let lastOrbitUpdate = 0;
-    let lastHelicopterScale = '';
     const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
@@ -233,9 +232,6 @@ export class AlertMap {
       // small icons at every zoom, getting a little smaller as you zoom in (like the original)
       const mks = Math.max(0.42, Math.min(0.56, 0.56 - (z - 6) * 0.025)).toFixed(2);
       if (mks !== this._mks) { this._mks = mks; c.style.setProperty('--mks', mks); } // restyle markers only when the size step changes
-      // Helicopter airframe starts at 18px and grows to 24px at close zoom; its orbit radius remains tied to the alert circle.
-      const helicopterScale = Math.max(1, Math.min(1.34, 1 + (z - 9) * 0.08)).toFixed(2);
-      if (helicopterScale !== lastHelicopterScale) { lastHelicopterScale = helicopterScale; c.style.setProperty('--heli-scale', helicopterScale); }
     };
     this.map.on('zoom', () => zoomTier());
     this.map.on('zoomend', () => {
@@ -926,8 +922,8 @@ export class AlertMap {
       const svgClass = signalDrone ? 'signal-sweep-uav-svg' : 'uav-svg';
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(glyph, 36, `class="${svgClass}"`)}</div></div>`;
     } else if (marker === 'helicopter') {
-      const craft = `<span class="heli-craft">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span>`;
-      const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span>` : '';
+      const craft = `<span class="heli-craft">${svgTag(t.glyph, 24, `fill="${visual.color}" class="helicopter-svg"`)}</span>`;
+      const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${svgTag(t.glyph, 24, `fill="${visual.color}" class="helicopter-svg"`)}</span>` : '';
       el.innerHTML = `<div class="heli-orbit${second ? ' heli-intensive' : ''}">${craft}${second}</div>`;
     } else if (marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
@@ -1029,7 +1025,7 @@ export class AlertMap {
           featureKeys.add(featureKey);
           features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [circlePolygon(z.lon, z.lat, km)] } });
         }
-        const classicAircraft = t.marker === 'squad' || t.marker === 'helicopter';
+        const classicAircraft = t.marker === 'squad';
         if (a.is_active && !planeArea) {
           const pulseKey = pulseVisualKey(visualZone, props.color, classicAircraft);
           const existingPulse = pulseByKey.get(pulseKey);
