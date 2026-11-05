@@ -464,6 +464,8 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 @keyframes squadFlyCompact { 0% { transform: translateY(12px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-12px); opacity: 0; } }
 /* Helicopters use one recognizable top-down airframe, orbiting the alert area with animated rotors. */
 .mk-helicopter .mk-s { transform: none; }
+.maplibregl-map .mk-helicopter { visibility: hidden; }
+.maplibregl-map.zoom-detail .mk-helicopter.sel { visibility: visible; }
 .heli-orbit { position: absolute; left: calc(0px - var(--orb, 14px)); top: calc(0px - var(--orb, 14px)); width: calc(var(--orb, 14px) + var(--orb, 14px)); height: calc(var(--orb, 14px) + var(--orb, 14px)); pointer-events: none; animation: heliOrbit 12s linear infinite; }
 .heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%) rotate(90deg); transform-origin: center; pointer-events: auto; filter: drop-shadow(0 1px 1.5px rgba(15,23,42,.42)) drop-shadow(0 0 1px rgba(255,255,255,.4)); }
 .heli-craft-second { top: 100%; transform: translate(-50%, -50%) rotate(270deg); }

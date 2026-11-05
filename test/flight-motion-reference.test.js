@@ -67,9 +67,9 @@ test('UAV animation declarations and reduced-motion/gesture pause behavior remai
 test('entering plane keeps right-to-left travel and faces left; cache versions refresh assets', () => {
   assert.match(css, /\.map-flight-track-marker\.is-plane\.is-entering-syria \.map-flight-track-squad \{ animation-name: flightTrackPlaneApproach; \}/);
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
-  assert.match(html, /app\.css\?v=55/);
+  assert.match(html, /app\.css\?v=56/);
   assert.match(html, /app\.js\?v=68/);
-  assert.match(app, /map\.js\?v=72/);
+  assert.match(app, /map\.js\?v=73/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {
