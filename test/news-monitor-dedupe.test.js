@@ -133,6 +133,7 @@ test('last-mile duplicate guard marks a pending monitored draft as duplicate wit
     id: 'already-published-alert', type: 'attack', ts: Date.now() - 5 * 60_000,
     headline: 'اقتحام حاجز أمني في دمشق', where: 'دمشق', geo: structuredClone(geoDamascus),
   }];
+  store.state.alerts = [{ id: 'already-published-alert', type: 'attack', channel_message_id: 314, is_active: true, timestamp: new Date(Date.now() - 5 * 60_000).toISOString() }];
   const draft = {
     id: 'pending-duplicate-draft', type: 'attack', status: 'pending', ts: Date.now(),
     headline: 'اقتحام حاجز أمني في دمشق', loc: {
@@ -144,7 +145,10 @@ test('last-mile duplicate guard marks a pending monitored draft as duplicate wit
   const duplicate = _test.knownDuplicateDraft(draft);
   assert.ok(duplicate, 'the existing published incident is found before channel publication');
   const buttons = _test.cardKb(draft, 'ar').inline_keyboard.flat();
-  assert.ok(buttons.some((button) => button.callback_data === `nw:d:${draft.id}` && button.text.includes('سبق نشره في القناة')), 'the reviewer can mark an already-posted incident and prevent reposting');
+  assert.ok(buttons.some((button) => button.callback_data === `nw:c:${draft.id}` && button.text.includes('تحقق من النشر في القناة')), 'the reviewer can request a channel publication check');
+  assert.equal(_test.channelPublishedDuplicateDraft(draft)?.alertId, 'already-published-alert', 'the check detects a matching alert with a channel message id');
+  const missing = { ...draft, id: 'not-channel-posted', headline: 'غارة جوية على إدلب', loc: { ...draft.loc, name_ar: 'إدلب', governorate_ar: 'إدلب', latitude: 35.93, longitude: 36.63 } };
+  assert.equal(_test.channelPublishedDuplicateDraft(missing), null, 'the check reports no match when no tracked channel post exists');
   assert.equal(await _test.suppressDuplicateDraft(draft, duplicate), true);
   assert.equal(draft.status, 'duplicate');
   assert.equal(n.alerts.length, 1, 'the original published alert remains stored and untouched');

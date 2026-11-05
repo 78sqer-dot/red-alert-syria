@@ -437,12 +437,12 @@ function knownEvents(hours = 12) {
     if (d.test || (d.ts || d.created) < since) continue;
     const locs = locsOf(d.loc, d.extra);
     if (d.alertId) fromDraft.add(d.alertId);
-    out.push({ kind: 'draft', status: d.status, draftId: d.id, type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: d.headline, where: whereOf(locs), geo: geoOf(locs) });
+    out.push({ kind: 'draft', status: d.status, draftId: d.id, alertId: d.alertId, type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: d.headline, where: whereOf(locs), geo: geoOf(locs) });
   }
   for (const a of n.alerts) {
     if (a.ts < since || fromDraft.has(a.id)) continue;
     const stored = store.getAlert(a.id);
-    out.push({ kind: 'alert', status: 'published', type: a.type, politicalCategory: a.politicalCategory || stored?.meta?.political?.category, ts: a.ts, headline: a.headline, where: a.where, geo: a.geo });
+    out.push({ kind: 'alert', status: 'published', alertId: a.id, type: a.type, politicalCategory: a.politicalCategory || stored?.meta?.political?.category, ts: a.ts, headline: a.headline, where: a.where, geo: a.geo });
   }
   for (const rep of Object.values(store.state.reports || {})) {
     const d = rep?.draft;
@@ -507,7 +507,7 @@ function cardKb(d, lang = 'ar') {
   const kb = new InlineKeyboard()
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
     .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id).row()
-    .text(tr(lang, '📣 سبق نشره في القناة — منع التكرار', '📣 Already posted in channel — prevent duplicate'), 'nw:d:' + d.id);
+    .text(tr(lang, '🔎 تحقق من النشر في القناة', '🔎 Check if posted in channel'), 'nw:c:' + d.id);
 
   if (d.type === 'political') kb.row().text(tr(lang, '🏛 الفئة السياسية', '🏛 Political category'), 'nw:pc:' + d.id);
   // Telegram refuses a whole message when one button has an empty text: the extra row only for drones
@@ -620,6 +620,26 @@ function noticeKb(d, lang = 'ar') {
   return kb.row()
     .text(tr(lang, '🏷 تغيير نوع الخبر', '🏷 Change news type'), 'nw:pt:' + d.id).row()
     .text(tr(lang, '↩️ تراجع (حذف من القناة والخريطة)', '↩️ Undo (remove from channel + map)'), 'nw:u:' + d.id);
+}
+function channelPublishedDuplicateDraft(d) {
+  const candidate = {
+    type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created,
+    headline: d.headline, geo: geoOf(locsOf(d.loc, d.extra)),
+  };
+  return knownEvents(12).find((known) => {
+    if (known.draftId === d.id || !known.alertId || !sameIncident(candidate, known)) return false;
+    return Boolean(store.getAlert(known.alertId)?.channel_message_id);
+  }) || null;
+}
+function channelCheckKeyboard(d, duplicate, lang = 'ar') {
+  const kb = new InlineKeyboard();
+  if (duplicate) {
+    kb.text(tr(lang, '❌ تجاهل هذه المسودة', '❌ Ignore this draft'), 'nw:x:' + d.id);
+  } else {
+    kb.text(tr(lang, '✅ نشر الخبر', '✅ Publish this story'), 'nw:p:' + d.id);
+    kb.text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id);
+  }
+  return kb;
 }
 function knownDuplicateDraft(d) {
   const candidate = {
@@ -1291,14 +1311,17 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, t(ctx, d.intense ? 'مكثف: 2-3 مسيّرات فوق كل منطقة' : 'عادي: مسيّرة وحدة فوق كل منطقة', d.intense ? 'Intensive: 2-3 drones per area' : 'Normal: one drone per area'));
     try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
   });
-  bot.callbackQuery(/^nw:d:(\w+)$/, async (ctx) => {
+  bot.callbackQuery(/^nw:c:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const d = await findDraft(ctx.match[1]);
     if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
-    d.status = 'duplicate'; d.duplicateMarkedAt = Date.now(); d.duplicateMarkedBy = ctx.from.id;
-    d.duplicateReason = 'already-posted-in-channel';
-    newsState().stats.dupes++; save(); await closeCards(d);
-    return toast(ctx, t(ctx, '✔️ سُجّل أنه منشور مسبقاً؛ لن يُعاد نشره، ولم يُحذف أي منشور.', '✔️ Marked as already posted; it will not be reposted, and no channel post was deleted.'));
+    const duplicate = channelPublishedDuplicateDraft(d);
+    const lang = h.langOf(ctx);
+    await toast(ctx, duplicate ? t(ctx, 'وُجد منشور مطابق في سجل القناة', 'Matching post found in channel records') : t(ctx, 'لم يُعثر على منشور مطابق في سجل القناة', 'No matching post found in channel records'));
+    const result = duplicate
+      ? t(ctx, `🔎 <b>نتيجة الفحص:</b> وُجد خبر مطابق منشور عبر البوت في سجل القناة. يُفضّل تجاهل هذه المسودة لتفادي التكرار. لم يُحذف أي منشور.`, `🔎 <b>Check result:</b> A matching story posted through the bot was found in channel records. Ignore this draft to avoid duplication. No post was deleted.`)
+      : t(ctx, `🔎 <b>نتيجة الفحص:</b> لم أجد خبراً مطابقاً ضمن منشورات القناة المسجلة لدى البوت. يمكنك نشره أو تجاهله. ملاحظة: لا يستطيع Telegram Bot API البحث في كامل أرشيف القناة عن منشورات أُضيفت خارج البوت.`, `🔎 <b>Check result:</b> No matching post was found in channel posts tracked by the bot. You can publish or ignore it. Note: Telegram Bot API cannot search the full channel history for posts made outside the bot.`);
+    return ctx.reply(result, { parse_mode: 'HTML', reply_markup: channelCheckKeyboard(d, duplicate, lang) });
   });
   bot.callbackQuery(/^nw:(p|x|t|b|e):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
@@ -1696,4 +1719,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, knownDuplicateDraft, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
