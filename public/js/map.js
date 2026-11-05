@@ -1142,6 +1142,7 @@ export class AlertMap {
     const zs = Array.isArray(alert.zones) ? alert.zones : [];
     const archiveRoute = isLegacyQuneitraArchiveAlert(alert) ? legacyQuneitraArchivePath(alert) : [];
     const orbiting = typeOf(alert.type).marker === 'orbit'
+      || typeOf(alert.type).marker === 'helicopter'
       || (alert.type === 'signal_sweep' && (alert.signal_platform === 'uav' || alert.meta?.signalPlatform === 'uav'));
     if (archiveRoute.length === 2 && fly) {
       this.closePopup();

@@ -35,7 +35,7 @@ export const ALERT_TYPES = {
   helicopter: {
     ar: 'طيران مروحي', en: 'Helicopter activity', button_ar: 'طيران مروحي (مروحية/مروحيات)', button_en: 'Helicopter(s)',
     emoji: '🚁', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
-    marker: 'helicopter', glyph: 'helicopter_simple', zone: 'dashed', tag_ar: 'طيران_مروحي', tag_en: 'Helicopter',
+    marker: 'helicopter', glyph: 'helicopter_simple', zone: true, tag_ar: 'طيران_مروحي', tag_en: 'Helicopter',
   },
   air_movement: {
     ar: 'حركة طيران', en: 'Aircraft movement', button_ar: 'حركة طيران', button_en: 'Aircraft movement',

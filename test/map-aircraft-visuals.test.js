@@ -42,11 +42,12 @@ test('helicopter matches the 24px drone/signal glyph and shared pulse while foll
   assert.match(css, /animation: zpulse 3\.2s cubic-bezier/);
   assert.match(mapJs, /el\.insertAdjacentHTML\('afterbegin', '<span class="news-pulse-ring"/);
   assert.doesNotMatch(css, /\.heli-orbit::(?:before|after)/, 'the helicopter must not gain decorative orbit rings');
-  assert.match(targetSvgs, /helicopter_simple:[\s\S]{0,220}heli-main-rotor[\s\S]{0,140}M40 246a10 10 0 0 1 0-20/);
+  assert.match(targetSvgs, /helicopter_simple:[\s\S]{0,220}heli-main-rotor[\s\S]{0,140}M54 247a12 12 0 0 1 0-24/);
 });
 
 test('helicopter uses the simplified silhouette while legacy glyphs remain available', () => {
   assert.match(types, /helicopter:\s*\{[\s\S]*?glyph: 'helicopter_simple'/);
+  assert.match(types, /helicopter:\s*\{[\s\S]*?marker: 'helicopter', glyph: 'helicopter_simple', zone: true/);
   assert.match(targetSvgs, /helicopter_simple:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter_topdown:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
   assert.match(targetSvgs, /helicopter_sleek:\s*'<g[\s\S]*?heli-main-rotor[\s\S]*?heli-tail-rotor/);
@@ -66,8 +67,9 @@ test('signal-sweep map markers are enlarged for phone visibility', () => {
   assert.match(css, /\.mk\.t-signal_sweep \.ic-svg \{ width: 34px; height: 34px; \}/);
 });
 
-test('opening UAV alerts forces detail zoom for governorate-scoped reports', () => {
+test('opening UAV and helicopter alerts forces detail zoom for governorate-scoped reports', () => {
   assert.match(mapJs, /const orbiting = typeOf\(alert\.type\)\.marker === 'orbit'[\s\S]*?alert\.signal_platform === 'uav'/);
+  assert.match(mapJs, /const orbiting = typeOf\(alert\.type\)\.marker === 'orbit'[\s\S]*?typeOf\(alert\.type\)\.marker === 'helicopter'/);
   assert.match(mapJs, /alertFocusZoom\(alert\.scope, this\.map\.getZoom\(\), orbiting \? 11\.5 : 0\)/);
 });
 
