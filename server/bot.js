@@ -888,6 +888,7 @@ function detailsExample(ctx, d) {
 }
 
 async function afterLocation(ctx, d) {
+  if (d.mode === 'active_edit') return showActiveEditForm(ctx, d);
   if (d.type === 'breaking' || d.details) return showPreview(ctx, d);
   d.step = 'details';
   if (d.type === 'road') {
@@ -2324,6 +2325,86 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await vanish(ctx, L(ctx).reportRejected(ctx.from.first_name || '') + (action === 'bn' ? ' · 🚫' : ''));
     }
   });
+  const activeEditKeyboard = (ctx) => {
+    const en = langOf(ctx) === 'en';
+    return new InlineKeyboard()
+      .text(en ? '✏️ Headline' : '✏️ العنوان', 'editfield:title').row()
+      .text(en ? '📝 Details' : '📝 التفاصيل', 'editfield:details').row()
+      .text(en ? '📍 Location' : '📍 الموقع', 'editfield:location').row()
+      .text(en ? '👁 Preview changes' : '👁 معاينة التعديلات', 'editpreview').row()
+      .text(en ? '↩️ Cancel' : '↩️ إلغاء', 'editcancel');
+  };
+  async function showActiveEditForm(ctx, d) {
+    const en = langOf(ctx) === 'en';
+    const a = store.getAlert(d.alertId);
+    if (!a?.is_active || !a.channel_message_id) return show(ctx, en ? 'This active post is no longer available to edit.' : 'لم يعد هذا المنشور النشط متاحاً للتعديل.', new InlineKeyboard().text(L(ctx).btnBack, 'active'));
+    const loc = d.location ? locName(d.location, langOf(ctx)) : (en ? 'Syria (no pin)' : 'سوريا (دون دبوس)');
+    const body = `${en ? '<b>Edit channel post</b>' : '<b>تعديل منشور القناة</b>'}\n\n${en ? 'Headline' : 'العنوان'}: ${esc(d.editTitle || a.title || '—')}\n${en ? 'Details' : 'التفاصيل'}: ${esc(d.details || '—')}\n${en ? 'Location' : 'الموقع'}: ${esc(loc)}\n\n${en ? 'Choose a field, then preview and confirm to update the existing post.' : 'اختر حقلاً، ثم عاين وأكّد لتحديث المنشور الحالي.'}`;
+    await show(ctx, body, activeEditKeyboard(ctx));
+  }
+  const activeEditDraft = (a) => ({
+    mode: 'active_edit', alertId: a.id, type: a.type, step: 'edit_menu',
+    editTitle: a.meta?.channelTitle || a.title || '', details: a.description || '',
+    location: a.place || locationFrom({}), extra: Array.isArray(a.extra) ? [...a.extra] : [],
+  });
+  bot.callbackQuery(/^editpost:([\w-]{36})$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!staff(ctx)) return;
+    const a = store.getAlert(ctx.match[1]);
+    if (!a?.is_active || !a.channel_message_id) return show(ctx, langOf(ctx) === 'en' ? 'This alert has no editable active channel post.' : 'لا يوجد منشور قناة نشط قابل للتعديل لهذا التنبيه.', new InlineKeyboard().text(L(ctx).btnBack, 'active'));
+    sessions.set(sk(ctx), activeEditDraft(a));
+    await showActiveEditForm(ctx, getDraft(ctx));
+  });
+  bot.callbackQuery(/^editfield:(title|details|location)$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!staff(ctx)) return;
+    const d = getDraft(ctx);
+    if (!d || d.mode !== 'active_edit') return;
+    const en = langOf(ctx) === 'en';
+    if (ctx.match[1] === 'location') {
+      d.step = 'gov'; d.gov = ''; d.dist = ''; d.sub = '';
+      return askLocation(ctx, d);
+    }
+    d.step = ctx.match[1] === 'title' ? 'edit_title' : 'edit_details';
+    const kb = new InlineKeyboard().text(en ? '↩️ Back' : '↩️ رجوع', 'editmenu').text(en ? 'Cancel' : 'إلغاء', 'editcancel');
+    await show(ctx, ctx.match[1] === 'title' ? (en ? 'Send the new headline (up to 120 characters):' : 'أرسل العنوان الجديد (حتى 120 حرفاً):') : (en ? 'Send the updated details, or send “-” to clear them:' : 'أرسل التفاصيل الجديدة، أو أرسل «-» لحذفها:'), kb);
+  });
+  bot.callbackQuery('editmenu', async (ctx) => { await ctx.answerCallbackQuery(); const d = getDraft(ctx); if (staff(ctx) && d?.mode === 'active_edit') await showActiveEditForm(ctx, d); });
+  bot.callbackQuery('editpreview', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const d = getDraft(ctx); if (!staff(ctx) || d?.mode !== 'active_edit') return;
+    const a = store.getAlert(d.alertId); if (!a?.is_active) return show(ctx, L(ctx).notFound, activeEditKeyboard(ctx));
+    d.step = 'preview';
+    const loc = d.location ? locName(d.location, langOf(ctx)) : '—';
+    const en = langOf(ctx) === 'en';
+    await show(ctx, `${en ? '<b>Review before updating the existing channel post</b>' : '<b>راجع التغييرات قبل تحديث منشور القناة الحالي</b>'}\n\n<b>${esc(d.editTitle || '—')}</b>\n${esc(d.details || (en ? 'No details' : 'لا توجد تفاصيل'))}\n📍 ${esc(loc)}`, new InlineKeyboard().text(en ? '✅ Confirm update' : '✅ تأكيد التحديث', 'editsave').row().text(en ? '↩️ Back to fields' : '↩️ رجوع للحقول', 'editmenu').text(en ? 'Cancel' : 'إلغاء', 'editcancel'));
+  });
+  bot.callbackQuery('editsave', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const d = getDraft(ctx); if (!staff(ctx) || d?.mode !== 'active_edit' || d.step !== 'preview') return;
+    const a = store.getAlert(d.alertId);
+    if (!a?.is_active || !a.channel_message_id) return show(ctx, L(ctx).notFound, new InlineKeyboard().text(L(ctx).btnBack, 'active'));
+    const meta = { ...(a.meta || {}), channelTitle: d.editTitle };
+    const place = d.location || a.place;
+    const candidate = { ...a, title: d.editTitle, description: d.details, place, extra: d.extra || [], meta };
+    try {
+      const text = channelPost(candidate);
+      const opts = { parse_mode: 'HTML', reply_markup: channelKeyboard(candidate), link_preview_options: { is_disabled: true } };
+      if (a.channel_media === 'photo') await ctx.api.editMessageCaption(config.channel, a.channel_message_id, { caption: channelCaption(candidate), parse_mode: 'HTML', reply_markup: channelKeyboard(candidate) });
+      else await ctx.api.editMessageText(config.channel, a.channel_message_id, text, opts);
+    } catch (e) {
+      const msg = String(e.description || e.message || '');
+      if (!msg.includes('not modified')) {
+        console.error('[bot] active post edit failed:', msg);
+        return show(ctx, langOf(ctx) === 'en' ? `Could not update the channel post: ${esc(msg)}` : `تعذر تحديث منشور القناة: ${esc(msg)}`, new InlineKeyboard().text(langOf(ctx) === 'en' ? '↩️ Back' : '↩️ رجوع', 'editmenu').text(langOf(ctx) === 'en' ? 'Cancel' : 'إلغاء', 'editcancel'));
+      }
+    }
+    const areas = [place, ...(d.extra || [])].filter((x) => x && x.scope !== 'country').map((x) => x.name_ar).filter(Boolean);
+    store.updateAlert(a.id, { title: d.editTitle, description: d.details, place, extra: d.extra || [], areas, meta });
+    sessions.delete(sk(ctx));
+    await show(ctx, langOf(ctx) === 'en' ? '✅ Existing channel post and map alert updated.' : '✅ تم تحديث المنشور الحالي والتنبيه على الخريطة.', resultKeyboard(ctx, store.getAlert(a.id)).row().text(L(ctx).btnBack, 'active'));
+  });
+  bot.callbackQuery('editcancel', async (ctx) => { await ctx.answerCallbackQuery(); if (staff(ctx)) { sessions.delete(sk(ctx)); await showActive(ctx); } });
   // -------- active alerts management
   async function showActive(ctx) {
     const l = L(ctx);
@@ -2395,7 +2476,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!staff(ctx)) return;
     const a = store.getAlert(ctx.match[1]);
     if (!a) return show(ctx, L(ctx).notFound, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
-    const kb = resultKeyboard(ctx, a).row().text(L(ctx).btnBack, 'active');
+    const kb = resultKeyboard(ctx, a);
+    if (a.is_active && a.channel_message_id) kb.row().text(langOf(ctx) === 'en' ? '✏️ Edit channel post' : '✏️ تعديل المنشور', 'editpost:' + a.id);
+    kb.row().text(L(ctx).btnBack, 'active');
     await show(ctx, manageText(ctx, a), kb);
   });
   bot.callbackQuery(/^(end|del|ext):([\w-]{36})$/, async (ctx) => {
@@ -2447,6 +2530,11 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const d = getDraft(ctx);
     if (!d) return home(ctx);
     const l = L(ctx);
+    if (d.mode === 'active_edit' && ['edit_title', 'edit_details'].includes(d.step)) {
+      if (d.step === 'edit_title') { if (!text || text.length > 120) return ctx.reply(langOf(ctx) === 'en' ? 'Please send a headline up to 120 characters.' : 'أرسل عنواناً لا يتجاوز 120 حرفاً.'); d.editTitle = text; }
+      else { if (text.length > 900) return ctx.reply(l.tooLong); d.details = text === '-' ? '' : text; }
+      d.step = 'edit_menu'; return showActiveEditForm(ctx, d);
+    }
     if (d.step === 'vehicle_count_input') {
       const count = parseVehicleCount(text);
       if (!count) {
