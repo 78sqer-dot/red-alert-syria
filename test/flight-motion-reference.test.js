@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { flightPosition, referenceFlightPath } from '../shared/flight-path.js';
 
 const css = await readFile(new URL('../public/css/app.css', import.meta.url), 'utf8');
 const map = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf8');
@@ -41,6 +42,20 @@ test('formation preserves exactly three 24px blue aircraft and does not alter ro
   assert.match(map, /setRotation\(heading\)/);
 });
 
+test('warplane icon follows the illustrative route and withdrawal leaves Syria', () => {
+  const insideSyria = { scope: 'governorate', longitude: 35.82, latitude: 33.12 };
+  const leaving = referenceFlightPath('leaving_syria', insideSyria);
+  assert.deepEqual(leaving[0], [insideSyria.longitude, insideSyria.latitude]);
+  assert.deepEqual(leaving.at(-1), [35.50, 33.10]);
+  const start = flightPosition(leaving, 0.02);
+  const end = flightPosition(leaving, 0.98);
+  assert.ok(end.lon < start.lon, 'westbound withdrawal reaches the outside-Syria reference');
+  assert.match(map, /track\.path = route;[\s\S]{0,280}aircraft === 'plane' && route\.length === 2/);
+  assert.match(map, /flightPosition\(track\.path, progress\)/);
+  assert.match(map, /track\.marker\.setLngLat\(\[point\.lon, point\.lat\]\)/);
+  assert.match(map, /not live tracking/);
+});
+
 test('UAV animation declarations and reduced-motion/gesture pause behavior remain intact', () => {
   assert.match(css, /\.map-flight-track-squad \{[^}]*animation: flightTrackTravel 7s linear infinite; \}/);
   assert.match(css, /\.map-flight-track-marker\.is-toward-syria \.map-flight-track-squad \{ animation: flightTrackApproach 5s linear infinite; \}/);
@@ -54,7 +69,7 @@ test('entering plane keeps right-to-left travel and faces left; cache versions r
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
   assert.match(html, /app\.css\?v=55/);
   assert.match(html, /app\.js\?v=68/);
-  assert.match(app, /map\.js\?v=71/);
+  assert.match(app, /map\.js\?v=72/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {

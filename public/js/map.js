@@ -9,7 +9,7 @@ import { clusterAlertsByScreen } from './marker-layout.js?v=2';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=2';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
-import { directFlightPath, directFlightBearing, referenceFlightPath, flightPathBearing, ISRAEL_APPROX_REFERENCE, LEGACY_QUNEITRA_ALERT_ID, isLegacyQuneitraArchiveAlert, legacyQuneitraArchivePath } from '/shared/flight-path.js?v=5';
+import { directFlightPath, directFlightBearing, referenceFlightPath, flightPathBearing, flightPosition, ISRAEL_APPROX_REFERENCE, LEGACY_QUNEITRA_ALERT_ID, isLegacyQuneitraArchiveAlert, legacyQuneitraArchivePath } from '/shared/flight-path.js?v=6';
 const ml = () => window.maplibregl;
 const aircraftHeading = (alert, bearing) => alert.aircraft === 'uav'
   ? (alert.flight_direction === 'leaving_syria' ? 180 : 0)
@@ -473,9 +473,8 @@ export class AlertMap {
       .slice(0, 3);
   }
 
-  // The aircraft icon remains anchored to the saved report location. Reference routes are display-only;
-  // neither the route nor the icon is a live aircraft track.
-  // Reports without coordinates retain the explicit location-unspecified notice.
+  // Warplane icons may travel along the selected illustrative route; this is not live tracking and
+  // never changes the saved report location. Reports without coordinates retain the location notice.
   syncMovementTracks() {
     const map = this.map;
     const source = map?.getSource('ras-flight-paths');
@@ -549,11 +548,34 @@ export class AlertMap {
         el.append(visual);
         const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat(position).addTo(map);
         this.bindMarkerTap(el, () => this.onSelect(alert.id, { fromMap: true, fly: true }));
-        track = { marker, element: el, signature };
+        track = { marker, element: el, signature, startedAt: performance.now(), frame: null };
         this.movementTracks.set(alert.id, track);
       }
-      track.marker.setLngLat(position);
-      track.marker.setRotation(heading);
+      track.path = route;
+      if (aircraft === 'plane' && route.length === 2) {
+        if (track.frame == null) {
+          const animate = (now) => {
+            if (this.movementTracks.get(alert.id) !== track) return;
+            if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+              track.marker.setLngLat(position);
+              track.marker.setRotation(heading);
+              track.frame = null;
+              return;
+            }
+            const progress = ((now - track.startedAt) % 7000) / 7000;
+            const point = flightPosition(track.path, progress);
+            if (point) {
+              track.marker.setLngLat([point.lon, point.lat]);
+              track.marker.setRotation(point.bearing);
+            }
+            track.frame = requestAnimationFrame(animate);
+          };
+          track.frame = requestAnimationFrame(animate);
+        }
+      } else {
+        track.marker.setLngLat(position);
+        track.marker.setRotation(heading);
+      }
       track.element.dataset.flightDirection = alert.flight_direction;
     });
     const archivedAlert = !this.newsHidden && this.selectedAlert?.id === this.selectedId
