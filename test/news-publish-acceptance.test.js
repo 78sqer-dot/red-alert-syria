@@ -1183,7 +1183,7 @@ test('aerial movement uses the approximate Israel reference and destination dire
     await tap('ag:aerial', user, targetBot);
     let menuStart = calls.length;
     await tap('t:uav', user, targetBot);
-    assert.ok(callbacksOf(keyboardAfter(menuStart)).includes('airmode:move'), `unrequested UAV submenu choice is preserved: ${JSON.stringify({ user: user.id, buttons: callbacksOf(keyboardAfter(menuStart)), text: lastText() })}`);
+    assert.equal(callbacksOf(keyboardAfter(menuStart)).includes('airmode:move'), false, 'movement stays in the main direction flow, not the aerial submenu');
     for (const aircraft of ['warplane', 'uav']) {
       await tap('home', user, targetBot);
       await tap('ag:aerial', user, targetBot);

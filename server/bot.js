@@ -757,13 +757,10 @@ async function askAerialMode(ctx, d) {
   const aircraft = d.type === 'uav' ? ALERT_TYPES.uav.emoji : ALERT_TYPES.warplane.emoji;
   const kb = new InlineKeyboard()
     .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row();
-  if (d.type !== 'warplane') kb.text(en ? `${aircraft} Aircraft movement` : `${aircraft} حركة طيران`, 'airmode:move').row();
   kb.text(L(ctx).btnCancel, 'cancel');
-  const prompt = d.type === 'warplane'
-    ? (en ? 'Choose over-area activity. For a route, use “Toward Syria / governorate” under aerial activity.' : 'اختر التحليق فوق المنطقة. لإضافة مسار استخدم «باتجاه سوريا / محافظة» ضمن النشاط الجوي.')
-    : en
-    ? 'Choose hovering over an area or aircraft movement. Movement asks for a Syrian destination; the map uses a clearly labeled approximate reference point inside Israel.'
-    : 'اختر التحليق فوق منطقة أو حركة طيران. في الحركة تختار وجهة داخل سوريا، وتستخدم الخريطة نقطة مرجعية تقريبية واضحة داخل إسرائيل.';
+  const prompt = en
+    ? 'Choose hovering over the area. For a route, use “Toward Syria / governorate” under aerial activity.'
+    : 'اختر التحليق فوق المنطقة. لإضافة مسار استخدم «باتجاه سوريا / محافظة» ضمن النشاط الجوي.';
   await show(ctx, prompt, kb);
 }
 async function askHelicopterIntensity(ctx, d) {
@@ -1990,16 +1987,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     d.intense = ctx.match[1] === 'high';
     await askLocation(ctx, d);
   }));
-  bot.callbackQuery(/^airmode:(over|move)$/, needDraft(async (ctx, d) => {
+  bot.callbackQuery(/^airmode:over$/, needDraft(async (ctx, d) => {
     if (d.type !== 'uav' && d.type !== 'warplane') return;
-    if (ctx.match[1] === 'over') {
-      d.aerialMode = 'over';
-      return askLocation(ctx, d);
-    }
-    d.aircraft = d.type;
-    d.type = 'air_movement';
-    d.ttlMin = typeOf(d.type).ttlMin;
-    await askFlightDirection(ctx, d);
+    d.aerialMode = 'over';
+    await askLocation(ctx, d);
   }));
   bot.callbackQuery(/^flightair:(warplane|uav)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'air_movement') return;

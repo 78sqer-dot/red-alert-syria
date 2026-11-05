@@ -5,11 +5,13 @@ import { FLIGHT_DIRECTIONS } from '../shared/types.js';
 
 const bot = await readFile(new URL('../server/bot.js', import.meta.url), 'utf8');
 
-test('warplanes and UAVs both offer movement while hovering stays separate', () => {
-  assert.match(bot, /kb\.text\(en \? `\$\{aircraft\} Aircraft movement` : `\$\{aircraft\} حركة طيران`, 'airmode:move'\)/);
+test('the aerial submenu keeps hovering only and the route stays in the main direction flow', () => {
+  assert.doesNotMatch(bot, /airmode:move|حركة طيران/);
+  assert.match(bot, /Hovering over the area[\s\S]{0,80}airmode:over/);
   assert.match(bot, /if \(d\.type !== 'uav' && d\.type !== 'warplane'\) return;/);
-  assert.match(bot, /d\.aircraft = d\.type;[\s\S]{0,80}d\.type = 'air_movement'/);
+  assert.match(bot, /else if \(type === 'air_movement'\) await askFlightAircraft\(ctx, d\)/);
   assert.match(bot, /d\.aerialMode = 'over';[\s\S]{0,100}askLocation\(ctx, d\)/);
+  assert.ok(bot.includes('bot.callbackQuery(/^airmode:over$/'), 'legacy movement callback is no longer registered');
 });
 
 test('new movement flow skips manual origin and asks directly for a Syrian destination', () => {
