@@ -1,13 +1,12 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=39';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=40';
 import { SVG } from './marker-svgs.js?v=19';
 import { EXTRA_SVG } from './target-svgs.js?v=19';
-import { icon } from './icons.js?v=5';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=7';
-import { clusterAlertsByScreen } from './marker-layout.js?v=2';
+import { clusterAlertsByScreen } from './marker-layout.js?v=3';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
-import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=2';
+import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=3';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
 import { directFlightPath, directFlightBearing, referenceFlightPath, flightPathBearing, flightPosition, ISRAEL_APPROX_REFERENCE, LEGACY_QUNEITRA_ALERT_ID, isLegacyQuneitraArchiveAlert, legacyQuneitraArchivePath } from '/shared/flight-path.js?v=6';
 const ml = () => window.maplibregl;
@@ -138,11 +137,6 @@ function firstSymbolId(map) {
   for (const l of map.getStyle().layers) if (l.type === 'symbol') return l.id;
   return undefined;
 }
-function labelFont(map) {
-  for (const l of map.getStyle().layers) if (l.type === 'symbol' && l['source-layer'] === 'place' && l.layout?.['text-font']) return l.layout['text-font'];
-  return ['Noto Sans Regular'];
-}
-
 function circlePolygon(lon, lat, km, steps = 96) {
   const coords = [];
   const dLat = km / 110.574;
@@ -310,7 +304,6 @@ export class AlertMap {
     const { border, govs } = await loadData();
     const before = firstSymbolId(map);
     const dark = this.opts.dark || this.opts.layer === 'satellite';
-    const font = labelFont(map);
     const add = (layer, beforeId = before) => {
       if (!map.getLayer(layer.id)) map.addLayer(layer, beforeId);
     };
@@ -1034,7 +1027,7 @@ export class AlertMap {
         for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
         orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, helicopter: marker === 'helicopter' });
       }
-      zs.forEach((z, i) => {
+      zs.forEach((z) => {
         // Aircraft areas keep the reference's geographic radius at every zoom; this does not
         // change the saved z.km, circle centers or locality count. Other categories retain their cap.
         const km = planeArea ? z.km : this._screenKm(z.km, z.lat, marker === 'squad' ? 0.28 : 0.18);

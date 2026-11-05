@@ -72,7 +72,11 @@ export function clusterAlertsByScreen(alerts, map, selectedId = null, radiusPx =
       };
     })
     .sort((a, b) => a._firstIndex - b._firstIndex)
-    .map(({ _firstIndex, ...cluster }) => cluster);
+    .map((cluster) => {
+      const result = { ...cluster };
+      delete result._firstIndex;
+      return result;
+    });
 }
 
 export function nextAlertId(group, selectedId = null) {

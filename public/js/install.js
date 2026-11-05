@@ -22,7 +22,7 @@ window.addEventListener('appinstalled', () => { st.installed = true; st.deferred
 function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } }
 function save(patch) { try { localStorage.setItem(KEY, JSON.stringify({ ...load(), ...patch })); } catch { /* ignore */ } }
 
-export function platform() {
+function platform() {
   const ua = navigator.userAgent || '';
   const ios = /iphone|ipod|ipad/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (ios) return 'ios';
@@ -30,7 +30,7 @@ export function platform() {
   if (/macintosh|windows|linux|cros/i.test(ua)) return 'desktop';
   return 'other';
 }
-export function isStandalone() {
+function isStandalone() {
   return !!(window.matchMedia && (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: minimal-ui)').matches || matchMedia('(display-mode: fullscreen)').matches))
     || navigator.standalone === true || document.referrer.startsWith('android-app://');
 }
@@ -140,4 +140,3 @@ export function initInstall(c) {
   ctx = c;
   onInstallChange(() => { if (card && !installMode()) hideCard(); });
 }
-export const _installState = st;

@@ -9,7 +9,7 @@ const [map, css] = await Promise.all([
 
 test('keeps geographic alert areas on the map without a zone-count badge or tooltip', () => {
   assert.match(map, /const zs = Array\.isArray\(a\.zones\) && a\.zones\.length \? a\.zones/);
-  assert.match(map, /zs\.forEach\(\(z, i\) => \{[\s\S]{0,2000}circlePolygon\(z\.lon, z\.lat, km\)/);
+  assert.match(map, /zs\.forEach\(\(z\) => \{[\s\S]{0,2000}circlePolygon\(z\.lon, z\.lat, km\)/);
   assert.doesNotMatch(map, /mk-zone-count|zoneCircleCount|syncZoneCountBadge|affected circles|affected areas|عدد الدوائر المتأثرة|عدد المناطق المتأثرة/);
   assert.match(map, /nearby alerts — click to choose/);
   assert.match(map, /el\.setAttribute\('aria-label', el\.title\)/);

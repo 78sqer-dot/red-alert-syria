@@ -4,7 +4,7 @@
     var s = JSON.parse(localStorage.getItem('ras-settings') || '{}');
     var dark = typeof s.darkMode === 'boolean' ? s.darkMode : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (dark) document.documentElement.classList.add('dark');
-  } catch (e) { /* ignore */ }
+  } catch { /* ignore */ }
 })();
 // Phone in "Desktop site" mode: the browser lays the page out at ~980px even though the
 // physical screen is narrow. Keep responsive layout decisions tied to the real screen width.
@@ -30,5 +30,5 @@
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
   window.__bip = e;
-  try { window.dispatchEvent(new Event('ras-bip')); } catch (x) { /* ignore */ }
+  try { window.dispatchEvent(new Event('ras-bip')); } catch { /* ignore */ }
 });

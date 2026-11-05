@@ -282,7 +282,7 @@ export function checkOfficial(o, sp) {
   if (sp?.usd?.buy && !inR(o.usd_buy / sp.usd.buy, 0.6, 1.25)) return 'official too far from market';
   return null;
 }
-export async function fetchOfficial(sp) {
+export async function fetchOfficial() {
   const sourceErrors = [];
   let posts = [];
   try { posts = await latestBulletinPosts(); } catch (e) { sourceErrors.push(`Facebook: ${e.message}`); }
@@ -368,7 +368,7 @@ export async function refreshPrices({ force = false, forceOfficial = false } = {
     if (forceOfficial || ((force || !currentOfficial || needsSourceMigration || (!haveToday && p.hm >= '12:30')) && Date.now() - R.lastOffTry > (force ? 60_000 : 30 * 60_000))) {
       R.lastOffTry = Date.now();
       try {
-        const o = await fetchOfficial(null);
+        const o = await fetchOfficial();
         if (o.post !== st.official?.post || o.src !== st.official?.src || o.checkedAt !== st.official?.checkedAt) { st.official = o; save(false); console.log(`[prices] official bulletin ${o.date}: USD ${o.usd.buy}/${o.usd.sell}`); }
         R.offErr = '';
       } catch (e) { R.offErr = e.message; console.warn('[prices] official failed:', e.message); }
@@ -415,7 +415,6 @@ function text(x, y, s, { size = 24, weight = 400, fill = '#e5e7eb', anchor = 'en
   return `<text x="${x}" y="${y}" font-family="${family}, Noto Sans" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}"${opacity < 1 ? ` opacity="${opacity}"` : ''}>${esc(s)}</text>`;
 }
 const card = (x, y, w, h, r = 22, fill = '#111827', stroke = '#1f2937') => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
-const arrow = (ch) => (!ch ? { s: '', c: '#9ca3af' } : ch > 0 ? { s: '+', c: '#fb7185' } : { s: '-', c: '#34d399' });
 const dayLabel = (ms) => { const p = damascusParts(ms); return `${AR_DAYS[p.wd]} ${p.d} ${AR_MONTHS[p.m - 1]} ${p.y}`; };
 const dateLabel = (iso) => { const [y, m, d] = String(iso || '').split('-').map(Number); return y ? `${d} ${AR_MONTHS[m - 1]}` : ''; };
 const CHECK_FMT = new Intl.DateTimeFormat('ar-SY-u-nu-latn', { timeZone: 'Asia/Damascus', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });

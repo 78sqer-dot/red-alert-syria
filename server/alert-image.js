@@ -10,7 +10,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { ALERT_TYPES, assassinationWeaponGlyph, shootingWeaponGlyph, eventVisual } from '../shared/types.js';
 import { SVG as BASE_GLYPHS } from '../public/js/marker-svgs.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
-import { zonePoints, alertZones, selectedAlertZones } from './places.js';
+import { alertZones, selectedAlertZones } from './places.js';
 
 const GLYPHS = { ...BASE_GLYPHS, ...EXTRA_SVG };
 const ROOT = path.dirname(fileURLToPath(import.meta.url));

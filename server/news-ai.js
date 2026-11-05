@@ -411,7 +411,6 @@ export function ruleClassify(text, { breaking = false } = {}) {
   const first = text.split('\n').find((l) => l.trim().length > 15) || text;
   return { event: true, type, new_incident: true, same_as: null, places: found, headline: first.replace(/[•:]+\s*$/, '').trim().slice(0, 140), rule: true };
 }
-export const typeLabelAr = (k) => `${ALERT_TYPES[k]?.emoji || ''} ${ALERT_TYPES[k]?.ar || k}`.trim();
 export { getGov, getDist };
 
 // ---------------------------------------------------------------- type safety net

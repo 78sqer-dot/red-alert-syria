@@ -8,7 +8,6 @@ import { governorates, locationFrom } from './places.js';
 
 const R = { H: null, started: false, last: 0, lastErr: '', running: false };
 const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-const rid = () => Math.random().toString(36).slice(2, 9);
 const durationLabel = (hours, en = false) => hours
   ? (en ? `${hours} ${hours === 1 ? 'hour' : 'hours'} after publishing` : `بعد ${hours === 1 ? 'ساعة' : `${hours} ساعة`} من النشر`)
   : (en ? 'No expiry — stays on the map until ended or deleted' : 'بلا انتهاء — يبقى على الخريطة حتى إنهائه أو حذفه');
@@ -190,7 +189,6 @@ async function publish(item, toChannel) {
 }
 
 // ---------------------------------------------------------------- owner cards
-const reviewers = () => [...new Set(config.ownerIds)];
 const isEnUid = (uid) => store.userLang?.(uid) === 'en';
 const cardKb = (it, en = false) => (it.pub
   ? new InlineKeyboard().text(en ? '🗑 Delete the warning' : '🗑 حذف التحذير', `wx:d:${it.id}`)
@@ -203,14 +201,6 @@ function cardText(it, en = false) {
     : (it.pub === 'channel' && it.auto ? '✅ <b>نُشر تلقائياً (تحذير شديد)</b>\n\n' : it.pub ? `✅ <b>منشور${it.pub === 'map' ? ' على الخريطة' : ''}</b>\n\n` : '📝 <b>مسودة تحذير جوي</b> — بتنتظر قرارك\n\n');
   const lifetime = en ? `⌛ <b>Map duration:</b> ${esc(duration)}` : `⌛ <b>مدة البقاء على الخريطة:</b> ${esc(duration)}`;
   return head + warningText(it.w) + `\n\n${lifetime}` + (en ? '\n\n<i>Source: Open-Meteo forecast (for review)</i>' : '\n\n<i>المصدر: توقعات Open-Meteo (للمراجعة)</i>');
-}
-async function sendCards(it) {
-  const api = R.H?.apis().admin; if (!api) return;
-  it.cards = [];
-  for (const uid of reviewers()) {
-    try { const m = await api.sendMessage(uid, cardText(it, isEnUid(uid)), { parse_mode: 'HTML', reply_markup: cardKb(it, isEnUid(uid)), _keep: 'c' }); it.cards.push([uid, m.message_id]); } catch { /* owner never opened the bot */ }
-  }
-  save();
 }
 async function refreshCards(it) {
   const api = R.H?.apis().admin; if (!api) return;

@@ -11,7 +11,7 @@ import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge } from './alert-image.js';
 import { EXTRA_POINTS, HAZARDS } from './weather.js';
 import { officialWeatherMeta, officialWeatherWarnings, DAILY_BULLETIN_INDEX, CAP_FEED_URL } from './weather-official.js';
-import { WX_LABEL, WX_EMOJI, wxKind, wxIconSvg } from '../shared/wx-icons.js';
+import { WX_LABEL, wxKind, wxIconSvg } from '../shared/wx-icons.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +27,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const siteUrl = () => (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-const LRM = '\u200E';
 const TTL = 30 * 60_000;
 const RETRY_MS = 2 * 60_000;
 const MET_TTL = 30 * 60_000;

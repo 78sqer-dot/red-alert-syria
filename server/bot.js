@@ -1,7 +1,7 @@
 import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
 import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
-import { config, isOwner, envDefaults, applyProject } from './config.js';
+import { config, isOwner, envDefaults } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert } from './store.js';
@@ -36,7 +36,6 @@ const REPORT_COOLDOWN_MS = 2 * 60_000;
 
 export const esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const clean = (s, max = 900) => String(s || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim().slice(0, max);
-const hashTag = (s) => '#' + String(s || '').replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '');
 
 const VEHICLE_COUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const VEHICLE_COUNT_MAX = 999;
@@ -186,9 +185,7 @@ function locName(loc, lang) {
 const fmtTime = (iso, lang) =>
   new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-SY', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' }).format(new Date(iso));
 
-const SEP = '━━━━━━━━━━━━━━━';
 const fmtClock = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
-const fmtDay = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(iso));
 const fmtDate = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, day: 'numeric', month: 'long' }).format(new Date(iso));
 const MEETING_COUNTRIES = [
   { code: 'LB', flag: '🇱🇧', names: ['لبنان', 'lebanon'] },
@@ -287,7 +284,6 @@ export function channelPost(alert, { ended = false } = {}) {
   } else if (alert.source === 'news') {
     const sources = (Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []).filter((s) => safeHttpUrl(s?.url)).slice(0, 5);
     for (const source of sources) {
-      const url = safeHttpUrl(source.url);
       sections.push(`🔎 <b>المصدر:</b> ${esc(clean(source.name, 120) || 'مصدر إخباري')}`);
     }
   }
@@ -1584,13 +1580,6 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
   // Owner commands
   const ownerOnly = (fn) => async (ctx) => (owner(ctx) ? fn(ctx) : ctx.reply(L(ctx).onlyOwner));
-  const editorsText = (ctx) => {
-    const list = store.state.editors.map((id) => {
-      const u = store.state.users[id];
-      return `• <code>${id}</code> ${u?.name ? esc(u.name) : ''} ${u?.username ? '@' + esc(u.username) : ''}`;
-    }).join('\n');
-    return L(ctx).editorsTitle(list);
-  };
   // Owner-only: render sample channel images on this server and send them to the owner's private chat
   // (never to the channel). /imgtest [type] [place name] — e.g. "/imgtest uav دوما", "/imgtest all".
   bot.command('imgtest', ownerOnly(async (ctx) => {
@@ -2214,7 +2203,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     sessions.delete(sk(ctx));
     lastReport.set(ctx.from.id, Date.now());
     const rid = Math.random().toString(36).slice(2, 10);
-    const { msgId: _m, ...draft } = d;
+    const draft = { ...d };
+    delete draft.msgId;
     const rep = { draft, from: { id: ctx.from.id, first_name: ctx.from.first_name, last_name: ctx.from.last_name, username: ctx.from.username }, messages: [], created: Date.now(), via: roleOf(ctx) };
     const api = APIS.admin || reviewApi || ctx.api;
     store.reportPut(rid, rep);
@@ -2226,7 +2216,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         rep.messages.push([uid, m.message_id]);
         store.reportPut(rid, rep); // saved with every card, so a decision always finds it
         store.relayPut(`a:${uid}:${m.message_id}`, ctx.from.id);
-      } catch (e) { /* reviewer has not started the bot */ }
+      } catch { /* reviewer has not started the bot */ }
     }
     store.openThread(ctx.from.id); // the reporter can now write to the team freely
     // short "thanks" notice that disappears by itself; the chat goes straight back to the menu

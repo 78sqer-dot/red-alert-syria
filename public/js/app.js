@@ -1,12 +1,12 @@
 // Red Alert Syria — front-end application
-import { createServices, GOV_C } from './services.js?v=22';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=39';
+import { createServices, GOV_C } from './services.js?v=23';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=40';
 import { DICT } from './i18n.js?v=3';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { icon } from './icons.js?v=5';
 import { settings } from './settings.js?v=13';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=74';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=75';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -235,11 +235,9 @@ setInterval(updateConnAge, 15_000);
 
 // ------------------------------------------------------------------ list & detail
 function badge(a, live = false) {
-  const t = typeOf(a.type);
   return `<span class="badge${live ? ' live' : ''}" style="--c:${eventVisual(a.type).color};--symbol-color:${eventVisual(a.type).color}">${icon(typeIcon(a.type), 13)}${esc(typeName(a.type))}</span>`;
 }
 function cardHtml(a, fresh) {
-  const t = typeOf(a.type);
   const hasLoc = a.location && Number.isFinite(a.location.latitude);
   return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}${isNear(a) ? ' near' : ''}" data-id="${esc(a.id)}" style="--c:${eventVisual(a.type).color}" tabindex="0">
     <div class="card-top">${badge(a)}<span class="time">${timeLine(a.timestamp)}</span></div>
@@ -281,7 +279,6 @@ function renderList() {
 }
 
 function detailHtml(a) {
-  const t = typeOf(a.type);
   const live = a.is_active;
   const political = a.type === 'political';
   const hasLoc = a.location && Number.isFinite(a.location.latitude) && Number.isFinite(a.location.longitude);
@@ -793,7 +790,6 @@ function syncNotificationButton() {
 function notify(a) {
   const s = settings.get();
   const n = s.notifications;
-  const t = typeOf(a.type);
   if (s.filter.includes(a.type)) alertToast(a);
   if (a.type === 'breaking') showBreaking(a);
   if (!n.enabled || !n.types.includes(a.type)) return;
@@ -1324,7 +1320,6 @@ function upsert(a, isNew) {
   state.alerts.set(a.id, a);
   if (isNew) freshIds.add(a.id);
 }
-let pollTimer = null;
 function setHistoryHours(h) {
   h = Number(h);
   if (!Number.isFinite(h) || h <= 0) return;
@@ -1351,7 +1346,7 @@ async function poll() {
 function connect() {
   if (!('EventSource' in window)) {
     poll();
-    pollTimer = setInterval(poll, 15000);
+    setInterval(poll, 15000);
     return;
   }
   setConn('connecting');

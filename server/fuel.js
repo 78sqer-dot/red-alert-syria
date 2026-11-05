@@ -11,7 +11,6 @@ const H_MS = 3600_000;
 export const STALE_H = 72;
 export const SYP_URL = 'https://sypnow.com/ar/fuel';
 export const SANA_FUEL_FEED = 'https://sana.sy/tag/%d8%a3%d8%b3%d8%b9%d8%a7%d8%b1-%d8%a7%d9%84%d9%85%d8%b4%d8%aa%d9%82%d8%a7%d8%aa-%d8%a7%d9%84%d9%86%d9%81%d8%b7%d9%8a%d8%a9/feed/';
-export const SANA_FUEL_DECISION = 'https://sana.sy/economy/syrian-economy/2579297/';
 export const SANA_DIESEL_GRADES = 'https://sana.sy/economy/syrian-economy/2583165/';
 const AR_M = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const AR_M2 = { يناير: 1, فبراير: 2, مارس: 3, أبريل: 4, مايو: 5, يونيو: 6, يوليو: 7, أغسطس: 8, سبتمبر: 9, أكتوبر: 10, نوفمبر: 11, ديسمبر: 12 };

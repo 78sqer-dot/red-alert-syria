@@ -1,7 +1,6 @@
 // Services on the website: 💱 prices · ⚡ electricity · 🛣 road status layer · 🏥 nearby services
 // (hospitals, pharmacies, fuel stations, bakeries from OpenStreetMap) · 📍 better "my location".
 // Everything here is additive: the alert map keeps working even if this module fails.
-import { settings } from './settings.js?v=13';
 import { WX_ICONS, WX_LABEL } from '/shared/wx-icons.js';
 import { weatherWarningFeatures } from '/shared/weather-map.js?v=1';
 
@@ -106,7 +105,6 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   const fmtH = new Intl.DateTimeFormat(LANG === 'ar' ? 'ar-SY' : 'en-GB', { timeZone: 'Asia/Damascus', weekday: 'short', hour: 'numeric', minute: '2-digit' });
   const when = (t) => (t ? fmtT.format(new Date(t)) : '');
   const dist = (d) => (d < 1 ? `${Math.round(d * 100) * 10} ${L.m}` : `${num(d, d < 10 ? 1 : 0)} ${L.km}`);
-  const s0 = () => settings.get();
 
   // ------------------------------------------------------------ data
   async function load() {
@@ -602,11 +600,9 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   const fmtD = new Intl.DateTimeFormat(LANG === 'en' ? 'en-GB' : 'ar-SY-u-nu-latn', { day: 'numeric', month: 'long', timeZone: 'Asia/Damascus' });
   const dayOf = (iso) => { const t = Date.parse(`${String(iso).slice(0, 10)}T12:00:00+03:00`); return Number.isFinite(t) ? fmtD.format(t) : ''; };
   const UNIT_EN = [[/^لتر$/, 'litre'], [/^أسطوانة\s*\((\d+)\s*كيلو\)$/, 'cylinder ($1 kg)'], [/^أسطوانة$/, 'cylinder'], [/^كيلو$/, 'kg'], [/^طن$/, 'ton'], [/^ك\.و\.س$/, 'kWh']];
-  const TARIFF_EN = { 'houses-under-300kwh': 'Homes (under 300 kWh)', 'houses-above-300kwh': 'Homes (over 300 kWh)', industrial: 'Industrial', commercial: 'Commercial', agricultural: 'Agricultural' };
-  const tariffName = (t) => (LANG === 'en' ? TARIFF_EN[t.slug] || t.name_en || t.name : t.name);
   const fuelName = (k, f) => (LANG === 'en' ? FUEL_EN[k] || f.name_en || f.name : f.name);
   const unitTxt = (u) => { if (LANG !== 'en') return u; for (const [re, en] of UNIT_EN) if (re.test(u)) return u.replace(re, en); return u; };
-  const unitOf = (x, name = x.name) => (x.unit && !String(x.name).includes(x.unit) ? ` <small>/ ${esc(unitTxt(x.unit))}</small>` : '');
+  const unitOf = (x) => (x.unit && !String(x.name).includes(x.unit) ? ` <small>/ ${esc(unitTxt(x.unit))}</small>` : '');
   function pricesHtml() {
     const p = st.prices;
     if (!p || !p.ok) return `<div class="svc-empty">${esc(L.noPrices)}</div>`;

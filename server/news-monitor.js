@@ -471,7 +471,6 @@ function rememberAlert(pa) {
 // ---------------------------------------------------------------- drafts & cards
 const fmtLoc = (l) => (l.scope === 'governorate' ? `محافظة ${l.name_ar}` : l.scope === 'district' ? `منطقة ${l.name_ar}، ${l.governorate_ar}` : [l.name_ar, l.district_ar && l.district_ar !== l.name_ar ? l.district_ar : '', l.governorate_ar].filter(Boolean).join('، '));
 function cardText(d, lang = 'ar') {
-  const t = typeOf(d.type);
   const locs = locsOf(d.loc, d.extra);
   const lines = [];
   lines.push(d.test
@@ -756,7 +755,7 @@ async function nightSummaryTick() {
 
 /** the bot's normal draft (same as a hand-made alert) from a news draft */
 export function toBotDraft(d) {
-  const n = newsState();
+  newsState();
   const body = d.headline;
   const patrolText = N(`${d.headline || ''} ${d.body || ''}`);
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
