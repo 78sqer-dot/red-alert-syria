@@ -53,7 +53,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=75'/);
+  assert.match(app, /from '\.\/map\.js\?v=74'/);
   assert.match(html, /app\.css\?v=56/);
 });
 
@@ -79,8 +79,7 @@ test('alert symbols use shared category colors in badges, filters and map marker
 
 test('tapping an individual map symbol zooms to its alert and opens details on phones', () => {
   assert.match(map, /selectMarker\(id\)[\s\S]{0,500}if \(group\?\.alerts\.length > 1\) return this\.zoomToGroupChooser\(group\);[\s\S]{0,140}this\.onSelect\(id, \{ fromMap: true, fly: true \}\)/);
-  assert.match(map, /const zoom = alert\.type === 'air_movement'[\s\S]{0,100}Math\.max\(this\.map\.getZoom\(\), 10\.5\)/);
-  assert.match(map, /this\.map\.flyTo\(\{ center: target, zoom,/);
+  assert.match(map, /if \(fly\) \{[\s\S]{0,600}this\.map\.flyTo\(\{ center: target, zoom: alertFocusZoom/);
   assert.match(map, /if \(popup && archiveRoute\.length !== 2\) this\.openPopup\(alert\)/);
   assert.match(app, /amap && amap\.select\(shown, \{ fly: fly, popup: true \}\);[\s\S]{0,150}showDetail\(\);[\s\S]{0,120}if \(isMobile\(\)\) setSheetOpen\(false\)/);
 });

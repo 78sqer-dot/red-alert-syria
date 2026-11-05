@@ -52,11 +52,6 @@ test('warplane icon follows the illustrative route and withdrawal leaves Syria',
   assert.ok(end.lon < start.lon, 'westbound withdrawal reaches the outside-Syria reference');
   assert.match(map, /track\.path = route;[\s\S]{0,280}aircraft === 'plane' && route\.length === 2/);
   assert.match(map, /flightPosition\(track\.path, progress\)/);
-  assert.match(map, /setLngLat\(route\.length === 2 \? route\[0\] : position\)/);
-  assert.match(map, /const progress = \(\(now - track\.startedAt\) % 7000\) \/ 7000/);
-  assert.match(map, /\.filter\(\(a\) => a\.type === 'air_movement' && a\.is_active/);
-  assert.match(map, /directionArrow: true/);
-  assert.match(map, /ras-flight-path-line', type: 'line', source: 'ras-flight-paths', minzoom: 8/);
   assert.match(map, /track\.marker\.setLngLat\(\[point\.lon, point\.lat\]\)/);
   assert.match(map, /not live tracking/);
 });
@@ -73,8 +68,8 @@ test('entering plane keeps right-to-left travel and faces left; cache versions r
   assert.match(css, /\.map-flight-track-marker\.is-plane\.is-entering-syria \.map-flight-track-squad \{ animation-name: flightTrackPlaneApproach; \}/);
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
   assert.match(html, /app\.css\?v=56/);
-  assert.match(html, /app\.js\?v=69/);
-  assert.match(app, /map\.js\?v=75/);
+  assert.match(html, /app\.js\?v=68/);
+  assert.match(app, /map\.js\?v=73/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {

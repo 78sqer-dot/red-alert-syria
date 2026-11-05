@@ -121,12 +121,9 @@ test('entry flight marker keeps its schematic approach animation while the route
   assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
 });
 
-test('movement route stays visible beyond detail selection and points toward its destination', () => {
+test('movement stays anchored to the observed location and draws only the selected direct route', () => {
   assert.match(mapJs, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
-  assert.match(mapJs, /setLngLat\(route\.length === 2 \? route\[0\] : position\)/);
-  assert.match(mapJs, /const progress = \(\(now - track\.startedAt\) % 7000\) \/ 7000/);
-  assert.match(mapJs, /const arrowProgress = alert\.flight_direction === 'leaving_syria' \? 0\.12 : 0\.88/);
-  assert.match(mapJs, /directionArrow: true/);
+  assert.match(mapJs, /track\.marker\.setLngLat\(position\)/);
   assert.match(mapJs, /const heading = isReferenceRoute && Number\.isFinite\(routeBearing\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
   assert.match(mapJs, /track\.marker\.setRotation\(heading\)/);
   assert.match(mapJs, /maplibregl-marker map-flight-track-marker/);
@@ -136,8 +133,8 @@ test('movement route stays visible beyond detail selection and points toward its
   assert.match(mapJs, /const routeColor = aircraft === 'uav' \? '#e5484d' : '#2476c9'/);
   assert.match(mapJs, /const iconColor = aircraft === 'uav' \? color : '#3b8eff'/);
   assert.match(mapJs, /properties: \{ color: routeColor, arrow: '➤'/);
-  assert.match(mapJs, /'text-rotate': \['get', 'arrowRotation'\], 'text-rotation-alignment': 'map'/);
-  assert.match(mapJs, /\.filter\(\(a\) => a\.type === 'air_movement' && a\.is_active/);
+  assert.match(mapJs, /'symbol-placement': 'line-center'/);
+  assert.match(mapJs, /'text-rotation-alignment': 'map', 'text-keep-upright': false/);
   assert.match(mapJs, /'line-opacity': \['case', \['get', 'referenceRoute'\], 0\.92, \['get', 'planeRoute'\], 0\.45, 0\.9\]/);
   assert.match(mapJs, /fill="\$\{iconColor\}" class="map-flight-track-svg"/);
   assert.match(mapJs, /source\.setData\(\{ type: 'FeatureCollection', features: routeFeatures \}\)/);
