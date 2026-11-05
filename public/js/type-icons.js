@@ -4,6 +4,7 @@ export const TYPE_ICON = Object.freeze({
   political: 'news',
   uav: 'drone',
   uav_strike: 'target',
+  targeted_strike: 'target',
   airstrike: 'planeDep',
   warplane: 'plane',
   helicopter: 'helicopter',

@@ -47,8 +47,8 @@ const politicalCategory = (key) => Object.hasOwn(POLITICAL_CATEGORIES, key) ? ke
 // is an explicit choice inside the aerial submenu, not a top-level menu item.
 export const BOT_ALERT_MENU_GROUPS = Object.freeze({
   aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => type !== 'uav_strike')),
-  targeting: Object.freeze(['uav_strike', 'assassination']),
-  strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination')),
+  targeting: Object.freeze(['targeted_strike', 'uav_strike', 'assassination']),
+  strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination' && type !== 'targeted_strike')),
   protests: Object.freeze(['protest_action', 'protest']),
   civil: Object.freeze(ALERT_GROUPS.civil.types.filter((type) => type !== 'protest' && type !== 'protest_action')),
   smuggling: Object.freeze([...ALERT_GROUPS.smuggling.types]),

@@ -1,6 +1,7 @@
 // Extra map glyphs kept separate from the large shared marker catalogue.
 export const EXTRA_SVG = {
   uav_strike: '<g><path d="M256 118 306 215 407 256 306 297 256 394 206 297 105 256 206 215z"/><circle cx="256" cy="256" r="42" fill="none" stroke="currentColor" stroke-width="24"/><circle cx="256" cy="256" r="214" fill="none" stroke="currentColor" stroke-width="18" stroke-dasharray="28 28"/></g>',
+  target_reticle: '<g fill="none" stroke="currentColor" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"><circle cx="256" cy="256" r="160"/><circle cx="256" cy="256" r="78"/><path d="M256 34v104m0 220v104M34 256h104m220 0h104"/></g><path d="m256 218 38 38-38 38-38-38z"/>',
   crossed_swords: '<g><path d="m112 78 42-42 278 278-42 42zM400 78l-42-42L80 314l42 42z"/><path d="m80 68 58-20 20 58-42 42-58-20zm272 272 42-42 58 20 20 58-58 20zm-224 0-42-42-58 20-20 58 58 20zm224-224 42 42 58-20 20-58-58-20z"/></g>',
   clashes: '<g><path d="M34 207h170v-44l75 93-75 93v-44H34zM478 305H308v44l-75-93 75-93v44h170z"/><path d="m256 186 18 40 40 18-40 18-18 40-18-40-40-18 40-18z"/></g>',
   military_vehicle: '<g><path d="M56 300h48l28-66h206l62 48h50l31 44-19 62H73l-32-36z"/><path d="M174 234l26-58h102l40 58zM226 186v-46h56v46z"/><circle cx="129" cy="385" r="38"/><circle cx="346" cy="385" r="38"/><path d="M115 385h28m189 0h28" fill="none" stroke="currentColor" stroke-width="18"/></g>',
