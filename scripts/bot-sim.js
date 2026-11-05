@@ -34,7 +34,8 @@ const btns = (l) => (l.payload.reply_markup?.inline_keyboard || []).flat().map((
 const show = (title) => { const l = last(); console.log(`\n=== ${title} [${l.method}]\n${l.payload.text}\n  buttons: ${btns(l).slice(0, 18).join(' | ')}${btns(l).length > 18 ? ` ... (+${btns(l).length - 18})` : ''}`); };
 const owner = user(8270709633);
 await msg(owner, '/start'); show('owner /start');
-await cb(owner, 't:uav'); show('uav → choose governorate');
+await cb(owner, 't:uav'); show('uav → choose aerial mode');
+await cb(owner, 'airmode:over'); show('uav → choose governorate');
 const govBtn = btns(last()).find((b) => b.startsWith('درعا') || b.includes('درعا'));
 await cb(owner, govBtn.split('=>')[1]); show('gov chosen → districts');
 const distBtn = btns(last()).find((b) => b.includes('=>d:'));
@@ -95,7 +96,7 @@ await msg(ed, '/start'); show('editor home');
 await msg(pub, '/start'); show('public in admin bot');
 // approve a report directly -> review message must be deleted, no leftover messages
 const pub2 = user(556, 'Omar');
-await rcb(pub2, 't:uav'); await rmsg(pub2, 'إدلب'); { const b = btns(last()).find((x) => /=>p:|=>wg:/.test(x)); await rcb(pub2, b.split('=>')[1]); } await rcb(pub2, 'skip'); await rcb(pub2, 'submit');
+await rcb(pub2, 't:uav'); await rcb(pub2, 'airmode:over'); await rmsg(pub2, 'إدلب'); { const b = btns(last()).find((x) => /=>p:|=>wg:/.test(x)); await rcb(pub2, b.split('=>')[1]); } await rcb(pub2, 'skip'); await rcb(pub2, 'submit');
 const rv2 = [...log].reverse().find((x) => x.method === 'sendMessage' && x.payload.chat_id === 8270709633);
 const n0 = log.length;
 await cb(owner, btns(rv2)[0].split('=>')[1]);

@@ -43,10 +43,10 @@ const VEHICLE_COUNT_MAX = 999;
 const politicalCategory = (key) => Object.hasOwn(POLITICAL_CATEGORIES, key) ? key : null;
 
 // Derive report choices from the current shared groups. Targeting stays separate
-// so drone strikes and assassinations remain distinct alert types. Flight movement
-// is an explicit choice inside the aerial submenu, not a top-level menu item.
+// so drone strikes and assassinations remain distinct alert types. Historical
+// air_movement alerts remain renderable, but new reports are not offered in bot menus.
 export const BOT_ALERT_MENU_GROUPS = Object.freeze({
-  aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => type !== 'uav_strike')),
+  aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => type !== 'uav_strike' && type !== 'air_movement')),
   targeting: Object.freeze(['targeted_strike', 'uav_strike', 'assassination']),
   strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination' && type !== 'targeted_strike')),
   protests: Object.freeze(['protest_action', 'protest']),
@@ -67,9 +67,7 @@ function reportGroupKeyboard(group, lang) {
   const types = BOT_ALERT_MENU_GROUPS[group] || [];
   const kb = new InlineKeyboard();
   types.forEach((type, index) => {
-    const label = group === 'aerial' && type === 'air_movement'
-      ? quoteButtonLabel(lang === 'en' ? '➤ Toward Syria / governorate' : '➤ باتجاه سوريا / محافظة', lang)
-      : quoteButtonLabel(alertButtonLabel(type, lang), lang);
+    const label = quoteButtonLabel(alertButtonLabel(type, lang), lang);
     kb.text(label, `t:${type}`);
     if (index % 2 === 1 && index < types.length - 1) kb.row();
   });
@@ -758,9 +756,7 @@ async function askAerialMode(ctx, d) {
   const kb = new InlineKeyboard()
     .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row();
   kb.text(L(ctx).btnCancel, 'cancel');
-  const prompt = en
-    ? 'Choose hovering over the area. For a route, use “Toward Syria / governorate” under aerial activity.'
-    : 'اختر التحليق فوق المنطقة. لإضافة مسار استخدم «باتجاه سوريا / محافظة» ضمن النشاط الجوي.';
+  const prompt = en ? 'Choose the reported aerial activity.' : 'اختر نوع النشاط الجوي المرصود.';
   await show(ctx, prompt, kb);
 }
 async function askHelicopterIntensity(ctx, d) {
@@ -1838,9 +1834,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return roadMenu(ctx);
   });
   bot.callbackQuery(/^t:(\w+)$/, async (ctx) => {
-    await ctx.answerCallbackQuery();
     const type = ctx.match[1];
     if (!ALERT_TYPES[type]) return;
+    if (type === 'air_movement') {
+      return ctx.answerCallbackQuery({
+        text: langOf(ctx) === 'en' ? 'This report option is no longer available.' : 'خيار «باتجاه سوريا / محافظة» لم يعد متاحاً.',
+        show_alert: true,
+      });
+    }
+    await ctx.answerCallbackQuery();
     if (!staff(ctx)) {
       if (store.isBanned(ctx.from.id)) return show(ctx, L(ctx).banned, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
       if (Date.now() - (lastReport.get(ctx.from.id) || 0) < REPORT_COOLDOWN_MS) return show(ctx, L(ctx).reportRate, new InlineKeyboard().text(L(ctx).btnHome, 'home'));
