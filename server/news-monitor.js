@@ -506,8 +506,9 @@ function cardText(d, lang = 'ar') {
 function cardKb(d, lang = 'ar') {
   const kb = new InlineKeyboard()
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
-    .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id)
-  ;
+    .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id).row()
+    .text(tr(lang, '📣 سبق نشره في القناة — منع التكرار', '📣 Already posted in channel — prevent duplicate'), 'nw:d:' + d.id);
+
   if (d.type === 'political') kb.row().text(tr(lang, '🏛 الفئة السياسية', '🏛 Political category'), 'nw:pc:' + d.id);
   // Telegram refuses a whole message when one button has an empty text: the extra row only for drones
   if (d.type === 'uav') kb.row().text(intenseLabel(d, lang), 'nw:i:' + d.id);
@@ -620,11 +621,31 @@ function noticeKb(d, lang = 'ar') {
     .text(tr(lang, '🏷 تغيير نوع الخبر', '🏷 Change news type'), 'nw:pt:' + d.id).row()
     .text(tr(lang, '↩️ تراجع (حذف من القناة والخريطة)', '↩️ Undo (remove from channel + map)'), 'nw:u:' + d.id);
 }
+function knownDuplicateDraft(d) {
+  const candidate = {
+    type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created,
+    headline: d.headline, geo: geoOf(locsOf(d.loc, d.extra)),
+  };
+  return knownEvents(12).find((known) => known.draftId !== d.id && sameIncident(candidate, known)) || null;
+}
+async function suppressDuplicateDraft(d, duplicate, by = 0) {
+  if (!d || d.status !== 'pending' || !duplicate) return false;
+  d.status = 'duplicate';
+  d.duplicateOf = duplicate.draftId || duplicate.alertId || duplicate.kind || 'known-event';
+  d.duplicateMarkedAt = Date.now();
+  if (by) d.by = by;
+  newsState().stats.dupes++;
+  save();
+  await closeCards(d);
+  return true;
+}
 async function nightPublish(d) {
   const a = api();
   if (!a || !R.H?.publishDraft || d.status !== 'pending' || !nightEligible(d)) return false;
   const n = newsState();
   const mode = d.autoMode === 'day' ? 'day' : 'night';
+  const duplicate = knownDuplicateDraft(d);
+  if (duplicate) { await suppressDuplicateDraft(d, duplicate); return false; }
   d.status = 'publishing'; save();
   let alert;
   try {
@@ -1270,6 +1291,15 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, t(ctx, d.intense ? 'مكثف: 2-3 مسيّرات فوق كل منطقة' : 'عادي: مسيّرة وحدة فوق كل منطقة', d.intense ? 'Intensive: 2-3 drones per area' : 'Normal: one drone per area'));
     try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
   });
+  bot.callbackQuery(/^nw:d:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
+    d.status = 'duplicate'; d.duplicateMarkedAt = Date.now(); d.duplicateMarkedBy = ctx.from.id;
+    d.duplicateReason = 'already-posted-in-channel';
+    newsState().stats.dupes++; save(); await closeCards(d);
+    return toast(ctx, t(ctx, '✔️ سُجّل أنه منشور مسبقاً؛ لن يُعاد نشره، ولم يُحذف أي منشور.', '✔️ Marked as already posted; it will not be reposted, and no channel post was deleted.'));
+  });
   bot.callbackQuery(/^nw:(p|x|t|b|e):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const [, act, id] = ctx.match;
@@ -1303,6 +1333,12 @@ export function registerNewsTools(bot, h) {
       await closeCards(d, c);
       if (c) setKeep('admin', c[0], c[1], false);
       return h.loadDraft(ctx, toBotDraft(d));
+    }
+    // Last-moment duplicate check also covers incidents that arrived on separate queue paths.
+    const duplicate = knownDuplicateDraft(d);
+    if (duplicate) {
+      await suppressDuplicateDraft(d, duplicate, ctx.from.id);
+      return toast(ctx, t(ctx, '✔️ مُنع النشر: هذا الحدث مسجل مسبقاً. لم يُحذف أي منشور.', '✔️ Publishing blocked: this event is already recorded. No post was deleted.'));
     }
     // publish: claimed once, so a second tap / a second reviewer can't publish it twice
     d.status = 'publishing'; save();
@@ -1660,4 +1696,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, knownDuplicateDraft, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };

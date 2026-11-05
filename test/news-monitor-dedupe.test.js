@@ -125,3 +125,28 @@ test('a cross-source repeat of an already-published monitored event is suppresse
   assert.equal(n.alerts.length, 1, 'the synthetic previously published record remains unchanged');
   assert.equal(_test.R.queue.length, 0, 'the synthetic post was fully processed');
 });
+
+test('last-mile duplicate guard marks a pending monitored draft as duplicate without deleting the existing post record', async () => {
+  const n = newsState();
+  n.drafts = {};
+  n.alerts = [{
+    id: 'already-published-alert', type: 'attack', ts: Date.now() - 5 * 60_000,
+    headline: 'اقتحام حاجز أمني في دمشق', where: 'دمشق', geo: structuredClone(geoDamascus),
+  }];
+  const draft = {
+    id: 'pending-duplicate-draft', type: 'attack', status: 'pending', ts: Date.now(),
+    headline: 'اقتحام حاجز أمني في دمشق', loc: {
+      scope: 'place', name_ar: 'دمشق', district_ar: '', governorate_ar: 'دمشق',
+      latitude: 33.5138, longitude: 36.2765,
+    }, extra: [], cards: [],
+  };
+  n.drafts[draft.id] = draft;
+  const duplicate = _test.knownDuplicateDraft(draft);
+  assert.ok(duplicate, 'the existing published incident is found before channel publication');
+  const buttons = _test.cardKb(draft, 'ar').inline_keyboard.flat();
+  assert.ok(buttons.some((button) => button.callback_data === `nw:d:${draft.id}` && button.text.includes('سبق نشره في القناة')), 'the reviewer can mark an already-posted incident and prevent reposting');
+  assert.equal(await _test.suppressDuplicateDraft(draft, duplicate), true);
+  assert.equal(draft.status, 'duplicate');
+  assert.equal(n.alerts.length, 1, 'the original published alert remains stored and untouched');
+  assert.equal(n.alerts[0].id, 'already-published-alert');
+});
