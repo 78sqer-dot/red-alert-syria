@@ -65,6 +65,9 @@ test('helicopter has its own monitored button and keeps the original warplane ma
   assert.equal(helicopter.glyph, 'helicopter_simple');
   assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
   assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\(t\.glyph, 18,/);
+  assert.match(mapSource, /a\.helicopters > 1/);
+  assert.match(mapSource, /heli-craft-second/);
+  assert.match(mapCss, /\.heli-craft-second \{ top: 100%; \}/);
   assert.match(mapSource, /const helicopterScale = Math\.max\(1, Math\.min\(1\.34, 1 \+ \(z - 9\) \* 0\.08\)\)/);
   assert.match(mapSource, /c\.style\.setProperty\('--heli-scale', helicopterScale\)/);
   assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 18px; height: 18px/);

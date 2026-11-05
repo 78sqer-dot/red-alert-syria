@@ -926,7 +926,9 @@ export class AlertMap {
       const svgClass = signalDrone ? 'signal-sweep-uav-svg' : 'uav-svg';
       el.innerHTML = `<div class="uav-box"><div class="uav">${svgTag(glyph, 36, `class="${svgClass}"`)}</div></div>`;
     } else if (marker === 'helicopter') {
-      el.innerHTML = `<div class="heli-orbit"><span class="heli-craft">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span></div>`;
+      const craft = `<span class="heli-craft">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span>`;
+      const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${svgTag(t.glyph, 18, `fill="${visual.color}" class="helicopter-svg"`)}</span>` : '';
+      el.innerHTML = `<div class="heli-orbit${second ? ' heli-intensive' : ''}">${craft}${second}</div>`;
     } else if (marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(36, -12, 1)}${pl(20, 8, 0.85)}${pl(52, 8, 0.85)}</div>`;

@@ -724,7 +724,10 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   for (const type of ['t:warplane', 't:uav', 't:helicopter']) assert.ok(buttons().some((button) => button.callback_data === type), `aerial submenu contains ${type}`);
   assert.ok(buttons().some((button) => button.callback_data === 't:air_movement' && button.text?.includes('باتجاه')), 'aerial submenu includes the direction-to-Syria/governorate button');
   await tap('t:helicopter', reporter, reportBot);
-  assert.match(lastUi()?.payload?.text || '', /طيران مروحي/, 'helicopter starts a manual publishing draft');
+  assert.match(lastUi()?.payload?.text || '', /حدّد عدد المروحيات/, 'helicopter asks for the observed count');
+  assert.ok(buttons().some((button) => button.callback_data === 'heli:intensity:high' && button.text.includes('مروحيتان')));
+  await tap('heli:intensity:high', reporter, reportBot);
+  assert.match(lastUi()?.payload?.text || '', /اختر المحافظة/);
   await tap('home');
   await tap('ag:strikes');
   await tap('t:airstrike');
@@ -790,7 +793,9 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(helicopterButton, 'helicopter button is available in the public report bot');
   assert.ok(helicopterButton.text.includes('طيران مروحي'), 'helicopter button has a clear Arabic label');
   await tap('t:helicopter', reporter, reportBot);
-  assert.match(lastUi()?.payload?.text || '', /طيران مروحي/);
+  assert.match(lastUi()?.payload?.text || '', /حدّد عدد المروحيات/);
+  assert.ok(buttons().some((button) => button.callback_data === 'heli:intensity:normal'));
+  assert.ok(buttons().some((button) => button.callback_data === 'heli:intensity:high'));
   await tap('home', reporter, reportBot);
   await tap('ag:strikes', reporter, reportBot);
   assert.ok(buttons().some((item) => item.callback_data === 't:airstrike'), 'airstrike button is available in the public report bot');

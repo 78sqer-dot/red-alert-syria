@@ -318,6 +318,7 @@ function draftSummary(d, lang) {
   const civilEmoji = d.type === 'civil' ? CIVIL_EMOJIS[d.civilEmoji]?.emoji : '';
   const lines = [`<b>${esc(d.type === 'road' ? roadLabel(d.road, lang) : draftTypeLabel(d, lang))}</b>${civilEmoji ? ` ${civilEmoji}` : ''}`];
   if (d.border && BORDER_REGIONS[d.border]) lines.push(`🛂 <b>${esc(lang === 'en' ? BORDER_REGIONS[d.border].en : BORDER_REGIONS[d.border].ar)}</b>`);
+  if (d.type === 'helicopter') lines.push(d.intense === true ? (lang === 'en' ? '🚁🚁 <b>Intensive flight — two helicopters</b>' : '🚁🚁 <b>تحليق مكثف — مروحيتان</b>') : (lang === 'en' ? '🚁 <b>One helicopter</b>' : '🚁 <b>مروحية واحدة</b>'));
   if (d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0) {
     lines.push(`🚙 <b>${lang === 'en' ? 'Vehicle count' : 'عدد الآليات'}:</b> ${esc(vehicleCountPhrase(d.vehicleCount, lang))}`);
   }
@@ -765,6 +766,15 @@ async function askAerialMode(ctx, d) {
     : 'اختر التحليق فوق منطقة أو حركة طيران. في الحركة تختار وجهة داخل سوريا، وتستخدم الخريطة نقطة مرجعية تقريبية واضحة داخل إسرائيل.';
   await show(ctx, prompt, kb);
 }
+async function askHelicopterIntensity(ctx, d) {
+  d.step = 'helicopter_intensity';
+  const en = langOf(ctx) === 'en';
+  const kb = new InlineKeyboard()
+    .text(en ? '🚁 One helicopter' : '🚁 مروحية واحدة', 'heli:intensity:normal').row()
+    .text(en ? '🚁🚁 Intensive — two helicopters' : '🚁🚁 تحليق مكثف — مروحيتان', 'heli:intensity:high').row()
+    .text(L(ctx).btnCancel, 'cancel');
+  await show(ctx, en ? 'Choose the observed helicopter activity:' : 'حدّد عدد المروحيات المرصودة:', kb);
+}
 async function askAirstrikeForm(ctx, d) {
   d.step = 'airstrike_form';
   const en = langOf(ctx) === 'en';
@@ -976,9 +986,9 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...((d.type === 'uav' && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || politicalMeta || monitoredSources.length ? {
+    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || politicalMeta || monitoredSources.length ? {
       meta: {
-        ...(d.type === 'uav' && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
+        ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
         ...(border ? { border: d.border } : {}),
         ...(flight ? { flightDirection: d.flightDirection } : {}),
@@ -1853,6 +1863,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await askSignalPlatform(ctx, d);
     } else if (type === 'border') await askBorder(ctx, d);
     else if (type === 'air_movement') await askFlightAircraft(ctx, d);
+    else if (type === 'helicopter') await askHelicopterIntensity(ctx, d);
     else if (type === 'civil') await askCivilEmoji(ctx, d);
     else if (type === 'uav' || type === 'warplane') await askAerialMode(ctx, d);
     else await askLocation(ctx, d);
@@ -1973,6 +1984,11 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     d.location = { scope: 'point', name_ar: marker.ar, name_en: marker.en, latitude: marker.lat, longitude: marker.lon };
     d.extra = [];
     await afterLocation(ctx, d);
+  }));
+  bot.callbackQuery(/^heli:intensity:(normal|high)$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'helicopter') return;
+    d.intense = ctx.match[1] === 'high';
+    await askLocation(ctx, d);
   }));
   bot.callbackQuery(/^airmode:(over|move)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'uav' && d.type !== 'warplane') return;

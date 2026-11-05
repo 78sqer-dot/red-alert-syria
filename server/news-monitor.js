@@ -484,6 +484,9 @@ function cardText(d, lang = 'ar') {
     for (const l of locs) lines.push(`• ${esc(fmtLoc(l))}`);
   } else lines.push(`📍 <b>${tr(lang, 'المكان', 'Place')}:</b> ${esc(locs[0] ? fmtLoc(locs[0]) : d.type === 'political' ? tr(lang, 'غير محدد داخل سوريا', 'Unspecified within Syria') : tr(lang, 'سوريا', 'Syria'))}`);
   lines.push(`📝 ${esc(d.headline)}`);
+  if (d.type === 'helicopter') lines.push(d.intense === true
+    ? tr(lang, '🚁🚁 <b>تحليق مكثف — مروحيتان</b>', '🚁🚁 <b>Intensive flight — two helicopters</b>')
+    : tr(lang, '🚁 <b>مروحية واحدة</b>', '🚁 <b>One helicopter</b>'));
   if (d.type === 'political') {
     const category = POLITICAL_CATEGORIES[d.politicalCategory];
     lines.push(category
@@ -512,8 +515,12 @@ function cardKb(d, lang = 'ar') {
   if (d.type === 'political') kb.row().text(tr(lang, '🏛 الفئة السياسية', '🏛 Political category'), 'nw:pc:' + d.id);
   // Telegram refuses a whole message when one button has an empty text: the extra row only for drones
   if (d.type === 'uav') kb.row().text(intenseLabel(d, lang), 'nw:i:' + d.id);
+  if (d.type === 'helicopter') kb.row().text(helicopterLabel(d, lang), 'nw:hi:' + d.id);
   return kb;
 }
+const helicopterAuto = (text) => /مروحيتين|مروحيات|مروحيتا|مروحيتان|مروحيات|عدة مروحيات|طائرات مروحية|helicopters|multiple helicopters|two helicopters|intensive/i.test(String(text || ''));
+const helicopterOn = (d) => (typeof d.intense === 'boolean' ? d.intense : helicopterAuto(`${d.headline || ''} ${d.body || ''}`));
+const helicopterLabel = (d, lang) => lang === 'en' ? `🚁 Intensive: ${helicopterOn(d) ? '✅ two helicopters' : '⬜ one helicopter'}` : `🚁 تحليق مكثف: ${helicopterOn(d) ? '✅ مروحيتان' : '⬜ مروحية واحدة'}`;
 const intenseOn = (d) => (typeof d.intense === 'boolean' ? d.intense : droneAuto(d.headline) > 1);
 const intenseLabel = (d, lang) => (lang === 'en' ? `${ALERT_TYPES.uav.emoji} Intensive flight: ${intenseOn(d) ? '✅ on' : '⬜ off'}` : `${ALERT_TYPES.uav.emoji} تحليق مكثف: ${intenseOn(d) ? '✅ مفعّل' : '⬜ لا'}`);
 const quoteChoice = (label, lang) => lang === 'en' ? `“${label}”` : `«${label}»`;
@@ -761,7 +768,7 @@ export function toBotDraft(d) {
     ...(d.type === 'military_incursion' && ['soldiers', 'vehicles', 'barrier'].includes(d.incursionKind) ? { incursionKind: d.incursionKind } : {}),
     ...(patrolForm ? { patrolForm } : {}),
     ...(d.type === 'weather' && d.hazard ? { meta: { hazard: d.hazard } } : {}),
-    ...(typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
+    ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
     ...(d.type === 'political' ? {
       politicalCategory: POLITICAL_CATEGORIES[d.politicalCategory] ? d.politicalCategory : null,
       politicalSources: (d.srcs || []).map((s) => ({ name: s.name || s.u || '', url: s.url || '', timestamp: Number.isFinite(s.ts) ? new Date(s.ts).toISOString() : null })),
@@ -888,7 +895,7 @@ async function handleResult(it, r, known, pmap) {
   if (!locs.length && r.type !== 'political') { note(it, 'no verified Syrian place found'); return; }
   if (capReached()) { note(it, 'hourly cap reached'); return; }
   const d = {
-    id: rid(), type: r.type, ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
+    id: rid(), type: r.type, ...(r.type === 'helicopter' ? { intense: helicopterAuto(`${headline} ${it.text}`) } : {}), ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
     loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
     sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
@@ -1315,6 +1322,14 @@ export function registerNewsTools(bot, h) {
     if (!d || d.pendingPublishedType !== 'political' || !POLITICAL_CATEGORIES[ctx.match[2]]) return toast(ctx, '');
     await applyPublishedNewsType(ctx, d, 'political', { politicalCategory: ctx.match[2] });
   });
+  bot.callbackQuery(/^nw:hi:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    if (!d || d.type !== 'helicopter' || d.status !== 'pending') return toast(ctx, '');
+    d.intense = !helicopterOn(d); save();
+    await toast(ctx, d.intense ? t(ctx, 'تحليق مكثف: مروحيتان', 'Intensive flight: two helicopters') : t(ctx, 'مروحية واحدة', 'One helicopter'));
+    await refreshCards(d);
+  });
   bot.callbackQuery(/^nw:i:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const d = await findDraft(ctx.match[1]);
@@ -1728,4 +1743,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };

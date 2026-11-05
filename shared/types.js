@@ -33,7 +33,7 @@ export const ALERT_TYPES = {
     marker: 'squad', glyph: 'plane', zone: 'dashed', tag_ar: 'طيران_حربي', tag_en: 'Warplane',
   },
   helicopter: {
-    ar: 'طيران مروحي', en: 'Helicopter activity', button_ar: 'طيران مروحي', button_en: 'Helicopter',
+    ar: 'طيران مروحي', en: 'Helicopter activity', button_ar: 'طيران مروحي (مروحية/مروحيات)', button_en: 'Helicopter(s)',
     emoji: '🚁', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
     marker: 'helicopter', glyph: 'helicopter_simple', zone: 'dashed', tag_ar: 'طيران_مروحي', tag_en: 'Helicopter',
   },

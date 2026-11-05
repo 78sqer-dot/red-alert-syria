@@ -157,3 +157,15 @@ test('last-mile duplicate guard marks a pending monitored draft as duplicate wit
   assert.equal(n.alerts.length, 1, 'the original published alert remains stored and untouched');
   assert.equal(n.alerts[0].id, 'already-published-alert');
 });
+
+
+test('helicopter monitoring distinguishes singular reports from an explicitly intensive pair', () => {
+  assert.equal(_test.helicopterAuto('تحليق مروحية فوق حمص'), false);
+  assert.equal(_test.helicopterAuto('تحليق مروحيتين فوق حمص'), true);
+  assert.equal(_test.helicopterAuto('multiple helicopters over Homs'), true);
+  const normal = { id: 'heli-one', type: 'helicopter', intense: false, ts: Date.now(), headline: 'تحليق مروحية', loc: { scope: 'governorate', name_ar: 'حمص', governorate_ar: 'حمص' } };
+  const intensive = { ...normal, id: 'heli-two', intense: true };
+  assert.match(_test.cardText(normal, 'ar'), /مروحية واحدة/);
+  assert.match(_test.cardText(intensive, 'ar'), /مروحيتان/);
+  assert.ok(_test.cardKb(intensive, 'ar').inline_keyboard.flat().some((button) => button.callback_data === `nw:hi:${intensive.id}`));
+});
