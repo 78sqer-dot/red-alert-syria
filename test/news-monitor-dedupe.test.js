@@ -146,7 +146,10 @@ test('last-mile duplicate guard marks a pending monitored draft as duplicate wit
   assert.ok(duplicate, 'the existing published incident is found before channel publication');
   const buttons = _test.cardKb(draft, 'ar').inline_keyboard.flat();
   assert.ok(buttons.some((button) => button.callback_data === `nw:c:${draft.id}` && button.text.includes('تحقق من النشر في القناة')), 'the reviewer can request a channel publication check');
-  assert.equal(_test.channelPublishedDuplicateDraft(draft)?.alertId, 'already-published-alert', 'the check detects a matching alert with a channel message id');
+  const channelMatch = _test.channelPublishedDuplicateDraft(draft);
+  assert.equal(channelMatch?.alertId, 'already-published-alert', 'the check detects a matching alert with a channel message id');
+  assert.match(_test.channelCheckText(channelMatch, 'ar'), /الخبر منشور بالفعل/);
+  assert.match(_test.channelCheckText(null, 'ar'), /لم أجد منشوراً مطابقاً/);
   const missing = { ...draft, id: 'not-channel-posted', headline: 'غارة جوية على إدلب', loc: { ...draft.loc, name_ar: 'إدلب', governorate_ar: 'إدلب', latitude: 35.93, longitude: 36.63 } };
   assert.equal(_test.channelPublishedDuplicateDraft(missing), null, 'the check reports no match when no tracked channel post exists');
   assert.equal(await _test.suppressDuplicateDraft(draft, duplicate), true);

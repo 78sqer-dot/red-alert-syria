@@ -628,13 +628,25 @@ function channelPublishedDuplicateDraft(d) {
   };
   return knownEvents(12).find((known) => {
     if (known.draftId === d.id || !known.alertId || !sameIncident(candidate, known)) return false;
-    return Boolean(store.getAlert(known.alertId)?.channel_message_id);
+    const alert = store.getAlert(known.alertId);
+    if (!alert?.channel_message_id) return false;
+    return { ...known, channelMessageId: alert.channel_message_id };
   }) || null;
+}
+function channelCheckText(duplicate, lang = 'ar') {
+  if (duplicate) return tr(lang,
+    '✅ <b>الخبر منشور بالفعل</b>\nوجدت منشوراً مطابقاً في سجل القناة. الإجراء المقترح: تجاهل المسودة؛ المنشور الحالي لن يُحذف.',
+    '✅ <b>Already published</b>\nA matching post was found in channel records. Recommended: ignore this draft; the existing post will not be deleted.');
+  return tr(lang,
+    '🟡 <b>لم أجد منشوراً مطابقاً في سجل البوت</b>\nيمكنك نشر الخبر أو تجاهله.\n<i>الفحص لا يشمل المنشورات التي أُضيفت إلى القناة خارج البوت.</i>',
+    '🟡 <b>No matching post found in bot records</b>\nYou can publish or ignore this story.\n<i>Posts added to the channel outside the bot are not included in this check.</i>');
 }
 function channelCheckKeyboard(d, duplicate, lang = 'ar') {
   const kb = new InlineKeyboard();
   if (duplicate) {
-    kb.text(tr(lang, '❌ تجاهل هذه المسودة', '❌ Ignore this draft'), 'nw:x:' + d.id);
+    const url = postUrl(duplicate.channelMessageId);
+    if (url) kb.url(tr(lang, '🔗 فتح المنشور الموجود', '🔗 Open existing post'), url).row();
+    kb.text(tr(lang, '❌ تجاهل المسودة', '❌ Ignore draft'), 'nw:x:' + d.id);
   } else {
     kb.text(tr(lang, '✅ نشر الخبر', '✅ Publish this story'), 'nw:p:' + d.id);
     kb.text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id);
@@ -1317,11 +1329,8 @@ export function registerNewsTools(bot, h) {
     if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
     const duplicate = channelPublishedDuplicateDraft(d);
     const lang = h.langOf(ctx);
-    await toast(ctx, duplicate ? t(ctx, 'وُجد منشور مطابق في سجل القناة', 'Matching post found in channel records') : t(ctx, 'لم يُعثر على منشور مطابق في سجل القناة', 'No matching post found in channel records'));
-    const result = duplicate
-      ? t(ctx, `🔎 <b>نتيجة الفحص:</b> وُجد خبر مطابق منشور عبر البوت في سجل القناة. يُفضّل تجاهل هذه المسودة لتفادي التكرار. لم يُحذف أي منشور.`, `🔎 <b>Check result:</b> A matching story posted through the bot was found in channel records. Ignore this draft to avoid duplication. No post was deleted.`)
-      : t(ctx, `🔎 <b>نتيجة الفحص:</b> لم أجد خبراً مطابقاً ضمن منشورات القناة المسجلة لدى البوت. يمكنك نشره أو تجاهله. ملاحظة: لا يستطيع Telegram Bot API البحث في كامل أرشيف القناة عن منشورات أُضيفت خارج البوت.`, `🔎 <b>Check result:</b> No matching post was found in channel posts tracked by the bot. You can publish or ignore it. Note: Telegram Bot API cannot search the full channel history for posts made outside the bot.`);
-    return ctx.reply(result, { parse_mode: 'HTML', reply_markup: channelCheckKeyboard(d, duplicate, lang) });
+    await toast(ctx, duplicate ? t(ctx, 'الخبر منشور بالفعل', 'Already published') : t(ctx, 'لم يُعثر على تطابق', 'No match found'));
+    return ctx.reply(channelCheckText(duplicate, lang), { parse_mode: 'HTML', reply_markup: channelCheckKeyboard(d, duplicate, lang) });
   });
   bot.callbackQuery(/^nw:(p|x|t|b|e):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
@@ -1719,4 +1728,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
