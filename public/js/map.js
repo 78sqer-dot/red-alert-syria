@@ -332,10 +332,10 @@ export class AlertMap {
     add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.11 : 0.08, 0.025) } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.58, 0.22), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1.3] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['get', 'planeArea'], true], 1.5, 1.8], 'line-opacity': ['case', ['==', ['get', 'planeArea'], true], 0.7, A(0.85, 0.3)], 'line-dasharray': [3, 4] } });
-    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'referenceRoute'], 0.92, ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'referenceRoute'], 2.4, ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'referenceRoute'], 3.2, ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'referenceRoute'], ['literal', [4, 2]], ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
-    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', filter: ['any', ['==', ['get', 'referenceRoute'], true], ['!=', ['get', 'planeRoute'], true]], layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
-    add({ id: 'ras-flight-reference-point', type: 'circle', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], paint: { 'circle-radius': 4, 'circle-color': ['get', 'color'], 'circle-stroke-color': dark ? '#111827' : '#ffffff', 'circle-stroke-width': 1.6 } });
-    add({ id: 'ras-flight-reference-label', type: 'symbol', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], layout: { 'text-field': ['get', 'label'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 10, 12], 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.96 } });
+    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', minzoom: 8, paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'referenceRoute'], 0.92, ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 8, ['case', ['get', 'referenceRoute'], 1.8, ['get', 'planeRoute'], 1.3, 1.2], 11, ['case', ['get', 'referenceRoute'], 2.4, ['get', 'planeRoute'], 1.4, 1.8]], 'line-dasharray': ['case', ['get', 'referenceRoute'], ['literal', [4, 2]], ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
+    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', minzoom: 8, filter: ['==', ['get', 'directionArrow'], true], layout: { 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 8, 14, 11, 18], 'text-rotate': ['get', 'arrowRotation'], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.96 } });
+    add({ id: 'ras-flight-reference-point', type: 'circle', source: 'ras-flight-paths', minzoom: 8, filter: ['==', ['get', 'referenceOrigin'], true], paint: { 'circle-radius': 4, 'circle-color': ['get', 'color'], 'circle-stroke-color': dark ? '#111827' : '#ffffff', 'circle-stroke-width': 1.6 } });
+    add({ id: 'ras-flight-reference-label', type: 'symbol', source: 'ras-flight-paths', minzoom: 8, filter: ['==', ['get', 'referenceOrigin'], true], layout: { 'text-field': ['get', 'label'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 11, 12], 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.96 } });
     this._startGlow();
     this.applyToggles();
     this.updateZones();
@@ -494,7 +494,6 @@ export class AlertMap {
       const savedBearing = directFlightBearing(alert.location, alert.flight_target);
       const routeBearing = flightPathBearing(route);
       const heading = isReferenceRoute && Number.isFinite(routeBearing) ? routeBearing : aircraftHeading(alert, savedBearing);
-      keep.add(alert.id);
       const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
       const color = eventVisual('air_movement').color;
       const iconColor = aircraft === 'uav' ? color : '#3b8eff';
@@ -517,7 +516,16 @@ export class AlertMap {
           properties: { color: routeColor, arrow: '➤', alertId: alert.id, illustrative: true, planeRoute: aircraft !== 'uav', referenceRoute: isReferenceRoute },
           geometry: { type: 'LineString', coordinates: route },
         });
+        const arrowProgress = alert.flight_direction === 'leaving_syria' ? 0.12 : 0.88;
+        const arrowPoint = flightPosition(route, arrowProgress);
+        if (arrowPoint) routeFeatures.push({
+          type: 'Feature',
+          id: `${alert.id}-direction-arrow`,
+          properties: { directionArrow: true, color: routeColor, arrow: '➤', arrowRotation: (arrowPoint.bearing + 270) % 360 },
+          geometry: { type: 'Point', coordinates: [arrowPoint.lon, arrowPoint.lat] },
+        });
       }
+      keep.add(alert.id);
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
       const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${heading}|${position.join(',')}|${route.join(';')}`;
       let track = this.movementTracks.get(alert.id);
@@ -546,7 +554,7 @@ export class AlertMap {
         squad.append(formation);
         visual.append(squad);
         el.append(visual);
-        const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat(position).addTo(map);
+        const marker = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat(route.length === 2 ? route[0] : position).addTo(map);
         this.bindMarkerTap(el, () => this.onSelect(alert.id, { fromMap: true, fly: true }));
         track = { marker, element: el, signature, startedAt: performance.now(), frame: null };
         this.movementTracks.set(alert.id, track);
@@ -1181,7 +1189,10 @@ export class AlertMap {
     } else if (fly) {
       const center = this.map.getCenter();
       const duration = alertTransitionDuration(distanceKm([center.lng, center.lat], target));
-      this.map.flyTo({ center: target, zoom: alertFocusZoom(alert.scope, this.map.getZoom(), orbiting ? 11.5 : 0), padding: this.padding(), curve: 1.18, duration, essential: true });
+      const zoom = alert.type === 'air_movement'
+        ? Math.max(this.map.getZoom(), 10.5)
+        : alertFocusZoom(alert.scope, this.map.getZoom(), orbiting ? 11.5 : 0);
+      this.map.flyTo({ center: target, zoom, padding: this.padding(), curve: 1.18, duration, essential: true });
     }
     if (popup && archiveRoute.length !== 2) this.openPopup(alert);
     else if (archiveRoute.length === 2) this.closePopup();
