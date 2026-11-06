@@ -725,9 +725,9 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const links = (Array.isArray(j.links) ? j.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
     const location = j.location ? (LANG === 'en' ? j.location.label_en : j.location.label_ar) : '';
     const id = String(j.id || '');
-    const text = String(j.text || '').replace(/https?:\/\/\S+/gi, '').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+    const text = String(j.text || '').replace(/https?:\/\/\S+/gi, '').split(/\r?\n/).filter((line) => !/^\s*(?:🔗\s*)?(?:تقدّم(?:\s+الآن)?|قدم(?:\s+الآن)?|apply(?:\s+now)?)\s*:?\s*$/i.test(line)).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
     const expanded = id && st.expandedJobs.has(id);
-    const previewLimit = 160;
+    const previewLimit = 100;
     const long = text.length > previewLimit;
     const displayedText = long && !expanded ? `${text.slice(0, previewLimit).trimEnd()}…` : text;
     return `<article class="job-card"><div class="job-card-head"><b>${esc(j.title || L.jobListings)}</b><small>${j.published_at ? `${esc(L.jobAdded)} ${esc(when(j.published_at))}` : ''}</small></div>${location ? `<div class="job-location">${icon('mapPin', 14)}<span>${esc(location)}</span></div>` : ''}<p class="job-card-text">${esc(displayedText).replace(/\r?\n/g, '<br>')}</p>${long && id ? `<button type="button" class="job-read-toggle" data-job-toggle="${esc(id)}" aria-expanded="${expanded ? 'true' : 'false'}">${esc(expanded ? L.jobReadLess : L.jobReadMore)}</button>` : ''}${links.length ? `<div class="job-card-links">${links.map((u, i) => `<a class="btn-sm" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${L.jobApply} ${i + 1}` : L.jobApply)}</a>`).join('')}</div>` : ''}</article>`;
