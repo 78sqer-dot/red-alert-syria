@@ -120,7 +120,11 @@ export function isOfficialGovernmentUrl(value) {
   try {
     const u = new URL(String(value || ''));
     const host = u.hostname.toLowerCase().replace(/^www\./, '');
-    return ['http:', 'https:'].includes(u.protocol) && (host === 'gov.sy' || host.endsWith('.gov.sy') || host === 'sana.sy' || host.endsWith('.sana.sy'));
+    if (!['http:', 'https:'].includes(u.protocol)) return false;
+    if (host === 'gov.sy' || host.endsWith('.gov.sy') || host === 'sana.sy' || host.endsWith('.sana.sy')) return true;
+    // SANA's verified channel is already an official monitored source; accept only its direct post links,
+    // never arbitrary Telegram channels or channel landing pages.
+    return host === 't.me' && /^\/sana_gov\/\d+\/?$/i.test(u.pathname);
   } catch { return false; }
 }
 /** Electricity hook only catches service/operations updates, not any text that merely mentions electricity. */
@@ -287,7 +291,7 @@ export function onNewsPost(it) {
   return true;
 }
 async function publishPower(api, p, channel) {
-  if (!isOfficialGovernmentUrl(p.src?.url)) throw new Error('لا يمكن نشر تحديث كهرباء بلا رابط مصدر حكومي رسمي (.gov.sy أو سانا).');
+  if (!isOfficialGovernmentUrl(p.src?.url)) throw new Error('لا يمكن نشر تحديث كهرباء بلا رابط حكومي رسمي أو رابط منشور من قناة سانا الرسمية على تيليغرام.');
   p.pub = true; p.ts = p.ts || Date.now(); p.pubAt = Date.now(); save(); emitPower();
   if (channel && config.channel) {
     const kb = new InlineKeyboard().url('⚡ كل تحديثات الكهرباء', `${siteUrl()}/ar/#power`);
@@ -345,7 +349,7 @@ export function registerPowerTools(bot, h) {
   }));
   bot.callbackQuery('pwr:add', (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery();
-    await h.show(ctx, T(ctx, '⚡ <b>تحديث كهرباء رسمي جديد</b>\n\nلأي محافظة؟ يجب إرفاق رابط الخبر من موقع حكومي أو سانا قبل النشر.', '⚡ <b>New official electricity update</b>\n\nFor which governorate? A government-site or SANA source link is required before publishing.'), govKb('pwr:g', 'pwr', ctx));
+    await h.show(ctx, T(ctx, '⚡ <b>تحديث كهرباء رسمي جديد</b>\n\nلأي محافظة؟ أرفق رابط الخبر من موقع حكومي أو رابط منشور قناة سانا الرسمية على تيليغرام قبل النشر.', '⚡ <b>New official electricity update</b>\n\nFor which governorate? Attach a government-site link or a post link from SANA’s official Telegram channel before publishing.'), govKb('pwr:g', 'pwr', ctx));
   }));
   bot.callbackQuery(/^pwr:g:(\w+)$/, (ctx) => onlyOwner(ctx, async () => {
     await ctx.answerCallbackQuery();
@@ -400,7 +404,7 @@ export function registerPowerTools(bot, h) {
     const txt = String(ctx.message.text || '').trim();
     if (txt.startsWith('/')) { pend.delete(ctx.from.id); return next(); }
     if (q.k === 'source') {
-      if (!isOfficialGovernmentUrl(txt)) return ctx.reply(T(ctx, '⚠️ أرسل رابطاً مباشراً من نطاق ‎.gov.sy‎ أو sana.sy.', '⚠️ Send a direct link from a .gov.sy or sana.sy domain.'));
+      if (!isOfficialGovernmentUrl(txt)) return ctx.reply(T(ctx, '⚠️ أرسل رابطاً مباشراً من ‎.gov.sy‎ أو sana.sy، أو رابط منشور من قناة سانا الرسمية على تيليغرام.', '⚠️ Send a direct .gov.sy or sana.sy link, or a post link from SANA’s official Telegram channel.'));
       q.sourceUrl = txt; q.k = 'text'; q.exp = Date.now() + 10 * 60_000;
       return ctx.reply(T(ctx, '✅ تم قبول رابط المصدر. أرسل الآن نص تحديث الكهرباء الذي تريد نشره.', '✅ Source accepted. Now send the electricity update text.'), { _keep: 'c' });
     }
