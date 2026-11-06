@@ -35,7 +35,7 @@ const S = {
     locInsecure: 'تحديد الموقع بيحتاج اتصال آمن. افتح الموقع على https://red-alert-syria.onrender.com',
     locOutside: 'موقعك برّا سوريا — الخريطة بتعرض سوريا بس.', accuracy: (m) => `الدقة تقريباً ± ${m}`,
     youHere: 'إنت هون', ok: 'تمام', retry: 'جرّب مرة تانية', close: 'إغلاق', ago: 'من',
-    jobs: 'وظائف', jobsIntro: 'فرص العمل التي راجعتها الإدارة قبل نشرها.', jobsSwitch: 'اختر الخدمة', findJob: 'أبحث عن عمل', findWorker: 'مطلوب موظف', jobBrowseHint: 'تصفّح إعلانات الوظائف المعتمدة', workerBrowseHint: 'أرسل وظيفة شاغرة للمراجعة', jobListings: 'فرص العمل المعتمدة', workerProfiles: 'أرسل طلب وظيفة', noJobListings: 'ما في فرص عمل منشورة حالياً.', noWorkerProfiles: 'أرسل تفاصيل الوظيفة عبر بوت التبليغ؛ ستظهر بعد موافقة الإدارة.', jobsNote: 'الإعلانات المقبولة تظهر في هذا القسم فقط، ولا تُنشر في قناة الأخبار.', jobApply: 'رابط التقديم', jobSource: 'المنشور الأصلي', jobAdded: 'أُضيف', jobReadMore: 'قراءة المزيد', jobReadLess: 'عرض أقل', jobRequestCta: 'إرسال تفاصيل الوظيفة',
+    jobs: 'وظائف', jobsIntro: 'فرص العمل التي راجعتها الإدارة قبل نشرها.', jobsSwitch: 'اختر الخدمة', findJob: 'أبحث عن عمل', findWorker: 'مطلوب موظف', jobBrowseHint: 'تصفّح إعلانات الوظائف المعتمدة', workerBrowseHint: 'أرسل وظيفة شاغرة للمراجعة', jobListings: 'فرص العمل المعتمدة', workerProfiles: 'أرسل طلب وظيفة', noJobListings: 'ما في فرص عمل منشورة حالياً.', noWorkerProfiles: 'أرسل تفاصيل الوظيفة عبر بوت التبليغ؛ ستظهر بعد موافقة الإدارة.', jobsNote: 'الإعلانات المقبولة تظهر في هذا القسم فقط، ولا تُنشر في قناة الأخبار.', jobApply: 'رابط التقديم', jobAdded: 'أُضيف', jobReadMore: 'قراءة المزيد', jobReadLess: 'عرض أقل', jobShare: 'مشاركة', jobWhatsApp: 'واتساب', jobTelegram: 'تيليغرام', jobShareCopied: 'نُسخت تفاصيل الوظيفة للمشاركة', jobShareCopyFailed: 'تعذّر النسخ؛ حاول المشاركة من واتساب أو تيليغرام.', jobRequestCta: 'إرسال تفاصيل الوظيفة',
   },
   en: {
     services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me', weather: 'Weather',
@@ -67,7 +67,7 @@ const S = {
     locInsecure: 'Location needs a secure connection. Open https://red-alert-syria.onrender.com',
     locOutside: 'You are outside Syria — the map covers Syria only.', accuracy: (m) => `Accuracy about ± ${m}`,
     youHere: 'You are here', ok: 'OK', retry: 'Try again', close: 'Close', ago: '',
-    jobs: 'Jobs', jobsIntro: 'Job openings reviewed by the team before they are listed.', jobsSwitch: 'Choose a service', findJob: 'Find a job', findWorker: 'Post a vacancy', jobBrowseHint: 'Browse approved job listings', workerBrowseHint: 'Send a vacancy for review', jobListings: 'Approved job openings', workerProfiles: 'Submit a vacancy', noJobListings: 'No job openings have been published yet.', noWorkerProfiles: 'Send the vacancy details through the report bot; it appears after the owner approves it.', jobsNote: 'Approved listings appear here only, never in the news channel.', jobApply: 'Apply / contact', jobSource: 'Original post', jobAdded: 'Added', jobReadMore: 'Read more', jobReadLess: 'Show less', jobRequestCta: 'Send vacancy details',
+    jobs: 'Jobs', jobsIntro: 'Job openings reviewed by the team before they are listed.', jobsSwitch: 'Choose a service', findJob: 'Find a job', findWorker: 'Post a vacancy', jobBrowseHint: 'Browse approved job listings', workerBrowseHint: 'Send a vacancy for review', jobListings: 'Approved job openings', workerProfiles: 'Submit a vacancy', noJobListings: 'No job openings have been published yet.', noWorkerProfiles: 'Send the vacancy details through the report bot; it appears after the owner approves it.', jobsNote: 'Approved listings appear here only, never in the news channel.', jobApply: 'Apply / contact', jobAdded: 'Added', jobReadMore: 'Read more', jobReadLess: 'Show less', jobShare: 'Share', jobWhatsApp: 'WhatsApp', jobTelegram: 'Telegram', jobShareCopied: 'Job details copied for sharing', jobShareCopyFailed: 'Could not copy; share using WhatsApp or Telegram.', jobRequestCta: 'Send vacancy details',
   },
 };
 const ARMY_TEXT = {
@@ -730,7 +730,12 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const previewLimit = 100;
     const long = text.length > previewLimit;
     const displayedText = long && !expanded ? `${text.slice(0, previewLimit).trimEnd()}…` : text;
-    return `<article class="job-card"><div class="job-card-head"><b>${esc(j.title || L.jobListings)}</b><small>${j.published_at ? `${esc(L.jobAdded)} ${esc(when(j.published_at))}` : ''}</small></div>${location ? `<div class="job-location">${icon('mapPin', 14)}<span>${esc(location)}</span></div>` : ''}<p class="job-card-text">${esc(displayedText).replace(/\r?\n/g, '<br>')}</p>${long && id ? `<button type="button" class="job-read-toggle" data-job-toggle="${esc(id)}" aria-expanded="${expanded ? 'true' : 'false'}">${esc(expanded ? L.jobReadLess : L.jobReadMore)}</button>` : ''}${links.length ? `<div class="job-card-links">${links.map((u, i) => `<a class="btn-sm" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${L.jobApply} ${i + 1}` : L.jobApply)}</a>`).join('')}</div>` : ''}</article>`;
+    const title = String(j.title || L.jobListings).trim();
+    const applyText = links.length ? `\n${L.jobApply}: ${links.join(' · ')}` : '';
+    const shareText = `${title}${location ? `\n📍 ${location}` : ''}${text ? `\n\n${text.slice(0, 1200)}` : ''}${applyText}`;
+    const shareUrl = `${window.location.origin}/${LANG === 'en' ? 'en' : 'ar'}/#jobs`;
+    const social = `<div class="job-share-actions"><button type="button" class="btn-sm job-share-native" data-job-share="${esc(id)}">${icon('share', 14)}${esc(L.jobShare)}</button><a class="btn-sm" href="https://wa.me/?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 14)}${esc(L.jobWhatsApp)}</a><a class="btn-sm" href="https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}" target="_blank" rel="noopener noreferrer">${icon('telegram', 14)}${esc(L.jobTelegram)}</a></div>`;
+    return `<article class="job-card" data-job-card="${esc(id)}"><div class="job-card-head"><b>${esc(title)}</b><small>${j.published_at ? `${esc(L.jobAdded)} ${esc(when(j.published_at))}` : ''}</small></div>${location ? `<div class="job-location">${icon('mapPin', 14)}<span>${esc(location)}</span></div>` : ''}<p class="job-card-text">${esc(displayedText).replace(/\r?\n/g, '<br>')}</p>${long && id ? `<button type="button" class="job-read-toggle" data-job-toggle="${esc(id)}" aria-expanded="${expanded ? 'true' : 'false'}">${esc(expanded ? L.jobReadLess : L.jobReadMore)}</button>` : ''}${links.length ? `<div class="job-card-links">${links.map((u, i) => `<a class="btn-sm" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${L.jobApply} ${i + 1}` : L.jobApply)}</a>`).join('')}</div>` : ''}${social}</article>`;
   }
   // Publicly visible listings are returned by the API only after the owner approves them.
   function jobsHtml() {
@@ -784,13 +789,35 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   }
   // kept for old callers: a layer "on" now means its map mode
   function toggleLayer(k, on) { if (on) enterMode(k); else if (st.mode === k) exitMode(); }
-  function onClick(e) {
+  async function onClick(e) {
     const t = e.target;
     if (t.closest('[data-a="close"]')) return close();
     const tab = t.closest('[data-tab]');
     if (tab) { st.tab = tab.dataset.tab; render(); if (st.tab === 'nearby') loadPoi().then(() => renderResults()).catch(() => renderResults(true)); return; }
     const jobsView = t.closest('[data-jobs-view]');
     if (jobsView) { st.jobsView = jobsView.dataset.jobsView === 'workers' ? 'workers' : 'jobs'; return render(); }
+    const jobShare = t.closest('[data-job-share]');
+    if (jobShare) {
+      const job = st.jobs.find((row) => String(row.id || '') === jobShare.dataset.jobShare);
+      if (!job) return;
+      const title = String(job.title || L.jobListings).trim();
+      const locationName = job.location ? (LANG === 'en' ? job.location.label_en : job.location.label_ar) : '';
+      const cleanText = String(job.text || '').replace(/https?:\/\/\S+/gi, '').split(/\r?\n/).filter((line) => !/^\s*(?:🔗\s*)?(?:تقدّم(?:\s+الآن)?|قدم(?:\s+الآن)?|apply(?:\s+now)?)\s*:?\s*$/i.test(line)).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+      const links = (Array.isArray(job.links) ? job.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
+      const shareText = `${title}${locationName ? `\n📍 ${locationName}` : ''}${cleanText ? `\n\n${cleanText.slice(0, 1200)}` : ''}${links.length ? `\n${L.jobApply}: ${links.join(' · ')}` : ''}`;
+      const shareUrl = `${window.location.origin}/${LANG === 'en' ? 'en' : 'ar'}/#jobs`;
+      if (navigator.share) {
+        try { await navigator.share({ title, text: shareText, url: shareUrl }); return; }
+        catch (err) { if (err?.name === 'AbortError') return; }
+      }
+      try {
+        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+        toast(L.jobShareCopied);
+      } catch {
+        toast(L.jobShareCopyFailed);
+      }
+      return;
+    }
     const jobToggle = t.closest('[data-job-toggle]');
     if (jobToggle) { const id = jobToggle.dataset.jobToggle; if (st.expandedJobs.has(id)) st.expandedJobs.delete(id); else st.expandedJobs.add(id); return render(); }
     const armyCat = t.closest('[data-army-cat]');

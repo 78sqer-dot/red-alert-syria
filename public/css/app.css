@@ -918,6 +918,9 @@ html.dark .wa-btn svg { color: #2fe079; }
 .job-read-toggle:hover { background: color-mix(in srgb, var(--red) 14%, var(--bg-card)); }
 .job-card-links { display: flex; flex-wrap: wrap; gap: 7px; }
 .job-card-links .btn-sm, .job-request { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.job-share-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--border-subtle); }
+.job-share-actions .btn-sm { min-height: 34px; justify-content: center; gap: 6px; }
+.job-share-native { color: var(--red); }
 .army-intro { display: flex; align-items: flex-start; gap: 11px; padding: 12px; border: 1px solid color-mix(in srgb, #2563eb 30%, var(--border)); border-radius: 13px; background: color-mix(in srgb, #2563eb 6%, var(--bg-card)); margin-bottom: 11px; }
 .army-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; flex: none; color: #2563eb; background: color-mix(in srgb, #2563eb 13%, transparent); }
 .army-intro h3 { margin: 0 0 4px; color: var(--text-primary); font-size: 15px; font-weight: 900; }

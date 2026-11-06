@@ -74,7 +74,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobs: 'وظائف'/);
   assert.match(services, /jobs: 'Jobs'/);
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
-  assert.match(app, /services\.js\?v=30/);
+  assert.match(app, /services\.js\?v=31/);
   assert.match(app, /icons\.js\?v=6/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
@@ -99,8 +99,20 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(card, /replace\(\/https\?:\\\/\\\/\\S\+\/gi, ''\)/);
   assert.match(card, /data-job-toggle=/);
   assert.match(card, /jobReadMore/);
+  assert.match(card, /data-job-share=/);
+  assert.match(card, /wa\.me\/\?text=/);
+  assert.match(card, /t\.me\/share\/url\?/);
+  assert.match(card, /L\.jobWhatsApp/);
+  assert.match(card, /L\.jobTelegram/);
   assert.doesNotMatch(card, /job-source|jobSource|source_url|source_name/);
   assert.match(services, /data-job-toggle/);
+  assert.match(services, /async function onClick/);
+  assert.match(services, /navigator\.share\(\{ title, text: shareText, url: shareUrl \}\)/);
+  assert.match(services, /navigator\.clipboard\.writeText\(`\$\{shareText\}\\n\$\{shareUrl\}`\)/);
+  assert.match(services, /jobShareCopied: 'نُسخت تفاصيل الوظيفة للمشاركة'/);
+  assert.match(services, /jobShareCopied: 'Job details copied for sharing'/);
+  assert.match(services, /jobWhatsApp: 'واتساب'/);
+  assert.match(services, /jobTelegram: 'تيليغرام'/);
   assert.match(services, /expandedJobs\.add\(id\)/);
   assert.match(services, /jobReadMore: 'قراءة المزيد'/);
   assert.match(services, /jobReadLess: 'عرض أقل'/);
@@ -110,12 +122,13 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(css, /\.jobs-option\.on\s*\{/);
   assert.match(css, /\.job-card\s*\{/);
   assert.match(css, /\.job-read-toggle\s*\{/);
+  assert.match(css, /\.job-share-actions\s*\{/);
   assert.match(css, /grid-template-columns: repeat\(8, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(max-width: 420px\)[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
-  assert.match(html, /app\.css\?v=62/);
+  assert.match(html, /app\.css\?v=63/);
 });
 
 test('Syrian Army salary section shows only approved items and uses configured follow links', () => {
