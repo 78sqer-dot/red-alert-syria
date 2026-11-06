@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_RESPONSE_SCHEMA, buildPrompt, keywordTypes, prefilter, refineType } from '../server/news-ai.js';
+import { AI_RESPONSE_SCHEMA, buildPrompt, keywordTypes, prefilter, refineType, rewriteArabicNews, NEWS_REWRITE_MODEL } from '../server/news-ai.js';
 
 test('Syria-only general feeds reject foreign weather warnings before the weather shortcut', () => {
   const foreign = prefilter('عاجل: تحذير جوي رسمي من عواصف رعدية وأمطار غزيرة في كييف يرجى الحذر', { general: true, breaking: true });
@@ -80,4 +80,39 @@ test('Gemini response schema includes the political type and allowed category va
   assert.ok(properties.type.enum.includes('political'));
   assert.deepEqual(properties.political_category.enum, ['agreement', 'signing', 'treaty', 'circular', 'support', 'military_cooperation', 'statement', 'position', 'decision', 'appointment', 'official_announcement', 'government_announcement', 'official_entity', 'negotiation', 'meeting', 'visit', 'election', 'none']);
   assert.ok(AI_RESPONSE_SCHEMA.items.required.includes('political_category'));
+});
+
+test('professional rewrite is disabled without its dedicated key and does not fall back to GEMINI_API_KEY', async () => {
+  const old = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = 'classification-key-must-not-be-used';
+  let requests = 0;
+  try {
+    await assert.rejects(
+      rewriteArabicNews('مصدر الخبر', { fetchImpl: async () => { requests++; throw new Error('unexpected request'); } }),
+      /NEWS_REWRITE_GEMINI_API_KEY/,
+    );
+    assert.equal(requests, 0, 'missing dedicated key causes no provider call');
+  } finally {
+    if (old === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = old;
+  }
+});
+
+test('professional rewrite uses only the fixed fast free-tier model and returns plain text', async () => {
+  let request;
+  const text = 'قالت مصادر محلية إن اشتباكات اندلعت قرب حارم في ريف إدلب مساء اليوم.';
+  const output = 'أفادت مصادر محلية باندلاع اشتباكات قرب حارم بريف إدلب مساء اليوم.';
+  const result = await rewriteArabicNews(text, {
+    key: 'dedicated-free-key',
+    fetchImpl: async (url, options) => {
+      request = { url: String(url), options };
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: output }] } }] }) };
+    },
+  });
+  assert.equal(result, output);
+  assert.match(request.url, new RegExp(`/models/${NEWS_REWRITE_MODEL}:generateContent\\?key=`));
+  assert.match(request.url, /dedicated-free-key/);
+  assert.match(request.options.body, /SOURCE:/);
+  assert.match(request.options.body, /درجة التأكد/);
+  assert.equal(JSON.parse(request.options.body).generationConfig.temperature, 0.1);
 });

@@ -56,14 +56,14 @@ reportBot.api.config.use(async (_previous, method, payload) => {
 });
 
 let updateId = 1;
-const tap = async (data, user = owner, targetBot = bot) => targetBot.handleUpdate({
+const tap = async (data, user = owner, targetBot = bot, targetMessageId = 700) => targetBot.handleUpdate({
   update_id: updateId++,
   callback_query: {
     id: `local-${updateId}`,
     from: user,
     chat_instance: 'local',
     data,
-    message: { message_id: 700, date: 0, chat: { id: user.id, type: 'private' }, from: targetBot.botInfo, text: 'Local test draft' },
+    message: { message_id: targetMessageId, date: 0, chat: { id: user.id, type: 'private' }, from: targetBot.botInfo, text: 'Local test draft' },
   },
 });
 const sendText = async (text, user = owner, targetBot = bot) => targetBot.handleUpdate({
@@ -1071,9 +1071,20 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     created: Date.now(),
   };
 
+  const checkStart = calls.length;
+  await tap(`nw:c:${draftId}`);
+  const checkReply = calls.slice(checkStart).find((call) => call.method === 'sendMessage' && call.chatId === ownerId);
+  assert.ok(checkReply, 'channel check returns a result card');
+  const checkMessageId = messageId;
+  assert.ok(newsState().drafts[draftId].cards.some(([chat, id]) => chat === ownerId && id === checkMessageId), 'the result card is registered for lifecycle cleanup');
+  assert.match(checkReply.payload.text, /لا يقرأ تاريخ القناة كاملاً/, 'the result explains that this is not a full channel-history search');
+
   const callback = `nw:p:${draftId}`;
-  await tap(callback);
+  const publishStart = calls.length;
+  await tap(callback, owner, bot, checkMessageId);
   assert.equal(newsState().drafts[draftId].status, 'published');
+  assert.ok(calls.slice(publishStart).some((call) => call.method === 'deleteMessage' && call.payload.message_id === checkMessageId), 'publishing from the check result removes its stale buttons');
+  assert.equal(newsState().drafts[draftId].cards.some(([, id]) => id === checkMessageId), false, 'the deleted result is also removed from persisted card tracking');
 
   await tap(callback);
   assert.equal(newsState().drafts[draftId].status, 'published');
@@ -1104,13 +1115,59 @@ test('news draft ignore action marks the draft ignored without publishing it', a
     created: Date.now(),
   };
 
-  await tap(`nw:x:${draftId}`);
+  const checkStart = calls.length;
+  await tap(`nw:c:${draftId}`);
+  const checkReply = calls.slice(checkStart).find((call) => call.method === 'sendMessage' && call.chatId === ownerId);
+  assert.ok(checkReply, 'channel check result is sent before the ignore decision');
+  const checkMessageId = messageId;
+  const ignoreStart = calls.length;
+  await tap(`nw:x:${draftId}`, owner, bot, checkMessageId);
 
   assert.equal(newsState().drafts[draftId].status, 'ignored', 'ignore callback moves a pending draft to ignored');
   assert.equal(newsState().drafts[draftId].by, ownerId, 'the moderator who ignored it is recorded');
   assert.equal(newsState().stats.ignored, beforeIgnored + 1, 'ignored statistics increment once');
   assert.equal(store.state.alerts.length, beforeAlerts, 'ignoring does not create a map alert');
   assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, beforeChannelPosts, 'ignoring does not publish to the Telegram channel');
+  assert.ok(calls.slice(ignoreStart).some((call) => call.method === 'deleteMessage' && call.payload.message_id === checkMessageId), 'ignoring from the check result removes its stale buttons');
+  assert.equal(newsState().drafts[draftId].cards.some(([, id]) => id === checkMessageId), false, 'the deleted ignore result is removed from persisted card tracking');
+});
+
+test('professional rewrite is a comparison preview, requires a separate apply action, and can restore the original', async (t) => {
+  const draftId = 'rewrite_human_approval';
+  const original = 'خبر مصدره محلي يذكر وقوع اشتباك قرب حارم مساء اليوم.';
+  const rewritten = 'أفاد مصدر محلي بوقوع اشتباك قرب حارم مساء اليوم.';
+  let receivedSource = '';
+  const channelPostsBefore = calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length;
+  newsMonitorTest.R.rewriteImpl = async (source) => { receivedSource = source; return rewritten; };
+  newsState().drafts[draftId] = {
+    id: draftId, type: 'attack', status: 'pending', headline: 'اشتباك قرب حارم', sourceText: original,
+    loc: { scope: 'place', name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib' },
+    extra: [], ttlMin: 180, srcs: [{ u: 'mock-source', name: 'مصدر محلي', local: false }],
+    cards: [[ownerId, 745]], created: Date.now(),
+  };
+  t.after(() => { newsMonitorTest.R.rewriteImpl = null; delete newsState().drafts[draftId]; });
+
+  const previewStart = calls.length;
+  await tap(`nw:rw:${draftId}`, owner, bot, 745);
+  assert.equal(receivedSource, original, 'the provider receives the stored source text, not another draft');
+  assert.equal(newsState().drafts[draftId].headline, 'اشتباك قرب حارم', 'requesting a rewrite does not alter the draft');
+  const preview = calls.slice(previewStart).find((call) => call.method === 'editMessageText');
+  assert.match(preview?.payload?.text || '', /النص الأصلي من المصدر/);
+  assert.match(preview?.payload?.text || '', /لم تُعتمد ولم تُنشر/);
+  assert.match(preview?.payload?.text || '', new RegExp(rewritten));
+  assert.ok(callbacksOf(keyboardAfter(previewStart)).includes(`nw:ra:${draftId}`), 'the preview requires an explicit apply button');
+  assert.equal(newsState().drafts[draftId].status, 'pending');
+
+  await tap(`nw:ra:${draftId}`, owner, bot, 745);
+  assert.equal(newsState().drafts[draftId].headline, rewritten, 'apply changes only the pending draft headline');
+  assert.equal(newsState().drafts[draftId].originalHeadline, 'اشتباك قرب حارم', 'the previous wording remains available for comparison');
+  assert.equal(newsState().drafts[draftId].sourceText, original, 'the original source text is not overwritten');
+  assert.equal(newsState().drafts[draftId].status, 'pending', 'applying a rewrite does not publish');
+  assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, channelPostsBefore, 'applying a rewrite makes no channel post');
+
+  await tap(`nw:ro:${draftId}`, owner, bot, 745);
+  assert.equal(newsState().drafts[draftId].headline, 'اشتباك قرب حارم', 'the original headline can be restored');
+  assert.equal(newsState().drafts[draftId].status, 'pending');
 });
 
 test('clashes channel posts keep the dedicated label instead of the generic attack label', () => {

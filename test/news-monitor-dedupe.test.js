@@ -145,11 +145,12 @@ test('last-mile duplicate guard marks a pending monitored draft as duplicate wit
   const duplicate = _test.knownDuplicateDraft(draft);
   assert.ok(duplicate, 'the existing published incident is found before channel publication');
   const buttons = _test.cardKb(draft, 'ar').inline_keyboard.flat();
-  assert.ok(buttons.some((button) => button.callback_data === `nw:c:${draft.id}` && button.text.includes('تحقق من النشر في القناة')), 'the reviewer can request a channel publication check');
+  assert.ok(buttons.some((button) => button.callback_data === `nw:c:${draft.id}` && button.text.includes('تحقق من سجل القناة')), 'the reviewer can request a check of the bot channel records');
   const channelMatch = _test.channelPublishedDuplicateDraft(draft);
   assert.equal(channelMatch?.alertId, 'already-published-alert', 'the check detects a matching alert with a channel message id');
-  assert.match(_test.channelCheckText(channelMatch, 'ar'), /الخبر منشور بالفعل/);
-  assert.match(_test.channelCheckText(null, 'ar'), /لم أجد منشوراً مطابقاً/);
+  assert.match(_test.channelCheckText(channelMatch, 'ar'), /مطابقة في سجل منشورات البوت/);
+  assert.match(_test.channelCheckText(channelMatch, 'ar'), /المنشور الموجود لن يُحذف/);
+  assert.match(_test.channelCheckText(null, 'ar'), /لا يقرأ تاريخ القناة كاملاً/);
   const missing = { ...draft, id: 'not-channel-posted', headline: 'غارة جوية على إدلب', loc: { ...draft.loc, name_ar: 'إدلب', governorate_ar: 'إدلب', latitude: 35.93, longitude: 36.63 } };
   assert.equal(_test.channelPublishedDuplicateDraft(missing), null, 'the check reports no match when no tracked channel post exists');
   assert.equal(await _test.suppressDuplicateDraft(draft, duplicate), true);

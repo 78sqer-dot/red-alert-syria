@@ -20,7 +20,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
 
@@ -317,6 +317,7 @@ export async function verifyReportSources(draft, {
 // ---------------------------------------------------------------- runtime
 const R = {
   H: null, // bot helpers (registerNewsTools)
+  rewriteImpl: null, // test-only override; production uses the dedicated free-tier key
   queue: [], // posts waiting for the AI
   log: [], // last decisions (debug endpoint)
   src: {}, // u -> { ok, at, err, n }
@@ -493,6 +494,9 @@ function cardText(d, lang = 'ar') {
       : tr(lang, '⚠️ <b>الفئة السياسية غير محددة — اخترها قبل النشر.</b>', '⚠️ <b>Political category is missing — choose one before publishing.</b>'));
   }
   if (d.type === 'weather' && d.body) lines.push('', esc(d.body));
+  if (d.originalHeadline && d.originalHeadline !== d.headline) {
+    lines.push(`📝 <i>${tr(lang, 'الصياغة الأصلية للمقارنة', 'Original wording for comparison')}:</i> ${esc(d.originalHeadline)}`);
+  }
   const isLocal = (s) => s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local;
   const srcs = (d.srcs || []).map((s) => (s.url ? `<a href="${esc(s.url)}">${esc(s.name)}</a>` : esc(s.name)) + (isLocal(s) ? tr(lang, ' <i>(محلي)</i>', ' <i>(local)</i>') : ''));
   lines.push('', `🗞 <b>${tr(lang, `المصادر (${srcs.length})`, `Sources (${srcs.length})`)}:</b> ${srcs.join(' · ')}`);
@@ -509,13 +513,45 @@ function cardKb(d, lang = 'ar') {
   const kb = new InlineKeyboard()
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
     .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id).row()
-    .text(tr(lang, '🔎 تحقق من النشر في القناة', '🔎 Check if posted in channel'), 'nw:c:' + d.id);
+    .text(tr(lang, '🪄 صياغة صحفية', '🪄 Rewrite professionally'), 'nw:rw:' + d.id)
+    .text(tr(lang, '🔎 تحقق من سجل القناة', '🔎 Check channel records'), 'nw:c:' + d.id);
+
+  if (d.originalHeadline && d.originalHeadline !== d.headline) {
+    kb.row().text(tr(lang, '↩️ استعادة الصياغة الأصلية', '↩️ Restore original wording'), 'nw:ro:' + d.id);
+  }
 
   if (d.type === 'political') kb.row().text(tr(lang, '🏛 الفئة السياسية', '🏛 Political category'), 'nw:pc:' + d.id);
   // Telegram refuses a whole message when one button has an empty text: the extra row only for drones
   if (d.type === 'uav') kb.row().text(intenseLabel(d, lang), 'nw:i:' + d.id);
   if (d.type === 'helicopter') kb.row().text(helicopterLabel(d, lang), 'nw:hi:' + d.id);
   return kb;
+}
+function rewritePreviewText(d, lang = 'ar') {
+  const preview = d.aiRewritePreview || {};
+  let source = String(preview.sourceText || d.sourceText || d.headline || '').slice(0, 500);
+  const original = String(preview.originalHeadline || d.originalHeadline || d.headline || '');
+  const render = (excerpt) => [
+    tr(lang, '🪄 <b>معاينة صياغة صحفية — لم تُعتمد ولم تُنشر</b>', '🪄 <b>Professional rewrite preview — not applied or published</b>'),
+    '',
+    `📝 <b>${tr(lang, 'عنوان المسودة الحالي', 'Current draft headline')}:</b> ${esc(original)}`,
+    `📄 <b>${tr(lang, 'النص الأصلي من المصدر (مقتطف)', 'Original source text (excerpt)')}:</b> ${esc(excerpt)}`,
+    `✨ <b>${tr(lang, 'المقترح', 'Suggestion')}:</b> ${esc(preview.text || '')}`,
+    '',
+    tr(lang, 'راجع الوقائع والمصدر بنفسك. لن يتغير نص المسودة إلا بعد اختيار اعتماد الصياغة.', 'Verify the facts and source yourself. The draft changes only if you choose to apply this wording.'),
+  ].join('\n');
+  let text = render(source);
+  while (text.length > 3900 && source.length > 80) { source = source.slice(0, Math.max(80, source.length - 80)); text = render(source); }
+  return text;
+}
+function rewritePreviewKb(d, lang = 'ar') {
+  if (d.aiRewritePreview?.applied) {
+    return new InlineKeyboard()
+      .text(tr(lang, '↩️ استعادة الأصل', '↩️ Restore original'), 'nw:ro:' + d.id)
+      .text(tr(lang, '↩️ رجوع للمسودة', '↩️ Back to draft'), 'nw:rr:' + d.id);
+  }
+  return new InlineKeyboard()
+    .text(tr(lang, '✅ اعتماد الصياغة', '✅ Apply wording'), 'nw:ra:' + d.id)
+    .text(tr(lang, '↩️ إبقاء النص الحالي', '↩️ Keep current wording'), 'nw:rr:' + d.id);
 }
 const helicopterAuto = (text) => /مروحيتين|مروحيات|مروحيتا|مروحيتان|مروحيات|عدة مروحيات|طائرات مروحية|helicopters|multiple helicopters|two helicopters|intensive/i.test(String(text || ''));
 const helicopterOn = (d) => (typeof d.intense === 'boolean' ? d.intense : helicopterAuto(`${d.headline || ''} ${d.body || ''}`));
@@ -640,12 +676,19 @@ function channelPublishedDuplicateDraft(d) {
   }) || null;
 }
 function channelCheckText(duplicate, lang = 'ar') {
-  if (duplicate) return tr(lang,
-    '✅ <b>الخبر منشور بالفعل</b>\nوجدت منشوراً مطابقاً في سجل القناة. الإجراء المقترح: تجاهل المسودة؛ المنشور الحالي لن يُحذف.',
-    '✅ <b>Already published</b>\nA matching post was found in channel records. Recommended: ignore this draft; the existing post will not be deleted.');
+  if (duplicate) {
+    const details = [
+      duplicate.headline ? `📝 ${esc(duplicate.headline)}` : '',
+      duplicate.where ? `📍 ${esc(duplicate.where)}` : '',
+      duplicate.ts ? `🕒 ${esc(clock(duplicate.ts))}` : '',
+    ].filter(Boolean).join('\n');
+    return tr(lang,
+      `✅ <b>عُثر على مطابقة في سجل منشورات البوت</b>\n${details}\nالإجراء المقترح: تجاهل المسودة؛ المنشور الموجود لن يُحذف. المطابقة ضمن سجل البوت وليست بحثاً شاملاً في القناة.`,
+      `✅ <b>A matching post was found in the bot's records</b>\n${details}\nRecommended: ignore this draft; the existing post will not be deleted. This is a bot-record match, not a full channel-history search.`);
+  }
   return tr(lang,
-    '🟡 <b>لم أجد منشوراً مطابقاً في سجل البوت</b>\nيمكنك نشر الخبر أو تجاهله.\n<i>الفحص لا يشمل المنشورات التي أُضيفت إلى القناة خارج البوت.</i>',
-    '🟡 <b>No matching post found in bot records</b>\nYou can publish or ignore this story.\n<i>Posts added to the channel outside the bot are not included in this check.</i>');
+    '🟡 <b>لم أجد تطابقاً في سجل البوت خلال نافذة الفحص (12 ساعة)</b>\nهذا لا يثبت أن الخبر غير منشور: الفحص لا يقرأ تاريخ القناة كاملاً ولا يشمل المنشورات التي أُضيفت خارج البوت. راجع القناة يدوياً قبل نشر نسخة أخرى.',
+    '🟡 <b>No match in the bot records within the 12-hour check window</b>\nThis does not prove the story is unpublished: the check cannot search the full channel history or posts added outside the bot. Manually check the channel before publishing another copy.');
 }
 function channelCheckKeyboard(d, duplicate, lang = 'ar') {
   const kb = new InlineKeyboard();
@@ -1211,6 +1254,13 @@ export function registerNewsTools(bot, h) {
     return newsState().drafts[id] || null;
   };
   const cur = (ctx) => (ctx.callbackQuery?.message ? [ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id] : null);
+  const forgetCurrentCard = (d, ctx) => {
+    const current = cur(ctx);
+    if (current) d.cards = (d.cards || []).filter(([chat, id]) => chat !== current[0] || id !== current[1]);
+  };
+  const showRewritePreview = async (ctx, d, lang) => ctx.editMessageText(rewritePreviewText(d, lang), {
+    parse_mode: 'HTML', reply_markup: rewritePreviewKb(d, lang), link_preview_options: { is_disabled: true },
+  });
   const toast = async (ctx, text, alert = false) => { try { await ctx.answerCallbackQuery({ text, show_alert: alert }); } catch { /* answered */ } };
   const vanish = async (ctx, text) => {
     await toast(ctx, text);
@@ -1337,6 +1387,81 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, t(ctx, d.intense ? 'مكثف: 2-3 مسيّرات فوق كل منطقة' : 'عادي: مسيّرة وحدة فوق كل منطقة', d.intense ? 'Intensive: 2-3 drones per area' : 'Normal: one drone per area'));
     try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
   });
+  bot.callbackQuery(/^nw:rw:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
+    const sourceText = String(d.sourceText || d.headline || '').trim();
+    if (!sourceText) return toast(ctx, t(ctx, 'لا يوجد نص مصدر لإعادة صياغته', 'No source text is available to rewrite'), true);
+    const preview = d.aiRewritePreview;
+    const previewIsCurrent = preview && preview.sourceText === sourceText && preview.baseHeadline === d.headline;
+    const previewAlreadyApplied = preview?.applied && preview.text === d.headline;
+    const lang = h.langOf(ctx);
+    if (previewIsCurrent || previewAlreadyApplied) {
+      await toast(ctx, '');
+      return showRewritePreview(ctx, d, lang);
+    }
+    if (!R.rewriteImpl && !process.env.NEWS_REWRITE_GEMINI_API_KEY) {
+      return toast(ctx, t(ctx,
+        'إعادة الصياغة غير مفعّلة بعد: يلزم مفتاح Google AI Studio مجاني منفصل في NEWS_REWRITE_GEMINI_API_KEY، مع إيقاف الفوترة.',
+        'Rewrite is not configured: add a separate free Google AI Studio key as NEWS_REWRITE_GEMINI_API_KEY with billing disabled.'), true);
+    }
+    if (d.aiRewriteBusy) return toast(ctx, t(ctx, 'إعادة الصياغة قيد التنفيذ', 'Rewrite is already running'));
+    d.aiRewriteBusy = true;
+    await toast(ctx, t(ctx, '🪄 جارٍ إعداد معاينة فقط…', '🪄 Preparing a preview only…'));
+    try {
+      const text = String(R.rewriteImpl
+        ? await R.rewriteImpl(sourceText)
+        : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY })).trim();
+      if (!text || text.length > 280) throw new Error('unsafe rewrite length');
+      d.aiRewritePreview = {
+        text, sourceText, baseHeadline: d.headline, originalHeadline: d.headline,
+        createdAt: Date.now(), applied: false,
+      };
+      save();
+      await showRewritePreview(ctx, d, lang);
+    } catch {
+      console.warn('[news] professional rewrite unavailable; draft unchanged');
+      await toast(ctx, t(ctx, 'تعذرت إعادة الصياغة الآن؛ بقيت المسودة كما هي ولم يُنشر شيء.', 'Rewrite failed; the draft is unchanged and nothing was published.'), true);
+    } finally {
+      delete d.aiRewriteBusy;
+    }
+  });
+  bot.callbackQuery(/^nw:ra:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    const preview = d?.aiRewritePreview;
+    if (!d || d.status !== 'pending' || !preview?.text) return toast(ctx, t(ctx, 'المسودة أو المعاينة لم تعد متاحة', 'Draft or preview is no longer available'), true);
+    const sourceText = String(d.sourceText || d.headline || '').trim();
+    if (preview.sourceText !== sourceText || preview.baseHeadline !== d.headline) return toast(ctx, t(ctx, 'هذه معاينة قديمة؛ أعد فتح المراجعة', 'This preview is out of date; reopen the draft'), true);
+    if (preview.applied && d.headline === preview.text) return toast(ctx, t(ctx, 'الصياغة مطبقة بالفعل؛ لم يُنشر شيء', 'Wording already applied; nothing was published'));
+    d.originalHeadline ||= d.headline;
+    d.headline = preview.text;
+    preview.applied = true;
+    preview.appliedAt = Date.now();
+    save();
+    await refreshCards(d);
+    await toast(ctx, t(ctx, 'تم اعتماد الصياغة في المسودة فقط — ما زال النشر يحتاج موافقتك', 'Wording applied to the draft only — publishing still needs your approval'));
+  });
+  bot.callbackQuery(/^nw:rr:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
+    await toast(ctx, t(ctx, 'تم الإبقاء على الصياغة الحالية', 'Kept the current wording'));
+    await refreshCards(d);
+  });
+  bot.callbackQuery(/^nw:ro:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
+    if (!d.originalHeadline || d.headline === d.originalHeadline) return toast(ctx, t(ctx, 'النص الحالي هو الصياغة الأصلية', 'The current wording is already the original'));
+    d.headline = d.originalHeadline;
+    d.originalHeadline = null;
+    if (d.aiRewritePreview) d.aiRewritePreview.applied = false;
+    save();
+    await refreshCards(d);
+    await toast(ctx, t(ctx, 'استُعيدت الصياغة الأصلية؛ لم يُنشر شيء', 'Original wording restored; nothing was published'));
+  });
   bot.callbackQuery(/^nw:c:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const d = await findDraft(ctx.match[1]);
@@ -1344,7 +1469,14 @@ export function registerNewsTools(bot, h) {
     const duplicate = channelPublishedDuplicateDraft(d);
     const lang = h.langOf(ctx);
     await toast(ctx, duplicate ? t(ctx, 'الخبر منشور بالفعل', 'Already published') : t(ctx, 'لم يُعثر على تطابق', 'No match found'));
-    return ctx.reply(channelCheckText(duplicate, lang), { parse_mode: 'HTML', reply_markup: channelCheckKeyboard(d, duplicate, lang) });
+    const message = await ctx.reply(channelCheckText(duplicate, lang), { parse_mode: 'HTML', reply_markup: channelCheckKeyboard(d, duplicate, lang), _keep: 'c' });
+    const card = cur(ctx);
+    if (message?.message_id && card) {
+      d.cards ||= [];
+      if (!d.cards.some(([chat, id]) => chat === card[0] && id === message.message_id)) d.cards.push([card[0], message.message_id]);
+      save();
+    }
+    return message;
   });
   bot.callbackQuery(/^nw:(p|x|t|b|e):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
@@ -1353,21 +1485,27 @@ export function registerNewsTools(bot, h) {
     if (!d) return vanish(ctx, t(ctx, 'هذه المسودة لم تعد متاحة', 'This draft is no longer available'));
     if (d.test && (act === 'p' || act === 'e')) {
       d.status = 'ignored'; await closeCards(d, cur(ctx)); save();
-      return vanish(ctx, t(ctx, '🧪 تجربة فقط — لم يُنشر شيء. الأزرار تعمل ✅', '🧪 Test only — nothing was published. Buttons work ✅'));
+      await vanish(ctx, t(ctx, '🧪 تجربة فقط — لم يُنشر شيء. الأزرار تعمل ✅', '🧪 Test only — nothing was published. Buttons work ✅'));
+      forgetCurrentCard(d, ctx); save();
+      return;
     }
     if (act === 't') { await toast(ctx, ''); try { await ctx.editMessageReplyMarkup({ reply_markup: typeKb(d, h.langOf(ctx)) }); } catch { /* ignore */ } return; }
     if (act === 'b') { await toast(ctx, ''); try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ } return; }
     if (d.status !== 'pending') {
       const by = d.status === 'published' ? t(ctx, 'نُشرت مسبقاً ✔️', 'already published ✔️') : d.status === 'expired' ? t(ctx, 'انتهت صلاحيتها', 'expired') : t(ctx, 'تمت معالجتها مسبقاً ✔️', 'already handled ✔️');
       await closeCards(d, cur(ctx));
-      return vanish(ctx, by);
+      await vanish(ctx, by);
+      forgetCurrentCard(d, ctx); save();
+      return;
     }
     const n = newsState();
     if (act === 'x') {
       d.status = 'ignored'; d.by = ctx.from.id; n.stats.ignored++;
       save();
       await closeCards(d, cur(ctx));
-      return vanish(ctx, t(ctx, 'تم التجاهل — لن يصلك هذا الحدث مرة ثانية', 'Ignored — this incident will not come back'));
+      await vanish(ctx, t(ctx, 'تم التجاهل — لن يصلك هذا الحدث مرة ثانية', 'Ignored — this incident will not come back'));
+      forgetCurrentCard(d, ctx); save();
+      return;
     }
     if (d.type === 'political' && !POLITICAL_CATEGORIES[d.politicalCategory] && (act === 'p' || act === 'e')) {
       return toast(ctx, t(ctx, 'اختر فئة سياسية صالحة قبل النشر أو التعديل', 'Choose a valid political category before publishing or editing'), true);
@@ -1396,7 +1534,7 @@ export function registerNewsTools(bot, h) {
     } catch (e) {
       d.status = 'pending'; save();
       console.error('[news] publish failed', e.description || e.message);
-      try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
+      try { await ctx.editMessageText(cardText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: cardKb(d, h.langOf(ctx)), link_preview_options: { is_disabled: true } }); } catch { /* ignore */ }
       return toast(ctx, t(ctx, '⚠️ تعذّر النشر — اضغط «نشر» مرة ثانية.', '⚠️ Publishing failed — tap Publish again.'), true);
     }
     d.status = 'published'; d.alertId = alert?.id; d.by = ctx.from.id;
@@ -1410,6 +1548,7 @@ export function registerNewsTools(bot, h) {
     }
     await closeCards(d, cur(ctx));
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    forgetCurrentCard(d, ctx); save();
     const kb = new InlineKeyboard();
     if (h.mapUrl && alert) kb.url(t(ctx, '🗺 على الخريطة', '🗺 On the map'), h.mapUrl(alert.id, h.langOf(ctx)));
     if (alert?.channel_message_id && config.channel.startsWith('@')) kb.url(t(ctx, '📣 المنشور', '📣 Post'), `https://t.me/${config.channel.slice(1)}/${alert.channel_message_id}`);

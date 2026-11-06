@@ -23,3 +23,5 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         sync: false
+      - key: NEWS_REWRITE_GEMINI_API_KEY
+        sync: false
