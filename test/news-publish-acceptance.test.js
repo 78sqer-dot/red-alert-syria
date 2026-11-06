@@ -1170,6 +1170,37 @@ test('professional rewrite is a comparison preview, requires a separate apply ac
   assert.equal(newsState().drafts[draftId].status, 'pending');
 });
 
+test('startup keyboard sync updates only existing pending review cards', async (t) => {
+  const pendingId = 'existing_pending_keyboard_sync';
+  const ignoredId = 'existing_ignored_keyboard_sync';
+  const testId = 'existing_test_keyboard_sync';
+  const previousHelpers = newsMonitorTest.R.H;
+  const edits = [];
+  newsMonitorTest.R.H = { apis: () => ({ admin: { editMessageReplyMarkup: async (chat, messageId, options) => edits.push({ chat, messageId, options }) } }) };
+  const makeDraft = (id, status, test = false) => ({
+    id, type: 'attack', status, ...(test ? { test: true } : {}), headline: 'Review wording unchanged',
+    loc: { scope: 'country' }, extra: [], srcs: [], cards: [[ownerId, id === pendingId ? 88001 : id === ignoredId ? 88002 : 88003]],
+  });
+  newsState().drafts[pendingId] = makeDraft(pendingId, 'pending');
+  newsState().drafts[ignoredId] = makeDraft(ignoredId, 'ignored');
+  newsState().drafts[testId] = makeDraft(testId, 'pending', true);
+  t.after(() => {
+    newsMonitorTest.R.H = previousHelpers;
+    delete newsState().drafts[pendingId];
+    delete newsState().drafts[ignoredId];
+    delete newsState().drafts[testId];
+  });
+
+  await newsMonitorTest.refreshPendingCardKeyboards();
+  assert.ok(edits.some((edit) => edit.chat === ownerId && edit.messageId === 88001), 'an existing pending review card gets its current keyboard');
+  assert.equal(edits.some((edit) => edit.messageId === 88002 || edit.messageId === 88003), false, 'ignored and test drafts are untouched');
+  const updated = edits.find((edit) => edit.messageId === 88001);
+  const callbacks = callbacksOf(updated.options.reply_markup.inline_keyboard);
+  assert.ok(callbacks.includes(`nw:rw:${pendingId}`));
+  assert.ok(callbacks.includes(`nw:c:${pendingId}`));
+  assert.equal(Object.hasOwn(updated.options, 'text'), false, 'keyboard sync does not change card text');
+});
+
 test('clashes channel posts keep the dedicated label instead of the generic attack label', () => {
   const input = buildAlertInput({ type: 'clashes', location: { scope: 'country' }, extra: [], ttlMin: 240 }, { id: ownerId, name: 'test' });
   const post = channelPost({ ...input, id: 'test-clashes-label', timestamp: new Date().toISOString(), place: { scope: 'country' } });

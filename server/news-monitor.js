@@ -631,6 +631,17 @@ async function refreshCards(d) {
     try { await a.editMessageText(chat, mid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang), link_preview_options: { is_disabled: true } }); } catch { /* not modified / gone */ }
   }
 }
+/** Add current review controls to existing pending cards without changing their text or creating messages. */
+export async function refreshPendingCardKeyboards() {
+  const a = api();
+  if (!a) return;
+  for (const d of Object.values(newsState().drafts)) {
+    if (d.status !== 'pending' || d.test) continue;
+    for (const [chat, mid] of d.cards || []) {
+      try { await a.editMessageReplyMarkup(chat, mid, { reply_markup: cardKb(d, langOfId(chat)) }); } catch { /* not modified / gone */ }
+    }
+  }
+}
 async function closeCards(d, keep = null) {
   const a = api();
   for (const [chat, mid] of d.cards || []) {
@@ -1203,6 +1214,7 @@ export function startNewsMonitor() {
       save();
       try { await refreshCards(d); } catch { /* ignore */ }
     }
+    try { await refreshPendingCardKeyboards(); } catch (e) { console.warn('[news] review keyboard sync failed', e.message); }
     console.log(`[news] monitor started: ${n.on ? 'ON' : 'paused'} · ${n.sources.filter((s) => s.on).length} sources · AI ${NEWS_CFG.aiKey() ? NEWS_CFG.models()[0] : 'OFF (rules only)'} · every ${NEWS_CFG.pollSec}s`);
     loop();
   };
@@ -1881,4 +1893,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
