@@ -74,7 +74,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobs: 'وظائف'/);
   assert.match(services, /jobs: 'Jobs'/);
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
-  assert.match(app, /services\.js\?v=28/);
+  assert.match(app, /services\.js\?v=29/);
   assert.match(app, /icons\.js\?v=6/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
@@ -95,7 +95,8 @@ test('jobs service lists only approved vacancies and routes employer submissions
   const cardStart = services.indexOf('function jobCard(j)');
   const cardEnd = services.indexOf('// Publicly visible listings', cardStart);
   const card = services.slice(cardStart, cardEnd);
-  assert.match(card, /previewLimit = 240/);
+  assert.match(card, /previewLimit = 160/);
+  assert.match(card, /replace\(\/https\?:\\\/\\\/\\S\+\/gi, ''\)/);
   assert.match(card, /data-job-toggle=/);
   assert.match(card, /jobReadMore/);
   assert.doesNotMatch(card, /job-source|jobSource|source_url|source_name/);
