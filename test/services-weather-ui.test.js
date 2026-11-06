@@ -74,7 +74,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobs: 'وظائف'/);
   assert.match(services, /jobs: 'Jobs'/);
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
-  assert.match(app, /services\.js\?v=26/);
+  assert.match(app, /services\.js\?v=27/);
   assert.match(app, /icons\.js\?v=6/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
@@ -84,7 +84,8 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /No job openings have been published yet/);
   assert.match(services, /Send the vacancy details through the report bot; it appears after the owner approves it\./);
   assert.match(services, /st\.jobsView = jobsView\.dataset\.jobsView === 'workers' \? 'workers' : 'jobs'/);
-  assert.match(services, /h === 'jobs'\) open\(h\)/);
+  assert.match(services, /h === 'jobs'/);
+  assert.match(services, /h === 'army'\) open\(h\)/);
   const jobsStart = services.indexOf('function jobsHtml()');
   const jobsEnd = services.indexOf('function renderResults', jobsStart);
   assert.ok(jobsStart >= 0 && jobsEnd > jobsStart);
@@ -94,12 +95,28 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(css, /\.jobs-switch\s*\{/);
   assert.match(css, /\.jobs-option\.on\s*\{/);
   assert.match(css, /\.job-card\s*\{/);
-  assert.match(css, /grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/);
+  assert.match(css, /grid-template-columns: repeat\(8, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(max-width: 420px\)[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
   assert.match(html, /app\.css\?v=61/);
+});
+
+test('Syrian Army salary section shows only approved items and uses configured follow links', () => {
+  assert.ok(ICONS.shield, 'the Army tab uses a registered shield icon');
+  assert.ok(ICONS.telegram && ICONS.whatsapp, 'follow buttons use the existing social icons');
+  assert.match(services, /tabBtn\('army', 'shield'/);
+  assert.match(services, /function armyHtml\(\)/);
+  assert.match(services, /channels\.tg \? `<a class="btn-sm army-follow-link"/);
+  assert.match(services, /channels\.wa \? `<a class="btn-sm army-follow-link"/);
+  assert.match(services, /tab: 'الجيش السوري'/);
+  assert.match(services, /Syrian Army & salaries/);
+  assert.match(app, /svc\.setArmy\(j\.army\)/);
+  assert.match(app, /addEventListener\('army'/);
+  assert.match(css, /\.army-card\s*\{/);
+  assert.match(css, /\.army-source\s*\{/);
+  assert.match(css, /@media \(max-width: 420px\)[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
 });
 
 test('job intake and monitored posts require a location from Syrian governorate and place data', () => {

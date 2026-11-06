@@ -864,7 +864,7 @@ html.dark .wa-btn svg { color: #2fe079; }
 .svc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-top: 10px; }
 .svc-head h2 { margin: 2px 0 4px; font-size: 22px; font-weight: 900; }
 .svc-head p { margin: 0; font-size: 13px; }
-.svc-tabs { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 14px 0 12px; position: sticky; top: -6px; background: var(--bg-primary); padding: 6px 0; z-index: 2; }
+.svc-tabs { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; margin: 14px 0 12px; position: sticky; top: -6px; background: var(--bg-primary); padding: 6px 0; z-index: 2; }
 .svc-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-card); font-weight: 800; font-size: 12.5px; color: var(--text-secondary); }
 .svc-tab.on { background: var(--red); border-color: var(--red); color: #fff; }
 .px-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
@@ -918,6 +918,36 @@ html.dark .wa-btn svg { color: #2fe079; }
 .job-card-links .btn-sm, .job-request { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .job-card-foot { margin-top: 9px; }
 .job-source { text-decoration: underline; text-underline-offset: 2px; }
+.army-intro { display: flex; align-items: flex-start; gap: 11px; padding: 12px; border: 1px solid color-mix(in srgb, #2563eb 30%, var(--border)); border-radius: 13px; background: color-mix(in srgb, #2563eb 6%, var(--bg-card)); margin-bottom: 11px; }
+.army-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; flex: none; color: #2563eb; background: color-mix(in srgb, #2563eb 13%, transparent); }
+.army-intro h3 { margin: 0 0 4px; color: var(--text-primary); font-size: 15px; font-weight: 900; }
+.army-intro p { margin: 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.7; }
+.army-follow { display: flex; flex-direction: column; gap: 7px; padding: 10px 12px; margin-bottom: 11px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--bg-card); }
+.army-follow > b { font-size: 12.5px; }
+.army-follow-links { display: flex; flex-wrap: wrap; gap: 7px; }
+.army-follow-link { display: inline-flex; align-items: center; gap: 6px; }
+.army-no-channels { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11.5px; }
+.army-chips { margin-top: 4px; }
+.army-chip { min-height: 32px; }
+.army-list { display: grid; gap: 9px; }
+.army-card { min-width: 0; padding: 12px; border: 1px solid var(--border-subtle); border-inline-start: 3px solid #2563eb; border-radius: 12px; background: var(--bg-card); }
+.army-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.army-card-top > small { color: var(--text-muted); font-size: 10.5px; text-align: end; }
+.army-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 999px; color: #1d4ed8; background: color-mix(in srgb, #2563eb 10%, transparent); font-size: 11.5px; font-weight: 800; }
+.army-card h3 { margin: 9px 0 5px; color: var(--text-primary); font-size: 14px; line-height: 1.6; }
+.army-card > p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.8; white-space: pre-line; overflow-wrap: anywhere; }
+.army-card-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.army-card-links > b { width: 100%; color: var(--text-secondary); font-size: 11.5px; }
+.army-card-source { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; color: #2563eb; font-size: 11.5px; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
+.army-sources { display: grid; gap: 6px; }
+.army-source { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 9px 10px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--bg-card); color: var(--text-primary); }
+.army-source > svg:first-child { flex: none; color: #2563eb; }
+.army-source > svg:last-child { flex: none; margin-inline-start: auto; color: var(--text-muted); }
+.army-source > span { display: flex; flex-direction: column; min-width: 0; }
+.army-source b { font-size: 12.5px; }
+.army-source small { color: var(--text-muted); font-size: 10.5px; }
+.army-empty { display: grid; justify-items: center; gap: 7px; }
+.army-empty p { margin: 0; line-height: 1.7; }
 .svc-loc { width: 100%; justify-content: center; margin-bottom: 8px; }
 .svc-res { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .svc-poi { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border-subtle); text-align: start; width: 100%; }
@@ -1025,7 +1055,7 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 .badge .bemo { font-size: 13px; line-height: 1; font-family: 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif; }
 
 /* ---------- weather mode (services) ---------- */
-.svc-tabs { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.svc-tabs { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 @media (max-width: 420px) { .svc-tab { font-size: 11px; padding: 7px 1px; } .svc-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; } }
 .wx-ic { display: inline-block; flex: none; vertical-align: middle; }
 .wx-now { display: flex; align-items: center; gap: 10px; margin: 6px 0 8px; }

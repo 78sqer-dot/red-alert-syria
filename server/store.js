@@ -141,6 +141,8 @@ class Store extends EventEmitter {
       news: s.news && typeof s.news === 'object' ? s.news : {},
       // 💼 separate Syrian jobs monitor, moderation queue, approved listings, and employer intake
       jobs: s.jobs && typeof s.jobs === 'object' ? s.jobs : {},
+      // 🏛 official army / government salary and recruitment items: owner-review queue + website-only records
+      army: s.army && typeof s.army === 'object' ? s.army : {},
       // 💱 prices bulletin, 🛣 road status, ⚡ electricity updates (server/prices.js, server/services.js)
       svc: s.svc && typeof s.svc === 'object' ? s.svc : {},
     };

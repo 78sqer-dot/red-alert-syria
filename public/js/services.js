@@ -70,6 +70,22 @@ const S = {
     jobs: 'Jobs', jobsIntro: 'Job openings reviewed by the team before they are listed.', jobsSwitch: 'Choose a service', findJob: 'Find a job', findWorker: 'Post a vacancy', jobBrowseHint: 'Browse approved job listings', workerBrowseHint: 'Send a vacancy for review', jobListings: 'Approved job openings', workerProfiles: 'Submit a vacancy', noJobListings: 'No job openings have been published yet.', noWorkerProfiles: 'Send the vacancy details through the report bot; it appears after the owner approves it.', jobsNote: 'Approved listings appear here only, never in the news channel.', jobApply: 'Apply / contact', jobSource: 'Original post', jobAdded: 'Added', jobRequestCta: 'Send vacancy details',
   },
 };
+const ARMY_TEXT = {
+  ar: {
+    tab: 'الجيش السوري', title: 'الجيش السوري والرواتب', intro: 'تحديثات رسمية عن الرواتب والانتساب للفئات العسكرية والجهات الحكومية. كل خبر هنا راجعه المالك قبل إظهاره.',
+    all: 'الكل', empty: 'لا توجد حالياً أخبار رسمية معتمدة. نرصد مصادر الوزارات كل 15 دقيقة، وتبقى الأخبار مخفية حتى الموافقة.',
+    sources: 'مصادر رسمية للتحقق والانتساب', sourceNote: 'روابط التقديم لا تُعرض إلا إذا وردت في إعلان رسمي وافقت عليه الإدارة. تحقّق دائماً من شروط وموعد الإعلان في المصدر الأصلي.',
+    source: 'فتح الإعلان الرسمي', apply: 'روابط التقديم المنشورة رسمياً', category: 'الفئة', updated: 'آخر رصد', follow: 'تابع التحديثات', telegram: 'تيليغرام', whatsapp: 'واتساب', noChannels: 'روابط قنوات المتابعة ستظهر هنا بعد إعدادها من لوحة الإدارة.',
+    verified: 'مصدر رسمي', reviewOnly: 'النشر بعد مراجعة الإدارة فقط',
+  },
+  en: {
+    tab: 'Syrian Army', title: 'Syrian Army & salaries', intro: 'Official salary and recruitment updates for military groups and government departments. Every item here is reviewed by the owner before appearing.',
+    all: 'All', empty: 'No approved official updates yet. Ministry sources are checked every 15 minutes; items stay hidden until approved.',
+    sources: 'Official sources for verification and recruitment', sourceNote: 'Application links appear only when included in an official announcement approved by the owner. Always confirm requirements and deadlines in the original source.',
+    source: 'Open official announcement', apply: 'Application links in official post', category: 'Category', updated: 'Last checked', follow: 'Follow updates', telegram: 'Telegram', whatsapp: 'WhatsApp', noChannels: 'Follow-channel links will appear here after the owner configures them.',
+    verified: 'Official source', reviewOnly: 'Owner review required before publishing',
+  },
+};
 const CAT_COLORS = { hospital: '#e11d48', clinic: '#db2777', pharmacy: '#059669', fuel: '#d97706', bakery: '#a16207' };
 const GROUPS = { health: ['hospital', 'clinic'], pharmacy: ['pharmacy'], fuel: ['fuel'], bakery: ['bakery'] };
 const ROAD_COLORS = { closed: '#ef4444', danger: '#f59e0b', open: '#22c55e', busy: '#eab308' };
@@ -97,7 +113,7 @@ function km(a, b) {
 
 export function createServices({ LANG, esc, icon, toast, openModal, closeModal, getMap, botUrl }) {
   const L = S[LANG] || S.ar;
-  const st = { mode: null, prices: null, roads: [], power: [], borders: [], jobs: [], jobsLoaded: false, poi: null, poiLoading: null, tab: 'prices', jobsView: 'jobs', q: '', cat: 'all', gov: 'all', me: null, popup: null, wx: null, wxAt: 0, wxLoading: null, wxErr: false };
+  const st = { mode: null, prices: null, roads: [], power: [], borders: [], jobs: [], jobsLoaded: false, army: { items: [], categories: [], sources: [], channels: {} }, armyLoaded: false, armyCat: 'all', poi: null, poiLoading: null, tab: 'prices', jobsView: 'jobs', q: '', cat: 'all', gov: 'all', me: null, popup: null, wx: null, wxAt: 0, wxLoading: null, wxErr: false };
   try { const m = JSON.parse(localStorage.getItem(ME_KEY) || 'null'); if (m && Date.now() - m.t < 6 * 3600_000) st.me = m; } catch { /* ignore */ }
   window.__rasMe = st.me;
   const map = () => getMap()?.map || null;
@@ -114,6 +130,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       const r = await fetch('/api/services', { cache: 'no-store' });
       const j = await r.json();
       st.prices = j.prices; st.roads = j.roads || []; st.power = j.power || []; st.borders = j.borders || []; st.jobs = Array.isArray(j.jobs) ? j.jobs : []; st.jobsLoaded = true;
+      if (j.army && typeof j.army === 'object') { st.army = j.army; st.armyLoaded = true; }
       paintRoads(); paintBorders(); if (isOpen()) render();
     } catch { /* offline: keep what we have */ }
   }
@@ -589,8 +606,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const b = sheet.querySelector('#svcBody');
     b.innerHTML = `<div class="sheet-grab"></div>
       <div class="svc-head"><div><h2>${esc(L.sheetTitle)}</h2><p>${esc(L.sheetSub)}</p></div><button class="sb-x lg" data-a="close" aria-label="${esc(L.close)}">${icon('x', 18)}</button></div>
-      <div class="svc-tabs">${tabBtn('prices', 'coin', L.prices)}${tabBtn('weather', 'sun', L.weather)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}${tabBtn('jobs', 'briefcase', L.jobs)}</div>
-      <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'weather' ? weatherHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : st.tab === 'borders' ? bordersHtml() : st.tab === 'jobs' ? jobsHtml() : nearbyHtml()}</div>`;
+      <div class="svc-tabs">${tabBtn('prices', 'coin', L.prices)}${tabBtn('weather', 'sun', L.weather)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}${tabBtn('jobs', 'briefcase', L.jobs)}${tabBtn('army', 'shield', ARMY_TEXT[LANG === 'en' ? 'en' : 'ar'].tab)}</div>
+      <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'weather' ? weatherHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : st.tab === 'borders' ? bordersHtml() : st.tab === 'jobs' ? jobsHtml() : st.tab === 'army' ? armyHtml() : st.tab === 'nearby' ? nearbyHtml() : pricesHtml()}</div>`;
     if (st.tab === 'nearby') renderResults();
     if (st.tab === 'weather' && (!st.wx || Date.now() - st.wxAt > 10 * 60_000) && !st.wxLoading) loadWx().catch(() => {});
   }
@@ -722,6 +739,32 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       <div class="jobs-switch" role="group" aria-label="${esc(L.jobsSwitch)}">${viewButton('jobs', L.findJob, L.jobBrowseHint, 'briefcase')}${viewButton('workers', L.findWorker, L.workerBrowseHint, 'users')}</div>
       ${body}<p class="svc-note">${esc(L.jobsNote)}</p>`;
   }
+  function armyHtml() {
+    const A = ARMY_TEXT[LANG === 'en' ? 'en' : 'ar'];
+    const data = st.army || {}; const categories = Array.isArray(data.categories) ? data.categories : [];
+    const items = Array.isArray(data.items) ? data.items : [];
+    const filtered = st.armyCat === 'all' ? items : items.filter((item) => item.category === st.armyCat);
+    const chip = (key, label, ic = '') => `<button type="button" class="svc-chip army-chip${st.armyCat === key ? ' on' : ''}" data-army-cat="${esc(key)}">${ic ? `${esc(ic)} ` : ''}${esc(label)}</button>`;
+    const channels = data.channels || {};
+    const followLinks = [
+      channels.tg ? `<a class="btn-sm army-follow-link" href="${esc(channels.tg)}" target="_blank" rel="noopener noreferrer">${icon('telegram', 16)}${esc(A.follow)} · ${esc(A.telegram)}</a>` : '',
+      channels.wa ? `<a class="btn-sm army-follow-link" href="${esc(channels.wa)}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 16)}${esc(A.follow)} · ${esc(A.whatsapp)}</a>` : '',
+    ].filter(Boolean).join('');
+    const sources = (Array.isArray(data.sources) ? data.sources : []).map((source) => `<a class="army-source" href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">${icon('shield', 15)}<span><b>${esc(source.name)}</b><small>${esc(A.verified)}</small></span>${icon('link', 13)}</a>`).join('');
+    const card = (item) => {
+      const category = categories.find((c) => c.id === item.category);
+      const links = (Array.isArray(item.links) ? item.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
+      const sourceUrl = /^https:\/\//i.test(String(item.source_url || '')) ? item.source_url : '';
+      return `<article class="army-card"><div class="army-card-top"><span class="army-badge">${esc(category?.icon || '🏛️')} ${esc(LANG === 'en' ? category?.en || A.title : category?.ar || A.title)}</span><small>${esc(item.source_name || A.verified)}${item.published_at ? ` · ${esc(when(item.published_at))}` : ''}</small></div><h3>${esc(item.title || A.title)}</h3><p>${esc(item.text || '').replace(/\r?\n/g, '<br>')}</p>${links.length ? `<div class="army-card-links"><b>${esc(A.apply)}</b>${links.map((url, i) => `<a class="btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${A.apply} ${i + 1}` : A.apply)}</a>`).join('')}</div>` : ''}${sourceUrl ? `<a class="army-card-source" href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(A.source)}</a>` : ''}</article>`;
+    };
+    const checked = data.checked_at ? `${esc(A.updated)}: ${esc(when(data.checked_at))}` : '';
+    return `<section class="army-intro"><span class="army-icon">${icon('shield', 22)}</span><div><h3>${esc(A.title)}</h3><p>${esc(A.intro)}</p></div></section>
+      <div class="army-follow"><b>${esc(A.follow)}</b><div class="army-follow-links">${followLinks || `<span class="army-no-channels">${icon('telegram', 16)} ${icon('whatsapp', 16)} ${esc(A.noChannels)}</span>`}</div></div>
+      <div class="dd-sec">${esc(A.category)}</div><div class="svc-chips army-chips">${chip('all', A.all)}${categories.map((c) => chip(c.id, LANG === 'en' ? c.en : c.ar, c.icon)).join('')}</div>
+      ${filtered.length ? `<div class="army-list">${filtered.map(card).join('')}</div>` : `<div class="svc-empty army-empty"><span class="army-icon">${icon('shield', 22)}</span><p>${esc(st.armyLoaded ? A.empty : L.loading)}</p></div>`}
+      <div class="dd-sec">${esc(A.sources)}</div><div class="army-sources">${sources || `<p class="svc-note">${esc(A.empty)}</p>`}</div>
+      <p class="svc-note">${esc(A.sourceNote)} ${checked ? `<br>${checked}` : ''}</p>`;
+  }
   function renderResults(failed) {
     const box = sheet?.querySelector('#svcRes'); if (!box) return;
     if (!st.poi) { box.innerHTML = `<div class="svc-empty">${esc(failed ? L.dataErr : L.loading)}</div>`; return; }
@@ -743,6 +786,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (tab) { st.tab = tab.dataset.tab; render(); if (st.tab === 'nearby') loadPoi().then(() => renderResults()).catch(() => renderResults(true)); return; }
     const jobsView = t.closest('[data-jobs-view]');
     if (jobsView) { st.jobsView = jobsView.dataset.jobsView === 'workers' ? 'workers' : 'jobs'; return render(); }
+    const armyCat = t.closest('[data-army-cat]');
+    if (armyCat) { st.armyCat = armyCat.dataset.armyCat || 'all'; return render(); }
     const cat = t.closest('[data-cat]');
     if (cat) { st.cat = cat.dataset.cat; sheet.querySelectorAll('.svc-chip').forEach((c) => c.classList.toggle('on', c.dataset.cat === st.cat)); return renderResults(); }
     if (t.closest('[data-a="forget"]')) { forgetMe(); getMap()?.hideMe?.(); render(); toast(LANG === 'en' ? 'Location removed from this device' : 'انحذف موقعك من هذا الجهاز'); return; }
@@ -844,7 +889,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   // ------------------------------------------------------------ hash links & public API
   function fromHash() {
     const h = location.hash.slice(1);
-    if (h === 'prices' || h === 'power' || h === 'borders' || h === 'jobs') open(h);
+    if (h === 'prices' || h === 'power' || h === 'borders' || h === 'jobs' || h === 'army') open(h);
     else if (h === 'weather') enterMode('weather');
     else if (h === 'services' || h === 'nearby') open('nearby');
     else if (h === 'roads') {
@@ -864,6 +909,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     setBorders(b) { st.borders = Array.isArray(b) ? b : []; paintBorders(); if (isOpen() && st.tab === 'borders') render(); },
     setPower(p) { st.power = Array.isArray(p) ? p : []; paintPower(); if (isOpen() && st.tab === 'power') render(); },
     setJobs(j) { st.jobs = Array.isArray(j) ? j : []; st.jobsLoaded = true; if (isOpen() && st.tab === 'jobs') render(); },
+    setArmy(j) { st.army = j && typeof j === 'object' ? j : { items: [], categories: [], sources: [], channels: {} }; st.armyLoaded = true; if (isOpen() && st.tab === 'army') render(); },
     layersHtml() {
       return `<div class="dd-sec">${esc(L.svcLayers)}</div>
         <div class="svc-mgrid">${Object.keys(MODES).map(modeBtn).join('')}</div>
