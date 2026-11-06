@@ -35,7 +35,7 @@ const S = {
     locInsecure: 'تحديد الموقع بيحتاج اتصال آمن. افتح الموقع على https://red-alert-syria.onrender.com',
     locOutside: 'موقعك برّا سوريا — الخريطة بتعرض سوريا بس.', accuracy: (m) => `الدقة تقريباً ± ${m}`,
     youHere: 'إنت هون', ok: 'تمام', retry: 'جرّب مرة تانية', close: 'إغلاق', ago: 'من',
-    jobs: 'وظائف', jobsIntro: 'فرص العمل التي راجعتها الإدارة قبل نشرها.', jobsSwitch: 'اختر الخدمة', findJob: 'أبحث عن عمل', findWorker: 'مطلوب موظف', jobBrowseHint: 'تصفّح إعلانات الوظائف المعتمدة', workerBrowseHint: 'أرسل وظيفة شاغرة للمراجعة', jobListings: 'فرص العمل المعتمدة', workerProfiles: 'أرسل طلب وظيفة', noJobListings: 'ما في فرص عمل منشورة حالياً.', noWorkerProfiles: 'أرسل تفاصيل الوظيفة عبر بوت التبليغ؛ ستظهر بعد موافقة الإدارة.', jobsNote: 'الإعلانات المقبولة تظهر في هذا القسم فقط، ولا تُنشر في قناة الأخبار.', jobApply: 'رابط التقديم', jobSource: 'المنشور الأصلي', jobAdded: 'أُضيف', jobRequestCta: 'إرسال تفاصيل الوظيفة',
+    jobs: 'وظائف', jobsIntro: 'فرص العمل التي راجعتها الإدارة قبل نشرها.', jobsSwitch: 'اختر الخدمة', findJob: 'أبحث عن عمل', findWorker: 'مطلوب موظف', jobBrowseHint: 'تصفّح إعلانات الوظائف المعتمدة', workerBrowseHint: 'أرسل وظيفة شاغرة للمراجعة', jobListings: 'فرص العمل المعتمدة', workerProfiles: 'أرسل طلب وظيفة', noJobListings: 'ما في فرص عمل منشورة حالياً.', noWorkerProfiles: 'أرسل تفاصيل الوظيفة عبر بوت التبليغ؛ ستظهر بعد موافقة الإدارة.', jobsNote: 'الإعلانات المقبولة تظهر في هذا القسم فقط، ولا تُنشر في قناة الأخبار.', jobApply: 'رابط التقديم', jobSource: 'المنشور الأصلي', jobAdded: 'أُضيف', jobReadMore: 'قراءة المزيد', jobReadLess: 'عرض أقل', jobRequestCta: 'إرسال تفاصيل الوظيفة',
   },
   en: {
     services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me', weather: 'Weather',
@@ -67,7 +67,7 @@ const S = {
     locInsecure: 'Location needs a secure connection. Open https://red-alert-syria.onrender.com',
     locOutside: 'You are outside Syria — the map covers Syria only.', accuracy: (m) => `Accuracy about ± ${m}`,
     youHere: 'You are here', ok: 'OK', retry: 'Try again', close: 'Close', ago: '',
-    jobs: 'Jobs', jobsIntro: 'Job openings reviewed by the team before they are listed.', jobsSwitch: 'Choose a service', findJob: 'Find a job', findWorker: 'Post a vacancy', jobBrowseHint: 'Browse approved job listings', workerBrowseHint: 'Send a vacancy for review', jobListings: 'Approved job openings', workerProfiles: 'Submit a vacancy', noJobListings: 'No job openings have been published yet.', noWorkerProfiles: 'Send the vacancy details through the report bot; it appears after the owner approves it.', jobsNote: 'Approved listings appear here only, never in the news channel.', jobApply: 'Apply / contact', jobSource: 'Original post', jobAdded: 'Added', jobRequestCta: 'Send vacancy details',
+    jobs: 'Jobs', jobsIntro: 'Job openings reviewed by the team before they are listed.', jobsSwitch: 'Choose a service', findJob: 'Find a job', findWorker: 'Post a vacancy', jobBrowseHint: 'Browse approved job listings', workerBrowseHint: 'Send a vacancy for review', jobListings: 'Approved job openings', workerProfiles: 'Submit a vacancy', noJobListings: 'No job openings have been published yet.', noWorkerProfiles: 'Send the vacancy details through the report bot; it appears after the owner approves it.', jobsNote: 'Approved listings appear here only, never in the news channel.', jobApply: 'Apply / contact', jobSource: 'Original post', jobAdded: 'Added', jobReadMore: 'Read more', jobReadLess: 'Show less', jobRequestCta: 'Send vacancy details',
   },
 };
 const ARMY_TEXT = {
@@ -113,7 +113,7 @@ function km(a, b) {
 
 export function createServices({ LANG, esc, icon, toast, openModal, closeModal, getMap, botUrl }) {
   const L = S[LANG] || S.ar;
-  const st = { mode: null, prices: null, roads: [], power: [], borders: [], jobs: [], jobsLoaded: false, army: { items: [], categories: [], sources: [], channels: {} }, armyLoaded: false, armyCat: 'all', poi: null, poiLoading: null, tab: 'prices', jobsView: 'jobs', q: '', cat: 'all', gov: 'all', me: null, popup: null, wx: null, wxAt: 0, wxLoading: null, wxErr: false };
+  const st = { mode: null, prices: null, roads: [], power: [], borders: [], jobs: [], jobsLoaded: false, expandedJobs: new Set(), army: { items: [], categories: [], sources: [], channels: {} }, armyLoaded: false, armyCat: 'all', poi: null, poiLoading: null, tab: 'prices', jobsView: 'jobs', q: '', cat: 'all', gov: 'all', me: null, popup: null, wx: null, wxAt: 0, wxLoading: null, wxErr: false };
   try { const m = JSON.parse(localStorage.getItem(ME_KEY) || 'null'); if (m && Date.now() - m.t < 6 * 3600_000) st.me = m; } catch { /* ignore */ }
   window.__rasMe = st.me;
   const map = () => getMap()?.map || null;
@@ -723,9 +723,14 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   }
   function jobCard(j) {
     const links = (Array.isArray(j.links) ? j.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
-    const src = /^https:\/\//i.test(String(j.source_url || '')) ? `<a class="job-source" href="${esc(j.source_url)}" target="_blank" rel="noopener noreferrer">${esc(L.jobSource)}</a>` : '';
     const location = j.location ? (LANG === 'en' ? j.location.label_en : j.location.label_ar) : '';
-    return `<article class="job-card"><div class="job-card-head"><b>${esc(j.title || L.jobListings)}</b><small>${esc(j.source_name || '')}${j.published_at ? ` · ${esc(L.jobAdded)} ${esc(when(j.published_at))}` : ''}</small></div>${location ? `<div class="job-location">${icon('mapPin', 14)}<span>${esc(location)}</span></div>` : ''}<p class="job-card-text">${esc(j.text || '').replace(/\r?\n/g, '<br>')}</p>${links.length ? `<div class="job-card-links">${links.map((u, i) => `<a class="btn-sm" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${L.jobApply} ${i + 1}` : L.jobApply)}</a>`).join('')}</div>` : ''}${src ? `<div class="job-card-foot">${src}</div>` : ''}</article>`;
+    const id = String(j.id || '');
+    const text = String(j.text || '');
+    const expanded = id && st.expandedJobs.has(id);
+    const previewLimit = 240;
+    const long = text.length > previewLimit;
+    const displayedText = long && !expanded ? `${text.slice(0, previewLimit).trimEnd()}…` : text;
+    return `<article class="job-card"><div class="job-card-head"><b>${esc(j.title || L.jobListings)}</b><small>${j.published_at ? `${esc(L.jobAdded)} ${esc(when(j.published_at))}` : ''}</small></div>${location ? `<div class="job-location">${icon('mapPin', 14)}<span>${esc(location)}</span></div>` : ''}<p class="job-card-text">${esc(displayedText).replace(/\r?\n/g, '<br>')}</p>${long && id ? `<button type="button" class="job-read-toggle" data-job-toggle="${esc(id)}" aria-expanded="${expanded ? 'true' : 'false'}">${esc(expanded ? L.jobReadLess : L.jobReadMore)}</button>` : ''}${links.length ? `<div class="job-card-links">${links.map((u, i) => `<a class="btn-sm" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${L.jobApply} ${i + 1}` : L.jobApply)}</a>`).join('')}</div>` : ''}</article>`;
   }
   // Publicly visible listings are returned by the API only after the owner approves them.
   function jobsHtml() {
@@ -786,6 +791,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (tab) { st.tab = tab.dataset.tab; render(); if (st.tab === 'nearby') loadPoi().then(() => renderResults()).catch(() => renderResults(true)); return; }
     const jobsView = t.closest('[data-jobs-view]');
     if (jobsView) { st.jobsView = jobsView.dataset.jobsView === 'workers' ? 'workers' : 'jobs'; return render(); }
+    const jobToggle = t.closest('[data-job-toggle]');
+    if (jobToggle) { const id = jobToggle.dataset.jobToggle; if (st.expandedJobs.has(id)) st.expandedJobs.delete(id); else st.expandedJobs.add(id); return render(); }
     const armyCat = t.closest('[data-army-cat]');
     if (armyCat) { st.armyCat = armyCat.dataset.armyCat || 'all'; return render(); }
     const cat = t.closest('[data-cat]');

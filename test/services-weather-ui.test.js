@@ -74,7 +74,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobs: 'وظائف'/);
   assert.match(services, /jobs: 'Jobs'/);
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
-  assert.match(app, /services\.js\?v=27/);
+  assert.match(app, /services\.js\?v=28/);
   assert.match(app, /icons\.js\?v=6/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
@@ -92,15 +92,29 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services.slice(jobsStart, jobsEnd), /st\.jobs\.map\(jobCard\)/);
   assert.match(services.slice(jobsStart, jobsEnd), /jobBotUrl\(\)/);
   assert.doesNotMatch(services.slice(jobsStart, jobsEnd), /fetch\(|sendMessage|publishDraft/i);
+  const cardStart = services.indexOf('function jobCard(j)');
+  const cardEnd = services.indexOf('// Publicly visible listings', cardStart);
+  const card = services.slice(cardStart, cardEnd);
+  assert.match(card, /previewLimit = 240/);
+  assert.match(card, /data-job-toggle=/);
+  assert.match(card, /jobReadMore/);
+  assert.doesNotMatch(card, /job-source|jobSource|source_url|source_name/);
+  assert.match(services, /data-job-toggle/);
+  assert.match(services, /expandedJobs\.add\(id\)/);
+  assert.match(services, /jobReadMore: 'قراءة المزيد'/);
+  assert.match(services, /jobReadLess: 'عرض أقل'/);
+  assert.match(services, /jobReadMore: 'Read more'/);
+  assert.match(services, /jobReadLess: 'Show less'/);
   assert.match(css, /\.jobs-switch\s*\{/);
   assert.match(css, /\.jobs-option\.on\s*\{/);
   assert.match(css, /\.job-card\s*\{/);
+  assert.match(css, /\.job-read-toggle\s*\{/);
   assert.match(css, /grid-template-columns: repeat\(8, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(max-width: 420px\)[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
-  assert.match(html, /app\.css\?v=61/);
+  assert.match(html, /app\.css\?v=62/);
 });
 
 test('Syrian Army salary section shows only approved items and uses configured follow links', () => {

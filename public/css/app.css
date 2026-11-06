@@ -910,14 +910,14 @@ html.dark .wa-btn svg { color: #2fe079; }
 .job-card { padding: 13px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--bg-card); }
 .job-card-head { display: grid; gap: 5px; }
 .job-card-head b { color: var(--text-primary); line-height: 1.55; }
-.job-card-head small, .job-card-foot { color: var(--text-muted); font-size: 11.5px; }
+.job-card-head small { color: var(--text-muted); font-size: 11.5px; }
 .job-location { display: flex; align-items: flex-start; gap: 5px; margin-top: 8px; color: var(--red); font-size: 12px; font-weight: 700; line-height: 1.5; }
 .job-location svg { flex: none; margin-top: 2px; }
 .job-card-text { margin: 10px 0; color: var(--text-secondary); line-height: 1.75; overflow-wrap: anywhere; }
+.job-read-toggle { display: inline-flex; align-items: center; min-height: 34px; margin: -4px 0 10px; padding: 4px 10px; border: 0; border-radius: 8px; background: color-mix(in srgb, var(--red) 8%, var(--bg-card)); color: var(--red); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.job-read-toggle:hover { background: color-mix(in srgb, var(--red) 14%, var(--bg-card)); }
 .job-card-links { display: flex; flex-wrap: wrap; gap: 7px; }
 .job-card-links .btn-sm, .job-request { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.job-card-foot { margin-top: 9px; }
-.job-source { text-decoration: underline; text-underline-offset: 2px; }
 .army-intro { display: flex; align-items: flex-start; gap: 11px; padding: 12px; border: 1px solid color-mix(in srgb, #2563eb 30%, var(--border)); border-radius: 13px; background: color-mix(in srgb, #2563eb 6%, var(--bg-card)); margin-bottom: 11px; }
 .army-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; flex: none; color: #2563eb; background: color-mix(in srgb, #2563eb 13%, transparent); }
 .army-intro h3 { margin: 0 0 4px; color: var(--text-primary); font-size: 15px; font-weight: 900; }
