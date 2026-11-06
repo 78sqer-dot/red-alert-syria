@@ -13,6 +13,7 @@ import { registerContactTools } from './contact-tools.js';
 import { registerSupportTools } from './support-tools.js';
 import { registerNewsTools, verifyReportSources } from './news-monitor.js';
 import { registerJobsTools } from './jobs.js';
+import { registerJobsAdminTools } from './jobs-admin-tools.js';
 import { ROAD_DURATIONS, roadLabel, addRoad, activeRoads, endRoad, roadWhere, postRoadToChannel, registerPowerTools } from './services.js';
 import { registerPriceTools } from './prices.js';
 import { registerQuakeTools } from './quakes.js';
@@ -477,6 +478,7 @@ function mainKeyboard(ctx) {
       .text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row()
       .text(lang === 'en' ? '📞 Contact links' : '📞 روابط التواصل', 'ct').text(lang === 'en' ? '💝 Website support' : '💝 الدعم في الموقع', 'sp').row()
       .text(lang === 'en' ? '📡 News monitor' : '📡 الرصد الإخباري', 'nws').row()
+      .text(lang === 'en' ? '💼 Job listings admin' : '💼 إدارة إعلانات الوظائف', 'j:admin').row()
       .text(lang === 'en' ? '💱 Prices bulletin' : '💱 نشرة الأسعار', 'px').text(lang === 'en' ? '🔄 Refresh rates' : '🔄 تحديث الأسعار', 'px:refresh').row()
       .text(lang === 'en' ? '⚡ Electricity' : '⚡ الكهرباء', 'pwr').row()
       .text(lang === 'en' ? '🌍 Earthquakes' : '🌍 الزلازل', 'qk').text(lang === 'en' ? '⛈ Weather warnings' : '⛈ تحذيرات الطقس', 'wx').row()
@@ -1483,7 +1485,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     await next();
   });
-  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerSupportTools(bot, OH); registerNewsTools(bot, OH); registerJobsTools(bot, OH, role); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerWxBulletinTools(bot, OH); registerBorderTools(bot, OH); registerPowerTools(bot, OH); registerRoadMonitorTools(bot, OH); } else { registerJobsTools(bot, OH, role); registerReportOwnerCommands(bot, OH); }
+  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerSupportTools(bot, OH); registerNewsTools(bot, OH); registerJobsTools(bot, OH, role); registerJobsAdminTools(bot, OH); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerWxBulletinTools(bot, OH); registerBorderTools(bot, OH); registerPowerTools(bot, OH); registerRoadMonitorTools(bot, OH); } else { registerJobsTools(bot, OH, role); registerReportOwnerCommands(bot, OH); }
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {

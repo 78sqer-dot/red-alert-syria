@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   initialJobsState, createPendingJob, decideJob, publicJobs,
-  pollJobsOnce, hasSyrianLocation, isJobPost, locationForGovernorate, locationForPlace, _test,
+  pollJobsOnce, hasSyrianLocation, isJobPost, locationForGovernorate, locationForDistrict, locationForPlace,
+  addCustomGovernorate, addCustomArea, updatePublishedJob, deleteJobListing, mergeJobsFromBackup, _test,
 } from '../server/jobs.js';
 import { governorates, districtsOf, placesOf } from '../server/places.js';
 
@@ -116,4 +117,52 @@ test('screening recognizes job language and requires a Syrian place for employer
   assert.equal(hasSyrianLocation('مطلوب محاسب في دمشق سوريا'), true);
   assert.equal(hasSyrianLocation('مطلوب عامل بحلب'), true);
   assert.equal(hasSyrianLocation('A vacancy in Beirut'), false);
+});
+
+test('owner-added governorates and areas produce valid website-only job locations', () => {
+  const jobs = initialJobsState();
+  const gov = addCustomGovernorate({ ar: 'ريف درعا', en: 'Daraa Countryside' }, jobs, NOW);
+  assert.equal(gov.ok, true);
+  const area = addCustomArea(gov.row.code, { ar: 'منطقة الاختبار', en: 'Test Area' }, jobs, NOW + 1);
+  assert.equal(area.ok, true);
+  assert.equal(addCustomArea(gov.row.code, { ar: 'منطقة الاختبار' }, jobs, NOW + 2).error, 'duplicate');
+  const location = locationForDistrict(area.row.code, jobs);
+  assert.equal(location.governorate_code, gov.row.code);
+  assert.equal(location.district_code, area.row.code);
+  const created = createPendingJob({ kind: 'manual', sourceKey: 'manual:test:custom', title: 'مطلوب فني صيانة', text: 'فرصة عمل لفني صيانة مع خبرة مناسبة، دوام كامل، والتقديم عبر البريد الإلكتروني.', location }, jobs, NOW + 3);
+  assert.ok(created.job);
+  assert.equal(publicJobs(jobs).length, 0, 'a draft must not be public before owner approval');
+  assert.equal(decideJob(created.job.id, 'approve', jobs, 9, NOW + 4).ok, true);
+  assert.equal(publicJobs(jobs)[0].location.label_ar, 'منطقة الاختبار، ريف درعا');
+});
+
+test('deletion is owner-recorded, removes public listings, and stale backups cannot restore them', () => {
+  const jobs = initialJobsState();
+  const created = createPendingJob({
+    kind: 'manual', sourceKey: 'manual:test:delete', title: 'فرصة مبيعات',
+    text: 'فرصة عمل في المبيعات بدوام كامل مع راتب ثابت وطريقة تقديم واضحة.',
+    location: locationForGovernorate(governorates[0].code),
+  }, jobs, NOW);
+  assert.ok(created.job);
+  assert.equal(decideJob(created.job.id, 'approve', jobs, 9, NOW + 1).ok, true);
+  const staleBackup = { jobs: { published: { [created.job.id]: structuredClone(jobs.published[created.job.id]) }, decisions: { [created.job.id]: structuredClone(jobs.decisions[created.job.id]) } } };
+  assert.equal(publicJobs(jobs).length, 1);
+  assert.equal(deleteJobListing(created.job.id, jobs, 9, NOW + 2).ok, true);
+  assert.equal(publicJobs(jobs).length, 0);
+  mergeJobsFromBackup(staleBackup, jobs);
+  assert.equal(jobs.published[created.job.id], undefined, 'a stale approval must not resurrect a deleted listing');
+  assert.equal(jobs.deleted[created.job.id].action, 'deleted');
+  assert.equal(publicJobs(jobs).length, 0);
+});
+
+test('edited approved listings win over an older backup snapshot', () => {
+  const jobs = initialJobsState();
+  const created = createPendingJob({ kind: 'manual', sourceKey: 'manual:test:edit', title: 'عنوان قديم', text: 'تفاصيل إعلان وظيفي قديم مع معلومات التقديم المطلوبة للمتقدمين.', location: locationForGovernorate(governorates[0].code) }, jobs, NOW);
+  assert.ok(created.job);
+  decideJob(created.job.id, 'approve', jobs, 9, NOW + 1);
+  const staleBackup = { jobs: { published: { [created.job.id]: structuredClone(jobs.published[created.job.id]) }, decisions: { [created.job.id]: structuredClone(jobs.decisions[created.job.id]) } } };
+  assert.equal(updatePublishedJob(created.job.id, { title: 'عنوان محدث' }, jobs, 9, NOW + 10).ok, true);
+  mergeJobsFromBackup(staleBackup, jobs);
+  assert.equal(jobs.published[created.job.id].title, 'عنوان محدث');
+  assert.equal(publicJobs(jobs)[0].title, 'عنوان محدث');
 });

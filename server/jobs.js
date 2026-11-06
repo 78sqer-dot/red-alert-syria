@@ -23,7 +23,8 @@ let helpers = null;
 export function initialJobsState() {
   return {
     source: { u: JOB_SOURCE.u, name: JOB_SOURCE.name, on: true, initialized: false, lastId: null, updatedAt: 0, lastCheck: null, lastError: null },
-    pending: {}, published: {}, decisions: {}, seen: {}, fingerprints: {}, intake: {},
+    pending: {}, published: {}, decisions: {}, deleted: {}, seen: {}, fingerprints: {}, intake: {},
+    customGovernorates: [], customAreas: [], adminDrafts: {},
   };
 }
 
@@ -40,9 +41,13 @@ export function jobsState(root = store.state) {
   j.pending = j.pending && typeof j.pending === 'object' ? j.pending : {};
   j.published = j.published && typeof j.published === 'object' ? j.published : {};
   j.decisions = j.decisions && typeof j.decisions === 'object' ? j.decisions : {};
+  j.deleted = j.deleted && typeof j.deleted === 'object' ? j.deleted : {};
   j.seen = j.seen && typeof j.seen === 'object' ? j.seen : {};
   j.fingerprints = j.fingerprints && typeof j.fingerprints === 'object' ? j.fingerprints : {};
   j.intake = j.intake && typeof j.intake === 'object' ? j.intake : {};
+  j.customGovernorates = Array.isArray(j.customGovernorates) ? j.customGovernorates : [];
+  j.customAreas = Array.isArray(j.customAreas) ? j.customAreas : [];
+  j.adminDrafts = j.adminDrafts && typeof j.adminDrafts === 'object' ? j.adminDrafts : {};
   return j;
 }
 
@@ -71,13 +76,38 @@ export function hasSyrianLocation(text) {
   })));
 }
 
-export function locationForGovernorate(code) {
+export function locationForGovernorate(code, j = jobsState()) {
   const gov = getGov(String(code || ''));
+  const custom = !gov && j.customGovernorates.find((row) => row.code === String(code || ''));
+  const selected = gov || custom;
+  if (!selected) return null;
+  return {
+    scope: 'governorate', governorate_code: selected.code, governorate_ar: selected.ar, governorate_en: selected.en || '',
+    district_code: null, district_ar: '', district_en: '', place_id: null, place_ar: '', place_en: '',
+    ...(custom ? { custom: true, custom_governorate: true } : {}),
+    label_ar: selected.ar, label_en: selected.en || selected.ar,
+  };
+}
+export function locationForDistrict(code, j = jobsState()) {
+  const district = getDist(String(code || ''));
+  if (district) {
+    const gov = getGov(district.gov);
+    if (!gov) return null;
+    return {
+      scope: 'district', governorate_code: gov.code, governorate_ar: gov.ar, governorate_en: gov.en,
+      district_code: district.code, district_ar: district.ar, district_en: district.en || '', place_id: null, place_ar: '', place_en: '',
+      label_ar: [district.ar, gov.ar].filter(Boolean).join('، '), label_en: [district.en || district.ar, gov.en].filter(Boolean).join(', '),
+    };
+  }
+  const area = j.customAreas.find((row) => row.code === String(code || ''));
+  if (!area) return null;
+  const gov = getGov(area.governorate_code) || j.customGovernorates.find((row) => row.code === area.governorate_code);
   if (!gov) return null;
   return {
-    scope: 'governorate', governorate_code: gov.code, governorate_ar: gov.ar, governorate_en: gov.en,
-    district_code: null, district_ar: '', district_en: '', place_id: null, place_ar: '', place_en: '',
-    label_ar: gov.ar, label_en: gov.en,
+    scope: 'district', governorate_code: gov.code, governorate_ar: gov.ar, governorate_en: gov.en || '',
+    district_code: area.code, district_ar: area.ar, district_en: area.en || '', place_id: null, place_ar: '', place_en: '',
+    custom: true, custom_area: true,
+    label_ar: [area.ar, gov.ar].filter(Boolean).join('، '), label_en: [area.en || area.ar, gov.en || gov.ar].filter(Boolean).join(', '),
   };
 }
 export function locationForPlace(placeId, expectedGov = null) {
@@ -93,11 +123,38 @@ export function locationForPlace(placeId, expectedGov = null) {
     label_en: [place.en || place.ar, district?.en, gov.en].filter(Boolean).join(', '),
   };
 }
-function normalizeJobLocation(location) {
+export function normalizeJobLocation(location, j = jobsState()) {
   if (!location || typeof location !== 'object') return null;
-  return location.place_id
-    ? locationForPlace(location.place_id, location.governorate_code)
-    : locationForGovernorate(location.governorate_code);
+  if (location.place_id) return locationForPlace(location.place_id, location.governorate_code);
+  if (location.custom_area || location.custom_area_code) return locationForDistrict(location.custom_area_code || location.district_code, j);
+  if (location.custom_governorate || location.custom_governorate_code) return locationForGovernorate(location.custom_governorate_code || location.governorate_code, j);
+  if (location.scope === 'district' && location.district_code) return locationForDistrict(location.district_code, j);
+  return locationForGovernorate(location.governorate_code, j);
+}
+
+const cleanLocationName = (value) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+const freshCode = (prefix) => `${prefix}${crypto.randomBytes(4).toString('hex')}`;
+export function addCustomGovernorate(input, j = jobsState(), now = Date.now()) {
+  const ar = cleanLocationName(input?.ar); const en = cleanLocationName(input?.en);
+  if (!ar) return { ok: false, error: 'name_required' };
+  if (j.customGovernorates.length >= 50) return { ok: false, error: 'limit' };
+  if ([...governorates, ...j.customGovernorates].some((row) => normalizeArabic(row.ar) === normalizeArabic(ar))) return { ok: false, error: 'duplicate' };
+  const row = { code: freshCode('x'), ar, en, createdAt: now };
+  j.customGovernorates.push(row);
+  return { ok: true, row };
+}
+export function addCustomArea(governorateCode, input, j = jobsState(), now = Date.now()) {
+  const code = String(governorateCode || '');
+  const gov = getGov(code) || j.customGovernorates.find((row) => row.code === code);
+  const ar = cleanLocationName(input?.ar); const en = cleanLocationName(input?.en);
+  if (!gov) return { ok: false, error: 'governorate_required' };
+  if (!ar) return { ok: false, error: 'name_required' };
+  if (j.customAreas.length >= 300) return { ok: false, error: 'limit' };
+  const existing = [...districtsOf(code), ...j.customAreas.filter((row) => row.governorate_code === code)];
+  if (existing.some((row) => normalizeArabic(row.ar) === normalizeArabic(ar))) return { ok: false, error: 'duplicate' };
+  const row = { code: freshCode('a'), governorate_code: code, ar, en, createdAt: now };
+  j.customAreas.push(row);
+  return { ok: true, row };
 }
 
 function safeLinks(links = []) {
@@ -118,10 +175,10 @@ function titleFromText(text) {
 export function createPendingJob(input, j = jobsState(), now = Date.now()) {
   const text = String(input?.text || '').trim().slice(0, MAX_JOB_TEXT);
   if (!text) return { duplicate: false, job: null, error: 'empty' };
-  const location = normalizeJobLocation(input.location);
+  const location = normalizeJobLocation(input.location, j);
   const baseFingerprint = jobFingerprint(text);
   const fp = location
-    ? crypto.createHash('sha256').update(`${baseFingerprint}:${location.governorate_code}:${location.place_id || 'governorate'}`).digest('hex').slice(0, 24)
+    ? crypto.createHash('sha256').update(`${baseFingerprint}:${location.governorate_code}:${location.place_id || location.district_code || 'governorate'}`).digest('hex').slice(0, 24)
     : baseFingerprint;
   const sourceKey = String(input.sourceKey || `${input.kind || 'source'}:${fp}`).slice(0, 160);
   if (j.seen[sourceKey]) return { duplicate: true, job: null, duplicateOf: j.seen[sourceKey].id || null };
@@ -132,12 +189,12 @@ export function createPendingJob(input, j = jobsState(), now = Date.now()) {
   }
   // Deterministic across overlapping Render instances: callbacks remain idempotent after a deploy.
   const id = crypto.createHash('sha256').update(sourceKey).digest('hex').slice(0, 14);
-  const kind = input.kind === 'employer' ? 'employer' : 'source';
+  const kind = input.kind === 'employer' ? 'employer' : input.kind === 'manual' ? 'manual' : 'source';
   const job = {
     id, kind, sourceKey, fingerprint: fp,
     title: String(input.title || titleFromText(text)).trim().slice(0, 120) || 'فرصة عمل',
     text,
-    sourceName: String(input.sourceName || (kind === 'source' ? JOB_SOURCE.name : 'طلب صاحب عمل')).slice(0, 80),
+    sourceName: String(input.sourceName || (kind === 'source' ? JOB_SOURCE.name : kind === 'manual' ? 'إضافة الإدارة' : 'طلب صاحب عمل')).slice(0, 80),
     sourceUrl: /^https:\/\//i.test(String(input.sourceUrl || '')) ? String(input.sourceUrl).slice(0, 500) : '',
     links: safeLinks(input.links || linksFromText(text)),
     location,
@@ -163,7 +220,7 @@ export function decideJob(id, action, j = jobsState(), by = null, now = Date.now
   const outcome = action === 'approve' ? 'approved' : action === 'ignore' ? 'ignored' : null;
   if (!outcome) return { ok: false, job: null, decision: null };
   if (outcome === 'approved') {
-    const location = normalizeJobLocation(job.location);
+    const location = normalizeJobLocation(job.location, j);
     if (!location) return { ok: false, job: null, decision: null, error: 'location_required' };
     job.location = location;
   }
@@ -180,13 +237,50 @@ export function decideJob(id, action, j = jobsState(), by = null, now = Date.now
   return { ok: true, job, decision };
 }
 
+export function updatePublishedJob(id, patch, j = jobsState(), by = null, now = Date.now()) {
+  const job = j.published[id];
+  if (!job || job.status !== 'approved' || j.deleted[id]) return { ok: false, error: 'not_found' };
+  if (patch.title !== undefined) {
+    const title = cleanLocationName(patch.title);
+    if (!title) return { ok: false, error: 'title_required' };
+    job.title = title.slice(0, 120);
+  }
+  if (patch.text !== undefined) {
+    const text = String(patch.text || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim().slice(0, MAX_JOB_TEXT);
+    if (text.length < 10) return { ok: false, error: 'text_too_short' };
+    job.text = text;
+    job.links = safeLinks(patch.links || linksFromText(text));
+  }
+  if (patch.location !== undefined) {
+    const location = normalizeJobLocation(patch.location, j);
+    if (!location) return { ok: false, error: 'location_required' };
+    job.location = location;
+  }
+  job.updatedAt = now;
+  if (by != null) job.updatedBy = Number(by) || null;
+  return { ok: true, job };
+}
+
+export function deleteJobListing(id, j = jobsState(), by = null, now = Date.now()) {
+  const job = j.pending[id] || j.published[id];
+  if (!job || j.deleted[id]) return { ok: false, job: null };
+  delete j.pending[id];
+  delete j.published[id];
+  const tombstone = { id, action: 'deleted', deletedAt: now, deletedBy: by == null ? null : Number(by) || null, fingerprint: job.fingerprint, sourceKey: job.sourceKey };
+  j.deleted[id] = tombstone;
+  j.decisions[id] = { id, action: 'deleted', decidedAt: now, decidedBy: tombstone.deletedBy, fingerprint: job.fingerprint, sourceKey: job.sourceKey };
+  if (job.sourceKey && j.seen[job.sourceKey]) j.seen[job.sourceKey] = { ...j.seen[job.sourceKey], status: 'deleted', id, at: now };
+  if (job.fingerprint && j.fingerprints[job.fingerprint]) j.fingerprints[job.fingerprint] = { ...j.fingerprints[job.fingerprint], status: 'deleted', id, at: now };
+  return { ok: true, job, tombstone };
+}
+
 export function publicJobs(j = jobsState()) {
-  return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && normalizeJobLocation(x.location))
+  return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && !j.deleted?.[x.id] && normalizeJobLocation(x.location, j))
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)).slice(0, 100)
     .map((x) => ({
       id: x.id, title: x.title, text: x.text, links: safeLinks(x.links || []),
       source_name: x.sourceName, source_url: x.sourceUrl || '',
-      location: normalizeJobLocation(x.location),
+      location: normalizeJobLocation(x.location, j),
       published_at: x.publishedAt || null,
     }));
 }
@@ -256,12 +350,31 @@ export async function notifyPending(j = jobsState(), { forceId = null } = {}) {
   return n;
 }
 
-export function mergeJobsFromBackup(snapshot) {
+export function mergeJobsFromBackup(snapshot, j = jobsState()) {
   const remote = snapshot?.jobs;
   if (!remote || typeof remote !== 'object') return;
-  const j = jobsState();
   let changed = false;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  for (const key of ['customGovernorates', 'customAreas']) {
+    const current = new Set(j[key].map((row) => row?.code).filter(Boolean));
+    for (const row of Array.isArray(remote[key]) ? remote[key] : []) {
+      if (!row?.code || current.has(row.code)) continue;
+      j[key].push(row); current.add(row.code); changed = true;
+    }
+  }
+  for (const [uid, draft] of Object.entries(remote.adminDrafts || {})) {
+    if (!draft || Date.now() - Number(draft.updatedAt || draft.createdAt || 0) > 24 * 3600_000) continue;
+    const mine = j.adminDrafts[uid];
+    if (!mine || Number(draft.updatedAt || draft.createdAt) > Number(mine.updatedAt || mine.createdAt)) { j.adminDrafts[uid] = draft; changed = true; }
+  }
+  for (const [id, tombstone] of Object.entries(remote.deleted || {})) {
+    if (!tombstone) continue;
+    if (!j.deleted[id] || Number(tombstone.deletedAt) > Number(j.deleted[id].deletedAt)) { j.deleted[id] = tombstone; changed = true; }
+    if (j.pending[id]) { delete j.pending[id]; changed = true; }
+    if (j.published[id]) { delete j.published[id]; changed = true; }
+    const decision = { id, action: 'deleted', decidedAt: Number(tombstone.deletedAt) || Date.now(), decidedBy: tombstone.deletedBy || null, fingerprint: tombstone.fingerprint, sourceKey: tombstone.sourceKey };
+    if (!same(j.decisions[id], decision)) { j.decisions[id] = decision; changed = true; }
+  }
   for (const [uid, intake] of Object.entries(remote.intake || {})) {
     if (!intake || Date.now() - Number(intake.createdAt || 0) > INTAKE_AGE) continue;
     const mine = j.intake[uid];
@@ -271,6 +384,15 @@ export function mergeJobsFromBackup(snapshot) {
     if (!row) continue;
     const localDecision = j.decisions[id];
     const remoteDecision = remote.decisions?.[id] || { id, action: 'approved', decidedAt: Date.parse(row.publishedAt || 0) || 0 };
+    if (j.deleted[id] || remote.deleted?.[id] || localDecision?.action === 'deleted' || remoteDecision.action === 'deleted') {
+      const tombstone = j.deleted[id] || remote.deleted?.[id] || { id, action: 'deleted', deletedAt: remoteDecision.decidedAt || Date.now(), deletedBy: remoteDecision.decidedBy || null, fingerprint: row.fingerprint, sourceKey: row.sourceKey };
+      j.deleted[id] = tombstone;
+      j.decisions[id] = { id, action: 'deleted', decidedAt: Number(tombstone.deletedAt) || Date.now(), decidedBy: tombstone.deletedBy || null, fingerprint: tombstone.fingerprint, sourceKey: tombstone.sourceKey };
+      if (j.pending[id]) delete j.pending[id];
+      if (j.published[id]) delete j.published[id];
+      changed = true;
+      continue;
+    }
     if (localDecision?.action === 'ignored' || remoteDecision.action === 'ignored') {
       const rejected = localDecision?.action === 'ignored' ? localDecision : remoteDecision;
       if (!same(j.decisions[id], rejected)) { j.decisions[id] = rejected; changed = true; }
@@ -278,11 +400,15 @@ export function mergeJobsFromBackup(snapshot) {
       if (j.published[id]) { delete j.published[id]; changed = true; }
       continue; // a rejection always wins a stale approval
     }
-    const location = normalizeJobLocation(row.location);
+    const localRow = j.published[id];
+    const localVersion = Number(localRow?.updatedAt) || Date.parse(localRow?.publishedAt || 0) || Number(localDecision?.decidedAt) || 0;
+    const remoteVersion = Number(row.updatedAt) || Date.parse(row.publishedAt || 0) || Number(remoteDecision.decidedAt) || 0;
+    const selectedRow = localRow && localVersion > remoteVersion ? localRow : row;
+    const location = normalizeJobLocation(selectedRow.location, j);
     if (!location || remoteDecision.action !== 'approved') continue;
     if (!localDecision && !same(j.decisions[id], remoteDecision)) { j.decisions[id] = remoteDecision; changed = true; }
     if (j.pending[id]) { delete j.pending[id]; changed = true; }
-    const approvedRow = { ...row, location, status: 'approved' };
+    const approvedRow = { ...selectedRow, location, status: 'approved' };
     if (!same(j.published[id], approvedRow)) { j.published[id] = approvedRow; changed = true; }
     if (row.sourceKey) {
       const seen = { status: 'approved', id, fingerprint: row.fingerprint, at: remoteDecision.decidedAt };
@@ -296,12 +422,21 @@ export function mergeJobsFromBackup(snapshot) {
   for (const [id, decision] of Object.entries(remote.decisions || {})) {
     if (!decision) continue;
     const localDecision = j.decisions[id];
+    if (j.deleted[id] || decision.action === 'deleted' || localDecision?.action === 'deleted') {
+      const tombstone = j.deleted[id] || remote.deleted?.[id] || { id, action: 'deleted', deletedAt: decision.decidedAt || Date.now(), deletedBy: decision.decidedBy || null, fingerprint: decision.fingerprint, sourceKey: decision.sourceKey };
+      j.deleted[id] = tombstone;
+      j.decisions[id] = { id, action: 'deleted', decidedAt: Number(tombstone.deletedAt) || Date.now(), decidedBy: tombstone.deletedBy || null, fingerprint: tombstone.fingerprint, sourceKey: tombstone.sourceKey };
+      if (j.pending[id]) delete j.pending[id];
+      if (j.published[id]) delete j.published[id];
+      changed = true;
+      continue;
+    }
     const chosen = localDecision?.action === 'ignored' || decision.action === 'ignored'
       ? (localDecision?.action === 'ignored' ? localDecision : decision)
       : (!localDecision || Number(decision.decidedAt) < Number(localDecision.decidedAt) ? decision : localDecision);
     if (chosen.action === 'approved') {
       const candidate = remote.published?.[id] || j.published[id] || j.pending[id];
-      if (!normalizeJobLocation(candidate?.location)) {
+      if (!normalizeJobLocation(candidate?.location, j)) {
         if (j.decisions[id]?.action === 'approved') { delete j.decisions[id]; changed = true; }
         if (j.published[id]) { delete j.published[id]; changed = true; }
         continue;
@@ -312,8 +447,12 @@ export function mergeJobsFromBackup(snapshot) {
       if (j.pending[id]) { delete j.pending[id]; changed = true; }
       if (j.published[id]) { delete j.published[id]; changed = true; }
     } else if (chosen.action === 'approved') {
-      const row = remote.published?.[id] || j.published[id] || j.pending[id];
-      const location = normalizeJobLocation(row?.location);
+      const remoteRow = remote.published?.[id];
+      const localRow = j.published[id];
+      const remoteVersion = Number(remoteRow?.updatedAt) || Date.parse(remoteRow?.publishedAt || 0) || Number(decision.decidedAt) || 0;
+      const localVersion = Number(localRow?.updatedAt) || Date.parse(localRow?.publishedAt || 0) || Number(localDecision?.decidedAt) || 0;
+      const row = localRow && localVersion > remoteVersion ? localRow : remoteRow || localRow || j.pending[id];
+      const location = normalizeJobLocation(row?.location, j);
       if (row && location) {
         const approvedRow = { ...row, location, status: 'approved' };
         if (!same(j.published[id], approvedRow)) { j.published[id] = approvedRow; changed = true; }
@@ -322,10 +461,10 @@ export function mergeJobsFromBackup(snapshot) {
     }
   }
   for (const [id, row] of Object.entries(remote.pending || {})) {
-    if (!row || j.decisions[id] || j.pending[id]) continue;
+    if (!row || j.deleted[id] || j.decisions[id] || j.pending[id]) continue;
     const fp = row.fingerprint && j.fingerprints[row.fingerprint];
     if (fp && fp.id !== id) continue;
-    j.pending[id] = { ...row, location: normalizeJobLocation(row.location) };
+    j.pending[id] = { ...row, location: normalizeJobLocation(row.location, j) };
     if (row.sourceKey) j.seen[row.sourceKey] ||= { status: 'pending', id, fingerprint: row.fingerprint, at: row.createdAt };
     if (row.fingerprint) j.fingerprints[row.fingerprint] ||= { status: 'pending', id, at: row.createdAt };
     changed = true;
@@ -340,7 +479,7 @@ export function mergeJobsFromBackup(snapshot) {
       j.source.initialized = true; j.source.lastId = Number(remote.source.lastId) || 0; changed = true;
     }
   }
-  if (changed) {
+  if (changed && j === jobsState()) {
     saveJobs({ broadcast: true });
   }
 }
