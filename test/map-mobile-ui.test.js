@@ -53,11 +53,12 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=76'/);
-  assert.match(html, /app\.css\?v=58/);
+  assert.match(html, /app\.css\?v=61/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
-  assert.match(app, /from '\.\/services\.js\?v=23'/);
+  assert.match(app, /from '\.\/services\.js\?v=26'/);
+  assert.match(app, /from '\.\/icons\.js\?v=6'/);
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=13'/);
   assert.match(map, /from '\/shared\/types\.js\?v=41'/);

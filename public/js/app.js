@@ -1,9 +1,9 @@
 // Red Alert Syria — front-end application
-import { createServices, GOV_C } from './services.js?v=23';
+import { createServices, GOV_C } from './services.js?v=26';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
 import { DICT } from './i18n.js?v=3';
 import { matchesGovernorate } from './alert-region-filter.js';
-import { icon } from './icons.js?v=5';
+import { icon } from './icons.js?v=6';
 import { settings } from './settings.js?v=13';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
 import { AlertMap, typeIcon, glyphDisc } from './map.js?v=76';
@@ -1373,6 +1373,7 @@ function connect() {
     setSupport(j.support);
     if (j.roads && svc) svc.setRoads(j.roads);
     if (j.borders && svc) svc.setBorders(j.borders);
+    if (j.jobs && svc) svc.setJobs(j.jobs);
     const before = new Set(state.alerts.keys());
     state.alerts = new Map();
     for (const a of j.alerts) state.alerts.set(a.id, a);
@@ -1405,6 +1406,7 @@ function connect() {
   es.addEventListener('roads', (e) => { beat(); try { svc && svc.setRoads(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('power', (e) => { beat(); try { svc && svc.setPower(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('borders', (e) => { beat(); try { svc && svc.setBorders(JSON.parse(e.data)); } catch { /* ignore */ } });
+  es.addEventListener('jobs', (e) => { beat(); try { svc && svc.setJobs(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('contacts', (e) => { beat(); try { setContacts(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('support', (e) => { beat(); try { setSupport(JSON.parse(e.data)); } catch { /* ignore */ } });
   es.addEventListener('update', (e) => {

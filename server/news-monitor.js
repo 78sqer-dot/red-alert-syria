@@ -1685,6 +1685,7 @@ export function registerNewsTools(bot, h) {
     return new InlineKeyboard()
       .text(n.on ? t(ctx, '⏸ إيقاف الرصد', '⏸ Pause monitoring') : t(ctx, '▶️ تشغيل الرصد', '▶️ Resume monitoring'), n.on ? 'nws:off' : 'nws:on').row()
       .text(t(ctx, '📰 المصادر', '📰 Sources'), 'nws:src').text(t(ctx, '🏷 الأنواع', '🏷 Types'), 'nws:ty').row()
+      .text(t(ctx, '💼 رصد الوظائف', '💼 Jobs monitor'), 'j:menu').row()
       .text(t(ctx, '➕ إضافة مصدر', '➕ Add a source'), 'nws:sa:main').row()
       .text(`🌙 ${t(ctx, 'النشر الليلي', 'Night auto-publish')}: ${n.night.on ? `✅ ${n.night.from}–${n.night.to}` : '⏸'}`, 'nws:ng').row()
       .text(t(ctx, '🧪 إرسال مسودة تجريبية', '🧪 Send a test draft'), 'nws:test').row()

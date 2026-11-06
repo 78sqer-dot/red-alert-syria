@@ -6,7 +6,11 @@ import { ICONS, icon } from '../public/js/icons.js';
 const services = readFileSync(new URL('../public/js/services.js', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
 const weatherServer = readFileSync(new URL('../server/wx-daily.js', import.meta.url), 'utf8');
+const jobsServer = readFileSync(new URL('../server/jobs.js', import.meta.url), 'utf8');
+const botServer = readFileSync(new URL('../server/bot.js', import.meta.url), 'utf8');
+const newsMonitor = readFileSync(new URL('../server/news-monitor.js', import.meta.url), 'utf8');
 
 test('weather map loads modeled data only when selected and keeps official warnings separately sourced', () => {
   assert.match(services, /wxNoAlerts: 'لا توجد حالياً تحذيرات جوية نشطة في موجز المركز\.'/);
@@ -62,6 +66,53 @@ test('services toolbar and place icons exist and are registered for map display'
   }
   assert.match(services, /for \(const \[k, col\] of Object\.entries\(CAT_COLORS\)\) if \(!m\.hasImage\('svc-' \+ k\)\) m\.addImage\('svc-' \+ k, drawIcon\(k, col\)/);
   assert.match(services, /'icon-image': \['get', 'icon'\]/);
+});
+
+test('jobs service lists only approved vacancies and routes employer submissions for review', () => {
+  assert.ok(ICONS.briefcase, 'the jobs tab uses a defined briefcase icon');
+  assert.match(icon('briefcase', 20), /<svg[^>]*viewBox="0 0 24 24"/);
+  assert.match(services, /jobs: 'وظائف'/);
+  assert.match(services, /jobs: 'Jobs'/);
+  assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
+  assert.match(app, /services\.js\?v=26/);
+  assert.match(app, /icons\.js\?v=6/);
+  assert.match(services, /viewButton\('jobs', L\.findJob/);
+  assert.match(services, /viewButton\('workers', L\.findWorker/);
+  assert.match(services, /findWorker: 'مطلوب موظف'/);
+  assert.match(services, /noJobListings: 'ما في فرص عمل منشورة حالياً\.'/);
+  assert.match(services, /noWorkerProfiles: 'أرسل تفاصيل الوظيفة عبر بوت التبليغ؛ ستظهر بعد موافقة الإدارة\.'/);
+  assert.match(services, /No job openings have been published yet/);
+  assert.match(services, /Send the vacancy details through the report bot; it appears after the owner approves it\./);
+  assert.match(services, /st\.jobsView = jobsView\.dataset\.jobsView === 'workers' \? 'workers' : 'jobs'/);
+  assert.match(services, /h === 'jobs'\) open\(h\)/);
+  const jobsStart = services.indexOf('function jobsHtml()');
+  const jobsEnd = services.indexOf('function renderResults', jobsStart);
+  assert.ok(jobsStart >= 0 && jobsEnd > jobsStart);
+  assert.match(services.slice(jobsStart, jobsEnd), /st\.jobs\.map\(jobCard\)/);
+  assert.match(services.slice(jobsStart, jobsEnd), /jobBotUrl\(\)/);
+  assert.doesNotMatch(services.slice(jobsStart, jobsEnd), /fetch\(|sendMessage|publishDraft/i);
+  assert.match(css, /\.jobs-switch\s*\{/);
+  assert.match(css, /\.jobs-option\.on\s*\{/);
+  assert.match(css, /\.job-card\s*\{/);
+  assert.match(css, /grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 420px\)[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
+  assert.match(services, /class="job-location"/);
+  assert.match(css, /\.job-location\s*\{/);
+  assert.match(html, /app\.css\?v=61/);
+});
+
+test('job intake and monitored posts require a location from Syrian governorate and place data', () => {
+  assert.match(jobsServer, /districtsOf, placesOf, getGov, getDist, getPlace/);
+  assert.match(jobsServer, /function locGovKeyboard/);
+  assert.match(jobsServer, /function locDistrictKeyboard/);
+  assert.match(jobsServer, /function locPlaceKeyboard/);
+  assert.match(jobsServer, /intake\.step !== 'details' \|\| !intake\.location/);
+  assert.match(jobsServer, /location_required/);
+  assert.match(jobsServer, /function denyNonPrivateJobRequest/);
+  assert.match(jobsServer, /ctx\.chat\.type !== 'private'/);
+  assert.match(botServer, /💼 Post a vacancy/);
+  assert.match(newsMonitor, /j:menu/);
 });
 
 test('official warning cards show their start time and clarify source-button destinations', () => {

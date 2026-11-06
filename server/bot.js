@@ -12,6 +12,7 @@ import { renderAlertPng } from './alert-image.js';
 import { registerContactTools } from './contact-tools.js';
 import { registerSupportTools } from './support-tools.js';
 import { registerNewsTools, verifyReportSources } from './news-monitor.js';
+import { registerJobsTools } from './jobs.js';
 import { ROAD_DURATIONS, roadLabel, addRoad, activeRoads, endRoad, roadWhere, postRoadToChannel, registerPowerTools } from './services.js';
 import { registerPriceTools } from './prices.js';
 import { registerQuakeTools } from './quakes.js';
@@ -464,6 +465,11 @@ function mainKeyboard(ctx) {
   kb.text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd');
   if (staff(ctx)) kb.text(lang === 'en' ? '🛂 Border crossings' : '🛂 المعابر', 'bd').row();
   else kb.url(lang === 'en' ? '🛂 Border crossings' : '🛂 حالة المعابر', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/${lang === 'en' ? 'en' : 'ar'}/#borders`).row();
+  if (roleOf(ctx) === 'report' && !staff(ctx)) {
+    const site = (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+    kb.url(lang === 'en' ? '🔎 Find a job' : '🔎 أبحث عن عمل', `${site}/${lang === 'en' ? 'en' : 'ar'}/#jobs`)
+      .text(lang === 'en' ? '💼 Post a vacancy' : '💼 مطلوب موظف', 'j:new').row();
+  }
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
   if (owner(ctx)) {
@@ -1477,7 +1483,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     await next();
   });
-  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerSupportTools(bot, OH); registerNewsTools(bot, OH); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerWxBulletinTools(bot, OH); registerBorderTools(bot, OH); registerPowerTools(bot, OH); registerRoadMonitorTools(bot, OH); } else registerReportOwnerCommands(bot, OH);
+  if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerSupportTools(bot, OH); registerNewsTools(bot, OH); registerJobsTools(bot, OH, role); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerWxBulletinTools(bot, OH); registerBorderTools(bot, OH); registerPowerTools(bot, OH); registerRoadMonitorTools(bot, OH); } else { registerJobsTools(bot, OH, role); registerReportOwnerCommands(bot, OH); }
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {

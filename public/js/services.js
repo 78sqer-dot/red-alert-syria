@@ -35,6 +35,7 @@ const S = {
     locInsecure: 'تحديد الموقع بيحتاج اتصال آمن. افتح الموقع على https://red-alert-syria.onrender.com',
     locOutside: 'موقعك برّا سوريا — الخريطة بتعرض سوريا بس.', accuracy: (m) => `الدقة تقريباً ± ${m}`,
     youHere: 'إنت هون', ok: 'تمام', retry: 'جرّب مرة تانية', close: 'إغلاق', ago: 'من',
+    jobs: 'وظائف', jobsIntro: 'فرص العمل التي راجعتها الإدارة قبل نشرها.', jobsSwitch: 'اختر الخدمة', findJob: 'أبحث عن عمل', findWorker: 'مطلوب موظف', jobBrowseHint: 'تصفّح إعلانات الوظائف المعتمدة', workerBrowseHint: 'أرسل وظيفة شاغرة للمراجعة', jobListings: 'فرص العمل المعتمدة', workerProfiles: 'أرسل طلب وظيفة', noJobListings: 'ما في فرص عمل منشورة حالياً.', noWorkerProfiles: 'أرسل تفاصيل الوظيفة عبر بوت التبليغ؛ ستظهر بعد موافقة الإدارة.', jobsNote: 'الإعلانات المقبولة تظهر في هذا القسم فقط، ولا تُنشر في قناة الأخبار.', jobApply: 'رابط التقديم', jobSource: 'المنشور الأصلي', jobAdded: 'أُضيف', jobRequestCta: 'إرسال تفاصيل الوظيفة',
   },
   en: {
     services: 'Services', prices: 'Prices', power: 'Electricity', roads: 'Roads', borders: 'Borders', nearby: 'Near me', weather: 'Weather',
@@ -66,6 +67,7 @@ const S = {
     locInsecure: 'Location needs a secure connection. Open https://red-alert-syria.onrender.com',
     locOutside: 'You are outside Syria — the map covers Syria only.', accuracy: (m) => `Accuracy about ± ${m}`,
     youHere: 'You are here', ok: 'OK', retry: 'Try again', close: 'Close', ago: '',
+    jobs: 'Jobs', jobsIntro: 'Job openings reviewed by the team before they are listed.', jobsSwitch: 'Choose a service', findJob: 'Find a job', findWorker: 'Post a vacancy', jobBrowseHint: 'Browse approved job listings', workerBrowseHint: 'Send a vacancy for review', jobListings: 'Approved job openings', workerProfiles: 'Submit a vacancy', noJobListings: 'No job openings have been published yet.', noWorkerProfiles: 'Send the vacancy details through the report bot; it appears after the owner approves it.', jobsNote: 'Approved listings appear here only, never in the news channel.', jobApply: 'Apply / contact', jobSource: 'Original post', jobAdded: 'Added', jobRequestCta: 'Send vacancy details',
   },
 };
 const CAT_COLORS = { hospital: '#e11d48', clinic: '#db2777', pharmacy: '#059669', fuel: '#d97706', bakery: '#a16207' };
@@ -95,7 +97,7 @@ function km(a, b) {
 
 export function createServices({ LANG, esc, icon, toast, openModal, closeModal, getMap, botUrl }) {
   const L = S[LANG] || S.ar;
-  const st = { mode: null, prices: null, roads: [], power: [], borders: [], poi: null, poiLoading: null, tab: 'prices', q: '', cat: 'all', gov: 'all', me: null, popup: null, wx: null, wxAt: 0, wxLoading: null, wxErr: false };
+  const st = { mode: null, prices: null, roads: [], power: [], borders: [], jobs: [], jobsLoaded: false, poi: null, poiLoading: null, tab: 'prices', jobsView: 'jobs', q: '', cat: 'all', gov: 'all', me: null, popup: null, wx: null, wxAt: 0, wxLoading: null, wxErr: false };
   try { const m = JSON.parse(localStorage.getItem(ME_KEY) || 'null'); if (m && Date.now() - m.t < 6 * 3600_000) st.me = m; } catch { /* ignore */ }
   window.__rasMe = st.me;
   const map = () => getMap()?.map || null;
@@ -111,7 +113,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     try {
       const r = await fetch('/api/services', { cache: 'no-store' });
       const j = await r.json();
-      st.prices = j.prices; st.roads = j.roads || []; st.power = j.power || []; st.borders = j.borders || [];
+      st.prices = j.prices; st.roads = j.roads || []; st.power = j.power || []; st.borders = j.borders || []; st.jobs = Array.isArray(j.jobs) ? j.jobs : []; st.jobsLoaded = true;
       paintRoads(); paintBorders(); if (isOpen()) render();
     } catch { /* offline: keep what we have */ }
   }
@@ -580,15 +582,15 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   function close() {
     if (!sheet) return;
     sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); back.hidden = true;
-    if (/^#(prices|power|roads|borders|services|weather)$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+    if (/^#(prices|power|roads|borders|services|weather|jobs)$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
   }
   const tabBtn = (k, ic, label) => `<button class="svc-tab${st.tab === k ? ' on' : ''}" data-tab="${k}">${icon(ic, 16)}<span>${esc(label)}</span></button>`;
   function render() {
     const b = sheet.querySelector('#svcBody');
     b.innerHTML = `<div class="sheet-grab"></div>
       <div class="svc-head"><div><h2>${esc(L.sheetTitle)}</h2><p>${esc(L.sheetSub)}</p></div><button class="sb-x lg" data-a="close" aria-label="${esc(L.close)}">${icon('x', 18)}</button></div>
-      <div class="svc-tabs">${tabBtn('prices', 'coin', L.prices)}${tabBtn('weather', 'sun', L.weather)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}</div>
-      <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'weather' ? weatherHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : st.tab === 'borders' ? bordersHtml() : nearbyHtml()}</div>`;
+      <div class="svc-tabs">${tabBtn('prices', 'coin', L.prices)}${tabBtn('weather', 'sun', L.weather)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}${tabBtn('jobs', 'briefcase', L.jobs)}</div>
+      <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'weather' ? weatherHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : st.tab === 'borders' ? bordersHtml() : st.tab === 'jobs' ? jobsHtml() : nearbyHtml()}</div>`;
     if (st.tab === 'nearby') renderResults();
     if (st.tab === 'weather' && (!st.wx || Date.now() - st.wxAt > 10 * 60_000) && !st.wxLoading) loadWx().catch(() => {});
   }
@@ -698,6 +700,28 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       <div class="svc-mgrid">${Object.keys(GROUPS).map(modeBtn).join('')}</div>
       <p class="svc-note">${esc(L.osmNote)} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a></p>`;
   }
+  function jobBotUrl() {
+    const base = String(botUrl?.() || '').trim().replace(/\?[^#]*$/, '').replace(/#.*$/, '');
+    return /^https:\/\/t\.me\/[A-Za-z0-9_]{4,}$/i.test(base) ? `${base}?start=job` : '';
+  }
+  function jobCard(j) {
+    const links = (Array.isArray(j.links) ? j.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
+    const src = /^https:\/\//i.test(String(j.source_url || '')) ? `<a class="job-source" href="${esc(j.source_url)}" target="_blank" rel="noopener noreferrer">${esc(L.jobSource)}</a>` : '';
+    const location = j.location ? (LANG === 'en' ? j.location.label_en : j.location.label_ar) : '';
+    return `<article class="job-card"><div class="job-card-head"><b>${esc(j.title || L.jobListings)}</b><small>${esc(j.source_name || '')}${j.published_at ? ` · ${esc(L.jobAdded)} ${esc(when(j.published_at))}` : ''}</small></div>${location ? `<div class="job-location">${icon('mapPin', 14)}<span>${esc(location)}</span></div>` : ''}<p class="job-card-text">${esc(j.text || '').replace(/\r?\n/g, '<br>')}</p>${links.length ? `<div class="job-card-links">${links.map((u, i) => `<a class="btn-sm" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${L.jobApply} ${i + 1}` : L.jobApply)}</a>`).join('')}</div>` : ''}${src ? `<div class="job-card-foot">${src}</div>` : ''}</article>`;
+  }
+  // Publicly visible listings are returned by the API only after the owner approves them.
+  function jobsHtml() {
+    const seeking = st.jobsView !== 'workers';
+    const title = seeking ? L.jobListings : L.workerProfiles;
+    const viewButton = (key, label, hint, ic) => `<button type="button" class="jobs-option${st.jobsView === key ? ' on' : ''}" data-jobs-view="${key}" aria-pressed="${st.jobsView === key}">${icon(ic, 20)}<span><b>${esc(label)}</b><small>${esc(hint)}</small></span></button>`;
+    const body = seeking
+      ? (st.jobs.length ? `<div class="jobs-list">${st.jobs.map(jobCard).join('')}</div>` : `<section class="svc-empty jobs-empty" aria-live="polite"><span class="jobs-empty-icon">${icon('briefcase', 22)}</span><h3>${esc(title)}</h3><p>${esc(st.jobsLoaded ? L.noJobListings : L.loading)}</p></section>`)
+      : `<section class="svc-empty jobs-empty"><span class="jobs-empty-icon">${icon('briefcase', 22)}</span><h3>${esc(title)}</h3><p>${esc(L.noWorkerProfiles)}</p>${jobBotUrl() ? `<a class="btn-sm job-request" href="${esc(jobBotUrl())}" target="_blank" rel="noopener noreferrer">${icon('link', 15)}${esc(L.jobRequestCta)}</a>` : ''}</section>`;
+    return `<p class="svc-note jobs-intro">${esc(L.jobsIntro)}</p>
+      <div class="jobs-switch" role="group" aria-label="${esc(L.jobsSwitch)}">${viewButton('jobs', L.findJob, L.jobBrowseHint, 'briefcase')}${viewButton('workers', L.findWorker, L.workerBrowseHint, 'users')}</div>
+      ${body}<p class="svc-note">${esc(L.jobsNote)}</p>`;
+  }
   function renderResults(failed) {
     const box = sheet?.querySelector('#svcRes'); if (!box) return;
     if (!st.poi) { box.innerHTML = `<div class="svc-empty">${esc(failed ? L.dataErr : L.loading)}</div>`; return; }
@@ -717,6 +741,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (t.closest('[data-a="close"]')) return close();
     const tab = t.closest('[data-tab]');
     if (tab) { st.tab = tab.dataset.tab; render(); if (st.tab === 'nearby') loadPoi().then(() => renderResults()).catch(() => renderResults(true)); return; }
+    const jobsView = t.closest('[data-jobs-view]');
+    if (jobsView) { st.jobsView = jobsView.dataset.jobsView === 'workers' ? 'workers' : 'jobs'; return render(); }
     const cat = t.closest('[data-cat]');
     if (cat) { st.cat = cat.dataset.cat; sheet.querySelectorAll('.svc-chip').forEach((c) => c.classList.toggle('on', c.dataset.cat === st.cat)); return renderResults(); }
     if (t.closest('[data-a="forget"]')) { forgetMe(); getMap()?.hideMe?.(); render(); toast(LANG === 'en' ? 'Location removed from this device' : 'انحذف موقعك من هذا الجهاز'); return; }
@@ -818,7 +844,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   // ------------------------------------------------------------ hash links & public API
   function fromHash() {
     const h = location.hash.slice(1);
-    if (h === 'prices' || h === 'power' || h === 'borders') open(h);
+    if (h === 'prices' || h === 'power' || h === 'borders' || h === 'jobs') open(h);
     else if (h === 'weather') enterMode('weather');
     else if (h === 'services' || h === 'nearby') open('nearby');
     else if (h === 'roads') {
@@ -837,6 +863,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     setRoads(r) { st.roads = Array.isArray(r) ? r : []; paintRoads(); if (isOpen() && st.tab === 'roads') render(); },
     setBorders(b) { st.borders = Array.isArray(b) ? b : []; paintBorders(); if (isOpen() && st.tab === 'borders') render(); },
     setPower(p) { st.power = Array.isArray(p) ? p : []; paintPower(); if (isOpen() && st.tab === 'power') render(); },
+    setJobs(j) { st.jobs = Array.isArray(j) ? j : []; st.jobsLoaded = true; if (isOpen() && st.tab === 'jobs') render(); },
     layersHtml() {
       return `<div class="dd-sec">${esc(L.svcLayers)}</div>
         <div class="svc-mgrid">${Object.keys(MODES).map(modeBtn).join('')}</div>

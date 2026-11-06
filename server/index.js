@@ -10,6 +10,7 @@ import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
+import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates } from './places.js';
@@ -156,7 +157,7 @@ app.get('/api/weather', apiLimiter, async (req, res) => {
 app.get('/api/weathernow', apiLimiter, (req, res) => res.json(weatherNowDebug()));
 app.get('/api/services', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=60');
-  res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), borders: publicBorders(), server_time: new Date().toISOString() });
+  res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), borders: publicBorders(), jobs: publicJobs(), server_time: new Date().toISOString() });
 });
 // Token-protected prices tools: status JSON, and a clearly marked preview of the bulletin sent to the
 // owner's private chat only (never the channel). key = sha256(BOT_TOKEN + ':prices').
@@ -203,7 +204,7 @@ app.get('/api/stream', streamLimiter, (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.write('retry: 4000\n\n');
-  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString(), build: BUILD, contacts: store.publicContacts, support: store.publicSupport, roads: publicRoads() })}\n\n`);
+  res.write(`event: snapshot\ndata: ${JSON.stringify({ alerts: store.recentAlerts().map(publicAlert), history_hours: store.historyWindow, server_time: new Date().toISOString(), build: BUILD, contacts: store.publicContacts, support: store.publicSupport, roads: publicRoads(), jobs: publicJobs() })}\n\n`);
   clients.add(res);
   req.on('close', () => clients.delete(res));
 });
@@ -220,6 +221,7 @@ store.on('remove', (a) => broadcast('remove', a));
 store.on('roads', (r) => broadcast('roads', r)); // 🛣 road status layer
 store.on('power', (p) => broadcast('power', p));
 store.on('borders', (b) => broadcast('borders', b)); // 🛂 border crossings // ⚡ electricity updates
+store.on('jobs', (j) => broadcast('jobs', j)); // 💼 approved jobs only
 store.on('contacts', (c) => broadcast('contacts', c)); // website contact links change instantly
 store.on('support', (s) => broadcast('support', s)); // optional wallet support changes instantly
 setInterval(() => {
@@ -453,6 +455,7 @@ async function start() {
     }
     }
     startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
+    startJobsMonitor(); // 💼 separate Syria jobs source -> owner approval -> website Jobs only
     startTranslations(); // 🌐 English descriptions for /en/
   };
   const upAdmin = async (attempt = 1) => {
@@ -484,6 +487,7 @@ async function start() {
 
 const shutdown = async () => {
   try { stopNewsMonitor(); } catch { /* ignore */ }
+  try { stopJobsMonitor(); } catch { /* ignore */ }
   try { store._writeLocal(); } catch { /* ignore */ }
   try { await Promise.race([store.flushBackup(true), new Promise((r) => setTimeout(r, 5000))]); } catch { /* ignore */ }
   try { if (config.botMode !== 'webhook') { for (const b of Object.values(bots)) if (b) await b.stop(); } } catch { /* ignore */ }

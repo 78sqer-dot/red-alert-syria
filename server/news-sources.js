@@ -70,11 +70,14 @@ export function parseChannelPage(html, u) {
     const m = block.match(/<div class="tgme_widget_message_text js-message_text"[^>]*>([\s\S]*?)<\/div>/)
       || block.match(/<div class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/);
     let text = m ? m[1] : '';
+    const links = [...(m?.[1] || '').matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>/gi)]
+      .map((x) => unescape(x[1]).replace(/&amp;/g, '&'))
+      .filter((x) => /^https:\/\//i.test(x) && !/\/s\//i.test(x));
     text = text.replace(/<br\s*\/?>/gi, '\n').replace(/<a [^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => inner)
       .replace(/<[^>]+>/g, '');
     text = unescape(text).replace(/\u200f|\u200e|\u202b|\u202c/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     const fwd = /tgme_widget_message_forwarded_from/.test(block);
-    posts.push({ id, ts: Number.isFinite(ts) ? ts : null, text, url: `https://t.me/${u}/${id}`, fwd });
+    posts.push({ id, ts: Number.isFinite(ts) ? ts : null, text, url: `https://t.me/${u}/${id}`, links, fwd });
   }
   posts.sort((a, b) => a.id - b.id);
   return { title, posts };
