@@ -1685,6 +1685,7 @@ export function registerNewsTools(bot, h) {
     return new InlineKeyboard()
       .text(n.on ? t(ctx, '⏸ إيقاف الرصد', '⏸ Pause monitoring') : t(ctx, '▶️ تشغيل الرصد', '▶️ Resume monitoring'), n.on ? 'nws:off' : 'nws:on').row()
       .text(t(ctx, '📰 المصادر', '📰 Sources'), 'nws:src').text(t(ctx, '🏷 الأنواع', '🏷 Types'), 'nws:ty').row()
+      .text(t(ctx, '➕ إضافة مصدر', '➕ Add a source'), 'nws:sa:main').row()
       .text(`🌙 ${t(ctx, 'النشر الليلي', 'Night auto-publish')}: ${n.night.on ? `✅ ${n.night.from}–${n.night.to}` : '⏸'}`, 'nws:ng').row()
       .text(t(ctx, '🧪 إرسال مسودة تجريبية', '🧪 Send a test draft'), 'nws:test').row()
       .text(t(ctx, '🔄 تحديث', '🔄 Refresh'), 'nws').text(t(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
@@ -1770,7 +1771,7 @@ export function registerNewsTools(bot, h) {
   const showMain = (ctx) => h.show(ctx, mainText(ctx), mainKb(ctx));
   const onlyOwner = async (ctx, fn) => { if (!h.owner(ctx)) { await toast(ctx, t(ctx, 'للمالك فقط', 'Owner only')); return; } return fn(); };
 
-  bot.on('callback_query:data', async (ctx, next) => { if (ctx.callbackQuery.data !== 'nws:sa') pend.delete(ctx.from.id); return next(); });
+  bot.on('callback_query:data', async (ctx, next) => { if (!['nws:sa', 'nws:sa:main'].includes(ctx.callbackQuery.data)) pend.delete(ctx.from.id); return next(); });
   bot.command('news', (ctx) => (h.owner(ctx) ? showMain(ctx) : ctx.reply(h.L(ctx).onlyOwner)));
   bot.command('approvals', async (ctx) => {
     if (!staff(ctx) || ctx.chat?.type !== 'private') return;
@@ -1861,12 +1862,14 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, t(ctx, '♻️ أُعيدت المصادر الافتراضية', '♻️ Default sources restored'));
     await h.show(ctx, srcText(ctx), srcKb(ctx));
   }));
-  bot.callbackQuery('nws:sa', (ctx) => onlyOwner(ctx, async () => {
+  const addSourcePrompt = (ctx, backTo) => onlyOwner(ctx, async () => {
     await toast(ctx, '');
     pend.set(ctx.from.id, { k: 'add', exp: Date.now() + PEND_MS });
     await h.show(ctx, t(ctx, '➕ <b>إضافة مصدر</b>\n\nأرسل معرّف قناة تيليغرام <b>عامة</b> أو رابطها، مثل:\n<code>@ajasyr</code> أو <code>https://t.me/ajasyr</code>', '➕ <b>Add a source</b>\n\nSend the username or link of a <b>public</b> Telegram channel, e.g.\n<code>@ajasyr</code> or <code>https://t.me/ajasyr</code>'),
-      new InlineKeyboard().text(t(ctx, '↩️ رجوع', '↩️ Back'), 'nws:src'));
-  }));
+      new InlineKeyboard().text(t(ctx, '↩️ رجوع', '↩️ Back'), backTo));
+  });
+  bot.callbackQuery('nws:sa', (ctx) => addSourcePrompt(ctx, 'nws:src'));
+  bot.callbackQuery('nws:sa:main', (ctx) => addSourcePrompt(ctx, 'nws'));
   bot.on('message', async (ctx, next) => {
     const p = pend.get(ctx.from?.id);
     if (!p) return next();

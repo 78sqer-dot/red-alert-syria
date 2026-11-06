@@ -47,37 +47,61 @@ const tap = async (id, data) => bot.handleUpdate({
   },
 });
 const lastUi = (id) => [...calls].reverse().find(({ method, payload }) =>
-  ['sendMessage', 'editMessageText'].includes(method) && payload.chat_id === id);
+  ['sendMessage', 'editMessageText'].includes(method) && payload.chat_id === id
+);
 const buttonsOf = (entry) => entry?.payload?.reply_markup?.inline_keyboard?.flat() || [];
 
-test('owner and backup admin see and can open the direct Add source flow; editors cannot', async (t) => {
-  const originalSources = structuredClone(store.state.news?.sources);
+test('Add source is inside the owner-only News monitor screen and keeps its source-list route', async (t) => {
+  let originalSources;
 
   for (const id of [8808894711, 8270709633]) {
     await sendText(id, '/start');
     const menu = lastUi(id);
-    assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nws:sa'), `owner ${id} sees the direct Add source button`);
-    const from = calls.length;
-    await tap(id, 'nws:sa');
-    const prompt = [...calls.slice(from)].reverse().find(({ method, payload }) => method === 'editMessageText' && payload.chat_id === id);
-    assert.ok(prompt, `owner ${id} opens the add-source prompt`);
-    assert.match(prompt.payload.text, /أرسل معرّف قناة تيليغرام/);
-    assert.match(prompt.payload.text, /عامة/);
+    assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nws'), `owner ${id} sees News monitor`);
+    assert.equal(buttonsOf(menu).some((button) => button.callback_data === 'nws:sa' || button.callback_data === 'nws:sa:main'), false,
+      `owner ${id} no longer sees Add source in the top-level menu`);
+
+    await tap(id, 'nws');
+    originalSources ??= structuredClone(store.state.news?.sources);
+    const monitor = lastUi(id);
+    assert.ok(buttonsOf(monitor).some((button) => button.callback_data === 'nws:sa:main'),
+      `owner ${id} sees Add source inside News monitor`);
+    assert.equal(buttonsOf(monitor).some((button) => button.callback_data === 'nws:sa'), false,
+      'the main monitor uses the route that returns to the monitor screen');
+
+    await tap(id, 'nws:sa:main');
+    const directPrompt = lastUi(id);
+    assert.match(directPrompt.payload.text, /أرسل معرّف قناة تيليغرام/);
+    assert.match(directPrompt.payload.text, /عامة/);
+    assert.ok(buttonsOf(directPrompt).some((button) => button.callback_data === 'nws'),
+      'the direct prompt returns to the News monitor screen');
+
+    await tap(id, 'nws:src');
+    const sourceList = lastUi(id);
+    if (buttonsOf(sourceList).some((button) => button.callback_data === 'nws:sa')) {
+      await tap(id, 'nws:sa');
+      const sourceListPrompt = lastUi(id);
+      assert.ok(buttonsOf(sourceListPrompt).some((button) => button.callback_data === 'nws:src'),
+        'the Sources-screen prompt returns to the Sources screen');
+    } else {
+      assert.match(sourceList.payload.text, /مصادر الرصد|Monitored sources/,
+        'the Sources screen opens even when its Add source button is hidden at capacity');
+    }
   }
 
   const editorId = 7000000001;
   store.addEditor(editorId);
   await sendText(editorId, '/start');
-  assert.equal(buttonsOf(lastUi(editorId)).some((button) => button.callback_data === 'nws:sa' || button.callback_data === 'nws'), false,
-    'an editor does not see owner-only news-monitor controls');
+  assert.equal(buttonsOf(lastUi(editorId)).some((button) => button.callback_data === 'nws' || button.callback_data === 'nws:sa' || button.callback_data === 'nws:sa:main'), false,
+    'an editor does not see owner-only News monitor controls');
   const from = calls.length;
-  await tap(editorId, 'nws:sa');
+  await tap(editorId, 'nws:sa:main');
   assert.equal(calls.slice(from).some(({ method, payload }) => method === 'editMessageText' && payload.chat_id === editorId), false,
-    'a forged add-source callback does not open the prompt for an editor');
+    'a forged Add source callback does not open the prompt for an editor');
   assert.equal(calls.slice(from).some(({ method, payload }) => method === 'answerCallbackQuery' && /للمالك فقط|Owner only/.test(payload.text || '')), true,
-    'the add-source callback explicitly rejects non-owners');
+    'the Add source callback explicitly rejects non-owners');
 
-  assert.deepEqual(store.state.news?.sources, originalSources, 'opening the flow does not add or change sources');
+  assert.deepEqual(store.state.news?.sources, originalSources, 'opening either route does not add or change sources');
   assert.equal(calls.some(({ payload }) => payload.chat_id === process.env.CHANNEL_ID), false, 'the test sends no channel messages');
 
   t.after(async () => {
