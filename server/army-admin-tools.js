@@ -267,6 +267,11 @@ export function registerArmyAdminTools(bot, h) {
     if (!draft || draft.mode !== 'add_monitor_source' || draft.step !== 'type') return answer(ctx);
     const result = addManualArmySource({ username: draft.username, name: draft.name, type: match[1] }, state());
     if (!result.ok) {
+      if (result.error === 'duplicate') {
+        delete draft.username; delete draft.name; draft.step = 'username'; draft.updatedAt = Date.now(); persist();
+        await answer(ctx, say(ctx, h, 'هذا المصدر موجود مسبقاً؛ أرسل معرف قناة أخرى.', 'This source already exists; send a different channel username.'));
+        return h.show(ctx, say(ctx, h, '<b>أرسل اسم مستخدم قناة تيليغرام عامة أو رابطها</b> (مثال: @channelname أو https://t.me/channelname).', '<b>Send a public Telegram channel username or link</b> (e.g. @channelname or https://t.me/channelname).'), cancelKeyboard(ctx, h));
+      }
       await answer(ctx, say(ctx, h, 'تعذر إضافة المصدر.', 'Could not add source.'));
       const message = result.error === 'duplicate' ? say(ctx, h, 'هذا المصدر موجود مسبقاً.', 'This source already exists.') : result.error === 'limit' ? say(ctx, h, 'بلغت الحد الأقصى (10 مصادر يدوية).', 'The limit of 10 manual sources has been reached.') : say(ctx, h, 'تعذر التحقق من بيانات المصدر.', 'Could not validate source details.');
       return h.show(ctx, message, cancelKeyboard(ctx, h));

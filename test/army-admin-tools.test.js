@@ -54,6 +54,44 @@ test('manual monitoring-source controls are visible only in the private owner pa
   } finally { store.state.army = previous; }
 });
 
+test('owner can add, edit, reclassify and delete a manual source through the registered bot handlers', async () => {
+  const previousState = store.state.army; const previousPersist = store.persist;
+  try {
+    store.state.army = initialArmyState(); store.persist = () => {};
+    const callbacks = []; let textHandler;
+    const bot = {
+      command() {}, callbackQuery(filter, fn) { callbacks.push([filter, fn]); },
+      on(filter, fn) { if (filter === 'message:text') textHandler = fn; },
+    };
+    const helpers = { owner: () => true, langOf: () => 'ar', show: async () => {} };
+    registerArmyAdminTools(bot, helpers);
+    const callback = async (data) => {
+      const row = callbacks.find(([filter]) => filter instanceof RegExp ? filter.test(data) : filter === data);
+      assert.ok(row, `registered callback: ${data}`);
+      const match = row[0] instanceof RegExp ? row[0].exec(data) : null;
+      return row[1]({ from: { id: 3001 }, chat: { id: 3001, type: 'private' }, match, answerCallbackQuery: async () => {} });
+    };
+    const message = async (text) => textHandler({ from: { id: 3001 }, chat: { id: 3001, type: 'private' }, message: { message_id: 1, text }, api: { deleteMessage: async () => {} } }, async () => {});
+    await callback('army:source:add');
+    await message('@ArmySalaryWatch');
+    await message('متابعة رواتب الجيش');
+    await callback('army:source:add-type:official');
+    assert.equal(store.state.army.manualSources.ArmySalaryWatch.type, 'official');
+    await callback('army:source:edit-name:ArmySalaryWatch');
+    await message('مصدر رواتب الجيش');
+    assert.equal(store.state.army.manualSources.ArmySalaryWatch.name, 'مصدر رواتب الجيش');
+    await callback('army:source:edit-channel:ArmySalaryWatch');
+    await message('https://t.me/ArmySalaryUpdates');
+    assert.equal(store.state.army.manualSources.ArmySalaryUpdates.name, 'مصدر رواتب الجيش');
+    await callback('army:source:set-type:media:ArmySalaryUpdates');
+    assert.equal(store.state.army.manualSources.ArmySalaryUpdates.type, 'media');
+    await callback('army:source:delete:ArmySalaryUpdates');
+    await callback('army:source:delete-yes:ArmySalaryUpdates');
+    assert.equal(store.state.army.manualSources.ArmySalaryUpdates, undefined);
+    assert.equal(store.state.army.sources.ArmySalaryUpdates, undefined);
+  } finally { store.state.army = previousState; store.persist = previousPersist; }
+});
+
 test('approval, edits, channel setup, monitoring and deletion callbacks reject non-owners', async () => {
   const handlers = [];
   const bot = {
