@@ -57,7 +57,7 @@ test('alert details stay centered on the map and their popup tip points to the e
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
-  assert.match(app, /from '\.\/services\.js\?v=32'/);
+  assert.match(app, /from '\.\/services\.js\?v=33'/);
   assert.match(app, /from '\.\/icons\.js\?v=6'/);
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=13'/);

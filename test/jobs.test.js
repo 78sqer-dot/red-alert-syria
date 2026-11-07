@@ -30,7 +30,7 @@ test('Syrian_job promotional footer is stripped from new, legacy and subsequentl
   const jobs = initialJobsState();
   const body = 'فرصة عمل لمحاسب بدوام كامل في دمشق. للتقديم أرسل السيرة الذاتية إلى الشركة.';
   const footer = 'لنشر ما لديكم من فرص، راسلونا دايركت';
-  const raw = `#Syrian_job\n${body}\n${footer}\n🔻🔻🔻🔻🔻\n@Syrian_job\n#Syrian_job`;
+  const raw = `#Syrian_job\n${body}\n${footer}\n🔻🔻🔻🔻🔻\n@Syrian_job\n@Syrian_jobbb\n#Syrian_job`;
   const created = createPendingJob({ kind: 'source', sourceKey: 'test:promo-footer', title: '#Syrian_job', text: raw, location: locationForGovernorate(governorates[0].code) }, jobs, NOW);
   assert.ok(created.job);
   assert.equal(created.job.title, body);
@@ -43,7 +43,7 @@ test('Syrian_job promotional footer is stripped from new, legacy and subsequentl
   const current = publicJobs(jobs)[0];
   assert.equal(current.title, body);
   assert.equal(current.text, body);
-  for (const unwanted of ['لنشر ما لديكم', 'Syrian_job', '🔻']) {
+  for (const unwanted of ['لنشر ما لديكم', 'Syrian_job', 'Syrian_jobbb', '🔻']) {
     assert.equal(current.title.includes(unwanted) || current.text.includes(unwanted), false, `strips ${unwanted}`);
   }
 

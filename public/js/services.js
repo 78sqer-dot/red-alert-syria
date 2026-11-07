@@ -722,7 +722,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     return /^https:\/\/t\.me\/[A-Za-z0-9_]{4,}$/i.test(base) ? `${base}?start=job` : '';
   }
   function cleanJobDisplayText(value) {
-    const channelPromo = /[@#]\s*syrian[_\s-]?jobb?\b[#]?/giu;
+    const channelPromo = /[@#]\s*syrian[_\s-]?jo[b]+\b[#]?/giu;
     const promoLine = /(?:لنشر|للنشر).{0,90}(?:راسلونا|تواصلوا|اتصلوا).{0,30}(?:دايركت|مباشرة|direct|dm)|(?:for\s+(?:posting|publishing|sharing)|to\s+(?:post|publish|advertise)).{0,70}(?:jobs?|vacanc\w*).{0,60}(?:dm|direct|message|contact)/iu;
     const arrowLine = /^[\s🔻🔽👇⬇️⬇︎▼▾↓]+$/u;
     return String(value || '').replace(/\r/g, '').split('\n')

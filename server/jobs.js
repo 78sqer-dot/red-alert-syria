@@ -167,7 +167,7 @@ function safeLinks(links = []) {
   return out.slice(0, 8);
 }
 function linksFromText(text) { return safeLinks(String(text || '').match(/https:\/\/[^\s<>()[\]{}]+/gi) || []); }
-const JOB_CHANNEL_PROMO = /[@#]\s*syrian[_\s-]?jobb?\b[#]?/giu;
+const JOB_CHANNEL_PROMO = /[@#]\s*syrian[_\s-]?jo[b]+\b[#]?/giu;
 const JOB_PROMO_LINE = /(?:لنشر|للنشر).{0,90}(?:راسلونا|تواصلوا|اتصلوا).{0,30}(?:دايركت|مباشرة|direct|dm)|(?:for\s+(?:posting|publishing|sharing)|to\s+(?:post|publish|advertise)).{0,70}(?:jobs?|vacanc\w*).{0,60}(?:dm|direct|message|contact)/iu;
 const JOB_ARROW_LINE = /^[\s🔻🔽👇⬇️⬇︎▼▾↓]+$/u;
 export function cleanJobText(value) {
