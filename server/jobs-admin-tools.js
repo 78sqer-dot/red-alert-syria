@@ -33,7 +33,7 @@ const save = ({ broadcast = false } = {}) => {
 const uidOf = (ctx) => String(ctx.from?.id || '');
 const govByCode = (code, j) => getGov(String(code)) || j.customGovernorates.find((row) => row.code === String(code)) || null;
 const adById = (id, j) => j.published[id] || j.pending[id] || null;
-const locText = (location, english = false) => location ? (english ? location.label_en : location.label_ar) : '—';
+const locText = (location, english = false) => location ? (english ? location.label_en : location.label_ar) : (english ? 'No location specified' : 'بدون موقع محدد');
 const activeItems = (j) => [
   ...Object.values(j.published || {}).filter((row) => row && !j.deleted?.[row.id]).map((row) => ({ ...row, _status: 'approved' })),
   ...Object.values(j.pending || {}).filter((row) => row && !j.deleted?.[row.id]).map((row) => ({ ...row, _status: 'pending' })),
@@ -84,7 +84,7 @@ async function showDraftScreen(ctx, h, draft, text, keyboard) {
 function cancelKeyboard(ctx, h, callback = 'j:admin:cancel-draft') {
   return new InlineKeyboard().text(say(ctx, h, '✖️ إلغاء', '✖️ Cancel'), callback);
 }
-function locationPickerKeyboard(j, english) {
+function locationPickerKeyboard(j, english, allowNoLocation = false) {
   const kb = new InlineKeyboard();
   const govs = [...governorates, ...j.customGovernorates];
   govs.forEach((gov, i) => {
@@ -92,6 +92,7 @@ function locationPickerKeyboard(j, english) {
     kb.text(`${custom ? '✳️ ' : ''}${english ? gov.en || gov.ar : gov.ar}`.slice(0, 54), `j:adminloc:g:${gov.code}`);
     if (i % 2 === 1 || i === govs.length - 1) kb.row();
   });
+  if (allowNoLocation) kb.text(english ? '⏭️ Continue without location' : '⏭️ المتابعة دون موقع', 'j:adminloc:none').row();
   kb.text(english ? '✖️ Cancel' : '✖️ إلغاء', 'j:admin:cancel-draft');
   return kb;
 }
@@ -147,12 +148,16 @@ function locationPlacesKeyboard(j, english, govCode, districtCode, page = 0) {
 }
 function draftPreview(ctx, h, draft) {
   const english = en(ctx, h);
+  const location = draft.location
+    ? `📍 ${esc(locText(draft.location, english))}`
+    : (english ? '📍 Location not specified' : '📍 لم يُحدّد موقع للإعلان');
   const text = english
-    ? `<b>Review the new job listing</b>\n\n<b>${esc(draft.title)}</b>\n📍 ${esc(locText(draft.location, true))}\n\n${esc(draft.text)}\n\nAfter you confirm, it appears on the website Jobs page only; nothing is posted to the news channel.`
-    : `<b>معاينة إعلان الوظيفة</b>\n\n<b>${esc(draft.title)}</b>\n📍 ${esc(locText(draft.location))}\n\n${esc(draft.text)}\n\nبعد تأكيدك سيظهر الإعلان في قسم الوظائف بالموقع فقط؛ لن يُنشر في قناة الأخبار.`;
-  const keyboard = new InlineKeyboard()
-    .text(english ? '✅ Approve for website only' : '✅ اعتماد للموقع فقط', 'j:admin:publish')
-    .text(english ? '📍 Change location' : '📍 تغيير الموقع', 'j:adminloc:gov').row()
+    ? `<b>Review the new job listing</b>\n\n<b>${esc(draft.title)}</b>\n${location}\n\n${esc(draft.text)}\n\nAfter you confirm, it appears on the website Jobs page only; nothing is posted to the news channel.`
+    : `<b>معاينة إعلان الوظيفة</b>\n\n<b>${esc(draft.title)}</b>\n${location}\n\n${esc(draft.text)}\n\nبعد تأكيدك سيظهر الإعلان في قسم الوظائف بالموقع فقط؛ لن يُنشر في قناة الأخبار.`;
+  const keyboard = new InlineKeyboard();
+  if (draft.location) keyboard.text(english ? '✅ Approve for website' : '✅ اعتماد للموقع', 'j:admin:publish');
+  keyboard.text(english ? '📍 Change location' : '📍 تغيير الموقع', 'j:adminloc:gov').row()
+    .text(english ? '✅ Publish without location' : '✅ نشر بدون موقع محدد', 'j:admin:publish-no-location').row()
     .text(english ? '✏️ Change details' : '✏️ تعديل التفاصيل', 'j:admin:details').row()
     .text(english ? '✖️ Cancel' : '✖️ إلغاء', 'j:admin:cancel-draft');
   return { text, keyboard };
@@ -161,7 +166,7 @@ async function showDraft(ctx, h, draft) {
   if (draft.step === 'location') {
     return showDraftScreen(ctx, h, draft,
       say(ctx, h, '<b>اختر محافظة الإعلان</b>\n\nتُعرض المحافظات والمناطق المضافة يدوياً بعلامة ✳️.', '<b>Choose the listing governorate</b>\n\nCustom entries are marked ✳️.'),
-      locationPickerKeyboard(jobsState(), en(ctx, h)));
+      locationPickerKeyboard(jobsState(), en(ctx, h), draft.mode === 'create'));
   }
   if (draft.step === 'choose_area') {
     const gov = govByCode(draft.governorateCode, jobsState());
@@ -213,6 +218,28 @@ function parseNamePair(text) {
   const [ar, ...rest] = String(text || '').split('|');
   return { ar: clean(ar, 100), en: clean(rest.join('|'), 100) };
 }
+async function publishAdminDraft(ctx, h, withoutLocation = false) {
+  const j = jobsState(); const uid = uidOf(ctx); const draft = j.adminDrafts[uid];
+  if (!draft || draft.mode !== 'create' || draft.step !== 'preview' || !draft.title || !draft.text || (!withoutLocation && !draft.location)) {
+    return answer(ctx, say(ctx, h, 'أكمل بيانات الإعلان واختر الموقع أو اضغط «نشر بدون موقع محدد».', 'Complete the listing and choose a location, or use “Publish without location”.'));
+  }
+  const sourceKey = `manual:${uid}:${crypto.randomUUID()}`;
+  const location = withoutLocation ? null : draft.location;
+  const created = createPendingJob({ kind: 'manual', sourceKey, title: draft.title, text: draft.text, links: urls(draft.text), sourceName: say(ctx, h, 'إضافة الإدارة', 'Admin listing'), location }, j);
+  if (!created.job) return answer(ctx, created.duplicate ? say(ctx, h, 'يوجد إعلان مطابق بالفعل', 'A matching listing already exists') : say(ctx, h, 'تعذّر إنشاء الإعلان', 'Could not create listing'));
+  const result = decideJob(created.job.id, withoutLocation ? 'approve_without_location' : 'approve', j, ctx.from.id);
+  if (!result.ok) {
+    delete j.pending[created.job.id]; delete j.seen[sourceKey]; delete j.fingerprints[created.job.fingerprint]; save();
+    return answer(ctx, withoutLocation ? say(ctx, h, 'تعذّر اعتماد الإعلان', 'Could not approve the listing') : say(ctx, h, 'تعذّر اعتماد الموقع المحدد', 'The selected location could not be approved'));
+  }
+  delete j.adminDrafts[uid];
+  save({ broadcast: true });
+  await answer(ctx, withoutLocation ? say(ctx, h, 'نُشر الإعلان دون موقع محدد', 'Published without a location') : say(ctx, h, 'اعتمد الإعلان للموقع فقط', 'Approved for the website only'));
+  const text = withoutLocation
+    ? say(ctx, h, `✅ <b>تم اعتماد «${esc(result.job.title)}»</b> في قسم الوظائف بالموقع دون موقع محدد.\nلم يُنشر في قناة الأخبار.`, `✅ <b>${esc(result.job.title)} is approved</b> in the website Jobs section without a location.\nIt was not posted to the news channel.`)
+    : say(ctx, h, `✅ <b>تم اعتماد «${esc(result.job.title)}»</b> في قسم الوظائف بالموقع فقط.\nلم يُنشر في قناة الأخبار.`, `✅ <b>${esc(result.job.title)} is approved</b> in the website Jobs section only.\nIt was not posted to the news channel.`);
+  await h.show(ctx, text, new InlineKeyboard().text(say(ctx, h, '📋 إدارة الإعلانات', '📋 Manage listings'), 'j:admin:list:0').row().text(say(ctx, h, '↩️ لوحة الإدارة', '↩️ Control panel'), 'j:admin'));
+}
 
 export function registerJobsAdminTools(bot, h) {
   const ownerOnly = (ctx, fn) => h.owner(ctx) ? fn() : answer(ctx);
@@ -256,19 +283,8 @@ export function registerJobsAdminTools(bot, h) {
     await showDraftScreen(ctx, h, draft,
       say(ctx, h, '<b>تفاصيل الإعلان</b>\n\nأرسل وصفاً يتضمن جهة العمل إن عُرفت، المهام والشروط وطريقة التقديم. أضف روابط HTTPS إن وجدت.', '<b>Listing details</b>\n\nSend the description, employer if known, duties, requirements and how to apply. Include HTTPS links if available.'), cancelKeyboard(ctx, h));
   }));
-  bot.callbackQuery('j:admin:publish', (ctx) => ownerOnly(ctx, async () => {
-    const j = jobsState(); const uid = uidOf(ctx); const draft = j.adminDrafts[uid];
-    if (!draft || draft.mode !== 'create' || draft.step !== 'preview' || !draft.title || !draft.text || !draft.location) return answer(ctx, say(ctx, h, 'أكمل بيانات الإعلان والموقع أولاً', 'Complete the listing and location first'));
-    const sourceKey = `manual:${uid}:${crypto.randomUUID()}`;
-    const created = createPendingJob({ kind: 'manual', sourceKey, title: draft.title, text: draft.text, links: urls(draft.text), sourceName: say(ctx, h, 'إضافة الإدارة', 'Admin listing'), location: draft.location }, j);
-    if (!created.job) return answer(ctx, created.duplicate ? say(ctx, h, 'يوجد إعلان مطابق بالفعل', 'A matching listing already exists') : say(ctx, h, 'تعذّر إنشاء الإعلان', 'Could not create listing'));
-    const result = decideJob(created.job.id, 'approve', j, ctx.from.id);
-    if (!result.ok) { delete j.pending[created.job.id]; delete j.seen[sourceKey]; delete j.fingerprints[created.job.fingerprint]; save(); return answer(ctx, say(ctx, h, 'تعذّر اعتماد الموقع المحدد', 'The selected location could not be approved')); }
-    delete j.adminDrafts[uid];
-    save({ broadcast: true });
-    await answer(ctx, say(ctx, h, 'اعتمد الإعلان للموقع فقط', 'Approved for the website only'));
-    await h.show(ctx, say(ctx, h, `✅ <b>تم اعتماد «${esc(result.job.title)}»</b> في قسم الوظائف بالموقع فقط.\nلم يُنشر في قناة الأخبار.`, `✅ <b>${esc(result.job.title)} is approved</b> in the website Jobs section only.\nIt was not posted to the news channel.`), new InlineKeyboard().text(say(ctx, h, '📋 إدارة الإعلانات', '📋 Manage listings'), 'j:admin:list:0').row().text(say(ctx, h, '↩️ لوحة الإدارة', '↩️ Control panel'), 'j:admin'));
-  }));
+  bot.callbackQuery('j:admin:publish', (ctx) => ownerOnly(ctx, () => publishAdminDraft(ctx, h, false)));
+  bot.callbackQuery('j:admin:publish-no-location', (ctx) => ownerOnly(ctx, () => publishAdminDraft(ctx, h, true)));
   bot.callbackQuery('j:admin:cancel-draft', (ctx) => ownerOnly(ctx, async () => {
     const uid = uidOf(ctx); const draft = jobsState().adminDrafts[uid];
     if (draft?.promptId) try { await ctx.api.deleteMessage(ctx.chat.id, draft.promptId); } catch { /* ignore */ }
@@ -340,6 +356,11 @@ export function registerJobsAdminTools(bot, h) {
     const uid = uidOf(ctx); const draft = jobsState().adminDrafts[uid];
     if (!draft || !['create', 'edit_listing'].includes(draft.mode)) return answer(ctx);
     const [op, a, b] = String(ctx.match[1] || '').split(':'); const english = en(ctx, h); const j = jobsState();
+    if (op === 'none') {
+      if (draft.mode !== 'create') return answer(ctx, say(ctx, h, 'يمكن تخطي الموقع عند إنشاء إعلان جديد فقط.', 'Location can only be skipped for a new listing.'));
+      draft.location = null; draft.step = 'preview'; delete draft.governorateCode; delete draft.districtCode;
+      storeDraft(uid, draft); await answer(ctx); return showDraft(ctx, h, draft);
+    }
     if (op === 'gov') {
       draft.step = 'location'; draft.governorateCode = null; await answer(ctx);
       return showDraft(ctx, h, draft);

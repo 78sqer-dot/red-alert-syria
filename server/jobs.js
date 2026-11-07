@@ -235,18 +235,21 @@ export function createPendingJob(input, j = jobsState(), now = Date.now()) {
 export function decideJob(id, action, j = jobsState(), by = null, now = Date.now()) {
   const job = j.pending[id];
   if (!job) return { ok: false, job: null, decision: j.decisions[id] || null };
-  const outcome = action === 'approve' ? 'approved' : action === 'ignore' ? 'ignored' : null;
+  const publishWithoutLocation = action === 'approve_without_location';
+  const outcome = action === 'approve' || publishWithoutLocation ? 'approved' : action === 'ignore' ? 'ignored' : null;
   if (!outcome) return { ok: false, job: null, decision: null };
   if (outcome === 'approved') {
-    const location = normalizeJobLocation(job.location, j);
-    if (!location) return { ok: false, job: null, decision: null, error: 'location_required' };
+    const location = publishWithoutLocation ? null : normalizeJobLocation(job.location, j);
+    if (!location && !publishWithoutLocation) return { ok: false, job: null, decision: null, error: 'location_required' };
     job.location = location;
+    if (!location) job.publishedWithoutLocation = true;
+    else delete job.publishedWithoutLocation;
   }
   delete j.pending[id];
   job.status = outcome;
   job.decidedAt = now;
   if (by != null) job.decidedBy = Number(by) || null;
-  const decision = { id, action: outcome, decidedAt: now, fingerprint: job.fingerprint, sourceKey: job.sourceKey };
+  const decision = { id, action: outcome, decidedAt: now, fingerprint: job.fingerprint, sourceKey: job.sourceKey, ...(job.publishedWithoutLocation ? { publishedWithoutLocation: true } : {}) };
   j.decisions[id] = decision;
   if (outcome === 'approved') { job.publishedAt = new Date(now).toISOString(); j.published[id] = job; }
   else delete j.published[id];
@@ -273,6 +276,8 @@ export function updatePublishedJob(id, patch, j = jobsState(), by = null, now = 
     const location = normalizeJobLocation(patch.location, j);
     if (!location) return { ok: false, error: 'location_required' };
     job.location = location;
+    delete job.publishedWithoutLocation;
+    if (j.decisions[id]) delete j.decisions[id].publishedWithoutLocation;
   }
   job.updatedAt = now;
   if (by != null) job.updatedBy = Number(by) || null;
@@ -293,7 +298,7 @@ export function deleteJobListing(id, j = jobsState(), by = null, now = Date.now(
 }
 
 export function publicJobs(j = jobsState()) {
-  return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && !j.deleted?.[x.id] && normalizeJobLocation(x.location, j))
+  return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && !j.deleted?.[x.id] && (normalizeJobLocation(x.location, j) || x.publishedWithoutLocation === true))
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)).slice(0, 100)
     .map((x) => {
       const text = cleanJobText(x.text);
@@ -301,7 +306,7 @@ export function publicJobs(j = jobsState()) {
       return {
       id: x.id, title, text, links: safeLinks(x.links || []),
       source_name: x.sourceName, source_url: x.sourceUrl || '',
-      location: normalizeJobLocation(x.location, j),
+      location: normalizeJobLocation(x.location, j) || null,
       published_at: x.publishedAt || null,
       };
     });
@@ -329,7 +334,7 @@ function reviewText(job, lang = 'ar') {
     : `${ar ? 'مقدّم الطلب' : 'Submitted by'}: ${job.submitter?.username ? '@' + esc(job.submitter.username) : esc(job.submitter?.name || String(job.submitter?.id || ''))}`;
   const linkLine = job.links?.length ? `\n\n${ar ? 'روابط التقديم/التواصل:' : 'Application/contact links:'}\n${job.links.map((u, i) => `<a href="${esc(u)}">${ar ? 'رابط' : 'Link'} ${i + 1}</a>`).join(' · ')}` : '';
   const sourceLine = job.kind === 'source' && job.sourceUrl ? `\n<a href="${esc(job.sourceUrl)}">${ar ? 'فتح المنشور الأصلي' : 'Open original post'}</a>` : '';
-  const locationLine = job.location ? `\n📍 <b>${ar ? 'الموقع' : 'Location'}:</b> ${esc(ar ? job.location.label_ar : job.location.label_en)}` : `\n📍 <b>${ar ? 'الموقع' : 'Location'}:</b> ${ar ? 'لم يُحدّد بعد — اختر مكاناً سورياً قبل الموافقة' : 'Not selected — choose a Syrian place before approval'}`;
+  const locationLine = job.location ? `\n📍 <b>${ar ? 'الموقع' : 'Location'}:</b> ${esc(ar ? job.location.label_ar : job.location.label_en)}` : `\n📍 <b>${ar ? 'الموقع' : 'Location'}:</b> ${ar ? 'لم يُحدّد — يمكنك تحديده أو النشر بدونه' : 'Not specified — choose a place or publish without one'}`;
   const contactLine = job.kind === 'employer' ? `\n\n<i>${ar ? 'للرد على صاحب الطلب، استخدم «رد» على هذه البطاقة.' : 'Reply to this card to contact the submitter.'}</i>` : '';
   return `<b>${heading}</b>\n${origin}${locationLine}\n\n<b>${esc(job.title)}</b>\n\n${esc(job.text.slice(0, 2550))}${job.text.length > 2550 ? '…' : ''}${linkLine}${sourceLine}${contactLine}\n\n<i>${ar ? 'الموافقة تُظهر الإعلان في قسم الوظائف بالموقع فقط؛ لا يُنشر في قناة الأخبار.' : 'Approval lists this only in the website Jobs section; it is not posted to the news channel.'}</i>`;
 }
@@ -337,7 +342,8 @@ function reviewKeyboard(job, lang = 'ar') {
   const kb = new InlineKeyboard();
   kb.text(job.location ? (lang === 'en' ? '📍 Change location' : '📍 تغيير الموقع') : (lang === 'en' ? '📍 Select Syrian location' : '📍 تحديد الموقع'), `j:locjob:${job.id}:gov`);
   if (job.location) kb.text(lang === 'en' ? '✅ Approve for website' : '✅ موافقة وإظهار بالموقع', `j:approve:${job.id}`);
-  return kb.row().text(lang === 'en' ? '❌ Ignore' : '❌ تجاهل', `j:ignore:${job.id}`);
+  return kb.row().text(lang === 'en' ? '✅ Publish without location' : '✅ نشر بدون موقع محدد', `j:approve-unlocated:${job.id}`).row()
+    .text(lang === 'en' ? '❌ Ignore' : '❌ تجاهل', `j:ignore:${job.id}`);
 }
 
 async function sendReview(job, { force = false } = {}) {
@@ -427,10 +433,16 @@ export function mergeJobsFromBackup(snapshot, j = jobsState()) {
     const remoteVersion = Number(row.updatedAt) || Date.parse(row.publishedAt || 0) || Number(remoteDecision.decidedAt) || 0;
     const selectedRow = localRow && localVersion > remoteVersion ? localRow : row;
     const location = normalizeJobLocation(selectedRow.location, j);
-    if (!location || remoteDecision.action !== 'approved') continue;
-    if (!localDecision && !same(j.decisions[id], remoteDecision)) { j.decisions[id] = remoteDecision; changed = true; }
+    const unlocatedApproved = !location && (selectedRow.publishedWithoutLocation === true || remoteDecision.publishedWithoutLocation === true);
+    if ((!location && !unlocatedApproved) || remoteDecision.action !== 'approved') continue;
+    const approvedDecision = { ...remoteDecision };
+    if (unlocatedApproved) approvedDecision.publishedWithoutLocation = true;
+    else delete approvedDecision.publishedWithoutLocation;
+    if (!localDecision && !same(j.decisions[id], approvedDecision)) { j.decisions[id] = approvedDecision; changed = true; }
     if (j.pending[id]) { delete j.pending[id]; changed = true; }
     const approvedRow = { ...selectedRow, location, status: 'approved' };
+    if (unlocatedApproved) approvedRow.publishedWithoutLocation = true;
+    else delete approvedRow.publishedWithoutLocation;
     if (!same(j.published[id], approvedRow)) { j.published[id] = approvedRow; changed = true; }
     if (row.sourceKey) {
       const seen = { status: 'approved', id, fingerprint: row.fingerprint, at: remoteDecision.decidedAt };
@@ -458,7 +470,7 @@ export function mergeJobsFromBackup(snapshot, j = jobsState()) {
       : (!localDecision || Number(decision.decidedAt) < Number(localDecision.decidedAt) ? decision : localDecision);
     if (chosen.action === 'approved') {
       const candidate = remote.published?.[id] || j.published[id] || j.pending[id];
-      if (!normalizeJobLocation(candidate?.location, j)) {
+      if (!normalizeJobLocation(candidate?.location, j) && candidate?.publishedWithoutLocation !== true && chosen.publishedWithoutLocation !== true) {
         if (j.decisions[id]?.action === 'approved') { delete j.decisions[id]; changed = true; }
         if (j.published[id]) { delete j.published[id]; changed = true; }
         continue;
@@ -475,8 +487,11 @@ export function mergeJobsFromBackup(snapshot, j = jobsState()) {
       const localVersion = Number(localRow?.updatedAt) || Date.parse(localRow?.publishedAt || 0) || Number(localDecision?.decidedAt) || 0;
       const row = localRow && localVersion > remoteVersion ? localRow : remoteRow || localRow || j.pending[id];
       const location = normalizeJobLocation(row?.location, j);
-      if (row && location) {
+      const unlocatedApproved = !location && (row?.publishedWithoutLocation === true || chosen.publishedWithoutLocation === true);
+      if (row && (location || unlocatedApproved)) {
         const approvedRow = { ...row, location, status: 'approved' };
+        if (unlocatedApproved) approvedRow.publishedWithoutLocation = true;
+        else delete approvedRow.publishedWithoutLocation;
         if (!same(j.published[id], approvedRow)) { j.published[id] = approvedRow; changed = true; }
         if (j.pending[id]) { delete j.pending[id]; changed = true; }
       }
@@ -804,7 +819,7 @@ export function registerJobsTools(bot, h, role = 'admin') {
       }
       return toast(ctx, '');
     }));
-    bot.callbackQuery(/^j:(approve|ignore):([a-f0-9]{14})$/, (ctx) => ownerOnly(ctx, async () => {
+    bot.callbackQuery(/^j:(approve-unlocated|approve|ignore):([a-f0-9]{14})$/, (ctx) => ownerOnly(ctx, async () => {
       if (store.backup && config.telegramBackup) await store.mergeFromBackup().catch(() => {});
       const j = jobsState(); const [, action, id] = ctx.match; const job = j.pending[id];
       if (!job) {
@@ -812,17 +827,21 @@ export function registerJobsTools(bot, h, role = 'admin') {
         try { await ctx.deleteMessage(); } catch { /* ignore */ }
         return;
       }
-      const result = decideJob(id, action, j, ctx.from.id);
+      const decisionAction = action === 'approve-unlocated' ? 'approve_without_location' : action;
+      const result = decideJob(id, decisionAction, j, ctx.from.id);
       if (!result.ok && result.error === 'location_required') {
         await toast(ctx, hLang(ctx) === 'en' ? 'Choose a Syrian location first' : 'حدّد موقعاً سورياً أولاً');
         return showAdminLocation(ctx, job, 'gov');
       }
       if (!result.ok) return toast(ctx, '');
       saveJobs({ broadcast: true });
-      await toast(ctx, action === 'approve' ? (hLang(ctx) === 'en' ? 'Approved for the website only' : 'تمت الموافقة للموقع فقط') : (hLang(ctx) === 'en' ? 'Ignored; it will not be shown' : 'تم التجاهل ولن يظهر'));
+      const approved = action !== 'ignore';
+      await toast(ctx, approved ? (hLang(ctx) === 'en' ? 'Approved for the website only' : 'تمت الموافقة للموقع فقط') : (hLang(ctx) === 'en' ? 'Ignored; it will not be shown' : 'تم التجاهل ولن يظهر'));
       await deleteJobCards(ctx, result.job);
-      await h.sendTransient(ctx.api, ctx.chat.id, action === 'approve'
-        ? (hLang(ctx) === 'en' ? '✅ Approved and added to the website Jobs section only — not the news channel.' : '✅ أُضيف الإعلان لقسم الوظائف في الموقع فقط؛ لم يُنشر في قناة الأخبار.')
+      await h.sendTransient(ctx.api, ctx.chat.id, approved
+        ? (action === 'approve-unlocated'
+          ? (hLang(ctx) === 'en' ? '✅ Published in the website Jobs section without a location.' : '✅ نُشر الإعلان في قسم الوظائف بالموقع دون تحديد موقع.')
+          : (hLang(ctx) === 'en' ? '✅ Approved and added to the website Jobs section only — not the news channel.' : '✅ أُضيف الإعلان لقسم الوظائف في الموقع فقط؛ لم يُنشر في قناة الأخبار.'))
         : (hLang(ctx) === 'en' ? 'The job post was ignored and will not be listed.' : 'تم تجاهل إعلان الوظيفة ولن يُعرض.'));
     }));
   } else if (role === 'report') {

@@ -137,13 +137,46 @@ test('city selection returns canonical Syrian governorate, district and place na
   assert.equal(locationForGovernorate('not-a-governorate'), null);
 });
 
-test('the review keyboard hides approval until a verified location has been selected', () => {
+test('the review keyboard offers owner approval without a location while preserving the standard location check', () => {
   const id = '0123456789abcd';
   const withoutLocation = _test.reviewKeyboard({ id, location: null }).inline_keyboard.flat().map((x) => x.callback_data);
   const withLocation = _test.reviewKeyboard({ id, location: locationForGovernorate(governorates[0].code) }).inline_keyboard.flat().map((x) => x.callback_data);
   assert.ok(!withoutLocation.includes(`j:approve:${id}`));
   assert.ok(withoutLocation.includes(`j:locjob:${id}:gov`));
+  assert.ok(withoutLocation.includes(`j:approve-unlocated:${id}`));
   assert.ok(withLocation.includes(`j:approve:${id}`));
+  assert.ok(withLocation.includes(`j:approve-unlocated:${id}`));
+});
+
+test('owner can publish a job without location and the listing survives backup restoration', () => {
+  const remote = initialJobsState();
+  const created = createPendingJob({ kind: 'manual', sourceKey: 'admin:no-location:1', title: 'وظيفة عن بعد', text: 'مطلوب موظف للعمل عن بعد. المهام والشروط وطريقة التقديم موضحة في هذا الإعلان.' }, remote, NOW);
+  assert.ok(created.job);
+  const blocked = decideJob(created.job.id, 'approve', remote, 7, NOW + 1);
+  assert.equal(blocked.error, 'location_required', 'ordinary approval still requires a selected location');
+  assert.ok(remote.pending[created.job.id], 'the job remains pending after a blocked ordinary approval');
+
+  const approved = decideJob(created.job.id, 'approve_without_location', remote, 7, NOW + 2);
+  assert.equal(approved.ok, true);
+  assert.equal(approved.job.location, null);
+  assert.equal(approved.job.publishedWithoutLocation, true);
+  assert.equal(publicJobs(remote).length, 1);
+  assert.equal(publicJobs(remote)[0].location, null);
+
+  const restored = initialJobsState();
+  mergeJobsFromBackup({ jobs: remote }, restored);
+  assert.equal(publicJobs(restored).length, 1, 'backup merge keeps an explicitly locationless approval');
+  assert.equal(publicJobs(restored)[0].location, null);
+});
+
+test('publish-without-location explicitly clears an already selected place', () => {
+  const jobs = initialJobsState();
+  const created = createPendingJob({ kind: 'manual', sourceKey: 'admin:no-location:2', title: 'وظيفة عامة', text: 'مطلوب موظف للعمل عن بعد. المهام والشروط وطريقة التقديم موضحة في هذا الإعلان.', location: locationForGovernorate(governorates[0].code) }, jobs, NOW);
+  assert.ok(created.job?.location);
+  const approved = decideJob(created.job.id, 'approve_without_location', jobs, 7, NOW + 1);
+  assert.equal(approved.ok, true);
+  assert.equal(approved.job.location, null);
+  assert.equal(publicJobs(jobs)[0].location, null);
 });
 
 test('identical vacancy details in different selected Syrian places are kept as distinct posts', () => {
