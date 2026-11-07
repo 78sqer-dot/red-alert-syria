@@ -721,16 +721,25 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const base = String(botUrl?.() || '').trim().replace(/\?[^#]*$/, '').replace(/#.*$/, '');
     return /^https:\/\/t\.me\/[A-Za-z0-9_]{4,}$/i.test(base) ? `${base}?start=job` : '';
   }
+  function cleanJobDisplayText(value) {
+    const channelPromo = /[@#]\s*syrian[_\s-]?jobb?\b[#]?/giu;
+    const promoLine = /(?:لنشر|للنشر).{0,90}(?:راسلونا|تواصلوا|اتصلوا).{0,30}(?:دايركت|مباشرة|direct|dm)|(?:for\s+(?:posting|publishing|sharing)|to\s+(?:post|publish|advertise)).{0,70}(?:jobs?|vacanc\w*).{0,60}(?:dm|direct|message|contact)/iu;
+    const arrowLine = /^[\s🔻🔽👇⬇️⬇︎▼▾↓]+$/u;
+    return String(value || '').replace(/\r/g, '').split('\n')
+      .map((line) => line.replace(channelPromo, ' ').replace(/[ \t]{2,}/g, ' ').replace(/^[\s|·•–—-]+|[\s|·•–—-]+$/g, '').trim())
+      .filter((line) => line && !promoLine.test(line) && !arrowLine.test(line))
+      .join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
   function jobCard(j) {
     const links = (Array.isArray(j.links) ? j.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
     const location = j.location ? (LANG === 'en' ? j.location.label_en : j.location.label_ar) : '';
     const id = String(j.id || '');
-    const text = String(j.text || '').replace(/https?:\/\/\S+/gi, '').split(/\r?\n/).filter((line) => !/^\s*(?:🔗\s*)?(?:تقدّم(?:\s+الآن)?|قدم(?:\s+الآن)?|apply(?:\s+now)?)\s*:?\s*$/i.test(line)).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+    const text = cleanJobDisplayText(String(j.text || '').replace(/https?:\/\/\S+/gi, '')).split(/\r?\n/).filter((line) => !/^\s*(?:🔗\s*)?(?:تقدّم(?:\s+الآن)?|قدم(?:\s+الآن)?|apply(?:\s+now)?)\s*:?\s*$/i.test(line)).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
     const expanded = id && st.expandedJobs.has(id);
     const previewLimit = 100;
     const long = text.length > previewLimit;
     const displayedText = long && !expanded ? `${text.slice(0, previewLimit).trimEnd()}…` : text;
-    const title = String(j.title || L.jobListings).trim();
+    const title = cleanJobDisplayText(j.title) || L.jobListings;
     const applyText = links.length ? `\n${L.jobApply}: ${links.join(' · ')}` : '';
     const shareText = `${title}${location ? `\n📍 ${location}` : ''}${text ? `\n\n${text.slice(0, 1200)}` : ''}${applyText}`;
     const shareUrl = `${window.location.origin}/${LANG === 'en' ? 'en' : 'ar'}/#jobs`;
@@ -800,9 +809,9 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     if (jobShare) {
       const job = st.jobs.find((row) => String(row.id || '') === jobShare.dataset.jobShare);
       if (!job) return;
-      const title = String(job.title || L.jobListings).trim();
+      const title = cleanJobDisplayText(job.title) || L.jobListings;
       const locationName = job.location ? (LANG === 'en' ? job.location.label_en : job.location.label_ar) : '';
-      const cleanText = String(job.text || '').replace(/https?:\/\/\S+/gi, '').split(/\r?\n/).filter((line) => !/^\s*(?:🔗\s*)?(?:تقدّم(?:\s+الآن)?|قدم(?:\s+الآن)?|apply(?:\s+now)?)\s*:?\s*$/i.test(line)).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+      const cleanText = cleanJobDisplayText(String(job.text || '').replace(/https?:\/\/\S+/gi, '')).split(/\r?\n/).filter((line) => !/^\s*(?:🔗\s*)?(?:تقدّم(?:\s+الآن)?|قدم(?:\s+الآن)?|apply(?:\s+now)?)\s*:?\s*$/i.test(line)).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
       const links = (Array.isArray(job.links) ? job.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
       const shareText = `${title}${locationName ? `\n📍 ${locationName}` : ''}${cleanText ? `\n\n${cleanText.slice(0, 1200)}` : ''}${links.length ? `\n${L.jobApply}: ${links.join(' · ')}` : ''}`;
       const shareUrl = `${window.location.origin}/${LANG === 'en' ? 'en' : 'ar'}/#jobs`;

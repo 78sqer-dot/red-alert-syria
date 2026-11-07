@@ -74,7 +74,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobs: 'وظائف'/);
   assert.match(services, /jobs: 'Jobs'/);
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
-  assert.match(app, /services\.js\?v=31/);
+  assert.match(app, /services\.js\?v=32/);
   assert.match(app, /icons\.js\?v=6/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
@@ -96,6 +96,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   const cardEnd = services.indexOf('// Publicly visible listings', cardStart);
   const card = services.slice(cardStart, cardEnd);
   assert.match(card, /previewLimit = 100/);
+  assert.match(card, /cleanJobDisplayText\(/, 'the card uses sanitized text for the preview and expanded listing');
   assert.match(card, /replace\(\/https\?:\\\/\\\/\\S\+\/gi, ''\)/);
   assert.match(card, /data-job-toggle=/);
   assert.match(card, /jobReadMore/);
@@ -118,6 +119,8 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobReadLess: 'عرض أقل'/);
   assert.match(services, /jobReadMore: 'Read more'/);
   assert.match(services, /jobReadLess: 'Show less'/);
+  assert.match(services, /syrian\[_\\s-\]\?jobb\?/i, 'channel tags are stripped from previously cached job items');
+  assert.match(app, /services\.js\?v=32/, 'the updated service module bypasses stale browser caches');
   assert.match(css, /\.jobs-switch\s*\{/);
   assert.match(css, /\.jobs-option\.on\s*\{/);
   assert.match(css, /\.job-card\s*\{/);

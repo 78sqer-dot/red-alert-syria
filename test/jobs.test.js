@@ -26,6 +26,33 @@ test('only owner-approved job posts enter the public Jobs list', () => {
   assert.equal(publicJobs(jobs)[0].location.label_ar, governorates[0].ar);
 });
 
+test('Syrian_job promotional footer is stripped from new, legacy and subsequently edited listings', () => {
+  const jobs = initialJobsState();
+  const body = 'فرصة عمل لمحاسب بدوام كامل في دمشق. للتقديم أرسل السيرة الذاتية إلى الشركة.';
+  const footer = 'لنشر ما لديكم من فرص، راسلونا دايركت';
+  const raw = `#Syrian_job\n${body}\n${footer}\n🔻🔻🔻🔻🔻\n@Syrian_job\n#Syrian_job`;
+  const created = createPendingJob({ kind: 'source', sourceKey: 'test:promo-footer', title: '#Syrian_job', text: raw, location: locationForGovernorate(governorates[0].code) }, jobs, NOW);
+  assert.ok(created.job);
+  assert.equal(created.job.title, body);
+  assert.equal(created.job.text, body);
+  assert.equal(decideJob(created.job.id, 'approve', jobs, 7, NOW + 1000).ok, true);
+
+  // Existing saved items are cleaned in the public projection too, without waiting for a rewrite.
+  jobs.published[created.job.id].title = '#Syrian_job';
+  jobs.published[created.job.id].text = raw;
+  const current = publicJobs(jobs)[0];
+  assert.equal(current.title, body);
+  assert.equal(current.text, body);
+  for (const unwanted of ['لنشر ما لديكم', 'Syrian_job', '🔻']) {
+    assert.equal(current.title.includes(unwanted) || current.text.includes(unwanted), false, `strips ${unwanted}`);
+  }
+
+  const edited = updatePublishedJob(created.job.id, { text: raw }, jobs, 7, NOW + 2000);
+  assert.equal(edited.ok, true);
+  assert.equal(edited.job.text, body, 'an admin edit cannot re-introduce the promo footer');
+  assert.equal(publicJobs(jobs)[0].text, body);
+});
+
 test('ignored posts stay out of the public list and become final decisions', () => {
   const jobs = initialJobsState();
   const created = createPendingJob({ kind: 'employer', sourceKey: 'test:employer:1', text: 'مطلوب موظف مبيعات في حلب. تفاصيل التقديم على الرابط.' }, jobs, NOW);

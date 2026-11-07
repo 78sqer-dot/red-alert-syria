@@ -167,13 +167,21 @@ function safeLinks(links = []) {
   return out.slice(0, 8);
 }
 function linksFromText(text) { return safeLinks(String(text || '').match(/https:\/\/[^\s<>()[\]{}]+/gi) || []); }
+const JOB_CHANNEL_PROMO = /[@#]\s*syrian[_\s-]?jobb?\b[#]?/giu;
+const JOB_PROMO_LINE = /(?:لنشر|للنشر).{0,90}(?:راسلونا|تواصلوا|اتصلوا).{0,30}(?:دايركت|مباشرة|direct|dm)|(?:for\s+(?:posting|publishing|sharing)|to\s+(?:post|publish|advertise)).{0,70}(?:jobs?|vacanc\w*).{0,60}(?:dm|direct|message|contact)/iu;
+const JOB_ARROW_LINE = /^[\s🔻🔽👇⬇️⬇︎▼▾↓]+$/u;
+export function cleanJobText(value) {
+  return String(value || '').replace(/\r/g, '').split('\n').map((line) => line.replace(JOB_CHANNEL_PROMO, ' ').replace(/[ \t]{2,}/g, ' ').replace(/^[\s|·•–—-]+|[\s|·•–—-]+$/g, '').trim())
+    .filter((line) => line && !JOB_PROMO_LINE.test(line) && !JOB_ARROW_LINE.test(line))
+    .join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
 function titleFromText(text) {
-  const line = String(text || '').split(/\r?\n/).map((x) => x.trim()).find(Boolean) || 'فرصة عمل';
+  const line = cleanJobText(text).split(/\r?\n/).map((x) => x.trim()).find(Boolean) || 'فرصة عمل';
   return line.replace(/<[^>]*>/g, '').slice(0, 120);
 }
 
 export function createPendingJob(input, j = jobsState(), now = Date.now()) {
-  const text = String(input?.text || '').trim().slice(0, MAX_JOB_TEXT);
+  const text = cleanJobText(input?.text).slice(0, MAX_JOB_TEXT);
   if (!text) return { duplicate: false, job: null, error: 'empty' };
   const location = normalizeJobLocation(input.location, j);
   const baseFingerprint = jobFingerprint(text);
@@ -190,9 +198,10 @@ export function createPendingJob(input, j = jobsState(), now = Date.now()) {
   // Deterministic across overlapping Render instances: callbacks remain idempotent after a deploy.
   const id = crypto.createHash('sha256').update(sourceKey).digest('hex').slice(0, 14);
   const kind = input.kind === 'employer' ? 'employer' : input.kind === 'manual' ? 'manual' : 'source';
+  const title = cleanJobText(input.title).replace(/\s+/g, ' ').trim() || titleFromText(text);
   const job = {
     id, kind, sourceKey, fingerprint: fp,
-    title: String(input.title || titleFromText(text)).trim().slice(0, 120) || 'فرصة عمل',
+    title: title.slice(0, 120) || 'فرصة عمل',
     text,
     sourceName: String(input.sourceName || (kind === 'source' ? JOB_SOURCE.name : kind === 'manual' ? 'إضافة الإدارة' : 'طلب صاحب عمل')).slice(0, 80),
     sourceUrl: /^https:\/\//i.test(String(input.sourceUrl || '')) ? String(input.sourceUrl).slice(0, 500) : '',
@@ -241,12 +250,12 @@ export function updatePublishedJob(id, patch, j = jobsState(), by = null, now = 
   const job = j.published[id];
   if (!job || job.status !== 'approved' || j.deleted[id]) return { ok: false, error: 'not_found' };
   if (patch.title !== undefined) {
-    const title = cleanLocationName(patch.title);
+    const title = cleanJobText(patch.title).replace(/\s+/g, ' ').trim();
     if (!title) return { ok: false, error: 'title_required' };
     job.title = title.slice(0, 120);
   }
   if (patch.text !== undefined) {
-    const text = String(patch.text || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim().slice(0, MAX_JOB_TEXT);
+    const text = cleanJobText(String(patch.text || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')).slice(0, MAX_JOB_TEXT);
     if (text.length < 10) return { ok: false, error: 'text_too_short' };
     job.text = text;
     job.links = safeLinks(patch.links || linksFromText(text));
@@ -277,12 +286,16 @@ export function deleteJobListing(id, j = jobsState(), by = null, now = Date.now(
 export function publicJobs(j = jobsState()) {
   return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && !j.deleted?.[x.id] && normalizeJobLocation(x.location, j))
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)).slice(0, 100)
-    .map((x) => ({
-      id: x.id, title: x.title, text: x.text, links: safeLinks(x.links || []),
+    .map((x) => {
+      const text = cleanJobText(x.text);
+      const title = cleanJobText(x.title).replace(/\s+/g, ' ').trim() || titleFromText(text);
+      return {
+      id: x.id, title, text, links: safeLinks(x.links || []),
       source_name: x.sourceName, source_url: x.sourceUrl || '',
       location: normalizeJobLocation(x.location, j),
       published_at: x.publishedAt || null,
-    }));
+      };
+    });
 }
 
 function saveJobs({ broadcast = false, backupSoon = true } = {}) {
@@ -974,4 +987,4 @@ export function startJobsMonitor({ everyMs = POLL_MS } = {}) {
 }
 export function stopJobsMonitor() { active = false; clearTimeout(timer); timer = null; }
 
-export const _test = { JOB_TERMS, safeLinks, linksFromText, titleFromText, reviewText, reviewKeyboard, mergeJobsFromBackup, sourceScreenText, pendingText };
+export const _test = { JOB_TERMS, safeLinks, linksFromText, cleanJobText, titleFromText, reviewText, reviewKeyboard, mergeJobsFromBackup, sourceScreenText, pendingText };
