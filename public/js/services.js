@@ -723,10 +723,16 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   }
   function cleanJobDisplayText(value) {
     const channelPromo = /[@#]\s*syrian[_\s-]?jo[b]+\b[#]?/giu;
-    const promoLine = /(?:لنشر|للنشر).{0,90}(?:راسلونا|تواصلوا|اتصلوا).{0,30}(?:دايركت|مباشرة|direct|dm)|(?:for\s+(?:posting|publishing|sharing)|to\s+(?:post|publish|advertise)).{0,70}(?:jobs?|vacanc\w*).{0,60}(?:dm|direct|message|contact)/iu;
+    const hashtag = /#(?:[\p{L}\p{N}\p{M}_]+)/gu;
+    const hashtagOnlyLine = /^(?:\s*#[\p{L}\p{N}\p{M}_]+\s*)+$/u;
+    const promoLine = /(?:لنشر|للنشر).{0,90}(?:راسلونا|تواصلوا|اتصلوا).{0,30}(?:دايركت|مباشرة|direct|dm)|(?:for\s+(?:posting|publishing|sharing)|to\s+(?:post|publish|advertise)).{0,70}(?:jobs?|vacanc\w*).{0,60}(?:dm|direct|message|contact)|(?:للاعلان|للإعلان|للترويج|تابعونا|اشتركوا|انضموا.{0,30}(?:قناة|تيليجرام)|لمزيد من (?:(?:فرص|فرصة)\s+عمل|الفرص|الوظائف|الاعلانات|الإعلانات)|follow us|join\s+(?:our\s+)?(?:channel|telegram))/iu;
     const arrowLine = /^[\s🔻🔽👇⬇️⬇︎▼▾↓]+$/u;
     return String(value || '').replace(/\r/g, '').split('\n')
-      .map((line) => line.replace(channelPromo, ' ').replace(/[ \t]{2,}/g, ' ').replace(/^[\s|·•–—-]+|[\s|·•–—-]+$/g, '').trim())
+      .map((line) => {
+        const withoutChannel = line.replace(channelPromo, ' ').trim();
+        if (hashtagOnlyLine.test(withoutChannel)) return '';
+        return withoutChannel.replace(hashtag, (tag) => ` ${tag.slice(1).replace(/_/g, ' ')} `).replace(/[ \t]{2,}/g, ' ').replace(/^[\s|·•–—-]+|[\s|·•–—-]+$/g, '').trim();
+      })
       .filter((line) => line && !promoLine.test(line) && !arrowLine.test(line))
       .join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }

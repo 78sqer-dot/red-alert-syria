@@ -53,6 +53,25 @@ test('Syrian_job promotional footer is stripped from new, legacy and subsequentl
   assert.equal(publicJobs(jobs)[0].text, body);
 });
 
+test('all hashtag-only lines and promotional endings are removed while employer names and apply URLs remain readable', () => {
+  const source = [
+    '#حلب',
+    '#فرصة_عمل',
+    'تعلن #جمعية_التآلف بالشراكة مع #برنامج_الأغذية_العالمي (WFP) عن الوظيفة الشاغرة.',
+    'رابط التقديم: https://example.org/vacancy#apply',
+    '#جمعية_التآلف',
+    '#WFP',
+    'تابعونا لمزيد من الوظائف',
+  ].join('\n');
+  const cleaned = _test.cleanJobText(source);
+  const withoutUrl = cleaned.replace(/https?:\/\/\S+/gi, '');
+  assert.doesNotMatch(withoutUrl, /#/);
+  assert.match(cleaned, /جمعية التآلف/);
+  assert.match(cleaned, /برنامج الأغذية العالمي/);
+  assert.match(cleaned, /https:\/\/example\.org\/vacancy#apply/, 'a URL fragment is preserved, not mistaken for a hashtag');
+  assert.doesNotMatch(cleaned, /تابعونا|لمزيد من الوظائف|فرصة عمل\s*$/);
+});
+
 test('ignored posts stay out of the public list and become final decisions', () => {
   const jobs = initialJobsState();
   const created = createPendingJob({ kind: 'employer', sourceKey: 'test:employer:1', text: 'مطلوب موظف مبيعات في حلب. تفاصيل التقديم على الرابط.' }, jobs, NOW);

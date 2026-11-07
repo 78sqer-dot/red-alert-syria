@@ -74,7 +74,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobs: 'وظائف'/);
   assert.match(services, /jobs: 'Jobs'/);
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
-  assert.match(app, /services\.js\?v=33/);
+  assert.match(app, /services\.js\?v=34/);
   assert.match(app, /icons\.js\?v=6/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
@@ -120,7 +120,8 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobReadMore: 'Read more'/);
   assert.match(services, /jobReadLess: 'Show less'/);
   assert.match(services, /syrian\[_\\s-\]\?jo\[b\]\+/i, 'channel tags are stripped from previously cached job items');
-  assert.match(app, /services\.js\?v=33/, 'the updated service module bypasses stale browser caches');
+  assert.match(app, /services\.js\?v=34/, 'the updated service module bypasses stale browser caches');
+  assert.match(services, /hashtagOnlyLine/, 'standalone hashtag footer lines are removed');
   assert.match(css, /\.jobs-switch\s*\{/);
   assert.match(css, /\.jobs-option\.on\s*\{/);
   assert.match(css, /\.job-card\s*\{/);

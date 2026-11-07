@@ -168,12 +168,21 @@ function safeLinks(links = []) {
 }
 function linksFromText(text) { return safeLinks(String(text || '').match(/https:\/\/[^\s<>()[\]{}]+/gi) || []); }
 const JOB_CHANNEL_PROMO = /[@#]\s*syrian[_\s-]?jo[b]+\b[#]?/giu;
-const JOB_PROMO_LINE = /(?:لنشر|للنشر).{0,90}(?:راسلونا|تواصلوا|اتصلوا).{0,30}(?:دايركت|مباشرة|direct|dm)|(?:for\s+(?:posting|publishing|sharing)|to\s+(?:post|publish|advertise)).{0,70}(?:jobs?|vacanc\w*).{0,60}(?:dm|direct|message|contact)/iu;
+const JOB_HASHTAG = /#(?:[\p{L}\p{N}\p{M}_]+)/gu;
+const JOB_HASHTAG_ONLY_LINE = /^(?:\s*#[\p{L}\p{N}\p{M}_]+\s*)+$/u;
+const JOB_PROMO_LINE = /(?:لنشر|للنشر).{0,90}(?:راسلونا|تواصلوا|اتصلوا).{0,30}(?:دايركت|مباشرة|direct|dm)|(?:for\s+(?:posting|publishing|sharing)|to\s+(?:post|publish|advertise)).{0,70}(?:jobs?|vacanc\w*).{0,60}(?:dm|direct|message|contact)|(?:للاعلان|للإعلان|للترويج|تابعونا|اشتركوا|انضموا.{0,30}(?:قناة|تيليجرام)|لمزيد من (?:(?:فرص|فرصة)\s+عمل|الفرص|الوظائف|الاعلانات|الإعلانات)|follow us|join\s+(?:our\s+)?(?:channel|telegram))/iu;
 const JOB_ARROW_LINE = /^[\s🔻🔽👇⬇️⬇︎▼▾↓]+$/u;
 export function cleanJobText(value) {
-  return String(value || '').replace(/\r/g, '').split('\n').map((line) => line.replace(JOB_CHANNEL_PROMO, ' ').replace(/[ \t]{2,}/g, ' ').replace(/^[\s|·•–—-]+|[\s|·•–—-]+$/g, '').trim())
+  const urls = [];
+  const protectedText = String(value || '').replace(/https?:\/\/[^\s<>]+/gi, (url) => `\uE000${urls.push(url) - 1}\uE001`);
+  const cleaned = protectedText.replace(/\r/g, '').split('\n').map((line) => {
+    const withoutChannel = line.replace(JOB_CHANNEL_PROMO, ' ').trim();
+    if (JOB_HASHTAG_ONLY_LINE.test(withoutChannel)) return '';
+    return withoutChannel.replace(JOB_HASHTAG, (tag) => ` ${tag.slice(1).replace(/_/g, ' ')} `).replace(/[ \t]{2,}/g, ' ').replace(/^[\s|·•–—-]+|[\s|·•–—-]+$/g, '').trim();
+  })
     .filter((line) => line && !JOB_PROMO_LINE.test(line) && !JOB_ARROW_LINE.test(line))
     .join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return cleaned.replace(/\uE000(\d+)\uE001/g, (_, index) => urls[Number(index)] || '');
 }
 function titleFromText(text) {
   const line = cleanJobText(text).split(/\r?\n/).map((x) => x.trim()).find(Boolean) || 'فرصة عمل';
