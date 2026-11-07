@@ -3,6 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import { config } from './config.js';
 import { store } from './store.js';
 import { fetchChannel } from './news-sources.js';
+import { normalizeApplicationDeadline, isApplicationDeadlineExpired } from './application-deadline.js';
 
 export const ARMY_CATEGORIES = Object.freeze({
   army: Object.freeze({ ar: 'رواتب الجيش', en: 'Army salaries', icon: '🪖' }),
@@ -216,6 +217,8 @@ export function armyFingerprint(text, _category = '') {
 export function createPendingArmyItem(input, j = armyState(), now = Date.now()) {
   const text = String(input?.text || '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, MAX_TEXT);
   if (text.length < 10) return { duplicate: false, item: null, error: 'text_required' };
+  const applicationDeadline = normalizeApplicationDeadline(input?.applicationDeadline);
+  if (input?.applicationDeadline && !applicationDeadline) return { duplicate: false, item: null, error: 'deadline_invalid' };
   const sourceUrl = safeHttps(input.sourceUrl);
   if (input.kind !== 'manual' && !sourceUrl) return { duplicate: false, item: null, error: 'source_required' };
   const category = isCategory(input.category) ? input.category : inferArmyCategory(text, input.sourceUsername || '');
@@ -236,6 +239,7 @@ export function createPendingArmyItem(input, j = armyState(), now = Date.now()) 
     sourceName: clean(input.sourceName || (kind === 'manual' ? 'إضافة الإدارة' : 'مصدر رسمي'), 100),
     sourceUrl,
     links: safeLinks(input.links || linksFromText(text)),
+    ...(applicationDeadline ? { applicationDeadline } : {}),
     createdAt: now, status: 'pending', notifiedAt: null, cards: [],
   };
   j.pending[id] = item;
@@ -294,6 +298,11 @@ export function updateArmyItem(id, patch, j = armyState(), by = null, now = Date
     if (!url) return { ok: false, error: 'source_invalid' };
     item.sourceUrl = url;
   }
+  if (patch.applicationDeadline !== undefined) {
+    const deadline = normalizeApplicationDeadline(patch.applicationDeadline);
+    if (patch.applicationDeadline != null && patch.applicationDeadline !== '' && !deadline) return { ok: false, error: 'deadline_invalid' };
+    if (deadline) item.applicationDeadline = deadline; else delete item.applicationDeadline;
+  }
   item.updatedAt = now;
   if (by != null) item.updatedBy = Number(by) || null;
   return { ok: true, item };
@@ -327,14 +336,15 @@ export function clearArmyChannel(kind, j = armyState(), now = Date.now()) {
   return true;
 }
 
-export function publicArmy(j = armyState()) {
+export function publicArmy(j = armyState(), now = Date.now()) {
   const items = Object.values(j.published || {})
-    .filter((item) => item && item.status === 'approved' && !j.deleted?.[item.id] && isCategory(item.category))
+    .filter((item) => item && item.status === 'approved' && !j.deleted?.[item.id] && !isApplicationDeadlineExpired(item.applicationDeadline, now) && isCategory(item.category))
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
     .slice(0, 100)
     .map((item) => ({
       id: item.id, category: item.category, title: item.title, text: item.text,
       source_name: item.sourceName, source_url: safeHttps(item.sourceUrl), links: safeLinks(item.links || []),
+      application_deadline: item.applicationDeadline || null,
       created_at: item.createdAt || null, updated_at: item.updatedAt || null, published_at: item.publishedAt || null,
     }));
   const checked = ARMY_SOURCES.map((source) => j.sources[source.u]?.lastCheck).filter(Boolean).map((x) => typeof x === 'number' ? x : Date.parse(x)).filter(Number.isFinite);
@@ -481,6 +491,8 @@ export async function pollArmyOnce({ j = armyState(), fetcher = fetchChannel, no
 let active = false;
 let running = false;
 let timer = null;
+let deadlineTimer = null;
+let lastExpiredArmyIds = null;
 let adminApi = null;
 
 export function setArmyAdminApi(api) { adminApi = api || null; }
@@ -539,6 +551,14 @@ export function armyReviewKeyboard(item, english = false) {
 export function startArmyMonitor(getApi = () => null, { everyMs = POLL_MS, poller = pollArmyOnce } = {}) {
   if (active) return;
   active = true;
+  lastExpiredArmyIds = Object.values(armyState().published || {}).filter((item) => isApplicationDeadlineExpired(item?.applicationDeadline)).map((item) => item.id).sort().join(',');
+  deadlineTimer = setInterval(() => {
+    const j = armyState();
+    const next = Object.values(j.published || {}).filter((item) => isApplicationDeadlineExpired(item?.applicationDeadline)).map((item) => item.id).sort().join(',');
+    if (lastExpiredArmyIds !== null && next !== lastExpiredArmyIds) store.emit('army', publicArmy(j));
+    lastExpiredArmyIds = next;
+  }, 60_000);
+  deadlineTimer.unref?.();
   setArmyAdminApi(getApi());
   store.mergeHooks ||= [];
   if (!store.mergeHooks.includes(mergeArmyFromBackup)) store.mergeHooks.push(mergeArmyFromBackup);
@@ -565,7 +585,7 @@ export function startArmyMonitor(getApi = () => null, { everyMs = POLL_MS, polle
   schedule();
 }
 
-export function stopArmyMonitor() { active = false; clearTimeout(timer); timer = null; running = false; }
+export function stopArmyMonitor() { active = false; clearTimeout(timer); clearInterval(deadlineTimer); timer = deadlineTimer = null; running = false; }
 
 export const _test = {
   safeHttps, safeLinks, linksFromText, titleFromText, norm, isCategory,

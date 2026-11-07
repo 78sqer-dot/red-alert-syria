@@ -59,6 +59,8 @@ test('owner can skip location and publish a manual job without a location from t
     const skipped = context({ isOwner: true, match: ['j:adminloc:none', 'none'] });
     skipped.callbackQuery = { message: { message_id: 101 } };
     await skipLocation.handler(skipped);
+    assert.equal(jobs.adminDrafts['9'].step, 'deadline');
+    await bot.findCallback('j:admin:deadline:none').handler(skipped);
     assert.equal(jobs.adminDrafts['9'].step, 'preview');
     assert.match(skipped.screen.text, /لم يُحدّد موقع للإعلان/);
     const previewCallbacks = skipped.screen.keyboard.inline_keyboard.flat().map((button) => button.callback_data);

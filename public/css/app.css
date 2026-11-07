@@ -1311,3 +1311,6 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 @media (prefers-reduced-motion: reduce) {
   .map-ctrl-panel { animation: none; }
 }
+
+.job-deadline, .army-deadline { display: block; margin: 7px 0; padding: 5px 8px; border-radius: 8px; background: rgba(37, 99, 235, .08); color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.job-deadline b, .army-deadline b { color: var(--text-primary); }

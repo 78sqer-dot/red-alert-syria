@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   initialJobsState, createPendingJob, decideJob, publicJobs,
   pollJobsOnce, hasSyrianLocation, isJobPost, locationForGovernorate, locationForDistrict, locationForPlace,
-  addCustomGovernorate, addCustomArea, updatePublishedJob, deleteJobListing, mergeJobsFromBackup, _test,
+  addCustomGovernorate, addCustomArea, updatePublishedJob, updateJobDeadline, deleteJobListing, mergeJobsFromBackup, _test,
 } from '../server/jobs.js';
 import { governorates, districtsOf, placesOf } from '../server/places.js';
 
@@ -24,6 +24,22 @@ test('only owner-approved job posts enter the public Jobs list', () => {
   assert.equal(publicJobs(jobs)[0].links[0], 'https://example.org/apply');
   assert.equal(publicJobs(jobs)[0].source_url, '');
   assert.equal(publicJobs(jobs)[0].location.label_ar, governorates[0].ar);
+});
+
+test('job listings expire after the Damascus application-deadline day and can be extended', () => {
+  const jobs = initialJobsState();
+  const created = createPendingJob({
+    kind: 'manual', sourceKey: 'test:deadline:1', title: 'فرصة محاسب',
+    text: 'فرصة عمل محاسب بدوام كامل في دمشق. أرسل السيرة الذاتية عبر الرابط.',
+    location: locationForGovernorate(governorates[0].code), applicationDeadline: '2026-11-06',
+  }, jobs, NOW);
+  assert.ok(created.job);
+  assert.equal(decideJob(created.job.id, 'approve', jobs, 7, NOW + 1000).ok, true);
+  assert.equal(publicJobs(jobs, Date.parse('2026-11-06T20:59:59Z')).length, 1, 'deadline date remains open through 23:59 Damascus time');
+  assert.equal(publicJobs(jobs, Date.parse('2026-11-06T21:00:00Z')).length, 0, 'it is hidden as the next Damascus day begins');
+  assert.ok(jobs.published[created.job.id], 'expiration hides the listing without deleting its record');
+  assert.equal(updateJobDeadline(created.job.id, '2026-11-08', jobs, 7, NOW + 2000).ok, true);
+  assert.equal(publicJobs(jobs, Date.parse('2026-11-06T21:00:00Z')).length, 1, 'an admin extension restores the listing');
 });
 
 test('Syrian_job promotional footer is stripped from new, legacy and subsequently edited listings', () => {

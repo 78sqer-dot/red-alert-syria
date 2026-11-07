@@ -38,6 +38,17 @@ test('only approved official-source items appear in the public Syrian Army secti
   assert.equal(result.items[0].status, undefined, 'public projection excludes workflow internals');
 });
 
+test('Syrian Army items with application deadlines disappear after the Damascus deadline day without deletion', () => {
+  const j = initialArmyState();
+  const made = makePending(j, 'army-deadline');
+  assert.equal(updateArmyItem(made.item.id, { applicationDeadline: '2026-11-06' }, j, 7, NOW + 1).ok, true);
+  assert.equal(decideArmyItem(made.item.id, 'approve', j, 7, NOW + 2).ok, true);
+  assert.equal(publicArmy(j, Date.parse('2026-11-06T20:59:59Z')).items.length, 1);
+  assert.equal(publicArmy(j, Date.parse('2026-11-06T21:00:00Z')).items.length, 0);
+  assert.ok(j.published[made.item.id], 'expired army notice stays available in administration');
+  assert.equal(publicArmy(j)[0], undefined, 'the current projection omits the expired notice');
+});
+
 test('official monitor establishes a baseline without importing old posts, then queues only relevant new posts', async () => {
   const j = initialArmyState();
   const history = {

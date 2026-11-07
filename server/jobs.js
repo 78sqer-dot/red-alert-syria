@@ -5,6 +5,7 @@ import { store } from './store.js';
 import { fetchChannel } from './news-sources.js';
 import { governorates, places, districtsOf, placesOf, getGov, getDist, getPlace, normalizeArabic } from './places.js';
 import { cleanMenuMessages } from './ui-clean.js';
+import { normalizeApplicationDeadline, isApplicationDeadlineExpired } from './application-deadline.js';
 
 export const JOB_SOURCE = Object.freeze({ u: 'syrian_jobb', name: 'وظائف سوريا', url: 'https://t.me/syrian_jobb' });
 const POLL_MS = 60_000;
@@ -192,6 +193,8 @@ function titleFromText(text) {
 export function createPendingJob(input, j = jobsState(), now = Date.now()) {
   const text = cleanJobText(input?.text).slice(0, MAX_JOB_TEXT);
   if (!text) return { duplicate: false, job: null, error: 'empty' };
+  const applicationDeadline = normalizeApplicationDeadline(input?.applicationDeadline);
+  if (input?.applicationDeadline && !applicationDeadline) return { duplicate: false, job: null, error: 'deadline_invalid' };
   const location = normalizeJobLocation(input.location, j);
   const baseFingerprint = jobFingerprint(text);
   const fp = location
@@ -216,6 +219,7 @@ export function createPendingJob(input, j = jobsState(), now = Date.now()) {
     sourceUrl: /^https:\/\//i.test(String(input.sourceUrl || '')) ? String(input.sourceUrl).slice(0, 500) : '',
     links: safeLinks(input.links || linksFromText(text)),
     location,
+    ...(applicationDeadline ? { applicationDeadline } : {}),
     createdAt: now,
     status: 'pending',
     notifiedAt: null,
@@ -279,6 +283,22 @@ export function updatePublishedJob(id, patch, j = jobsState(), by = null, now = 
     delete job.publishedWithoutLocation;
     if (j.decisions[id]) delete j.decisions[id].publishedWithoutLocation;
   }
+  if (patch.applicationDeadline !== undefined) {
+    const deadline = normalizeApplicationDeadline(patch.applicationDeadline);
+    if (patch.applicationDeadline != null && patch.applicationDeadline !== '' && !deadline) return { ok: false, error: 'deadline_invalid' };
+    if (deadline) job.applicationDeadline = deadline; else delete job.applicationDeadline;
+  }
+  job.updatedAt = now;
+  if (by != null) job.updatedBy = Number(by) || null;
+  return { ok: true, job };
+}
+
+export function updateJobDeadline(id, value, j = jobsState(), by = null, now = Date.now()) {
+  const job = j.pending[id] || j.published[id];
+  if (!job || j.deleted[id]) return { ok: false, error: 'not_found' };
+  const deadline = normalizeApplicationDeadline(value);
+  if (value != null && value !== '' && !deadline) return { ok: false, error: 'deadline_invalid' };
+  if (deadline) job.applicationDeadline = deadline; else delete job.applicationDeadline;
   job.updatedAt = now;
   if (by != null) job.updatedBy = Number(by) || null;
   return { ok: true, job };
@@ -297,8 +317,8 @@ export function deleteJobListing(id, j = jobsState(), by = null, now = Date.now(
   return { ok: true, job, tombstone };
 }
 
-export function publicJobs(j = jobsState()) {
-  return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && !j.deleted?.[x.id] && (normalizeJobLocation(x.location, j) || x.publishedWithoutLocation === true))
+export function publicJobs(j = jobsState(), now = Date.now()) {
+  return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && !j.deleted?.[x.id] && !isApplicationDeadlineExpired(x.applicationDeadline, now) && (normalizeJobLocation(x.location, j) || x.publishedWithoutLocation === true))
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)).slice(0, 100)
     .map((x) => {
       const text = cleanJobText(x.text);
@@ -307,14 +327,25 @@ export function publicJobs(j = jobsState()) {
       id: x.id, title, text, links: safeLinks(x.links || []),
       source_name: x.sourceName, source_url: x.sourceUrl || '',
       location: normalizeJobLocation(x.location, j) || null,
+      application_deadline: x.applicationDeadline || null,
       published_at: x.publishedAt || null,
       };
     });
 }
 
+let lastExpiredJobIds = null;
+function expiredJobIds(j = jobsState()) {
+  return Object.values(j.published || {}).filter((job) => job && isApplicationDeadlineExpired(job.applicationDeadline))
+    .map((job) => job.id).sort().join(',');
+}
+function broadcastDeadlineChanges(j = jobsState()) {
+  const next = expiredJobIds(j);
+  if (lastExpiredJobIds !== null && next !== lastExpiredJobIds) store.emit('jobs', publicJobs(j));
+  lastExpiredJobIds = next;
+}
 function saveJobs({ broadcast = false, backupSoon = true } = {}) {
   store.persist({ backupSoon });
-  if (broadcast) store.emit('jobs', publicJobs());
+  if (broadcast) { store.emit('jobs', publicJobs()); lastExpiredJobIds = expiredJobIds(); }
 }
 let intakeMergeAt = 0;
 async function mergeJobBackup(force = false) {
@@ -992,6 +1023,7 @@ export function startJobsMonitor({ everyMs = POLL_MS } = {}) {
   if (active) return;
   active = true;
   jobsState();
+  lastExpiredJobIds = expiredJobIds();
   store.mergeHooks ||= [];
   if (!store.mergeHooks.includes(mergeJobsFromBackup)) store.mergeHooks.push(mergeJobsFromBackup);
   const loop = async () => {
@@ -1007,6 +1039,7 @@ export function startJobsMonitor({ everyMs = POLL_MS } = {}) {
       if (result.baseline || result.newJobs || result.error || result.incomplete) saveJobs({ backupSoon: !!(result.baseline || result.newJobs), broadcast: result.newJobs > 0 });
       else if (result.checkedPosts) saveJobs({ backupSoon: false });
       await notifyPending(j);
+      broadcastDeadlineChanges(j);
     } catch (e) { console.error('[jobs] monitor failed', e.message); }
     finally { running = false; }
     if (active) { timer = setTimeout(loop, everyMs); timer.unref?.(); }

@@ -74,7 +74,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobs: 'وظائف'/);
   assert.match(services, /jobs: 'Jobs'/);
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
-  assert.match(app, /services\.js\?v=34/);
+  assert.match(app, /services\.js\?v=35/);
   assert.match(app, /icons\.js\?v=6/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
@@ -105,6 +105,8 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(card, /t\.me\/share\/url\?/);
   assert.match(card, /L\.jobWhatsApp/);
   assert.match(card, /L\.jobTelegram/);
+  assert.match(card, /j\.application_deadline/);
+  assert.match(card, /L\.jobDeadline/);
   assert.doesNotMatch(card, /job-source|jobSource|source_url|source_name/);
   assert.match(services, /data-job-toggle/);
   assert.match(services, /async function onClick/);
@@ -120,7 +122,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobReadMore: 'Read more'/);
   assert.match(services, /jobReadLess: 'Show less'/);
   assert.match(services, /syrian\[_\\s-\]\?jo\[b\]\+/i, 'channel tags are stripped from previously cached job items');
-  assert.match(app, /services\.js\?v=34/, 'the updated service module bypasses stale browser caches');
+  assert.match(app, /services\.js\?v=35/, 'the updated service module bypasses stale browser caches');
   assert.match(services, /hashtagOnlyLine/, 'standalone hashtag footer lines are removed');
   assert.match(css, /\.jobs-switch\s*\{/);
   assert.match(css, /\.jobs-option\.on\s*\{/);
@@ -132,7 +134,8 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
-  assert.match(html, /app\.css\?v=63/);
+  assert.match(html, /app\.css\?v=64/);
+  assert.match(css, /\.job-deadline, \.army-deadline/);
 });
 
 test('Syrian Army salary section shows only approved items and uses configured follow links', () => {
@@ -140,6 +143,8 @@ test('Syrian Army salary section shows only approved items and uses configured f
   assert.ok(ICONS.telegram && ICONS.whatsapp, 'follow buttons use the existing social icons');
   assert.match(services, /tabBtn\('army', 'shield'/);
   assert.match(services, /function armyHtml\(\)/);
+  assert.match(services, /item\.application_deadline/);
+  assert.match(services, /A\.deadline/);
   assert.match(services, /channels\.tg \? `<a class="btn-sm army-follow-link"/);
   assert.match(services, /channels\.wa \? `<a class="btn-sm army-follow-link"/);
   assert.match(services, /tab: 'الجيش السوري'/);

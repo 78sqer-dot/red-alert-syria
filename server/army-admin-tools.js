@@ -7,6 +7,7 @@ import {
   decideArmyItem, updateArmyItem, deleteArmyItem, setArmyChannel, clearArmyChannel,
   normalizeArmyChannelLink,
 } from './army.js';
+import { normalizeApplicationDeadline } from './application-deadline.js';
 
 const MAX_TEXT = 3600;
 const PAGE_SIZE = 8;
@@ -64,14 +65,16 @@ function itemScreenText(ctx, h, item) {
   const original = item.sourceUrl ? `<a href="${esc(item.sourceUrl)}">${en ? (item.kind === 'media_source' ? 'Open original media report' : 'Open original official source') : (item.kind === 'media_source' ? 'فتح الخبر الإعلامي الأصلي' : 'فتح المصدر الرسمي الأصلي')}</a>` : '';
   const links = (item.links || []).map((u, i) => `<a href="${esc(u)}">${en ? `Link ${i + 1}` : `رابط ${i + 1}`}</a>`).join(' · ');
   const fullText = String(item.text || ''); const excerpt = fullText.slice(0, 2200);
-  return [`<b>${itemTitle(item, en)}</b>`, `<i>${status}</i>`, `${en ? 'Source' : 'المصدر'}: ${esc(item.sourceName || '—')}${original ? ` · ${original}` : ''}`, '', `<b>${esc(item.title)}</b>`, esc(excerpt) + (fullText.length > excerpt.length ? '…' : ''), links ? `\n${en ? 'Links from source post' : 'روابط وردت في المنشور'}: ${links}` : '', '', `<i>${en ? 'This item is not public before approval. Approved items appear only in the website/map section; they are never sent to the news channel or configured social channels.' : 'لن يظهر هذا الخبر قبل الموافقة. بعد الاعتماد يظهر في قسم الموقع/الخريطة فقط، ولا يُرسل إلى قناة الأخبار أو قنوات التواصل المُعدّة.'}</i>`].filter(Boolean).join('\n');
+  const deadline = item.applicationDeadline ? `${en ? 'Application deadline' : 'آخر موعد للتقديم'}: ${item.applicationDeadline}` : (en ? 'No application deadline set' : 'لم يُحدّد موعد نهائي للتقديم');
+  return [`<b>${itemTitle(item, en)}</b>`, `<i>${status}</i>`, `${en ? 'Source' : 'المصدر'}: ${esc(item.sourceName || '—')}${original ? ` · ${original}` : ''}`, esc(deadline), '', `<b>${esc(item.title)}</b>`, esc(excerpt) + (fullText.length > excerpt.length ? '…' : ''), links ? `\n${en ? 'Links from source post' : 'روابط وردت في المنشور'}: ${links}` : '', '', `<i>${en ? 'This item is not public before approval. Approved items appear only in the website/map section; they are never sent to the news channel or configured social channels.' : 'لن يظهر هذا الخبر قبل الموافقة. بعد الاعتماد يظهر في قسم الموقع/الخريطة فقط، ولا يُرسل إلى قناة الأخبار أو قنوات التواصل المُعدّة.'}</i>`].filter(Boolean).join('\n');
 }
 function itemKeyboard(ctx, h, item) {
   const en = isEnglish(ctx, h); const kb = new InlineKeyboard();
   if (item.status !== 'approved') kb.text(en ? '✅ Approve for website/map only' : '✅ اعتماد للموقع/الخريطة فقط', `army:approve:${item.id}`).row();
   kb.text(en ? '✏️ Edit title' : '✏️ تعديل العنوان', `army:edit:title:${item.id}`)
     .text(en ? '✏️ Edit details' : '✏️ تعديل التفاصيل', `army:edit:text:${item.id}`).row()
-    .text(en ? '🏷 Change category' : '🏷 تغيير الفئة', `army:edit-category:${item.id}`).row();
+    .text(en ? '🏷 Change category' : '🏷 تغيير الفئة', `army:edit-category:${item.id}`).row()
+    .text(en ? '🗓 Set application deadline' : '🗓 تحديد آخر موعد للتقديم', `army:edit:deadline:${item.id}`).row();
   if (item.status !== 'approved') kb.text(en ? '🚫 Ignore' : '🚫 تجاهل', `army:ignore:${item.id}`);
   kb.text(en ? '🗑 Delete' : '🗑 حذف', `army:delete:${item.id}`).row()
     .text(en ? '↩️ Control panel' : '↩️ لوحة الإدارة', 'army:menu');
@@ -192,14 +195,31 @@ export function registerArmyAdminTools(bot, h) {
     if (result.ok) persist();
     return h.show(ctx, say(ctx, h, result.ok ? '🚫 تم تجاهل الخبر، ولن يظهر للعامة.' : 'لم يتم العثور على الخبر.', result.ok ? '🚫 Ignored; it will not be public.' : 'Item not found.'), menuKeyboard(ctx, h));
   }));
-  bot.callbackQuery(/^army:edit:(title|text):([a-f0-9]{14})$/, (ctx) => ownerOnly(ctx, async () => {
+  bot.callbackQuery(/^army:edit:(title|text|deadline):([a-f0-9]{14})$/, (ctx) => ownerOnly(ctx, async () => {
     const [, field, id] = ctx.match; const item = state().pending[id] || state().published[id]; await answer(ctx);
     if (!item || state().deleted[id]) return showMenu(ctx, h);
     const draft = { mode: 'edit_item', field, itemId: id, createdAt: Date.now() };
+    if (field === 'deadline') {
+      draft.step = 'deadline';
+      const keyboard = new InlineKeyboard().text(say(ctx, h, '🗑 إزالة الموعد', '🗑 Clear deadline'), `army:deadline:clear:${id}`).row()
+        .text(say(ctx, h, '✖️ إلغاء', '✖️ Cancel'), `army:cancel-deadline:${id}`);
+      return startDraft(ctx, h, draft, say(ctx, h, '<b>أرسل آخر موعد للتقديم</b> بصيغة YYYY-MM-DD. يبقى الإعلان ظاهرًا حتى نهاية اليوم بتوقيت دمشق.', '<b>Send the application deadline</b> as YYYY-MM-DD. The item stays visible through the end of that day in Damascus time.'), keyboard);
+    }
     const prompt = field === 'title'
       ? say(ctx, h, `<b>أرسل العنوان الجديد</b>\nالحالي: ${esc(item.title)}`, `<b>Send the new title</b>\nCurrent: ${esc(item.title)}`)
       : say(ctx, h, '<b>أرسل النص الكامل الجديد</b> (10–3600 حرفاً). تأكد من بقاء رابط المصدر الرسمي صحيحاً.', '<b>Send the full revised text</b> (10–3600 characters). Keep the official source attribution accurate.');
     return startDraft(ctx, h, draft, prompt, cancelKeyboard(ctx, h));
+  }));
+  bot.callbackQuery(/^army:deadline:clear:([a-f0-9]{14})$/, (ctx) => ownerOnly(ctx, async () => {
+    const id = ctx.match[1]; const result = updateArmyItem(id, { applicationDeadline: null }, state(), ctx.from.id);
+    await answer(ctx, result.ok ? say(ctx, h, 'أُزيل موعد التقديم.', 'Application deadline cleared.') : say(ctx, h, 'تعذّر تحديث الموعد.', 'Could not update the deadline.'));
+    if (result.ok) { delete state().adminDrafts[idOf(ctx)]; persist({ broadcast: result.item.status === 'approved' }); }
+    return result.ok ? h.show(ctx, itemScreenText(ctx, h, result.item), itemKeyboard(ctx, h, result.item)) : showMenu(ctx, h);
+  }));
+  bot.callbackQuery(/^army:cancel-deadline:([a-f0-9]{14})$/, (ctx) => ownerOnly(ctx, async () => {
+    const id = ctx.match[1]; delete state().adminDrafts[idOf(ctx)]; persist(); await answer(ctx, say(ctx, h, 'أُلغي تعديل الموعد.', 'Deadline edit cancelled.'));
+    const item = state().pending[id] || state().published[id];
+    return item ? h.show(ctx, itemScreenText(ctx, h, item), itemKeyboard(ctx, h, item)) : showMenu(ctx, h);
   }));
   bot.callbackQuery(/^army:edit-category:([a-f0-9]{14})$/, (ctx) => ownerOnly(ctx, async () => {
     const id = ctx.match[1]; await answer(ctx);
@@ -349,6 +369,16 @@ export function registerArmyAdminTools(bot, h) {
       return h.show(ctx, itemScreenText(ctx, h, made.item), itemKeyboard(ctx, h, made.item));
     }
     if (draft.mode === 'edit_item') {
+      if (draft.field === 'deadline') {
+        const deadline = normalizeApplicationDeadline(raw);
+        const keyboard = new InlineKeyboard().text(say(ctx, h, '🗑 إزالة الموعد', '🗑 Clear deadline'), `army:deadline:clear:${draft.itemId}`).row()
+          .text(say(ctx, h, '✖️ إلغاء', '✖️ Cancel'), `army:cancel-deadline:${draft.itemId}`);
+        if (!deadline) return h.show(ctx, say(ctx, h, 'تاريخ غير صالح؛ أرسل YYYY-MM-DD مثل 2026-12-31.', 'Invalid date; send YYYY-MM-DD, e.g. 2026-12-31.'), keyboard);
+        const result = updateArmyItem(draft.itemId, { applicationDeadline: deadline }, state(), ctx.from.id);
+        if (!result.ok) return h.show(ctx, say(ctx, h, 'تعذّر حفظ الموعد.', 'Could not save the deadline.'), keyboard);
+        delete state().adminDrafts[uid]; persist({ broadcast: result.item.status === 'approved' });
+        return h.show(ctx, itemScreenText(ctx, h, result.item), itemKeyboard(ctx, h, result.item));
+      }
       const patch = draft.field === 'title' ? { title: clean(raw, 120) } : { text: String(raw).replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, MAX_TEXT) };
       const result = updateArmyItem(draft.itemId, patch, state(), ctx.from.id); delete state().adminDrafts[uid];
       if (!result.ok) { persist(); return h.show(ctx, say(ctx, h, 'تعذّر التعديل: تحقق من طول النص وأنه ليس مكرراً.', 'Could not save the edit: check its length and make sure it is not a duplicate.'), menuKeyboard(ctx, h)); }

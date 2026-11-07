@@ -4,9 +4,10 @@ import { store } from './store.js';
 import {
   addCustomArea, addCustomGovernorate, createPendingJob, decideJob, deleteJobListing,
   jobsState, locationForDistrict, locationForGovernorate, locationForPlace,
-  publicJobs, updatePublishedJob,
+  publicJobs, updatePublishedJob, updateJobDeadline,
 } from './jobs.js';
 import { districts, districtsOf, getDist, getGov, governorates, placesOf } from './places.js';
+import { normalizeApplicationDeadline, isApplicationDeadlineExpired } from './application-deadline.js';
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const LIMIT = 3600;
@@ -151,9 +152,12 @@ function draftPreview(ctx, h, draft) {
   const location = draft.location
     ? `📍 ${esc(locText(draft.location, english))}`
     : (english ? '📍 Location not specified' : '📍 لم يُحدّد موقع للإعلان');
+  const deadline = draft.applicationDeadline
+    ? (english ? `🗓 Application deadline: ${draft.applicationDeadline} (Damascus time)` : `🗓 آخر موعد للتقديم: ${draft.applicationDeadline} (حتى نهاية اليوم بتوقيت دمشق)`)
+    : (english ? '🗓 No application deadline' : '🗓 دون موعد نهائي للتقديم');
   const text = english
-    ? `<b>Review the new job listing</b>\n\n<b>${esc(draft.title)}</b>\n${location}\n\n${esc(draft.text)}\n\nAfter you confirm, it appears on the website Jobs page only; nothing is posted to the news channel.`
-    : `<b>معاينة إعلان الوظيفة</b>\n\n<b>${esc(draft.title)}</b>\n${location}\n\n${esc(draft.text)}\n\nبعد تأكيدك سيظهر الإعلان في قسم الوظائف بالموقع فقط؛ لن يُنشر في قناة الأخبار.`;
+    ? `<b>Review the new job listing</b>\n\n<b>${esc(draft.title)}</b>\n${location}\n${deadline}\n\n${esc(draft.text)}\n\nAfter you confirm, it appears on the website Jobs page only; nothing is posted to the news channel.`
+    : `<b>معاينة إعلان الوظيفة</b>\n\n<b>${esc(draft.title)}</b>\n${location}\n${deadline}\n\n${esc(draft.text)}\n\nبعد تأكيدك سيظهر الإعلان في قسم الوظائف بالموقع فقط؛ لن يُنشر في قناة الأخبار.`;
   const keyboard = new InlineKeyboard();
   if (draft.location) keyboard.text(english ? '✅ Approve for website' : '✅ اعتماد للموقع', 'j:admin:publish');
   keyboard.text(english ? '📍 Change location' : '📍 تغيير الموقع', 'j:adminloc:gov').row()
@@ -163,6 +167,14 @@ function draftPreview(ctx, h, draft) {
   return { text, keyboard };
 }
 async function showDraft(ctx, h, draft) {
+  if (draft.step === 'deadline') {
+    const keyboard = new InlineKeyboard()
+      .text(say(ctx, h, draft.mode === 'create' ? '⏭️ بدون موعد' : '🗑 إزالة الموعد', draft.mode === 'create' ? '⏭️ No deadline' : '🗑 Clear deadline'), 'j:admin:deadline:none').row()
+      .text(say(ctx, h, '✖️ إلغاء', '✖️ Cancel'), draft.mode === 'create' ? 'j:admin:cancel-draft' : `j:admin:cancel-edit:${draft.jobId}`);
+    const prompt = say(ctx, h, '<b>آخر موعد للتقديم (اختياري)</b>\nأرسل التاريخ بصيغة YYYY-MM-DD. يظل الإعلان ظاهرًا حتى نهاية ذلك اليوم بتوقيت دمشق.', '<b>Application deadline (optional)</b>\nSend YYYY-MM-DD. The listing stays visible through the end of that day in Damascus time.');
+    const error = draft.deadlineError ? say(ctx, h, '⚠️ التاريخ غير صالح أو أصبح من الماضي؛ أرسله مثل 2026-12-31.', '⚠️ Invalid or past date; send it like 2026-12-31.') : '';
+    return showDraftScreen(ctx, h, draft, error ? `${prompt}\n\n${error}` : prompt, keyboard);
+  }
   if (draft.step === 'location') {
     return showDraftScreen(ctx, h, draft,
       say(ctx, h, '<b>اختر محافظة الإعلان</b>\n\nتُعرض المحافظات والمناطق المضافة يدوياً بعلامة ✳️.', '<b>Choose the listing governorate</b>\n\nCustom entries are marked ✳️.'),
@@ -225,7 +237,7 @@ async function publishAdminDraft(ctx, h, withoutLocation = false) {
   }
   const sourceKey = `manual:${uid}:${crypto.randomUUID()}`;
   const location = withoutLocation ? null : draft.location;
-  const created = createPendingJob({ kind: 'manual', sourceKey, title: draft.title, text: draft.text, links: urls(draft.text), sourceName: say(ctx, h, 'إضافة الإدارة', 'Admin listing'), location }, j);
+  const created = createPendingJob({ kind: 'manual', sourceKey, title: draft.title, text: draft.text, links: urls(draft.text), sourceName: say(ctx, h, 'إضافة الإدارة', 'Admin listing'), location, applicationDeadline: draft.applicationDeadline || null }, j);
   if (!created.job) return answer(ctx, created.duplicate ? say(ctx, h, 'يوجد إعلان مطابق بالفعل', 'A matching listing already exists') : say(ctx, h, 'تعذّر إنشاء الإعلان', 'Could not create listing'));
   const result = decideJob(created.job.id, withoutLocation ? 'approve_without_location' : 'approve', j, ctx.from.id);
   if (!result.ok) {
@@ -285,6 +297,18 @@ export function registerJobsAdminTools(bot, h) {
   }));
   bot.callbackQuery('j:admin:publish', (ctx) => ownerOnly(ctx, () => publishAdminDraft(ctx, h, false)));
   bot.callbackQuery('j:admin:publish-no-location', (ctx) => ownerOnly(ctx, () => publishAdminDraft(ctx, h, true)));
+  bot.callbackQuery('j:admin:deadline:none', (ctx) => ownerOnly(ctx, async () => {
+    const uid = uidOf(ctx); const draft = jobsState().adminDrafts[uid];
+    if (!draft) return answer(ctx);
+    await answer(ctx);
+    if (draft.mode === 'create') { delete draft.applicationDeadline; draft.step = 'preview'; storeDraft(uid, draft); return showDraft(ctx, h, draft); }
+    if (draft.mode === 'edit_listing' && draft.field === 'deadline') {
+      const result = updateJobDeadline(draft.jobId, null, jobsState(), ctx.from.id);
+      if (!result.ok) return answer(ctx, say(ctx, h, 'تعذّر إزالة الموعد.', 'Could not clear the deadline.'));
+      removeDraft(uid); save({ broadcast: true });
+      return h.show(ctx, say(ctx, h, '✅ أُزيل موعد التقديم.', '✅ Application deadline cleared.'), new InlineKeyboard().text(say(ctx, h, '↩️ رجوع للإعلان', '↩️ Back to listing'), `j:admin:view:${draft.jobId}`));
+    }
+  }));
   bot.callbackQuery('j:admin:cancel-draft', (ctx) => ownerOnly(ctx, async () => {
     const uid = uidOf(ctx); const draft = jobsState().adminDrafts[uid];
     if (draft?.promptId) try { await ctx.api.deleteMessage(ctx.chat.id, draft.promptId); } catch { /* ignore */ }
@@ -311,12 +335,13 @@ export function registerJobsAdminTools(bot, h) {
     const row = adById(ctx.match[1], jobsState()); if (!row) { await answer(ctx); return showPanel(ctx, h); }
     const english = en(ctx, h); const approved = !!jobsState().published[row.id];
     const text = english
-      ? `<b>${approved ? '✅ Approved listing' : '🕓 Pending listing'}</b>\n\n<b>${esc(row.title)}</b>\n📍 ${esc(locText(row.location, true))}\n\n${esc(row.text)}${row.links?.length ? `\n\nLinks: ${row.links.map((u) => `<a href="${esc(u)}">open</a>`).join(' · ')}` : ''}`
-      : `<b>${approved ? '✅ إعلان معتمد' : '🕓 إعلان بانتظار المراجعة'}</b>\n\n<b>${esc(row.title)}</b>\n📍 ${esc(locText(row.location))}\n\n${esc(row.text)}${row.links?.length ? `\n\nروابط: ${row.links.map((u) => `<a href="${esc(u)}">فتح</a>`).join(' · ')}` : ''}`;
+      ? `<b>${approved ? '✅ Approved listing' : '🕓 Pending listing'}</b>\n\n<b>${esc(row.title)}</b>\n📍 ${esc(locText(row.location, true))}${row.applicationDeadline ? `\n🗓 Application deadline: ${row.applicationDeadline}` : ''}\n\n${esc(row.text)}${row.links?.length ? `\n\nLinks: ${row.links.map((u) => `<a href="${esc(u)}">open</a>`).join(' · ')}` : ''}`
+      : `<b>${approved ? '✅ إعلان معتمد' : '🕓 إعلان بانتظار المراجعة'}</b>\n\n<b>${esc(row.title)}</b>\n📍 ${esc(locText(row.location))}${row.applicationDeadline ? `\n🗓 آخر موعد للتقديم: ${row.applicationDeadline}` : ''}\n\n${esc(row.text)}${row.links?.length ? `\n\nروابط: ${row.links.map((u) => `<a href="${esc(u)}">فتح</a>`).join(' · ')}` : ''}`;
     const kb = new InlineKeyboard();
     if (approved) kb.text(say(ctx, h, '✏️ تعديل العنوان', '✏️ Edit title'), `j:admin:edit:title:${row.id}`).row()
       .text(say(ctx, h, '✏️ تعديل التفاصيل', '✏️ Edit details'), `j:admin:edit:text:${row.id}`).row()
       .text(say(ctx, h, '📍 تعديل الموقع', '📍 Edit location'), `j:admin:edit:location:${row.id}`).row();
+    kb.text(say(ctx, h, '🗓 تعديل آخر موعد للتقديم', '🗓 Edit application deadline'), `j:admin:edit:deadline:${row.id}`).row();
     kb.text(say(ctx, h, '🗑 حذف الإعلان', '🗑 Delete listing'), `j:admin:delete:${row.id}`).row()
       .text(say(ctx, h, '↩️ الإعلانات', '↩️ Listings'), 'j:admin:list:0');
     await answer(ctx); await h.show(ctx, text, kb);
@@ -335,11 +360,12 @@ export function registerJobsAdminTools(bot, h) {
     await h.show(ctx, result.ok ? say(ctx, h, '🗑 تم حذف الإعلان من قسم الوظائف في الموقع.', '🗑 The listing was deleted from the website Jobs section.') : say(ctx, h, 'لم يتم العثور على الإعلان.', 'Listing not found.'), new InlineKeyboard().text(say(ctx, h, '📋 إدارة الإعلانات', '📋 Manage listings'), 'j:admin:list:0').row().text(say(ctx, h, '↩️ لوحة الإدارة', '↩️ Control panel'), 'j:admin'));
   }));
 
-  bot.callbackQuery(/^j:admin:edit:(title|text|location):([a-f0-9]{14})$/, (ctx) => ownerOnly(ctx, async () => {
-    const [, field, id] = ctx.match; const row = jobsState().published[id];
-    if (!row) return answer(ctx, say(ctx, h, 'الإعلان المعتمد غير موجود', 'Approved listing not found'));
+  bot.callbackQuery(/^j:admin:edit:(title|text|location|deadline):([a-f0-9]{14})$/, (ctx) => ownerOnly(ctx, async () => {
+    const [, field, id] = ctx.match; const row = adById(id, jobsState());
+    if (!row) return answer(ctx, say(ctx, h, 'الإعلان غير موجود', 'Listing not found'));
     await answer(ctx);
-    const draft = { mode: 'edit_listing', field, jobId: id, step: field, createdAt: Date.now(), location: row.location };
+    const draft = { mode: 'edit_listing', field, jobId: id, step: field === 'deadline' ? 'deadline' : field, createdAt: Date.now(), location: row.location };
+    if (field === 'deadline') { storeDraft(uidOf(ctx), draft); return showDraft(ctx, h, draft); }
     storeDraft(uidOf(ctx), draft);
     if (field === 'location') return showDraft(ctx, h, { ...draft, step: 'location' });
     const prompt = field === 'title'
@@ -358,7 +384,7 @@ export function registerJobsAdminTools(bot, h) {
     const [op, a, b] = String(ctx.match[1] || '').split(':'); const english = en(ctx, h); const j = jobsState();
     if (op === 'none') {
       if (draft.mode !== 'create') return answer(ctx, say(ctx, h, 'يمكن تخطي الموقع عند إنشاء إعلان جديد فقط.', 'Location can only be skipped for a new listing.'));
-      draft.location = null; draft.step = 'preview'; delete draft.governorateCode; delete draft.districtCode;
+      draft.location = null; draft.step = 'deadline'; delete draft.governorateCode; delete draft.districtCode;
       storeDraft(uid, draft); await answer(ctx); return showDraft(ctx, h, draft);
     }
     if (op === 'gov') {
@@ -371,7 +397,7 @@ export function registerJobsAdminTools(bot, h) {
       const areas = [...districtsOf(gov.code), ...j.customAreas.filter((area) => area.governorate_code === gov.code)];
       if (!areas.length) {
         draft.location = locationForGovernorate(gov.code, j);
-        draft.step = draft.mode === 'create' ? 'preview' : 'location';
+        draft.step = draft.mode === 'create' ? 'deadline' : 'location';
         if (draft.mode === 'edit_listing') {
           const res = updatePublishedJob(draft.jobId, { location: draft.location }, j, ctx.from.id);
           if (res.ok) { removeDraft(uid); save({ broadcast: true }); await answer(ctx, say(ctx, h, 'تم تحديث الموقع', 'Location updated')); return h.show(ctx, say(ctx, h, `تم تحديث الموقع إلى ${esc(res.job.location.label_ar)}.`, `Location updated to ${esc(res.job.location.label_en)}.`), new InlineKeyboard().text(say(ctx, h, '↩️ رجوع للإعلان', '↩️ Back to listing'), `j:admin:view:${draft.jobId}`)); }
@@ -392,7 +418,7 @@ export function registerJobsAdminTools(bot, h) {
         removeDraft(uid); save({ broadcast: true }); await answer(ctx, say(ctx, h, 'تم تحديث الموقع', 'Location updated'));
         return h.show(ctx, say(ctx, h, `تم تحديث الموقع إلى ${esc(location.label_ar)}.`, `Location updated to ${esc(location.label_en)}.`), new InlineKeyboard().text(say(ctx, h, '↩️ رجوع للإعلان', '↩️ Back to listing'), `j:admin:view:${draft.jobId}`));
       }
-      draft.location = location; draft.step = 'preview'; storeDraft(uid, draft); await answer(ctx); return showDraft(ctx, h, draft);
+      draft.location = location; draft.step = 'deadline'; storeDraft(uid, draft); await answer(ctx); return showDraft(ctx, h, draft);
     }
     if (op === 'd') {
       const dist = getDist(a);
@@ -409,7 +435,7 @@ export function registerJobsAdminTools(bot, h) {
         removeDraft(uid); save({ broadcast: true }); await answer(ctx, say(ctx, h, 'تم تحديث الموقع', 'Location updated'));
         return h.show(ctx, say(ctx, h, `تم تحديث الموقع إلى ${esc(location.label_ar)}.`, `Location updated to ${esc(location.label_en)}.`), new InlineKeyboard().text(say(ctx, h, '↩️ رجوع للإعلان', '↩️ Back to listing'), `j:admin:view:${draft.jobId}`));
       }
-      draft.location = location; draft.step = 'preview'; storeDraft(uid, draft); await answer(ctx); return showDraft(ctx, h, draft);
+      draft.location = location; draft.step = 'deadline'; storeDraft(uid, draft); await answer(ctx); return showDraft(ctx, h, draft);
     }
     if (op === 'page') {
       if (String(a) !== String(draft.districtCode)) return answer(ctx, say(ctx, h, 'المنطقة غير مطابقة للاختيار', 'District does not match'));
@@ -424,7 +450,7 @@ export function registerJobsAdminTools(bot, h) {
         removeDraft(uid); save({ broadcast: true }); await answer(ctx, say(ctx, h, 'تم تحديث الموقع', 'Location updated'));
         return h.show(ctx, say(ctx, h, `تم تحديث الموقع إلى ${esc(place.label_ar)}.`, `Location updated to ${esc(place.label_en)}.`), new InlineKeyboard().text(say(ctx, h, '↩️ رجوع للإعلان', '↩️ Back to listing'), `j:admin:view:${draft.jobId}`));
       }
-      draft.location = place; draft.step = 'preview'; storeDraft(uid, draft); await answer(ctx); return showDraft(ctx, h, draft);
+      draft.location = place; draft.step = 'deadline'; storeDraft(uid, draft); await answer(ctx); return showDraft(ctx, h, draft);
     }
     if (op === 'noop') return answer(ctx);
     return answer(ctx);
@@ -450,7 +476,12 @@ export function registerJobsAdminTools(bot, h) {
     if (draft.mode === 'create' && draft.step === 'text') {
       const text = String(raw).replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim().slice(0, LIMIT);
       if (text.length < 35) return showDraftScreen(ctx, h, draft, say(ctx, h, 'أضف تفاصيل أكثر (35 حرفاً على الأقل).', 'Please add more detail (at least 35 characters).'), cancelKeyboard(ctx, h));
-      draft.text = text; draft.step = draft.location ? 'preview' : 'location'; storeDraft(uid, draft); return showDraft(ctx, h, draft);
+      draft.text = text; draft.step = draft.location ? 'deadline' : 'location'; storeDraft(uid, draft); return showDraft(ctx, h, draft);
+    }
+    if (draft.mode === 'create' && draft.step === 'deadline') {
+      const deadline = normalizeApplicationDeadline(raw);
+      if (!deadline || isApplicationDeadlineExpired(deadline)) { draft.deadlineError = true; storeDraft(uid, draft); return showDraft(ctx, h, draft); }
+      draft.applicationDeadline = deadline; delete draft.deadlineError; draft.step = 'preview'; storeDraft(uid, draft); return showDraft(ctx, h, draft);
     }
     if (draft.mode === 'add_governorate' && draft.step === 'name') {
       const result = addCustomGovernorate(parseNamePair(raw), j);
@@ -473,6 +504,14 @@ export function registerJobsAdminTools(bot, h) {
       return h.show(ctx, say(ctx, h, `✅ أُضيفت المنطقة «${esc(result.row.ar)}».`, `✅ Added area “${esc(result.row.en || result.row.ar)}”.`), new InlineKeyboard().text(say(ctx, h, '➕ إضافة منطقة أخرى', '➕ Add another area'), 'j:admin:location:add-area').row().text(say(ctx, h, '📍 إدارة المواقع', '📍 Manage locations'), 'j:admin:locations'));
     }
     if (draft.mode === 'edit_listing') {
+      if (draft.field === 'deadline') {
+        const deadline = normalizeApplicationDeadline(raw);
+        if (!deadline) { draft.deadlineError = true; storeDraft(uid, draft); return showDraft(ctx, h, draft); }
+        const result = updateJobDeadline(draft.jobId, deadline, j, ctx.from.id);
+        if (!result.ok) { draft.deadlineError = true; storeDraft(uid, draft); return showDraft(ctx, h, draft); }
+        await clearPrompt(ctx, draft); delete j.adminDrafts[uid]; save({ broadcast: true });
+        return h.show(ctx, say(ctx, h, `✅ حُدّث آخر موعد للتقديم إلى ${deadline}.`, `✅ Application deadline updated to ${deadline}.`), new InlineKeyboard().text(say(ctx, h, '↩️ رجوع للإعلان', '↩️ Back to listing'), `j:admin:view:${draft.jobId}`));
+      }
       const patch = draft.field === 'title' ? { title: clean(raw, 120) } : { text: String(raw).replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim().slice(0, LIMIT), links: urls(raw) };
       if (draft.field === 'title' && patch.title.length < 3) return showDraftScreen(ctx, h, draft, say(ctx, h, 'أرسل عنواناً من 3 أحرف على الأقل.', 'Send a title of at least 3 characters.'), cancelKeyboard(ctx, h, `j:admin:cancel-edit:${draft.jobId}`));
       if (draft.field === 'text' && patch.text.length < 10) return showDraftScreen(ctx, h, draft, say(ctx, h, 'التفاصيل قصيرة جداً؛ أرسل 10 أحرف على الأقل.', 'Details are too short; send at least 10 characters.'), cancelKeyboard(ctx, h, `j:admin:cancel-edit:${draft.jobId}`));
