@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ARMY_CATEGORIES, ARMY_SOURCES, initialArmyState, salaryNewsKind, inferArmyCategory,
+  ARMY_CATEGORIES, ARMY_SOURCES, ARMY_MONITOR_ONLY_SOURCES, initialArmyState, salaryNewsKind, inferArmyCategory,
   createPendingArmyItem, decideArmyItem, updateArmyItem, deleteArmyItem,
   publicArmy, pollArmyOnce, mergeArmyFromBackup, setArmyChannel, normalizeArmyChannelLink,
 } from '../server/army.js';
@@ -31,6 +31,7 @@ test('only approved official-source items appear in the public Syrian Army secti
   assert.equal(result.items[0].title, 'إعلان اختبار اصطناعي');
   assert.equal(result.items[0].source_url, 'https://t.me/test_official/1');
   assert.deepEqual(result.sources.map((x) => x.username), ARMY_SOURCES.map((x) => x.u));
+  assert.ok(ARMY_MONITOR_ONLY_SOURCES.every((source) => !result.sources.some((x) => x.username === source.u)));
   assert.equal(result.items[0].text.includes('اختبار اصطناعي'), true);
   assert.equal(result.items[0].status, undefined, 'public projection excludes workflow internals');
 });
@@ -67,6 +68,21 @@ test('official monitor establishes a baseline without importing old posts, then 
   assert.equal(notices.length, 1, 'review notification is the only side effect');
   assert.equal(publicArmy(j).items.length, 0);
   assert.equal(Object.values(j.pending)[0].category, 'army');
+});
+
+test('monitor-only media reports stay off the public sources list and are labelled for verification', async () => {
+  const j = initialArmyState();
+  const first = await pollArmyOnce({ j, fetcher: async (username) => ({ complete: true, posts: username === 'televisionsyria' ? [synthetic(10, 'تقرير عن رواتب العسكريين المتقاعدين.')] : [] }), now: NOW });
+  assert.equal(first.newItems, 0, 'old posts are baselined, not imported');
+  const second = await pollArmyOnce({ j, fetcher: async (username) => ({ complete: true, posts: username === 'televisionsyria' ? [
+    synthetic(10, 'تقرير عن رواتب العسكريين المتقاعدين.'),
+    synthetic(11, 'تلفزيون سوريا: بدء صرف رواتب العسكريين المتقاعدين لشهر كانون الأول.', { ts: NOW + 30_000, url: 'https://t.me/televisionsyria/11' }),
+  ] : [] }), now: NOW + 60_000 });
+  assert.equal(second.newItems, 1);
+  assert.equal(Object.values(j.pending)[0].kind, 'media_source');
+  const result = publicArmy(j);
+  assert.ok(ARMY_MONITOR_ONLY_SOURCES.every((source) => !result.sources.some((x) => x.username === source.u)));
+  assert.deepEqual(result.channels, { tg: '', wa: '' });
 });
 
 test('salary and recruitment screening covers requested groups without matching unrelated official posts', () => {

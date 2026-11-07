@@ -2,7 +2,7 @@ import { InlineKeyboard } from 'grammy';
 import { config } from './config.js';
 import { store } from './store.js';
 import {
-  ARMY_CATEGORIES, ARMY_SOURCES, armyState, publicArmy, createPendingArmyItem,
+  ARMY_CATEGORIES, ARMY_SOURCES, ARMY_MONITOR_SOURCES, armyState, publicArmy, createPendingArmyItem,
   decideArmyItem, updateArmyItem, deleteArmyItem, setArmyChannel, clearArmyChannel,
   normalizeArmyChannelLink,
 } from './army.js';
@@ -29,11 +29,11 @@ async function answer(ctx, text = '') {
 async function deleteInput(ctx) { if (ctx.message?.message_id) try { await ctx.api.deleteMessage(ctx.chat.id, ctx.message.message_id); } catch { /* best effort */ } }
 function menuText(ctx, h) {
   const j = state();
-  const last = ARMY_SOURCES.map((s) => j.sources[s.u]?.lastCheck).filter(Boolean).map((x) => Date.parse(x)).filter(Number.isFinite);
+  const last = ARMY_MONITOR_SOURCES.map((s) => j.sources[s.u]?.lastCheck).filter(Boolean).map((x) => Date.parse(x)).filter(Number.isFinite);
   const lastAt = last.length ? new Date(Math.max(...last)).toLocaleString(isEnglish(ctx, h) ? 'en-GB' : 'ar-SY', { timeZone: 'Asia/Damascus' }) : say(ctx, h, 'لم يبدأ بعد', 'not checked yet');
   return say(ctx, h,
-    `<b>🏛 الجيش السوري — لوحة الإدارة</b>\n\nبانتظار المراجعة: <b>${Object.keys(j.pending).length}</b> · منشور بالموقع/الخريطة: <b>${Object.keys(j.published).length}</b>\nالرصد الرسمي: <b>${j.monitorOn ? 'يعمل كل 15 دقيقة' : 'متوقف'}</b> · آخر تحقق: ${esc(lastAt)}\n\nكل خبر يحتاج موافقتك قبل أن يظهر في قسم الجيش السوري بالموقع/الخريطة. لا يُنشر في قناة الأخبار أو قنوات تيليغرام/واتساب. روابط القنوات تُعرض للمتابعة فقط، ولا يُرسل إليها شيء تلقائياً.`,
-    `<b>🏛 Syrian Army — Admin</b>\n\nAwaiting review: <b>${Object.keys(j.pending).length}</b> · On website/map: <b>${Object.keys(j.published).length}</b>\nOfficial monitoring: <b>${j.monitorOn ? 'on, every 15 minutes' : 'paused'}</b> · Last check: ${esc(lastAt)}\n\nEvery item requires your approval before appearing in the Syrian Army section of the website/map. Nothing is posted to the news channel or Telegram/WhatsApp channels. Channel links are follow-only; there is no automatic cross-posting.`);
+    `<b>🏛 الجيش السوري — لوحة الإدارة</b>\n\nبانتظار المراجعة: <b>${Object.keys(j.pending).length}</b> · منشور بالموقع/الخريطة: <b>${Object.keys(j.published).length}</b>\nرصد المصادر: <b>${j.monitorOn ? 'يعمل كل 15 دقيقة' : 'متوقف'}</b> · آخر تحقق: ${esc(lastAt)}\n\nكل خبر يحتاج موافقتك قبل أن يظهر في قسم الجيش السوري بالموقع/الخريطة. لا يُنشر في قناة الأخبار أو قنوات تيليغرام/واتساب. روابط المتابعة العامة منفصلة عن مصادر الرصد الداخلية.`,
+    `<b>🏛 Syrian Army — Admin</b>\n\nAwaiting review: <b>${Object.keys(j.pending).length}</b> · On website/map: <b>${Object.keys(j.published).length}</b>\nSource monitoring: <b>${j.monitorOn ? 'on, every 15 minutes' : 'paused'}</b> · Last check: ${esc(lastAt)}\n\nEvery item requires your approval before appearing in the Syrian Army section of the website/map. Nothing is posted to the news channel or Telegram/WhatsApp channels. Public follow links stay separate from internal monitoring inputs.`);
 }
 function menuKeyboard(ctx, h) {
   const en = isEnglish(ctx, h); const j = state();
@@ -43,7 +43,7 @@ function menuKeyboard(ctx, h) {
     .text(en ? `🗺 Published (${Object.keys(j.published).length})` : `🗺 المنشورة (${Object.keys(j.published).length})`, 'army:list:published').row()
     .text(j.monitorOn ? (en ? '⏸ Pause monitoring' : '⏸ إيقاف الرصد') : (en ? '▶️ Start monitoring' : '▶️ تشغيل الرصد'), 'army:monitor')
     .text(en ? '🔗 Configure channels' : '🔗 إعداد قنوات المتابعة', 'army:channels').row()
-    .text(en ? '📡 Official sources' : '📡 المصادر الرسمية', 'army:sources').row()
+    .text(en ? '📡 Monitoring sources' : '📡 مصادر الرصد', 'army:sources').row()
     .text(en ? '↩️ Main menu' : '↩️ القائمة الرئيسية', 'home');
 }
 async function showMenu(ctx, h) { return h.show(ctx, menuText(ctx, h), menuKeyboard(ctx, h)); }
@@ -60,7 +60,7 @@ function itemTitle(item, en) { const cat = ARMY_CATEGORIES[item.category] || ARM
 function itemScreenText(ctx, h, item) {
   const en = isEnglish(ctx, h); const cat = ARMY_CATEGORIES[item.category] || ARMY_CATEGORIES.army;
   const status = item.status === 'approved' ? (en ? '✅ Approved — website/map only' : '✅ معتمد — الموقع/الخريطة فقط') : (en ? '⏳ Waiting for owner approval' : '⏳ بانتظار موافقة المالك');
-  const original = item.sourceUrl ? `<a href="${esc(item.sourceUrl)}">${en ? 'Open original official source' : 'فتح المصدر الرسمي الأصلي'}</a>` : '';
+  const original = item.sourceUrl ? `<a href="${esc(item.sourceUrl)}">${en ? (item.kind === 'media_source' ? 'Open original media report' : 'Open original official source') : (item.kind === 'media_source' ? 'فتح الخبر الإعلامي الأصلي' : 'فتح المصدر الرسمي الأصلي')}</a>` : '';
   const links = (item.links || []).map((u, i) => `<a href="${esc(u)}">${en ? `Link ${i + 1}` : `رابط ${i + 1}`}</a>`).join(' · ');
   const fullText = String(item.text || ''); const excerpt = fullText.slice(0, 2200);
   return [`<b>${itemTitle(item, en)}</b>`, `<i>${status}</i>`, `${en ? 'Source' : 'المصدر'}: ${esc(item.sourceName || '—')}${original ? ` · ${original}` : ''}`, '', `<b>${esc(item.title)}</b>`, esc(excerpt) + (fullText.length > excerpt.length ? '…' : ''), links ? `\n${en ? 'Links from source post' : 'روابط وردت في المنشور'}: ${links}` : '', '', `<i>${en ? 'This item is not public before approval. Approved items appear only in the website/map section; they are never sent to the news channel or configured social channels.' : 'لن يظهر هذا الخبر قبل الموافقة. بعد الاعتماد يظهر في قسم الموقع/الخريطة فقط، ولا يُرسل إلى قناة الأخبار أو قنوات التواصل المُعدّة.'}</i>`].filter(Boolean).join('\n');
@@ -100,14 +100,15 @@ function listKeyboard(ctx, h, which, page = 0) {
 }
 function sourceScreen(ctx, h) {
   const en = isEnglish(ctx, h); const j = state();
-  const links = ARMY_SOURCES.map((s) => {
+  const links = ARMY_MONITOR_SOURCES.map((s) => {
     const status = j.sources[s.u] || {};
     const checked = status.lastCheck ? new Date(status.lastCheck).toLocaleString(en ? 'en-GB' : 'ar-SY', { timeZone: 'Asia/Damascus' }) : (en ? 'not checked yet' : 'لم يبدأ بعد');
-    return `• <a href="${s.url}">${esc(s.name)}</a> — ${en ? 'last checked' : 'آخر تحقق'}: ${esc(checked)}${status.lastError ? ` · ⚠️ ${esc(status.lastError)}` : ''}`;
+    const sourceType = s.type === 'media' ? (en ? 'media signal — internal only' : 'إشارة إعلامية — داخلية') : (en ? 'official source' : 'مصدر رسمي');
+    return `• <a href="${s.url}">${esc(s.name)}</a> (${sourceType}) — ${en ? 'last checked' : 'آخر تحقق'}: ${esc(checked)}${status.lastError ? ` · ⚠️ ${esc(status.lastError)}` : ''}`;
   }).join('\n');
   const text = en
-    ? `<b>📡 Official-source monitor</b>\n\nOnly public ministry Telegram feeds that identify themselves as official are checked. New salary/pay or recruitment posts are queued for you; older posts are not imported on first startup. Polling interval: 15 minutes.\n\n${links}\n\nNothing is published automatically.`
-    : `<b>📡 الرصد من المصادر الرسمية</b>\n\nيراقب فقط قنوات تيليغرام العامة للوزارات التي تعرّف نفسها بأنها رسمية. تُحوّل أخبار الرواتب/التقديم الجديدة إلى قائمة المراجعة؛ لا تُستورد المنشورات القديمة عند أول تشغيل. التحقق كل 15 دقيقة.\n\n${links}\n\nلا يوجد نشر تلقائي.`;
+    ? `<b>📡 Internal monitoring sources</b>\n\nOfficial feeds and one clearly labelled media signal are checked internally. New salary/pay or recruitment posts are queued for your review; older posts are not imported on first startup. Polling interval: 15 minutes. These inputs do not change the public map's official-sources list or follow links.\n\n${links}\n\nNothing is published automatically.`
+    : `<b>📡 مصادر الرصد الداخلية</b>\n\nيراقب البوت مصادر رسمية وإشارة إعلامية واحدة موسومة بوضوح، وتُحوّل المنشورات الجديدة المطابقة إلى مراجعتك. لا تُستورد المنشورات القديمة عند أول تشغيل؛ التحقق كل 15 دقيقة. لا تغيّر هذه المدخلات قائمة المصادر الرسمية أو روابط المتابعة العامة على الخريطة.\n\n${links}\n\nلا يوجد نشر تلقائي.`;
   return { text, keyboard: new InlineKeyboard().text(j.monitorOn ? (en ? '⏸ Pause monitoring' : '⏸ إيقاف الرصد') : (en ? '▶️ Start monitoring' : '▶️ تشغيل الرصد'), 'army:monitor').row().text(en ? '↩️ Control panel' : '↩️ لوحة الإدارة', 'army:menu') };
 }
 function channelScreen(ctx, h) {

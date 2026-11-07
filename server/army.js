@@ -22,6 +22,14 @@ export const ARMY_SOURCES = Object.freeze([
   Object.freeze({ u: 'sana_gov', name: 'الوكالة العربية السورية للأنباء (سانا)', agency: 'الحكومة', url: 'https://t.me/sana_gov' }),
 ]);
 
+// Private bot-only inputs; publicArmy().sources and visitor follow links stay unchanged.
+export const ARMY_MONITOR_ONLY_SOURCES = Object.freeze([
+  Object.freeze({ u: 'SyrArArmy', name: 'الجيش العربي السوري', agency: 'العسكرية', type: 'official', url: 'https://t.me/SyrArArmy' }),
+  Object.freeze({ u: 'SANANewsEnglish', name: 'SANA English', agency: 'الحكومة', type: 'official', url: 'https://t.me/SANANewsEnglish' }),
+  Object.freeze({ u: 'televisionsyria', name: 'تلفزيون سوريا (إشارة إعلامية)', agency: 'إعلام', type: 'media', url: 'https://t.me/televisionsyria' }),
+]);
+export const ARMY_MONITOR_SOURCES = Object.freeze([...ARMY_SOURCES, ...ARMY_MONITOR_ONLY_SOURCES]);
+
 const POLL_MS = 15 * 60_000;
 const MAX_SOURCE_AGE = 30 * 86400_000;
 const MAX_TEXT = 3600;
@@ -71,7 +79,7 @@ export function normalizeArmyChannelLink(kind, raw) {
 export function initialArmyState() {
   return {
     monitorOn: true, monitorUpdatedAt: 0,
-    sources: Object.fromEntries(ARMY_SOURCES.map((s) => [s.u, { lastId: null, initialized: false, lastCheck: null, lastError: null }])),
+    sources: Object.fromEntries(ARMY_MONITOR_SOURCES.map((s) => [s.u, { lastId: null, initialized: false, lastCheck: null, lastError: null }])),
     pending: {}, published: {}, decisions: {}, deleted: {}, seen: {}, fingerprints: {},
     channels: { tg: '', wa: '', updatedAt: 0 }, adminDrafts: {},
   };
@@ -83,7 +91,7 @@ export function armyState(root = store.state) {
   if (typeof j.monitorOn !== 'boolean') j.monitorOn = true;
   j.monitorUpdatedAt = Number(j.monitorUpdatedAt) || 0;
   j.sources = j.sources && typeof j.sources === 'object' ? j.sources : {};
-  for (const source of ARMY_SOURCES) {
+  for (const source of ARMY_MONITOR_SOURCES) {
     j.sources[source.u] = j.sources[source.u] && typeof j.sources[source.u] === 'object' ? j.sources[source.u] : {};
     const status = j.sources[source.u];
     status.lastId = Number.isFinite(Number(status.lastId)) ? Number(status.lastId) : null;
@@ -119,8 +127,8 @@ export function inferArmyCategory(text, sourceUsername = '') {
   if (/(الجيش|القوات المسلحه|وزاره الدفاع|عناصر عسكري|عسكريين|جندي|التجنيد|وزارة الدفاع|army|armed forces|military)/iu.test(n)) return 'army';
   const source = String(sourceUsername || '').toLowerCase();
   if (source === 'syrianmoi') return /امن|security/iu.test(n) ? 'security' : 'police';
-  if (source === 'syrmoff') return 'government';
-  if (source === 'sana_gov') return 'government';
+  if (source === 'syrmoff' || source === 'sana_gov' || source === 'sananewsenglish') return 'government';
+  if (source === 'syrararmy') return 'army';
   return 'army';
 }
 
@@ -144,7 +152,7 @@ export function createPendingArmyItem(input, j = armyState(), now = Date.now()) 
     return { duplicate: true, item: null, duplicateOf: old.id || null };
   }
   const id = uidFrom(sourceKey);
-  const kind = input.kind === 'manual' ? 'manual' : 'official_source';
+  const kind = input.kind === 'manual' ? 'manual' : input.kind === 'media_source' ? 'media_source' : 'official_source';
   const item = {
     id, kind, sourceKey, fingerprint, category,
     title: clean(input.title || titleFromText(text), 120) || 'تحديث رسمي',
@@ -279,7 +287,7 @@ export function mergeArmyFromBackup(snapshot, j = armyState()) {
       updatedAt: Number(remote.channels?.updatedAt) || 0,
     };
   }
-  for (const source of ARMY_SOURCES) {
+  for (const source of ARMY_MONITOR_SOURCES) {
     const current = j.sources[source.u] || (j.sources[source.u] = {});
     const row = remote.sources?.[source.u];
     if (!row) continue;
@@ -340,7 +348,7 @@ export function mergeArmyFromBackup(snapshot, j = armyState()) {
 export async function pollArmyOnce({ j = armyState(), fetcher = fetchChannel, notify = async () => {}, now = Date.now() } = {}) {
   if (!j.monitorOn) return { skipped: true, newItems: 0, checkedPosts: 0 };
   let baseline = false; let newItems = 0; let checkedPosts = 0; const errors = [];
-  for (const source of ARMY_SOURCES) {
+  for (const source of ARMY_MONITOR_SOURCES) {
     const cursor = j.sources[source.u] || (j.sources[source.u] = { lastId: null, initialized: false, lastCheck: null, lastError: null });
     let result;
     try {
@@ -369,7 +377,7 @@ export async function pollArmyOnce({ j = armyState(), fetcher = fetchChannel, no
       const key = `telegram:${source.u}:${post.id}`;
       if (text && salaryNewsKind(text) && post.ts && now - Number(post.ts) <= MAX_SOURCE_AGE) {
         const made = createPendingArmyItem({
-          kind: 'official_source', sourceKey: key, sourceUsername: source.u,
+          kind: source.type === 'media' ? 'media_source' : 'official_source', sourceKey: key, sourceUsername: source.u,
           category: inferArmyCategory(text, source.u), title: titleFromText(text), text,
           sourceName: source.name, sourceUrl: post.url || `${source.url}/${post.id}`, links: post.links || [],
         }, j, now);
@@ -397,14 +405,15 @@ function reviewText(item, english = false) {
   const category = ARMY_CATEGORIES[item.category] || ARMY_CATEGORIES.army;
   const links = (item.links || []).map((url, i) => `<a href="${escHtml(url)}">${english ? `Link ${i + 1}` : `رابط ${i + 1}`}</a>`).join(' · ');
   const ar = !english;
+  const media = item.kind === 'media_source';
   return [
-    `<b>${category.icon} ${ar ? 'خبر رسمي مقترح — بانتظار مراجعتك' : 'Official-source item — awaiting your review'}</b>`,
+    `<b>${category.icon} ${ar ? (media ? 'إشارة من مصدر إعلامي — تحقّق قبل الاعتماد' : 'خبر من مصدر رسمي — بانتظار مراجعتك') : (media ? 'Media report — verify before approval' : 'Official-source item — awaiting your review')}</b>`,
     `${ar ? 'الفئة' : 'Category'}: <b>${escHtml(ar ? category.ar : category.en)}</b>`,
     `${ar ? 'المصدر' : 'Source'}: <a href="${escHtml(item.sourceUrl)}">${escHtml(item.sourceName)}</a>`,
     '', `<b>${escHtml(item.title)}</b>`, escHtml(item.text.slice(0, 2200)),
     links ? `${ar ? 'روابط وردت في المنشور' : 'Links found in the post'}: ${links}` : '',
     item.sourceUrl ? `<a href="${escHtml(item.sourceUrl)}">${ar ? 'فتح المنشور الأصلي' : 'Open original post'}</a>` : '',
-    '', `<i>${ar ? 'لن يظهر على الموقع/الخريطة إلا بعد اعتمادك. لن يُنشر في قناة الأخبار أو تيليغرام/واتساب.' : 'It stays off the website/map until you approve it. It is never posted to the news channel or Telegram/WhatsApp.'}</i>`,
+    '', `<i>${ar ? (media ? 'هذا رصد إعلامي وليس تأكيداً رسمياً؛ تحقّق من الجهة الأولية قبل الاعتماد. لن يظهر على الموقع/الخريطة إلا بعد موافقتك.' : 'لن يظهر على الموقع/الخريطة إلا بعد اعتمادك. لن يُنشر في قناة الأخبار أو تيليغرام/واتساب.') : (media ? 'This is a media signal, not official confirmation; verify with a primary source before approval. It remains off the website/map until you approve it.' : 'It stays off the website/map until you approve it. It is never posted to the news channel or Telegram/WhatsApp.')}</i>`,
   ].filter(Boolean).join('\n');
 }
 
