@@ -29,6 +29,75 @@ export const ARMY_MONITOR_ONLY_SOURCES = Object.freeze([
   Object.freeze({ u: 'televisionsyria', name: 'تلفزيون سوريا (إشارة إعلامية)', agency: 'إعلام', type: 'media', url: 'https://t.me/televisionsyria' }),
 ]);
 export const ARMY_MONITOR_SOURCES = Object.freeze([...ARMY_SOURCES, ...ARMY_MONITOR_ONLY_SOURCES]);
+const MAX_MANUAL_ARMY_SOURCES = 10;
+
+export function normalizeArmyTelegramUsername(raw) {
+  let value = String(raw || '').trim();
+  if (value.startsWith('@')) value = value.slice(1);
+  if (/^(?:https?:\/\/|www\.|t\.me\/)/i.test(value)) {
+    try {
+      const url = new URL(value.startsWith('t.me/') ? `https://${value}` : value.startsWith('www.') ? `https://${value}` : value);
+      if (url.protocol !== 'https:' || !['t.me', 'www.t.me'].includes(url.hostname.toLowerCase()) || url.username || url.password || url.port || url.search || url.hash) return '';
+      value = url.pathname.replace(/^\/+|\/+$/g, '');
+    } catch { return ''; }
+  }
+  return /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(value) ? value : '';
+}
+
+export function normalizeManualArmySource(input = {}) {
+  const u = normalizeArmyTelegramUsername(input.username || input.u || input.url);
+  const name = clean(input.name, 70);
+  const type = input.type === 'media' ? 'media' : input.type === 'official' ? 'official' : '';
+  if (!u) return { ok: false, error: 'invalid_username' };
+  if (name.length < 2) return { ok: false, error: 'invalid_name' };
+  if (!type) return { ok: false, error: 'invalid_type' };
+  return { ok: true, source: { u, name, agency: type === 'media' ? 'إعلام' : 'مصدر يدوي', type, url: `https://t.me/${u}`, manual: true } };
+}
+
+export function armyMonitorSources(j = armyState()) {
+  const sources = [...ARMY_MONITOR_SOURCES];
+  const seen = new Set(sources.map((source) => source.u.toLowerCase()));
+  for (const source of Object.values(j.manualSources || {})) {
+    if (!source || seen.has(String(source.u || '').toLowerCase())) continue;
+    seen.add(source.u.toLowerCase()); sources.push(source);
+  }
+  return sources;
+}
+
+export function addManualArmySource(input, j = armyState(), now = Date.now()) {
+  const normalized = normalizeManualArmySource(input);
+  if (!normalized.ok) return normalized;
+  const source = normalized.source; const u = source.u.toLowerCase();
+  if (ARMY_MONITOR_SOURCES.some((row) => row.u.toLowerCase() === u) || Object.keys(j.manualSources || {}).some((key) => key.toLowerCase() === u)) return { ok: false, error: 'duplicate' };
+  if (Object.keys(j.manualSources || {}).length >= MAX_MANUAL_ARMY_SOURCES) return { ok: false, error: 'limit' };
+  j.manualSources ||= {}; j.manualSources[source.u] = source;
+  j.sources[source.u] = { lastId: null, initialized: false, lastCheck: null, lastError: null };
+  j.monitorSourcesUpdatedAt = now;
+  return { ok: true, source };
+}
+
+export function updateManualArmySource(username, patch, j = armyState(), now = Date.now()) {
+  const old = String(username || ''); const current = j.manualSources?.[old];
+  if (!current) return { ok: false, error: 'not_found' };
+  const normalized = normalizeManualArmySource({ ...current, ...patch });
+  if (!normalized.ok) return normalized;
+  const source = normalized.source; const duplicate = [...ARMY_MONITOR_SOURCES, ...Object.values(j.manualSources || {})].some((row) => row.u.toLowerCase() === source.u.toLowerCase() && row.u !== old);
+  if (duplicate) return { ok: false, error: 'duplicate' };
+  if (source.u !== old) {
+    delete j.manualSources[old]; delete j.sources[old];
+    j.sources[source.u] = { lastId: null, initialized: false, lastCheck: null, lastError: null };
+  }
+  j.manualSources[source.u] = source; j.monitorSourcesUpdatedAt = now;
+  return { ok: true, source };
+}
+
+export function removeManualArmySource(username, j = armyState(), now = Date.now()) {
+  const u = String(username || '');
+  if (!j.manualSources?.[u]) return { ok: false, error: 'not_found' };
+  const source = j.manualSources[u]; delete j.manualSources[u]; delete j.sources[u];
+  j.monitorSourcesUpdatedAt = now;
+  return { ok: true, source };
+}
 
 const POLL_MS = 15 * 60_000;
 const MAX_SOURCE_AGE = 30 * 86400_000;
@@ -78,7 +147,7 @@ export function normalizeArmyChannelLink(kind, raw) {
 
 export function initialArmyState() {
   return {
-    monitorOn: true, monitorUpdatedAt: 0,
+    monitorOn: true, monitorUpdatedAt: 0, monitorSourcesUpdatedAt: 0, manualSources: {},
     sources: Object.fromEntries(ARMY_MONITOR_SOURCES.map((s) => [s.u, { lastId: null, initialized: false, lastCheck: null, lastError: null }])),
     pending: {}, published: {}, decisions: {}, deleted: {}, seen: {}, fingerprints: {},
     channels: { tg: '', wa: '', updatedAt: 0 }, adminDrafts: {},
@@ -90,8 +159,15 @@ export function armyState(root = store.state) {
   const j = root.army;
   if (typeof j.monitorOn !== 'boolean') j.monitorOn = true;
   j.monitorUpdatedAt = Number(j.monitorUpdatedAt) || 0;
+  j.monitorSourcesUpdatedAt = Number(j.monitorSourcesUpdatedAt) || 0;
+  const manualSources = {};
+  for (const row of Object.values(j.manualSources && typeof j.manualSources === 'object' ? j.manualSources : {})) {
+    const normalized = normalizeManualArmySource(row);
+    if (normalized.ok && !ARMY_MONITOR_SOURCES.some((source) => source.u.toLowerCase() === normalized.source.u.toLowerCase())) manualSources[normalized.source.u] = normalized.source;
+  }
+  j.manualSources = manualSources;
   j.sources = j.sources && typeof j.sources === 'object' ? j.sources : {};
-  for (const source of ARMY_MONITOR_SOURCES) {
+  for (const source of armyMonitorSources(j)) {
     j.sources[source.u] = j.sources[source.u] && typeof j.sources[source.u] === 'object' ? j.sources[source.u] : {};
     const status = j.sources[source.u];
     status.lastId = Number.isFinite(Number(status.lastId)) ? Number(status.lastId) : null;
@@ -287,7 +363,15 @@ export function mergeArmyFromBackup(snapshot, j = armyState()) {
       updatedAt: Number(remote.channels?.updatedAt) || 0,
     };
   }
-  for (const source of ARMY_MONITOR_SOURCES) {
+  if (Number(remote.monitorSourcesUpdatedAt) > Number(j.monitorSourcesUpdatedAt)) {
+    const rows = {};
+    for (const row of Object.values(remote.manualSources && typeof remote.manualSources === 'object' ? remote.manualSources : {})) {
+      const normalized = normalizeManualArmySource(row);
+      if (normalized.ok && !ARMY_MONITOR_SOURCES.some((source) => source.u.toLowerCase() === normalized.source.u.toLowerCase())) rows[normalized.source.u] = normalized.source;
+    }
+    j.manualSources = rows; j.monitorSourcesUpdatedAt = Number(remote.monitorSourcesUpdatedAt) || 0;
+  }
+  for (const source of armyMonitorSources(j)) {
     const current = j.sources[source.u] || (j.sources[source.u] = {});
     const row = remote.sources?.[source.u];
     if (!row) continue;
@@ -348,7 +432,7 @@ export function mergeArmyFromBackup(snapshot, j = armyState()) {
 export async function pollArmyOnce({ j = armyState(), fetcher = fetchChannel, notify = async () => {}, now = Date.now() } = {}) {
   if (!j.monitorOn) return { skipped: true, newItems: 0, checkedPosts: 0 };
   let baseline = false; let newItems = 0; let checkedPosts = 0; const errors = [];
-  for (const source of ARMY_MONITOR_SOURCES) {
+  for (const source of armyMonitorSources(j)) {
     const cursor = j.sources[source.u] || (j.sources[source.u] = { lastId: null, initialized: false, lastCheck: null, lastError: null });
     let result;
     try {

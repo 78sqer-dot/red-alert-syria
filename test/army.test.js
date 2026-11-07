@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ARMY_CATEGORIES, ARMY_SOURCES, ARMY_MONITOR_ONLY_SOURCES, initialArmyState, salaryNewsKind, inferArmyCategory,
+  normalizeArmyTelegramUsername, normalizeManualArmySource, armyMonitorSources,
+  addManualArmySource, updateManualArmySource, removeManualArmySource,
   createPendingArmyItem, decideArmyItem, updateArmyItem, deleteArmyItem,
   publicArmy, pollArmyOnce, mergeArmyFromBackup, setArmyChannel, normalizeArmyChannelLink,
 } from '../server/army.js';
@@ -83,6 +85,31 @@ test('monitor-only media reports stay off the public sources list and are labell
   const result = publicArmy(j);
   assert.ok(ARMY_MONITOR_ONLY_SOURCES.every((source) => !result.sources.some((x) => x.username === source.u)));
   assert.deepEqual(result.channels, { tg: '', wa: '' });
+});
+
+test('manual Telegram monitor sources validate, add, edit and remove without entering public sources or follow links', () => {
+  const j = initialArmyState();
+  assert.equal(normalizeArmyTelegramUsername('@SalaryWatch'), 'SalaryWatch');
+  assert.equal(normalizeArmyTelegramUsername('https://t.me/SalaryWatch'), 'SalaryWatch');
+  assert.equal(normalizeArmyTelegramUsername('https://t.me/+privateInvite'), '');
+  assert.equal(normalizeArmyTelegramUsername('https://example.com/SalaryWatch'), '');
+  assert.equal(normalizeManualArmySource({ username: 'SalaryWatch', name: 'رواتب الجيش', type: 'media' }).ok, true);
+  const added = addManualArmySource({ username: 'SalaryWatch', name: 'متابعة الرواتب', type: 'media' }, j, NOW);
+  assert.equal(added.ok, true);
+  assert.equal(armyMonitorSources(j).some((source) => source.u === 'SalaryWatch'), true);
+  assert.equal(addManualArmySource({ username: 'salarywatch', name: 'مكرر', type: 'official' }, j, NOW + 1).error, 'duplicate');
+  assert.equal(publicArmy(j).sources.some((source) => source.username === 'SalaryWatch'), false);
+  assert.deepEqual(publicArmy(j).channels, { tg: '', wa: '' });
+  j.sources.SalaryWatch.initialized = true; j.sources.SalaryWatch.lastId = 555;
+  const changed = updateManualArmySource('SalaryWatch', { username: 'ArmyPayNews', name: 'مصدر رواتب محدث', type: 'official' }, j, NOW + 2);
+  assert.equal(changed.ok, true);
+  assert.equal(j.sources.SalaryWatch, undefined);
+  assert.equal(j.sources.ArmyPayNews.initialized, false, 'a changed channel starts with a fresh baseline');
+  assert.equal(armyMonitorSources(j).some((source) => source.u === 'ArmyPayNews' && source.type === 'official'), true);
+  assert.equal(publicArmy(j).sources.some((source) => source.username === 'ArmyPayNews'), false);
+  assert.equal(removeManualArmySource('ArmyPayNews', j, NOW + 3).ok, true);
+  assert.equal(armyMonitorSources(j).some((source) => source.u === 'ArmyPayNews'), false);
+  assert.equal(j.sources.ArmyPayNews, undefined);
 });
 
 test('salary and recruitment screening covers requested groups without matching unrelated official posts', () => {

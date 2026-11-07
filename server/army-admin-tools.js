@@ -2,7 +2,8 @@ import { InlineKeyboard } from 'grammy';
 import { config } from './config.js';
 import { store } from './store.js';
 import {
-  ARMY_CATEGORIES, ARMY_SOURCES, ARMY_MONITOR_SOURCES, armyState, publicArmy, createPendingArmyItem,
+  ARMY_CATEGORIES, armyMonitorSources, normalizeArmyTelegramUsername, addManualArmySource,
+  updateManualArmySource, removeManualArmySource, armyState, publicArmy, createPendingArmyItem,
   decideArmyItem, updateArmyItem, deleteArmyItem, setArmyChannel, clearArmyChannel,
   normalizeArmyChannelLink,
 } from './army.js';
@@ -29,7 +30,7 @@ async function answer(ctx, text = '') {
 async function deleteInput(ctx) { if (ctx.message?.message_id) try { await ctx.api.deleteMessage(ctx.chat.id, ctx.message.message_id); } catch { /* best effort */ } }
 function menuText(ctx, h) {
   const j = state();
-  const last = ARMY_MONITOR_SOURCES.map((s) => j.sources[s.u]?.lastCheck).filter(Boolean).map((x) => Date.parse(x)).filter(Number.isFinite);
+  const last = armyMonitorSources(j).map((s) => j.sources[s.u]?.lastCheck).filter(Boolean).map((x) => Date.parse(x)).filter(Number.isFinite);
   const lastAt = last.length ? new Date(Math.max(...last)).toLocaleString(isEnglish(ctx, h) ? 'en-GB' : 'ar-SY', { timeZone: 'Asia/Damascus' }) : say(ctx, h, 'لم يبدأ بعد', 'not checked yet');
   return say(ctx, h,
     `<b>🏛 الجيش السوري — لوحة الإدارة</b>\n\nبانتظار المراجعة: <b>${Object.keys(j.pending).length}</b> · منشور بالموقع/الخريطة: <b>${Object.keys(j.published).length}</b>\nرصد المصادر: <b>${j.monitorOn ? 'يعمل كل 15 دقيقة' : 'متوقف'}</b> · آخر تحقق: ${esc(lastAt)}\n\nكل خبر يحتاج موافقتك قبل أن يظهر في قسم الجيش السوري بالموقع/الخريطة. لا يُنشر في قناة الأخبار أو قنوات تيليغرام/واتساب. روابط المتابعة العامة منفصلة عن مصادر الرصد الداخلية.`,
@@ -100,16 +101,36 @@ function listKeyboard(ctx, h, which, page = 0) {
 }
 function sourceScreen(ctx, h) {
   const en = isEnglish(ctx, h); const j = state();
-  const links = ARMY_MONITOR_SOURCES.map((s) => {
+  const sources = armyMonitorSources(j);
+  const links = sources.map((s) => {
     const status = j.sources[s.u] || {};
     const checked = status.lastCheck ? new Date(status.lastCheck).toLocaleString(en ? 'en-GB' : 'ar-SY', { timeZone: 'Asia/Damascus' }) : (en ? 'not checked yet' : 'لم يبدأ بعد');
-    const sourceType = s.type === 'media' ? (en ? 'media signal — internal only' : 'إشارة إعلامية — داخلية') : (en ? 'official source' : 'مصدر رسمي');
+    const sourceType = s.manual ? (en ? `manual ${s.type === 'media' ? 'media' : 'official'} source` : `يدوي · ${s.type === 'media' ? 'إعلامي' : 'رسمي'}`) : s.type === 'media' ? (en ? 'media signal — internal only' : 'إشارة إعلامية — داخلية') : (en ? 'official source' : 'مصدر رسمي');
     return `• <a href="${s.url}">${esc(s.name)}</a> (${sourceType}) — ${en ? 'last checked' : 'آخر تحقق'}: ${esc(checked)}${status.lastError ? ` · ⚠️ ${esc(status.lastError)}` : ''}`;
   }).join('\n');
   const text = en
-    ? `<b>📡 Internal monitoring sources</b>\n\nOfficial feeds and one clearly labelled media signal are checked internally. New salary/pay or recruitment posts are queued for your review; older posts are not imported on first startup. Polling interval: 15 minutes. These inputs do not change the public map's official-sources list or follow links.\n\n${links}\n\nNothing is published automatically.`
-    : `<b>📡 مصادر الرصد الداخلية</b>\n\nيراقب البوت مصادر رسمية وإشارة إعلامية واحدة موسومة بوضوح، وتُحوّل المنشورات الجديدة المطابقة إلى مراجعتك. لا تُستورد المنشورات القديمة عند أول تشغيل؛ التحقق كل 15 دقيقة. لا تغيّر هذه المدخلات قائمة المصادر الرسمية أو روابط المتابعة العامة على الخريطة.\n\n${links}\n\nلا يوجد نشر تلقائي.`;
-  return { text, keyboard: new InlineKeyboard().text(j.monitorOn ? (en ? '⏸ Pause monitoring' : '⏸ إيقاف الرصد') : (en ? '▶️ Start monitoring' : '▶️ تشغيل الرصد'), 'army:monitor').row().text(en ? '↩️ Control panel' : '↩️ لوحة الإدارة', 'army:menu') };
+    ? `<b>📡 Internal monitoring sources</b>\n\nOfficial and manually added public Telegram channels are checked every 15 minutes. Relevant new posts are queued for your review; old posts are skipped on first check. Manual sources stay off the public map source list and follow links.\n\n${links}\n\nNothing is published automatically.`
+    : `<b>📡 مصادر الرصد الداخلية</b>\n\nيراقب البوت القنوات الرسمية والعامة التي تضيفها يدوياً كل 15 دقيقة. تُحوّل المنشورات الجديدة المطابقة إلى مراجعتك، ويُتجاوز الأرشيف عند أول تحقق. المصادر اليدوية لا تظهر في قائمة الخريطة أو أزرار المتابعة العامة.\n\n${links}\n\nلا يوجد نشر تلقائي.`;
+  const keyboard = new InlineKeyboard();
+  for (const source of Object.values(j.manualSources || {})) keyboard.text(`✏️ ${source.name}`.slice(0, 45), `army:source:manage:${source.u}`).row();
+  keyboard.text(en ? '➕ Add manual source' : '➕ إضافة مصدر يدوي', 'army:source:add').row();
+  keyboard.text(j.monitorOn ? (en ? '⏸ Pause monitoring' : '⏸ إيقاف الرصد') : (en ? '▶️ Start monitoring' : '▶️ تشغيل الرصد'), 'army:monitor').row();
+  keyboard.text(en ? '↩️ Control panel' : '↩️ لوحة الإدارة', 'army:menu');
+  return { text, keyboard };
+}
+
+function sourceManageScreen(ctx, h, username) {
+  const en = isEnglish(ctx, h); const source = state().manualSources?.[username];
+  if (!source) return null;
+  const type = source.type === 'media' ? (en ? 'media signal' : 'إعلامي') : (en ? 'official' : 'رسمي');
+  const text = say(ctx, h, `<b>إدارة المصدر اليدوي</b>\n\n${esc(source.name)}\n<a href="${esc(source.url)}">${esc(source.url)}</a>\nالتصنيف: ${type}\n\nالمصدر داخلي للرصد فقط، ولا يظهر في قائمة المصادر العامة أو المتابعة.`, `<b>Manage manual source</b>\n\n${esc(source.name)}\n<a href="${esc(source.url)}">${esc(source.url)}</a>\nType: ${type}\n\nThis is an internal monitoring input, not a public map source or follow link.`);
+  const keyboard = new InlineKeyboard()
+    .text(en ? '✏️ Edit name' : '✏️ تعديل الاسم', `army:source:edit-name:${username}`).row()
+    .text(en ? '✏️ Edit channel' : '✏️ تعديل القناة', `army:source:edit-channel:${username}`).row()
+    .text(en ? `Set as ${source.type === 'media' ? 'official' : 'media'}` : `تحويل إلى ${source.type === 'media' ? 'رسمي' : 'إعلامي'}`, `army:source:set-type:${source.type === 'media' ? 'official' : 'media'}:${username}`).row()
+    .text(en ? '🗑 Delete source' : '🗑 حذف المصدر', `army:source:delete:${username}`).row()
+    .text(en ? '↩️ Sources' : '↩️ المصادر', 'army:sources');
+  return { text, keyboard };
 }
 function channelScreen(ctx, h) {
   const en = isEnglish(ctx, h); const c = state().channels;
@@ -148,7 +169,9 @@ export function registerArmyAdminTools(bot, h) {
     return h.show(ctx, say(ctx, h, '<b>أرسل عنوان الخبر</b> (3 أحرف على الأقل).', '<b>Send the update title</b> (at least 3 characters).'), cancelKeyboard(ctx, h));
   }));
   bot.callbackQuery('army:cancel', (ctx) => ownerOnly(ctx, async () => {
-    delete state().adminDrafts[idOf(ctx)]; persist(); await answer(ctx, say(ctx, h, 'تم إلغاء العملية.', 'Cancelled.')); return showMenu(ctx, h);
+    const draft = state().adminDrafts[idOf(ctx)]; delete state().adminDrafts[idOf(ctx)]; persist(); await answer(ctx, say(ctx, h, 'تم إلغاء العملية.', 'Cancelled.'));
+    if (draft?.mode === 'add_monitor_source' || draft?.mode === 'edit_monitor_source') { const screen = sourceScreen(ctx, h); return h.show(ctx, screen.text, screen.keyboard); }
+    return showMenu(ctx, h);
   }));
   bot.callbackQuery(/^army:list:(pending|published)(?::(\d+))?$/, (ctx) => ownerOnly(ctx, async () => {
     const which = ctx.match[1]; const page = Number(ctx.match[2]) || 0; const result = listText(ctx, h, which, page);
@@ -205,6 +228,52 @@ export function registerArmyAdminTools(bot, h) {
     const j = state(); j.monitorOn = !j.monitorOn; j.monitorUpdatedAt = Date.now(); persist(); await answer(ctx, j.monitorOn ? say(ctx, h, 'تم تشغيل الرصد', 'Monitoring enabled') : say(ctx, h, 'تم إيقاف الرصد', 'Monitoring paused')); return showMenu(ctx, h);
   }));
   bot.callbackQuery('army:sources', (ctx) => ownerOnly(ctx, async () => { const screen = sourceScreen(ctx, h); await answer(ctx); return h.show(ctx, screen.text, screen.keyboard); }));
+  bot.callbackQuery('army:source:add', (ctx) => ownerOnly(ctx, async () => {
+    await answer(ctx);
+    return startDraft(ctx, h, { mode: 'add_monitor_source', step: 'username', createdAt: Date.now() }, say(ctx, h, '<b>أرسل اسم مستخدم قناة تيليغرام عامة أو رابطها</b> (مثال: @channelname أو https://t.me/channelname). لا تدعم القنوات الخاصة أو روابط الدعوة.', '<b>Send a public Telegram channel username or link</b> (e.g. @channelname or https://t.me/channelname). Private channels and invite links are not supported.'), cancelKeyboard(ctx, h));
+  }));
+  bot.callbackQuery(/^army:source:manage:([A-Za-z][A-Za-z0-9_]{4,31})$/, (ctx) => ownerOnly(ctx, async () => {
+    const screen = sourceManageScreen(ctx, h, ctx.match[1]); await answer(ctx);
+    return screen ? h.show(ctx, screen.text, screen.keyboard) : showMenu(ctx, h);
+  }));
+  bot.callbackQuery(/^army:source:edit-name:([A-Za-z][A-Za-z0-9_]{4,31})$/, (ctx) => ownerOnly(ctx, async () => {
+    const username = ctx.match[1]; const source = state().manualSources[username]; await answer(ctx);
+    if (!source) return showMenu(ctx, h);
+    return startDraft(ctx, h, { mode: 'edit_monitor_source', field: 'name', sourceUsername: username, createdAt: Date.now() }, say(ctx, h, `<b>أرسل الاسم المعروض للمصدر</b>\nالحالي: ${esc(source.name)}`, `<b>Send a display name for the source</b>\nCurrent: ${esc(source.name)}`), cancelKeyboard(ctx, h));
+  }));
+  bot.callbackQuery(/^army:source:edit-channel:([A-Za-z][A-Za-z0-9_]{4,31})$/, (ctx) => ownerOnly(ctx, async () => {
+    const username = ctx.match[1]; const source = state().manualSources[username]; await answer(ctx);
+    if (!source) return showMenu(ctx, h);
+    return startDraft(ctx, h, { mode: 'edit_monitor_source', field: 'username', sourceUsername: username, createdAt: Date.now() }, say(ctx, h, '<b>أرسل اسم المستخدم أو الرابط الجديد للقناة العامة</b>. سيبدأ الرصد من أحدث منشور عند أول تحقق، دون استيراد الأرشيف.', '<b>Send the new public channel username or link</b>. The first check starts at the latest post without importing history.'), cancelKeyboard(ctx, h));
+  }));
+  bot.callbackQuery(/^army:source:set-type:(official|media):([A-Za-z][A-Za-z0-9_]{4,31})$/, (ctx) => ownerOnly(ctx, async () => {
+    const [, type, username] = ctx.match; const result = updateManualArmySource(username, { type }, state()); await answer(ctx, result.ok ? say(ctx, h, 'تم تحديث تصنيف المصدر.', 'Source type updated.') : say(ctx, h, 'تعذر تحديث المصدر.', 'Could not update source.'));
+    if (result.ok) persist();
+    const screen = sourceManageScreen(ctx, h, username); return screen ? h.show(ctx, screen.text, screen.keyboard) : showMenu(ctx, h);
+  }));
+  bot.callbackQuery(/^army:source:delete:([A-Za-z][A-Za-z0-9_]{4,31})$/, (ctx) => ownerOnly(ctx, async () => {
+    const username = ctx.match[1]; const source = state().manualSources[username]; await answer(ctx);
+    if (!source) return showMenu(ctx, h);
+    return h.show(ctx, say(ctx, h, `<b>تأكيد حذف مصدر الرصد؟</b>\n\n${esc(source.name)} (@${esc(username)})\n\nسيتوقف رصد القناة. لا تُحذف الأخبار التي سبق أن أُرسلت للمراجعة.`, `<b>Delete this monitoring source?</b>\n\n${esc(source.name)} (@${esc(username)})\n\nMonitoring will stop. Items already sent for review will not be deleted.`), new InlineKeyboard().text(say(ctx, h, '🗑 نعم، احذف المصدر', '🗑 Yes, delete source'), `army:source:delete-yes:${username}`).row().text(say(ctx, h, 'إلغاء', 'Cancel'), `army:source:manage:${username}`));
+  }));
+  bot.callbackQuery(/^army:source:delete-yes:([A-Za-z][A-Za-z0-9_]{4,31})$/, (ctx) => ownerOnly(ctx, async () => {
+    const result = removeManualArmySource(ctx.match[1], state()); await answer(ctx, result.ok ? say(ctx, h, 'حُذف المصدر وتوقف رصده.', 'Source deleted and monitoring stopped.') : say(ctx, h, 'المصدر غير موجود.', 'Source not found.'));
+    if (result.ok) persist();
+    const screen = sourceScreen(ctx, h); return h.show(ctx, screen.text, screen.keyboard);
+  }));
+  bot.callbackQuery(/^army:source:add-type:(official|media)$/, (ctx) => ownerOnly(ctx, async () => {
+    const match = ctx.match;
+    const draft = state().adminDrafts[idOf(ctx)];
+    if (!draft || draft.mode !== 'add_monitor_source' || draft.step !== 'type') return answer(ctx);
+    const result = addManualArmySource({ username: draft.username, name: draft.name, type: match[1] }, state());
+    if (!result.ok) {
+      await answer(ctx, say(ctx, h, 'تعذر إضافة المصدر.', 'Could not add source.'));
+      const message = result.error === 'duplicate' ? say(ctx, h, 'هذا المصدر موجود مسبقاً.', 'This source already exists.') : result.error === 'limit' ? say(ctx, h, 'بلغت الحد الأقصى (10 مصادر يدوية).', 'The limit of 10 manual sources has been reached.') : say(ctx, h, 'تعذر التحقق من بيانات المصدر.', 'Could not validate source details.');
+      return h.show(ctx, message, cancelKeyboard(ctx, h));
+    }
+    delete state().adminDrafts[idOf(ctx)]; persist(); await answer(ctx, say(ctx, h, 'أُضيف المصدر؛ يبدأ الرصد بعد أول تحقق.', 'Source added; monitoring starts after its first baseline check.'));
+    const screen = sourceScreen(ctx, h); return h.show(ctx, screen.text, screen.keyboard);
+  }));
   bot.callbackQuery('army:channels', (ctx) => ownerOnly(ctx, async () => { const screen = channelScreen(ctx, h); await answer(ctx); return h.show(ctx, screen.text, screen.keyboard); }));
   bot.callbackQuery(/^army:channel:edit:(tg|wa)$/, (ctx) => ownerOnly(ctx, async () => {
     const kind = ctx.match[1]; await answer(ctx);
@@ -230,6 +299,29 @@ export function registerArmyAdminTools(bot, h) {
     const raw = String(ctx.message.text || '').trim();
     if (!raw || raw.startsWith('/')) return next();
     await deleteInput(ctx);
+    if (draft.mode === 'add_monitor_source' && draft.step === 'username') {
+      const username = normalizeArmyTelegramUsername(raw);
+      if (!username) return h.show(ctx, say(ctx, h, 'اسم/رابط غير صالح. أرسل معرف قناة عامة من 5 إلى 32 حرفاً أو رابط https://t.me/اسم_القناة.', 'Invalid username/link. Send a public channel username (5–32 characters) or https://t.me/channel_name.'), cancelKeyboard(ctx, h));
+      draft.username = username; draft.step = 'name'; draft.updatedAt = Date.now(); persist();
+      return h.show(ctx, say(ctx, h, '<b>أرسل اسماً واضحاً للمصدر</b> (حرفان على الأقل).', '<b>Send a clear display name</b> (at least 2 characters).'), cancelKeyboard(ctx, h));
+    }
+    if (draft.mode === 'add_monitor_source' && draft.step === 'name') {
+      const name = clean(raw, 70);
+      if (name.length < 2) return h.show(ctx, say(ctx, h, 'الاسم قصير؛ أرسل حرفين على الأقل.', 'Name too short; send at least 2 characters.'), cancelKeyboard(ctx, h));
+      draft.name = name; draft.step = 'type'; draft.updatedAt = Date.now(); persist();
+      const keyboard = new InlineKeyboard().text(say(ctx, h, 'مصدر رسمي', 'Official source'), 'army:source:add-type:official').text(say(ctx, h, 'إشارة إعلامية', 'Media signal'), 'army:source:add-type:media').row().text(say(ctx, h, 'إلغاء', 'Cancel'), 'army:cancel');
+      return h.show(ctx, say(ctx, h, '<b>اختر تصنيف المصدر</b>؛ التصنيف الإعلامي لا يعني تأكيداً رسمياً.', '<b>Choose a source type</b>; media does not mean official confirmation.'), keyboard);
+    }
+    if (draft.mode === 'edit_monitor_source') {
+      const patch = draft.field === 'name' ? { name: clean(raw, 70) } : { username: normalizeArmyTelegramUsername(raw) };
+      if (draft.field === 'name' && patch.name.length < 2) return h.show(ctx, say(ctx, h, 'الاسم قصير؛ أرسل حرفين على الأقل.', 'Name too short; send at least 2 characters.'), cancelKeyboard(ctx, h));
+      if (draft.field === 'username' && !patch.username) return h.show(ctx, say(ctx, h, 'رابط/معرف غير صالح. استخدم قناة عامة على t.me.', 'Invalid username/link. Use a public t.me channel.'), cancelKeyboard(ctx, h));
+      const result = updateManualArmySource(draft.sourceUsername, patch, state());
+      if (!result.ok) return h.show(ctx, say(ctx, h, result.error === 'duplicate' ? 'المصدر موجود مسبقاً.' : 'تعذّر تعديل المصدر؛ تحقق من البيانات.', result.error === 'duplicate' ? 'Source already exists.' : 'Could not update source; check the input.'), cancelKeyboard(ctx, h));
+      delete state().adminDrafts[uid]; persist();
+      const screen = sourceManageScreen(ctx, h, result.source.u) || sourceScreen(ctx, h);
+      return h.show(ctx, screen.text, screen.keyboard);
+    }
     if (draft.mode === 'create' && draft.step === 'title') {
       const title = clean(raw, 120);
       if (title.length < 3) return h.show(ctx, say(ctx, h, 'أرسل عنواناً من 3 أحرف على الأقل.', 'Send a title of at least 3 characters.'), cancelKeyboard(ctx, h));
@@ -271,4 +363,4 @@ export function registerArmyAdminTools(bot, h) {
   });
 }
 
-export const _test = { menuText, menuKeyboard, categoryKeyboard, itemScreenText, itemKeyboard, listText, listKeyboard, sourceScreen, channelScreen, secureUrl };
+export const _test = { menuText, menuKeyboard, categoryKeyboard, itemScreenText, itemKeyboard, listText, listKeyboard, sourceScreen, sourceManageScreen, channelScreen, secureUrl };
