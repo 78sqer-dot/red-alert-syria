@@ -38,8 +38,23 @@ const reportBot = createBot({ role: 'report', token: '654321:LOCAL_REPORT_TEST' 
 reportBot.botInfo = { id: 2, is_bot: true, first_name: 'Local report test', username: 'LocalReportTestBot' };
 const calls = [];
 let messageId = 1000;
+const snapshotPayload = (payload) => {
+  const copy = { ...(payload || {}) };
+  for (const key of ['photo', 'video']) if (copy[key] && typeof copy[key] !== 'string') copy[key] = '[media]';
+  if (copy.media && typeof copy.media === 'object') copy.media = { type: copy.media.type, caption: copy.media.caption, parse_mode: copy.media.parse_mode, media: '[media]' };
+  return structuredClone(copy);
+};
+const mockMediaMessage = (payload, type) => {
+  const id = ++messageId;
+  const file = { file_id: `admin-${type}-${id}`, file_unique_id: `admin-unique-${id}`, file_size: 128, width: 10, height: 10 };
+  return { ok: true, result: { message_id: id, chat: { id: payload.chat_id, type: [ownerId, reporter.id].includes(payload.chat_id) ? 'private' : 'channel' }, date: 0, ...(type === 'photo' ? { photo: [file] } : { video: { ...file, mime_type: 'video/mp4' } }) } };
+};
 bot.api.config.use(async (_previous, method, payload) => {
-  calls.push({ method, chatId: payload?.chat_id, payload: structuredClone(payload || {}) });
+  calls.push({ method, chatId: payload?.chat_id, payload: snapshotPayload(payload) });
+  if (method === 'getFile') return { ok: true, result: { file_path: 'photos/local-test.jpg', file_size: 128 } };
+  if (method === 'sendPhoto') return mockMediaMessage(payload, 'photo');
+  if (method === 'sendVideo') return mockMediaMessage(payload, 'video');
+  if (method === 'editMessageMedia') return { ok: true, result: { message_id: payload.message_id, chat: { id: payload.chat_id, type: 'channel' }, date: 0, ...(payload.media?.type === 'video' ? { video: { file_id: 'edited-video', file_unique_id: 'edited-video-unique', mime_type: 'video/mp4' } } : { photo: [{ file_id: 'edited-photo', file_unique_id: 'edited-photo-unique', width: 10, height: 10 }] }) } };
   if (method === 'sendMessage') {
     return { ok: true, result: { message_id: ++messageId, chat: { id: payload.chat_id, type: [ownerId, reporter.id].includes(payload.chat_id) ? 'private' : 'channel' }, date: 0, text: payload.text || '' } };
   }
@@ -49,7 +64,8 @@ bot.api.config.use(async (_previous, method, payload) => {
   return { ok: true, result: true };
 });
 reportBot.api.config.use(async (_previous, method, payload) => {
-  calls.push({ method, chatId: payload?.chat_id, payload: structuredClone(payload || {}) });
+  calls.push({ method, chatId: payload?.chat_id, payload: snapshotPayload(payload) });
+  if (method === 'getFile') return { ok: true, result: { file_path: 'photos/local-test.jpg', file_size: 128 } };
   if (method === 'sendMessage') return { ok: true, result: { message_id: ++messageId, chat: { id: payload.chat_id, type: 'private' }, date: 0, text: payload.text || '' } };
   if (method === 'editMessageText') return { ok: true, result: { message_id: payload.message_id, chat: { id: payload.chat_id, type: 'private' }, date: 0, text: payload.text || '' } };
   return { ok: true, result: true };
@@ -69,6 +85,14 @@ const tap = async (data, user = owner, targetBot = bot, targetMessageId = 700) =
 const sendText = async (text, user = owner, targetBot = bot) => targetBot.handleUpdate({
   update_id: updateId++,
   message: { message_id: ++messageId, date: 0, chat: { id: user.id, type: 'private' }, from: user, text },
+});
+const sendPhoto = async (user, targetBot = reportBot, fileId = 'report-photo-1') => targetBot.handleUpdate({
+  update_id: updateId++,
+  message: { message_id: ++messageId, date: 0, chat: { id: user.id, type: 'private' }, from: user, photo: [{ file_id: fileId, file_unique_id: `${fileId}-unique`, width: 640, height: 480, file_size: 128 }] },
+});
+const sendVideo = async (user, targetBot = reportBot, fileId = 'report-video-1') => targetBot.handleUpdate({
+  update_id: updateId++,
+  message: { message_id: ++messageId, date: 0, chat: { id: user.id, type: 'private' }, from: user, video: { file_id: fileId, file_unique_id: `${fileId}-unique`, width: 640, height: 480, duration: 5, mime_type: 'video/mp4', file_size: 128 } },
 });
 const plainChannelText = (html) => String(html || '').replace(/<[^>]+>/g, '')
   .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, String.fromCharCode(34));
@@ -557,8 +581,9 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(assassinationPost, /اغتيال/);
   assert.doesNotMatch(assassinationPost, /🎯|🔊|🔫|اغتيال<\/b> -/);
   const socialRow = channelKeyboard({ id: 'test-social-buttons' }).inline_keyboard.find((row) => row.some((button) => button.url?.includes('/boost/')));
-  assert.equal(socialRow?.length, 1, 'only the Telegram boost button remains in the footer');
+  assert.equal(socialRow?.length, 2, 'the Telegram boost and WhatsApp channel buttons share the footer');
   assert.equal(socialRow[0].url, 'https://t.me/boost/Red_Alert_Syria');
+  assert.equal(socialRow[1].url, 'https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k');
   const legacyHeader = channelPost({ type: 'breaking', timestamp: new Date().toISOString(), place: { scope: 'country' } });
   assert.match(legacyHeader, /^<b>خبر عاجل<\/b> - 🚨/, 'an already-published alert keeps the legacy header by default');
   assert.doesNotMatch(legacyHeader, /🔴/, 'existing channel posts are not reformatted retroactively');
@@ -1244,4 +1269,84 @@ test('bot menus hide route creation while preserving regular aerial reports and 
   const source = fs.readFileSync(new URL('../server/bot.js', import.meta.url), 'utf8');
   assert.match(source, /type === 'air_movement'[\s\S]{0,200}لم يعد متاحاً/);
   assert.match(source, /aerial: Object\.freeze\(ALERT_GROUPS\.aerial\.types\.filter\(\(type\) => type !== 'uav_strike' && type !== 'air_movement'\)\)/);
+});
+
+
+test('reporters can attach a photo and editors receive it before approving the channel and map alert', async (t) => {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const mediaReporter = { id: 8270709661, is_bot: false, first_name: 'Media reporter', language_code: 'ar' };
+  const reportIdsBefore = new Set(Object.keys(store.state.reports || {}));
+  const activeBefore = new Set(store.activeAlerts().map((alert) => alert.id));
+  const start = calls.length;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(Buffer.from('local-media-bytes'), { status: 200, headers: { 'content-length': '17', 'content-type': 'image/jpeg' } });
+  let publishedId = null;
+  let rid = null;
+  t.after(async () => {
+    globalThis.fetch = originalFetch;
+    if (publishedId) store.deleteAlert(publishedId);
+    if (rid && store.reportGet(rid)) store.reportTake(rid);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  });
+
+  await tap('home', mediaReporter, reportBot);
+  await tap('ag:protests', mediaReporter, reportBot);
+  await tap('t:protest_action', mediaReporter, reportBot);
+  const gov = governorates.find((item) => item.ar === 'حلب') || governorates[0];
+  await tap(`g:${gov.code}`, mediaReporter, reportBot);
+  await tap(`wg:${gov.code}`, mediaReporter, reportBot);
+  await tap('skip', mediaReporter, reportBot);
+  await tap('attachmedia', mediaReporter, reportBot);
+  await sendPhoto(mediaReporter, reportBot, 'report-photo-e2e');
+  const preview = [...calls.slice(start)].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
+  assert.match(preview?.payload?.text || '', /صورة مرفقة/);
+  assert.ok(preview?.payload?.reply_markup?.inline_keyboard?.flat().some((button) => button.callback_data === 'submit'));
+  await tap('submit', mediaReporter, reportBot);
+
+  rid = Object.keys(store.state.reports || {}).find((id) => !reportIdsBefore.has(id));
+  assert.ok(rid, 'report with its attachment is retained for review');
+  const pending = store.reportGet(rid);
+  assert.equal(pending.draft.media?.type, 'photo');
+  assert.equal(pending.draft.media?.bot_role, 'admin', 'reviewers receive the media with a file identifier owned by the admin bot');
+  assert.ok(calls.slice(start).some(({ method, chatId, payload }) => method === 'sendPhoto' && chatId === ownerId && payload.caption === '📎 مرفق البلاغ'), 'reviewers receive the photo before the decision card');
+  const projectedPending = publicAlert(buildAlertInput(pending.draft, pending.from));
+  assert.equal(projectedPending.media.type, 'photo');
+  assert.equal(Object.hasOwn(projectedPending.media, 'file_id'), false, 'Telegram file identifiers are never exposed to map clients');
+  assert.equal(JSON.stringify(projectedPending).includes('report-photo-e2e'), false);
+
+  await tap(`rap:${rid}`, owner, bot);
+  const published = store.activeAlerts().find((alert) => !activeBefore.has(alert.id));
+  assert.ok(published, 'the editor approval publishes the reviewed report');
+  publishedId = published.id;
+  assert.equal(published.channel_media, 'photo');
+  assert.equal(published.media?.bot_role, 'admin', 'the reviewer transfers the attachment to the publishing bot before channel posting');
+  assert.ok(calls.slice(start).some(({ method, chatId }) => method === 'sendPhoto' && chatId === '@mock_news_channel'));
+  assert.equal(store.reportDone(rid), true);
+});
+
+test('admins can attach a video to an active text-only channel post and the bot replaces it safely', async (t) => {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const source = buildAlertInput({ type: 'uav', location: { scope: 'country' }, extra: [], ttlMin: 60 }, { id: ownerId, name: 'Local owner' });
+  const alert = store.addAlert(source);
+  store.updateAlert(alert.id, { channel_message_id: 9000001, channel_media: 'text' });
+  const start = calls.length;
+  t.after(async () => {
+    store.deleteAlert(alert.id);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  });
+
+  await tap(`m:${alert.id}`, owner, bot);
+  const menu = [...calls.slice(start)].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
+  assert.ok(menu?.payload?.reply_markup?.inline_keyboard?.flat().some((button) => button.callback_data === `alertmedia:${alert.id}`), 'active alert management exposes the admin media button');
+  await tap(`alertmedia:${alert.id}`, owner, bot);
+  await sendVideo(owner, bot, 'admin-video-e2e');
+
+  const saved = store.getAlert(alert.id);
+  assert.equal(saved.channel_media, 'video');
+  assert.notEqual(saved.channel_message_id, 9000001, 'a text-only Telegram message is replaced because Telegram cannot convert it into a video post');
+  assert.equal(saved.media?.type, 'video');
+  assert.ok(calls.slice(start).some(({ method, chatId, payload }) => method === 'sendVideo' && chatId === '@mock_news_channel' && payload.caption), 'the replacement includes the alert caption');
+  assert.ok(calls.slice(start).some(({ method, chatId, payload }) => method === 'deleteMessage' && chatId === '@mock_news_channel' && payload.message_id === 9000001), 'the prior text post is deleted only after the video post is created');
+  const channelButtons = [...calls.slice(start)].reverse().find(({ method, chatId }) => method === 'sendVideo' && chatId === '@mock_news_channel')?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+  assert.ok(channelButtons.some((button) => button.url === 'https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k'), 'channel posts include the WhatsApp channel link');
 });

@@ -53,12 +53,14 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=76'/);
-  assert.match(html, /app\.css\?v=64/);
+  assert.match(html, /app\.css\?v=65/);
+  assert.match(html, /app\.js\?v=79/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
   assert.match(app, /from '\.\/services\.js\?v=35'/);
-  assert.match(app, /from '\.\/icons\.js\?v=6'/);
+  assert.match(app, /from '\.\/icons\.js\?v=7'/);
+  assert.match(app, /from '\.\/i18n\.js\?v=4'/);
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=13'/);
   assert.match(map, /from '\/shared\/types\.js\?v=41'/);
@@ -67,6 +69,21 @@ test('changed type and icon modules use fresh cache keys', () => {
   assert.match(map, /from '\.\/marker-layout\.js\?v=3'/);
   assert.match(map, /from '\/shared\/zone-visuals\.js\?v=3'/);
   assert.match(settings, /from '\/shared\/types\.js\?v=41'/);
+});
+
+test('alert popup switches between the news card and attached media with clear icons', () => {
+  assert.match(app, /class="pp-view-tabs" role="tablist"/);
+  assert.match(app, /data-pp-tab="news"/);
+  assert.match(app, /data-pp-tab="media"/);
+  assert.match(app, /icon\('news', 15\)/);
+  assert.match(app, /mediaVideo' : 'mediaImage/);
+  assert.match(app, /<video class="pp-media-video" controls playsinline preload="none"/);
+  assert.match(app, /<img class="pp-media-image"/);
+  assert.match(app, /schedulePopupFit\?\.\(2\)/);
+  assert.match(css, /\.pp-view-tabs \{/);
+  assert.match(css, /\.pp-media-image, \.pp-media-video/);
+  assert.match(app, /https:\/\/whatsapp\.com\/channel\/0029VbEO1eGCBtxLP3jW8e1k/);
+  assert.match(app, /wa-channel-btn/);
 });
 
 test('alert symbols use shared category colors in badges, filters and map markers', () => {

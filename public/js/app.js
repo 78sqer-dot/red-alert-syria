@@ -1,9 +1,9 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=35';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
-import { DICT } from './i18n.js?v=3';
+import { DICT } from './i18n.js?v=4';
 import { matchesGovernorate } from './alert-region-filter.js';
-import { icon } from './icons.js?v=6';
+import { icon } from './icons.js?v=7';
 import { settings } from './settings.js?v=13';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
 import { AlertMap, typeIcon, glyphDisc } from './map.js?v=76';
@@ -15,6 +15,7 @@ const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
 const TZ = 'Asia/Damascus';
 const CHANNEL = 'https://t.me/Red_Alert_Syria';
+const WHATSAPP_CHANNEL = 'https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k';
 // Telegram links: on Android (Chrome, Brave, Samsung… — also in "Desktop site" mode, whose user agent
 // pretends to be a PC) a plain https://t.me link only opens the t.me web page inside the browser.
 // So on Android we open the Telegram app directly with an intent:// link (falls back to t.me when
@@ -386,12 +387,24 @@ function distChip(a) {
 }
 function popupHtml(a) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
-  return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">
-    <div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
+  const mediaType = ['photo', 'video'].includes(a.media?.type) ? a.media.type : null;
+  const version = /^[a-f0-9]{12}$/.test(a.media?.version || '') ? a.media.version : '';
+  const mediaUrl = mediaType ? `/api/alerts/${encodeURIComponent(a.id)}/media${version ? `?v=${version}` : ''}` : '';
+  const alertInfo = `<div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <p class="pp-title">${esc(titleOf(a))}</p>
     ${distChip(a)}
     ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">${icon('locate', 13)} ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
-    ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}
+    ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}`;
+  const content = mediaType ? `<div class="pp-view-tabs" role="tablist" aria-label="${esc(T.alertNewsTab)}">
+      <button type="button" class="pp-view-tab" role="tab" aria-selected="true" aria-controls="pp-news-${esc(a.id)}" data-pp-tab="news">${icon('news', 15)}${esc(T.alertNewsTab)}</button>
+      <button type="button" class="pp-view-tab" role="tab" aria-selected="false" aria-controls="pp-media-${esc(a.id)}" data-pp-tab="media">${icon(mediaType === 'video' ? 'mediaVideo' : 'mediaImage', 15)}${esc(mediaType === 'video' ? T.videoTab : T.photoTab)}</button>
+    </div>
+    <section class="pp-panel" role="tabpanel" id="pp-news-${esc(a.id)}" data-pp-panel="news">${alertInfo}</section>
+    <section class="pp-panel pp-media-panel" role="tabpanel" id="pp-media-${esc(a.id)}" data-pp-panel="media" hidden>${mediaType === 'video'
+      ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(mediaUrl)}" type="video/mp4"></video>`
+      : `<img class="pp-media-image" src="${esc(mediaUrl)}" alt="${esc(T.photoTab)}" loading="lazy" decoding="async">`}</section>` : alertInfo;
+  return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">
+    ${content}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
     <a class="pp-share" href="https://wa.me/?text=${encodeURIComponent(shareText(a) + '\n' + shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.share)}</a></div></div>`;
 }
@@ -661,7 +674,7 @@ function renderDrawer() {
   </section>
   <section class="s-card about-us"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.about)}</h3><p>${esc(T.aboutSub)}</p></div></div>
     <p>${esc(T.aboutText)}</p>
-    <div class="about-links"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a></div>
+    <div class="about-links"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm wa-channel-btn" href="${WHATSAPP_CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.followWhatsAppChannel)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a></div>
     ${cts}
   </section>
   <div class="drawer-foot"><button class="link-btn" data-s="terms" style="color:inherit;text-decoration:underline">${esc(T.terms)}</button> · <button class="link-btn" data-s="privacy" style="color:inherit;text-decoration:underline">${esc(T.privacy)}</button><br/>© ${new Date().getFullYear()} Red Alert Syria — ${esc(T.madeFor)}</div>`;
@@ -693,7 +706,7 @@ function renderAbout() {
     <div class="legend">${legend}</div>
     <div class="disclaimer">${esc(T.disclaimer)}</div>
     ${state.support ? `<section class="support-card"><div class="support-card-head"><span class="support-icon">${icon('heart', 18)}</span><div><h3>${esc(T.supportTitle)}</h3><p>${esc(T.supportTransfer)}</p></div></div><button class="btn-red" data-a="support">${icon('heart', 16)}${esc(T.supportButton)}</button></section>` : ''}
-    <div class="about-links" style="margin-bottom:14px"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a><button class="btn-sm" data-a="terms">${esc(T.terms)}</button><button class="btn-sm" data-a="privacy">${esc(T.privacy)}</button></div>
+    <div class="about-links" style="margin-bottom:14px"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm wa-channel-btn" href="${WHATSAPP_CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.followWhatsAppChannel)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a><button class="btn-sm" data-a="terms">${esc(T.terms)}</button><button class="btn-sm" data-a="privacy">${esc(T.privacy)}</button></div>
     ${contactRows().length ? `<div class="sec-label">${esc(T.contactUs)}</div>${contactListHtml()}` : ''}
     <div class="sec-label">${esc(T.sources)}</div>
     <p class="sources"><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a> · <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames (CC BY 4.0)</a> · <a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a> · Esri World Imagery · Mapzen Terrain (AWS Open Data) · Tabler Icons</p>`;
@@ -1132,6 +1145,17 @@ function bindEvents() {
   });
   // popups (rendered inside the map container)
   $('#map').addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-pp-tab]');
+    if (tab) {
+      const root = tab.closest('.pp');
+      const view = tab.dataset.ppTab;
+      if (!root || !['news', 'media'].includes(view)) return;
+      root.querySelectorAll('[data-pp-tab]').forEach((button) => button.setAttribute('aria-selected', String(button === tab)));
+      root.querySelectorAll('[data-pp-panel]').forEach((panel) => { panel.hidden = panel.dataset.ppPanel !== view; });
+      if (view !== 'media') root.querySelectorAll('video').forEach((video) => video.pause());
+      amap?.schedulePopupFit?.(2);
+      return;
+    }
     const b = e.target.closest('[data-pp="more"]');
     if (b) {
       select(b.dataset.id, { fly: false });

@@ -4,7 +4,7 @@ import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpErr
 import { config, isOwner, envDefaults } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
-import { store, publicAlert } from './store.js';
+import { store, publicAlert, sanitizeAlertMedia, ALERT_MEDIA_MAX_BYTES } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, alertButtonLabel, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS, eventVisual } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
@@ -142,6 +142,7 @@ function vehicleCountPhrase(count, lang) {
 }
 
 const sessions = new Map(); // userId -> draft
+const activeMediaSessions = new Map(); // userId -> { alertId, created }: admin attachment to an already-published alert
 // pending reports live in the store (store.reportPut/Take): they survive restarts and deploys
 const lastReport = new Map();
 
@@ -169,6 +170,7 @@ const draftTypeLabel = (d, lang) => d?.type === 'airstrike' && d.airstrikeForm
         ? (lang === 'en' ? 'Military checkpoint' : 'حاجز عسكري')
         : typeLabel(d?.type, lang);
 const mapUrl = (id, lang = 'ar') => (config.publicUrl ? `${config.publicUrl}/${lang}/${id ? '#' + id : ''}` : '');
+const WHATSAPP_CHANNEL = 'https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k';
 
 // spelling-insensitive key: "داريّا" == "داريا", "حماه" == "حماة", "أعزاز" == "اعزاز"
 const nameKey = (x) => String(x || '').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '')
@@ -306,7 +308,8 @@ export function channelKeyboard(alert) {
   if (url) kb.url('🗺 عرض على الخريطة', url);
   if (config.reportBotUsername) kb.url('📨 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
   kb.row()
-    .url('🚀 عزّز القناة', 'https://t.me/boost/Red_Alert_Syria');
+    .url('🚀 عزّز القناة', 'https://t.me/boost/Red_Alert_Syria')
+    .url('🟢 قناة واتساب', WHATSAPP_CHANNEL);
   return kb;
 }
 function draftSummary(d, lang) {
@@ -314,6 +317,7 @@ function draftSummary(d, lang) {
   const loc = d.location;
   const civilEmoji = d.type === 'civil' ? CIVIL_EMOJIS[d.civilEmoji]?.emoji : '';
   const lines = [`<b>${esc(d.type === 'road' ? roadLabel(d.road, lang) : draftTypeLabel(d, lang))}</b>${civilEmoji ? ` ${civilEmoji}` : ''}`];
+  if (d.media) lines.push(lang === 'en' ? `📎 <b>${d.media.type === 'video' ? 'Video attached' : 'Photo attached'}</b>` : `📎 <b>${d.media.type === 'video' ? 'فيديو مرفق' : 'صورة مرفقة'}</b>`);
   if (d.border && BORDER_REGIONS[d.border]) lines.push(`🛂 <b>${esc(lang === 'en' ? BORDER_REGIONS[d.border].en : BORDER_REGIONS[d.border].ar)}</b>`);
   if (d.type === 'helicopter') lines.push(d.intense === true ? (lang === 'en' ? '🚁🚁 <b>Intensive flight — two helicopters</b>' : '🚁🚁 <b>تحليق مكثف — مروحيتان</b>') : (lang === 'en' ? '🚁 <b>One helicopter</b>' : '🚁 <b>مروحية واحدة</b>'));
   if (d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0) {
@@ -601,9 +605,10 @@ function previewKeyboard(ctx, d) {
   const kb = new InlineKeyboard();
   const enx = langOf(ctx) === 'en';
   if (d.mode === 'report') kb.text(l.btnSubmit, 'submit').row();
-  else if (d.mode === 'edit_published') kb.text(enx ? '✅ Save format edit' : '✅ حفظ تعديل الصيغة', 'save_edit').row();
   else if (d.type === 'road') kb.text(enx ? '🗺 Publish on the map' : '🗺 نشر على الخريطة', 'publish').row().text(enx ? '📢 Map + channel' : '📢 الخريطة + القناة', 'publish:ch').row();
   else kb.text(l.btnPublish, 'publish').row();
+  kb.text(d.media ? l.btnReplaceMedia : l.btnAddMedia, 'attachmedia').row();
+  if (d.media) kb.text(l.btnRemoveMedia, 'removemedia').row();
   kb.text(l.btnDuration(d.ttlMin), 'dur').row();
   // drones: "تحليق مكثف" = 2-3 drones over every circle on the map instead of one
   if (d.type === 'uav' && d.mode !== 'report') {
@@ -656,6 +661,7 @@ async function show(ctx, text, keyboard) {
 }
 
 function newDraft(ctx, type) {
+  activeMediaSessions.delete(sk(ctx));
   const d = {
     type,
     mode: staff(ctx) ? 'publish' : 'report',
@@ -987,6 +993,7 @@ export function buildAlertInput(d, author) {
     title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
     extra,
     description: cleanAlertText(d.type === 'breaking' ? d.text : d.details),
+    ...(sanitizeAlertMedia(d.media) ? { media: sanitizeAlertMedia(d.media) } : {}),
     location: loc,
     areas,
     ttlMin: d.ttlMin,
@@ -1056,7 +1063,7 @@ function channelEditPatch(alert, message) {
   const content = String(message.text ?? message.caption ?? '').trim();
   if (!content) return null;
   const opts = { ended: !alert.is_active };
-  const expected = plainTelegramText(alert.channel_media === 'photo' ? channelCaption(alert, opts) : channelPost(alert, opts));
+  const expected = plainTelegramText(['photo', 'video'].includes(alert.channel_media) ? channelCaption(alert, opts) : channelPost(alert, opts));
   if (content === expected) return null;
   const previous = channelEditParts(expected);
   const edited = channelEditParts(content);
@@ -1113,19 +1120,23 @@ export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph =
     }
     if (markerGlyph) {
       const b = { ...a, ...patch };
-      if (!api || !config.channel || !b.channel_message_id || b.channel_media !== 'photo') {
+      if (!api || !config.channel || !b.channel_message_id || !['photo', 'video'].includes(b.channel_media)) {
         out.push({ id, ok: false, why: 'existing channel photo unavailable; no map change made' });
         continue;
       }
       const opts = { ended: !b.is_active };
       try {
-        const png = await withDeadline(alertImage(b, 'ar'), 30000);
-        try {
-          await api.editMessageMedia(config.channel, b.channel_message_id,
-            InputMediaBuilder.photo(new InputFile(png, `red-alert-syria-${b.id.slice(0, 8)}.png`), { caption: channelCaption(b, opts), parse_mode: 'HTML' }),
-            { reply_markup: channelKeyboard(b) });
-        } catch (e) {
-          if (!/message is not modified/i.test(String(e.description || e.message || e))) throw e;
+        if (sanitizeAlertMedia(b.media) || b.channel_media === 'video') {
+          await api.editMessageCaption(config.channel, b.channel_message_id, { caption: channelCaption(b, opts), parse_mode: 'HTML', reply_markup: channelKeyboard(b) });
+        } else {
+          const png = await withDeadline(alertImage(b, 'ar'), 30000);
+          try {
+            await api.editMessageMedia(config.channel, b.channel_message_id,
+              InputMediaBuilder.photo(new InputFile(png, `red-alert-syria-${b.id.slice(0, 8)}.png`), { caption: channelCaption(b, opts), parse_mode: 'HTML' }),
+              { reply_markup: channelKeyboard(b) });
+          } catch (e) {
+            if (!/message is not modified/i.test(String(e.description || e.message || e))) throw e;
+          }
         }
         store.updateAlert(id, patch); // emit the live-map update only after the existing photo edit succeeds
         store.persist();
@@ -1145,11 +1156,13 @@ export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph =
     if (!b.channel_message_id || !api || !config.channel) { out.push({ id, ok: true, post: null }); continue; }
     const opts = { ended: !b.is_active };
     try {
-      if (b.channel_media === 'photo') {
+      if (b.channel_media === 'photo' && !sanitizeAlertMedia(b.media)) {
         const png = await withDeadline(alertImage(b, 'ar'), 30000);
         await api.editMessageMedia(config.channel, b.channel_message_id,
           InputMediaBuilder.photo(new InputFile(png, `red-alert-syria-${b.id.slice(0, 8)}.png`), { caption: channelCaption(b, opts), parse_mode: 'HTML' }),
           { reply_markup: channelKeyboard(b) });
+      } else if (['photo', 'video'].includes(b.channel_media)) {
+        await api.editMessageCaption(config.channel, b.channel_message_id, { caption: channelCaption(b, opts), parse_mode: 'HTML', reply_markup: channelKeyboard(b) });
       } else {
         await api.editMessageText(config.channel, b.channel_message_id, channelPost(b, opts), { parse_mode: 'HTML', reply_markup: channelKeyboard(b), link_preview_options: { is_disabled: true } });
       }
@@ -1208,28 +1221,6 @@ export async function publishDraft(api, d, author) {
   }
   return publishInput(api, buildAlertInput(d, author));
 }
-/** Update an existing alert and its existing channel post in place. */
-export async function editPublishedAlert(api, id, d, author) {
-  const current = store.getAlert(id);
-  if (!current) throw new Error('published alert not found');
-  const input = buildAlertInput(d, author);
-  const patch = {
-    type: input.type,
-    title: input.title,
-    title_en: input.title_en,
-    description: input.description || '',
-    location: input.location?.latitude != null ? { latitude: input.location.latitude, longitude: input.location.longitude } : null,
-    place: input.location || null,
-    areas: input.areas || [],
-    extra: input.extra || [],
-    scope: input.location?.scope || 'country',
-    meta: { ...(current.meta || {}), ...(input.meta || {}) },
-  };
-  store.updateAlert(id, patch);
-  const updated = store.getAlert(id);
-  await refreshChannelPost(api, updated, !updated.is_active);
-  return updated;
-}
 /** add an alert to the map and (unless toChannel=false) post it to the channel */
 export async function publishInput(api, input, { toChannel = true } = {}) {
   const alert = store.addAlert(input);
@@ -1240,8 +1231,21 @@ export async function publishInput(api, input, { toChannel = true } = {}) {
   store.persist();
   const text = channelPost(alert);
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
-  let m = null; let media = 'text'; let uncertainPhotoSend = false;
-  if (config.alertImages && visibleLen(text) <= CAPTION_MAX) {
+  let m = null; let media = 'text'; let uncertainMediaSend = false;
+  if (sanitizeAlertMedia(alert.media)) {
+    try {
+      const file = await alertMediaInput(alert.media, 'admin');
+      m = alert.media.type === 'photo'
+        ? await api.sendPhoto(config.channel, file, { caption: channelCaption(alert), ...extra })
+        : await api.sendVideo(config.channel, file, { caption: channelCaption(alert), ...extra });
+      media = alert.media.type;
+      store.updateAlert(alert.id, { media: mediaFromSentMessage(m, media, alert.media, 'admin') });
+    } catch (e) {
+      uncertainMediaSend = !isDefinitiveTelegramRejection(e);
+      console.error('[media] channel media post failed:', e.description || e.message);
+    }
+  }
+  if (!m && !uncertainMediaSend && config.alertImages && visibleLen(text) <= CAPTION_MAX) {
     const t0 = Date.now();
     try {
       const png = await withDeadline(alertImage(alert, 'ar'), IMAGE_DEADLINE_MS);
@@ -1250,14 +1254,14 @@ export async function publishInput(api, input, { toChannel = true } = {}) {
         media = 'photo';
         console.log(`[img] channel image sent in ${Date.now() - t0} ms (${Math.round(png.length / 1024)} KB)`);
       } catch (e) {
-        uncertainPhotoSend = !isDefinitiveTelegramRejection(e);
+        uncertainMediaSend = !isDefinitiveTelegramRejection(e);
         console.error(`[img] channel image post failed after ${Date.now() - t0} ms:`, e.description || e.message);
       }
     } catch (e) {
       console.error(`[img] image generation failed after ${Date.now() - t0} ms:`, e.description || e.message);
     }
   }
-  if (!m && !uncertainPhotoSend) {
+  if (!m && !uncertainMediaSend) {
     try {
       m = await api.sendMessage(config.channel, text, { ...extra, link_preview_options: { is_disabled: true } });
     } catch (e) {
@@ -1276,6 +1280,7 @@ function resultKeyboard(ctx, alert) {
   if (config.publicUrl) kb.url(l.btnOpenMap, mapUrl(alert.id, langOf(ctx)));
   const pa = publicAlert(alert);
   if (pa.telegram_url) kb.url(l.btnOpenPost, pa.telegram_url);
+  if (staff(ctx) && alert.is_active) kb.row().text(alert.media ? l.btnReplaceMedia : l.btnAddMedia, 'alertmedia:' + alert.id);
   kb.row().text(l.btnEnd, 'end:' + alert.id);
   if (alert.expires_at) kb.text(l.btnExtend, 'ext:' + alert.id);
   kb.row().text(l.btnDelete, 'del:' + alert.id).row().text(l.btnHome, 'home');
@@ -1292,17 +1297,17 @@ export async function refreshChannelPost(api, alert, ended) {
   if (!alert?.channel_message_id) return;
   const editText = () => api.editMessageText(config.channel, alert.channel_message_id, channelPost(alert, { ended }), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(alert) });
   const editCaption = () => api.editMessageCaption(config.channel, alert.channel_message_id, { caption: channelCaption(alert, { ended }), parse_mode: 'HTML', reply_markup: channelKeyboard(alert) });
-  const photo = alert.channel_media === 'photo';
+  const hasCaption = ['photo', 'video'].includes(alert.channel_media);
   try {
-    await (photo ? editCaption() : editText());
+    await (hasCaption ? editCaption() : editText());
   } catch (e) {
     const msg = String(e.description || e.message || '');
     if (msg.includes('not modified')) return;
     // stored kind missing or wrong: Telegram says so explicitly -> edit the other way and remember it
     if (/there is no (text|caption) in the message/i.test(msg)) {
       try {
-        await (photo ? editText() : editCaption());
-        store.updateAlert(alert.id, { channel_media: photo ? 'text' : 'photo' });
+        await (hasCaption ? editText() : editCaption());
+        store.updateAlert(alert.id, { channel_media: hasCaption ? 'text' : 'photo' });
         return;
       } catch (e2) {
         if (String(e2.description || '').includes('not modified')) return;
@@ -1335,6 +1340,130 @@ export async function resyncChannelPosts(api) {
 // publishing bot; the reporter gets it in the report bot signed as the team (staff identity hidden).
 // The reporter answers in the report bot (reply, or a plain message while a conversation is open).
 const APIS = {}; const TOKENS = {};
+const alertMediaCache = new Map();
+let alertMediaCacheBytes = 0;
+const ALERT_MEDIA_CACHE_MAX = 32 * 1024 * 1024;
+async function downloadAlertMediaBuffer(value) {
+  const media = sanitizeAlertMedia(value);
+  if (!media) throw new Error('invalid alert media');
+  const key = `${media.bot_role}:${media.file_unique_id || media.file_id}`;
+  const cached = alertMediaCache.get(key);
+  if (cached) { alertMediaCache.delete(key); alertMediaCache.set(key, cached); return cached; }
+  const api = APIS[media.bot_role];
+  const token = TOKENS[media.bot_role];
+  if (!api || !token) throw new Error('media source bot unavailable');
+  const file = await api.getFile(media.file_id);
+  const filePath = String(file?.file_path || '');
+  if (!filePath || filePath.startsWith('/') || /[?#\\]/.test(filePath) || filePath.split('/').some((part) => !part || part === '.' || part === '..')) throw new Error('invalid Telegram file path');
+  const url = `https://api.telegram.org/file/bot${token}/${filePath.split('/').map(encodeURIComponent).join('/')}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  let response;
+  let buffer;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+    if (!response.ok || !response.body) throw new Error('Telegram media download failed');
+    const declaredSize = Number(response.headers.get('content-length') || file.file_size || media.file_size || 0);
+    if (declaredSize > ALERT_MEDIA_MAX_BYTES) throw new Error('Telegram media exceeds size limit');
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of response.body) {
+      total += chunk.length;
+      if (total > ALERT_MEDIA_MAX_BYTES) throw new Error('Telegram media exceeds size limit');
+      chunks.push(Buffer.from(chunk));
+    }
+    buffer = Buffer.concat(chunks, total);
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (buffer.length && buffer.length <= ALERT_MEDIA_CACHE_MAX) {
+    while (alertMediaCacheBytes + buffer.length > ALERT_MEDIA_CACHE_MAX && alertMediaCache.size) {
+      const oldestKey = alertMediaCache.keys().next().value;
+      const oldest = alertMediaCache.get(oldestKey);
+      alertMediaCache.delete(oldestKey);
+      alertMediaCacheBytes -= oldest.length;
+    }
+    alertMediaCache.set(key, buffer);
+    alertMediaCacheBytes += buffer.length;
+  }
+  return buffer;
+}
+async function alertMediaInput(value, targetRole = 'admin') {
+  const media = sanitizeAlertMedia(value);
+  if (!media) throw new Error('invalid alert media');
+  if (media.bot_role === targetRole) return media.file_id;
+  const buffer = await downloadAlertMediaBuffer(media);
+  const extension = media.type === 'photo' ? 'jpg' : 'mp4';
+  return new InputFile(buffer, `red-alert-${media.type}.${extension}`);
+}
+function mediaFromTelegramMessage(message, type, botRole) {
+  const item = type === 'photo' ? message?.photo?.at(-1) : message?.video;
+  return sanitizeAlertMedia(item?.file_id ? {
+    type,
+    file_id: item.file_id,
+    file_unique_id: item.file_unique_id,
+    bot_role: botRole,
+    mime_type: type === 'video' ? item.mime_type || 'video/mp4' : 'image/jpeg',
+    file_size: item.file_size,
+  } : null);
+}
+function mediaFromSentMessage(message, type, fallback, botRole = 'admin') {
+  const item = type === 'photo' ? message?.photo?.at(-1) : message?.video;
+  return item?.file_id ? (sanitizeAlertMedia({
+    ...fallback,
+    file_id: item.file_id,
+    file_unique_id: item.file_unique_id,
+    bot_role: botRole,
+    mime_type: type === 'video' ? item.mime_type || 'video/mp4' : 'image/jpeg',
+    file_size: item.file_size,
+  }) || fallback) : fallback;
+}
+export async function fetchAlertMediaFile(id) {
+  const alert = store.getAlert(id);
+  const media = sanitizeAlertMedia(alert?.media);
+  if (!alert || !media) return null;
+  const buffer = await downloadAlertMediaBuffer(media);
+  return { buffer, contentType: media.type === 'photo' ? 'image/jpeg' : 'video/mp4', etag: `"${publicAlert(alert).media.version}"` };
+}
+async function updateAlertChannelMedia(api, alert, mediaValue) {
+  const media = sanitizeAlertMedia(mediaValue);
+  if (!media || !alert?.channel_message_id || !config.channel) return { ok: false, noChannelPost: true };
+  const file = await alertMediaInput(media, 'admin');
+  const caption = channelCaption(alert);
+  const keyboard = channelKeyboard(alert);
+  const oldMessageId = alert.channel_message_id;
+  const sendNewPost = async () => {
+    const replacementFile = await alertMediaInput(media, 'admin');
+    const posted = media.type === 'photo'
+      ? await api.sendPhoto(config.channel, replacementFile, { caption, parse_mode: 'HTML', reply_markup: keyboard })
+      : await api.sendVideo(config.channel, replacementFile, { caption, parse_mode: 'HTML', reply_markup: keyboard });
+    if (!posted?.message_id) throw new Error('Telegram did not return the replacement post');
+    const savedMedia = mediaFromSentMessage(posted, media.type, media, 'admin');
+    store.updateAlert(alert.id, { channel_message_id: posted.message_id, channel_media: media.type, media: savedMedia });
+    let oldRemoved = true;
+    try { await api.deleteMessage(config.channel, oldMessageId); }
+    catch (e) { oldRemoved = false; console.warn('[bot] replaced channel post but could not delete the old message:', e.description || e.message); }
+    return { ok: true, replaced: true, oldRemoved };
+  };
+  if (alert.channel_media === media.type && ['photo', 'video'].includes(alert.channel_media)) {
+    try {
+      const inputMedia = media.type === 'photo'
+        ? InputMediaBuilder.photo(file, { caption, parse_mode: 'HTML' })
+        : InputMediaBuilder.video(file, { caption, parse_mode: 'HTML' });
+      const edited = await api.editMessageMedia(config.channel, oldMessageId, inputMedia, { reply_markup: keyboard });
+      store.updateAlert(alert.id, { channel_media: media.type, media: mediaFromSentMessage(edited, media.type, media, 'admin') });
+      return { ok: true, replaced: false };
+    } catch (e) {
+      if (/message is not modified/i.test(String(e.description || e.message || ''))) {
+        store.updateAlert(alert.id, { channel_media: media.type, media });
+        return { ok: true, replaced: false };
+      }
+      if (!isDefinitiveTelegramRejection(e)) throw e;
+      console.warn('[bot] in-place channel media edit rejected; replacing the post:', e.description || e.message);
+    }
+  }
+  return sendNewPost();
+}
 runtimeHooks.restoreApi = (role, old) => { APIS[role] = old.api; TOKENS[role] = old.token; };
 const RELAY_KINDS = { photo: 'sendPhoto', video: 'sendVideo', voice: 'sendVoice', audio: 'sendAudio', document: 'sendDocument', animation: 'sendAnimation', video_note: 'sendVideoNote', sticker: 'sendSticker' };
 const relayRate = new Map();
@@ -1457,20 +1586,13 @@ const OH = {
   botInfo,
   apis: () => APIS,
   mainKeyboard: (ctx) => mainKeyboard(ctx),
-  dropSessions: (id) => { sessions.delete(`admin:${id}`); },
+  dropSessions: (id) => { sessions.delete(`admin:${id}`); activeMediaSessions.delete(`admin:${id}`); },
   resync: () => resyncChannelPosts(APIS.admin).catch(() => {}),
   sendTransient: (api, chat, text, o) => sendTransient(api, chat, text, o),
   publishDraft: (api, d, author) => publishDraft(api, d, author),
-  editPublishedAlert: (api, id, d, author) => editPublishedAlert(api, id, d, author),
-  getAlert: (id) => store.getAlert(id),
   mapUrl: (id, lang) => mapUrl(id, lang),
   // open a ready draft (news monitor "✏️ edit first") in this user's normal publishing preview
   loadDraft: (ctx, d) => { const x = { ...d, mode: 'publish', created: Date.now(), msgId: null }; sessions.set(sk(ctx), x); return showPreview(ctx, x); },
-  loadPublishedDraft: (ctx, d, id) => {
-    const x = { ...d, mode: 'edit_published', publishedAlertId: id, created: Date.now(), msgId: null };
-    sessions.set(sk(ctx), x);
-    return showPreview(ctx, x);
-  },
 };
 export function createBot({ role = 'admin', token = config.botToken, reviewApi = null } = {}) {
   if (!token) return null;
@@ -1662,8 +1784,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
 
   // -------- callbacks
-  bot.callbackQuery('home', async (ctx) => { await ctx.answerCallbackQuery(); await home(ctx); });
-  bot.callbackQuery('cancel', async (ctx) => { await ctx.answerCallbackQuery(L(ctx).cancelled); await home(ctx); });
+  bot.callbackQuery('home', async (ctx) => { activeMediaSessions.delete(sk(ctx)); await ctx.answerCallbackQuery(); await home(ctx); });
+  bot.callbackQuery('cancel', async (ctx) => { activeMediaSessions.delete(sk(ctx)); await ctx.answerCallbackQuery(L(ctx).cancelled); await home(ctx); });
   bot.callbackQuery('lang', async (ctx) => {
     store.setUserLang(ctx.from.id, langOf(ctx) === 'ar' ? 'en' : 'ar');
     await ctx.answerCallbackQuery(L(ctx).langSet);
@@ -1957,6 +2079,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   });
 
   const needDraft = (fn) => async (ctx) => {
+    activeMediaSessions.delete(sk(ctx));
     const d = getDraft(ctx);
     if (!d) {
       await ctx.answerCallbackQuery(L(ctx).expiredSession);
@@ -2220,17 +2343,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
   bot.callbackQuery('preview', needDraft((ctx, d) => showPreview(ctx, d)));
 
-  bot.callbackQuery('save_edit', needDraft(async (ctx, d) => {
-    if (!staff(ctx) || d.mode !== 'edit_published' || !d.publishedAlertId || d.type === 'road') return;
-    if (d.type === 'breaking' && !d.text) return askLocation(ctx, d);
-    sessions.delete(sk(ctx));
-    try {
-      const alert = await editPublishedAlert(ctx.api, d.publishedAlertId, d, { id: ctx.from.id, name: ctx.from.first_name });
-      await show(ctx, `${langOf(ctx) === 'en' ? '✅ Published story format updated in place.' : '✅ تم تحديث صيغة الخبر المنشور في مكانه.'}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
-    } catch (e) {
-      console.error('[bot] published story edit failed:', e.description || e.message);
-      await show(ctx, langOf(ctx) === 'en' ? '⚠️ Could not update the published story.' : '⚠️ تعذّر تحديث الخبر المنشور.', new InlineKeyboard().text(L(ctx).btnHome, 'home'));
-    }
+  bot.callbackQuery('attachmedia', needDraft(async (ctx, d) => {
+    if (d.mode === 'active_edit') return;
+    d.step = 'media';
+    await show(ctx, L(ctx).askMedia, new InlineKeyboard().text(L(ctx).btnCancel, 'cancel').row().text(L(ctx).btnBack, 'preview'));
+  }));
+  bot.callbackQuery('removemedia', needDraft(async (ctx, d) => {
+    if (d.mode === 'active_edit') return;
+    delete d.media;
+    return showPreview(ctx, d);
   }));
 
   const publishRoadDraft = async (ctx, d, toChannel) => {
@@ -2271,6 +2392,21 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     for (const uid of reviewers) {
       const lang = store.userLang(uid) === 'en' ? 'en' : 'ar';
       try {
+        if (sanitizeAlertMedia(rep.draft.media)) {
+          try {
+            const attachment = sanitizeAlertMedia(rep.draft.media);
+            const file = await alertMediaInput(attachment, 'admin');
+            const mediaMessage = attachment.type === 'photo'
+              ? await api.sendPhoto(uid, file, { caption: T[lang].mediaReviewAttachment })
+              : await api.sendVideo(uid, file, { caption: T[lang].mediaReviewAttachment });
+            if (mediaMessage?.message_id) {
+              rep.messages.push([uid, mediaMessage.message_id]);
+              store.relayPut(`a:${uid}:${mediaMessage.message_id}`, ctx.from.id);
+              rep.draft.media = mediaFromSentMessage(mediaMessage, attachment.type, attachment, 'admin');
+              store.reportPut(rid, rep);
+            }
+          } catch (e) { console.warn('[report] media preview to reviewer failed:', e.description || e.message); }
+        }
         const m = await api.sendMessage(uid, reportCardText(rep, lang), { parse_mode: 'HTML', reply_markup: reportReviewKeyboard(lang, rid), _keep: 'c' }); // stays until handled
         rep.messages.push([uid, m.message_id]);
         store.reportPut(rid, rep); // saved with every card, so a decision always finds it
@@ -2383,14 +2519,18 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await vanish(ctx, L(ctx).reportRejected(ctx.from.first_name || '') + (action === 'bn' ? ' · 🚫' : ''));
     }
   });
-  const activeEditKeyboard = (ctx) => {
+  const activeEditKeyboard = (ctx, d = null) => {
     const en = langOf(ctx) === 'en';
-    return new InlineKeyboard()
+    const kb = new InlineKeyboard()
       .text(en ? '✏️ Headline' : '✏️ العنوان', 'editfield:title').row()
       .text(en ? '📝 Details' : '📝 التفاصيل', 'editfield:details').row()
       .text(en ? '📍 Location' : '📍 الموقع', 'editfield:location').row()
-      .text(en ? '👁 Preview changes' : '👁 معاينة التعديلات', 'editpreview').row()
-      .text(en ? '↩️ Cancel' : '↩️ إلغاء', 'editcancel');
+      .text(en ? '👁 Preview changes' : '👁 معاينة التعديلات', 'editpreview').row();
+    const a = d?.alertId ? store.getAlert(d.alertId) : null;
+    if (a?.is_active) kb.text(a.media
+      ? (en ? '🎞 Replace photo/video' : '🎞 استبدال الصورة/الفيديو')
+      : (en ? '📎 Add photo/video' : '📎 إضافة صورة/فيديو'), 'alertmedia:' + a.id).row();
+    return kb.text(en ? '↩️ Cancel' : '↩️ إلغاء', 'editcancel');
   };
   async function showActiveEditForm(ctx, d) {
     const en = langOf(ctx) === 'en';
@@ -2398,7 +2538,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!a?.is_active || !a.channel_message_id) return show(ctx, en ? 'This active post is no longer available to edit.' : 'لم يعد هذا المنشور النشط متاحاً للتعديل.', new InlineKeyboard().text(L(ctx).btnBack, 'active'));
     const loc = d.location ? locName(d.location, langOf(ctx)) : (en ? 'Syria (no pin)' : 'سوريا (دون دبوس)');
     const body = `${en ? '<b>Edit channel post</b>' : '<b>تعديل منشور القناة</b>'}\n\n${en ? 'Headline' : 'العنوان'}: ${esc(d.editTitle || a.title || '—')}\n${en ? 'Details' : 'التفاصيل'}: ${esc(d.details || '—')}\n${en ? 'Location' : 'الموقع'}: ${esc(loc)}\n\n${en ? 'Choose a field, then preview and confirm to update the existing post.' : 'اختر حقلاً، ثم عاين وأكّد لتحديث المنشور الحالي.'}`;
-    await show(ctx, body, activeEditKeyboard(ctx));
+    await show(ctx, body, activeEditKeyboard(ctx, d));
   }
   const activeEditDraft = (a) => ({
     mode: 'active_edit', alertId: a.id, type: a.type, step: 'edit_menu',
@@ -2435,7 +2575,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     d.step = 'preview';
     const loc = d.location ? locName(d.location, langOf(ctx)) : '—';
     const en = langOf(ctx) === 'en';
-    await show(ctx, `${en ? '<b>Review before updating the existing channel post</b>' : '<b>راجع التغييرات قبل تحديث منشور القناة الحالي</b>'}\n\n<b>${esc(d.editTitle || '—')}</b>\n${esc(d.details || (en ? 'No details' : 'لا توجد تفاصيل'))}\n📍 ${esc(loc)}`, new InlineKeyboard().text(en ? '✅ Confirm update' : '✅ تأكيد التحديث', 'editsave').row().text(en ? '↩️ Back to fields' : '↩️ رجوع للحقول', 'editmenu').text(en ? 'Cancel' : 'إلغاء', 'editcancel'));
+    const previewKb = new InlineKeyboard().text(en ? '✅ Confirm update' : '✅ تأكيد التحديث', 'editsave').row();
+    previewKb.text(a.media ? (en ? '🎞 Replace photo/video' : '🎞 استبدال الصورة/الفيديو') : (en ? '📎 Add photo/video' : '📎 إضافة صورة/فيديو'), 'alertmedia:' + a.id).row();
+    previewKb.text(en ? '↩️ Back to fields' : '↩️ رجوع للحقول', 'editmenu').text(en ? 'Cancel' : 'إلغاء', 'editcancel');
+    await show(ctx, `${en ? '<b>Review before updating the existing channel post</b>' : '<b>راجع التغييرات قبل تحديث منشور القناة الحالي</b>'}\n\n<b>${esc(d.editTitle || '—')}</b>\n${esc(d.details || (en ? 'No details' : 'لا توجد تفاصيل'))}\n📍 ${esc(loc)}`, previewKb);
   });
   bot.callbackQuery('editsave', async (ctx) => {
     await ctx.answerCallbackQuery();
@@ -2448,7 +2591,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     try {
       const text = channelPost(candidate);
       const opts = { parse_mode: 'HTML', reply_markup: channelKeyboard(candidate), link_preview_options: { is_disabled: true } };
-      if (a.channel_media === 'photo') await ctx.api.editMessageCaption(config.channel, a.channel_message_id, { caption: channelCaption(candidate), parse_mode: 'HTML', reply_markup: channelKeyboard(candidate) });
+      if (['photo', 'video'].includes(a.channel_media)) await ctx.api.editMessageCaption(config.channel, a.channel_message_id, { caption: channelCaption(candidate), parse_mode: 'HTML', reply_markup: channelKeyboard(candidate) });
       else await ctx.api.editMessageText(config.channel, a.channel_message_id, text, opts);
     } catch (e) {
       const msg = String(e.description || e.message || '');
@@ -2520,6 +2663,18 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await show(ctx, L(ctx).autoTitle(store.autoDeleteHours), autoKb(ctx));
   });
   bot.callbackQuery('active', async (ctx) => { await ctx.answerCallbackQuery(); if (staff(ctx)) await showActive(ctx); });
+  bot.callbackQuery(/^alertmedia:([\w-]{36})$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (role !== 'admin' || !staff(ctx)) return;
+    const alert = store.getAlert(ctx.match[1]);
+    if (!alert?.is_active) return show(ctx, L(ctx).notFound, new InlineKeyboard().text(L(ctx).btnBack, 'active'));
+    activeMediaSessions.set(sk(ctx), { alertId: alert.id, created: Date.now() });
+    const en = langOf(ctx) === 'en';
+    const note = alert.channel_message_id
+      ? (en ? 'The linked channel post will be updated too.' : 'سيُحدَّث منشور القناة المرتبط أيضاً.')
+      : (en ? 'This alert has no linked channel post; the map will be updated.' : 'لا يوجد منشور قناة مرتبط؛ سيُحدَّث التنبيه على الخريطة فقط.');
+    await show(ctx, `${L(ctx).askMedia}\n\n<i>${note}</i>`, new InlineKeyboard().text(L(ctx).btnCancel, 'cancel').row().text(L(ctx).btnBack, 'm:' + alert.id));
+  });
 
   const manageText = (ctx, a) => {
     const lang = langOf(ctx);
@@ -2581,6 +2736,47 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       : locationFrom({ lat, lon });
     await pickLocation(ctx, d, loc);
   });
+
+  const receiveAlertMedia = async (ctx, type) => {
+    const key = sk(ctx);
+    const pending = activeMediaSessions.get(key);
+    const media = mediaFromTelegramMessage(ctx.message, type, roleOf(ctx));
+    if (!media) return ctx.reply(L(ctx).mediaTypeError);
+    if (pending) {
+      if (role !== 'admin' || !staff(ctx)) { activeMediaSessions.delete(key); return; }
+      if (Date.now() - pending.created > 10 * 60_000) {
+        activeMediaSessions.delete(key);
+        return ctx.reply(L(ctx).expiredSession);
+      }
+      const alert = store.getAlert(pending.alertId);
+      if (!alert?.is_active) {
+        activeMediaSessions.delete(key);
+        return ctx.reply(L(ctx).notFound);
+      }
+      const updated = store.updateAlert(alert.id, { media });
+      activeMediaSessions.delete(key);
+      let resultText = L(ctx).mediaMapAdded;
+      if (updated.channel_message_id) {
+        try {
+          const result = await updateAlertChannelMedia(ctx.api, updated, media);
+          resultText = result.ok
+            ? (result.replaced && !result.oldRemoved ? L(ctx).mediaPostReplacedWarning : L(ctx).mediaPostUpdated)
+            : L(ctx).mediaMapOnly;
+        } catch (e) {
+          console.error('[media] active channel post update failed:', e.description || e.message);
+          resultText = L(ctx).mediaMapOnly;
+        }
+      }
+      const current = store.getAlert(alert.id);
+      return show(ctx, resultText, resultKeyboard(ctx, current).row().text(L(ctx).btnBack, 'active'));
+    }
+    const d = getDraft(ctx);
+    if (!d || d.step !== 'media' || d.mode === 'active_edit') return;
+    d.media = media;
+    return showPreview(ctx, d);
+  };
+  bot.on('message:photo', (ctx) => receiveAlertMedia(ctx, 'photo'));
+  bot.on('message:video', (ctx) => receiveAlertMedia(ctx, 'video'));
 
   bot.on('message:text', async (ctx) => {
     const text = clean(ctx.message.text, 2000);

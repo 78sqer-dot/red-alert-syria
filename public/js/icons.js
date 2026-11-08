@@ -68,6 +68,8 @@ export const ICONS = {
   locate: { filled: false, body: "<path d=\"M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0\" /><path d=\"M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0\" /><path d=\"M12 2l0 2\" /><path d=\"M12 20l0 2\" /><path d=\"M20 12l2 0\" /><path d=\"M2 12l2 0\" />" },
   heart: { filled: false, body: "<path d=\"M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572\" />" },
   news: { filled: false, body: "<path d=\"M16 6h3a1 1 0 0 1 1 1v11a2 2 0 0 1 -4 0v-13a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1v12a3 3 0 0 0 3 3h11\" /><path d=\"M8 8l4 0\" /><path d=\"M8 12l4 0\" /><path d=\"M8 16l4 0\" />" },
+  mediaImage: { filled: false, body: "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><circle cx=\"8.5\" cy=\"8.5\" r=\"1.5\"/><path d=\"m21 15-5-5L5 21\"/>" },
+  mediaVideo: { filled: false, body: "<rect x=\"3\" y=\"5\" width=\"13\" height=\"14\" rx=\"2\"/><path d=\"m16 10 5-3v10l-5-3\"/>" },
   urgent: { filled: false, body: "<path d=\"M8 16v-4a4 4 0 0 1 8 0v4\" /><path d=\"M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7\" /><path d=\"M6 17a1 1 0 0 1 1 -1h10a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1l0 -2\" />" },
   eye: { filled: false, body: "<path d=\"M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0\" /><path d=\"M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6\" />" },
   vibrate: { filled: false, body: "<path d=\"M3 5a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -14\" /><path d=\"M8 4l2 0\" /><path d=\"M9 17l0 .01\" /><path d=\"M21 6l-2 3l2 3l-2 3l2 3\" />" },

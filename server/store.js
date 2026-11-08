@@ -8,6 +8,26 @@ import { alertZones, selectedAlertZones, regionFix } from './places.js';
 import { cleanAlertText } from './clean-text.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
 
+export const ALERT_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+export function sanitizeAlertMedia(media) {
+  if (!media || typeof media !== 'object' || !['photo', 'video'].includes(media.type)) return null;
+  const fileId = typeof media.file_id === 'string' ? media.file_id.trim() : '';
+  if (!fileId || fileId.length > 512 || !['admin', 'report'].includes(media.bot_role)) return null;
+  const fileSize = Number.isSafeInteger(media.file_size) && media.file_size >= 0 ? media.file_size : undefined;
+  if (fileSize > ALERT_MEDIA_MAX_BYTES) return null;
+  const mimeType = media.type === 'photo' ? 'image/jpeg' : (!media.mime_type || media.mime_type === 'video/mp4' ? 'video/mp4' : null);
+  if (!mimeType) return null;
+  const uniqueId = typeof media.file_unique_id === 'string' ? media.file_unique_id.slice(0, 256) : '';
+  return {
+    type: media.type,
+    file_id: fileId,
+    ...(uniqueId ? { file_unique_id: uniqueId } : {}),
+    bot_role: media.bot_role,
+    mime_type: mimeType,
+    ...(fileSize !== undefined ? { file_size: fileSize } : {}),
+  };
+}
+
 /**
  * In-memory state with atomic JSON persistence on disk and an optional remote backup
  * (the bot keeps a pinned JSON snapshot in the owner's private chat so data survives
@@ -78,9 +98,15 @@ class Store extends EventEmitter {
 
   _apply(s) {
     if (!s || typeof s !== 'object') return;
+    const alerts = Array.isArray(s.alerts) ? s.alerts.filter((a) => a && a.id && ALERT_TYPES[a.type]) : [];
+    for (const alert of alerts) {
+      const media = sanitizeAlertMedia(alert.media);
+      if (media) alert.media = media;
+      else delete alert.media;
+    }
     this.state = {
       version: 1,
-      alerts: Array.isArray(s.alerts) ? s.alerts.filter((a) => a && a.id && ALERT_TYPES[a.type]) : [],
+      alerts,
       editors: Array.isArray(s.editors) ? s.editors.map(Number).filter(Number.isFinite) : [],
       banned: Array.isArray(s.banned) ? s.banned.map(Number).filter(Number.isFinite) : [],
       users: s.users && typeof s.users === 'object' ? s.users : {},
@@ -198,6 +224,7 @@ class Store extends EventEmitter {
       title: input.title,
       title_en: input.title_en,
       description: input.description || '',
+      ...(sanitizeAlertMedia(input.media) ? { media: sanitizeAlertMedia(input.media) } : {}),
       location: input.location?.latitude != null ? { latitude: input.location.latitude, longitude: input.location.longitude } : null,
       place: input.location || null,
       areas: input.areas || [],
@@ -252,6 +279,11 @@ class Store extends EventEmitter {
     const a = this.getAlert(id);
     if (!a) return null;
     Object.assign(a, patch);
+    if (Object.hasOwn(patch, 'media')) {
+      const media = sanitizeAlertMedia(patch.media);
+      if (media) a.media = media;
+      else delete a.media;
+    }
     if (['title', 'title_en', 'description', 'description_en', 'location', 'extra', 'expires_at', 'is_active'].some((k) => k in patch)) this._history(a, 'updated');
     if ('channel_message_id' in patch) this._logPatch(id, { m: patch.channel_message_id || undefined });
     this.persist();
@@ -684,6 +716,8 @@ function publicSourceInfo(a, sources, newsSources) {
 /** Strip private fields before sending an alert to browsers. */
 export function publicAlert(a) {
   const p = a.place || {};
+  const media = sanitizeAlertMedia(a.media);
+  const mediaVersion = media ? crypto.createHash('sha256').update(media.file_unique_id || media.file_id).digest('hex').slice(0, 12) : null;
   const sources = politicalSources(a);
   const newsSources = monitoredNewsSources(a);
   const rawFlightTarget = a.type === 'air_movement' ? a.meta?.flightTarget : null;
@@ -729,6 +763,7 @@ export function publicAlert(a) {
     title_en: a.title_en,
     description: cleanAlertText(a.description) || undefined,
     description_en: a.description_en || undefined,
+    ...(media ? { media: { type: media.type, version: mediaVersion } } : {}),
     location: a.location,
     place: {
       name_ar: p.name_ar, name_en: p.name_en,

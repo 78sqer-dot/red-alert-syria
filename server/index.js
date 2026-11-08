@@ -12,7 +12,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -123,6 +123,49 @@ app.get('/api/alerts/:id', apiLimiter, (req, res) => {
   const a = store.getAlert(req.params.id);
   if (!a) return res.status(404).json({ error: 'not found' });
   res.json({ alert: publicAlert(a) });
+});
+
+app.get('/api/alerts/:id/media', apiLimiter, async (req, res) => {
+  if (!/^[\w-]{36}$/.test(req.params.id)) return res.status(400).end();
+  const alert = store.getAlert(req.params.id);
+  const publicMedia = alert && publicAlert(alert).media;
+  if (!alert || !publicMedia) return res.status(404).end();
+  const etag = `"${publicMedia.version}"`;
+  res.setHeader('ETag', etag);
+  res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `inline; filename="alert-${req.params.id}.${publicMedia.type === 'photo' ? 'jpg' : 'mp4'}"`);
+  res.setHeader('Accept-Ranges', 'bytes');
+  if (req.headers['if-none-match']?.split(',').map((value) => value.trim()).includes(etag)) return res.status(304).end();
+  try {
+    const asset = await fetchAlertMediaFile(req.params.id);
+    if (!asset?.buffer?.length) return res.status(404).end();
+    res.setHeader('Content-Type', asset.contentType);
+    const size = asset.buffer.length;
+    const range = req.headers.range;
+    if (!range) {
+      res.setHeader('Content-Length', String(size));
+      return res.status(200).end(asset.buffer);
+    }
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (!match || (!match[1] && !match[2])) {
+      res.setHeader('Content-Range', `bytes */${size}`);
+      return res.status(416).end();
+    }
+    const suffixLength = match[1] ? null : Number(match[2]);
+    const start = match[1] ? Number(match[1]) : Math.max(0, size - suffixLength);
+    const end = match[2] && match[1] ? Math.min(Number(match[2]), size - 1) : size - 1;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= size || end < start) {
+      res.setHeader('Content-Range', `bytes */${size}`);
+      return res.status(416).end();
+    }
+    res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+    res.setHeader('Content-Length', String(end - start + 1));
+    return res.status(206).end(asset.buffer.subarray(start, end + 1));
+  } catch {
+    console.warn(`[media] Telegram attachment unavailable for alert ${req.params.id}`);
+    return res.status(502).json({ error: 'media temporarily unavailable' });
+  }
 });
 
 // Token-protected self-test of the channel image on this server: renders samples and sends them to the
