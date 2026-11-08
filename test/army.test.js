@@ -38,6 +38,23 @@ test('only approved official-source items appear in the public Syrian Army secti
   assert.equal(result.items[0].status, undefined, 'public projection excludes workflow internals');
 });
 
+test('public Syrian Army cards omit SANA tags and Telegram promo footer but retain official and application links', () => {
+  const j = initialArmyState();
+  const made = createPendingArmyItem({
+    kind: 'official_source', sourceKey: 'test:sana-footer', sourceName: 'الوكالة العربية السورية للأنباء (سانا)',
+    sourceUrl: 'https://t.me/sana_gov/190412', category: 'government', title: 'بريد حمص يخصص دواماً إضافياً',
+    text: 'بريد حمص يخصص دواماً إضافياً يوم السبت لصرف رواتب المتقاعدين.\n#سانا\nـــــــــــــــــــ\nتابعونا على التلغرام | https://t.me/sana_gov',
+    links: ['https://t.me/sana_gov', 'https://example.org/apply'],
+  }, j, NOW);
+  assert.ok(made.item);
+  assert.equal(decideArmyItem(made.item.id, 'approve', j, 7, NOW + 1).ok, true);
+  const item = publicArmy(j, NOW + 1).items[0];
+  assert.equal(item.text, 'بريد حمص يخصص دواماً إضافياً يوم السبت لصرف رواتب المتقاعدين.');
+  assert.equal(item.source_name, 'مصدر رسمي');
+  assert.equal(item.source_url, 'https://t.me/sana_gov/190412', 'the original official post remains available');
+  assert.deepEqual(item.links, ['https://example.org/apply'], 'the SANA follow-channel URL is not shown as an application link');
+});
+
 test('Syrian Army items with application deadlines disappear after the Damascus deadline day without deletion', () => {
   const j = initialArmyState();
   const made = makePending(j, 'army-deadline');

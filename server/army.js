@@ -128,6 +128,27 @@ function safeLinks(links = []) {
   return result;
 }
 function linksFromText(text) { return safeLinks(String(text || '').match(URL_RE) || []); }
+function cleanPublicArmyText(raw) {
+  const lines = String(raw || '').split(/\r?\n/).filter((line) => {
+    const value = line.trim();
+    if (/(?:تابعونا\s+على|تابعوا\s+على|follow\s+us\s+on)\s*(?:التلغرام|التليغرام|تلغرام|تليغرام|telegram)/iu.test(value)) return false;
+    if (/^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\/sana_gov\/?$/i.test(value)) return false;
+    return true;
+  }).map((line) => line.replace(/#\s*(?:سانا|sana)(?=$|[\s|])/giu, '').trim()).filter(Boolean);
+  while (lines.length && /^[ـ—–=_-]{3,}$/.test(lines[lines.length - 1])) lines.pop();
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+function publicArmyLinks(item) {
+  return safeLinks(item.links || []).filter((raw) => {
+    try {
+      const url = new URL(raw);
+      return !['t.me', 'www.t.me', 'telegram.me', 'www.telegram.me'].includes(url.hostname.toLowerCase()) || url.pathname.replace(/\/+$/, '').toLowerCase() !== '/sana_gov';
+    } catch { return false; }
+  });
+}
+function publicArmySourceName(item) {
+  return /سانا|\bsana\b/iu.test(String(item.sourceName || '')) ? 'مصدر رسمي' : item.sourceName;
+}
 function titleFromText(text) {
   const line = String(text || '').split(/\r?\n/).map((x) => x.trim()).find(Boolean) || 'تحديث رسمي';
   return clean(line.replace(/<[^>]*>/g, ''), 120);
@@ -342,8 +363,8 @@ export function publicArmy(j = armyState(), now = Date.now()) {
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
     .slice(0, 100)
     .map((item) => ({
-      id: item.id, category: item.category, title: item.title, text: item.text,
-      source_name: item.sourceName, source_url: safeHttps(item.sourceUrl), links: safeLinks(item.links || []),
+      id: item.id, category: item.category, title: cleanPublicArmyText(item.title) || item.title, text: cleanPublicArmyText(item.text),
+      source_name: publicArmySourceName(item), source_url: safeHttps(item.sourceUrl), links: publicArmyLinks(item),
       application_deadline: item.applicationDeadline || null,
       created_at: item.createdAt || null, updated_at: item.updatedAt || null, published_at: item.publishedAt || null,
     }));
