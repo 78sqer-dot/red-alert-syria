@@ -670,10 +670,9 @@ function noticeKb(d, lang = 'ar') {
   const u = postUrl(d.postId);
   if (u) kb.url(tr(lang, '📣 المنشور', '📣 Post'), u);
   if (R.H?.mapUrl && d.alertId) kb.url(tr(lang, '🗺 على الخريطة', '🗺 On the map'), R.H.mapUrl(d.alertId, lang));
-<<<<<<< ours
-  return kb.row()
-    .text(tr(lang, '🏷 تغيير نوع الخبر', '🏷 Change news type'), 'nw:pt:' + d.id).row()
-    .text(tr(lang, '↩️ تراجع (حذف من القناة والخريطة)', '↩️ Undo (remove from channel + map)'), 'nw:u:' + d.id);
+  kb.row().text(tr(lang, '🏷 تغيير نوع الخبر', '🏷 Change news type'), 'nw:pt:' + d.id);
+  kb.row().text(tr(lang, '✏️ تعديل صيغة الخبر', '✏️ Edit story format'), 'nw:ed:' + d.id);
+  return kb.row().text(tr(lang, '↩️ تراجع (حذف من القناة والخريطة)', '↩️ Undo (remove from channel + map)'), 'nw:u:' + d.id);
 }
 function channelPublishedDuplicateDraft(d) {
   const candidate = {
@@ -731,10 +730,6 @@ async function suppressDuplicateDraft(d, duplicate, by = 0) {
   save();
   await closeCards(d);
   return true;
-=======
-  kb.row().text(tr(lang, '✏️ تعديل صيغة الخبر', '✏️ Edit story format'), 'nw:ed:' + d.id);
-  return kb.row().text(tr(lang, '↩️ تراجع (حذف من القناة والخريطة)', '↩️ Undo (remove from channel + map)'), 'nw:u:' + d.id);
->>>>>>> theirs
 }
 async function nightPublish(d) {
   const a = api();
@@ -1404,7 +1399,6 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, t(ctx, d.intense ? 'مكثف: 2-3 مسيّرات فوق كل منطقة' : 'عادي: مسيّرة وحدة فوق كل منطقة', d.intense ? 'Intensive: 2-3 drones per area' : 'Normal: one drone per area'));
     try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
   });
-<<<<<<< ours
   bot.callbackQuery(/^nw:rw:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const d = await findDraft(ctx.match[1]);
@@ -1495,7 +1489,7 @@ export function registerNewsTools(bot, h) {
       save();
     }
     return message;
-=======
+  });
   bot.callbackQuery(/^nw:ed:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const d = await findDraft(ctx.match[1]);
@@ -1506,7 +1500,6 @@ export function registerNewsTools(bot, h) {
       : d;
     await toast(ctx, '');
     return h.loadPublishedDraft(ctx, toBotDraft(latest), d.alertId);
->>>>>>> theirs
   });
   bot.callbackQuery(/^nw:(p|x|t|b|e):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
