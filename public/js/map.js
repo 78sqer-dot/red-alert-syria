@@ -204,10 +204,6 @@ export class AlertMap {
     this.map.addControl(new M.AttributionControl({ compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · GeoNames · geoBoundaries' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
     this.map.addControl(new M.ScaleControl({ maxWidth: 110, unit: 'metric' }), this.opts.lang === 'ar' ? 'bottom-right' : 'bottom-left');
     window.__rasMap = this.map;
-    // Keep ambient rings above map tiles but below every DOM marker and control.
-    const pulseLayer = this.el.parentElement?.querySelector('.ambient-pulse-layer');
-    const canvasContainer = this.map.getCanvasContainer?.();
-    if (pulseLayer && canvasContainer) canvasContainer.appendChild(pulseLayer);
     this.map.on('style.load', () => this.addOverlays());
     stylePromise.then((style) => {
       if (this.map) this.map.setStyle(style, { diff: false });

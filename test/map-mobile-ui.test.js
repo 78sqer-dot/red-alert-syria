@@ -63,7 +63,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=79'/);
+  assert.match(app, /from '\.\/map\.js\?v=80'/);
   assert.match(html, /app\.css\?v=71/);
   assert.match(html, /app\.js\?v=86/);
 });
@@ -134,14 +134,6 @@ test('follow area picker saves local preferences and only sends area IDs to push
   assert.match(settings, /followArea: null/);
   assert.match(settings, /state\.followArea = sanitizeFollowArea\(state\.followArea\)/);
   assert.match(css, /\.follow-area-results \{ display: grid; gap: 5px/);
-});
-
-test('ambient map pulses are separate, non-interactive decoration with reduced-motion handling', () => {
-  assert.match(html, /class="ambient-pulse-layer" aria-hidden="true"/);
-  assert.match(html, /ambient-pulse-a/);
-  assert.match(html, /ambient-pulse-b/);
-  assert.match(css, /\.ambient-pulse-layer \{[^}]*pointer-events: none/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.ambient-pulse::before, \.ambient-pulse::after/);
 });
 
 test('alert symbols use shared category colors in badges, filters and map markers', () => {

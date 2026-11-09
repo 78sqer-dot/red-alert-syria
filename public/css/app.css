@@ -1382,13 +1382,3 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .follow-area-selected b { font-size: 12px; }
 .follow-area-selected span { color: var(--text-muted); font-size: 12px; }
 .follow-area-note { margin: 7px 0 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.6; }
-
-/* Decorative map pulses are screen-level ambience, not alert markers or location tracking. */
-.ambient-pulse-layer { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.ambient-pulse { --pulse: #ff3b4e; position: absolute; width: 14px; height: 14px; border: 1px solid color-mix(in srgb, var(--pulse) 35%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--pulse) 8%, transparent); }
-.ambient-pulse::before, .ambient-pulse::after { content: ""; position: absolute; inset: -11px; border: 1px solid color-mix(in srgb, var(--pulse) 34%, transparent); border-radius: 50%; opacity: 0; animation: ambientPulse 5.2s ease-out infinite; }
-.ambient-pulse::after { animation-delay: 2.6s; }
-.ambient-pulse-a { left: 36%; top: 38%; }
-.ambient-pulse-b { left: 68%; top: 61%; }
-@keyframes ambientPulse { 0% { transform: scale(.45); opacity: .32; } 85%, 100% { transform: scale(2.7); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .ambient-pulse::before, .ambient-pulse::after { animation: none; opacity: .12; transform: scale(1.15); } }

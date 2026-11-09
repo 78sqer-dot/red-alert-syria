@@ -54,7 +54,7 @@ test('entering plane keeps right-to-left travel and faces left; cache versions r
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
   assert.match(html, /app\.css\?v=71/);
   assert.match(html, /app\.js\?v=86/);
-  assert.match(app, /map\.js\?v=79/);
+  assert.match(app, /map\.js\?v=80/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {
