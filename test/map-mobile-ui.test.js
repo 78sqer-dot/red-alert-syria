@@ -21,11 +21,15 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
   assert.match(app, /e\.key !== 'Escape'[^\n]*[\s\S]{0,100}setMapControlsOpen\(false\)/);
 });
 
-test('map attribution keeps credits visible without a compact information button', () => {
-  assert.match(map, /new M\.AttributionControl\(\{ compact: false, customAttribution:/);
+test('map attribution keeps a compact information button and readable credits', () => {
+  assert.match(map, /new M\.AttributionControl\(\{ compact: true, customAttribution:/);
   assert.match(map, /OpenFreeMap<\/a> © <a href="https:\/\/www\.openstreetmap\.org\/copyright"/);
-  assert.doesNotMatch(map, /classList\.remove\('maplibregl-compact-show'\)/);
+  assert.match(map, /classList\.remove\('maplibregl-compact-show'\)/);
   assert.match(css, /\.maplibregl-ctrl-attrib \.maplibregl-ctrl-attrib-inner \{[^}]*white-space: normal/);
+  assert.match(css, /\.maplibregl-ctrl-attrib\.maplibregl-compact:not\(\.maplibregl-compact-show\) \{[^}]*width: 24px;[^}]*height: 24px/);
+  assert.match(css, /html\[dir='rtl'\] \.maplibregl-ctrl-bottom-left \{[^}]*left: calc\(50% \+ 50px\);[^}]*transform: translateX\(-50%\)/);
+  assert.match(css, /html\[dir='ltr'\] \.maplibregl-ctrl-bottom-right \{[^}]*left: calc\(50% - 50px\);[^}]*transform: translateX\(-50%\)/);
+  assert.match(css, /@media \(max-width: 340px\)[\s\S]{0,220}\.about-pill \{ max-width: calc\(100vw - 170px\)/);
 });
 
 test('phone map controls and about pill share a lower safe-area-aware bottom row', () => {
@@ -59,17 +63,17 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=77'/);
-  assert.match(html, /app\.css\?v=68/);
-  assert.match(html, /app\.js\?v=83/);
+  assert.match(app, /from '\.\/map\.js\?v=79'/);
+  assert.match(html, /app\.css\?v=71/);
+  assert.match(html, /app\.js\?v=86/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
   assert.match(app, /from '\.\/services\.js\?v=36'/);
   assert.match(app, /from '\.\/icons\.js\?v=7'/);
-  assert.match(app, /from '\.\/i18n\.js\?v=4'/);
+  assert.match(app, /from '\.\/i18n\.js\?v=5'/);
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
-  assert.match(app, /from '\.\/settings\.js\?v=13'/);
+  assert.match(app, /from '\.\/settings\.js\?v=14'/);
   assert.match(map, /from '\/shared\/types\.js\?v=41'/);
   assert.match(map, /from '\.\/target-svgs\.js\?v=19'/);
   assert.match(map, /from '\.\/type-icons\.js\?v=7'/);
@@ -89,7 +93,8 @@ test('alert popup keeps the article visible with buttons for attached photo and 
   assert.match(app, /mediaItems\.map\(\(item, index\)/);
   assert.match(app, /mediaVideo' : 'mediaImage/);
   assert.match(app, /<video class="pp-media-video" controls playsinline preload="none"/);
-  assert.match(app, /<img class="pp-media-image"/);
+  assert.equal((app.match(/<img class="pp-media-image"[^>]*loading="eager"/g) || []).length, 2);
+  assert.doesNotMatch(app, /class="pp-media-image"[^>]*loading="lazy"/);
   assert.match(app, /schedulePopupFit\?\.\(2\)/);
   assert.match(css, /\.pp-title-row \{ display: flex/);
   assert.match(css, /\.pp-media-actions \{ display: flex/);
@@ -104,8 +109,39 @@ test('alert popup text and media are modestly smaller while controls remain touc
   assert.match(css, /\.pp-desc \{ margin: 9px 0 0; color: var\(--text-secondary\); font-size: 12px/);
   assert.match(css, /\.pp-media-image, \.pp-media-video \{ max-height: min\(32dvh, 280px\); \}/);
   assert.match(css, /\.pp-media-action \{[^}]*min-height: 36px/);
-  assert.match(css, /@media \(max-width: 767px\) \{[\s\S]{0,500}\.pp-alert-popup \.maplibregl-popup-content \{[^}]*max-height: min\(44dvh, 400px\)/);
+  assert.match(css, /\.pp-alert-popup \.maplibregl-popup-content \{ width: min\(420px, calc\(100vw - 20px\)\); max-height: min\(44dvh, 400px\); \}/);
   assert.match(css, /\.pp-alert-popup \.pp-more, \.pp-alert-popup \.pp-share \{ min-height: 44px/);
+});
+
+test('share preview shows the map snapshot, direct link, location, and last update time', () => {
+  assert.match(app, /function openShareCard\(a\)/);
+  assert.match(app, /\/og\/a\/\$\{encodeURIComponent\(a\.id\)\}-\$\{LANG\}\.png\?v=/);
+  assert.match(app, /T\.shareCardLocation/);
+  assert.match(app, /T\.lastUpdated/);
+  assert.match(app, /data-share-act="copy"/);
+  assert.match(app, /data-share-act="share"/);
+  assert.match(app, /data-pp="share"/);
+  assert.match(app, /data-share-act/);
+  assert.match(css, /\.share-card-map img \{ display: block; width: 100%; max-height: 330px; object-fit: contain; \}/);
+});
+
+test('follow area picker saves local preferences and only sends area IDs to push subscription', () => {
+  assert.match(app, /data-follow-gov/);
+  assert.match(app, /\/api\/places\/search\?/);
+  assert.match(app, /matchesFollowArea\(a, s\.followArea\)/);
+  assert.match(app, /function pushPreferences\(\)[\s\S]{0,520}type: 'place', placeId: Number\(area\.placeId\)/);
+  assert.match(app, /settings\.set\(\{ followArea: area \}\)/);
+  assert.match(settings, /followArea: null/);
+  assert.match(settings, /state\.followArea = sanitizeFollowArea\(state\.followArea\)/);
+  assert.match(css, /\.follow-area-results \{ display: grid; gap: 5px/);
+});
+
+test('ambient map pulses are separate, non-interactive decoration with reduced-motion handling', () => {
+  assert.match(html, /class="ambient-pulse-layer" aria-hidden="true"/);
+  assert.match(html, /ambient-pulse-a/);
+  assert.match(html, /ambient-pulse-b/);
+  assert.match(css, /\.ambient-pulse-layer \{[^}]*pointer-events: none/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.ambient-pulse::before, \.ambient-pulse::after/);
 });
 
 test('alert symbols use shared category colors in badges, filters and map markers', () => {

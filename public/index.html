@@ -35,9 +35,9 @@
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/vendor/maplibre-gl.css?v=6.16.0" />
-  <link rel="stylesheet" href="/css/app.css?v=68" />
+  <link rel="stylesheet" href="/css/app.css?v=71" />
   <script src="/js/boot.js"></script>
-  <script type="module" src="/js/app.js?v=83"></script>
+  <script type="module" src="/js/app.js?v=86"></script>
 </head>
 <body>
   <noscript><div class="noscript">يتطلب الموقع تفعيل JavaScript — This site requires JavaScript.</div></noscript>
@@ -64,6 +64,7 @@
     <main class="layout">
       <section class="map-wrap" id="mapWrap">
         <div id="map" class="map" role="region" aria-label="map"></div>
+        <div class="ambient-pulse-layer" aria-hidden="true"><span class="ambient-pulse ambient-pulse-a"></span><span class="ambient-pulse ambient-pulse-b"></span></div>
 
         <div class="breaking-banner" id="breaking" hidden>
           <span class="bb-tag"><span data-icon="bolt"></span><span data-t="breaking"></span></span>

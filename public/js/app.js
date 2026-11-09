@@ -1,12 +1,13 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=36';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
-import { DICT } from './i18n.js?v=4';
+import { DICT } from './i18n.js?v=5';
 import { matchesGovernorate } from './alert-region-filter.js';
+import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon } from './icons.js?v=7';
-import { settings } from './settings.js?v=13';
+import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=77';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=79';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -98,6 +99,10 @@ const state = {
 };
 let amap = null;
 let svc = null; // 💱 ⚡ 🛣 🏥 public/js/services.js
+let shareAlert = null;
+let followAreaSearchTimer = null;
+let followAreaSearchController = null;
+const followAreaSearchResults = new Map();
 
 // ------------------------------------------------------------------ formatting
 const fmtDay = new Intl.DateTimeFormat(LANG === 'ar' ? 'ar-SY' : 'en-GB', { day: 'numeric', month: 'long', timeZone: TZ });
@@ -324,13 +329,7 @@ function detailHtml(a) {
     ${updates.length > 1 ? `<div class="sec-label">${esc(LANG === 'ar' ? 'سجل الخبر والتحديثات' : 'News and update history')}</div><div class="update-history">${updates.map((u) => `<div class="update-item"><span class="update-dot"></span><div><b>${esc(u.kind === 'published' ? (LANG === 'ar' ? 'نشر الخبر' : 'Published') : u.kind === 'ended' ? (LANG === 'ar' ? 'انتهى التنبيه' : 'Alert ended') : (LANG === 'ar' ? 'تحديث' : 'Update'))}</b><time>${esc(fmtFull.format(new Date(u.at)))}</time>${u.description ? `<p>${esc(u.description)}</p>` : ''}</div></div>`).join('')}</div>` : ''}
     ${hasLoc ? `<div class="sec-label">${esc(T.coordinates)}</div>
     <div class="coords"><div class="coord"><div class="k">${esc(T.lat)}</div><div class="v">${fmtNum(a.location.latitude)}° N</div></div><div class="coord"><div class="k">${esc(T.lng)}</div><div class="v">${fmtNum(a.location.longitude)}° E</div></div></div>` : ''}
-    <button class="btn-dark" data-act="share-toggle">${icon('share', 18)}${esc(T.shareAlert)}</button>
-    <div class="share-menu" id="shareMenu" hidden>
-      <a class="wa" href="https://wa.me/?text=${encodeURIComponent(shareText(a) + '\n' + shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 17)}${esc(T.whatsapp)}</a>
-      <a class="tg" href="https://t.me/share/url?url=${encodeURIComponent(shareUrl(a))}&text=${encodeURIComponent(shareText(a))}" target="_blank" rel="noopener noreferrer">${icon('telegram', 17)}${esc(T.telegram)}</a>
-      <a class="fb" href="${fbShare(shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('facebook', 17)}${esc(T.facebook)}</a>
-      <button data-act="copy">${icon('copy', 17)}${esc(T.copyLink)}</button>
-    </div>
+    <button class="btn-dark" data-act="share">${icon('share', 18)}${esc(T.shareAlert)}</button>
     <div class="btn-row">
       ${hasLoc ? `<button class="btn-ghost" data-act="fly">${icon('mapPin', 16)}${esc(T.showOnMap)}</button>` : ''}
       ${a.telegram_url ? `<a class="btn-ghost" href="${esc(a.telegram_url)}" target="_blank" rel="noopener noreferrer">${icon('telegram', 16)}${esc(T.openTelegram)}</a>` : ''}
@@ -396,7 +395,7 @@ function popupHtml(a) {
   };
   const mediaElement = (item) => item.type === 'video'
     ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(mediaUrl(item))}" type="video/mp4"></video>`
-    : `<img class="pp-media-image" src="${esc(mediaUrl(item))}" alt="${esc(T.photoTab)}" loading="lazy" decoding="async">`;
+    : `<img class="pp-media-image" src="${esc(mediaUrl(item))}" alt="${esc(T.photoTab)}" loading="eager" decoding="async">`;
   const firstMedia = mediaItems[0] || null;
   const mediaActions = mediaItems.length ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'وسائط التنبيه' : 'Alert media')}">${mediaItems.map((item, index) => `<button type="button" class="pp-media-action" aria-pressed="${index === 0}" aria-label="${esc(item.type === 'video' ? T.videoTab : T.photoTab)}" data-pp-media-type="${item.type}" data-pp-media-version="${esc(item.version || '')}">${icon(item.type === 'video' ? 'mediaVideo' : 'mediaImage', 14)}<span>${esc(item.type === 'video' ? T.videoTab : T.photoTab)}</span></button>`).join('')}</div>` : '';
   const alertInfo = `<div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
@@ -409,7 +408,7 @@ function popupHtml(a) {
   return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" data-alert-id="${esc(a.id)}">
     ${content}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
-    <a class="pp-share" href="https://wa.me/?text=${encodeURIComponent(shareText(a) + '\n' + shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.share)}</a></div></div>`;
+    <button class="pp-share" type="button" data-pp="share" data-id="${esc(a.id)}">${icon('share', 15)}${esc(T.share)}</button></div></div>`;
 }
 
 // ------------------------------------------------------------------ selection
@@ -634,6 +633,56 @@ function setSupport(s) {
     : null;
   if ($('#aboutSheet')?.classList.contains('open')) renderAbout();
 }
+function followAreaFromPlace(place) {
+  return {
+    type: 'place', placeId: Number(place.id), code: String(place.governorate || ''),
+    name_ar: place.name_ar, name_en: place.name_en,
+    district_ar: place.district_ar, district_en: place.district_en,
+    lat: Number(place.latitude), lon: Number(place.longitude), radiusKm: Number(place.radius_km),
+  };
+}
+function saveFollowArea(area) {
+  followAreaSearchController?.abort();
+  followAreaSearchController = null;
+  clearTimeout(followAreaSearchTimer);
+  settings.set({ followArea: area });
+  followAreaSearchResults.clear();
+  syncPushPreferences();
+  renderDrawer();
+  toast(T.followAreaSaved);
+}
+function showFollowAreaResults(places, status = '') {
+  const box = $('#followAreaResults');
+  const statusNode = $('#followAreaStatus');
+  if (!box || !statusNode) return;
+  followAreaSearchResults.clear();
+  statusNode.textContent = status;
+  box.innerHTML = places.map((place) => {
+    followAreaSearchResults.set(String(place.id), place);
+    const name = LANG === 'ar' ? place.name_ar : (place.name_en || place.name_ar);
+    const district = LANG === 'ar' ? place.district_ar : (place.district_en || place.district_ar);
+    const governorate = LANG === 'ar' ? place.governorate_ar : (place.governorate_en || place.governorate_ar);
+    return `<button type="button" role="option" aria-selected="false" class="follow-area-result" data-follow-place="${esc(place.id)}"><span>${esc(name)}</span><small>${esc([district, governorate].filter(Boolean).join(' · '))}</small></button>`;
+  }).join('');
+}
+async function searchFollowArea(query, governorate) {
+  followAreaSearchController?.abort();
+  const controller = new AbortController();
+  followAreaSearchController = controller;
+  showFollowAreaResults([], T.followAreaSearching);
+  try {
+    const params = new URLSearchParams({ q: query });
+    if (governorate && governorate !== 'all') params.set('gov', governorate);
+    const response = await fetch(`/api/places/search?${params}`, { cache: 'no-store', signal: controller.signal });
+    if (!response.ok) throw new Error('place search unavailable');
+    const data = await response.json();
+    if (followAreaSearchController !== controller) return;
+    const places = Array.isArray(data.places) ? data.places : [];
+    showFollowAreaResults(places, places.length ? '' : T.followAreaNoResults);
+  } catch (error) {
+    if (error?.name !== 'AbortError' && followAreaSearchController === controller) showFollowAreaResults([], T.followAreaSearchError);
+  }
+}
 function renderDrawer() {
   const s = settings.get();
   const n = s.notifications;
@@ -646,6 +695,16 @@ function renderDrawer() {
     ${im === 'prompt' ? `<button class="btn-red inst-go" data-s="install">${icon('download', 18)}${esc(T.instBtn)}</button>` : stepsHtml(im, { T, icon, esc })}
   </section>` : '';
   const cts = contactRows().length ? `<span class="field-label">${esc(T.contactUs)}</span>${contactListHtml()}` : '';
+  const followArea = s.followArea;
+  const selectedGov = followArea?.code || 'all';
+  const govOptions = Object.entries(GOV_C).sort(([a], [b]) => a.localeCompare(b)).map(([code, info]) => {
+    const [lat, lon, ar, en] = info;
+    return `<option value="${esc(code)}" ${selectedGov === code ? 'selected' : ''}>${esc(LANG === 'ar' ? ar : en)}</option>`;
+  }).join('');
+  const selectedName = followArea ? (LANG === 'ar' ? followArea.name_ar : (followArea.name_en || followArea.name_ar)) : '';
+  const selectedDetails = followArea?.type === 'place'
+    ? [selectedName, LANG === 'ar' ? followArea.district_ar : (followArea.district_en || followArea.district_ar), LANG === 'ar' ? GOV_C[followArea.code]?.[2] : GOV_C[followArea.code]?.[3]].filter(Boolean).join(' · ')
+    : selectedName;
   $('#drawerBody').innerHTML = `
   <section class="s-card"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.appearance)}</h3><p>${esc(T.appearanceSub)}</p></div></div>
     <span class="field-label">${esc(T.language)}</span>
@@ -659,6 +718,18 @@ function renderDrawer() {
     ${tg('data-s="vibration"', n.vibration, T.vibration, T.vibrationSub)}
     <span class="field-label">${esc(T.alertTypes)} — <span style="font-weight:500">${esc(T.alertTypesSub)}</span></span>
     <div class="types-grid">${TYPE_KEYS.map((t) => `<label class="chk"><input type="checkbox" data-nt="${t}" ${n.types.includes(t) ? 'checked' : ''}/><span class="sw" style="--c:${ALERT_TYPES[t].color}"></span><span class="name">${esc(typeName(t))}</span></label>`).join('')}</div>
+  </section>
+  <section class="s-card follow-area-card"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.followAreaTitle)}</h3><p>${esc(T.followAreaSub)}</p></div></div>
+    <label class="field-label" for="followAreaGovernorate">${esc(T.followAreaGovernorate)}</label>
+    <div class="sel-wrap"><select class="sel" id="followAreaGovernorate" data-follow-gov><option value="all" ${selectedGov === 'all' ? 'selected' : ''}>${esc(T.allGovernorates)}</option>${govOptions}</select></div>
+    <label class="field-label" for="followAreaSearch">${esc(T.followAreaTownSearch)}</label>
+    <input class="follow-area-search" id="followAreaSearch" type="search" maxlength="80" autocomplete="off" placeholder="${esc(T.followAreaSearchPlaceholder)}"/>
+    <div class="follow-area-status" id="followAreaStatus" aria-live="polite">${esc(T.followAreaSearchHint)}</div>
+    <div class="follow-area-results" id="followAreaResults" role="listbox" aria-label="${esc(T.followAreaTownSearch)}"></div>
+    <div class="follow-area-selected"><div><b>${esc(T.followAreaSelected)}</b><span>${esc(selectedDetails || T.followAreaNone)}</span></div>
+      ${followArea?.lat && followArea?.lon ? `<button class="btn-sm" data-s="focusFollowArea">${icon('mapPin', 14)}${esc(T.followAreaShowMap)}</button>` : ''}
+      ${followArea ? `<button class="btn-sm" data-s="clearFollowArea">${icon('x', 14)}${esc(T.followAreaClear)}</button>` : ''}</div>
+    <p class="follow-area-note">${esc(T.followAreaNotificationNote)}</p>
   </section>
   <section class="s-card tg-notification-card"><div class="s-head"><span class="s-num">${num()}</span><div><h3>${esc(T.telegramAlerts)}</h3><p>${esc(T.telegramAlertsSub)}</p></div></div>
     <div class="about-links"><a class="btn-sm tg" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegramNow)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTelegramNow)}</a></div>
@@ -769,8 +840,18 @@ async function syncPushPreferences() {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (!sub) return;
-    await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), preferences: { types: settings.get().notifications.types, governorate: settings.get().governorate, lang: LANG } }) });
+    await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), preferences: pushPreferences() }) });
   } catch { /* local notifications remain available */ }
+}
+function pushPreferences() {
+  const s = settings.get();
+  const area = s.followArea;
+  const followArea = area?.type === 'governorate' && /^[0-9]{2}$/.test(String(area.code || ''))
+    ? { type: 'governorate', code: String(area.code) }
+    : area?.type === 'place' && Number.isSafeInteger(Number(area.placeId))
+      ? { type: 'place', placeId: Number(area.placeId) }
+      : null;
+  return { types: s.notifications.types, governorate: followArea ? 'all' : s.governorate, followArea, lang: LANG };
 }
 async function subscribeToPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
@@ -780,7 +861,7 @@ async function subscribeToPush() {
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidBytes(publicKey) });
-  const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), preferences: { types: settings.get().notifications.types, governorate: settings.get().governorate, lang: LANG } }) });
+  const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), preferences: pushPreferences() }) });
   return r.ok;
 }
 async function enableNotifications() {
@@ -809,6 +890,7 @@ function notify(a) {
   if (s.filter.includes(a.type)) alertToast(a);
   if (a.type === 'breaking') showBreaking(a);
   if (!n.enabled || !n.types.includes(a.type)) return;
+  if (s.followArea && !matchesFollowArea(a, s.followArea)) return;
   if (n.sound) playRingtone(n.ringtone, n.volume);
   if (n.vibration && navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
@@ -977,18 +1059,54 @@ function setupSheet() {
 }
 
 // ------------------------------------------------------------------ share
-async function share(a) {
+function lastUpdateInfo(a) {
+  const updates = Array.isArray(a?.updates) ? a.updates.filter((item) => item?.kind && item.kind !== 'published' && Number.isFinite(Date.parse(item.at))) : [];
+  updates.sort((x, y) => Date.parse(x.at) - Date.parse(y.at));
+  const eventDate = new Date(a?.timestamp);
+  const lastAt = updates.at(-1)?.at || '';
+  const lastDate = lastAt ? new Date(lastAt) : null;
+  const versionDate = lastDate && Number.isFinite(lastDate.getTime()) ? lastDate : eventDate;
+  return { eventDate, lastAt, lastDate, label: T.lastUpdated, version: String(Number.isFinite(versionDate?.getTime()) ? versionDate.getTime() : 0) };
+}
+function openShareCard(a) {
+  if (!a) return;
+  shareAlert = a;
   const url = shareUrl(a);
+  const update = lastUpdateInfo(a);
+  const imageUrl = `/og/a/${encodeURIComponent(a.id)}-${LANG}.png?v=${encodeURIComponent(update.version)}`;
+  const eventWhen = Number.isFinite(update.eventDate.getTime()) ? fmtFull.format(update.eventDate) : '';
+  const lastWhen = update.lastDate && Number.isFinite(update.lastDate.getTime()) ? fmtFull.format(update.lastDate) : '';
+  openModal(`<div class="share-card-modal" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" aria-labelledby="shareCardTitle">
+    <div class="share-card-head"><div><h2 id="shareCardTitle">${esc(T.shareCardTitle)}</h2><p>${esc(T.shareCardPreview)}</p></div><button class="sb-x" type="button" data-m="close" aria-label="${esc(T.close)}">${icon('x', 17)}</button></div>
+    <div class="share-card-map"><img id="shareCardMapImage" src="${esc(imageUrl)}" alt="${esc(T.shareCardMapAlt)}" loading="eager" decoding="async"/><div id="shareCardMapFallback" class="share-card-fallback" hidden>${esc(T.shareCardMapFallback)}</div></div>
+    <div class="share-card-info"><h3>${esc(titleOf(a))}</h3><div class="share-card-meta">${icon('mapPin', 15)}<span><b>${esc(T.shareCardLocation)}:</b> ${esc(placeName(a))}</span></div>
+      <div class="share-card-meta">${icon('clock', 15)}<span><b>${esc(T.eventTime)}:</b> ${esc(eventWhen)}</span></div>${lastWhen ? `<div class="share-card-meta">${icon('refresh', 15)}<span><b>${esc(update.label)}:</b> ${esc(lastWhen)}</span></div>` : ''}</div>
+    <div class="share-card-link"><label for="shareCardUrl">${esc(T.directAlertLink)}</label><div><input id="shareCardUrl" type="url" value="${esc(url)}" readonly dir="ltr"/><a href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(T.directAlertLink)}">${icon('link', 15)}</a></div></div>
+    <div class="share-card-actions"><button class="btn-red" type="button" data-share-act="share">${icon('share', 16)}${esc(T.shareCardOpenShare)}</button><button class="btn-sm" type="button" data-share-act="copy">${icon('copy', 15)}${esc(T.shareCardCopy)}</button></div>
+    <div class="share-menu"><a class="wa" href="https://wa.me/?text=${encodeURIComponent(shareText(a) + '\n' + url)}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 16)}${esc(T.whatsapp)}</a>
+      <a class="tg" href="https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText(a))}" target="_blank" rel="noopener noreferrer">${icon('telegram', 16)}${esc(T.telegram)}</a>
+      <a class="fb" href="${fbShare(url)}" target="_blank" rel="noopener noreferrer">${icon('facebook', 16)}${esc(T.facebook)}</a></div>
+  </div>`, () => { shareAlert = null; });
+  const image = $('#shareCardMapImage');
+  image?.addEventListener('error', () => {
+    image.hidden = true;
+    const fallback = $('#shareCardMapFallback');
+    if (fallback) fallback.hidden = false;
+  }, { once: true });
+}
+async function shareCardAction(action) {
+  const a = shareAlert;
+  if (!a) return;
+  const url = shareUrl(a);
+  if (action === 'copy') return copy(url);
+  if (action !== 'share') return;
   if (navigator.share) {
-    try {
-      await navigator.share({ title: titleOf(a), text: shareText(a), url });
-      return;
-    } catch (e) {
-      if (e && e.name === 'AbortError') return;
-    }
+    try { await navigator.share({ title: titleOf(a), text: shareText(a), url }); return; }
+    catch (error) { if (error?.name === 'AbortError') return; }
   }
   copy(url);
 }
+function share(a) { openShareCard(a); }
 async function copy(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -1137,10 +1255,8 @@ function bindEvents() {
     const a = state.alerts.get(state.selectedId);
     if (!a) return;
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'share-toggle') {
-      if (navigator.share && isMobile()) return share(a);
-      $('#shareMenu').hidden = !$('#shareMenu').hidden;
-    } else if (act === 'copy') copy(shareUrl(a));
+    if (act === 'share') return share(a);
+    if (act === 'copy') copy(shareUrl(a));
     else if (act === 'fly') {
       if (isMobile()) setSheetOpen(false);
       amap && amap.select(isLive(a) ? a : { ...a, is_active: false });
@@ -1161,7 +1277,7 @@ function bindEvents() {
       const url = `/api/alerts/${encodeURIComponent(root.dataset.alertId || '')}/media?type=${encodeURIComponent(type)}${version}`;
       display.innerHTML = type === 'video'
         ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(url)}" type="video/mp4"></video>`
-        : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(T.photoTab)}" loading="lazy" decoding="async">`;
+        : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(T.photoTab)}" loading="eager" decoding="async">`;
       amap?.schedulePopupFit?.(2);
       return;
     }
@@ -1171,7 +1287,10 @@ function bindEvents() {
       if (isMobile()) {
         setSheetOpen(true);
       }
+      return;
     }
+    const shareButton = e.target.closest('[data-pp="share"]');
+    if (shareButton) { e.preventDefault(); e.stopPropagation(); return share(state.alerts.get(shareButton.dataset.id)); }
   });
   // ticker
   const tickClick = (e) => {
@@ -1229,6 +1348,12 @@ function bindEvents() {
   // drawer
   const db = $('#drawerBody');
   db.addEventListener('click', (e) => {
+    const placeButton = e.target.closest('[data-follow-place]');
+    if (placeButton) {
+      const place = followAreaSearchResults.get(String(placeButton.dataset.followPlace));
+      if (place) saveFollowArea(followAreaFromPlace(place));
+      return;
+    }
     const b = e.target.closest('[data-s]');
     if (!b || b.tagName === 'INPUT' || b.tagName === 'SELECT') return;
     const k = b.dataset.s;
@@ -1245,11 +1370,26 @@ function bindEvents() {
     } else if (k === 'tour') startTour();
     else if (k === 'install') {
       promptInstall().then((r) => { if (r === 'accepted') toast(T.instDone); renderDrawer(); });
-    } else if (k === 'terms') pageModal(T.terms, T.termsText);
+    } else if (k === 'clearFollowArea') saveFollowArea(null);
+    else if (k === 'focusFollowArea') {
+      const area = settings.get().followArea;
+      if (area && Number.isFinite(area.lat) && Number.isFinite(area.lon) && amap?.map) {
+        closeDrawer();
+        setTimeout(() => amap?.map?.flyTo({ center: [area.lon, area.lat], zoom: area.type === 'place' ? 11 : 8.5, duration: 850, essential: true }), 220);
+      }
+    }
+    else if (k === 'terms') pageModal(T.terms, T.termsText);
     else if (k === 'privacy') pageModal(T.privacy, T.privacyText);
   });
   db.addEventListener('change', async (e) => {
     const i = e.target;
+    if (i.matches('[data-follow-gov]')) {
+      const code = i.value;
+      const info = GOV_C[code];
+      if (!info) saveFollowArea(null);
+      else saveFollowArea({ type: 'governorate', code, lat: info[0], lon: info[1], name_ar: info[2], name_en: info[3] });
+      return;
+    }
     const k = i.dataset.s;
     if (k === 'notif') {
       if (i.checked) await enableNotifications();
@@ -1278,6 +1418,14 @@ function bindEvents() {
     }
   });
   db.addEventListener('input', (e) => {
+    if (e.target.id === 'followAreaSearch') {
+      clearTimeout(followAreaSearchTimer);
+      followAreaSearchController?.abort();
+      const query = e.target.value.trim();
+      if (query.length < 2) { showFollowAreaResults([], T.followAreaSearchHint); return; }
+      followAreaSearchTimer = setTimeout(() => searchFollowArea(query, $('#followAreaGovernorate')?.value || 'all'), 260);
+      return;
+    }
     if (e.target.dataset.s === 'volume') {
       const lbl = e.target.previousElementSibling?.querySelector('.mono');
       if (lbl) lbl.textContent = Math.round(e.target.value * 100) + '%';
@@ -1295,6 +1443,8 @@ function bindEvents() {
   });
   // modal
   $('#modalBackdrop').addEventListener('click', async (e) => {
+    const shareAction = e.target.closest('[data-share-act]')?.dataset.shareAct;
+    if (shareAction) { e.preventDefault(); return shareCardAction(shareAction); }
     const m = e.target.closest('[data-m]')?.dataset.m;
     if (m === 'start') {
       await enableNotifications();

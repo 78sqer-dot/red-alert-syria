@@ -8,7 +8,12 @@ const seo = await readFile(new URL('../server/seo.js', import.meta.url), 'utf8')
 test('alert cards open details and share buttons keep a direct alert URL', () => {
   assert.match(app, /const shareUrl = \(a\) => `\$\{location\.origin\}\/\$\{LANG\}\/a\/\$\{encodeURIComponent\(a\.id\)\}`/);
   assert.match(app, /if \(act === 'share'\) return share\(a\);[\s\S]*?select\(a\.id\);/);
+  assert.match(app, /function openShareCard\(a\)[\s\S]{0,900}shareCardMapImage/);
+  assert.match(app, /function lastUpdateInfo\(a\)[\s\S]{0,650}T\.lastUpdated/);
+  assert.match(app, /data-pp="share"/);
   assert.match(seo, /const target = `\/\$\{lang\}\/\#\$\{encodeURIComponent\(id\)\}`/);
+  assert.match(seo, /alertLastUpdate\(a\)/);
+  assert.match(seo, /Last updated/);
 });
 
 test('direct alert hashes fetch IDs outside the current snapshot and clear on back', () => {

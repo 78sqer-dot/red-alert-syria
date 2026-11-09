@@ -290,14 +290,21 @@ function hubPage(lang) {
 
 // ------------------------------------------------------------------ alert share page
 const BOT_UA = /bot|crawl|spider|facebookexternalhit|facebot|whatsapp|telegram|slack|discord|twitter|linkedin|skype|vkshare|pinterest|embedly|quora|outbrain|viber|snapchat|signal|preview|google|bing|yandex|applebot|iframely/i;
+function alertLastUpdate(a) {
+  const base = Date.parse(a?.timestamp) || 0;
+  const updates = Array.isArray(a?.history) ? a.history : Array.isArray(a?.updates) ? a.updates : [];
+  const candidates = [Date.parse(a?.updated_at) || 0, ...updates.filter((u) => u?.kind && u.kind !== 'published').map((u) => Date.parse(u.at) || 0)];
+  const latest = Math.max(...candidates);
+  return latest > base ? latest : 0;
+}
 function alertInfo(id) {
   const a = store.getAlert(id);
   if (a) {
     const p = a.place || {};
-    return { a, ty: a.type, ts: Date.parse(a.timestamp), pa: p.scope === 'governorate' ? p.governorate_ar : (p.name_ar || p.governorate_ar), pe: p.scope === 'governorate' ? p.governorate_en : (p.name_en || p.governorate_en), ga: p.governorate_ar, ge: p.governorate_en, desc: a.description || '', desc_en: a.description_en || '' };
+    return { a, ty: a.type, ts: Date.parse(a.timestamp), updatedTs: alertLastUpdate(a), pa: p.scope === 'governorate' ? p.governorate_ar : (p.name_ar || p.governorate_ar), pe: p.scope === 'governorate' ? p.governorate_en : (p.name_en || p.governorate_en), ga: p.governorate_ar, ge: p.governorate_en, desc: a.description || '', desc_en: a.description_en || '' };
   }
   const e = (store.state.log || []).findLast?.((x) => x.id === id) || [...(store.state.log || [])].reverse().find((x) => x.id === id);
-  if (e) return { ty: e.ty, ts: Date.parse(e.ts), pa: e.pa || e.ga, pe: e.pe || e.ge, ga: e.ga, ge: e.ge, desc: '', m: e.m };
+  if (e) return { ty: e.ty, ts: Date.parse(e.ts), updatedTs: 0, pa: e.pa || e.ga, pe: e.pe || e.ge, ga: e.ga, ge: e.ge, desc: '', m: e.m };
   return null;
 }
 function alertSharePage(id, lang) {
@@ -311,10 +318,13 @@ function alertSharePage(id, lang) {
   const placeLine = [place, gov].filter((x, i, arr) => x && arr.indexOf(x) === i).join(en ? ', ' : '، ');
   const title = `🚨 ${typeLabel(info.ty, lang)}${placeLine ? ` — ${placeLine}` : ''} | ${en ? 'Red Alert Syria' : 'الإنذار الأحمر سوريا'}`;
   const when = fmtWhen(info.ts, lang);
+  const lastUpdated = info.updatedTs ? fmtWhen(info.updatedTs, lang) : '';
   const dtx = (en && info.desc_en) || info.desc;
-  const desc = `${dtx ? dtx.slice(0, 160) + ' · ' : ''}${when} (${en ? 'Damascus time' : 'بتوقيت دمشق'}). ${en ? 'Live map of alerts across Syria — follow t.me/Red_Alert_Syria' : 'خريطة سوريا المباشرة للتنبيهات — تابعنا t.me/Red_Alert_Syria'}`;
-  const og = info.a ? `${site}/og/a/${encodeURIComponent(id)}-${lang}.png` : `${site}/og/site-${lang}.png`;
-  const body = `<h1>${esc(typeLabel(info.ty, lang))}${placeLine ? ` — ${esc(placeLine)}` : ''}</h1><p class="lead">${esc(when)}</p>
+  const updateText = lastUpdated ? (en ? ` · Last updated ${lastUpdated}` : ` · آخر تحديث ${lastUpdated}`) : '';
+  const desc = `${dtx ? dtx.slice(0, 160) + ' · ' : ''}${when} (${en ? 'Damascus time' : 'بتوقيت دمشق'})${updateText}. ${en ? 'Live map of alerts across Syria — follow t.me/Red_Alert_Syria' : 'خريطة سوريا المباشرة للتنبيهات — تابعنا t.me/Red_Alert_Syria'}`;
+  const version = info.updatedTs || info.ts;
+  const og = info.a ? `${site}/og/a/${encodeURIComponent(id)}-${lang}.png?v=${encodeURIComponent(version)}` : `${site}/og/site-${lang}.png`;
+  const body = `<h1>${esc(typeLabel(info.ty, lang))}${placeLine ? ` — ${esc(placeLine)}` : ''}</h1><p class="lead">${en ? 'Reported' : 'وقت البلاغ'}: ${esc(when)}</p>${lastUpdated ? `<p class="lead">${en ? 'Last updated' : 'آخر تحديث'}: ${esc(lastUpdated)}</p>` : ''}
 <div class="cta"><a class="btn red" href="${target}">${en ? 'Open on the live map' : 'افتح على الخريطة المباشرة'}</a><a class="btn tg" href="${CHANNEL_URL}">${en ? 'Follow on Telegram' : 'تابعنا على تيليغرام'}</a></div>`;
   let html = shell({ lang, title, desc, path: `/${lang}/a/${encodeURIComponent(id)}`, alt: null, ogImage: og, ogW: info.a ? 820 : 1200, ogH: info.a ? 791 : 630, body, robots: 'noindex,follow' });
   html = html.replace('<meta name="robots"', `<meta http-equiv="refresh" content="0;url=${esc(target)}"><meta name="robots"`);
@@ -439,7 +449,7 @@ export function mountSeo(app, { limiter } = {}) {
     const m = String(req.params.file).match(/^(.+)-(ar|en)\.png$/);
     const a = m && store.getAlert(m[1]);
     if (!a) return res.redirect(302, `/og/site-${m?.[2] || 'ar'}.png`);
-    try { png(res, await cached(`alert:${a.id}:${m[2]}`, 24 * 3600_000, () => renderAlertPng(a, { lang: m[2], timeoutMs: 5000 })), 3600); } catch (e) { console.error('[seo] og alert', e.message); res.redirect(302, `/og/site-${m[2]}.png`); }
+    try { png(res, await cached(`alert:${a.id}:${m[2]}:${alertLastUpdate(a)}`, 24 * 3600_000, () => renderAlertPng(a, { lang: m[2], timeoutMs: 5000 })), 3600); } catch (e) { console.error('[seo] og alert', e.message); res.redirect(302, `/og/site-${m[2]}.png`); }
   });
 }
-export const _test = { AREAS, BY_SLUG, areaPage, hubPage, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };
+export const _test = { AREAS, BY_SLUG, areaPage, hubPage, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };

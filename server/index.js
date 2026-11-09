@@ -14,7 +14,7 @@ import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
 import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
-import { governorates } from './places.js';
+import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
 import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
 import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug } from './wx-daily.js';
@@ -108,6 +108,10 @@ app.post('/api/push/subscribe', apiLimiter, express.json({ limit: '32kb' }), (re
 app.delete('/api/push/subscribe', apiLimiter, express.json({ limit: '8kb' }), (req, res) => {
   if (!pushConfigured) return res.status(404).end();
   res.json({ ok: removeSubscription(store, req.body?.subscription || req.body?.endpoint) });
+});
+
+app.get('/api/places/search', apiLimiter, (req, res) => {
+  res.json({ places: searchFollowPlaces(req.query.q, req.query.gov) });
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size }));

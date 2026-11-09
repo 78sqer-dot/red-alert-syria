@@ -205,6 +205,28 @@ export function placeKm(loc) {
   if (r == null) return 2.2;
   return r <= 1 ? 4.5 : r === 2 ? 3.2 : r === 3 ? 2.4 : r <= 5 ? 1.8 : 1.3;
 }
+
+/** Public, bounded search results for the optional area-follow picker. */
+export function searchFollowPlaces(query, governorate = '') {
+  const q = String(query || '').trim();
+  if (q.length < 2 || q.length > 80) return [];
+  const requestedGov = getGov(String(governorate))?.code || '';
+  return searchPlaces(q, 100)
+    .filter((p) => !p.scope && p.gov && (!requestedGov || p.gov === requestedGov)
+      && Number.isFinite(p.lat) && Number.isFinite(p.lon))
+    .slice(0, 12)
+    .map((p) => {
+      const gov = getGov(p.gov);
+      const dist = getDist(p.dist);
+      return {
+        id: p.id, name_ar: p.ar, name_en: p.en, governorate: p.gov,
+        governorate_ar: gov?.ar || '', governorate_en: gov?.en || '',
+        district: p.dist || '', district_ar: dist?.ar || '', district_en: dist?.en || '',
+        latitude: p.lat, longitude: p.lon, radius_km: placeKm(p), rank: p.rank,
+      };
+    });
+}
+
 const mentionToken = (token, first) => {
   let value = normalizeArabic(token);
   if (first) value = value.replace(/^(?:و|ف|ب|ك|ل)(?=\p{L})/u, '');

@@ -40,8 +40,8 @@ test('helicopter matches the 24px drone/signal glyph and shared pulse while foll
   assert.match(mapJs, /svgTag\(t\.glyph,\s*24,\s*`fill=/);
   assert.match(css, /\.uav\s*\{[^}]*animation:\s*uavOrbit 9s linear infinite/);
   assert.match(css, /\.heli-orbit\s*\{[^}]*animation:\s*heliOrbit 9s linear infinite/);
-  assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: hidden; \}/);
-  assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-helicopter\.sel \{ visibility: visible; \}/);
+  assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: visible; \}/);
+  assert.match(css, /\.news-off \.mk-helicopter \{ display: block !important; visibility: visible !important; \}/);
   assert.match(mapJs, /classList\.toggle\('sel', a\.id === this\.selectedId\)/);
   assert.match(mapJs, /actual visible perimeter of its alert circle[\s\S]{0,180}setProperty\('--orb', px \+ 'px'\)/);
   assert.match(mapJs, /const classicAircraft = t\.marker === 'squad';/, 'the helicopter uses the shared drone/signal pulse dimensions');

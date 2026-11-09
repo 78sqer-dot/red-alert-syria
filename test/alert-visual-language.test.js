@@ -178,5 +178,5 @@ test('map SVGs use each event type color instead of a hard-coded black glyph', (
   assert.match(css, /\.uav-svg \{[^}]*fill: var\(--c, #6b7280\)/);
   assert.match(css, /\.helicopter-svg \{[^}]*fill: var\(--c, #3b8eff\)/);
   assert.match(css, /html\.dark \.mk\.sel \.uav-svg \{ fill: color-mix\(in srgb, var\(--c, #6b7280\) 72%, #fff\); \}/);
-  assert.match(css, /html\.dark \.mk\.sel \.helicopter-svg \{ fill: color-mix\(in srgb, var\(--c, #3b8eff\) 72%, #fff\); \}/);
+  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #ef233c; \}/);
 });

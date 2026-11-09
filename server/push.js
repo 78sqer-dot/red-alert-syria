@@ -1,5 +1,7 @@
 import webpush from 'web-push';
 import crypto from 'node:crypto';
+import { matchesFollowArea } from '../shared/area-follow.js';
+import { getGov, getPlace, placeKm } from './places.js';
 
 const PUBLIC_KEY = String(process.env.VAPID_PUBLIC_KEY || '').trim();
 const PRIVATE_KEY = String(process.env.VAPID_PRIVATE_KEY || '').trim();
@@ -20,13 +22,27 @@ export function sanitizeSubscription(input) {
   return { endpoint: s.endpoint, expirationTime: s.expirationTime || null, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } };
 }
 
+export function sanitizeFollowArea(input) {
+  const area = input && typeof input === 'object' ? input : {};
+  if (area.type === 'governorate') {
+    const governorate = getGov(String(area.code || ''));
+    return governorate ? { type: 'governorate', code: governorate.code } : null;
+  }
+  if (area.type === 'place') {
+    const place = getPlace(Number(area.placeId ?? area.id));
+    return place ? { type: 'place', placeId: place.id } : null;
+  }
+  return null;
+}
+
 export function saveSubscription(store, input, preferences = {}) {
   const subscription = sanitizeSubscription(input);
   if (!subscription) return null;
   const id = endpointKey(subscription.endpoint);
   const types = Array.isArray(preferences.types) ? preferences.types.filter((x) => typeof x === 'string').slice(0, 80) : [];
   const governorate = typeof preferences.governorate === 'string' && /^[0-9]{2}$/.test(preferences.governorate) ? preferences.governorate : 'all';
-  store.savePushSubscription(id, { ...subscription, types, governorate, lang: preferences.lang === 'en' ? 'en' : 'ar', updatedAt: Date.now() });
+  const followArea = sanitizeFollowArea(preferences.followArea);
+  store.savePushSubscription(id, { ...subscription, types, governorate, followArea, lang: preferences.lang === 'en' ? 'en' : 'ar', updatedAt: Date.now() });
   return id;
 }
 
@@ -38,7 +54,14 @@ export function removeSubscription(store, input) {
 
 function matches(alert, sub) {
   if (Array.isArray(sub.types) && sub.types.length && !sub.types.includes(alert.type)) return false;
-  if (sub.governorate && sub.governorate !== 'all') {
+  if (sub.followArea) {
+    const followArea = sub.followArea.type === 'governorate'
+      ? (() => { const g = getGov(sub.followArea.code); return g && { type: 'governorate', code: g.code, name_ar: g.ar, name_en: g.en }; })()
+      : sub.followArea.type === 'place'
+        ? (() => { const p = getPlace(sub.followArea.placeId); return p && { type: 'place', placeId: p.id, code: p.gov, name_ar: p.ar, name_en: p.en, lat: p.lat, lon: p.lon, radiusKm: placeKm(p) }; })()
+        : null;
+    if (!followArea || !matchesFollowArea(alert, followArea)) return false;
+  } else if (sub.governorate && sub.governorate !== 'all') {
     const places = [alert.place, ...(Array.isArray(alert.more) ? alert.more : [])];
     if (!places.some((p) => p?.governorate === sub.governorate || p?.governorate_code === sub.governorate)) return false;
   }
