@@ -167,6 +167,17 @@ function safeLinks(links = []) {
   }
   return out.slice(0, 8);
 }
+function sourceRelatedJobLink(raw, rawSource) {
+  try {
+    const link = new URL(raw);
+    const source = new URL(String(rawSource || ''));
+    const host = (value) => value.toLowerCase().replace(/^www\./, '');
+    const linkPath = link.pathname.replace(/\/+$/, '').toLowerCase() || '/';
+    const sourcePath = source.pathname.replace(/\/+$/, '').toLowerCase() || '/';
+    return host(link.hostname) === host(source.hostname)
+      && (linkPath === sourcePath || (linkPath !== '/' && sourcePath.startsWith(`${linkPath}/`)));
+  } catch { return false; }
+}
 function linksFromText(text) { return safeLinks(String(text || '').match(/https:\/\/[^\s<>()[\]{}]+/gi) || []); }
 const JOB_CHANNEL_PROMO = /[@#]\s*syrian[_\s-]?jo[b]+\b[#]?/giu;
 const JOB_HASHTAG = /#(?:[\p{L}\p{N}\p{M}_]+)/gu;
@@ -321,11 +332,11 @@ export function publicJobs(j = jobsState(), now = Date.now()) {
   return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && !j.deleted?.[x.id] && !isApplicationDeadlineExpired(x.applicationDeadline, now) && (normalizeJobLocation(x.location, j) || x.publishedWithoutLocation === true))
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)).slice(0, 100)
     .map((x) => {
-      const text = cleanJobText(x.text);
+      const sourceUrl = String(x.sourceUrl || '');
+      const text = cleanJobText(x.text).replace(/https?:\/\/[^\s<>]+/gi, (raw) => sourceRelatedJobLink(raw.replace(/[),.;!?]+$/, ''), sourceUrl) ? '' : raw).trim();
       const title = cleanJobText(x.title).replace(/\s+/g, ' ').trim() || titleFromText(text);
       return {
-      id: x.id, title, text, links: safeLinks(x.links || []),
-      source_name: x.sourceName, source_url: x.sourceUrl || '',
+      id: x.id, title, text, links: safeLinks(x.links || []).filter((link) => !sourceRelatedJobLink(link, sourceUrl)),
       location: normalizeJobLocation(x.location, j) || null,
       application_deadline: x.applicationDeadline || null,
       published_at: x.publishedAt || null,

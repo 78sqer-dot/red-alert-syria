@@ -127,8 +127,13 @@ app.get('/api/alerts/:id', apiLimiter, (req, res) => {
 
 app.get('/api/alerts/:id/media', apiLimiter, async (req, res) => {
   if (!/^[\w-]{36}$/.test(req.params.id)) return res.status(400).end();
+  const requestedType = String(req.query.type || '');
+  if (requestedType && !['photo', 'video'].includes(requestedType)) return res.status(400).end();
   const alert = store.getAlert(req.params.id);
-  const publicMedia = alert && publicAlert(alert).media;
+  const projected = alert && publicAlert(alert);
+  const publicMedia = requestedType
+    ? projected?.media_items?.find((item) => item.type === requestedType)
+    : projected?.media;
   if (!alert || !publicMedia) return res.status(404).end();
   const etag = `"${publicMedia.version}"`;
   res.setHeader('ETag', etag);
@@ -138,7 +143,7 @@ app.get('/api/alerts/:id/media', apiLimiter, async (req, res) => {
   res.setHeader('Accept-Ranges', 'bytes');
   if (req.headers['if-none-match']?.split(',').map((value) => value.trim()).includes(etag)) return res.status(304).end();
   try {
-    const asset = await fetchAlertMediaFile(req.params.id);
+    const asset = await fetchAlertMediaFile(req.params.id, requestedType || null);
     if (!asset?.buffer?.length) return res.status(404).end();
     res.setHeader('Content-Type', asset.contentType);
     const size = asset.buffer.length;

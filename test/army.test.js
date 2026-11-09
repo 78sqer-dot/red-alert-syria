@@ -31,9 +31,9 @@ test('only approved official-source items appear in the public Syrian Army secti
   const result = publicArmy(j);
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].title, 'إعلان اختبار اصطناعي');
-  assert.equal(result.items[0].source_url, 'https://t.me/test_official/1');
-  assert.deepEqual(result.sources.map((x) => x.username), ARMY_SOURCES.map((x) => x.u));
-  assert.ok(ARMY_MONITOR_ONLY_SOURCES.every((source) => !result.sources.some((x) => x.username === source.u)));
+  assert.equal('source_name' in result.items[0], false);
+  assert.equal('source_url' in result.items[0], false);
+  assert.equal('sources' in result, false);
   assert.equal(result.items[0].text.includes('اختبار اصطناعي'), true);
   assert.equal(result.items[0].status, undefined, 'public projection excludes workflow internals');
 });
@@ -48,10 +48,12 @@ test('public Syrian Army cards omit SANA tags and Telegram promo footer but reta
   }, j, NOW);
   assert.ok(made.item);
   assert.equal(decideArmyItem(made.item.id, 'approve', j, 7, NOW + 1).ok, true);
-  const item = publicArmy(j, NOW + 1).items[0];
+  const publicData = publicArmy(j, NOW + 1);
+  const item = publicData.items[0];
   assert.equal(item.text, 'بريد حمص يخصص دواماً إضافياً يوم السبت لصرف رواتب المتقاعدين.');
-  assert.equal(item.source_name, 'مصدر رسمي');
-  assert.equal(item.source_url, 'https://t.me/sana_gov/190412', 'the original official post remains available');
+  assert.equal('source_name' in item, false);
+  assert.equal('source_url' in item, false);
+  assert.equal('sources' in publicData, false);
   assert.deepEqual(item.links, ['https://example.org/apply'], 'the SANA follow-channel URL is not shown as an application link');
 });
 
@@ -111,7 +113,8 @@ test('monitor-only media reports stay off the public sources list and are labell
   assert.equal(second.newItems, 1);
   assert.equal(Object.values(j.pending)[0].kind, 'media_source');
   const result = publicArmy(j);
-  assert.ok(ARMY_MONITOR_ONLY_SOURCES.every((source) => !result.sources.some((x) => x.username === source.u)));
+  assert.equal('sources' in result, false, 'the public projection omits monitored source names and links');
+  assert.ok(ARMY_MONITOR_ONLY_SOURCES.every((source) => armyMonitorSources(j).some((x) => x.u === source.u)), 'monitor-only sources remain in internal monitoring state');
   assert.deepEqual(result.channels, { tg: '', wa: '' });
 });
 
@@ -126,7 +129,7 @@ test('manual Telegram monitor sources validate, add, edit and remove without ent
   assert.equal(added.ok, true);
   assert.equal(armyMonitorSources(j).some((source) => source.u === 'SalaryWatch'), true);
   assert.equal(addManualArmySource({ username: 'salarywatch', name: 'مكرر', type: 'official' }, j, NOW + 1).error, 'duplicate');
-  assert.equal(publicArmy(j).sources.some((source) => source.username === 'SalaryWatch'), false);
+  assert.equal('sources' in publicArmy(j), false);
   assert.deepEqual(publicArmy(j).channels, { tg: '', wa: '' });
   j.sources.SalaryWatch.initialized = true; j.sources.SalaryWatch.lastId = 555;
   const changed = updateManualArmySource('SalaryWatch', { username: 'ArmyPayNews', name: 'مصدر رواتب محدث', type: 'official' }, j, NOW + 2);
@@ -134,7 +137,7 @@ test('manual Telegram monitor sources validate, add, edit and remove without ent
   assert.equal(j.sources.SalaryWatch, undefined);
   assert.equal(j.sources.ArmyPayNews.initialized, false, 'a changed channel starts with a fresh baseline');
   assert.equal(armyMonitorSources(j).some((source) => source.u === 'ArmyPayNews' && source.type === 'official'), true);
-  assert.equal(publicArmy(j).sources.some((source) => source.username === 'ArmyPayNews'), false);
+  assert.equal('sources' in publicArmy(j), false);
   assert.equal(removeManualArmySource('ArmyPayNews', j, NOW + 3).ok, true);
   assert.equal(armyMonitorSources(j).some((source) => source.u === 'ArmyPayNews'), false);
   assert.equal(j.sources.ArmyPayNews, undefined);

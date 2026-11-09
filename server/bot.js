@@ -4,7 +4,7 @@ import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpErr
 import { config, isOwner, envDefaults } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
-import { store, publicAlert, sanitizeAlertMedia, ALERT_MEDIA_MAX_BYTES } from './store.js';
+import { store, publicAlert, sanitizeAlertMedia, sanitizeAlertMediaItems, mergeAlertMediaItems, ALERT_MEDIA_MAX_BYTES } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, alertButtonLabel, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS, eventVisual } from '../shared/types.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
@@ -317,7 +317,10 @@ function draftSummary(d, lang) {
   const loc = d.location;
   const civilEmoji = d.type === 'civil' ? CIVIL_EMOJIS[d.civilEmoji]?.emoji : '';
   const lines = [`<b>${esc(d.type === 'road' ? roadLabel(d.road, lang) : draftTypeLabel(d, lang))}</b>${civilEmoji ? ` ${civilEmoji}` : ''}`];
-  if (d.media) lines.push(lang === 'en' ? `📎 <b>${d.media.type === 'video' ? 'Video attached' : 'Photo attached'}</b>` : `📎 <b>${d.media.type === 'video' ? 'فيديو مرفق' : 'صورة مرفقة'}</b>`);
+  const mediaItems = sanitizeAlertMediaItems(Array.isArray(d.media_items) && d.media_items.length ? d.media_items : d.media);
+  if (mediaItems.length) lines.push(lang === 'en'
+    ? `📎 <b>${mediaItems.map((item) => item.type === 'video' ? 'Video' : 'Photo').join(' + ')} attached</b>`
+    : `📎 <b>مرفق ${mediaItems.map((item) => item.type === 'video' ? 'فيديو' : 'صورة').join(' + ')}</b>`);
   if (d.border && BORDER_REGIONS[d.border]) lines.push(`🛂 <b>${esc(lang === 'en' ? BORDER_REGIONS[d.border].en : BORDER_REGIONS[d.border].ar)}</b>`);
   if (d.type === 'helicopter') lines.push(d.intense === true ? (lang === 'en' ? '🚁🚁 <b>Intensive flight — two helicopters</b>' : '🚁🚁 <b>تحليق مكثف — مروحيتان</b>') : (lang === 'en' ? '🚁 <b>One helicopter</b>' : '🚁 <b>مروحية واحدة</b>'));
   if (d.type === 'military_incursion' && Number.isInteger(d.vehicleCount) && d.vehicleCount > 0) {
@@ -604,12 +607,13 @@ function previewKeyboard(ctx, d) {
   const l = L(ctx);
   const kb = new InlineKeyboard();
   const enx = langOf(ctx) === 'en';
+  const mediaItems = sanitizeAlertMediaItems(Array.isArray(d.media_items) && d.media_items.length ? d.media_items : d.media);
   if (d.mode === 'report') kb.text(l.btnSubmit, 'submit').row();
   else if (d.mode === 'edit_published') kb.text(enx ? '✅ Save format edit' : '✅ حفظ تعديل الصيغة', 'save_edit').row();
   else if (d.type === 'road') kb.text(enx ? '🗺 Publish on the map' : '🗺 نشر على الخريطة', 'publish').row().text(enx ? '📢 Map + channel' : '📢 الخريطة + القناة', 'publish:ch').row();
   else kb.text(l.btnPublish, 'publish').row();
-  kb.text(d.media ? l.btnReplaceMedia : l.btnAddMedia, 'attachmedia').row();
-  if (d.media) kb.text(l.btnRemoveMedia, 'removemedia').row();
+  kb.text(mediaItems.length ? l.btnReplaceMedia : l.btnAddMedia, 'attachmedia').row();
+  if (mediaItems.length) kb.text(l.btnRemoveMedia, 'removemedia').row();
   kb.text(l.btnDuration(d.ttlMin), 'dur').row();
   // drones: "تحليق مكثف" = 2-3 drones over every circle on the map instead of one
   if (d.type === 'uav' && d.mode !== 'report') {
@@ -982,6 +986,7 @@ export function buildAlertInput(d, author) {
     sourceTimestamp: sourceIso(d.politicalSourceTimestamp),
   } : null;
   const monitoredSources = d.source === 'news' && d.type !== 'political' ? monitoredSourcesFor(d) : [];
+  const mediaItems = sanitizeAlertMediaItems(Array.isArray(d.media_items) && d.media_items.length ? d.media_items : d.media);
   const baseTitle = d.type === 'air_movement'
     ? (aircraft?.ar || titles.ar)
     : wx ? `${titles.ar}: ${wx[0]}${named ? ` — ${loc.name_ar}` : ''}` : named ? `${titles.ar} — ${loc.name_ar}${more(extra.length)}` : titles.ar;
@@ -994,7 +999,7 @@ export function buildAlertInput(d, author) {
     title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
     extra,
     description: cleanAlertText(d.type === 'breaking' ? d.text : d.details),
-    ...(sanitizeAlertMedia(d.media) ? { media: sanitizeAlertMedia(d.media) } : {}),
+    ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
     location: loc,
     areas,
     ttlMin: d.ttlMin,
@@ -1245,7 +1250,7 @@ export async function editPublishedAlert(api, id, d, author) {
   return updated;
 }
 /** add an alert to the map and (unless toChannel=false) post it to the channel */
-export async function publishInput(api, input, { toChannel = true } = {}) {
+export async function publishInput(api, input, { toChannel = true, renderSnapshot = null } = {}) {
   const alert = store.addAlert(input);
   if (input.meta) alert.meta = input.meta;
   if (!toChannel || !config.channel) return alert;
@@ -1255,23 +1260,12 @@ export async function publishInput(api, input, { toChannel = true } = {}) {
   const text = channelPost(alert);
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
   let m = null; let media = 'text'; let uncertainMediaSend = false;
-  if (sanitizeAlertMedia(alert.media)) {
-    try {
-      const file = await alertMediaInput(alert.media, 'admin');
-      m = alert.media.type === 'photo'
-        ? await api.sendPhoto(config.channel, file, { caption: channelCaption(alert), ...extra })
-        : await api.sendVideo(config.channel, file, { caption: channelCaption(alert), ...extra });
-      media = alert.media.type;
-      store.updateAlert(alert.id, { media: mediaFromSentMessage(m, media, alert.media, 'admin') });
-    } catch (e) {
-      uncertainMediaSend = !isDefinitiveTelegramRejection(e);
-      console.error('[media] channel media post failed:', e.description || e.message);
-    }
-  }
-  if (!m && !uncertainMediaSend && config.alertImages && visibleLen(text) <= CAPTION_MAX) {
+  // Attached source media stays on the public map; channel posts use the rendered map snapshot only.
+  const snapshotRenderer = typeof renderSnapshot === 'function' ? renderSnapshot : null;
+  if ((snapshotRenderer || config.alertImages) && visibleLen(text) <= CAPTION_MAX) {
     const t0 = Date.now();
     try {
-      const png = await withDeadline(alertImage(alert, 'ar'), IMAGE_DEADLINE_MS);
+      const png = await withDeadline((snapshotRenderer || alertImage)(alert, 'ar'), IMAGE_DEADLINE_MS);
       try {
         m = await api.sendPhoto(config.channel, new InputFile(png, `red-alert-syria-${alert.id.slice(0, 8)}.png`), { caption: text, ...extra });
         media = 'photo';
@@ -1441,51 +1435,23 @@ function mediaFromSentMessage(message, type, fallback, botRole = 'admin') {
     file_size: item.file_size,
   }) || fallback) : fallback;
 }
-export async function fetchAlertMediaFile(id) {
+export async function fetchAlertMediaFile(id, requestedType = null) {
   const alert = store.getAlert(id);
-  const media = sanitizeAlertMedia(alert?.media);
+  const available = sanitizeAlertMediaItems(Array.isArray(alert?.media_items) && alert.media_items.length ? alert.media_items : alert?.media);
+  const media = requestedType ? available.find((item) => item.type === requestedType) : available[0];
   if (!alert || !media) return null;
   const buffer = await downloadAlertMediaBuffer(media);
-  return { buffer, contentType: media.type === 'photo' ? 'image/jpeg' : 'video/mp4', etag: `"${publicAlert(alert).media.version}"` };
+  const projected = publicAlert(alert);
+  const publicMedia = projected.media_items?.find((item) => item.type === media.type) || projected.media;
+  return { buffer, contentType: media.type === 'photo' ? 'image/jpeg' : 'video/mp4', etag: `"${publicMedia.version}"` };
 }
-async function updateAlertChannelMedia(api, alert, mediaValue) {
+function updateAlertChannelMedia(_api, alert, mediaValue) {
   const media = sanitizeAlertMedia(mediaValue);
-  if (!media || !alert?.channel_message_id || !config.channel) return { ok: false, noChannelPost: true };
-  const file = await alertMediaInput(media, 'admin');
-  const caption = channelCaption(alert);
-  const keyboard = channelKeyboard(alert);
-  const oldMessageId = alert.channel_message_id;
-  const sendNewPost = async () => {
-    const replacementFile = await alertMediaInput(media, 'admin');
-    const posted = media.type === 'photo'
-      ? await api.sendPhoto(config.channel, replacementFile, { caption, parse_mode: 'HTML', reply_markup: keyboard })
-      : await api.sendVideo(config.channel, replacementFile, { caption, parse_mode: 'HTML', reply_markup: keyboard });
-    if (!posted?.message_id) throw new Error('Telegram did not return the replacement post');
-    const savedMedia = mediaFromSentMessage(posted, media.type, media, 'admin');
-    store.updateAlert(alert.id, { channel_message_id: posted.message_id, channel_media: media.type, media: savedMedia });
-    let oldRemoved = true;
-    try { await api.deleteMessage(config.channel, oldMessageId); }
-    catch (e) { oldRemoved = false; console.warn('[bot] replaced channel post but could not delete the old message:', e.description || e.message); }
-    return { ok: true, replaced: true, oldRemoved };
-  };
-  if (alert.channel_media === media.type && ['photo', 'video'].includes(alert.channel_media)) {
-    try {
-      const inputMedia = media.type === 'photo'
-        ? InputMediaBuilder.photo(file, { caption, parse_mode: 'HTML' })
-        : InputMediaBuilder.video(file, { caption, parse_mode: 'HTML' });
-      const edited = await api.editMessageMedia(config.channel, oldMessageId, inputMedia, { reply_markup: keyboard });
-      store.updateAlert(alert.id, { channel_media: media.type, media: mediaFromSentMessage(edited, media.type, media, 'admin') });
-      return { ok: true, replaced: false };
-    } catch (e) {
-      if (/message is not modified/i.test(String(e.description || e.message || ''))) {
-        store.updateAlert(alert.id, { channel_media: media.type, media });
-        return { ok: true, replaced: false };
-      }
-      if (!isDefinitiveTelegramRejection(e)) throw e;
-      console.warn('[bot] in-place channel media edit rejected; replacing the post:', e.description || e.message);
-    }
-  }
-  return sendNewPost();
+  if (!media || !alert?.id) return { ok: false, noMedia: true };
+  const existing = Array.isArray(alert.media_items) && alert.media_items.length ? alert.media_items : alert.media;
+  const mediaItems = mergeAlertMediaItems(existing, media, { replaceSameType: true });
+  store.updateAlert(alert.id, { media_items: mediaItems });
+  return { ok: true, mapOnly: true };
 }
 runtimeHooks.restoreApi = (role, old) => { APIS[role] = old.api; TOKENS[role] = old.token; };
 const RELAY_KINDS = { photo: 'sendPhoto', video: 'sendVideo', voice: 'sendVoice', audio: 'sendAudio', document: 'sendDocument', animation: 'sendAnimation', video_note: 'sendVideoNote', sticker: 'sendSticker' };
@@ -2394,6 +2360,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery('removemedia', needDraft(async (ctx, d) => {
     if (d.mode === 'active_edit') return;
     delete d.media;
+    delete d.media_items;
     return showPreview(ctx, d);
   }));
 
@@ -2435,18 +2402,22 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     for (const uid of reviewers) {
       const lang = store.userLang(uid) === 'en' ? 'en' : 'ar';
       try {
-        if (sanitizeAlertMedia(rep.draft.media)) {
+        const reportMediaItems = sanitizeAlertMediaItems(Array.isArray(rep.draft.media_items) && rep.draft.media_items.length ? rep.draft.media_items : rep.draft.media);
+        if (reportMediaItems.length) {
           try {
-            const attachment = sanitizeAlertMedia(rep.draft.media);
-            const file = await alertMediaInput(attachment, 'admin');
-            const mediaMessage = attachment.type === 'photo'
-              ? await api.sendPhoto(uid, file, { caption: T[lang].mediaReviewAttachment })
-              : await api.sendVideo(uid, file, { caption: T[lang].mediaReviewAttachment });
-            if (mediaMessage?.message_id) {
-              rep.messages.push([uid, mediaMessage.message_id]);
-              store.relayPut(`a:${uid}:${mediaMessage.message_id}`, ctx.from.id);
-              rep.draft.media = mediaFromSentMessage(mediaMessage, attachment.type, attachment, 'admin');
-              store.reportPut(rid, rep);
+            for (const attachment of reportMediaItems) {
+              const file = await alertMediaInput(attachment, 'admin');
+              const mediaMessage = attachment.type === 'photo'
+                ? await api.sendPhoto(uid, file, { caption: T[lang].mediaReviewAttachment })
+                : await api.sendVideo(uid, file, { caption: T[lang].mediaReviewAttachment });
+              if (mediaMessage?.message_id) {
+                rep.messages.push([uid, mediaMessage.message_id]);
+                store.relayPut(`a:${uid}:${mediaMessage.message_id}`, ctx.from.id);
+                const remapped = mediaFromSentMessage(mediaMessage, attachment.type, attachment, 'admin');
+                rep.draft.media_items = mergeAlertMediaItems(rep.draft.media_items || rep.draft.media, remapped, { replaceSameType: true });
+                rep.draft.media = rep.draft.media_items[0];
+                store.reportPut(rid, rep);
+              }
             }
           } catch (e) { console.warn('[report] media preview to reviewer failed:', e.description || e.message); }
         }
@@ -2714,8 +2685,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     activeMediaSessions.set(sk(ctx), { alertId: alert.id, created: Date.now() });
     const en = langOf(ctx) === 'en';
     const note = alert.channel_message_id
-      ? (en ? 'The linked channel post will be updated too.' : 'سيُحدَّث منشور القناة المرتبط أيضاً.')
-      : (en ? 'This alert has no linked channel post; the map will be updated.' : 'لا يوجد منشور قناة مرتبط؛ سيُحدَّث التنبيه على الخريطة فقط.');
+      ? (en ? 'The map attachment will change; the channel post keeps its map snapshot.' : 'سيتغير مرفق الخريطة فقط، ويبقى منشور القناة بلقطة الخريطة.')
+      : (en ? 'This updates the map attachment only.' : 'سيُحدَّث مرفق الخريطة فقط.');
     await show(ctx, `${L(ctx).askMedia}\n\n<i>${note}</i>`, new InlineKeyboard().text(L(ctx).btnCancel, 'cancel').row().text(L(ctx).btnBack, 'm:' + alert.id));
   });
 
@@ -2796,26 +2767,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         activeMediaSessions.delete(key);
         return ctx.reply(L(ctx).notFound);
       }
-      const updated = store.updateAlert(alert.id, { media });
       activeMediaSessions.delete(key);
-      let resultText = L(ctx).mediaMapAdded;
-      if (updated.channel_message_id) {
-        try {
-          const result = await updateAlertChannelMedia(ctx.api, updated, media);
-          resultText = result.ok
-            ? (result.replaced && !result.oldRemoved ? L(ctx).mediaPostReplacedWarning : L(ctx).mediaPostUpdated)
-            : L(ctx).mediaMapOnly;
-        } catch (e) {
-          console.error('[media] active channel post update failed:', e.description || e.message);
-          resultText = L(ctx).mediaMapOnly;
-        }
-      }
+      updateAlertChannelMedia(ctx.api, alert, media);
       const current = store.getAlert(alert.id);
-      return show(ctx, resultText, resultKeyboard(ctx, current).row().text(L(ctx).btnBack, 'active'));
+      return show(ctx, L(ctx).mediaMapAdded, resultKeyboard(ctx, current).row().text(L(ctx).btnBack, 'active'));
     }
     const d = getDraft(ctx);
     if (!d || d.step !== 'media' || d.mode === 'active_edit') return;
-    d.media = media;
+    d.media_items = mergeAlertMediaItems(Array.isArray(d.media_items) && d.media_items.length ? d.media_items : d.media, media, { replaceSameType: true });
+    d.media = d.media_items[0];
     return showPreview(ctx, d);
   };
   bot.on('message:photo', (ctx) => receiveAlertMedia(ctx, 'photo'));

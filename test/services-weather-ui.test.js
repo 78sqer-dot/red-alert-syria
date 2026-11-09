@@ -74,8 +74,10 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobs: 'وظائف'/);
   assert.match(services, /jobs: 'Jobs'/);
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
-  assert.match(app, /services\.js\?v=35/);
-  assert.match(app, /icons\.js\?v=6/);
+  const tabOrder = [...services.matchAll(/tabBtn\('([^']+)'/g)].map((match) => match[1]);
+  assert.deepEqual(tabOrder.slice(0, 2), ['army', 'jobs']);
+  assert.match(app, /services\.js\?v=36/);
+  assert.match(app, /icons\.js\?v=7/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
   assert.match(services, /findWorker: 'مطلوب موظف'/);
@@ -108,6 +110,10 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(card, /j\.application_deadline/);
   assert.match(card, /L\.jobDeadline/);
   assert.doesNotMatch(card, /job-source|jobSource|source_url|source_name/);
+  const armyStart = services.indexOf('function armyHtml()');
+  const armyEnd = services.indexOf('function renderResults', armyStart);
+  assert.ok(armyStart >= 0 && armyEnd > armyStart);
+  assert.doesNotMatch(services.slice(armyStart, armyEnd), /source_name|source_url|data\.sources|army-source|army-card-source/);
   assert.match(services, /data-job-toggle/);
   assert.match(services, /async function onClick/);
   assert.match(services, /navigator\.share\(\{ title, text: shareText, url: shareUrl \}\)/);
@@ -122,7 +128,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobReadMore: 'Read more'/);
   assert.match(services, /jobReadLess: 'Show less'/);
   assert.match(services, /syrian\[_\\s-\]\?jo\[b\]\+/i, 'channel tags are stripped from previously cached job items');
-  assert.match(app, /services\.js\?v=35/, 'the updated service module bypasses stale browser caches');
+  assert.match(app, /services\.js\?v=36/, 'the updated service module bypasses stale browser caches');
   assert.match(services, /hashtagOnlyLine/, 'standalone hashtag footer lines are removed');
   assert.match(css, /\.jobs-switch\s*\{/);
   assert.match(css, /\.jobs-option\.on\s*\{/);
@@ -134,7 +140,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
-  assert.match(html, /app\.css\?v=64/);
+  assert.match(html, /app\.css\?v=67/);
   assert.match(css, /\.job-deadline, \.army-deadline/);
 });
 

@@ -28,6 +28,31 @@ export function sanitizeAlertMedia(media) {
   };
 }
 
+export function sanitizeAlertMediaItems(value) {
+  const candidates = Array.isArray(value) ? value : (value ? [value] : []);
+  const items = [];
+  for (const candidate of candidates) {
+    const media = sanitizeAlertMedia(candidate);
+    if (!media || items.some((item) => item.type === media.type)) continue;
+    items.push(media);
+    if (items.length === 2) break;
+  }
+  return items;
+}
+/** Add a different media type, or replace its existing item when explicitly requested. */
+export function mergeAlertMediaItems(existing, incoming, { replaceSameType = false } = {}) {
+  const items = sanitizeAlertMediaItems(existing);
+  const media = sanitizeAlertMedia(incoming);
+  if (!media) return items;
+  const sameType = items.findIndex((item) => item.type === media.type);
+  if (sameType >= 0) {
+    if (replaceSameType) items[sameType] = media;
+    return items;
+  }
+  if (items.length < 2) items.push(media);
+  return items;
+}
+
 /**
  * In-memory state with atomic JSON persistence on disk and an optional remote backup
  * (the bot keeps a pinned JSON snapshot in the owner's private chat so data survives
@@ -100,9 +125,15 @@ class Store extends EventEmitter {
     if (!s || typeof s !== 'object') return;
     const alerts = Array.isArray(s.alerts) ? s.alerts.filter((a) => a && a.id && ALERT_TYPES[a.type]) : [];
     for (const alert of alerts) {
-      const media = sanitizeAlertMedia(alert.media);
-      if (media) alert.media = media;
-      else delete alert.media;
+      const rawMediaItems = Array.isArray(alert.media_items) && alert.media_items.length ? alert.media_items : alert.media;
+      const mediaItems = sanitizeAlertMediaItems(rawMediaItems);
+      if (mediaItems.length) {
+        alert.media_items = mediaItems;
+        alert.media = mediaItems[0];
+      } else {
+        delete alert.media_items;
+        delete alert.media;
+      }
     }
     this.state = {
       version: 1,
@@ -218,13 +249,15 @@ class Store extends EventEmitter {
     const ttl = Math.max(5, Math.min(Number(input.ttlMin) || t.ttlMin, 24 * 60));
     const weatherWarning = input.type === 'weather' && input.source === 'weather';
     const weatherHours = this.autoDeleteHours;
+    const rawMediaItems = Array.isArray(input.media_items) && input.media_items.length ? input.media_items : input.media;
+    const mediaItems = sanitizeAlertMediaItems(rawMediaItems);
     const alert = {
       id: input.id || this.newId(),
       type: input.type,
       title: input.title,
       title_en: input.title_en,
       description: input.description || '',
-      ...(sanitizeAlertMedia(input.media) ? { media: sanitizeAlertMedia(input.media) } : {}),
+      ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
       location: input.location?.latitude != null ? { latitude: input.location.latitude, longitude: input.location.longitude } : null,
       place: input.location || null,
       areas: input.areas || [],
@@ -279,10 +312,24 @@ class Store extends EventEmitter {
     const a = this.getAlert(id);
     if (!a) return null;
     Object.assign(a, patch);
-    if (Object.hasOwn(patch, 'media')) {
+    if (Object.hasOwn(patch, 'media_items')) {
+      const mediaItems = sanitizeAlertMediaItems(patch.media_items);
+      if (mediaItems.length) {
+        a.media_items = mediaItems;
+        a.media = mediaItems[0];
+      } else {
+        delete a.media_items;
+        delete a.media;
+      }
+    } else if (Object.hasOwn(patch, 'media')) {
       const media = sanitizeAlertMedia(patch.media);
-      if (media) a.media = media;
-      else delete a.media;
+      if (media) {
+        a.media = media;
+        a.media_items = [media];
+      } else {
+        delete a.media_items;
+        delete a.media;
+      }
     }
     if (['title', 'title_en', 'description', 'description_en', 'location', 'extra', 'expires_at', 'is_active'].some((k) => k in patch)) this._history(a, 'updated');
     if ('channel_message_id' in patch) this._logPatch(id, { m: patch.channel_message_id || undefined });
@@ -716,8 +763,12 @@ function publicSourceInfo(a, sources, newsSources) {
 /** Strip private fields before sending an alert to browsers. */
 export function publicAlert(a) {
   const p = a.place || {};
-  const media = sanitizeAlertMedia(a.media);
-  const mediaVersion = media ? crypto.createHash('sha256').update(media.file_unique_id || media.file_id).digest('hex').slice(0, 12) : null;
+  const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : a.media;
+  const mediaItems = sanitizeAlertMediaItems(rawMediaItems).map((media) => ({
+    type: media.type,
+    version: crypto.createHash('sha256').update(media.file_unique_id || media.file_id).digest('hex').slice(0, 12),
+  }));
+  const media = mediaItems[0] || null;
   const sources = politicalSources(a);
   const newsSources = monitoredNewsSources(a);
   const rawFlightTarget = a.type === 'air_movement' ? a.meta?.flightTarget : null;
@@ -763,7 +814,7 @@ export function publicAlert(a) {
     title_en: a.title_en,
     description: cleanAlertText(a.description) || undefined,
     description_en: a.description_en || undefined,
-    ...(media ? { media: { type: media.type, version: mediaVersion } } : {}),
+    ...(media ? { media, media_items: mediaItems } : {}),
     location: a.location,
     place: {
       name_ar: p.name_ar, name_en: p.name_en,

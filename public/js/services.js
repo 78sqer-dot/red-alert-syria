@@ -611,7 +611,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const b = sheet.querySelector('#svcBody');
     b.innerHTML = `<div class="sheet-grab"></div>
       <div class="svc-head"><div><h2>${esc(L.sheetTitle)}</h2><p>${esc(L.sheetSub)}</p></div><button class="sb-x lg" data-a="close" aria-label="${esc(L.close)}">${icon('x', 18)}</button></div>
-      <div class="svc-tabs">${tabBtn('prices', 'coin', L.prices)}${tabBtn('weather', 'sun', L.weather)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}${tabBtn('jobs', 'briefcase', L.jobs)}${tabBtn('army', 'shield', ARMY_TEXT[LANG === 'en' ? 'en' : 'ar'].tab)}</div>
+      <div class="svc-tabs">${tabBtn('army', 'shield', ARMY_TEXT[LANG === 'en' ? 'en' : 'ar'].tab)}${tabBtn('jobs', 'briefcase', L.jobs)}${tabBtn('prices', 'coin', L.prices)}${tabBtn('weather', 'sun', L.weather)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}</div>
       <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'weather' ? weatherHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : st.tab === 'borders' ? bordersHtml() : st.tab === 'jobs' ? jobsHtml() : st.tab === 'army' ? armyHtml() : st.tab === 'nearby' ? nearbyHtml() : pricesHtml()}</div>`;
     if (st.tab === 'nearby') renderResults();
     if (st.tab === 'weather' && (!st.wx || Date.now() - st.wxAt > 10 * 60_000) && !st.wxLoading) loadWx().catch(() => {});
@@ -781,21 +781,16 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       channels.tg ? `<a class="btn-sm army-follow-link" href="${esc(channels.tg)}" target="_blank" rel="noopener noreferrer">${icon('telegram', 16)}${esc(A.follow)} · ${esc(A.telegram)}</a>` : '',
       channels.wa ? `<a class="btn-sm army-follow-link" href="${esc(channels.wa)}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 16)}${esc(A.follow)} · ${esc(A.whatsapp)}</a>` : '',
     ].filter(Boolean).join('');
-    const sources = (Array.isArray(data.sources) ? data.sources : []).map((source) => `<a class="army-source" href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">${icon('shield', 15)}<span><b>${esc(source.name)}</b><small>${esc(A.verified)}</small></span>${icon('link', 13)}</a>`).join('');
     const card = (item) => {
       const category = categories.find((c) => c.id === item.category);
       const links = (Array.isArray(item.links) ? item.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
-      const sourceUrl = /^https:\/\//i.test(String(item.source_url || '')) ? item.source_url : '';
       const deadline = deadlineLabel(item.application_deadline);
-      return `<article class="army-card"><div class="army-card-top"><span class="army-badge">${esc(category?.icon || '🏛️')} ${esc(LANG === 'en' ? category?.en || A.title : category?.ar || A.title)}</span><small>${esc(item.source_name || A.verified)}${item.published_at ? ` · ${esc(when(item.published_at))}` : ''}</small></div><h3>${esc(item.title || A.title)}</h3>${deadline ? `<small class="army-deadline"><b>${esc(A.deadline)}:</b> ${esc(deadline)}</small>` : ''}<p>${esc(item.text || '').replace(/\r?\n/g, '<br>')}</p>${links.length ? `<div class="army-card-links"><b>${esc(A.apply)}</b>${links.map((url, i) => `<a class="btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${A.apply} ${i + 1}` : A.apply)}</a>`).join('')}</div>` : ''}${sourceUrl ? `<a class="army-card-source" href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(A.source)}</a>` : ''}</article>`;
+      return `<article class="army-card"><div class="army-card-top"><span class="army-badge">${esc(category?.icon || '🏛️')} ${esc(LANG === 'en' ? category?.en || A.title : category?.ar || A.title)}</span><small>${item.published_at ? esc(when(item.published_at)) : ''}</small></div><h3>${esc(item.title || A.title)}</h3>${deadline ? `<small class="army-deadline"><b>${esc(A.deadline)}:</b> ${esc(deadline)}</small>` : ''}<p>${esc(item.text || '').replace(/\r?\n/g, '<br>')}</p>${links.length ? `<div class="army-card-links"><b>${esc(A.apply)}</b>${links.map((url, i) => `<a class="btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${A.apply} ${i + 1}` : A.apply)}</a>`).join('')}</div>` : ''}</article>`;
     };
-    const checked = data.checked_at ? `${esc(A.updated)}: ${esc(when(data.checked_at))}` : '';
     return `<section class="army-intro"><span class="army-icon">${icon('shield', 22)}</span><div><h3>${esc(A.title)}</h3><p>${esc(A.intro)}</p></div></section>
       <div class="army-follow"><b>${esc(A.follow)}</b><div class="army-follow-links">${followLinks || `<span class="army-no-channels">${icon('telegram', 16)} ${icon('whatsapp', 16)} ${esc(A.noChannels)}</span>`}</div></div>
       <div class="dd-sec">${esc(A.category)}</div><div class="svc-chips army-chips">${chip('all', A.all)}${categories.map((c) => chip(c.id, LANG === 'en' ? c.en : c.ar, c.icon)).join('')}</div>
-      ${filtered.length ? `<div class="army-list">${filtered.map(card).join('')}</div>` : `<div class="svc-empty army-empty"><span class="army-icon">${icon('shield', 22)}</span><p>${esc(st.armyLoaded ? A.empty : L.loading)}</p></div>`}
-      <div class="dd-sec">${esc(A.sources)}</div><div class="army-sources">${sources || `<p class="svc-note">${esc(A.empty)}</p>`}</div>
-      <p class="svc-note">${esc(A.sourceNote)} ${checked ? `<br>${checked}` : ''}</p>`;
+      ${filtered.length ? `<div class="army-list">${filtered.map(card).join('')}</div>` : `<div class="svc-empty army-empty"><span class="army-icon">${icon('shield', 22)}</span><p>${esc(st.armyLoaded ? A.empty : L.loading)}</p></div>`}`;
   }
   function renderResults(failed) {
     const box = sheet?.querySelector('#svcRes'); if (!box) return;

@@ -65,7 +65,7 @@ bot.api.config.use(async (_previous, method, payload) => {
 });
 reportBot.api.config.use(async (_previous, method, payload) => {
   calls.push({ method, chatId: payload?.chat_id, payload: snapshotPayload(payload) });
-  if (method === 'getFile') return { ok: true, result: { file_path: 'photos/local-test.jpg', file_size: 128 } };
+  if (method === 'getFile') return { ok: true, result: { file_path: String(payload.file_id).startsWith('report-video') ? 'videos/local-test.mp4' : 'photos/local-test.jpg', file_size: 128 } };
   if (method === 'sendMessage') return { ok: true, result: { message_id: ++messageId, chat: { id: payload.chat_id, type: 'private' }, date: 0, text: payload.text || '' } };
   if (method === 'editMessageText') return { ok: true, result: { message_id: payload.message_id, chat: { id: payload.chat_id, type: 'private' }, date: 0, text: payload.text || '' } };
   return { ok: true, result: true };
@@ -1272,19 +1272,22 @@ test('bot menus hide route creation while preserving regular aerial reports and 
 });
 
 
-test('reporters can attach a photo and editors receive it before approving the channel and map alert', async (t) => {
+test('public reporters can attach a photo and video to one pending report before manual review', async (t) => {
   fs.mkdirSync(dataDir, { recursive: true });
   const mediaReporter = { id: 8270709661, is_bot: false, first_name: 'Media reporter', language_code: 'ar' };
   const reportIdsBefore = new Set(Object.keys(store.state.reports || {}));
-  const activeBefore = new Set(store.activeAlerts().map((alert) => alert.id));
   const start = calls.length;
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(Buffer.from('local-media-bytes'), { status: 200, headers: { 'content-length': '17', 'content-type': 'image/jpeg' } });
-  let publishedId = null;
+  globalThis.fetch = async (url) => {
+    const video = String(url).includes('/videos/');
+    return new Response(Buffer.from(video ? 'local-video-bytes' : 'local-photo-bytes'), {
+      status: 200,
+      headers: { 'content-length': '17', 'content-type': video ? 'video/mp4' : 'image/jpeg' },
+    });
+  };
   let rid = null;
   t.after(async () => {
     globalThis.fetch = originalFetch;
-    if (publishedId) store.deleteAlert(publishedId);
     if (rid && store.reportGet(rid)) store.reportTake(rid);
     await new Promise((resolve) => setTimeout(resolve, 350));
   });
@@ -1298,33 +1301,34 @@ test('reporters can attach a photo and editors receive it before approving the c
   await tap('skip', mediaReporter, reportBot);
   await tap('attachmedia', mediaReporter, reportBot);
   await sendPhoto(mediaReporter, reportBot, 'report-photo-e2e');
+  const previewWithPhoto = [...calls.slice(start)].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
+  assert.match(previewWithPhoto?.payload?.text || '', /مرفق صورة/);
+  assert.ok(previewWithPhoto?.payload?.reply_markup?.inline_keyboard?.flat().some((button) => button.callback_data === 'attachmedia'), 'the reporter can add another media type after the first attachment');
+  await tap('attachmedia', mediaReporter, reportBot);
+  await sendVideo(mediaReporter, reportBot, 'report-video-e2e');
   const preview = [...calls.slice(start)].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
-  assert.match(preview?.payload?.text || '', /صورة مرفقة/);
+  assert.match(preview?.payload?.text || '', /مرفق صورة \+ فيديو/);
   assert.ok(preview?.payload?.reply_markup?.inline_keyboard?.flat().some((button) => button.callback_data === 'submit'));
   await tap('submit', mediaReporter, reportBot);
 
   rid = Object.keys(store.state.reports || {}).find((id) => !reportIdsBefore.has(id));
-  assert.ok(rid, 'report with its attachment is retained for review');
+  assert.ok(rid, 'the report with both attachments is retained for manual review');
   const pending = store.reportGet(rid);
-  assert.equal(pending.draft.media?.type, 'photo');
-  assert.equal(pending.draft.media?.bot_role, 'admin', 'reviewers receive the media with a file identifier owned by the admin bot');
+  const pendingMedia = pending.draft.media_items;
+  assert.deepEqual(pendingMedia.map((item) => item.type), ['photo', 'video']);
+  assert.ok(pendingMedia.every((item) => item.bot_role === 'admin'), 'reviewers receive media with file identifiers owned by the admin bot');
   assert.ok(calls.slice(start).some(({ method, chatId, payload }) => method === 'sendPhoto' && chatId === ownerId && payload.caption === '📎 مرفق البلاغ'), 'reviewers receive the photo before the decision card');
+  assert.ok(calls.slice(start).some(({ method, chatId, payload }) => method === 'sendVideo' && chatId === ownerId && payload.caption === '📎 مرفق البلاغ'), 'reviewers receive the video before the decision card');
   const projectedPending = publicAlert(buildAlertInput(pending.draft, pending.from));
-  assert.equal(projectedPending.media.type, 'photo');
-  assert.equal(Object.hasOwn(projectedPending.media, 'file_id'), false, 'Telegram file identifiers are never exposed to map clients');
+  assert.deepEqual(projectedPending.media_items.map((item) => item.type), ['photo', 'video']);
+  assert.equal(projectedPending.media_items.some((item) => Object.hasOwn(item, 'file_id')), false, 'Telegram file identifiers are never exposed to map clients');
   assert.equal(JSON.stringify(projectedPending).includes('report-photo-e2e'), false);
-
-  await tap(`rap:${rid}`, owner, bot);
-  const published = store.activeAlerts().find((alert) => !activeBefore.has(alert.id));
-  assert.ok(published, 'the editor approval publishes the reviewed report');
-  publishedId = published.id;
-  assert.equal(published.channel_media, 'photo');
-  assert.equal(published.media?.bot_role, 'admin', 'the reviewer transfers the attachment to the publishing bot before channel posting');
-  assert.ok(calls.slice(start).some(({ method, chatId }) => method === 'sendPhoto' && chatId === '@mock_news_channel'));
-  assert.equal(store.reportDone(rid), true);
+  assert.equal(JSON.stringify(projectedPending).includes('report-video-e2e'), false);
+  assert.equal(calls.slice(start).some(({ chatId }) => chatId === '@mock_news_channel'), false, 'the synthetic report remains pending and is never published');
+  assert.equal(store.reportDone(rid), false, 'the report is still awaiting an editor decision');
 });
 
-test('admins can attach a video to an active text-only channel post and the bot replaces it safely', async (t) => {
+test('admins can add a video to the map without changing the existing channel post', async (t) => {
   fs.mkdirSync(dataDir, { recursive: true });
   const source = buildAlertInput({ type: 'uav', location: { scope: 'country' }, extra: [], ttlMin: 60 }, { id: ownerId, name: 'Local owner' });
   const alert = store.addAlert(source);
@@ -1342,11 +1346,12 @@ test('admins can attach a video to an active text-only channel post and the bot 
   await sendVideo(owner, bot, 'admin-video-e2e');
 
   const saved = store.getAlert(alert.id);
-  assert.equal(saved.channel_media, 'video');
-  assert.notEqual(saved.channel_message_id, 9000001, 'a text-only Telegram message is replaced because Telegram cannot convert it into a video post');
+  assert.equal(saved.channel_media, 'text', 'adding map media does not alter the existing channel post');
+  assert.equal(saved.channel_message_id, 9000001, 'the original channel message remains in place');
   assert.equal(saved.media?.type, 'video');
-  assert.ok(calls.slice(start).some(({ method, chatId, payload }) => method === 'sendVideo' && chatId === '@mock_news_channel' && payload.caption), 'the replacement includes the alert caption');
-  assert.ok(calls.slice(start).some(({ method, chatId, payload }) => method === 'deleteMessage' && chatId === '@mock_news_channel' && payload.message_id === 9000001), 'the prior text post is deleted only after the video post is created');
-  const channelButtons = [...calls.slice(start)].reverse().find(({ method, chatId }) => method === 'sendVideo' && chatId === '@mock_news_channel')?.payload?.reply_markup?.inline_keyboard?.flat() || [];
-  assert.ok(channelButtons.some((button) => button.url === 'https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k'), 'channel posts include the WhatsApp channel link');
+  assert.deepEqual(saved.media_items.map((item) => item.type), ['video']);
+  assert.equal(calls.slice(start).some(({ chatId }) => chatId === '@mock_news_channel'), false, 'map media updates never replace or repost an existing channel message');
+  assert.equal(calls.slice(start).some(({ method, payload }) => method === 'deleteMessage' && payload.message_id === 9000001), false, 'the old channel post is not deleted');
+  const confirmation = [...calls.slice(start)].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText')?.payload?.text || '';
+  assert.match(confirmation, /حُفظ الوسيط على الخريطة/);
 });

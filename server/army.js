@@ -138,16 +138,27 @@ function cleanPublicArmyText(raw) {
   while (lines.length && /^[ـ—–=_-]{3,}$/.test(lines[lines.length - 1])) lines.pop();
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
+function armySourceRelatedLink(raw, rawSource) {
+  try {
+    const link = new URL(raw);
+    const source = new URL(safeHttps(rawSource));
+    const host = (value) => value.toLowerCase().replace(/^www\./, '');
+    const linkPath = link.pathname.replace(/\/+$/, '').toLowerCase() || '/';
+    const sourcePath = source.pathname.replace(/\/+$/, '').toLowerCase() || '/';
+    return host(link.hostname) === host(source.hostname)
+      && (linkPath === sourcePath || (linkPath !== '/' && sourcePath.startsWith(`${linkPath}/`)));
+  } catch { return false; }
+}
 function publicArmyLinks(item) {
   return safeLinks(item.links || []).filter((raw) => {
     try {
       const url = new URL(raw);
-      return !['t.me', 'www.t.me', 'telegram.me', 'www.telegram.me'].includes(url.hostname.toLowerCase()) || url.pathname.replace(/\/+$/, '').toLowerCase() !== '/sana_gov';
+      const host = url.hostname.toLowerCase();
+      const sanaFollow = ['t.me', 'www.t.me', 'telegram.me', 'www.telegram.me'].includes(host)
+        && url.pathname.replace(/\/+$/, '').toLowerCase() === '/sana_gov';
+      return !sanaFollow && !armySourceRelatedLink(raw, item.sourceUrl);
     } catch { return false; }
   });
-}
-function publicArmySourceName(item) {
-  return /سانا|\bsana\b/iu.test(String(item.sourceName || '')) ? 'مصدر رسمي' : item.sourceName;
 }
 function titleFromText(text) {
   const line = String(text || '').split(/\r?\n/).map((x) => x.trim()).find(Boolean) || 'تحديث رسمي';
@@ -363,18 +374,16 @@ export function publicArmy(j = armyState(), now = Date.now()) {
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
     .slice(0, 100)
     .map((item) => ({
-      id: item.id, category: item.category, title: cleanPublicArmyText(item.title) || item.title, text: cleanPublicArmyText(item.text),
-      source_name: publicArmySourceName(item), source_url: safeHttps(item.sourceUrl), links: publicArmyLinks(item),
+      id: item.id, category: item.category, title: cleanPublicArmyText(item.title) || item.title,
+      text: cleanPublicArmyText(item.text).replace(/https?:\/\/[^\s<>]+/gi, (raw) => armySourceRelatedLink(raw.replace(/[),.;!?]+$/, ''), item.sourceUrl) ? '' : raw).trim(),
+      links: publicArmyLinks(item),
       application_deadline: item.applicationDeadline || null,
       created_at: item.createdAt || null, updated_at: item.updatedAt || null, published_at: item.publishedAt || null,
     }));
-  const checked = ARMY_SOURCES.map((source) => j.sources[source.u]?.lastCheck).filter(Boolean).map((x) => typeof x === 'number' ? x : Date.parse(x)).filter(Number.isFinite);
   return {
     categories: Object.entries(ARMY_CATEGORIES).map(([id, row]) => ({ id, ...row })),
     items,
-    sources: ARMY_SOURCES.map(({ u, name, url }) => ({ username: u, name, url })),
     channels: { tg: j.channels.tg || '', wa: j.channels.wa || '' },
-    checked_at: checked.length ? new Date(Math.max(...checked)).toISOString() : null,
   };
 }
 

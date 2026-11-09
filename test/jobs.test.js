@@ -22,8 +22,27 @@ test('only owner-approved job posts enter the public Jobs list', () => {
   assert.equal(decideJob(created.job.id, 'approve', jobs, 7, NOW + 1000).ok, true);
   assert.equal(publicJobs(jobs).length, 1);
   assert.equal(publicJobs(jobs)[0].links[0], 'https://example.org/apply');
-  assert.equal(publicJobs(jobs)[0].source_url, '');
+  assert.equal('source_name' in publicJobs(jobs)[0], false);
+  assert.equal('source_url' in publicJobs(jobs)[0], false);
   assert.equal(publicJobs(jobs)[0].location.label_ar, governorates[0].ar);
+});
+
+test('public job data hides monitored source names and URLs but retains application links', () => {
+  const jobs = initialJobsState();
+  const created = createPendingJob({
+    kind: 'source', sourceKey: 'test:private-source:1', sourceName: 'قناة وظائف خاصة',
+    sourceUrl: 'https://t.me/private_jobs/42', title: 'فرصة محاسب',
+    text: 'فرصة عمل محاسب في دمشق. رابط المصدر: https://t.me/private_jobs/42\nللتقديم: https://example.org/apply',
+    links: ['https://t.me/private_jobs/42', 'https://t.me/private_jobs', 'https://example.org/apply'],
+    location: locationForGovernorate(governorates[0].code),
+  }, jobs, NOW);
+  assert.ok(created.job);
+  assert.equal(decideJob(created.job.id, 'approve', jobs, 7, NOW + 1000).ok, true);
+  const item = publicJobs(jobs)[0];
+  assert.equal('source_name' in item, false);
+  assert.equal('source_url' in item, false);
+  assert.equal(item.text.includes('private_jobs'), false);
+  assert.deepEqual(item.links, ['https://example.org/apply']);
 });
 
 test('job listings expire after the Damascus application-deadline day and can be extended', () => {

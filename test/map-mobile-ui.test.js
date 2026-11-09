@@ -53,12 +53,12 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=76'/);
-  assert.match(html, /app\.css\?v=65/);
-  assert.match(html, /app\.js\?v=79/);
+  assert.match(html, /app\.css\?v=67/);
+  assert.match(html, /app\.js\?v=82/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
-  assert.match(app, /from '\.\/services\.js\?v=35'/);
+  assert.match(app, /from '\.\/services\.js\?v=36'/);
   assert.match(app, /from '\.\/icons\.js\?v=7'/);
   assert.match(app, /from '\.\/i18n\.js\?v=4'/);
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
@@ -71,19 +71,34 @@ test('changed type and icon modules use fresh cache keys', () => {
   assert.match(settings, /from '\/shared\/types\.js\?v=41'/);
 });
 
-test('alert popup switches between the news card and attached media with clear icons', () => {
-  assert.match(app, /class="pp-view-tabs" role="tablist"/);
-  assert.match(app, /data-pp-tab="news"/);
-  assert.match(app, /data-pp-tab="media"/);
-  assert.match(app, /icon\('news', 15\)/);
+test('alert popup keeps the article visible with buttons for attached photo and video beside its title', () => {
+  assert.match(app, /const mediaItems = \['photo', 'video'\]\.map\(\(type\) => rawMediaItems\.find\(\(item\) => item\?\.type === type\)\)\.filter\(Boolean\)/);
+  assert.match(app, /const mediaActions = mediaItems\.length \?/);
+  assert.match(app, /class="pp-title-row"><p class="pp-title">[\s\S]{0,100}\$\{mediaActions\}/);
+  assert.match(app, /const mediaViewer = firstMedia \?/);
+  assert.match(app, /const content = `\$\{alertInfo\}\$\{mediaViewer\}`/);
+  assert.doesNotMatch(app, /pp-view-tabs|data-pp-tab/);
+  assert.match(app, /data-pp-media-type/);
+  assert.match(app, /mediaItems\.map\(\(item, index\)/);
   assert.match(app, /mediaVideo' : 'mediaImage/);
   assert.match(app, /<video class="pp-media-video" controls playsinline preload="none"/);
   assert.match(app, /<img class="pp-media-image"/);
   assert.match(app, /schedulePopupFit\?\.\(2\)/);
-  assert.match(css, /\.pp-view-tabs \{/);
+  assert.match(css, /\.pp-title-row \{ display: flex/);
+  assert.match(css, /\.pp-media-actions \{ display: flex/);
+  assert.match(css, /\.pp-media-action \{/);
   assert.match(css, /\.pp-media-image, \.pp-media-video/);
   assert.match(app, /https:\/\/whatsapp\.com\/channel\/0029VbEO1eGCBtxLP3jW8e1k/);
   assert.match(app, /wa-channel-btn/);
+});
+
+test('alert popup text and media are modestly smaller while controls remain touch accessible', () => {
+  assert.match(css, /\.pp-title \{ margin: 0; color: var\(--text-primary\); font-weight: 900; font-size: clamp\(14px, 1\.05rem, 16px\)/);
+  assert.match(css, /\.pp-desc \{ margin: 9px 0 0; color: var\(--text-secondary\); font-size: 12px/);
+  assert.match(css, /\.pp-media-image, \.pp-media-video \{ max-height: min\(32dvh, 280px\); \}/);
+  assert.match(css, /\.pp-media-action \{[^}]*min-height: 36px/);
+  assert.match(css, /@media \(max-width: 767px\) \{[\s\S]{0,500}\.pp-alert-popup \.maplibregl-popup-content \{[^}]*max-height: min\(44dvh, 400px\)/);
+  assert.match(css, /\.pp-alert-popup \.pp-more, \.pp-alert-popup \.pp-share \{ min-height: 44px/);
 });
 
 test('alert symbols use shared category colors in badges, filters and map markers', () => {

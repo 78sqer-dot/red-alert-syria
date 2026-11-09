@@ -1,5 +1,5 @@
 // Red Alert Syria — front-end application
-import { createServices, GOV_C } from './services.js?v=35';
+import { createServices, GOV_C } from './services.js?v=36';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
 import { DICT } from './i18n.js?v=4';
 import { matchesGovernorate } from './alert-region-filter.js';
@@ -387,23 +387,26 @@ function distChip(a) {
 }
 function popupHtml(a) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
-  const mediaType = ['photo', 'video'].includes(a.media?.type) ? a.media.type : null;
-  const version = /^[a-f0-9]{12}$/.test(a.media?.version || '') ? a.media.version : '';
-  const mediaUrl = mediaType ? `/api/alerts/${encodeURIComponent(a.id)}/media${version ? `?v=${version}` : ''}` : '';
+  const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : (a.media ? [a.media] : []);
+  const mediaItems = ['photo', 'video'].map((type) => rawMediaItems.find((item) => item?.type === type)).filter(Boolean);
+  const mediaUrl = (item) => {
+    const query = new URLSearchParams({ type: item.type });
+    if (/^[a-f0-9]{12}$/.test(item.version || '')) query.set('v', item.version);
+    return `/api/alerts/${encodeURIComponent(a.id)}/media?${query.toString()}`;
+  };
+  const mediaElement = (item) => item.type === 'video'
+    ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(mediaUrl(item))}" type="video/mp4"></video>`
+    : `<img class="pp-media-image" src="${esc(mediaUrl(item))}" alt="${esc(T.photoTab)}" loading="lazy" decoding="async">`;
+  const firstMedia = mediaItems[0] || null;
+  const mediaActions = mediaItems.length ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'وسائط التنبيه' : 'Alert media')}">${mediaItems.map((item, index) => `<button type="button" class="pp-media-action" aria-pressed="${index === 0}" aria-label="${esc(item.type === 'video' ? T.videoTab : T.photoTab)}" data-pp-media-type="${item.type}" data-pp-media-version="${esc(item.version || '')}">${icon(item.type === 'video' ? 'mediaVideo' : 'mediaImage', 14)}<span>${esc(item.type === 'video' ? T.videoTab : T.photoTab)}</span></button>`).join('')}</div>` : '';
   const alertInfo = `<div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
-    <p class="pp-title">${esc(titleOf(a))}</p>
+    <div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p>${mediaActions}</div>
     ${distChip(a)}
     ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">${icon('locate', 13)} ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
     ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}`;
-  const content = mediaType ? `<div class="pp-view-tabs" role="tablist" aria-label="${esc(T.alertNewsTab)}">
-      <button type="button" class="pp-view-tab" role="tab" aria-selected="true" aria-controls="pp-news-${esc(a.id)}" data-pp-tab="news">${icon('news', 15)}${esc(T.alertNewsTab)}</button>
-      <button type="button" class="pp-view-tab" role="tab" aria-selected="false" aria-controls="pp-media-${esc(a.id)}" data-pp-tab="media">${icon(mediaType === 'video' ? 'mediaVideo' : 'mediaImage', 15)}${esc(mediaType === 'video' ? T.videoTab : T.photoTab)}</button>
-    </div>
-    <section class="pp-panel" role="tabpanel" id="pp-news-${esc(a.id)}" data-pp-panel="news">${alertInfo}</section>
-    <section class="pp-panel pp-media-panel" role="tabpanel" id="pp-media-${esc(a.id)}" data-pp-panel="media" hidden>${mediaType === 'video'
-      ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(mediaUrl)}" type="video/mp4"></video>`
-      : `<img class="pp-media-image" src="${esc(mediaUrl)}" alt="${esc(T.photoTab)}" loading="lazy" decoding="async">`}</section>` : alertInfo;
-  return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">
+  const mediaViewer = firstMedia ? `<section class="pp-media-panel" role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"><div class="pp-media-content" data-pp-media-content>${mediaElement(firstMedia)}</div></section>` : '';
+  const content = `${alertInfo}${mediaViewer}`;
+  return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" data-alert-id="${esc(a.id)}">
     ${content}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
     <a class="pp-share" href="https://wa.me/?text=${encodeURIComponent(shareText(a) + '\n' + shareUrl(a))}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.share)}</a></div></div>`;
@@ -1145,14 +1148,20 @@ function bindEvents() {
   });
   // popups (rendered inside the map container)
   $('#map').addEventListener('click', (e) => {
-    const tab = e.target.closest('[data-pp-tab]');
-    if (tab) {
-      const root = tab.closest('.pp');
-      const view = tab.dataset.ppTab;
-      if (!root || !['news', 'media'].includes(view)) return;
-      root.querySelectorAll('[data-pp-tab]').forEach((button) => button.setAttribute('aria-selected', String(button === tab)));
-      root.querySelectorAll('[data-pp-panel]').forEach((panel) => { panel.hidden = panel.dataset.ppPanel !== view; });
-      if (view !== 'media') root.querySelectorAll('video').forEach((video) => video.pause());
+    const mediaButton = e.target.closest('[data-pp-media-type]');
+    if (mediaButton) {
+      const root = mediaButton.closest('.pp');
+      const panel = root?.querySelector('.pp-media-panel');
+      const type = mediaButton.dataset.ppMediaType;
+      if (!root || !panel || !['photo', 'video'].includes(type)) return;
+      root.querySelectorAll('[data-pp-media-type]').forEach((button) => button.setAttribute('aria-pressed', String(button === mediaButton)));
+      const display = panel.querySelector('[data-pp-media-content]');
+      if (!display) return;
+      const version = /^[a-f0-9]{12}$/.test(mediaButton.dataset.ppMediaVersion || '') ? `&v=${encodeURIComponent(mediaButton.dataset.ppMediaVersion)}` : '';
+      const url = `/api/alerts/${encodeURIComponent(root.dataset.alertId || '')}/media?type=${encodeURIComponent(type)}${version}`;
+      display.innerHTML = type === 'video'
+        ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(url)}" type="video/mp4"></video>`
+        : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(T.photoTab)}" loading="lazy" decoding="async">`;
       amap?.schedulePopupFit?.(2);
       return;
     }
