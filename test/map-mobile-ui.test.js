@@ -21,6 +21,13 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
   assert.match(app, /e\.key !== 'Escape'[^\n]*[\s\S]{0,100}setMapControlsOpen\(false\)/);
 });
 
+test('map attribution keeps credits visible without a compact information button', () => {
+  assert.match(map, /new M\.AttributionControl\(\{ compact: false, customAttribution:/);
+  assert.match(map, /OpenFreeMap<\/a> © <a href="https:\/\/www\.openstreetmap\.org\/copyright"/);
+  assert.doesNotMatch(map, /classList\.remove\('maplibregl-compact-show'\)/);
+  assert.match(css, /\.maplibregl-ctrl-attrib \.maplibregl-ctrl-attrib-inner \{[^}]*white-space: normal/);
+});
+
 test('phone map controls and about pill share a lower safe-area-aware bottom row', () => {
   assert.match(css, /\.map-ctrls \{ bottom: calc\(20px \+ env\(safe-area-inset-bottom, 0px\)\); gap: 7px;/);
   assert.match(css, /\.about-pill \{\s*bottom: calc\(23px \+ env\(safe-area-inset-bottom, 0px\)\);/);
@@ -52,9 +59,9 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=76'/);
-  assert.match(html, /app\.css\?v=67/);
-  assert.match(html, /app\.js\?v=82/);
+  assert.match(app, /from '\.\/map\.js\?v=77'/);
+  assert.match(html, /app\.css\?v=68/);
+  assert.match(html, /app\.js\?v=83/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
