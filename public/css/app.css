@@ -498,9 +498,9 @@ html[dir='rtl'] .maplibregl-popup-close-button { left: 6px; right: auto; }
 .pp-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding-inline-end: 30px; flex-wrap: wrap; row-gap: 4px; }
 .pp-title { font-weight: 800; font-size: 13px; line-height: 1.5; margin: 0; }
 .pp-desc { display: block; overflow: visible; overflow-wrap: anywhere; font-size: 11px; line-height: 1.55; color: var(--text-secondary); margin: 3px 0 0; white-space: pre-line; }
-.pp-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-width: 0; }
+.pp-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-width: 0; padding-inline-end: 34px; }
 .pp-title-row .pp-title { flex: 1; min-width: 0; }
-.pp-media-actions { display: flex; flex: none; align-items: center; gap: 5px; margin-inline-start: 3px; }
+.pp-media-actions { display: flex; width: 100%; max-width: 100%; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 5px; margin: 8px 0 0; }
 .pp-media-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 58px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--bg-secondary); color: var(--text-secondary); font: 800 10.5px/1.2 var(--font-arabic); cursor: pointer; touch-action: manipulation; white-space: nowrap; }
 .pp-media-action[aria-pressed='true'] { border-color: color-mix(in srgb, var(--blue) 70%, var(--border-subtle)); background: color-mix(in srgb, var(--blue) 18%, var(--bg-elevated)); color: var(--text-primary); }
 .pp-media-action svg { width: 14px; height: 14px; flex: none; }
@@ -560,7 +560,7 @@ html.dark .pp-share { color: #94e2ac; }
   .pp-alert-popup .maplibregl-popup-content { width: min(420px, calc(100vw - 20px)); max-height: min(44vh, 400px); max-height: min(44dvh, 400px); padding: 14px 13px calc(12px + env(safe-area-inset-bottom, 0px)); border-radius: 16px; }
   .pp-title { font-size: 14px; line-height: 1.6; }
   .pp-title-row { gap: 6px; }
-  .pp-media-actions { gap: 4px; margin-inline-start: 1px; }
+  .pp-media-actions { gap: 4px; margin-top: 8px; }
   .pp-media-action { min-width: 52px; min-height: 36px; gap: 4px; padding: 4px 6px; font-size: 10px; }
   .pp-desc { font-size: 11.5px; line-height: 1.7; }
   .pp-foot { position: sticky; bottom: -12px; gap: 8px; margin-inline: -13px; padding: 10px 13px max(10px, env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--bg-elevated) 96%, transparent); backdrop-filter: blur(12px); }
