@@ -6,7 +6,8 @@
 // draft or report, or already ignored never comes back, and follow-ups ("ارتفاع الحصيلة", "القبض على
 // المنفذين", "مجدداً"...) of a known incident don't create new drafts.
 import crypto from 'node:crypto';
-import { InlineKeyboard } from 'grammy';
+import { readFile } from 'node:fs/promises';
+import { InlineKeyboard, InputFile } from 'grammy';
 import { config, isOwner } from './config.js';
 import { store } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji, alertButtonLabel } from '../shared/types.js';
@@ -23,6 +24,7 @@ const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
+import { captureTelegramMedia } from './news-media.js';
 
 const NEWS_GROUP_PRIORITY = ['aerial', 'strikes', 'civil', 'smuggling', 'political', 'nature', 'other'];
 const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', patrol: '🚓', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
@@ -500,6 +502,9 @@ function cardText(d, lang = 'ar') {
   const isLocal = (s) => s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local;
   const srcs = (d.srcs || []).map((s) => (s.url ? `<a href="${esc(s.url)}">${esc(s.name)}</a>` : esc(s.name)) + (isLocal(s) ? tr(lang, ' <i>(محلي)</i>', ' <i>(local)</i>') : ''));
   lines.push('', `🗞 <b>${tr(lang, `المصادر (${srcs.length})`, `Sources (${srcs.length})`)}:</b> ${srcs.join(' · ')}`);
+  for (const m of d.sourceMedia || []) lines.push(m.status === 'captured'
+    ? tr(lang, `📎 مرفق مصدر محفوظ للمراجعة (${m.type === 'photo' ? 'صورة' : 'فيديو'})`, `📎 Source ${m.type} captured for review`)
+    : tr(lang, `⚠️ تعذر حفظ مرفق المصدر؛ الرابط الأصلي متاح أعلاه (${m.type})`, `⚠️ Source ${m.type} unavailable; original source link remains above`));
   const nMain = (d.srcs || []).filter((s) => !isLocal(s)).length;
   if (d.type === 'political') {
     lines.push(tr(lang, 'ℹ️ <i>صياغة منسوبة لما نشرته المصادر — ليست تحققاً مستقلاً، وتحتاج مراجعة بشرية.</i>', 'ℹ️ <i>Attributed to the cited sources; this is not independent verification and needs human review.</i>'));
@@ -617,6 +622,14 @@ async function sendCards(d, only = null) {
   for (const uid of only ? [only] : reviewerIds()) {
     const lang = langOfId(uid);
     try {
+      for (const media of (d.sourceMedia || []).filter((m) => m.status === 'captured')) {
+        try {
+          const input = new InputFile(await readFile(media.path), `source-${media.type}.${media.mimeType.split('/')[1]}`);
+          const caption = tr(lang, `📎 مرفق من ${media.channel}/${media.messageId} — للمراجعة فقط`, `📎 Source attachment from ${media.channel}/${media.messageId} — review only`);
+          if (media.type === 'photo') await a.sendPhoto(uid, input, { caption });
+          else await a.sendVideo(uid, input, { caption });
+        } catch (e) { console.warn('[news] source media reviewer delivery failed', d.id, e.description || e.message); }
+      }
       const m = await a.sendMessage(uid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang), link_preview_options: { is_disabled: true }, disable_notification: nightActive(), _keep: 'c' });
       d.cards.push([uid, m.message_id]); n++;
     } catch (e) { console.warn('[news] card not delivered to', uid, e.description || e.message); }
@@ -947,7 +960,8 @@ async function handleResult(it, r, known, pmap) {
   if (!n.types[r.type]) { note(it, `type ${r.type} switched off`); return; }
   if (!locs.length && r.type !== 'political') { note(it, 'no verified Syrian place found'); return; }
   if (capReached()) { note(it, 'hourly cap reached'); return; }
-  const sourceMedia = Array.isArray(it.media) ? it.media.filter((m) => m && ['photo', 'video'].includes(m.type) && typeof m.url === 'string' && /^https:\/\/(?:cdn\d+\.)?telesco\.pe\//i.test(m.url)).slice(0, 2).map((m) => ({ type: m.type, url: m.url, source: it.url })) : [];
+  const sourceMedia = Array.isArray(it.media) ? await captureTelegramMedia(it.media) : [];
+  for (const media of sourceMedia) Object.assign(media, { source: it.url, channel: it.src.u, messageId: String(it.url.split('/').pop() || '') });
   const d = {
     id: rid(), type: r.type, ...(r.type === 'helicopter' ? { intense: helicopterAuto(`${headline} ${it.text}`) } : {}), ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
     loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
