@@ -31,6 +31,7 @@ function withLabel(loc, label) {
 }
 const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
 import { cleanAlertText } from './clean-text.js';
+import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, fetchAlnabaTelegramBytes } from './alnaba.js';
 
 const PAGE = 24;
 const SUB_MENU_MIN = 40; // districts with more towns than this get a ناحية (sub-district) step first
@@ -143,6 +144,8 @@ function vehicleCountPhrase(count, lang) {
 
 const sessions = new Map(); // userId -> draft
 const activeMediaSessions = new Map(); // userId -> { alertId, created }: admin attachment to an already-published alert
+const alnabaSessions = new Map(); // ownerId -> { section, createdAt }
+const alnabaPendingUploads = new Map(); // ownerId -> validated media waiting for explicit publish confirmation
 // pending reports live in the store (store.reportPut/Take): they survive restarts and deploys
 const lastReport = new Map();
 
@@ -151,6 +154,7 @@ const isStaffId = (id) => isOwner(id) || store.isEditor(id);
 const roleOf = (ctx) => ctx.ras?.role || 'admin';
 const staff = (ctx) => roleOf(ctx) === 'admin' && isStaffId(ctx.from?.id);
 const owner = (ctx) => roleOf(ctx) === 'admin' && isOwner(ctx.from?.id);
+const alnabaOwner = (ctx) => roleOf(ctx) === 'admin' && isAlnabaOwner(ctx.from?.id);
 const sk = (ctx) => `${roleOf(ctx)}:${ctx.from?.id}`;
 export const botInfo = { admin: null, report: null }; // usernames, filled at start
 const L = (ctx) => T[store.userLang(ctx.from?.id)] || T.ar;
@@ -481,6 +485,7 @@ function mainKeyboard(ctx) {
   }
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
+  if (alnabaOwner(ctx)) kb.text(lang === 'en' ? '📰 Al-Nabaa publishing' : '📰 إدارة النبأ', 'nb:open').row();
   if (owner(ctx)) {
     kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row()
       .text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row()
@@ -1744,6 +1749,28 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
   // Owner commands
   const ownerOnly = (fn) => async (ctx) => (owner(ctx) ? fn(ctx) : ctx.reply(L(ctx).onlyOwner));
+  const alnabaSite = (section = '') => `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/+$/, '')}/alnaba/${section ? `${section}/` : ''}`;
+  const alnabaMenuKeyboard = (ctx) => {
+    const en = langOf(ctx) === 'en';
+    return new InlineKeyboard()
+      .text(en ? '🖼 Photo news' : '🖼 أخبار مصورة', 'nb:photos')
+      .text(en ? '📄 Weekly newspaper' : '📄 الصحيفة الأسبوعية', 'nb:weekly').row()
+      .url(en ? '🌐 Open Al-Nabaa' : '🌐 فتح صفحة النبأ', alnabaSite());
+  };
+  const alnabaMenuText = (ctx) => langOf(ctx) === 'en'
+    ? '📰 <b>Al-Nabaa publishing</b>\n\nChoose a section. Uploads stay private until you review the preview and confirm publishing.'
+    : '📰 <b>نشر محتوى النبأ</b>\n\nاختر القسم. يبقى الملف خاصاً حتى تراجع المعاينة وتضغط «نشر». لا يُنشر أي ملف تلقائياً.';
+  const alnabaSectionPrompt = (section, en) => section === 'photos'
+    ? (en
+      ? '🖼 <b>Photo news</b>\n\nSend one photo with its headline in the caption, or attach a JPG, PNG, or WebP file with a headline. Maximum 10 MB. The original image is preserved; nothing goes public until you confirm.'
+      : '🖼 <b>أخبار مصوّرة</b>\n\nأرسل صورة مع عنوانها في وصف الصورة، أو أرفق JPG أو PNG أو WebP مع العنوان. الحد الأقصى 10 ميغابايت. تُعرض الصورة كما هي، ولا تظهر للمتابعين قبل تأكيد النشر.')
+    : (en
+      ? '📄 <b>Weekly newspaper</b>\n\nSend a PDF file (up to 20 MB). Add an issue title in the caption; otherwise the filename will be used. The PDF is checked before you review and publish it.'
+      : '📄 <b>الصحيفة الأسبوعية</b>\n\nأرسل ملف PDF لا يتجاوز 20 ميغابايت. ضع عنوان العدد في وصف الملف، وإلا سيُستخدم اسم الملف. يُفحص PDF قبل معاينته ونشره.');
+  bot.command('alnaba', async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.reply(langOf(ctx) === 'en' ? 'This publishing option is not available for this account.' : 'هذه الصلاحية غير متاحة لهذا الحساب.');
+    await ctx.reply(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
+  });
   // Owner-only: render sample channel images on this server and send them to the owner's private chat
   // (never to the channel). /imgtest [type] [place name] — e.g. "/imgtest uav دوما", "/imgtest all".
   bot.command('imgtest', ownerOnly(async (ctx) => {
@@ -1780,6 +1807,67 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
 
   // -------- callbacks
+  bot.callbackQuery(/^nb:(open|photos|weekly|publish|cancel)$/, async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية النشر.');
+    const action = ctx.match[1];
+    const uid = Number(ctx.from.id);
+    if (action === 'open') {
+      alnabaSessions.delete(uid);
+      await ctx.answerCallbackQuery();
+      return ctx.editMessageText(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
+    }
+    if (action === 'photos' || action === 'weekly') {
+      if (alnabaPendingUploads.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Confirm or cancel the pending upload first.' : 'أكّد نشر الملف المعلّق أو ألغِه أولاً.');
+      const section = action;
+      alnabaSessions.set(uid, { section, createdAt: Date.now() });
+      const en = langOf(ctx) === 'en';
+      const back = new InlineKeyboard().text(en ? '↩️ Back' : '↩️ رجوع', 'nb:open').text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
+      await ctx.answerCallbackQuery();
+      return ctx.editMessageText(alnabaSectionPrompt(section, en), { parse_mode: 'HTML', reply_markup: back });
+    }
+    if (action === 'cancel') {
+      alnabaSessions.delete(uid);
+      alnabaPendingUploads.delete(uid);
+      await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Cancelled.' : 'تم الإلغاء.');
+      return ctx.deleteMessage().catch(() => {});
+    }
+
+    const pending = alnabaPendingUploads.get(uid);
+    if (!pending || Date.now() - pending.createdAt > 30 * 60_000) {
+      alnabaPendingUploads.delete(uid);
+      await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This preview expired. Start again with /alnaba.' : 'انتهت صلاحية المعاينة. ابدأ مجدداً عبر /alnaba.');
+      return ctx.deleteMessage().catch(() => {});
+    }
+    if (!store.backup || !config.telegramBackup) {
+      return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Publishing is paused: durable backup is unavailable.' : 'توقف النشر: النسخة الاحتياطية الدائمة غير متاحة حالياً.');
+    }
+    const oldState = store.state.alnaba;
+    let item;
+    try {
+      item = publishAlnabaItem(store, uid, pending, new Date());
+      await store.flushBackup();
+      if (store._backupPending) throw new Error('BACKUP_FAILED');
+    } catch (error) {
+      store.state.alnaba = oldState;
+      store.persist({ backupSoon: false });
+      const en = langOf(ctx) === 'en';
+      const message = error.message === 'DUPLICATE_MEDIA'
+        ? (en ? 'This exact file is already published.' : 'هذا الملف منشور مسبقاً.')
+        : (en ? 'Could not save a durable backup, so nothing was published. Please try again.' : 'تعذّر حفظ نسخة احتياطية دائمة؛ لذلك لم يُنشر شيء. حاول مجدداً.');
+      await ctx.answerCallbackQuery(message);
+      return;
+    }
+    alnabaPendingUploads.delete(uid);
+    alnabaSessions.delete(uid);
+    const en = langOf(ctx) === 'en';
+    const link = alnabaSite(item.section);
+    await ctx.answerCallbackQuery(en ? 'Published on the website.' : 'تم النشر على الموقع.');
+    await ctx.deleteMessage().catch(() => {});
+    const keyboard = new InlineKeyboard()
+      .url(en ? 'Open section' : 'فتح القسم', link)
+      .url(en ? 'Al-Nabaa home' : 'صفحة النبأ', alnabaSite());
+    await ctx.reply(en ? `✅ Published: <b>${esc(item.title)}</b>` : `✅ تم النشر: <b>${esc(item.title)}</b>`, { parse_mode: 'HTML', reply_markup: keyboard });
+  });
   bot.callbackQuery('home', async (ctx) => { activeMediaSessions.delete(sk(ctx)); await ctx.answerCallbackQuery(); await home(ctx); });
   bot.callbackQuery('cancel', async (ctx) => { activeMediaSessions.delete(sk(ctx)); await ctx.answerCallbackQuery(L(ctx).cancelled); await home(ctx); });
   bot.callbackQuery('lang', async (ctx) => {
@@ -2751,6 +2839,94 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await pickLocation(ctx, d, loc);
   });
 
+  const alnabaUploadError = (error, en) => {
+    if (error?.message === 'FILE_TOO_LARGE') return en ? 'The file exceeds the limit: 10 MB for images or 20 MB for PDF.' : 'حجم الملف أكبر من الحد: 10 ميغابايت للصورة أو 20 ميغابايت للـPDF.';
+    if (error?.message === 'MISSING_TITLE') return en ? 'Add a headline in the photo caption, then resend.' : 'أضف عنوان الخبر في وصف الصورة ثم أعد إرسالها.';
+    if (['INVALID_MEDIA_TYPE', 'INVALID_FILE_NAME', 'INVALID_FILE_CONTENT'].includes(error?.message)) return en ? 'This file is not a valid image/PDF for the selected section.' : 'الملف ليس صورة أو PDF صالحاً للقسم المحدد.';
+    return en ? 'Telegram could not verify the file. Please retry with a smaller supported file.' : 'تعذّر التحقق من الملف عبر Telegram. أعد المحاولة بملف أصغر وبصيغة مدعومة.';
+  };
+  const receiveAlnabaUpload = async (ctx, candidate) => {
+    const uid = Number(ctx.from?.id);
+    if (!alnabaOwner(ctx)) return false;
+    const flow = alnabaSessions.get(uid);
+    if (!flow) return false;
+    const en = langOf(ctx) === 'en';
+    if (Date.now() - flow.createdAt > 30 * 60_000) {
+      alnabaSessions.delete(uid);
+      await ctx.reply(en ? 'The upload session expired. Start again with /alnaba.' : 'انتهت جلسة الرفع. ابدأ مجدداً عبر /alnaba.');
+      return true;
+    }
+    if (alnabaPendingUploads.has(uid)) {
+      await ctx.reply(en ? 'Confirm or cancel the current upload before sending another.' : 'أكّد الملف الحالي أو ألغِه قبل إرسال ملف آخر.');
+      return true;
+    }
+    try {
+      const prepared = prepareAlnabaUpload({ ...candidate, section: flow.section });
+      await fetchAlnabaTelegramBytes(prepared, { api: ctx.api, token: TOKENS.admin });
+      alnabaPendingUploads.set(uid, { ...prepared, createdAt: Date.now() });
+      alnabaSessions.delete(uid);
+      const photo = prepared.section === 'photos';
+      const size = prepared.file_size ? `\n${en ? 'Size' : 'الحجم'}: ${(prepared.file_size / (1024 * 1024)).toFixed(1)} MB` : '';
+      const preview = en
+        ? `Review before publishing to ${photo ? 'Photo news' : 'Weekly newspaper'}:\n<b>${esc(prepared.title)}</b>\n${esc(prepared.file_name)}${size}\n\nNothing is public until you press Publish.`
+        : `راجع الملف قبل نشره في ${photo ? 'الأخبار المصوّرة' : 'الصحيفة الأسبوعية'}:\n<b>${esc(prepared.title)}</b>\n${esc(prepared.file_name)}${size}\n\nلن يظهر للمتابعين حتى تضغط «نشر الآن».`;
+      const keyboard = new InlineKeyboard()
+        .text(en ? '✅ Publish now' : '✅ نشر الآن', 'nb:publish')
+        .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
+      await ctx.reply(preview, { parse_mode: 'HTML', reply_markup: keyboard });
+      return true;
+    } catch (error) {
+      await ctx.reply(alnabaUploadError(error, en));
+      return true;
+    }
+  };
+  bot.on('message:photo', async (ctx, next) => {
+    const uid = Number(ctx.from?.id);
+    if (!alnabaOwner(ctx)) return next();
+    if (alnabaPendingUploads.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another file.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال ملف آخر.');
+    if (!alnabaSessions.has(uid)) return next();
+    const photo = ctx.message.photo?.at(-1);
+    if (!photo) return ctx.reply(langOf(ctx) === 'en' ? 'Send a photo file.' : 'أرسل ملف صورة.');
+    return receiveAlnabaUpload(ctx, {
+      title: ctx.message.caption || '',
+      file_id: photo.file_id,
+      file_unique_id: photo.file_unique_id,
+      file_size: photo.file_size,
+      mime_type: 'image/jpeg',
+      file_name: 'alnaba-photo.jpg',
+    });
+  });
+  bot.on('message:document', async (ctx, next) => {
+    const uid = Number(ctx.from?.id);
+    if (!alnabaOwner(ctx)) return next();
+    if (alnabaPendingUploads.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another file.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال ملف آخر.');
+    if (!alnabaSessions.has(uid)) return next();
+    const document = ctx.message.document;
+    if (!document) return ctx.reply(langOf(ctx) === 'en' ? 'Send an image or PDF file.' : 'أرسل ملف صورة أو PDF.');
+    const section = alnabaSessions.get(Number(ctx.from.id))?.section;
+    const title = section === 'weekly'
+      ? (ctx.message.caption || String(document.file_name || '').replace(/\.pdf$/i, '').replace(/[_-]+/g, ' '))
+      : (ctx.message.caption || '');
+    return receiveAlnabaUpload(ctx, {
+      title,
+      file_id: document.file_id,
+      file_unique_id: document.file_unique_id,
+      file_size: document.file_size,
+      mime_type: document.mime_type,
+      file_name: document.file_name || '',
+    });
+  });
+  bot.on('message:video', async (ctx, next) => {
+    const uid = Number(ctx.from?.id);
+    if (alnabaOwner(ctx) && alnabaPendingUploads.has(uid)) {
+      return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview first.' : 'أكّد المعاينة الحالية أو ألغِها أولاً.');
+    }
+    if (alnabaOwner(ctx) && alnabaSessions.has(uid)) {
+      return ctx.reply(langOf(ctx) === 'en' ? 'This section accepts images or PDF files, not videos.' : 'هذا القسم يقبل الصور أو ملفات PDF، وليس الفيديو.');
+    }
+    return next();
+  });
+
   const receiveAlertMedia = async (ctx, type) => {
     const key = sk(ctx);
     const pending = activeMediaSessions.get(key);
@@ -2784,6 +2960,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.on('message:text', async (ctx) => {
     const text = clean(ctx.message.text, 2000);
     if (text.startsWith('/')) return;
+    const uid = Number(ctx.from?.id);
+    if (alnabaOwner(ctx) && alnabaPendingUploads.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Use the Publish or Cancel buttons on the pending preview.' : 'استخدم زري «نشر الآن» أو «إلغاء» في المعاينة المعلّقة.');
+    if (alnabaOwner(ctx) && alnabaSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Send the selected image/PDF as a media file; add the photo headline as its caption.' : 'أرسل الصورة أو ملف PDF الذي اخترته؛ وضع عنوان الصورة في وصفها.');
     const d = getDraft(ctx);
     if (!d) return home(ctx);
     const l = L(ctx);
@@ -2923,6 +3102,7 @@ export const BOT_COMMANDS = {
   ar: [
     { command: 'start', description: 'القائمة الرئيسية' },
     { command: 'active', description: 'التنبيهات النشطة' },
+    { command: 'alnaba', description: 'نشر أخبار مصورة وصحيفة أسبوعية' },
     { command: 'lang', description: 'English / العربية' },
     { command: 'id', description: 'معرّفي' },
     { command: 'help', description: 'المساعدة' },
@@ -2930,6 +3110,7 @@ export const BOT_COMMANDS = {
   en: [
     { command: 'start', description: 'Main menu' },
     { command: 'active', description: 'Active alerts' },
+    { command: 'alnaba', description: 'Publish photo news and weekly PDF' },
     { command: 'lang', description: 'العربية / English' },
     { command: 'id', description: 'My ID' },
     { command: 'help', description: 'Help' },
@@ -2949,3 +3130,8 @@ export const REPORT_COMMANDS = {
     { command: 'help', description: 'Help' },
   ],
 };
+
+export async function fetchAlnabaMediaForWeb(item) {
+  if (!APIS.admin || !TOKENS.admin) throw new Error('BOT_UNAVAILABLE');
+  return fetchAlnabaTelegramBytes(item, { api: APIS.admin, token: TOKENS.admin });
+}

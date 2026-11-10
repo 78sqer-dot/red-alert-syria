@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-page="{{PAGE}}" translate="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="google" content="notranslate" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{{TITLE}}</title>
+  <meta name="description" content="{{DESCRIPTION}}" />
+  <meta name="theme-color" content="#111821" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <link rel="canonical" href="{{CANONICAL}}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Red Alert Syria" />
+  <meta property="og:title" content="{{TITLE}}" />
+  <meta property="og:description" content="{{DESCRIPTION}}" />
+  <meta property="og:image" content="/img/og.png" />
+  <meta property="og:url" content="{{CANONICAL}}" />
+  <link rel="icon" type="image/svg+xml" href="/img/icon.svg" />
+  <link rel="stylesheet" href="/css/alnaba.css?v=1" />
+  <script type="module" src="/js/alnaba.js?v=1"></script>
+</head>
+<body>
+  <div class="an-shell">
+    <header class="an-header">
+      <a class="an-brand" href="/alnaba/" aria-label="النبأ — Red Alert Syria">
+        <img src="/img/logo-wordmark.svg" alt="Red Alert Syria" width="132" height="42" />
+        <span class="an-brand-divider" aria-hidden="true"></span>
+        <b>النبأ</b>
+      </a>
+      <nav class="an-nav" aria-label="التنقل في النبأ">
+        <a href="/alnaba/" data-nav="home">النبأ</a>
+        <a href="/alnaba/photos/" data-nav="photos">أخبار مصوّرة</a>
+        <a href="/alnaba/weekly/" data-nav="weekly">الصحيفة الأسبوعية</a>
+        <a class="an-map-link" href="/ar/">العودة إلى الخريطة</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="an-view an-home" data-view="home" hidden>
+        <div class="an-eyebrow"><span class="an-live-dot"></span> Red Alert Syria <span class="an-slash">/</span> النبأ</div>
+        <div class="an-home-copy">
+          <h1>النبأ</h1>
+          <p>مساحة تحريرية للأخبار المصوّرة والأعداد الأسبوعية، تُنشر هنا بعد مراجعتها.</p>
+        </div>
+        <div class="an-section-grid">
+          <a class="an-section-card an-photo-card" href="/alnaba/photos/">
+            <span class="an-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+            </span>
+            <span class="an-card-kicker">القصص بالصور</span>
+            <b>أخبار مصوّرة</b>
+            <span class="an-card-description">صور الأخبار مع عناوينها وتاريخ نشرها.</span>
+            <span class="an-card-action">استكشف القسم <span aria-hidden="true">←</span></span>
+          </a>
+          <a class="an-section-card an-weekly-card" href="/alnaba/weekly/">
+            <span class="an-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z"></path><path d="M14 3v5h5M8 12h8M8 16h8"></path></svg>
+            </span>
+            <span class="an-card-kicker">قراءة وتحميل</span>
+            <b>الصحيفة الأسبوعية</b>
+            <span class="an-card-description">الأعداد الأسبوعية بصيغة PDF، جاهزة للفتح والمشاركة.</span>
+            <span class="an-card-action">تصفّح الأعداد <span aria-hidden="true">←</span></span>
+          </a>
+        </div>
+        <div class="an-share-row">
+          <span>رابط الصفحة الرئيسية للمتابعين</span>
+          <button class="an-copy-button" type="button" data-copy-link>نسخ رابط النبأ</button>
+        </div>
+      </section>
+
+      <section class="an-view" data-view="photos" hidden>
+        <div class="an-page-heading">
+          <div>
+            <div class="an-eyebrow"><a href="/alnaba/">النبأ</a><span class="an-slash">/</span> قسم الصور</div>
+            <h1>أخبار مصوّرة</h1>
+            <p>صور الأخبار كما أُرسلت، مع عناوينها وتواريخ نشرها.</p>
+          </div>
+          <button class="an-copy-button" type="button" data-copy-link>نسخ رابط القسم</button>
+        </div>
+        <div class="an-story-grid" id="photoGrid" aria-live="polite"></div>
+        <div class="an-state" id="photoLoading">جارٍ تحميل الأخبار المصوّرة…</div>
+        <div class="an-state" id="photoEmpty" hidden>لا توجد أخبار مصوّرة منشورة حالياً.</div>
+        <div class="an-state an-error" id="photoError" hidden>تعذّر تحميل المحتوى الآن. حاول فتح الصفحة مجدداً بعد قليل.</div>
+      </section>
+
+      <section class="an-view" data-view="weekly" hidden>
+        <div class="an-page-heading">
+          <div>
+            <div class="an-eyebrow"><a href="/alnaba/">النبأ</a><span class="an-slash">/</span> الأعداد</div>
+            <h1>الصحيفة الأسبوعية</h1>
+            <p>اقرأ أحدث عدد أو افتح أرشيف الأعداد المنشورة بصيغة PDF.</p>
+          </div>
+          <button class="an-copy-button" type="button" data-copy-link>نسخ رابط القسم</button>
+        </div>
+        <div class="an-weekly-list" id="weeklyList" aria-live="polite"></div>
+        <div class="an-state" id="weeklyLoading">جارٍ تحميل أعداد الصحيفة…</div>
+        <div class="an-state" id="weeklyEmpty" hidden>لا توجد أعداد منشورة حالياً.</div>
+        <div class="an-state an-error" id="weeklyError" hidden>تعذّر تحميل المحتوى الآن. حاول فتح الصفحة مجدداً بعد قليل.</div>
+      </section>
+    </main>
+
+    <footer class="an-footer">
+      <a href="/alnaba/">النبأ</a>
+      <span>Red Alert Syria — الإنذار الأحمر سوريا</span>
+      <a href="/ar/">الخريطة المباشرة</a>
+    </footer>
+  </div>
+  <div class="an-toast" id="anToast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

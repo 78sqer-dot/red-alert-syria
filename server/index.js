@@ -24,6 +24,8 @@ import { publicBorders } from './borders.js';
 import { renderNewsIllustrationPng } from './alert-image.js';
 import { startServices, publicRoads, publicPower } from './services.js';
 import { pushConfigured, pushPublicKey, saveSubscription, removeSubscription, sendPush } from './push.js';
+import { createAlnabaRouter } from './alnaba.js';
+import { fetchAlnabaMediaForWeb } from './bot.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -114,6 +116,9 @@ app.delete('/api/push/subscribe', apiLimiter, express.json({ limit: '8kb' }), (r
 app.get('/api/places/search', apiLimiter, (req, res) => {
   res.json({ places: searchFollowPlaces(req.query.q, req.query.gov) });
 });
+
+// Public, read-only Al-Nabaa sections; write access exists only through the owner bot.
+app.use('/api/alnaba', createAlnabaRouter({ store, fetchMedia: fetchAlnabaMediaForWeb, limiter: apiLimiter }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size }));
 
@@ -333,6 +338,7 @@ const BUILD = String(process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).s
 // Bust integer app asset versions but preserve semantic vendor versions (e.g. 6.16.0),
 // so modulepreload URLs match the exact imports used by app.js.
 const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8').replace(/\?v=(\d+)(?=["&])/g, `?v=${BUILD}`);
+const alnabaPageTemplate = fs.readFileSync(path.join(ROOT, 'server', 'alnaba-page.html'), 'utf8');
 function renderIndex(lang) {
   const url = config.publicUrl || '';
   const head = `${verifyMetaTags()}<link rel="alternate" hreflang="x-default" href="${url}/ar/" /><meta property="og:locale" content="${lang === 'ar' ? 'ar_SY' : 'en_US'}" />`
@@ -370,6 +376,29 @@ app.get(['/ar', '/en', '/ar/', '/en/'], (req, res) => {
   if (!p.endsWith('/')) return res.redirect(301, p + '/');
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(renderIndex(p.startsWith('/en') ? 'en' : 'ar'));
+});
+app.get(['/alnaba', '/alnaba/', '/alnaba/photos', '/alnaba/photos/', '/alnaba/weekly', '/alnaba/weekly/'], (req, res) => {
+  const pathname = req.path.replace(/\/+$/, '') || '/alnaba';
+  if (!req.path.endsWith('/')) {
+    const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    return res.redirect(301, `${req.path}/${query}`);
+  }
+  const page = pathname === '/alnaba/photos' ? 'photos' : pathname === '/alnaba/weekly' ? 'weekly' : 'home';
+  const title = page === 'photos' ? 'أخبار مصوّرة — النبأ' : page === 'weekly' ? 'الصحيفة الأسبوعية — النبأ' : 'النبأ — Red Alert Syria';
+  const description = page === 'photos'
+    ? 'أخبار مصوّرة من Red Alert Syria — الإنذار الأحمر سوريا.'
+    : page === 'weekly'
+      ? 'أعداد الصحيفة الأسبوعية بصيغة PDF من Red Alert Syria.'
+      : 'النبأ: الأخبار المصوّرة والصحيفة الأسبوعية من Red Alert Syria.';
+  const base = (config.publicUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
+  const canonical = `${base}${pathname}/`;
+  const html = alnabaPageTemplate
+    .replaceAll('{{PAGE}}', page)
+    .replaceAll('{{TITLE}}', title)
+    .replaceAll('{{DESCRIPTION}}', description)
+    .replaceAll('{{CANONICAL}}', canonical);
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.type('html').send(html);
 });
 mountSeo(app, { limiter: apiLimiter });
 app.use((req, res) => res.status(404).type('text').send('Not found'));
