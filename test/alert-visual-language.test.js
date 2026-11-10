@@ -167,7 +167,7 @@ test('urgent marker core, red pulse and glow follow the shared map zoom scale', 
   assert.match(map, /const mks = Math\.max\(0\.42, Math\.min\(0\.56,/);
 });
 
-test('map SVGs use each event type color instead of a hard-coded black glyph', () => {
+test('map SVGs use category colors while the selected helicopter design stays olive', () => {
   assert.match(map, /const fg = visual\.color;/, 'static discs use the category color');
   assert.match(map, /const iconColor = visual\.color/);
   assert.match(map, /style="--ic:\$\{iconColor\}/);
@@ -176,7 +176,7 @@ test('map SVGs use each event type color instead of a hard-coded black glyph', (
   assert.match(css, /\.sai\.map-event-disc svg \{ fill: var\(--c\) !important; color: var\(--c\) !important; \}/);
   assert.match(css, /\.ic-pistol \.ic-svg, \.ic-rifle \.ic-svg \{[^}]*fill: var\(--ic\)/);
   assert.match(css, /\.uav-svg \{[^}]*fill: var\(--c, #6b7280\)/);
-  assert.match(css, /\.helicopter-svg \{[^}]*fill: var\(--c, #3b8eff\)/);
+  assert.match(css, /\.helicopter-svg \{[^}]*fill: #65764a/);
   assert.match(css, /html\.dark \.mk\.sel \.uav-svg \{ fill: color-mix\(in srgb, var\(--c, #6b7280\) 72%, #fff\); \}/);
-  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #ef233c; \}/);
+  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #65764a; \}/);
 });

@@ -31,24 +31,31 @@ test('drone is hidden with impact circles alone at country zoom and orbits at de
   assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });
 
-test('helicopter matches the 24px drone/signal glyph and shared pulse while following its alert perimeter', () => {
+test('helicopter uses option 2 olive X-rotor art and hides its craft until detail zoom', () => {
   assert.match(css, /\.mk-helicopter \.mk-s\s*\{\s*transform:\s*none;\s*\}/);
   assert.match(css, /\.heli-craft\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*rotate\(90deg\);/);
   assert.match(css, /\.heli-craft-second \{ top: 100%; transform: translate\(-50%, -50%\) rotate\(270deg\); \}/);
-  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*fill:\s*var\(--c, #3b8eff\);/);
+  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*fill:\s*#65764a;/);
+  assert.match(css, /\.helicopter-svg \.heli-main-rotor \{ fill: #303a2a; opacity: 1;/);
+  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{ fill: #303a2a; opacity: 1;/);
+  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-helicopter \.heli-orbit \{ visibility: hidden; \}/);
+  assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-helicopter \.heli-orbit \{ visibility: visible; \}/);
+  assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: visible; \}/);
+  assert.match(css, /\.news-off \.mk-helicopter \{ display: block !important; visibility: visible !important; \}/);
+  assert.doesNotMatch(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-helicopter\s*\{[^}]*visibility: hidden/);
+  const craftRule = css.match(/\.heli-craft \{[^}]+\}/)?.[0] || '';
+  assert.doesNotMatch(craftRule, /rgba\(59,142,255/);
   assert.doesNotMatch(mapJs, /helicopterScale|--heli-scale/);
   assert.match(mapJs, /svgTag\(t\.glyph,\s*24,\s*`fill=/);
   assert.match(css, /\.uav\s*\{[^}]*animation:\s*uavOrbit 9s linear infinite/);
-  assert.match(css, /\.heli-orbit\s*\{[^}]*animation:\s*heliOrbit 9s linear infinite/);
-  assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: visible; \}/);
-  assert.match(css, /\.news-off \.mk-helicopter \{ display: block !important; visibility: visible !important; \}/);
+  assert.match(css, /\.heli-orbit\s*\{[^}]*animation: heliOrbit 9s linear infinite/);
   assert.match(mapJs, /classList\.toggle\('sel', a\.id === this\.selectedId\)/);
   assert.match(mapJs, /actual visible perimeter of its alert circle[\s\S]{0,180}setProperty\('--orb', px \+ 'px'\)/);
   assert.match(mapJs, /const classicAircraft = t\.marker === 'squad';/, 'the helicopter uses the shared drone/signal pulse dimensions');
   assert.match(css, /animation: zpulse 3\.2s cubic-bezier/);
   assert.match(mapJs, /el\.insertAdjacentHTML\('afterbegin', '<span class="news-pulse-ring"/);
   assert.doesNotMatch(css, /\.heli-orbit::(?:before|after)/, 'the helicopter must not gain decorative orbit rings');
-  assert.match(targetSvgs, /helicopter_simple:[\s\S]{0,220}heli-main-rotor[\s\S]{0,150}M62 250a10 10 0 0 1 0-20/);
+  assert.match(targetSvgs, /helicopter_simple:[\s\S]{0,850}rotate\(45 256 256\)[\s\S]{0,120}rotate\(-45 256 256\)/);
 });
 
 test('helicopter uses the simplified silhouette while legacy glyphs remain available', () => {

@@ -2,7 +2,7 @@
 import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=41';
 import { mapDroneCount } from '/shared/map-drone-visuals.js?v=1';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=19';
+import { EXTRA_SVG } from './target-svgs.js?v=20';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=7';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
