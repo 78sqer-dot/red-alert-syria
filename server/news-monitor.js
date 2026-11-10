@@ -947,11 +947,12 @@ async function handleResult(it, r, known, pmap) {
   if (!n.types[r.type]) { note(it, `type ${r.type} switched off`); return; }
   if (!locs.length && r.type !== 'political') { note(it, 'no verified Syrian place found'); return; }
   if (capReached()) { note(it, 'hourly cap reached'); return; }
+  const sourceMedia = Array.isArray(it.media) ? it.media.filter((m) => m && ['photo', 'video'].includes(m.type) && typeof m.url === 'string' && /^https:\/\/(?:cdn\d+\.)?telesco\.pe\//i.test(m.url)).slice(0, 2).map((m) => ({ type: m.type, url: m.url, source: it.url })) : [];
   const d = {
     id: rid(), type: r.type, ...(r.type === 'helicopter' ? { intense: helicopterAuto(`${headline} ${it.text}`) } : {}), ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
     loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
-    sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
+    sourceText: String(it.text || '').slice(0, 1200), ...(sourceMedia.length ? { sourceMedia } : {}), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
   };
   scheduleDayAuto(d, d.created);
   n.drafts[d.id] = d;
@@ -1047,7 +1048,7 @@ async function rescanIfFilterChanged() {
         if (!f.ok) continue;
         const h = textHash(c.text);
         n.seen[h] = Date.now(); n.handled[key] = Date.now();
-        const it = { src: { u: src.u, name: src.name, local: !!src.local }, url: p.url, ts: p.ts, qAt: Date.now(), text: c.text, breaking: c.breaking, rescan: true };
+        const it = { src: { u: src.u, name: src.name, local: !!src.local }, url: p.url, ts: p.ts, qAt: Date.now(), text: c.text, media: p.media, breaking: c.breaking, rescan: true };
         note(it, 'rescan: queued');
         R.queue.push(it); queued++;
       }
@@ -1094,7 +1095,7 @@ async function pollOnce() {
   save(false);
   for (const { src, p } of fresh) {
     n.stats.posts++;
-    const it = { src: { u: src.u, name: src.name, local: !!src.local, roadOnly: !!src.roadOnly }, url: p.url, ts: p.ts || Date.now(), qAt: Date.now() };
+    const it = { src: { u: src.u, name: src.name, local: !!src.local, roadOnly: !!src.roadOnly }, url: p.url, ts: p.ts || Date.now(), qAt: Date.now(), media: p.media };
     if (!p.ts || Date.now() - p.ts > NEWS_CFG.maxAgeMin * 60_000) { it.text = p.text; note(it, 'too old'); continue; }
     const c = cleanPostText(p.text);
     it.text = c.text; it.breaking = c.breaking;

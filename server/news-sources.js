@@ -77,7 +77,22 @@ export function parseChannelPage(html, u) {
       .replace(/<[^>]+>/g, '');
     text = unescape(text).replace(/\u200f|\u200e|\u202b|\u202c/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     const fwd = /tgme_widget_message_forwarded_from/.test(block);
-    posts.push({ id, ts: Number.isFinite(ts) ? ts : null, text, url: `https://t.me/${u}/${id}`, links, fwd });
+    // Public Telegram embeds expose photos as telesco.pe background images and
+    // videos as telesco.pe <video>/<source> URLs. Keep only public HTTPS CDN URLs.
+    const media = [];
+    const addMedia = (type, raw) => {
+      const value = unescape(String(raw || '').replace(/&amp;/g, '&'));
+      let parsed; try { parsed = new URL(value); } catch { return; }
+      if (parsed.protocol !== 'https:' || !/^(?:cdn\d+\.)?telesco\.pe$/i.test(parsed.hostname) || parsed.username || parsed.password) return;
+      const pathname = parsed.pathname.toLowerCase();
+      const allowed = type === 'photo' ? /\.(?:jpe?g|png|webp)$/i.test(pathname) : /\.(?:mp4|webm)$/i.test(pathname);
+      if (!allowed || media.some((item) => item.type === type)) return;
+      parsed.hash = '';
+      media.push({ type, url: parsed.toString() });
+    };
+    for (const m of block.matchAll(/<a\b[^>]*class="[^"]*tgme_widget_message_photo[^"]*"[^>]*style="[^"]*background-image:\s*url\(['"]?(https:\/\/[^'")]+)['"]?\)/gi)) addMedia('photo', m[1]);
+    for (const m of block.matchAll(/<(?:video|source)\b[^>]*src="(https:\/\/[^"]+)"/gi)) addMedia('video', m[1]);
+    posts.push({ id, ts: Number.isFinite(ts) ? ts : null, text, url: `https://t.me/${u}/${id}`, links, fwd, media });
   }
   posts.sort((a, b) => a.id - b.id);
   return { title, posts };
