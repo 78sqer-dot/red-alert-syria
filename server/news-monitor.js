@@ -7,6 +7,7 @@
 // المنفذين", "مجدداً"...) of a known incident don't create new drafts.
 import crypto from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { captureTelegramMedia, unlinkCapturedMedia } from './news-media.js';
 import { InlineKeyboard, InputFile } from 'grammy';
 import { config, isOwner } from './config.js';
 import { store } from './store.js';
@@ -24,7 +25,6 @@ const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
-import { captureTelegramMedia } from './news-media.js';
 
 const NEWS_GROUP_PRIORITY = ['aerial', 'strikes', 'civil', 'smuggling', 'political', 'nature', 'other'];
 const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', patrol: '🚓', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
@@ -627,8 +627,9 @@ async function sendCards(d, only = null) {
         try {
           const input = new InputFile(await readFile(media.path), `source-${media.type}.${media.mimeType.split('/')[1]}`);
           const caption = tr(lang, `📎 مرفق للمراجعة فقط · المسودة ${d.id} · المصدر ${media.channel}/${media.messageId}`, `📎 Review only · draft ${d.id} · source ${media.channel}/${media.messageId}`);
-          if (media.type === 'photo') await a.sendPhoto(uid, input, { caption });
-          else await a.sendVideo(uid, input, { caption });
+          const method = media.type === 'photo' ? (/\.webp$/i.test(media.path) ? 'sendDocument' : 'sendPhoto') : (/\.webm$/i.test(media.path) ? 'sendDocument' : 'sendVideo');
+          const sent = await a[method](uid, input, { caption });
+          d.mediaCards ||= []; d.mediaCards.push([uid, sent.message_id]);
         } catch (e) { console.warn('[news] source media reviewer delivery failed', d.id, e.description || e.message); }
       }
       const m = await a.sendMessage(uid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang), link_preview_options: { is_disabled: true }, disable_notification: nightActive(), _keep: 'c' });
@@ -636,6 +637,19 @@ async function sendCards(d, only = null) {
     } catch (e) { console.warn('[news] card not delivered to', uid, e.description || e.message); }
   }
   return n;
+}
+async function deliverNewSourceMedia(d, mediaItems) {
+  const a = api(); if (!a || !mediaItems.length) return;
+  d.mediaCards ||= [];
+  for (const uid of reviewerIds()) for (const media of mediaItems.filter((m) => m.status === 'captured')) {
+    try {
+      const input = new InputFile(await readFile(media.path), `source-${media.type}.${media.mimeType.split('/')[1]}`);
+      const caption = tr(langOfId(uid), `📎 مرفق للمراجعة فقط · المسودة ${d.id} · المصدر ${media.channel}/${media.messageId}`, `📎 Review only · draft ${d.id} · source ${media.channel}/${media.messageId}`);
+      const method = media.type === 'photo' ? (/\.webp$/i.test(media.path) ? 'sendDocument' : 'sendPhoto') : (/\.webm$/i.test(media.path) ? 'sendDocument' : 'sendVideo');
+      const sent = await a[method](uid, input, { caption });
+      d.mediaCards.push([uid, sent.message_id]);
+    } catch (e) { console.warn('[news] source media reviewer delivery failed', d.id, e.description || e.message); }
+  }
 }
 async function refreshCards(d) {
   const a = api();
@@ -656,7 +670,7 @@ export async function refreshPendingCardKeyboards() {
     }
   }
 }
-async function closeCards(d, keep = null) {
+async function closeCards(d, keep = null, closeMedia = false) {
   const a = api();
   for (const [chat, mid] of d.cards || []) {
     setKeep('admin', chat, mid, false);
@@ -665,6 +679,10 @@ async function closeCards(d, keep = null) {
     try { await a.deleteMessage(chat, mid); } catch {
       try { await a.editMessageText(chat, mid, '✔️', {}); } catch { /* ignore */ }
     }
+  }
+  if (closeMedia) {
+    for (const [chat, mid] of d.mediaCards || []) { setKeep('admin', chat, mid, false); if (a) try { await a.deleteMessage(chat, mid); } catch { /* best effort */ } }
+    d.mediaCards = [];
   }
   d.cards = keep ? (d.cards || []).filter(([c, m]) => c === keep[0] && m === keep[1]) : [];
 }
@@ -766,7 +784,7 @@ async function nightPublish(d) {
   d.status = 'published'; d.auto = true; d.autoMode = mode; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null;
   n.stats.published++; n.stats.auto = (n.stats.auto || 0) + 1;
   save();
-  await closeCards(d); // a draft that was waiting (single local source, then confirmed) leaves the chat
+  await closeCards(d, null, true); await unlinkCapturedMedia(d.sourceMedia); // a draft that was waiting (single local source, then confirmed) leaves the chat
   d.notices = [];
   for (const uid of ownerIdsU()) {
     const lang = langOfId(uid);
@@ -900,6 +918,9 @@ async function mergeInto(d, it, locs = []) {
   const n = newsState();
   if ((d.srcs || []).some((s) => s.u === it.src.u)) return false;
   d.srcs.push({ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local });
+  const newMedia = Array.isArray(it.media) ? await captureTelegramMedia(it.media) : [];
+  for (const media of newMedia) Object.assign(media, { source: it.url, channel: it.src.u, messageId: String(it.url.split('/').pop() || '') });
+  if (newMedia.length) d.sourceMedia = [...(d.sourceMedia || []), ...newMedia];
   scheduleDayAuto(d);
   // another channel names a more precise nearby place (e.g. "المعكر" next to "مزرعة الحانوت"): add it as an extra area
   const main = d.loc && Number.isFinite(d.loc.latitude) ? { lat: d.loc.latitude, lon: d.loc.longitude } : null;
@@ -915,6 +936,8 @@ async function mergeInto(d, it, locs = []) {
   n.stats.merged++;
   save();
   await refreshCards(d);
+  await deliverNewSourceMedia(d, newMedia);
+  save();
   if (d.status === 'pending' && nightActive() && nightEligible(d)) await nightPublish(d); // confirmed by a 2nd source at night
   return true;
 }
@@ -1152,7 +1175,7 @@ async function sweep() {
   let changed = false;
   for (const d of Object.values(n.drafts)) {
     const life = d.test ? 10 * 60_000 : NEWS_CFG.expireMin * 60_000;
-    if (d.status === 'pending' && now - d.created > life) { d.status = 'expired'; await closeCards(d); changed = true; }
+    if (d.status === 'pending' && now - d.created > life) { d.status = 'expired'; await closeCards(d, null, true); await unlinkCapturedMedia(d.sourceMedia); changed = true; }
     if (now - d.created > 26 * H_MS) { delete n.drafts[d.id]; changed = true; }
   }
   const before = n.alerts.length;
@@ -1523,7 +1546,7 @@ export function registerNewsTools(bot, h) {
     const d = await findDraft(id);
     if (!d) return vanish(ctx, t(ctx, 'هذه المسودة لم تعد متاحة', 'This draft is no longer available'));
     if (d.test && (act === 'p' || act === 'e')) {
-      d.status = 'ignored'; await closeCards(d, cur(ctx)); save();
+      d.status = 'ignored'; await closeCards(d, cur(ctx), true); await unlinkCapturedMedia(d.sourceMedia); save();
       await vanish(ctx, t(ctx, '🧪 تجربة فقط — لم يُنشر شيء. الأزرار تعمل ✅', '🧪 Test only — nothing was published. Buttons work ✅'));
       forgetCurrentCard(d, ctx); save();
       return;
@@ -1541,7 +1564,8 @@ export function registerNewsTools(bot, h) {
     if (act === 'x') {
       d.status = 'ignored'; d.by = ctx.from.id; n.stats.ignored++;
       save();
-      await closeCards(d, cur(ctx));
+      await closeCards(d, cur(ctx), true);
+      await unlinkCapturedMedia(d.sourceMedia);
       await vanish(ctx, t(ctx, 'تم التجاهل — لن يصلك هذا الحدث مرة ثانية', 'Ignored — this incident will not come back'));
       forgetCurrentCard(d, ctx); save();
       return;
@@ -1577,6 +1601,7 @@ export function registerNewsTools(bot, h) {
       return toast(ctx, t(ctx, '⚠️ تعذّر النشر — اضغط «نشر» مرة ثانية.', '⚠️ Publishing failed — tap Publish again.'), true);
     }
     d.status = 'published'; d.alertId = alert?.id; d.by = ctx.from.id;
+    await unlinkCapturedMedia(d.sourceMedia);
     d.approvedBy = { id: ctx.from.id, name: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' '), username: ctx.from.username || null };
     d.approvedAt = new Date().toISOString(); n.stats.published++;
     save();
@@ -1585,7 +1610,8 @@ export function registerNewsTools(bot, h) {
       const reviewer = d.approvedBy.username ? `@${d.approvedBy.username}` : d.approvedBy.name;
       try { await ctx.api.sendMessage(ownerId, `<b>تم اعتماد ونشر خبر جديد</b>\n${esc(d.headline || d.title || '')}\nالمشرف: ${esc(reviewer || String(ctx.from.id))}\nالوقت: ${esc(new Date(d.approvedAt).toLocaleString('ar-SY', { timeZone: 'Asia/Damascus' }))}`, { parse_mode: 'HTML' }); } catch (e) { console.warn('[news] owner approval notification failed', e.message); }
     }
-    await closeCards(d, cur(ctx));
+    await closeCards(d, cur(ctx), true);
+    await unlinkCapturedMedia(d.sourceMedia);
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
     forgetCurrentCard(d, ctx); save();
     const kb = new InlineKeyboard();

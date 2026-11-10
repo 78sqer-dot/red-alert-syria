@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { captureTelegramMedia, MEDIA_LIMITS } from '../server/news-media.js';
+import { captureTelegramMedia, MEDIA_LIMITS, MEDIA_STORAGE_CAP } from '../server/news-media.js';
 
 const fixtures = path.join(import.meta.dirname, 'fixtures', 'news-media');
 const dir = () => fs.mkdtemp(path.join(os.tmpdir(), 'ras-media-test-'));
@@ -53,4 +53,28 @@ test('enforces strict streaming byte caps even without Content-Length and reject
   assert.equal(large.error, 'media_too_large');
   const [privateHost] = await captureTelegramMedia([{ type: 'photo', url: photo }], { lookup: async () => [{ address: '10.0.0.1', family: 4 }], fetchImpl: async () => assert.fail('private DNS must be rejected') });
   assert.equal(privateHost.status, 'unavailable');
+});
+
+test('terminal cleanup unlinks only captured files beneath the supplied media directory', async () => {
+  const root = await dir(); const outside = await dir();
+  const insideFile = path.join(root, 'captured.jpg'); const outsideFile = path.join(outside, 'keep.jpg');
+  await fs.writeFile(insideFile, 'captured'); await fs.writeFile(outsideFile, 'keep');
+  const { unlinkCapturedMedia } = await import('../server/news-media.js');
+  await unlinkCapturedMedia([
+    { status: 'captured', path: insideFile },
+    { status: 'captured', path: outsideFile },
+    { status: 'unavailable', path: path.join(root, 'missing') },
+  ], { directory: root });
+  await assert.rejects(fs.stat(insideFile), { code: 'ENOENT' });
+  assert.equal(await fs.readFile(outsideFile, 'utf8'), 'keep');
+  await fs.rm(root, { recursive: true }); await fs.rm(outside, { recursive: true });
+});
+
+test('storage capacity refusal preserves existing pending media and captures no extra file', async () => {
+  const out = await dir(); await fs.writeFile(path.join(out, 'active-pending.jpg'), Buffer.alloc(MEDIA_STORAGE_CAP));
+  const bytes = await fs.readFile(path.join(fixtures, 'image-only.jpg'));
+  const [m] = await captureTelegramMedia([{ type: 'photo', url: photo }], { directory: out, lookup, fetchImpl: async () => response(bytes, 'image/jpeg') });
+  assert.equal(m.status, 'unavailable'); assert.equal(m.error, 'media_storage_full');
+  assert.deepEqual((await fs.readdir(out)).sort(), ['active-pending.jpg']);
+  await fs.rm(out, { recursive: true });
 });

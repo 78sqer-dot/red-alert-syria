@@ -4,6 +4,17 @@ import dns from 'node:dns/promises';
 import { config } from './config.js';
 
 export const MEDIA_LIMITS = Object.freeze({ photo: 8 * 1024 * 1024, video: 20 * 1024 * 1024 });
+export const MEDIA_STORAGE_CAP = 256 * 1024 * 1024;
+const mediaRoot = path.resolve(config.dataDir, 'news-media');
+export async function unlinkCapturedMedia(mediaItems = [], { directory = mediaRoot } = {}) {
+  const root = path.resolve(directory);
+  for (const media of mediaItems) {
+    if (media?.status !== 'captured' || typeof media.path !== 'string') continue;
+    const target = path.resolve(media.path);
+    if (!target.startsWith(`${root}${path.sep}`)) continue;
+    try { await fs.unlink(target); } catch (error) { if (error.code !== 'ENOENT') console.warn('[news] media cleanup failed', error.message); }
+  }
+}
 const hosts = /^(?:telesco\.pe|cdn\d+\.telesco\.pe)$/i;
 const extensions = { photo: /\.(?:jpe?g|png|webp)$/i, video: /\.(?:mp4|webm)$/i };
 const mimeByExt = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm' };
@@ -52,6 +63,10 @@ export async function captureTelegramMedia(items, { fetchImpl = fetch, lookup = 
       const bytes = Buffer.concat(chunks);
       if (!bytes.length || sniff(bytes, item.type, ext) !== expectedMime) throw new Error('media_content_rejected');
       await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+      const entries = await fs.readdir(directory, { withFileTypes: true });
+      let used = 0;
+      for (const entry of entries) if (entry.isFile()) { try { used += (await fs.stat(path.join(directory, entry.name))).size; } catch { /* concurrent cleanup */ } }
+      if (used + size > MEDIA_STORAGE_CAP) throw new Error('media_storage_full');
       const name = `${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`;
       const filePath = path.join(directory, name);
       await fs.writeFile(filePath, bytes, { flag: 'wx', mode: 0o600 });
