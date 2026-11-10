@@ -345,7 +345,8 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || ['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
+  if (!d || d.test || d.rule || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+  if (['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
   if (d.type === 'political') {
     const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
     if (!POLITICAL_CATEGORIES[d.politicalCategory] || d.politicalNeedsCategory || !Number.isFinite(d.created) || !Number.isFinite(activatedAt) || d.created <= activatedAt) return false;
@@ -625,7 +626,7 @@ async function sendCards(d, only = null) {
       for (const media of (d.sourceMedia || []).filter((m) => m.status === 'captured')) {
         try {
           const input = new InputFile(await readFile(media.path), `source-${media.type}.${media.mimeType.split('/')[1]}`);
-          const caption = tr(lang, `📎 مرفق من ${media.channel}/${media.messageId} — للمراجعة فقط`, `📎 Source attachment from ${media.channel}/${media.messageId} — review only`);
+          const caption = tr(lang, `📎 مرفق للمراجعة فقط · المسودة ${d.id} · المصدر ${media.channel}/${media.messageId}`, `📎 Review only · draft ${d.id} · source ${media.channel}/${media.messageId}`);
           if (media.type === 'photo') await a.sendPhoto(uid, input, { caption });
           else await a.sendVideo(uid, input, { caption });
         } catch (e) { console.warn('[news] source media reviewer delivery failed', d.id, e.description || e.message); }

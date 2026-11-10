@@ -69,6 +69,20 @@ test('explosion retains its existing night and daytime auto-publish eligibility 
   assert.equal(daytimeAutoEligible(explosion), true);
 });
 
+test('source photo or video keeps a draft in human review instead of automatic publishing', () => {
+  for (const media of [
+    { type: 'photo', status: 'captured' },
+    { type: 'video', status: 'captured' },
+    { type: 'photo', status: 'unavailable' },
+  ]) {
+    const draft = qualified({ sourceMedia: [media] });
+    assert.equal(nightEligible(draft), false);
+    assert.equal(daytimeAutoEligible(draft), false);
+    assert.equal(dayAutoDueAt(draft, daytimeStart), null);
+    assert.equal(dayAutoReady({ ...draft, dayAutoAt: daytimeStart }, daytimeStart + 120_000), false);
+  }
+});
+
 test('new detonation reports remain outside auto-publishing until explicitly approved', () => {
   const detonation = qualified({ type: 'detonation' });
   assert.equal(nightEligible(detonation), false);
