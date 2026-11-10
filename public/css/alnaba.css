@@ -98,15 +98,18 @@ button { font: inherit; }
 }
 .an-section-card::after { position: absolute; inset-inline-start: 0; top: 22px; bottom: 22px; width: 3px; border-radius: 0 4px 4px 0; background: var(--an-red); content: ''; opacity: .8; }
 .an-weekly-card::after { background: var(--an-blue); }
+.an-archive-card-link::after { background: #49a88b; }
 .an-section-card:hover { transform: translateY(-3px); border-color: #40536a; background-color: var(--an-panel-raised); }
 .an-card-icon { display: grid; width: 48px; height: 48px; place-items: center; margin-bottom: 22px; border: 1px solid rgba(227, 60, 76, .26); border-radius: 13px; background: rgba(227, 60, 76, .09); color: #ff7582; }
 .an-weekly-card .an-card-icon { border-color: rgba(71, 124, 171, .35); background: rgba(71, 124, 171, .12); color: #86b8e2; }
+.an-archive-card-link .an-card-icon { border-color: rgba(73, 168, 139, .35); background: rgba(73, 168, 139, .10); color: #7ed8ba; }
 .an-card-icon svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .an-card-kicker { color: var(--an-muted); font-size: 11px; }
 .an-section-card > b { margin-top: 3px; color: #fff; font-size: 21px; }
 .an-card-description { max-width: 450px; margin-top: 8px; color: #aab8c7; font-size: 12.5px; line-height: 1.9; }
 .an-card-action { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 20px; color: #ff7b87; font-size: 12px; font-weight: 700; }
 .an-weekly-card .an-card-action { color: #8dbde6; }
+.an-archive-card-link .an-card-action { color: #82d5b8; }
 .an-card-action span { font-family: Arial, sans-serif; font-size: 18px; }
 .an-share-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; padding: 14px 16px; border: 1px solid rgba(154, 169, 184, .14); border-radius: 12px; color: var(--an-muted); font-size: 11px; }
 .an-copy-button, .an-action-link {
@@ -150,6 +153,14 @@ button { font: inherit; }
 .an-paper-actions .an-action-link.secondary { border-color: var(--an-line); background: transparent; color: #c1cbd6; }
 .an-pdf-frame { min-height: 340px; border-inline-start: 1px solid var(--an-line); background: #e7eaf0; }
 .an-pdf-frame iframe { display: block; width: 100%; height: 100%; min-height: 340px; border: 0; background: #fff; }
+.an-archive-list { display: grid; gap: 12px; }
+.an-archive-entry { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 19px; border: 1px solid var(--an-line); border-radius: 14px; background: linear-gradient(105deg, rgba(73, 168, 139, .055), transparent 45%), var(--an-panel); }
+.an-archive-copy { min-width: 0; }
+.an-archive-kicker { display: inline-flex; align-items: center; gap: 7px; color: #81cdb3; font-size: 10px; font-weight: 700; }
+.an-archive-kicker span { color: #536477; }
+.an-archive-entry h2 { margin: 4px 0 0; color: #f2f5f9; font-size: 16px; line-height: 1.7; overflow-wrap: anywhere; }
+.an-archive-entry time { display: block; margin-top: 4px; color: var(--an-muted); font-size: 10px; }
+.an-archive-open { flex: 0 0 auto; border-color: rgba(73, 168, 139, .38); background: rgba(73, 168, 139, .08); color: #9ce2c9; }
 .an-state { display: grid; min-height: 120px; place-items: center; padding: 22px; border: 1px dashed #354455; border-radius: 14px; color: var(--an-muted); text-align: center; font-size: 12px; }
 .an-error { border-color: rgba(227, 60, 76, .42); color: #ff9ca5; }
 .an-footer { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid rgba(154, 169, 184, .17); color: #7e8c9c; font-size: 10.5px; }
@@ -175,6 +186,8 @@ button { font: inherit; }
   .an-page-heading { align-items: flex-start; flex-direction: column; margin-bottom: 18px; }
   .an-page-heading h1 { font-size: 28px; }
   .an-paper-card { grid-template-columns: 1fr; }
+  .an-archive-entry { align-items: stretch; flex-direction: column; gap: 12px; padding: 15px; }
+  .an-archive-open { width: 100%; }
   .an-paper-copy { min-height: 190px; padding: 16px; }
   .an-pdf-frame { min-height: 300px; border-inline-start: 0; border-top: 1px solid var(--an-line); }
   .an-pdf-frame iframe { min-height: 300px; }

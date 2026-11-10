@@ -377,19 +377,21 @@ app.get(['/ar', '/en', '/ar/', '/en/'], (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(renderIndex(p.startsWith('/en') ? 'en' : 'ar'));
 });
-app.get(['/alnaba', '/alnaba/', '/alnaba/photos', '/alnaba/photos/', '/alnaba/weekly', '/alnaba/weekly/'], (req, res) => {
+app.get(['/alnaba', '/alnaba/', '/alnaba/photos', '/alnaba/photos/', '/alnaba/weekly', '/alnaba/weekly/', '/alnaba/archive', '/alnaba/archive/'], (req, res) => {
   const pathname = req.path.replace(/\/+$/, '') || '/alnaba';
   if (!req.path.endsWith('/')) {
     const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
     return res.redirect(301, `${req.path}/${query}`);
   }
-  const page = pathname === '/alnaba/photos' ? 'photos' : pathname === '/alnaba/weekly' ? 'weekly' : 'home';
-  const title = page === 'photos' ? 'أخبار مصوّرة — النبأ' : page === 'weekly' ? 'الصحيفة الأسبوعية — النبأ' : 'النبأ — Red Alert Syria';
+  const page = pathname === '/alnaba/photos' ? 'photos' : pathname === '/alnaba/weekly' ? 'weekly' : pathname === '/alnaba/archive' ? 'archive' : 'home';
+  const title = page === 'photos' ? 'أخبار مصوّرة — النبأ' : page === 'weekly' ? 'الصحيفة الأسبوعية — النبأ' : page === 'archive' ? 'الأرشيف — النبأ' : 'النبأ — Red Alert Syria';
   const description = page === 'photos'
     ? 'أخبار مصوّرة من Red Alert Syria — الإنذار الأحمر سوريا.'
     : page === 'weekly'
       ? 'أعداد الصحيفة الأسبوعية بصيغة PDF من Red Alert Syria.'
-      : 'النبأ: الأخبار المصوّرة والصحيفة الأسبوعية من Red Alert Syria.';
+      : page === 'archive'
+        ? 'دليل روابط قنوات ومجموعات Telegram المضافة إلى أرشيف النبأ.'
+        : 'النبأ: الأخبار المصوّرة والصحيفة الأسبوعية وأرشيف الروابط من Red Alert Syria.';
   const base = (config.publicUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
   const canonical = `${base}${pathname}/`;
   const html = alnabaPageTemplate

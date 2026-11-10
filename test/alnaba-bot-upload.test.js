@@ -33,8 +33,9 @@ globalThis.fetch = async (url) => {
 
 const { store } = await import('../server/store.js');
 await store.init(null);
-store.backup = { async save(json) { this.json = json; } };
-store.state.alnaba = { photos: [], weekly: [] };
+let failBackup = false;
+store.backup = { async save(json) { if (failBackup) throw new Error('fixture backup failure'); this.json = json; } };
+store.state.alnaba = { photos: [], weekly: [], archive: [] };
 const { createBot } = await import('../server/bot.js');
 const bot = createBot({ token: process.env.BOT_TOKEN });
 bot.botInfo = { id: 1, is_bot: true, first_name: 'Fixture bot', username: 'FixtureBot' };
@@ -122,9 +123,12 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.match(menu.payload.text, /نشر محتوى النبأ/);
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:photos'));
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:weekly'));
+  assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:archive'));
 
   await tap(deniedId, 'nb:photos');
   assert.equal(buttonsOf(lastUiFor(deniedId)).some((button) => button.callback_data === 'nb:publish'), false);
+  await tap(deniedId, 'nb:archive');
+  assert.equal(calls.some(({ method, payload }) => method === 'editMessageText' && payload.chat_id === deniedId && payload.text.includes('🔗 <b>الأرشيف</b>')), false);
 
   await tap(authorizedId, 'nb:photos');
   assert.ok(calls.some(({ method, payload }) => method === 'editMessageText' && payload.text.includes('أخبار مصوّرة')));
@@ -185,6 +189,57 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   await tap(authorizedId, addWeekly.callback_data);
   assert.match(lastEditFor(authorizedId)?.payload?.text || '', /الصحيفة الأسبوعية/);
   assert.equal(store.state.alnaba.weekly.length, 1, 'starting the next PDF upload does not republish the previous issue');
+
+  await sendText(authorizedId, '/alnaba');
+  await tap(authorizedId, 'nb:archive');
+  assert.match(lastEditFor(authorizedId)?.payload?.text || '', /الأرشيف/);
+  await sendText(authorizedId, 'قناة اختبارية\nhttps://example.invalid/not-telegram');
+  assert.match(lastUiFor(authorizedId)?.payload?.text || '', /رابط Telegram صالح/);
+  assert.equal(store.state.alnaba.archive.length, 0, 'invalid links never enter the archive');
+
+  await sendText(authorizedId, 'قناة اختبارية\nhttps://t.me/ras_mock_archive_channel_01');
+  const archivePreview = lastUiFor(authorizedId);
+  assert.match(archivePreview.payload.text, /راجع مدخل الأرشيف/);
+  assert.match(archivePreview.payload.text, /https:\/\/t\.me\/ras_mock_archive_channel_01/);
+  assert.ok(buttonsOf(archivePreview).some((button) => button.callback_data === 'nb:publish'));
+  assert.equal(store.state.alnaba.archive.length, 0, 'archive entries stay private until explicit confirmation');
+  await tap(authorizedId, 'nb:publish');
+  assert.equal(store.state.alnaba.archive.length, 1);
+  assert.equal(store.state.alnaba.archive[0].title, 'قناة اختبارية');
+  assert.ok(JSON.parse(store.backup.json).alnaba.archive.some((entry) => entry.url === 'https://t.me/ras_mock_archive_channel_01'));
+  const archiveSuccess = lastUiFor(authorizedId);
+  const addAnotherLink = buttonsOf(archiveSuccess).find((button) => button.callback_data === 'nb:archive');
+  assert.equal(addAnotherLink?.text, '➕ إضافة رابط آخر');
+  await tap(authorizedId, addAnotherLink.callback_data);
+  assert.match(lastEditFor(authorizedId)?.payload?.text || '', /سطرين/);
+  assert.equal(store.state.alnaba.archive.length, 1, 'opening the next archive form does not duplicate the previous entry');
+  await sendText(authorizedId, 'مجموعة اختبارية\nhttps://telegram.me/ras_mock_archive_group_02/');
+  assert.equal(store.state.alnaba.archive.length, 1, 'the second mock link remains private while awaiting confirmation');
+  await tap(authorizedId, 'nb:publish');
+  assert.equal(store.state.alnaba.archive.length, 2);
+  assert.deepEqual(store.state.alnaba.archive.map((entry) => entry.url), [
+    'https://t.me/ras_mock_archive_group_02',
+    'https://t.me/ras_mock_archive_channel_01',
+  ]);
+  assert.ok(JSON.parse(store.backup.json).alnaba.archive.some((entry) => entry.title === 'مجموعة اختبارية'));
+  await tap(authorizedId, 'nb:archive');
+  await sendText(authorizedId, 'رابط ملغى\nhttps://t.me/ras_mock_archive_cancel_03');
+  assert.equal(store.state.alnaba.archive.length, 2, 'a mock entry is not public before confirmation');
+  await tap(authorizedId, 'nb:cancel');
+  assert.equal(store.state.alnaba.archive.length, 2, 'cancelling the preview does not create an archive entry');
+
+  await tap(authorizedId, 'nb:archive');
+  await sendText(authorizedId, 'رابط إعادة المحاولة\nhttps://t.me/ras_mock_archive_retry_04');
+  const backupBeforeFailure = store.backup.json;
+  failBackup = true;
+  await tap(authorizedId, 'nb:publish');
+  assert.equal(store.state.alnaba.archive.length, 2, 'a failed durable backup rolls back the in-memory archive write');
+  assert.equal(store.backup.json, backupBeforeFailure, 'a failed backup does not replace the last durable snapshot');
+  assert.match([...calls].reverse().find(({ method }) => method === 'answerCallbackQuery')?.payload?.text || '', /نسخة احتياطية/);
+  failBackup = false;
+  await tap(authorizedId, 'nb:publish');
+  assert.equal(store.state.alnaba.archive.length, 3, 'the owner can retry the still-pending preview after backup recovers');
+  assert.ok(JSON.parse(store.backup.json).alnaba.archive.some((entry) => entry.title === 'رابط إعادة المحاولة'));
   assert.equal(calls.some(({ method, payload }) => ['sendPhoto', 'sendDocument'].includes(method) && payload.chat_id === '@mock_news_channel'), false,
     'Al-Nabaa uploads do not auto-post files to the Telegram channel');
 });

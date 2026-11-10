@@ -31,7 +31,7 @@ function withLabel(loc, label) {
 }
 const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
 import { cleanAlertText } from './clean-text.js';
-import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, fetchAlnabaTelegramBytes } from './alnaba.js';
+import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, fetchAlnabaTelegramBytes } from './alnaba.js';
 
 const PAGE = 24;
 const SUB_MENU_MIN = 40; // districts with more towns than this get a ناحية (sub-district) step first
@@ -146,6 +146,7 @@ const sessions = new Map(); // userId -> draft
 const activeMediaSessions = new Map(); // userId -> { alertId, created }: admin attachment to an already-published alert
 const alnabaSessions = new Map(); // ownerId -> { section, createdAt }
 const alnabaPendingUploads = new Map(); // ownerId -> validated media waiting for explicit publish confirmation
+const alnabaPendingArchiveEntries = new Map(); // ownerId -> validated Telegram directory entry waiting for confirmation
 // pending reports live in the store (store.reportPut/Take): they survive restarts and deploys
 const lastReport = new Map();
 
@@ -1722,6 +1723,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (ctx.message) ctx.ras.keepInput = true; // cleanMenuMessages tracks and deletes this command itself
     alnabaSessions.delete(Number(ctx.from?.id));
     alnabaPendingUploads.delete(Number(ctx.from?.id));
+    alnabaPendingArchiveEntries.delete(Number(ctx.from?.id));
     await clearConvo(ctx);
     await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.message || ctx.callbackQuery?.message);
     sessions.delete(sk(ctx));
@@ -1735,6 +1737,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (ctx.callbackQuery) return home(ctx);
     alnabaSessions.delete(Number(ctx.from?.id));
     alnabaPendingUploads.delete(Number(ctx.from?.id));
+    alnabaPendingArchiveEntries.delete(Number(ctx.from?.id));
     if (ctx.message) ctx.ras.keepInput = true; // cleanMenuMessages tracks and deletes this command itself
     await clearConvo(ctx);
     await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.message);
@@ -1761,22 +1764,28 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return new InlineKeyboard()
       .text(en ? '🖼 Photo news' : '🖼 أخبار مصورة', 'nb:photos')
       .text(en ? '📄 Weekly newspaper' : '📄 الصحيفة الأسبوعية', 'nb:weekly').row()
+      .text(en ? '🔗 Archive' : '🔗 الأرشيف', 'nb:archive').row()
       .url(en ? '🌐 Open Al-Nabaa' : '🌐 فتح صفحة النبأ', alnabaSite());
   };
   const alnabaMenuText = (ctx) => langOf(ctx) === 'en'
-    ? '📰 <b>Al-Nabaa publishing</b>\n\nChoose a section. Uploads stay private until you review the preview and confirm publishing.'
-    : '📰 <b>نشر محتوى النبأ</b>\n\nاختر القسم. يبقى الملف خاصاً حتى تراجع المعاينة وتضغط «نشر». لا يُنشر أي ملف تلقائياً.';
-  const alnabaSectionPrompt = (section, en) => section === 'photos'
-    ? (en
+    ? '📰 <b>Al-Nabaa publishing</b>\n\nChoose photo news, the weekly newspaper, or the archive. Files and links stay private until you review the preview and confirm publishing.'
+    : '📰 <b>نشر محتوى النبأ</b>\n\nاختر الأخبار المصوّرة أو الصحيفة الأسبوعية أو الأرشيف. تبقى الملفات والروابط خاصة حتى تراجع المعاينة وتؤكد النشر.';
+  const alnabaSectionPrompt = (section, en) => {
+    if (section === 'photos') return en
       ? '🖼 <b>Photo news</b>\n\nSend one photo with its headline in the caption, or attach a JPG, PNG, or WebP file with a headline. Maximum 10 MB. The original image is preserved; nothing goes public until you confirm.'
-      : '🖼 <b>أخبار مصوّرة</b>\n\nأرسل صورة مع عنوانها في وصف الصورة، أو أرفق JPG أو PNG أو WebP مع العنوان. الحد الأقصى 10 ميغابايت. تُعرض الصورة كما هي، ولا تظهر للمتابعين قبل تأكيد النشر.')
-    : (en
+      : '🖼 <b>أخبار مصوّرة</b>\n\nأرسل صورة مع عنوانها في وصف الصورة، أو أرفق JPG أو PNG أو WebP مع العنوان. الحد الأقصى 10 ميغابايت. تُعرض الصورة كما هي، ولا تظهر للمتابعين قبل تأكيد النشر.';
+    if (section === 'weekly') return en
       ? '📄 <b>Weekly newspaper</b>\n\nSend a PDF file (up to 20 MB). Add an issue title in the caption; otherwise the filename will be used. The PDF is checked before you review and publish it.'
-      : '📄 <b>الصحيفة الأسبوعية</b>\n\nأرسل ملف PDF لا يتجاوز 20 ميغابايت. ضع عنوان العدد في وصف الملف، وإلا سيُستخدم اسم الملف. يُفحص PDF قبل معاينته ونشره.');
+      : '📄 <b>الصحيفة الأسبوعية</b>\n\nأرسل ملف PDF لا يتجاوز 20 ميغابايت. ضع عنوان العدد في وصف الملف، وإلا سيُستخدم اسم الملف. يُفحص PDF قبل معاينته ونشره.';
+    return en
+      ? '🔗 <b>Archive</b>\n\nSend one text message with two lines: the channel/group name or title first, then its HTTPS Telegram link (t.me or telegram.me). Public usernames and invite links are supported. The entry stays private until you confirm the preview.'
+      : '🔗 <b>الأرشيف</b>\n\nأرسل رسالة نصية من سطرين: اسم/عنوان القناة أو المجموعة في السطر الأول، ثم رابط Telegram كامل يبدأ بـ HTTPS في السطر الثاني (t.me أو telegram.me). تُقبل الروابط العامة وروابط الدعوة، ولا يظهر الرابط للزوار قبل تأكيد المعاينة.';
+  };
   bot.command('alnaba', async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.reply(langOf(ctx) === 'en' ? 'This publishing option is not available for this account.' : 'هذه الصلاحية غير متاحة لهذا الحساب.');
     alnabaSessions.delete(Number(ctx.from.id));
     alnabaPendingUploads.delete(Number(ctx.from.id));
+    alnabaPendingArchiveEntries.delete(Number(ctx.from.id));
     await ctx.reply(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
   });
   // Owner-only: render sample channel images on this server and send them to the owner's private chat
@@ -1815,18 +1824,19 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
 
   // -------- callbacks
-  bot.callbackQuery(/^nb:(open|photos|weekly|publish|cancel)$/, async (ctx) => {
+  bot.callbackQuery(/^nb:(open|photos|weekly|archive|publish|cancel)$/, async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية النشر.');
     const action = ctx.match[1];
     const uid = Number(ctx.from.id);
     if (action === 'open') {
       alnabaSessions.delete(uid);
       alnabaPendingUploads.delete(uid);
+      alnabaPendingArchiveEntries.delete(uid);
       await ctx.answerCallbackQuery();
       return ctx.editMessageText(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
     }
-    if (action === 'photos' || action === 'weekly') {
-      if (alnabaPendingUploads.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Confirm or cancel the pending upload first.' : 'أكّد نشر الملف المعلّق أو ألغِه أولاً.');
+    if (action === 'photos' || action === 'weekly' || action === 'archive') {
+      if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Confirm or cancel the pending preview first.' : 'أكّد المعاينة المعلّقة أو ألغِها أولاً.');
       const section = action;
       alnabaSessions.set(uid, { section, createdAt: Date.now() });
       const en = langOf(ctx) === 'en';
@@ -1837,8 +1847,48 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (action === 'cancel') {
       alnabaSessions.delete(uid);
       alnabaPendingUploads.delete(uid);
+      alnabaPendingArchiveEntries.delete(uid);
       await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Cancelled.' : 'تم الإلغاء.');
       return ctx.deleteMessage().catch(() => {});
+    }
+
+    const archivePending = alnabaPendingArchiveEntries.get(uid);
+    if (archivePending) {
+      if (Date.now() - archivePending.createdAt > 30 * 60_000) {
+        alnabaPendingArchiveEntries.delete(uid);
+        await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This preview expired. Start again with /alnaba.' : 'انتهت صلاحية المعاينة. ابدأ مجدداً عبر /alnaba.');
+        return ctx.deleteMessage().catch(() => {});
+      }
+      if (!store.backup || !config.telegramBackup) {
+        return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Publishing is paused: durable backup is unavailable.' : 'توقف النشر: النسخة الاحتياطية الدائمة غير متاحة حالياً.');
+      }
+      const oldState = store.state.alnaba;
+      let item;
+      try {
+        item = publishAlnabaArchiveEntry(store, uid, archivePending, new Date());
+        await store.flushBackup();
+        if (store._backupPending) throw new Error('BACKUP_FAILED');
+      } catch (error) {
+        store.state.alnaba = oldState;
+        store.persist({ backupSoon: false });
+        const en = langOf(ctx) === 'en';
+        const message = error.message === 'DUPLICATE_ARCHIVE_LINK'
+          ? (en ? 'This Telegram link is already in the archive.' : 'هذا الرابط موجود مسبقاً في الأرشيف.')
+          : (en ? 'Could not save a durable backup, so nothing was published. Please try again.' : 'تعذّر حفظ نسخة احتياطية دائمة؛ لذلك لم يُنشر شيء. حاول مجدداً.');
+        await ctx.answerCallbackQuery(message);
+        return;
+      }
+      alnabaPendingArchiveEntries.delete(uid);
+      alnabaSessions.delete(uid);
+      const en = langOf(ctx) === 'en';
+      await ctx.answerCallbackQuery(en ? 'Added to the Al-Nabaa archive.' : 'أُضيف الرابط إلى أرشيف النبأ.');
+      await ctx.deleteMessage().catch(() => {});
+      const keyboard = new InlineKeyboard()
+        .text(en ? '➕ Add another link' : '➕ إضافة رابط آخر', 'nb:archive').row()
+        .url(en ? 'Open archive' : 'فتح الأرشيف', alnabaSite('archive'))
+        .url(en ? 'Al-Nabaa home' : 'صفحة النبأ', alnabaSite());
+      await ctx.reply(en ? `✅ Added to archive: <b>${esc(item.title)}</b>` : `✅ أُضيف إلى الأرشيف: <b>${esc(item.title)}</b>`, { parse_mode: 'HTML', reply_markup: keyboard });
+      return;
     }
 
     const pending = alnabaPendingUploads.get(uid);
@@ -2861,6 +2911,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const flow = alnabaSessions.get(uid);
     if (!flow) return false;
     const en = langOf(ctx) === 'en';
+    if (flow.section === 'archive') {
+      await ctx.reply(en ? 'Send the archive title and Telegram link as a two-line text message.' : 'أرسل عنوان الأرشيف ورابط Telegram في رسالة نصية من سطرين.');
+      return true;
+    }
     if (Date.now() - flow.createdAt > 30 * 60_000) {
       alnabaSessions.delete(uid);
       await ctx.reply(en ? 'The upload session expired. Start again with /alnaba.' : 'انتهت جلسة الرفع. ابدأ مجدداً عبر /alnaba.');
@@ -2893,7 +2947,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.on('message:photo', async (ctx, next) => {
     const uid = Number(ctx.from?.id);
     if (!alnabaOwner(ctx)) return next();
-    if (alnabaPendingUploads.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another file.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال ملف آخر.');
+    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.');
     if (!alnabaSessions.has(uid)) return next();
     const photo = ctx.message.photo?.at(-1);
     if (!photo) return ctx.reply(langOf(ctx) === 'en' ? 'Send a photo file.' : 'أرسل ملف صورة.');
@@ -2909,7 +2963,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.on('message:document', async (ctx, next) => {
     const uid = Number(ctx.from?.id);
     if (!alnabaOwner(ctx)) return next();
-    if (alnabaPendingUploads.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another file.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال ملف آخر.');
+    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.');
     if (!alnabaSessions.has(uid)) return next();
     const document = ctx.message.document;
     if (!document) return ctx.reply(langOf(ctx) === 'en' ? 'Send an image or PDF file.' : 'أرسل ملف صورة أو PDF.');
@@ -2928,7 +2982,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   });
   bot.on('message:video', async (ctx, next) => {
     const uid = Number(ctx.from?.id);
-    if (alnabaOwner(ctx) && alnabaPendingUploads.has(uid)) {
+    if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid))) {
       return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview first.' : 'أكّد المعاينة الحالية أو ألغِها أولاً.');
     }
     if (alnabaOwner(ctx) && alnabaSessions.has(uid)) {
@@ -2971,8 +3025,39 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const text = clean(ctx.message.text, 2000);
     if (text.startsWith('/')) return;
     const uid = Number(ctx.from?.id);
-    if (alnabaOwner(ctx) && alnabaPendingUploads.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Use the Publish or Cancel buttons on the pending preview.' : 'استخدم زري «نشر الآن» أو «إلغاء» في المعاينة المعلّقة.');
-    if (alnabaOwner(ctx) && alnabaSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Send the selected image/PDF as a media file; add the photo headline as its caption.' : 'أرسل الصورة أو ملف PDF الذي اخترته؛ وضع عنوان الصورة في وصفها.');
+    if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid))) return ctx.reply(langOf(ctx) === 'en' ? 'Use the Publish or Cancel buttons on the pending preview.' : 'استخدم زري «نشر الآن» أو «إلغاء» في المعاينة المعلّقة.');
+    const alnabaFlow = alnabaSessions.get(uid);
+    if (alnabaOwner(ctx) && alnabaFlow?.section === 'archive') {
+      const en = langOf(ctx) === 'en';
+      if (Date.now() - alnabaFlow.createdAt > 30 * 60_000) {
+        alnabaSessions.delete(uid);
+        return ctx.reply(en ? 'The archive session expired. Start again with /alnaba.' : 'انتهت جلسة الأرشيف. ابدأ مجدداً عبر /alnaba.');
+      }
+      const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      if (lines.length !== 2) return ctx.reply(en
+        ? 'Send exactly two lines: the channel/group title, then its full HTTPS Telegram link.'
+        : 'أرسل سطرين فقط: اسم/عنوان القناة أو المجموعة أولاً، ثم رابط Telegram الكامل في السطر الثاني.');
+      try {
+        const prepared = prepareAlnabaArchiveEntry({ title: lines[0], url: lines[1] });
+        alnabaPendingArchiveEntries.set(uid, { ...prepared, createdAt: Date.now() });
+        alnabaSessions.delete(uid);
+        const preview = en
+          ? `Review this archive entry before publishing:\n<b>${esc(prepared.title)}</b>\n<a href="${esc(prepared.url)}">${esc(prepared.url)}</a>\n\nIt stays private until you confirm.`
+          : `راجع مدخل الأرشيف قبل نشره:\n<b>${esc(prepared.title)}</b>\n<a href="${esc(prepared.url)}">${esc(prepared.url)}</a>\n\nلن يظهر للزوار حتى تؤكد النشر.`;
+        const keyboard = new InlineKeyboard()
+          .text(en ? '✅ Publish now' : '✅ نشر الآن', 'nb:publish')
+          .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
+        return ctx.reply(preview, { parse_mode: 'HTML', reply_markup: keyboard, link_preview_options: { is_disabled: true } });
+      } catch (error) {
+        const message = error.message === 'MISSING_TITLE'
+          ? (en ? 'Please include the channel/group title on the first line.' : 'أضف اسم/عنوان القناة أو المجموعة في السطر الأول.')
+          : error.message === 'TITLE_TOO_LONG'
+            ? (en ? 'Keep the title within 180 characters.' : 'اجعل العنوان أقل من 180 حرفاً.')
+            : (en ? 'Use a valid HTTPS Telegram link (t.me or telegram.me) for a channel, group, or invite.' : 'أرسل رابط Telegram صالحاً وآمناً يبدأ بـ https://t.me أو https://telegram.me لقناة أو مجموعة أو دعوة.');
+        return ctx.reply(message);
+      }
+    }
+    if (alnabaOwner(ctx) && alnabaFlow) return ctx.reply(langOf(ctx) === 'en' ? 'Send the selected image/PDF as a media file; add the photo headline as its caption.' : 'أرسل الصورة أو ملف PDF الذي اخترته؛ وضع عنوان الصورة في وصفها.');
     const d = getDraft(ctx);
     if (!d) return home(ctx);
     const l = L(ctx);

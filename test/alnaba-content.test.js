@@ -8,8 +8,12 @@ import {
   fetchAlnabaTelegramBytes,
   isAlnabaOwner,
   listPublicAlnabaItems,
+  normalizeTelegramLink,
+  prepareAlnabaArchiveEntry,
   prepareAlnabaUpload,
+  publishAlnabaArchiveEntry,
   publishAlnabaItem,
+  sanitizeAlnabaState,
 } from '../server/alnaba.js';
 
 const OWNER = 8270709633;
@@ -20,7 +24,7 @@ const pdfBytes = Buffer.from('%PDF-1.7\nfixture only\n%%EOF\n');
 
 function createStore() {
   return {
-    state: { alnaba: { photos: [], weekly: [] } },
+    state: { alnaba: { photos: [], weekly: [], archive: [] } },
     persistCalls: 0,
     persist() { this.persistCalls += 1; },
   };
@@ -86,6 +90,11 @@ const weeklyUpload = () => ({
   file_name: 'fixture-weekly.pdf',
 });
 
+const archiveEntry = () => ({
+  title: 'قناة أرشيف تجريبية',
+  url: 'https://t.me/ras_fixture_archive_entry_123',
+});
+
 test('only 8270709633 can use Al-Nabaa publishing; 8808894711 and nearby IDs are denied', () => {
   const store = createStore();
   assert.equal(isAlnabaOwner(OWNER), true);
@@ -93,8 +102,42 @@ test('only 8270709633 can use Al-Nabaa publishing; 8808894711 and nearby IDs are
   assert.equal(isAlnabaOwner(8808894712), false);
   assert.throws(() => publishAlnabaItem(store, PREVIOUS_PROJECT_OWNER, photoUpload()), { message: 'FORBIDDEN' });
   assert.throws(() => publishAlnabaItem(store, OWNER + 1, photoUpload()), { message: 'FORBIDDEN' });
-  assert.deepEqual(store.state.alnaba, { photos: [], weekly: [] });
+  assert.throws(() => publishAlnabaArchiveEntry(store, PREVIOUS_PROJECT_OWNER, archiveEntry()), { message: 'FORBIDDEN' });
+  assert.deepEqual(store.state.alnaba, { photos: [], weekly: [], archive: [] });
   assert.equal(store.persistCalls, 0);
+});
+
+test('archive accepts only direct HTTPS Telegram public or invite links and normalizes their host', () => {
+  assert.equal(normalizeTelegramLink('https://telegram.me/RasArchiveFixture/'), 'https://t.me/RasArchiveFixture');
+  assert.equal(normalizeTelegramLink('https://t.me/+AbCdEfgh_123-'), 'https://t.me/+AbCdEfgh_123-');
+  assert.equal(normalizeTelegramLink('https://t.me/joinchat/AbCdEfgh123456'), 'https://t.me/joinchat/AbCdEfgh123456');
+  for (const url of [
+    'http://t.me/RasArchiveFixture',
+    'https://t.me.evil.example/RasArchiveFixture',
+    'https://t.me@evil.example/RasArchiveFixture',
+    'https://www.t.me/RasArchiveFixture',
+    'https://t.me/RasArchiveFixture?start=payload',
+    'https://t.me/RasArchiveFixture#fragment',
+    'https://t.me/',
+    'javascript:alert(1)',
+    'https://t.me/abc',
+  ]) assert.throws(() => normalizeTelegramLink(url), { message: 'INVALID_TELEGRAM_LINK' }, url);
+  assert.throws(() => prepareAlnabaArchiveEntry({ title: '', url: 'https://t.me/RasArchiveFixture' }), { message: 'MISSING_TITLE' });
+  assert.throws(() => prepareAlnabaArchiveEntry({ title: 'x'.repeat(181), url: 'https://t.me/RasArchiveFixture' }), { message: 'TITLE_TOO_LONG' });
+});
+
+test('archive entries are deduplicated and survive Al-Nabaa state serialization/restoration', () => {
+  const store = createStore();
+  const item = publishAlnabaArchiveEntry(store, OWNER, archiveEntry(), new Date('2026-11-10T12:10:00.000Z'));
+  assert.equal(item.section, 'archive');
+  assert.equal(item.url, 'https://t.me/ras_fixture_archive_entry_123');
+  assert.equal(store.persistCalls, 1);
+  assert.throws(() => publishAlnabaArchiveEntry(store, OWNER, { ...archiveEntry(), url: 'https://telegram.me/ras_fixture_archive_entry_123/' }), { message: 'DUPLICATE_ARCHIVE_LINK' });
+  const restored = sanitizeAlnabaState(JSON.parse(JSON.stringify(store.state.alnaba)));
+  assert.deepEqual(restored.archive, [item]);
+  assert.deepEqual(restored.photos, []);
+  assert.deepEqual(restored.weekly, []);
+  assert.deepEqual(sanitizeAlnabaState({ ...store.state.alnaba, archive: [{ ...item, url: 'https://t.me.evil.example/unsafe' }] }).archive, []);
 });
 
 test('upload validation enforces allowed section types and size limits', () => {
@@ -119,9 +162,11 @@ test('synthetic owner approval publishes the original photo and PDF to public se
 
   const photo = publishAlnabaItem(store, OWNER, photoPreview, new Date('2026-11-10T12:00:00.000Z'));
   const weekly = publishAlnabaItem(store, OWNER, pdfPreview, new Date('2026-11-10T12:05:00.000Z'));
-  assert.equal(store.persistCalls, 2);
+  const archive = publishAlnabaArchiveEntry(store, OWNER, archiveEntry(), new Date('2026-11-10T12:10:00.000Z'));
+  assert.equal(store.persistCalls, 3);
   assert.equal(listPublicAlnabaItems(store, 'photos')[0].id, photo.id);
   assert.equal(listPublicAlnabaItems(store, 'weekly')[0].id, weekly.id);
+  assert.equal(listPublicAlnabaItems(store, 'archive')[0].id, archive.id);
 
   const app = express();
   app.use('/api/alnaba', createAlnabaRouter({
@@ -153,6 +198,19 @@ test('synthetic owner approval publishes the original photo and PDF to public se
     const weeklyList = await weeklyListResponse.json();
     assert.equal(weeklyList.items[0].media_url, `/api/alnaba/media/${weekly.id}`);
     assert.equal(JSON.stringify(weeklyList).includes('fixture_pdf_id'), false);
+
+    const archiveListResponse = await fetch(`${base}/api/alnaba?section=archive`, { credentials: 'omit' });
+    assert.equal(archiveListResponse.status, 200);
+    const archiveList = await archiveListResponse.json();
+    assert.equal(archiveList.section, 'archive');
+    assert.deepEqual(archiveList.items, [{
+      id: archive.id,
+      section: 'archive',
+      title: 'قناة أرشيف تجريبية',
+      url: 'https://t.me/ras_fixture_archive_entry_123',
+      published_at: '2026-11-10T12:10:00.000Z',
+    }]);
+    assert.equal(JSON.stringify(archiveList).includes('file_id'), false);
 
     const pdfResponse = await fetch(`${base}${weeklyList.items[0].media_url}`, { credentials: 'omit' });
     assert.equal(pdfResponse.status, 200);

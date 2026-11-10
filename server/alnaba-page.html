@@ -17,8 +17,8 @@
   <meta property="og:image" content="/img/og.png" />
   <meta property="og:url" content="{{CANONICAL}}" />
   <link rel="icon" type="image/svg+xml" href="/img/icon.svg" />
-  <link rel="stylesheet" href="/css/alnaba.css?v=1" />
-  <script type="module" src="/js/alnaba.js?v=1"></script>
+  <link rel="stylesheet" href="/css/alnaba.css?v=2" />
+  <script type="module" src="/js/alnaba.js?v=2"></script>
 </head>
 <body>
   <div class="an-shell">
@@ -32,6 +32,7 @@
         <a href="/alnaba/" data-nav="home">النبأ</a>
         <a href="/alnaba/photos/" data-nav="photos">أخبار مصوّرة</a>
         <a href="/alnaba/weekly/" data-nav="weekly">الصحيفة الأسبوعية</a>
+        <a href="/alnaba/archive/" data-nav="archive">الأرشيف</a>
         <a class="an-map-link" href="/ar/">العودة إلى الخريطة</a>
       </nav>
     </header>
@@ -41,7 +42,7 @@
         <div class="an-eyebrow"><span class="an-live-dot"></span> Red Alert Syria <span class="an-slash">/</span> النبأ</div>
         <div class="an-home-copy">
           <h1>النبأ</h1>
-          <p>مساحة تحريرية للأخبار المصوّرة والأعداد الأسبوعية، تُنشر هنا بعد مراجعتها.</p>
+          <p>مساحة تحريرية للأخبار المصوّرة والأعداد الأسبوعية، مع دليل روابط منظم، يُضاف بعد المراجعة.</p>
         </div>
         <div class="an-section-grid">
           <a class="an-section-card an-photo-card" href="/alnaba/photos/">
@@ -61,6 +62,15 @@
             <b>الصحيفة الأسبوعية</b>
             <span class="an-card-description">الأعداد الأسبوعية بصيغة PDF، جاهزة للفتح والمشاركة.</span>
             <span class="an-card-action">تصفّح الأعداد <span aria-hidden="true">←</span></span>
+          </a>
+          <a class="an-section-card an-archive-card-link" href="/alnaba/archive/">
+            <span class="an-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l2.2-2.2a5 5 0 0 0-7.1-7.1L10.9 5"></path><path d="M14 11a5 5 0 0 0-7.1 0l-2.2 2.2a5 5 0 0 0 7.1 7.1l1.3-1.3"></path></svg>
+            </span>
+            <span class="an-card-kicker">روابط مباشرة</span>
+            <b>الأرشيف</b>
+            <span class="an-card-description">دليل منظم لروابط قنوات ومجموعات Telegram المضافة إلى النبأ.</span>
+            <span class="an-card-action">استكشف الأرشيف <span aria-hidden="true">←</span></span>
           </a>
         </div>
         <div class="an-share-row">
@@ -97,6 +107,21 @@
         <div class="an-state" id="weeklyLoading">جارٍ تحميل أعداد الصحيفة…</div>
         <div class="an-state" id="weeklyEmpty" hidden>لا توجد أعداد منشورة حالياً.</div>
         <div class="an-state an-error" id="weeklyError" hidden>تعذّر تحميل المحتوى الآن. حاول فتح الصفحة مجدداً بعد قليل.</div>
+      </section>
+
+      <section class="an-view" data-view="archive" hidden>
+        <div class="an-page-heading">
+          <div>
+            <div class="an-eyebrow"><a href="/alnaba/">النبأ</a><span class="an-slash">/</span> الروابط</div>
+            <h1>الأرشيف</h1>
+            <p>دليل مرتب لروابط قنوات ومجموعات Telegram، افتح أي رابط للانتقال مباشرةً إلى وجهته.</p>
+          </div>
+          <button class="an-copy-button" type="button" data-copy-link>نسخ رابط القسم</button>
+        </div>
+        <div class="an-archive-list" id="archiveList" aria-live="polite"></div>
+        <div class="an-state" id="archiveLoading">جارٍ تحميل الأرشيف…</div>
+        <div class="an-state" id="archiveEmpty" hidden>لا توجد روابط مضافة إلى الأرشيف حالياً.</div>
+        <div class="an-state an-error" id="archiveError" hidden>تعذّر تحميل الأرشيف الآن. حاول فتح الصفحة مجدداً بعد قليل.</div>
       </section>
     </main>
 

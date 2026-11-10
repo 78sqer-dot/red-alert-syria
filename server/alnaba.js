@@ -4,6 +4,7 @@ import express from 'express';
 export const ALNABA_OWNER_ID = 8270709633;
 export const ALNABA_MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 export const ALNABA_MAX_PDF_BYTES = 20 * 1024 * 1024;
+export const ALNABA_MAX_ARCHIVE_ENTRIES = 250;
 const FILE_ID_RE = /^[A-Za-z0-9_-]{1,512}$/;
 const UNIQUE_ID_RE = /^[A-Za-z0-9_-]{1,256}$/;
 const UUID_RE = /^[\w-]{36}$/;
@@ -12,6 +13,23 @@ const next = (_req, _res, done) => done();
 
 function cleanTitle(value, max = 180) {
   return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+export function normalizeTelegramLink(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw.length > 512 || /\s|[\u0000-\u001f\u007f]/u.test(raw)) throw new Error('INVALID_TELEGRAM_LINK');
+  let url;
+  try { url = new URL(raw); } catch { throw new Error('INVALID_TELEGRAM_LINK'); }
+  if (url.protocol !== 'https:' || !['t.me', 'telegram.me'].includes(url.hostname.toLowerCase())
+    || url.username || url.password || url.port || url.search || url.hash) throw new Error('INVALID_TELEGRAM_LINK');
+  const pathname = url.pathname.replace(/\/+$/, '');
+  let match = pathname.match(/^\/([A-Za-z][A-Za-z0-9_]{4,31})$/);
+  if (match) return `https://t.me/${match[1]}`;
+  match = pathname.match(/^\/\+([A-Za-z0-9_-]{8,128})$/);
+  if (match) return `https://t.me/+${match[1]}`;
+  match = pathname.match(/^\/joinchat\/([A-Za-z0-9_-]{8,128})$/);
+  if (match) return `https://t.me/joinchat/${match[1]}`;
+  throw new Error('INVALID_TELEGRAM_LINK');
 }
 
 function cleanFileName(value, fallback) {
@@ -65,11 +83,24 @@ function sanitizeItem(raw, section) {
   };
 }
 
+function sanitizeArchiveEntry(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = typeof raw.id === 'string' && UUID_RE.test(raw.id) ? raw.id : null;
+  const title = cleanTitle(raw.title);
+  const publishedAt = typeof raw.published_at === 'string' && Number.isFinite(Date.parse(raw.published_at))
+    ? new Date(raw.published_at).toISOString() : null;
+  let url = null;
+  try { url = normalizeTelegramLink(raw.url); } catch { /* discard unsafe legacy entries */ }
+  if (!id || !title || !url || !publishedAt) return null;
+  return { id, section: 'archive', title, url, published_at: publishedAt };
+}
+
 export function sanitizeAlnabaState(value) {
   const src = value && typeof value === 'object' ? value : {};
   const photos = Array.isArray(src.photos) ? src.photos.map((item) => sanitizeItem(item, 'photos')).filter(Boolean).slice(0, 200) : [];
   const weekly = Array.isArray(src.weekly) ? src.weekly.map((item) => sanitizeItem(item, 'weekly')).filter(Boolean).slice(0, 100) : [];
-  return { photos, weekly };
+  const archive = Array.isArray(src.archive) ? src.archive.map(sanitizeArchiveEntry).filter(Boolean).slice(0, ALNABA_MAX_ARCHIVE_ENTRIES) : [];
+  return { photos, weekly, archive };
 }
 
 export function isAlnabaOwner(actorId) {
@@ -126,6 +157,26 @@ export function publishAlnabaItem(store, actorId, input, now = new Date()) {
   return item;
 }
 
+export function prepareAlnabaArchiveEntry(input) {
+  const rawTitle = String(input?.title ?? '').trim();
+  const title = cleanTitle(rawTitle, 181);
+  if (!title) throw new Error('MISSING_TITLE');
+  if (title.length > 180) throw new Error('TITLE_TOO_LONG');
+  return { section: 'archive', title, url: normalizeTelegramLink(input?.url) };
+}
+
+export function publishAlnabaArchiveEntry(store, actorId, input, now = new Date()) {
+  if (!isAlnabaOwner(actorId)) throw new Error('FORBIDDEN');
+  const clean = prepareAlnabaArchiveEntry(input);
+  const state = sanitizeAlnabaState(store?.state?.alnaba);
+  if (state.archive.some((entry) => entry.url === clean.url)) throw new Error('DUPLICATE_ARCHIVE_LINK');
+  const item = { id: crypto.randomUUID(), ...clean, published_at: new Date(now).toISOString() };
+  state.archive = [item, ...state.archive].slice(0, ALNABA_MAX_ARCHIVE_ENTRIES);
+  store.state.alnaba = state;
+  store.persist();
+  return item;
+}
+
 export function publicAlnabaItem(item) {
   return {
     id: item.id,
@@ -139,11 +190,13 @@ export function publicAlnabaItem(item) {
 }
 
 export function listPublicAlnabaItems(store, section, limit = 80) {
-  if (!['photos', 'weekly'].includes(section)) return null;
+  if (!['photos', 'weekly', 'archive'].includes(section)) return null;
   return sanitizeAlnabaState(store?.state?.alnaba)[section]
     .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at))
     .slice(0, Math.max(1, Math.min(Number(limit) || 80, 100)))
-    .map(publicAlnabaItem);
+    .map((item) => section === 'archive'
+      ? { id: item.id, section: 'archive', title: item.title, url: item.url, published_at: item.published_at }
+      : publicAlnabaItem(item));
 }
 
 export function findAlnabaItem(store, id) {

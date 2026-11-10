@@ -203,7 +203,7 @@ class Store extends EventEmitter {
       jobs: s.jobs && typeof s.jobs === 'object' ? s.jobs : {},
       // 🏛 official army / government salary and recruitment items: owner-review queue + website-only records
       army: s.army && typeof s.army === 'object' ? s.army : {},
-      // 📰 public Al-Nabaa photo stories and weekly PDF editions (Telegram-hosted files).
+      // 📰 public Al-Nabaa photo stories, weekly PDF editions, and Telegram archive links.
       alnaba: sanitizeAlnabaState(s.alnaba),
       // 💱 prices bulletin, 🛣 road status, ⚡ electricity updates (server/prices.js, server/services.js)
       svc: s.svc && typeof s.svc === 'object' ? s.svc : {},

@@ -13,6 +13,19 @@ function mediaUrl(item) {
   return item && UUID.test(String(item.id || '')) ? `/api/alnaba/media/${item.id}` : null;
 }
 
+function safeTelegramUrl(value) {
+  try {
+    const url = new URL(String(value ?? '').trim());
+    if (url.protocol !== 'https:' || !['t.me', 'telegram.me'].includes(url.hostname.toLowerCase())
+      || url.username || url.password || url.port || url.search || url.hash) return null;
+    const path = url.pathname.replace(/\/+$/, '');
+    if (!/^\/(?:[A-Za-z][A-Za-z0-9_]{4,31}|\+[A-Za-z0-9_-]{8,128}|joinchat\/[A-Za-z0-9_-]{8,128})$/.test(path)) return null;
+    return `https://t.me${path}`;
+  } catch {
+    return null;
+  }
+}
+
 function formatDate(value) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return '';
@@ -91,13 +104,31 @@ function renderWeekly(item) {
   </article>`;
 }
 
+function renderArchive(item) {
+  const href = safeTelegramUrl(item.url);
+  if (!href) return '';
+  const title = esc(item.title || 'رابط Telegram');
+  const date = formatDate(item.published_at);
+  return `<article class="an-archive-entry">
+    <div class="an-archive-copy">
+      <span class="an-archive-kicker">النبأ <span aria-hidden="true">/</span> الأرشيف</span>
+      <h2>${title}</h2>
+      ${date ? `<time datetime="${esc(item.published_at)}">أُضيف ${esc(date)}</time>` : ''}
+    </div>
+    <a class="an-action-link an-archive-open" href="${esc(href)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(`فتح ${item.title || 'رابط Telegram'} في Telegram`)}">
+      <span>فتح في Telegram</span><span aria-hidden="true">↗</span>
+    </a>
+  </article>`;
+}
+
 async function loadSection(section) {
-  const photos = section === 'photos';
-  const list = photos ? $('#photoGrid') : $('#weeklyList');
-  const loading = photos ? $('#photoLoading') : $('#weeklyLoading');
-  const empty = photos ? $('#photoEmpty') : $('#weeklyEmpty');
-  const error = photos ? $('#photoError') : $('#weeklyError');
-  if (!list || !loading || !empty || !error) return;
+  const sections = {
+    photos: { list: $('#photoGrid'), loading: $('#photoLoading'), empty: $('#photoEmpty'), error: $('#photoError'), render: renderPhoto },
+    weekly: { list: $('#weeklyList'), loading: $('#weeklyLoading'), empty: $('#weeklyEmpty'), error: $('#weeklyError'), render: renderWeekly },
+    archive: { list: $('#archiveList'), loading: $('#archiveLoading'), empty: $('#archiveEmpty'), error: $('#archiveError'), render: renderArchive },
+  };
+  const view = sections[section];
+  if (!view?.list || !view.loading || !view.empty || !view.error) return;
   try {
     const response = await fetch(`/api/alnaba?section=${section}`, {
       headers: { Accept: 'application/json' },
@@ -107,14 +138,14 @@ async function loadSection(section) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (data.section !== section || !Array.isArray(data.items)) throw new Error('Invalid response');
-    const cards = data.items.map(photos ? renderPhoto : renderWeekly).filter(Boolean);
-    list.innerHTML = cards.join('');
-    empty.hidden = cards.length > 0;
+    const cards = data.items.map(view.render).filter(Boolean);
+    view.list.innerHTML = cards.join('');
+    view.empty.hidden = cards.length > 0;
   } catch {
-    error.hidden = false;
+    view.error.hidden = false;
   } finally {
-    loading.hidden = true;
+    view.loading.hidden = true;
   }
 }
 
-if (page === 'photos' || page === 'weekly') loadSection(page);
+if (page === 'photos' || page === 'weekly' || page === 'archive') loadSection(page);
