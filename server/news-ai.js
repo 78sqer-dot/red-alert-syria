@@ -5,8 +5,7 @@
 // bot's own places database, so a draft always points at a real place of the map.
 import { ALERT_TYPES, POLITICAL_CATEGORIES } from '../shared/types.js';
 import { governorates, districts, searchPlaces, normalizeArabic, getGov, getDist, places } from './places.js';
-
-export const NEWS_TYPES = ['breaking', 'political', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'uav', 'uav_strike', 'warplane', 'helicopter', 'patrol', 'airstrike', 'missile', 'attack', 'clashes', 'assassination', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'weather'];
+export const NEWS_TYPES = ['breaking', 'political', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'uav', 'uav_strike', 'warplane', 'helicopter', 'patrol', 'airstrike', 'missile', 'attack', 'military_incursion', 'clashes', 'assassination', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'weather'];
 const N = normalizeArabic;
 const stripAl = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w);
 
@@ -14,6 +13,7 @@ const stripAl = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w);
 const KW = {
   uav: ['مسيره', 'مسيرات', 'المسيره', 'درون', 'طائره مسيره', 'طائرات مسيره', 'انتحاريه'],
   uav_strike: ['استهداف بمسيره', 'استهداف بطائره مسيره', 'استهداف مسيره', 'استهدفتها مسيره', 'مسيره استهدفت', 'طائره مسيره استهدفت', 'غاره بمسيره', 'غاره بطائره مسيره', 'قصف بمسيره', 'ضربه بمسيره', 'ضربات بمسيره', 'drone strike', 'uav strike'],
+  military_incursion: ['توغل', 'توغلت', 'توغلات', 'توغل بري', 'اجتياح بري', 'دخلت قوات', 'دخلت آليات', 'عبرت القوات', 'ground incursion', 'troops entered', 'forces entered'],
   warplane: ['طيران حربي', 'الطيران الحربي', 'طائرات حربيه', 'طائره حربيه', 'الطيران الاسرائيلي', 'تحليق طيران حربي', 'تحليق طائره حربيه'],
   patrol: ['دوريه عسكريه', 'دوريات عسكريه', 'دوريه اسرائيليه', 'دوريات اسرائيليه', 'دوريه للجيش', 'دوريات للجيش', 'دوريه امنيه', 'دوريات امنيه', 'military patrol', 'military patrols', 'patrols'],
   airstrike: ['غاره', 'غارات', 'غاره جويه', 'غارات جويه', 'قصف جوي', 'قصف بالطيران الحربي', 'قصف بالطيران', 'استهداف جوي', 'هجوم جوي', 'airstrike', 'air strike'],
@@ -273,7 +273,8 @@ const TYPE_HELP = `- uav: drone (مسيّرة) flight, sighting or surveillance 
 - assassination: an explicitly reported completed or attempted targeted killing / assassination (اغتيال), including by gunfire; keep distinct from a generic attack
 - clashes: an explicit armed clash or exchange of fire between opposing groups/forces (اشتباكات مسلحة، مواجهات مسلحة، تبادل إطلاق النار); distinct from a one-sided attack or gunfire with no opposing sides
 - patrol: a specifically reported military/security patrol at a Syrian place (دورية عسكرية، دورية إسرائيلية); use only for patrol presence, not a raid, shooting, or armed clash. This category always waits for human review. Keep singular/plural based on the source wording.
-- attack: a non-assassination armed attack by people: shooting / gunfire at a named target or checkpoint, stabbing, armed robbery, armed kidnapping, a military incursion/raid by a foreign army into a Syrian village (e.g. Israeli forces storming/raiding a village, searching homes, arresting or shooting at people, blowing up a house); do not use for an armed clash between opposing sides
+- military_incursion: a clearly reported ground entry/penetration by troops or military vehicles into Syrian territory/a named place (توغل بري، توغلت قوات، دخلت آليات). Use this as the primary type when that is the main incident, even if a drone is also mentioned or explicitly flying; drone flight is secondary. Do NOT use it for a drone/air strike, an armed clash, or a separately reported attack as the main incident; choose that specific type instead. This category always waits for human review.
+- attack: a non-assassination armed attack by people: shooting / gunfire at a named target or checkpoint, stabbing, armed robbery, armed kidnapping, or a military raid with reported direct attacks on people/property (e.g. searching homes, arresting or shooting at people, blowing up a house); use military_incursion for a ground entry/penetration without a more specific attack. Do not use for an armed clash between opposing sides
 - artillery: artillery / mortar / rocket-launcher shelling (قصف مدفعي، قذائف هاون)
 - smuggling_weapons: a specific, recent attempted or completed illicit transfer/interception of weapons or ammunition inside Syria; require an explicit smuggling/trafficking cue and a named Syrian place
 - smuggling_drugs: a specific, recent attempted or completed illicit transfer/interception of narcotics inside Syria; require an explicit smuggling/trafficking cue and a named Syrian place
@@ -290,7 +291,7 @@ const TYPE_HELP = `- uav: drone (مسيّرة) flight, sighting or surveillance 
 - weather: ONLY an explicit, actionable official severe-weather warning/advisory for a named Syrian place, with a hazard and safety guidance (تحذير/تنبيه جوي رسمي مع مكان وتعليمات). NOT routine forecasts. Choose weather over civil/electricity when the post warns about dangerous storms, heavy rain, snow, wind, heat, frost or dust.
 - explosion: ANY explosion or blast (انفجار، تفجير، دوي انفجار): landmine (لغم), war remnants / unexploded ordnance (مخلفات حرب، ذخائر), IED / explosive device (عبوة ناسفة), car bomb (سيارة مفخخة), suicide bomber, gas cylinder / fuel tank / ammunition depot blowing up, controlled detonation of ordnance, a loud explosion heard, blowing up a house
 - civil: ONLY when no other type fits: building collapse, drowning, flood, electrocution, poisoning, a body found without a known cause, a person found hanged, a missing person found dead
-- breaking: another urgent, major security or humanitarian event in Syria that people need to know right now and that has none of the types above (e.g. curfew, road closed for security, major security operation starting, foreign forces setting up a checkpoint inside Syria). Israeli army ground activity inside Syria WITHOUT a raid or shooting IS an event of this type when no specific patrol is reported: vehicles/tanks advancing near or into an area, bulldozing land or uprooting trees, digging trenches, building earth berms (سواتر ترابية) or fortifications, resuming excavation, setting up a new position — mostly in Quneitra / Daraa countryside / Mount Hermon (جبل الشيخ). It counts even when it is an ongoing or resumed activity, as long as the post reports it now.`;
+- breaking: another urgent, major security or humanitarian event in Syria that people need to know right now and that has none of the types above (e.g. curfew, road closed for security, major security operation starting, foreign forces setting up a checkpoint inside Syria). Use military_incursion for a clearly reported ground entry/penetration. Construction, digging, bulldozing or positioning without a reported entry/penetration can remain breaking when it is a current concrete event and no more specific type fits.`;
 export function buildPrompt(items, known, nowIso) {
   const sys = `You are the news desk of "Red Alert Syria", a live alert map of Syria. You read short posts from Syrian news channels and decide which ones should become a map alert.
 For EACH post return one object. Rules:
@@ -401,6 +402,26 @@ const nonviolentIsraeliGroundActivity = (text) => {
     && ISRAELI_GROUND_WORDS.some((w) => nt.includes(w))
     && !ARMED_VIOLENCE_WORDS.some((w) => nt.includes(w));
 };
+const GROUND_INCURSION_ACTIONS = ['توغل', 'توغلت', 'توغلات', 'توغل بري', 'اجتياح بري', 'دخلت قوات', 'دخلت آليات', 'عبرت القوات', 'تسللت قوات', 'ground incursion', 'troops entered', 'forces entered', 'penetrated into'].map(N);
+const GROUND_FORCE_CONTEXT = ['قوات', 'قوة عسكرية', 'الجيش', 'جنود', 'آليات عسكرية', 'دبابات', 'الاحتلال', 'اسرائيلي', 'troops', 'forces', 'army', 'military'].map(N);
+const DIRECT_VIOLENCE_CUES = ['قصف', 'غارة', 'اطلاق نار', 'اطلاق النار', 'اشتباك', 'مقتل', 'اصيب', 'استهداف', 'انفجار', 'صاروخ', 'قذائف', 'هاون', 'اغتيال', 'هجوم مسلح', 'اعتداء مسلح', 'shooting', 'airstrike', 'drone strike'].map(N);
+export function isGroundIncursionReport(text) {
+  const nt = N(String(text || ''));
+  return GROUND_INCURSION_ACTIONS.some((word) => nt.includes(word))
+    && GROUND_FORCE_CONTEXT.some((word) => nt.includes(word));
+}
+const hasReportedDirectViolence = (text) => {
+  const nt = N(String(text || ''));
+  return DIRECT_VIOLENCE_CUES.some((word) => nt.includes(word));
+};
+const UAV_FLIGHT_CUES = ['تحليق مسيره', 'تحليق مسيرات', 'تحليق طائره مسيره', 'تحليق طائرات مسيره', 'مسيره تحلق', 'مسيرات تحلق', 'طائره مسيره تحلق', 'طائرات مسيره تحلق', 'طائره بدون طيار تحلق', 'طائرات بدون طيار تحلق', 'درون يحلق', 'درونات تحلق'];
+export function hasExplicitDroneFlight(text) {
+  const nt = N(String(text || ''));
+  const en = String(text || '').toLowerCase();
+  return UAV_FLIGHT_CUES.some((word) => nt.includes(N(word)))
+    || /\b(?:drones?|uavs?)\s+(?:are\s+|were\s+)?(?:flying|circling|overflying|hovering)\b/.test(en)
+    || /\b(?:drone|uav)\s+overflight\b/.test(en);
+}
 export function ruleClassify(text, { breaking = false } = {}) {
   const nt = N(text);
   const weather = weatherWarningInfo(text);
@@ -413,7 +434,8 @@ export function ruleClassify(text, { breaking = false } = {}) {
   if (!mentionsSyria(text)) return null;
   const kt = keywordTypes(text);
   const specificOther = kt.some((k) => !['attack', 'breaking', 'civil', 'weather'].includes(k));
-  let type = nonviolentIsraeliGroundActivity(text) && !specificOther ? 'breaking' : RULE_ORDER.find((k) => kt.includes(k));
+  const groundIncursion = isGroundIncursionReport(text) && !hasReportedDirectViolence(text);
+  let type = groundIncursion ? 'military_incursion' : nonviolentIsraeliGroundActivity(text) && !specificOther ? 'breaking' : RULE_ORDER.find((k) => kt.includes(k));
   const smuggling = detectedSmugglingType(text);
   if (smuggling && !hasActualExplosion(text)) type = smuggling; // ammunition/contraband keywords can overlap the generic explosion list
   if (type === 'helicopter' && HELI_ATTACK_W.some((w) => nt.includes(w))) type = 'attack';
@@ -437,7 +459,7 @@ export function ruleClassify(text, { breaking = false } = {}) {
   }
   if (!found.length && type !== 'political') return null;
   const first = text.split('\n').find((l) => l.trim().length > 15) || text;
-  return { event: true, type, new_incident: true, same_as: null, places: found, headline: first.replace(/[•:]+\s*$/, '').trim().slice(0, 140), rule: true };
+  return { event: true, type, new_incident: true, same_as: null, places: found, headline: first.replace(/[•:]+\s*$/, '').trim().slice(0, 140), rule: true, ...(hasExplicitDroneFlight(text) ? { dronePresence: true } : {}) };
 }
 export { getGov, getDist };
 
@@ -478,6 +500,8 @@ export function refineType(type, text) {
   if (smuggling && !hasActualExplosion(evidenceText) && ['breaking', 'civil', 'arrest', 'explosion', 'none'].includes(type)) return smuggling;
   if (any(UAV_STRIKE_W) && ['warplane', 'helicopter', 'civil', 'breaking', 'weather', 'none', 'attack', 'airstrike', 'uav'].includes(type)) return 'uav_strike';
   const kt = keywordTypes(evidenceText);
+  if (isGroundIncursionReport(evidenceText) && !hasReportedDirectViolence(evidenceText)
+    && ['breaking', 'civil', 'attack', 'uav', 'warplane', 'helicopter', 'none'].includes(type)) return 'military_incursion';
   const politicalOnly = kt.includes('political') && !kt.some((k) => !['political', 'breaking', 'civil', 'weather'].includes(k));
   if (politicalOnly && ['breaking', 'civil', 'attack', 'weather', 'none'].includes(type)) return 'political';
   if (any(AIRSTRIKE_W) && ['warplane', 'helicopter', 'civil', 'breaking', 'weather', 'none', 'attack'].includes(type)) return 'airstrike';

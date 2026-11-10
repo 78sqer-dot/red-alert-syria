@@ -124,7 +124,7 @@ test('border alert type is available in the map type filter', () => {
   assert.equal(ALERT_TYPES.border.button_ar, 'الحدود');
 });
 
-test('military incursion subtypes have distinct markers and remain manual-only', () => {
+test('military incursion has distinct markers and automatic drafts still require human review', () => {
   const type = ALERT_TYPES.military_incursion;
   assert.ok(TYPE_KEYS.includes('military_incursion'));
   assert.equal(TYPE_KEYS.includes('military_incursion_general'), false, 'the general submenu reuses the historical type instead of adding a migrated type');
@@ -146,7 +146,10 @@ test('military incursion subtypes have distinct markers and remain manual-only',
   assert.match(mapSource, /incursion_kind/);
   assert.match(mapSource, /military_barrier/);
   assert.match(alertImageSource, /incursionKind === 'barrier'/);
-  assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'vehicle incursion is not automatically classified from news');
+  assert.equal(NEWS_TYPES.includes('military_incursion'), true, 'ground incursions are now eligible for automatic classification');
+  const incursionDraft = { type: 'military_incursion', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
+  assert.equal(nightEligible(incursionDraft), false, 'the detected ground event remains in human review');
+  assert.equal(dayAutoReady({ ...incursionDraft, dayAutoAt: Date.now() - 1 }), false, 'ground incursions never auto-publish during the day');
 });
 
 test('military patrol is a separate monitored category with a clean icon and human review', () => {
@@ -510,10 +513,10 @@ test('an erroneous standalone brawl button label does not override an official w
   assert.equal(refineType('brawl', `مشاجرة\n${weather}\nاندلعت مشاجرة في الحسكة`), 'brawl', 'a real second incident remains distinct');
 });
 
-test('nonviolent Israeli ground activity routes to breaking, while armed clashes use their dedicated type', () => {
+test('clear ground entry routes to military incursion, while armed clashes use their dedicated type', () => {
   const ground = 'توغلت دورية تابعة لجيش الاحتلال الإسرائيلي وأقامت ساتراً ترابياً في ريف القنيطرة جنوب سوريا اليوم.';
-  assert.equal(ruleClassify(ground)?.type, 'breaking');
-  assert.equal(refineType('attack', ground), 'breaking');
+  assert.equal(ruleClassify(ground)?.type, 'military_incursion');
+  assert.equal(refineType('attack', ground), 'military_incursion');
   const clash = 'توغلت قوات الاحتلال الإسرائيلي في ريف القنيطرة جنوب سوريا واندلع اشتباك مع الأهالي اليوم.';
   assert.equal(ruleClassify(clash)?.type, 'clashes');
 });

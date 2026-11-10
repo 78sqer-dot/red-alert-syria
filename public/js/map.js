@@ -1,6 +1,6 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
 import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=41';
-import { mapDroneCount } from '/shared/map-drone-visuals.js?v=1';
+import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
 import { EXTRA_SVG } from './target-svgs.js?v=20';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
@@ -870,28 +870,35 @@ export class AlertMap {
       el.title = a.title;
     }
     this.refreshMarkerGroups();
-    // drones: the alert's own marker flies over its main circle; every other circle of the same alert gets
-    // its drone too, and an intensive flight (a.drones = 2-3, from the server) puts 2-3 over each circle
+    // A secondary drone is a display-only marker: it never replaces the alert's primary category marker.
+    // Existing UAV alerts keep their normal one-per-circle/intensive behavior.
     this.sats = this.sats || new Map();
     const satSeen = new Set();
     let satN = 0;
     for (const a of this.alerts) {
-      if (typeOf(a.type).marker !== 'orbit' || !a.location || a.scope === 'country') continue;
-      const per = mapDroneCount(a);
-      const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [];
+      const secondaryDrone = hasSecondaryDrone(a) && typeOf(a.type).marker !== 'orbit';
+      if ((typeOf(a.type).marker !== 'orbit' && !secondaryDrone) || !a.location || a.scope === 'country') continue;
+      const per = secondaryDrone ? 1 : mapDroneCount(a);
+      const areaZones = Array.isArray(a.zones) && a.zones.length ? a.zones : [];
       let mi = -1, bd = Infinity;
-      zs.forEach((z, i) => { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; mi = i; } });
+      areaZones.forEach((z, i) => { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; mi = i; } });
+      const primaryZone = mi >= 0 ? areaZones[mi] : null;
+      const zs = secondaryDrone
+        ? [{ lat: a.location.latitude, lon: a.location.longitude, km: Number.isFinite(primaryZone?.km) ? primaryZone.km : 4 }]
+        : areaZones;
+      if (secondaryDrone) mi = -1;
       zs.forEach((z, i) => {
-        for (let j = i === mi ? 1 : 0; j < per; j++) {
+        for (let j = secondaryDrone ? 0 : i === mi ? 1 : 0; j < per; j++) {
           if (satN >= 60) return; // keep phones smooth
           const key = `${a.id}:${i}:${j}`;
           satSeen.add(key); satN++;
           let m = this.sats.get(key);
-          const sig = `${a.type}|${a.is_active}|${z.lat.toFixed(4)},${z.lon.toFixed(4)}|${per}`;
+          const sig = `${a.type}|${a.is_active}|${secondaryDrone}|${z.lat.toFixed(4)},${z.lon.toFixed(4)}|${per}`;
           if (m && m._sig !== sig) { m.remove(); this.sats.delete(key); m = null; }
           if (!m) {
-            const el = this.markerEl(a);
+            const el = this.markerEl(secondaryDrone ? { ...a, type: 'uav', drones: 1 } : a);
             el.classList.add('mk-sat');
+            if (secondaryDrone) el.classList.add('drone-secondary');
             el.removeAttribute('tabindex');
             // spread the drones of one circle around it, and offset each circle a little
             el.style.setProperty('--delay', `${(-(9 * j) / per - i * 1.3).toFixed(2)}s`);

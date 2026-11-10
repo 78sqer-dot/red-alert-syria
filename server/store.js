@@ -806,6 +806,7 @@ export function publicAlert(a) {
     ...(flightTarget ? { flight_target: flightTarget } : {}),
     signal_platform: a.type === 'signal_sweep' && a.meta?.signalPlatform === 'uav' ? 'uav' : undefined,
     drones: a.type === 'uav' ? droneLevel(a) : undefined,
+    drone_presence: a.meta?.dronePresence === true ? true : undefined,
     helicopters: a.type === 'helicopter' ? (a.meta?.intense === true ? 2 : 1) : undefined,
     vehicle_count: a.type === 'military_incursion' && Number.isInteger(a.meta?.vehicleCount) ? a.meta.vehicleCount : undefined,
     incursion_kind: a.type === 'military_incursion'

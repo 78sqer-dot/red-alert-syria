@@ -948,6 +948,7 @@ export function buildAlertInput(d, author) {
     : null;
   const patrolForm = d.type === 'patrol' ? (d.patrolForm === 'plural' ? 'plural' : 'singular') : null;
   const signalPlatform = d.type === 'signal_sweep' && d.signalPlatform === 'uav' ? 'uav' : null;
+  const dronePresence = d.meta?.dronePresence === true;
   const titles = d.type === 'airstrike' && d.airstrikeForm === 'plural'
     ? { ar: 'غارات جوية', en: 'Airstrikes' }
     : d.type === 'patrol'
@@ -1010,7 +1011,7 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || politicalMeta || monitoredSources.length ? {
+    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length ? {
       meta: {
         ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
@@ -1024,6 +1025,7 @@ export function buildAlertInput(d, author) {
         ...(incursionKind ? { incursionKind } : {}),
         ...(patrolForm ? { patrolForm } : {}),
         ...(signalPlatform ? { signalPlatform } : {}),
+        ...(dronePresence ? { dronePresence: true } : {}),
         ...(politicalMeta ? { political: politicalMeta } : {}),
         ...(monitoredSources.length ? { newsSources: monitoredSources } : {}),
       },

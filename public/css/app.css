@@ -440,7 +440,9 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 .maplibregl-map:not(.zoom-detail) .mk-orbit:not(.mk-sat) .uav { visibility: hidden; }
 .maplibregl-map.zoom-detail .mk-orbit:not(.mk-sat) .uav { visibility: visible; }
 .maplibregl-map:not(.zoom-detail) .mk-orbit.mk-sat { visibility: hidden; }
-.mk-sat .uav, .maplibregl-map.zoom-detail .mk-sat .uav { animation-delay: var(--delay, 0s); }
+.maplibregl-map.zoom-detail .mk-sat .uav { animation: uavOrbit 9s linear infinite; animation-delay: var(--delay, 0s); }
+.maplibregl-map .mk-sat.drone-secondary { visibility: hidden; }
+.maplibregl-map.zoom-detail .mk-sat.drone-secondary.sel { visibility: visible; }
 /* the airframe circles the target and turns with its heading */
 @keyframes uavOrbit { from { transform: rotate(0deg) translateX(var(--orb, 20px)); } to { transform: rotate(-360deg) translateX(var(--orb, 20px)); } }
 @media (prefers-reduced-motion: reduce) { .maplibregl-map .mk-orbit .uav { animation: none !important; } }

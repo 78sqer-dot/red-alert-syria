@@ -22,15 +22,16 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText } from './clean-text.js';
 
-const NEWS_GROUP_PRIORITY = ['aerial', 'strikes', 'civil', 'smuggling', 'political', 'nature', 'other'];
+const NEWS_GROUP_PRIORITY = ['aerial', 'incursion', 'strikes', 'civil', 'smuggling', 'political', 'nature', 'other'];
 const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', patrol: '🚓', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
+const newsGroupForType = (type) => type === 'military_incursion' ? 'incursion' : ALERT_TYPES[type]?.group || 'other';
 const NEWS_TYPE_GROUPS = Object.freeze(Object.fromEntries(
-  [...new Set(NEWS_TYPES.map((type) => ALERT_TYPES[type]?.group || 'other'))]
-    .map((group) => [group, Object.freeze(NEWS_TYPES.filter((type) => (ALERT_TYPES[type]?.group || 'other') === group))]),
+  [...new Set(NEWS_TYPES.map(newsGroupForType))]
+    .map((group) => [group, Object.freeze(NEWS_TYPES.filter((type) => newsGroupForType(type) === group))]),
 ));
 // The owner can reclassify a human-reviewed draft to any bot alert type. Keep this
 // separate from NEWS_TYPE_GROUPS, which controls automatic news monitoring only.
@@ -345,8 +346,8 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
-  if (['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
+  if (!d || d.test || d.rule || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+  if (['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'military_incursion', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
   if (d.type === 'political') {
     const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
     if (!POLITICAL_CATEGORIES[d.politicalCategory] || d.politicalNeedsCategory || !Number.isFinite(d.created) || !Number.isFinite(activatedAt) || d.created <= activatedAt) return false;
@@ -872,7 +873,7 @@ export function toBotDraft(d) {
     created: Date.now(), source: 'news',
     ...(d.type === 'military_incursion' && ['soldiers', 'vehicles', 'barrier'].includes(d.incursionKind) ? { incursionKind: d.incursionKind } : {}),
     ...(patrolForm ? { patrolForm } : {}),
-    ...(d.type === 'weather' && d.hazard ? { meta: { hazard: d.hazard } } : {}),
+    ...((d.type === 'weather' && d.hazard) || d.dronePresence === true ? { meta: { ...(d.type === 'weather' && d.hazard ? { hazard: d.hazard } : {}), ...(d.dronePresence === true ? { dronePresence: true } : {}) } } : {}),
     ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
     ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
     ...(d.type === 'political' ? {
@@ -938,6 +939,7 @@ function capReached() {
 async function mergeInto(d, it, locs = []) {
   const n = newsState();
   if ((d.srcs || []).some((s) => s.u === it.src.u)) return false;
+  if (d.droneRuleVersion === 1 && hasExplicitDroneFlight(it.text)) d.dronePresence = true;
   d.srcs.push({ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local });
   const newMedia = Array.isArray(it.media) ? await captureTelegramMedia(it.media) : [];
   for (const media of newMedia) Object.assign(media, { source: it.url, channel: it.src.u, messageId: String(it.url.split('/').pop() || '') });
@@ -1011,6 +1013,7 @@ async function handleResult(it, r, known, pmap) {
     id: rid(), type: r.type, ...(r.type === 'helicopter' ? { intense: helicopterAuto(`${headline} ${it.text}`) } : {}), ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
     loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
+    droneRuleVersion: 1, dronePresence: hasExplicitDroneFlight(it.text),
     sourceText: String(it.text || '').slice(0, 1200), ...(sourceMedia.length ? { sourceMedia } : {}), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
   };
   scheduleDayAuto(d, d.created);

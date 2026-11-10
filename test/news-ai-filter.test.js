@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_RESPONSE_SCHEMA, buildPrompt, keywordTypes, prefilter, refineType, rewriteArabicNews, NEWS_REWRITE_MODEL } from '../server/news-ai.js';
+import { AI_RESPONSE_SCHEMA, buildPrompt, hasExplicitDroneFlight, isGroundIncursionReport, keywordTypes, prefilter, refineType, rewriteArabicNews, ruleClassify, NEWS_REWRITE_MODEL } from '../server/news-ai.js';
 
 test('Syria-only general feeds reject foreign weather warnings before the weather shortcut', () => {
   const foreign = prefilter('عاجل: تحذير جوي رسمي من عواصف رعدية وأمطار غزيرة في كييف يرجى الحذر', { general: true, breaking: true });
@@ -32,6 +32,19 @@ test('explicit military aircraft wording remains a warplane classification', () 
   const text = 'رصد تحليق طائرات حربية في أجواء ريف دمشق خلال ساعات الفجر';
   assert.ok(keywordTypes(text).includes('warplane'));
   assert.equal(refineType('uav', text), 'warplane', 'specific aircraft wording overrides a generic UAV fallback');
+});
+
+test('a reported ground incursion stays primary when the same report explicitly mentions a flying drone', () => {
+  const text = 'توغلت قوات الاحتلال الإسرائيلي إلى قرية حضر في ريف القنيطرة، بالتزامن مع تحليق مسيّرة استطلاع في المنطقة.';
+  assert.equal(isGroundIncursionReport(text), true);
+  assert.equal(hasExplicitDroneFlight(text), true);
+  const result = ruleClassify(text, { breaking: true });
+  assert.equal(result?.type, 'military_incursion');
+  assert.equal(result?.dronePresence, true, 'the explicit flight mention is retained as a secondary visual hint');
+  assert.equal(refineType('uav', text), 'military_incursion', 'an AI UAV fallback cannot override the reported ground event');
+
+  const strike = 'توغلت قوات الاحتلال إلى قرية حضر في ريف القنيطرة ونفذت استهدافاً بمسيّرة.';
+  assert.equal(refineType('uav_strike', strike), 'uav_strike', 'a separately reported drone strike remains a specific violent event');
 });
 
 test('specific Syrian political developments pass only when political keywords are present', () => {

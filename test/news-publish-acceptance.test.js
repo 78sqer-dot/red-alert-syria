@@ -19,7 +19,7 @@ const { buildAlertInput, createBot, channelKeyboard, channelPost, publishInput, 
 const { BORDER_MARKERS, ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES } = await import('../shared/types.js');
 const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { governorates } = await import('../server/places.js');
-const { newsState, sendTestDraft, toBotDraft, _test: newsMonitorTest } = await import('../server/news-monitor.js');
+const { newsState, sendTestDraft, toBotDraft, nightEligible, dayAutoReady, _test: newsMonitorTest } = await import('../server/news-monitor.js');
 const syriaBorder = JSON.parse(fs.readFileSync(new URL('../public/data/syria-border.geojson', import.meta.url), 'utf8'));
 
 test('Syrian–Palestinian border alert pin lies on the actual Syria border geometry', () => {
@@ -569,7 +569,10 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   }
   assert.ok(ALERT_TYPES.military_incursion, 'military vehicle incursion is a registered manual alert type');
   assert.ok(ALERT_GROUPS.other.types.includes('military_incursion'), 'the new type is filterable on the map');
-  assert.equal(NEWS_TYPES.includes('military_incursion'), false, 'manual vehicle-incursion reports stay out of automatic news classification');
+  assert.equal(NEWS_TYPES.includes('military_incursion'), true, 'ground-incursion reports are now automatically classified');
+  const incursionDraft = { type: 'military_incursion', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
+  assert.equal(nightEligible(incursionDraft), false, 'automatic classification still stops for human review');
+  assert.equal(dayAutoReady({ ...incursionDraft, dayAutoAt: Date.now() - 1 }), false, 'a ground-incursion draft is not auto-published');
   const shootingAlert = store.addAlert(buildAlertInput({ type: 'shooting', location: { scope: 'country' }, extra: [], ttlMin: 60 }, { id: ownerId, name: 'test' }));
   addedAlertIds.push(shootingAlert.id);
   const shootingPost = channelPost(shootingAlert);

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { alertMarkerKind, droneAuto, droneLevel } from '../shared/types.js';
-import { mapDroneCount } from '../shared/map-drone-visuals.js';
+import { hasSecondaryDrone, mapDroneCount } from '../shared/map-drone-visuals.js';
 
 const CURRENT_ALERT_ID = 'a547f1dc-073a-4c81-a8cb-ae921c7d75e4';
 const [mapSource, css] = await Promise.all([
@@ -40,11 +40,25 @@ test('the live alert displays one drone, while other intensive reports still dis
   assert.equal(droneLevel({ type: 'uav', title: 'تحليق مسيّرة', meta: { intense: false } }), 1);
   assert.equal(droneAuto('سرب من المسيّرات فوق دمشق'), 3);
   assert.deepEqual(current, original, 'display choice never changes the record');
-  assert.match(mapSource, /import \{ mapDroneCount \} from '\/shared\/map-drone-visuals\.js\?v=1'/);
-  assert.match(mapSource, /const per = mapDroneCount\(a\);/);
-  assert.match(mapSource, /for \(let j = i === mi \? 1 : 0; j < per; j\+\+\)/);
+  assert.match(mapSource, /import \{ mapDroneCount, hasSecondaryDrone \} from '\/shared\/map-drone-visuals\.js\?v=2'/);
+  assert.match(mapSource, /const per = secondaryDrone \? 1 : mapDroneCount\(a\);/);
+  assert.match(mapSource, /for \(let j = secondaryDrone \? 0 : i === mi \? 1 : 0; j < per; j\+\+\)/);
   assert.match(mapSource, /el\.style\.setProperty\('--delay', `\$\{\(-\(9 \* j\) \/ per - i \* 1\.3\)\.toFixed\(2\)\}s`\)/);
   assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-sat \.uav \{ animation: uavOrbit 9s linear infinite; animation-delay: var\(--delay, 0s\); \}/);
+});
+
+test('a ground incursion can carry one secondary drone without replacing its primary marker', () => {
+  const report = { id: 'synthetic-incursion', type: 'military_incursion', drone_presence: true };
+  const original = structuredClone(report);
+  assert.equal(alertMarkerKind(report), 'icon', 'the ground-incursion marker stays primary');
+  assert.equal(hasSecondaryDrone(report), true);
+  assert.equal(mapDroneCount(report), 1, 'the secondary overlay is singular');
+  assert.deepEqual(report, original, 'the display choice does not mutate the alert');
+  assert.match(mapSource, /const secondaryDrone = hasSecondaryDrone\(a\) && typeOf\(a\.type\)\.marker !== 'orbit';/);
+  assert.match(mapSource, /this\.markerEl\(secondaryDrone \? \{ \.\.\.a, type: 'uav', drones: 1 \} : a\)/);
+  assert.match(mapSource, /if \(secondaryDrone\) el\.classList\.add\('drone-secondary'\)/);
+  assert.match(css, /\.maplibregl-map \.mk-sat\.drone-secondary \{ visibility: hidden; \}/);
+  assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-sat\.drone-secondary\.sel \{ visibility: visible; \}/);
 });
 
 test('primary and second drone markers orbit the exact displayed circle on phone and desktop viewports', () => {

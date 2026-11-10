@@ -16,7 +16,7 @@ process.env.NEWS_AI_MIN_GAP_MS = '0';
 
 const { store } = await import('../server/store.js');
 await store.init(null);
-const { newsState, _test } = await import('../server/news-monitor.js');
+const { newsState, nightEligible, daytimeAutoEligible, _test } = await import('../server/news-monitor.js');
 const originalFetch = globalThis.fetch;
 const originalGeminiKey = process.env.GEMINI_API_KEY;
 const originalModels = process.env.NEWS_AI_MODELS;
@@ -169,4 +169,17 @@ test('helicopter monitoring distinguishes singular reports from an explicitly in
   assert.match(_test.cardText(normal, 'ar'), /مروحية واحدة/);
   assert.match(_test.cardText(intensive, 'ar'), /مروحيتان/);
   assert.ok(_test.cardKb(intensive, 'ar').inline_keyboard.flat().some((button) => button.callback_data === `nw:hi:${intensive.id}`));
+});
+
+test('drone presence on a ground-incursion report remains review-only and is never auto-published', () => {
+  const eligibleUav = {
+    type: 'uav', status: 'pending',
+    loc: { scope: 'place', latitude: 33.0, longitude: 36.0 },
+    srcs: [{ u: 'synthetic-source', local: false }],
+  };
+  assert.equal(nightEligible(eligibleUav), true, 'the synthetic control is otherwise eligible for the auto-publication gate');
+  assert.equal(daytimeAutoEligible(eligibleUav), true);
+  const withDrone = { ...eligibleUav, type: 'military_incursion', dronePresence: true };
+  assert.equal(nightEligible(withDrone), false, 'a drone-presence report stays out of the night queue');
+  assert.equal(daytimeAutoEligible(withDrone), false, 'a drone-presence report stays out of the daytime queue');
 });
