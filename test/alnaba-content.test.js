@@ -12,8 +12,8 @@ import {
   publishAlnabaItem,
 } from '../server/alnaba.js';
 
-const OWNER = 8270709633;
-const PREVIOUS_PROJECT_OWNER = 8808894711;
+const OWNER = 8808894711;
+const PREVIOUS_PROJECT_OWNER = 8270709633;
 const TOKEN_FIXTURE = '123456:fixture_token_without_real_credentials';
 const photoBytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
 const pdfBytes = Buffer.from('%PDF-1.7\nfixture only\n%%EOF\n');

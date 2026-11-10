@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import express from 'express';
 
-export const ALNABA_OWNER_ID = 8270709633;
+export const ALNABA_OWNER_ID = 8808894711;
 export const ALNABA_MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 export const ALNABA_MAX_PDF_BYTES = 20 * 1024 * 1024;
 const FILE_ID_RE = /^[A-Za-z0-9_-]{1,512}$/;

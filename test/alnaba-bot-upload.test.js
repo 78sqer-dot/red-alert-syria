@@ -85,9 +85,9 @@ after(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
-test('the bot offers Al-Nabaa only to 8270709633 and publishes an uploaded photo only after confirmation', async () => {
-  const authorizedId = 8270709633;
-  const deniedId = 8808894711;
+test('the bot offers Al-Nabaa only to the confirmed owner 8808894711 and publishes only after confirmation', async () => {
+  const authorizedId = 8808894711;
+  const deniedId = 8270709633;
 
   await sendText(deniedId, '/alnaba');
   assert.match(lastUiFor(deniedId)?.payload?.text || '', /غير متاحة/);
