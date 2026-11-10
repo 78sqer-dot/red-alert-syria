@@ -1873,6 +1873,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await ctx.answerCallbackQuery(en ? 'Published on the website.' : 'تم النشر على الموقع.');
     await ctx.deleteMessage().catch(() => {});
     const keyboard = new InlineKeyboard()
+      .text(en ? '➕ Add another item' : '➕ إضافة خبر جديد', `nb:${item.section}`).row()
       .url(en ? 'Open section' : 'فتح القسم', link)
       .url(en ? 'Al-Nabaa home' : 'صفحة النبأ', alnabaSite());
     await ctx.reply(en ? `✅ Published: <b>${esc(item.title)}</b>` : `✅ تم النشر: <b>${esc(item.title)}</b>`, { parse_mode: 'HTML', reply_markup: keyboard });
