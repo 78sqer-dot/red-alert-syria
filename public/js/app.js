@@ -1,7 +1,8 @@
 // Red Alert Syria — front-end application
-import { createServices, GOV_C } from './services.js?v=36';
+import { createServices, GOV_C } from './services.js?v=37';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
-import { DICT } from './i18n.js?v=5';
+import { DICT } from './i18n.js?v=6';
+import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon } from './icons.js?v=7';
@@ -388,6 +389,9 @@ function popupHtml(a) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : (a.media ? [a.media] : []);
   const mediaItems = ['photo', 'video'].map((type) => rawMediaItems.find((item) => item?.type === type)).filter(Boolean);
+  const newsText = [titleOf(a), descOf(a)].filter((value) => String(value || '').trim()).join('\n');
+  const displayModes = availableAlertDisplayModes(newsText, mediaItems);
+  const initialMode = initialAlertDisplayMode(displayModes);
   const mediaUrl = (item) => {
     const query = new URLSearchParams({ type: item.type });
     if (/^[a-f0-9]{12}$/.test(item.version || '')) query.set('v', item.version);
@@ -396,15 +400,20 @@ function popupHtml(a) {
   const mediaElement = (item) => item.type === 'video'
     ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(mediaUrl(item))}" type="video/mp4"></video>`
     : `<img class="pp-media-image" src="${esc(mediaUrl(item))}" alt="${esc(T.photoTab)}" loading="eager" decoding="async">`;
-  const firstMedia = mediaItems[0] || null;
-  const mediaActions = mediaItems.length ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'وسائط التنبيه' : 'Alert media')}">${mediaItems.map((item, index) => `<button type="button" class="pp-media-action" aria-pressed="${index === 0}" aria-label="${esc(item.type === 'video' ? T.videoTab : T.photoTab)}" data-pp-media-type="${item.type}" data-pp-media-version="${esc(item.version || '')}">${icon(item.type === 'video' ? 'mediaVideo' : 'mediaImage', 14)}<span>${esc(item.type === 'video' ? T.videoTab : T.photoTab)}</span></button>`).join('')}</div>` : '';
-  const alertInfo = `<div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
-    <div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p>${mediaActions}</div>
+  const mediaActions = displayModes.length ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'محتوى التنبيه' : 'Alert content')}">${displayModes.map((mode) => {
+    const item = mediaItems.find((candidate) => candidate.type === mode);
+    const label = mode === 'news' ? T.alertNewsTab : mode === 'video' ? T.videoTab : T.photoTab;
+    const glyph = mode === 'news' ? 'news' : mode === 'video' ? 'mediaVideo' : 'mediaImage';
+    return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
+  }).join('')}</div>` : '';
+  const titleRow = `<div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p>${mediaActions}</div>`;
+  const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}><div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
     ${distChip(a)}
     ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">${icon('locate', 13)} ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
-    ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}`;
-  const mediaViewer = firstMedia ? `<section class="pp-media-panel" role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"><div class="pp-media-content" data-pp-media-content>${mediaElement(firstMedia)}</div></section>` : '';
-  const content = `${alertInfo}${mediaViewer}`;
+    ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}</section>` : '';
+  const activeMedia = mediaItems.find((item) => item.type === initialMode);
+  const mediaViewer = mediaItems.length ? `<section class="pp-media-panel" data-pp-media-panel role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"${initialMode === 'news' ? ' hidden' : ''}><div class="pp-media-content" data-pp-media-content>${activeMedia ? mediaElement(activeMedia) : ''}</div></section>` : '';
+  const content = `${titleRow}${newsPanel}${mediaViewer}`;
   return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" data-alert-id="${esc(a.id)}">
     ${content}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
@@ -1264,18 +1273,29 @@ function bindEvents() {
   });
   // popups (rendered inside the map container)
   $('#map').addEventListener('click', (e) => {
-    const mediaButton = e.target.closest('[data-pp-media-type]');
+    const mediaButton = e.target.closest('[data-pp-mode]');
     if (mediaButton) {
       const root = mediaButton.closest('.pp');
-      const panel = root?.querySelector('.pp-media-panel');
-      const type = mediaButton.dataset.ppMediaType;
-      if (!root || !panel || !['photo', 'video'].includes(type)) return;
-      root.querySelectorAll('[data-pp-media-type]').forEach((button) => button.setAttribute('aria-pressed', String(button === mediaButton)));
+      const mode = mediaButton.dataset.ppMode;
+      if (!root || !['news', 'photo', 'video'].includes(mode)) return;
+      const panels = alertDisplayPanelState(mode);
+      const newsPanel = root.querySelector('[data-pp-news-panel]');
+      const panel = root.querySelector('[data-pp-media-panel]');
+      root.querySelectorAll('[data-pp-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button === mediaButton)));
+      if (newsPanel) newsPanel.hidden = !panels.news;
+      if (panel) panel.hidden = !panels.media;
+      if (mode === 'news') {
+        panel?.querySelector('video')?.pause();
+        amap?.schedulePopupFit?.(2);
+        return;
+      }
+      if (!panel) return;
       const display = panel.querySelector('[data-pp-media-content]');
       if (!display) return;
+      panel.querySelector('video')?.pause();
       const version = /^[a-f0-9]{12}$/.test(mediaButton.dataset.ppMediaVersion || '') ? `&v=${encodeURIComponent(mediaButton.dataset.ppMediaVersion)}` : '';
-      const url = `/api/alerts/${encodeURIComponent(root.dataset.alertId || '')}/media?type=${encodeURIComponent(type)}${version}`;
-      display.innerHTML = type === 'video'
+      const url = `/api/alerts/${encodeURIComponent(root.dataset.alertId || '')}/media?type=${encodeURIComponent(panels.mediaType)}${version}`;
+      display.innerHTML = panels.mediaType === 'video'
         ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(url)}" type="video/mp4"></video>`
         : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(T.photoTab)}" loading="eager" decoding="async">`;
       amap?.schedulePopupFit?.(2);

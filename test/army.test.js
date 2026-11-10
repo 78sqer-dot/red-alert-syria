@@ -38,23 +38,32 @@ test('only approved official-source items appear in the public Syrian Army secti
   assert.equal(result.items[0].status, undefined, 'public projection excludes workflow internals');
 });
 
-test('public Syrian Army cards omit SANA tags and Telegram promo footer but retain official and application links', () => {
+test('public Army projection reclassifies military notices and keeps nonmilitary records stored but hidden', () => {
   const j = initialArmyState();
-  const made = createPendingArmyItem({
-    kind: 'official_source', sourceKey: 'test:sana-footer', sourceName: 'الوكالة العربية السورية للأنباء (سانا)',
-    sourceUrl: 'https://t.me/sana_gov/190412', category: 'government', title: 'بريد حمص يخصص دواماً إضافياً',
-    text: 'بريد حمص يخصص دواماً إضافياً يوم السبت لصرف رواتب المتقاعدين.\n#سانا\nـــــــــــــــــــ\nتابعونا على التلغرام | https://t.me/sana_gov',
-    links: ['https://t.me/sana_gov', 'https://example.org/apply'],
-  }, j, NOW);
-  assert.ok(made.item);
-  assert.equal(decideArmyItem(made.item.id, 'approve', j, 7, NOW + 1).ok, true);
-  const publicData = publicArmy(j, NOW + 1);
-  const item = publicData.items[0];
-  assert.equal(item.text, 'بريد حمص يخصص دواماً إضافياً يوم السبت لصرف رواتب المتقاعدين.');
-  assert.equal('source_name' in item, false);
-  assert.equal('source_url' in item, false);
+  const records = [
+    { id: 'army-enlist', category: 'army', title: 'التطوع بالجيش العربي السوري', text: 'فتح باب التطوع والانتساب بالجيش العربي السوري.', sourceKey: 'telegram:SyrArArmy:1', sourceUrl: 'https://t.me/SyrArArmy/1', publishedAt: new Date(NOW + 100).toISOString() },
+    { id: 'police-recruit', category: 'government', title: 'وزارة الداخلية تفتح باب الانتساب لدورة أفراد', text: 'وزارة الداخلية تفتح باب الانتساب لدورة أفراد للشرطة السورية عبر الرابط الرسمي https://ee.moi-sy.com/apply', sourceKey: 'telegram:syrianmoi:2', sourceUrl: 'https://t.me/syrianmoi/2', links: ['https://ee.moi-sy.com/apply'], publishedAt: new Date(NOW + 200).toISOString() },
+    { id: 'military-pay', category: 'government', title: 'وزارة الدفاع تصرف رواتب العسكريين', text: 'وزارة الدفاع تعلن صرف رواتب العسكريين لشهر تشرين الثاني.\n#سانا\nـــــــــــــــــــ\nتابعونا على التلغرام | https://t.me/sana_gov', sourceKey: 'telegram:sana_gov:3', sourceUrl: 'https://t.me/sana_gov/3', links: ['https://t.me/sana_gov', 'https://example.org/apply'], publishedAt: new Date(NOW + 300).toISOString() },
+    { id: 'civil-campaign', category: 'government', title: 'حملة تطوعية في درعا', text: 'حملة "بناة" التطوعية تعيد الألق لحديقة حي في درعا.', sourceKey: 'telegram:sana_gov:4', sourceUrl: 'https://t.me/sana_gov/4', publishedAt: new Date(NOW + 400).toISOString() },
+    { id: 'ministry-vacancy', category: 'government', title: 'وزارة الإعلام تعلن عن شواغر وظيفية', text: 'إعلان عن شواغر وظيفية في وزارة الإعلام.', sourceKey: 'telegram:sana_gov:5', sourceUrl: 'https://t.me/sana_gov/5', publishedAt: new Date(NOW + 500).toISOString() },
+    { id: 'post-office-pay', category: 'government', title: 'بريد حمص يخصص دواماً إضافياً', text: 'بريد حمص يخصص دواماً إضافياً يوم السبت لصرف رواتب المتقاعدين.', sourceKey: 'telegram:sana_gov:6', sourceUrl: 'https://t.me/sana_gov/6', publishedAt: new Date(NOW + 600).toISOString() },
+  ];
+  for (const record of records) {
+    j.published[record.id] = { ...record, kind: 'official_source', status: 'approved', links: record.links || [], createdAt: NOW, fingerprint: `fingerprint-${record.id}` };
+    j.decisions[record.id] = { id: record.id, action: 'approved', decidedAt: NOW, decidedBy: 7 };
+  }
+  const publishedBefore = structuredClone(j.published);
+  const decisionsBefore = structuredClone(j.decisions);
+  const publicData = publicArmy(j, NOW + 1000);
+  assert.deepEqual(publicData.items.map((item) => item.id), ['military-pay', 'police-recruit', 'army-enlist']);
+  assert.deepEqual(publicData.items.map((item) => item.category), ['army', 'official_links', 'recruitment']);
+  assert.equal(publicData.items[0].text, 'وزارة الدفاع تعلن صرف رواتب العسكريين لشهر تشرين الثاني.');
+  assert.deepEqual(publicData.items[0].links, ['https://example.org/apply'], 'the SANA follow-channel URL is not shown as an application link');
+  assert.equal(publicData.categories.some((category) => category.id === 'government'), false);
   assert.equal('sources' in publicData, false);
-  assert.deepEqual(item.links, ['https://example.org/apply'], 'the SANA follow-channel URL is not shown as an application link');
+  assert.deepEqual(j.published, publishedBefore, 'the public filter does not rewrite or delete stored records');
+  assert.deepEqual(j.decisions, decisionsBefore, 'approval history remains unchanged');
+  assert.deepEqual(j.deleted, {});
 });
 
 test('Syrian Army items with application deadlines disappear after the Damascus deadline day without deletion', () => {
@@ -102,6 +111,28 @@ test('official monitor establishes a baseline without importing old posts, then 
   assert.equal(Object.values(j.pending)[0].category, 'army');
 });
 
+test('official monitor rejects civil campaigns, general vacancies and civilian salary notices', async () => {
+  const j = initialArmyState();
+  const history = {
+    Sy_Defense: [synthetic(10, 'وزارة الدفاع تعقد اجتماعاً دورياً.')],
+    syrianmoi: [synthetic(20, 'وزارة الداخلية تنظم لقاءً تدريبياً.')],
+    SyrMOfF: [synthetic(30, 'وزارة المالية تعقد اجتماعاً دورياً.')],
+    sana_gov: [synthetic(40, 'سانا تنشر أخباراً عامة.')],
+  };
+  const fetcher = async (username) => ({ complete: true, posts: history[username] || [] });
+  const baseline = await pollArmyOnce({ j, fetcher, now: NOW });
+  assert.equal(baseline.baseline, true);
+  history.Sy_Defense.push(synthetic(11, 'وزارة الدفاع تطلق حملة تنظيف للحديقة العامة.', { ts: NOW + 30_000 }));
+  history.sana_gov.push(
+    synthetic(41, 'حملة بناة التطوعية تعيد الألق لحديقة حي في درعا.', { ts: NOW + 31_000 }),
+    synthetic(42, 'وزارة الإعلام تعلن عن شواغر وظيفية.', { ts: NOW + 32_000 }),
+    synthetic(43, 'بريد حمص يخصص دواماً إضافياً لصرف رواتب المتقاعدين.', { ts: NOW + 33_000 }),
+  );
+  const result = await pollArmyOnce({ j, fetcher, now: NOW + 60_000 });
+  assert.equal(result.newItems, 0);
+  assert.equal(Object.keys(j.pending).length, 0);
+});
+
 test('monitor-only media reports stay off the public sources list and are labelled for verification', async () => {
   const j = initialArmyState();
   const first = await pollArmyOnce({ j, fetcher: async (username) => ({ complete: true, posts: username === 'televisionsyria' ? [synthetic(10, 'تقرير عن رواتب العسكريين المتقاعدين.')] : [] }), now: NOW });
@@ -144,15 +175,24 @@ test('manual Telegram monitor sources validate, add, edit and remove without ent
 });
 
 test('salary and recruitment screening covers requested groups without matching unrelated official posts', () => {
-  assert.equal(salaryNewsKind('إعلان رسمي عن موعد صرف الرواتب للعاملين'), true);
+  assert.equal(salaryNewsKind('إعلان رسمي عن موعد صرف الرواتب للعاملين'), false);
+  assert.equal(salaryNewsKind('إعلان رسمي عن صرف رواتب العسكريين'), true);
   assert.equal(salaryNewsKind('فتح باب الانتساب لدورة أفراد وفق الشروط الرسمية'), true);
   assert.equal(salaryNewsKind('وزارة الدفاع تجري اجتماعاً دورياً'), false);
-  assert.equal(salaryNewsKind('Ministry announces payroll update for staff'), true);
-  assert.equal(inferArmyCategory('إعلان عن دورة أفراد في الشرطة السورية'), 'police');
+  assert.equal(salaryNewsKind('Ministry announces payroll update for staff'), false);
+  assert.equal(salaryNewsKind('حملة بناة التطوعية تعيد الألق لحديقة حي في درعا'), false);
+  assert.equal(salaryNewsKind('إعلان عن شواغر وظيفية في وزارة الإعلام'), false);
+  assert.equal(salaryNewsKind('The army announces soldier salary payments'), true);
+  assert.equal(inferArmyCategory('إعلان عن دورة أفراد في الشرطة السورية'), 'recruitment');
   assert.equal(inferArmyCategory('فتح باب الانتساب لقوات المهام الخاصة'), 'special');
-  assert.equal(inferArmyCategory('صرف رواتب موظفي الوزارات والدوائر الحكومية', 'SyrMOfF'), 'government');
-  assert.equal(inferArmyCategory('إعلان حكومي تجريبي عن صرف الرواتب', 'sana_gov'), 'government');
-  assert.deepEqual(Object.keys(ARMY_CATEGORIES), ['army', 'police', 'security', 'units', 'special', 'government']);
+  assert.equal(inferArmyCategory('وزارة الداخلية تفتح باب الانتساب لدورة أفراد عبر الرابط الرسمي', 'syrianmoi', ['https://ee.moi-sy.com/apply']), 'official_links');
+  assert.equal(inferArmyCategory('إعلان عن رواتب عناصر الأمن العام'), 'security');
+  assert.equal(inferArmyCategory('صرف رواتب موظفي الوزارات والدوائر الحكومية', 'SyrMOfF'), null);
+  assert.equal(inferArmyCategory('إعلان حكومي تجريبي عن صرف الرواتب', 'sana_gov'), null);
+  const rejected = createPendingArmyItem({ kind: 'official_source', sourceKey: 'test:civil-vacancy', sourceUrl: 'https://t.me/sana_gov/999', title: 'شواغر وظيفية', text: 'إعلان عن شواغر وظيفية في وزارة الإعلام.' }, initialArmyState(), NOW);
+  assert.equal(rejected.error, 'not_army_related');
+  assert.deepEqual(Object.keys(ARMY_CATEGORIES), ['recruitment', 'army', 'police', 'security', 'units', 'special', 'official_links', 'government']);
+  assert.equal(ARMY_CATEGORIES.government.public, false);
   assert.ok(ARMY_SOURCES.some((source) => source.u === 'sana_gov' && source.url === 'https://t.me/sana_gov'));
 });
 
@@ -173,7 +213,7 @@ test('pending items can be edited before approval and approved items can be upda
   assert.equal(updateArmyItem(made.item.id, { title: 'عنوان اختبار مُحدّث', category: 'police' }, j, 7, NOW + 1).ok, true);
   assert.equal(publicArmy(j).items.length, 0);
   assert.equal(decideArmyItem(made.item.id, 'approve', j, 7, NOW + 2).ok, true);
-  const updated = updateArmyItem(made.item.id, { text: 'تفاصيل اختبار اصطناعي محدثة من لوحة الإدارة فقط.' }, j, 7, NOW + 3);
+  const updated = updateArmyItem(made.item.id, { text: 'تفاصيل محدثة من لوحة الإدارة عن رواتب أفراد الجيش.' }, j, 7, NOW + 3);
   assert.equal(updated.ok, true);
   assert.equal(publicArmy(j).items[0].title, 'عنوان اختبار مُحدّث');
   assert.equal(publicArmy(j).items[0].category, 'police');

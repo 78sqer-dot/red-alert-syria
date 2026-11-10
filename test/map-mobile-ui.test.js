@@ -64,14 +64,14 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=80'/);
-  assert.match(html, /app\.css\?v=71/);
-  assert.match(html, /app\.js\?v=86/);
+  assert.match(html, /app\.css\?v=72/);
+  assert.match(html, /app\.js\?v=87/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
-  assert.match(app, /from '\.\/services\.js\?v=36'/);
+  assert.match(app, /from '\.\/services\.js\?v=37'/);
   assert.match(app, /from '\.\/icons\.js\?v=7'/);
-  assert.match(app, /from '\.\/i18n\.js\?v=5'/);
+  assert.match(app, /from '\.\/i18n\.js\?v=6'/);
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);
   assert.match(map, /from '\/shared\/types\.js\?v=41'/);
@@ -82,15 +82,21 @@ test('changed type and icon modules use fresh cache keys', () => {
   assert.match(settings, /from '\/shared\/types\.js\?v=41'/);
 });
 
-test('alert popup keeps the article visible with buttons for attached photo and video beside its title', () => {
+test('alert popup switches between news and attached photo/video in the same window', () => {
   assert.match(app, /const mediaItems = \['photo', 'video'\]\.map\(\(type\) => rawMediaItems\.find\(\(item\) => item\?\.type === type\)\)\.filter\(Boolean\)/);
-  assert.match(app, /const mediaActions = mediaItems\.length \?/);
+  assert.match(app, /const displayModes = availableAlertDisplayModes\(newsText, mediaItems\)/);
+  assert.match(app, /const initialMode = initialAlertDisplayMode\(displayModes\)/);
+  assert.match(app, /const mediaActions = displayModes\.length \?/);
   assert.match(app, /class="pp-title-row"><p class="pp-title">[\s\S]{0,100}\$\{mediaActions\}/);
-  assert.match(app, /const mediaViewer = firstMedia \?/);
-  assert.match(app, /const content = `\$\{alertInfo\}\$\{mediaViewer\}`/);
+  assert.match(app, /class="pp-news-panel" data-pp-news-panel/);
+  assert.match(app, /class="pp-media-panel" data-pp-media-panel/);
+  assert.match(app, /const content = `\$\{titleRow\}\$\{newsPanel\}\$\{mediaViewer\}`/);
   assert.doesNotMatch(app, /pp-view-tabs|data-pp-tab/);
-  assert.match(app, /data-pp-media-type/);
-  assert.match(app, /mediaItems\.map\(\(item, index\)/);
+  assert.match(app, /data-pp-mode="\$\{mode\}"/);
+  assert.match(app, /alertDisplayPanelState\(mode\)/);
+  assert.match(app, /newsPanel\.hidden = !panels\.news/);
+  assert.match(app, /panel\.hidden = !panels\.media/);
+  assert.match(app, /mode === 'news' \? T\.alertNewsTab/);
   assert.match(app, /mediaVideo' : 'mediaImage/);
   assert.match(app, /<video class="pp-media-video" controls playsinline preload="none"/);
   assert.equal((app.match(/<img class="pp-media-image"[^>]*loading="eager"/g) || []).length, 2);
@@ -99,6 +105,7 @@ test('alert popup keeps the article visible with buttons for attached photo and 
   assert.match(css, /\.pp-title-row \{ display: flex/);
   assert.match(css, /\.pp-media-actions \{ display: flex/);
   assert.match(css, /\.pp-media-action \{/);
+  assert.match(css, /\.pp-news-panel\[hidden\], \.pp-media-panel\[hidden\] \{ display: none !important; \}/);
   assert.match(css, /\.pp-media-image, \.pp-media-video/);
   assert.match(app, /https:\/\/whatsapp\.com\/channel\/0029VbEO1eGCBtxLP3jW8e1k/);
   assert.match(app, /wa-channel-btn/);

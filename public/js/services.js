@@ -72,15 +72,15 @@ const S = {
 };
 const ARMY_TEXT = {
   ar: {
-    tab: 'الجيش السوري', title: 'الجيش السوري والرواتب', intro: 'تحديثات رسمية عن الرواتب والانتساب للفئات العسكرية والجهات الحكومية. كل خبر هنا راجعه المالك قبل إظهاره.',
-    all: 'الكل', empty: 'لا توجد حالياً أخبار رسمية معتمدة. نرصد مصادر الوزارات كل 15 دقيقة، وتبقى الأخبار مخفية حتى الموافقة.',
+    tab: 'الجيش السوري', title: 'الجيش والانتساب والرواتب', intro: 'رواتب وانتساب وروابط تقديم رسمية تخص الجيش والشرطة والأمن. لا تُعرض الوظائف العامة أو الحملات المدنية ضمن هذا القسم.',
+    all: 'الكل', empty: 'لا توجد حالياً أخبار عسكرية معتمدة. يقتصر هذا القسم على الانتساب والرواتب والروابط الرسمية ذات الصلة العسكرية.',
     sources: 'مصادر رسمية للتحقق والانتساب', sourceNote: 'روابط التقديم لا تُعرض إلا إذا وردت في إعلان رسمي وافقت عليه الإدارة. تحقّق دائماً من شروط وموعد الإعلان في المصدر الأصلي.',
     source: 'فتح الإعلان الرسمي', apply: 'روابط التقديم المنشورة رسمياً', deadline: 'آخر موعد للتقديم', category: 'الفئة', updated: 'آخر رصد', follow: 'تابع التحديثات', telegram: 'تيليغرام', whatsapp: 'واتساب', noChannels: 'روابط قنوات المتابعة ستظهر هنا بعد إعدادها من لوحة الإدارة.',
     verified: 'مصدر رسمي', reviewOnly: 'النشر بعد مراجعة الإدارة فقط',
   },
   en: {
-    tab: 'Syrian Army', title: 'Syrian Army & salaries', intro: 'Official salary and recruitment updates for military groups and government departments. Every item here is reviewed by the owner before appearing.',
-    all: 'All', empty: 'No approved official updates yet. Ministry sources are checked every 15 minutes; items stay hidden until approved.',
+    tab: 'Syrian Army', title: 'Army, Enlistment & Salaries', intro: 'Military salary, enlistment and official application updates for army, police and security personnel. General vacancies and civil campaigns are excluded.',
+    all: 'All', empty: 'No approved military updates yet. This section is limited to relevant enlistment, salary and official application notices.',
     sources: 'Official sources for verification and recruitment', sourceNote: 'Application links appear only when included in an official announcement approved by the owner. Always confirm requirements and deadlines in the original source.',
     source: 'Open official announcement', apply: 'Application links in official post', deadline: 'Application deadline', category: 'Category', updated: 'Last checked', follow: 'Follow updates', telegram: 'Telegram', whatsapp: 'WhatsApp', noChannels: 'Follow-channel links will appear here after the owner configures them.',
     verified: 'Official source', reviewOnly: 'Owner review required before publishing',
@@ -775,7 +775,10 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const data = st.army || {}; const categories = Array.isArray(data.categories) ? data.categories : [];
     const items = Array.isArray(data.items) ? data.items : [];
     const filtered = st.armyCat === 'all' ? items : items.filter((item) => item.category === st.armyCat);
-    const chip = (key, label, ic = '') => `<button type="button" class="svc-chip army-chip${st.armyCat === key ? ' on' : ''}" data-army-cat="${esc(key)}">${ic ? `${esc(ic)} ` : ''}${esc(label)}</button>`;
+    const categoryGlyph = (category) => category?.iconKey
+      ? `<span class="army-cat-icon">${icon(category.iconKey, 14)}</span>`
+      : category?.icon ? `<span class="army-cat-icon">${esc(category.icon)}</span>` : '';
+    const chip = (key, label, category = null) => `<button type="button" class="svc-chip army-chip${st.armyCat === key ? ' on' : ''}" data-army-cat="${esc(key)}">${categoryGlyph(category)}${esc(label)}</button>`;
     const channels = data.channels || {};
     const followLinks = [
       channels.tg ? `<a class="btn-sm army-follow-link" href="${esc(channels.tg)}" target="_blank" rel="noopener noreferrer">${icon('telegram', 16)}${esc(A.follow)} · ${esc(A.telegram)}</a>` : '',
@@ -785,11 +788,12 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       const category = categories.find((c) => c.id === item.category);
       const links = (Array.isArray(item.links) ? item.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
       const deadline = deadlineLabel(item.application_deadline);
-      return `<article class="army-card"><div class="army-card-top"><span class="army-badge">${esc(category?.icon || '🏛️')} ${esc(LANG === 'en' ? category?.en || A.title : category?.ar || A.title)}</span><small>${item.published_at ? esc(when(item.published_at)) : ''}</small></div><h3>${esc(item.title || A.title)}</h3>${deadline ? `<small class="army-deadline"><b>${esc(A.deadline)}:</b> ${esc(deadline)}</small>` : ''}<p>${esc(item.text || '').replace(/\r?\n/g, '<br>')}</p>${links.length ? `<div class="army-card-links"><b>${esc(A.apply)}</b>${links.map((url, i) => `<a class="btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${A.apply} ${i + 1}` : A.apply)}</a>`).join('')}</div>` : ''}</article>`;
+      const label = LANG === 'en' ? category?.en || A.title : category?.ar || A.title;
+      return `<article class="army-card"><div class="army-card-top"><span class="army-badge">${categoryGlyph(category || { iconKey: 'shield' })}<span>${esc(label)}</span></span><small>${item.published_at ? esc(when(item.published_at)) : ''}</small></div><h3>${esc(item.title || A.title)}</h3>${deadline ? `<small class="army-deadline"><b>${esc(A.deadline)}:</b> ${esc(deadline)}</small>` : ''}<p>${esc(item.text || '').replace(/\r?\n/g, '<br>')}</p>${links.length ? `<div class="army-card-links"><b>${esc(A.apply)}</b>${links.map((url, i) => `<a class="btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${A.apply} ${i + 1}` : A.apply)}</a>`).join('')}</div>` : ''}</article>`;
     };
     return `<section class="army-intro"><span class="army-icon">${icon('shield', 22)}</span><div><h3>${esc(A.title)}</h3><p>${esc(A.intro)}</p></div></section>
       <div class="army-follow"><b>${esc(A.follow)}</b><div class="army-follow-links">${followLinks || `<span class="army-no-channels">${icon('telegram', 16)} ${icon('whatsapp', 16)} ${esc(A.noChannels)}</span>`}</div></div>
-      <div class="dd-sec">${esc(A.category)}</div><div class="svc-chips army-chips">${chip('all', A.all)}${categories.map((c) => chip(c.id, LANG === 'en' ? c.en : c.ar, c.icon)).join('')}</div>
+      <div class="dd-sec">${esc(A.category)}</div><div class="svc-chips army-chips">${chip('all', A.all)}${categories.map((c) => chip(c.id, LANG === 'en' ? c.en : c.ar, c)).join('')}</div>
       ${filtered.length ? `<div class="army-list">${filtered.map(card).join('')}</div>` : `<div class="svc-empty army-empty"><span class="army-icon">${icon('shield', 22)}</span><p>${esc(st.armyLoaded ? A.empty : L.loading)}</p></div>`}`;
   }
   function renderResults(failed) {
