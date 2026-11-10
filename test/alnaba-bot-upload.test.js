@@ -153,6 +153,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:photos'));
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:weekly'));
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:archive'));
+  assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:home'));
 
   await tap(deniedId, 'nb:photos');
   assert.equal(buttonsOf(lastUiFor(deniedId)).some((button) => button.callback_data === 'nb:publish'), false);
@@ -164,7 +165,17 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
 
   await tap(authorizedId, 'nb:photos');
   assert.ok(calls.some(({ method, payload }) => method === 'editMessageText' && payload.text.includes('أخبار مصوّرة')));
-  assert.ok(buttonsOf(lastEditFor(authorizedId)).some((button) => button.callback_data === 'nb:manage:photos'));
+  const photosPrompt = lastEditFor(authorizedId);
+  assert.ok(buttonsOf(photosPrompt).some((button) => button.callback_data === 'nb:manage:photos'));
+  assert.ok(buttonsOf(photosPrompt).some((button) => button.callback_data === 'nb:home'));
+  await tap(authorizedId, 'nb:home');
+  const returnedMainMenu = lastEditFor(authorizedId);
+  assert.ok(returnedMainMenu);
+  assert.doesNotMatch(returnedMainMenu.payload.text, /نشر محتوى النبأ/);
+  assert.ok(buttonsOf(returnedMainMenu).some((button) => button.callback_data === 'nb:open'));
+  assert.equal(buttonsOf(returnedMainMenu).some((button) => button.callback_data === 'nb:home' || button.callback_data === 'nb:photos'), false);
+  await sendText(authorizedId, '/alnaba');
+  await tap(authorizedId, 'nb:photos');
   await sendPhoto(authorizedId);
   const preview = lastUiFor(authorizedId);
   assert.match(preview.payload.text, /راجع الملف قبل نشره/);
@@ -183,6 +194,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.ok(JSON.parse(store.backup.json).alnaba.photos.some((item) => item.file_id === 'fixture_photo_id'));
   assert.ok(calls.some(({ method, payload }) => method === 'sendMessage' && payload.text.includes('تم النشر')));
   const firstSuccess = lastUiFor(authorizedId);
+  assert.ok(buttonsOf(firstSuccess).some((button) => button.callback_data === 'nb:home'));
   const addPhoto = buttonsOf(firstSuccess).find((button) => button.callback_data === 'nb:photos');
   assert.equal(addPhoto?.text, '➕ إضافة خبر جديد');
   await tap(authorizedId, addPhoto.callback_data);
@@ -201,7 +213,9 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
 
   await sendText(authorizedId, '/alnaba');
   await tap(authorizedId, 'nb:weekly');
-  assert.ok(buttonsOf(lastEditFor(authorizedId)).some((button) => button.callback_data === 'nb:manage:weekly'));
+  const weeklyPrompt = lastEditFor(authorizedId);
+  assert.ok(buttonsOf(weeklyPrompt).some((button) => button.callback_data === 'nb:manage:weekly'));
+  assert.ok(buttonsOf(weeklyPrompt).some((button) => button.callback_data === 'nb:home'));
   await bot.handleUpdate({
     update_id: updateId++,
     message: {
@@ -218,6 +232,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.equal(store.state.alnaba.weekly[0].title, 'العدد الأسبوعي التجريبي');
   assert.ok(JSON.parse(store.backup.json).alnaba.weekly.some((item) => item.file_id === 'fixture_pdf_id'));
   const weeklySuccess = lastUiFor(authorizedId);
+  assert.ok(buttonsOf(weeklySuccess).some((button) => button.callback_data === 'nb:home'));
   const addWeekly = buttonsOf(weeklySuccess).find((button) => button.callback_data === 'nb:weekly');
   assert.equal(addWeekly?.text, '➕ إضافة خبر جديد');
   await tap(authorizedId, addWeekly.callback_data);
@@ -226,8 +241,10 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
 
   await sendText(authorizedId, '/alnaba');
   await tap(authorizedId, 'nb:archive');
-  assert.match(lastEditFor(authorizedId)?.payload?.text || '', /الأرشيف/);
-  assert.ok(buttonsOf(lastEditFor(authorizedId)).some((button) => button.callback_data === 'nb:manage:archive'));
+  const archivePrompt = lastEditFor(authorizedId);
+  assert.match(archivePrompt?.payload?.text || '', /الأرشيف/);
+  assert.ok(buttonsOf(archivePrompt).some((button) => button.callback_data === 'nb:manage:archive'));
+  assert.ok(buttonsOf(archivePrompt).some((button) => button.callback_data === 'nb:home'));
   await sendText(authorizedId, 'قناة اختبارية\nhttps://example.invalid/not-telegram');
   assert.match(lastUiFor(authorizedId)?.payload?.text || '', /رابط Telegram صالح/);
   assert.equal(store.state.alnaba.archive.length, 0, 'invalid links never enter the archive');
@@ -237,12 +254,14 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.match(archivePreview.payload.text, /راجع مدخل الأرشيف/);
   assert.match(archivePreview.payload.text, /https:\/\/t\.me\/ras_mock_archive_channel_01/);
   assert.ok(buttonsOf(archivePreview).some((button) => button.callback_data === 'nb:publish'));
+  assert.ok(buttonsOf(archivePreview).some((button) => button.callback_data === 'nb:home'));
   assert.equal(store.state.alnaba.archive.length, 0, 'archive entries stay private until explicit confirmation');
   await tap(authorizedId, 'nb:publish');
   assert.equal(store.state.alnaba.archive.length, 1);
   assert.equal(store.state.alnaba.archive[0].title, 'قناة اختبارية');
   assert.ok(JSON.parse(store.backup.json).alnaba.archive.some((entry) => entry.url === 'https://t.me/ras_mock_archive_channel_01'));
   const archiveSuccess = lastUiFor(authorizedId);
+  assert.ok(buttonsOf(archiveSuccess).some((button) => button.callback_data === 'nb:home'));
   const addAnotherLink = buttonsOf(archiveSuccess).find((button) => button.callback_data === 'nb:archive');
   assert.equal(addAnotherLink?.text, '➕ إضافة رابط آخر');
   await tap(authorizedId, addAnotherLink.callback_data);
@@ -279,10 +298,13 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   const openManagement = async (section) => {
     await sendText(authorizedId, '/alnaba');
     await tap(authorizedId, `nb:${section}`);
-    assert.ok(buttonsOf(lastEditFor(authorizedId)).some((button) => button.callback_data === `nb:manage:${section}`));
+    const sectionPrompt = lastEditFor(authorizedId);
+    assert.ok(buttonsOf(sectionPrompt).some((button) => button.callback_data === `nb:manage:${section}`));
+    assert.ok(buttonsOf(sectionPrompt).some((button) => button.callback_data === 'nb:home'));
     await tap(authorizedId, `nb:manage:${section}`);
     const list = lastEditFor(authorizedId);
     assert.match(list?.payload?.text || '', /إدارة/);
+    assert.ok(buttonsOf(list).some((button) => button.callback_data === 'nb:home'));
     return list;
   };
   const itemButton = (section, id, list) => buttonsOf(list).find((button) => button.callback_data.startsWith(`nb:item:${section}:${id}:`));
@@ -294,6 +316,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.ok(photoButton, 'the private photo-news list exposes the existing mock entry');
   await tap(authorizedId, photoButton.callback_data);
   const photoControls = lastEditFor(authorizedId);
+  assert.ok(buttonsOf(photoControls).some((button) => button.callback_data === 'nb:home'));
   const editPhotoTitle = buttonsOf(photoControls).find((button) => button.callback_data.startsWith('nb:edit-title:photos:'));
   await tap(authorizedId, editPhotoTitle.callback_data);
   await sendText(authorizedId, 'عنوان صورة معدّل للاختبار');

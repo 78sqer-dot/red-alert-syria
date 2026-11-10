@@ -1776,13 +1776,18 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   // Owner commands
   const ownerOnly = (fn) => async (ctx) => (owner(ctx) ? fn(ctx) : ctx.reply(L(ctx).onlyOwner));
   const alnabaSite = (section = '') => `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/+$/, '')}/alnaba/${section ? `${section}/` : ''}`;
+  const alnabaHomeKeyboard = (ctx) => new InlineKeyboard().text(langOf(ctx) === 'en' ? '↩️ Main menu' : '↩️ رجوع للقائمة', 'nb:home');
+  const withAlnabaHomeButton = (keyboard, ctx) => keyboard
+    .row()
+    .text(langOf(ctx) === 'en' ? '↩️ Main menu' : '↩️ رجوع للقائمة', 'nb:home');
   const alnabaMenuKeyboard = (ctx) => {
     const en = langOf(ctx) === 'en';
-    return new InlineKeyboard()
+    const keyboard = new InlineKeyboard()
       .text(en ? '🖼 Photo news' : '🖼 أخبار مصورة', 'nb:photos')
       .text(en ? '📄 Weekly newspaper' : '📄 الصحيفة الأسبوعية', 'nb:weekly').row()
       .text(en ? '🔗 Archive' : '🔗 الأرشيف', 'nb:archive').row()
       .url(en ? '🌐 Open Al-Nabaa' : '🌐 فتح صفحة النبأ', alnabaSite());
+    return withAlnabaHomeButton(keyboard, ctx);
   };
   const alnabaMenuText = (ctx) => langOf(ctx) === 'en'
     ? '📰 <b>Al-Nabaa publishing</b>\n\nChoose photo news, the weekly newspaper, or the archive. Files and links stay private until you review the preview and confirm publishing.'
@@ -1828,6 +1833,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     keyboard.text(en ? '➕ Add new item' : '➕ إضافة محتوى', `nb:${section}`).row()
       .text(en ? '↩️ Al-Nabaa menu' : '↩️ قائمة النبأ', 'nb:open');
+    withAlnabaHomeButton(keyboard, ctx);
     const title = alnabaSectionName(section, en);
     const pageInfo = pageCount > 1 ? `\n${en ? `Page ${safePage + 1} of ${pageCount}` : `الصفحة ${safePage + 1} من ${pageCount}`}` : '';
     const text = en
@@ -1849,7 +1855,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     else keyboard.text(en ? '♻️ Replace file' : '♻️ استبدال الملف', `nb:replace:${section}:${id}:${page}`);
     keyboard.row()
       .text(en ? '🗑 Delete' : '🗑 حذف', `nb:delete:${section}:${id}:${page}`).row()
-      .text(en ? '↩️ Back to list' : '↩️ رجوع للقائمة', `nb:manage:${section}:${page}`);
+      .text(en ? '↩️ Back to item list' : '↩️ رجوع لقائمة الإدارة', `nb:manage:${section}:${page}`);
+    withAlnabaHomeButton(keyboard, ctx);
     const dateSource = item.updated_at || item.published_at;
     const date = dateSource ? fmtTime(dateSource, en ? 'en' : 'ar') : '';
     const details = section === 'archive'
@@ -1909,10 +1916,14 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
 
   // -------- callbacks
-  bot.callbackQuery(/^nb:(open|photos|weekly|archive|publish|cancel)$/, async (ctx) => {
+  bot.callbackQuery(/^nb:(open|photos|weekly|archive|publish|cancel|home)$/, async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية النشر.');
     const action = ctx.match[1];
     const uid = Number(ctx.from.id);
+    if (action === 'home') {
+      await ctx.answerCallbackQuery();
+      return home(ctx);
+    }
     if (action === 'open') {
       alnabaSessions.delete(uid);
       alnabaPendingUploads.delete(uid);
@@ -1930,6 +1941,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         .text(en ? '↩️ Back' : '↩️ رجوع', 'nb:open')
         .text(en ? '🛠 Manage this section' : '🛠 إدارة هذا القسم', `nb:manage:${section}`).row()
         .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
+      withAlnabaHomeButton(back, ctx);
       await ctx.answerCallbackQuery();
       return ctx.editMessageText(alnabaSectionPrompt(section, en), { parse_mode: 'HTML', reply_markup: back });
     }
@@ -1982,7 +1994,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         .text(en ? '➕ Add another link' : '➕ إضافة رابط آخر', 'nb:archive').row()
         .url(en ? 'Open archive' : 'فتح الأرشيف', alnabaSite('archive'))
         .url(en ? 'Al-Nabaa home' : 'صفحة النبأ', alnabaSite());
-      await ctx.reply(en ? `✅ Added to archive: <b>${esc(item.title)}</b>` : `✅ أُضيف إلى الأرشيف: <b>${esc(item.title)}</b>`, { parse_mode: 'HTML', reply_markup: keyboard });
+      await ctx.reply(en ? `✅ Added to archive: <b>${esc(item.title)}</b>` : `✅ أُضيف إلى الأرشيف: <b>${esc(item.title)}</b>`, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
       return;
     }
 
@@ -2021,7 +2033,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       .text(en ? '➕ Add another item' : '➕ إضافة خبر جديد', `nb:${item.section}`).row()
       .url(en ? 'Open section' : 'فتح القسم', link)
       .url(en ? 'Al-Nabaa home' : 'صفحة النبأ', alnabaSite());
-    await ctx.reply(en ? `✅ Published: <b>${esc(item.title)}</b>` : `✅ تم النشر: <b>${esc(item.title)}</b>`, { parse_mode: 'HTML', reply_markup: keyboard });
+    await ctx.reply(en ? `✅ Published: <b>${esc(item.title)}</b>` : `✅ تم النشر: <b>${esc(item.title)}</b>`, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
     });
   });
   bot.callbackQuery(/^nb:manage:(photos|weekly|archive)(?::(\d{1,4}))?$/, async (ctx) => {
@@ -2060,7 +2072,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       .text(en ? '↩️ Back to item' : '↩️ رجوع للمنشور', `nb:item:${section}:${id}:${page}`)
       .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
     await ctx.answerCallbackQuery();
-    return ctx.editMessageText(prompt, { parse_mode: 'HTML', reply_markup: keyboard });
+    return ctx.editMessageText(prompt, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
   });
   bot.callbackQuery(/^nb:replace:(photos|weekly):([\w-]{36}):(\d{1,4})$/, async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
@@ -2079,7 +2091,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       .text(en ? '↩️ Back to item' : '↩️ رجوع للمنشور', `nb:item:${section}:${id}:${page}`)
       .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
     await ctx.answerCallbackQuery();
-    return ctx.editMessageText(prompt, { parse_mode: 'HTML', reply_markup: keyboard });
+    return ctx.editMessageText(prompt, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
   });
   bot.callbackQuery(/^nb:edit-save:([0-9a-f-]{36})$/, async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
@@ -2120,7 +2132,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const summary = pending.changes.media
       ? (en ? 'Replacement file saved' : 'تم حفظ الملف البديل')
       : (en ? 'Item updated' : 'تم تعديل المنشور');
-    return ctx.reply(`✅ ${summary}: <b>${esc(updated.title)}</b>`, { parse_mode: 'HTML', reply_markup: keyboard });
+    return ctx.reply(`✅ ${summary}: <b>${esc(updated.title)}</b>`, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
     });
   });
   bot.callbackQuery(/^nb:delete:(photos|weekly|archive):([\w-]{36}):(\d{1,4})$/, async (ctx) => {
@@ -2141,7 +2153,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       .text(en ? '🗑 Yes, delete' : '🗑 نعم، احذف', `nb:delete-confirm:${token}`)
       .text(en ? 'Cancel' : 'إلغاء', `nb:delete-cancel:${token}`);
     await ctx.answerCallbackQuery();
-    return ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard });
+    return ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
   });
   bot.callbackQuery(/^nb:delete-cancel:([0-9a-f-]{36})$/, async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
@@ -2182,7 +2194,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await ctx.answerCallbackQuery(en ? 'Item deleted.' : 'تم حذف المنشور.');
     await ctx.deleteMessage().catch(() => {});
     const keyboard = new InlineKeyboard().text(en ? '🛠 Manage section' : '🛠 إدارة القسم', `nb:manage:${pending.section}:${pending.page}`);
-    return ctx.reply(en ? '✅ The item was deleted from Al-Nabaa.' : '✅ تم حذف المنشور من النبأ.', { reply_markup: keyboard });
+    return ctx.reply(en ? '✅ The item was deleted from Al-Nabaa.' : '✅ تم حذف المنشور من النبأ.', { reply_markup: withAlnabaHomeButton(keyboard, ctx) });
     });
   });
   bot.callbackQuery('home', async (ctx) => { activeMediaSessions.delete(sk(ctx)); await ctx.answerCallbackQuery(); await home(ctx); });
@@ -3169,26 +3181,26 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!flow) return false;
     const en = langOf(ctx) === 'en';
     if (alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) {
-      await ctx.reply(en ? 'Finish or cancel the current management action first.' : 'أكمل إجراء الإدارة الحالي أو ألغِه أولاً.');
+      await ctx.reply(en ? 'Finish or cancel the current management action first.' : 'أكمل إجراء الإدارة الحالي أو ألغِه أولاً.', { reply_markup: alnabaHomeKeyboard(ctx) });
       return true;
     }
     if (flow.section === 'archive') {
-      await ctx.reply(en ? 'Send the archive title and Telegram link as a two-line text message.' : 'أرسل عنوان الأرشيف ورابط Telegram في رسالة نصية من سطرين.');
+      await ctx.reply(en ? 'Send the archive title and Telegram link as a two-line text message.' : 'أرسل عنوان الأرشيف ورابط Telegram في رسالة نصية من سطرين.', { reply_markup: alnabaHomeKeyboard(ctx) });
       return true;
     }
     if (Date.now() - flow.createdAt > 30 * 60_000) {
       alnabaSessions.delete(uid);
-      await ctx.reply(en ? 'The upload session expired. Start again with /alnaba.' : 'انتهت جلسة الرفع. ابدأ مجدداً عبر /alnaba.');
+      await ctx.reply(en ? 'The upload session expired. Start again with /alnaba.' : 'انتهت جلسة الرفع. ابدأ مجدداً عبر /alnaba.', { reply_markup: alnabaHomeKeyboard(ctx) });
       return true;
     }
     if (alnabaPendingUploads.has(uid)) {
-      await ctx.reply(en ? 'Confirm or cancel the current upload before sending another.' : 'أكّد الملف الحالي أو ألغِه قبل إرسال ملف آخر.');
+      await ctx.reply(en ? 'Confirm or cancel the current upload before sending another.' : 'أكّد الملف الحالي أو ألغِه قبل إرسال ملف آخر.', { reply_markup: alnabaHomeKeyboard(ctx) });
       return true;
     }
     const replacementTarget = flow.mode === 'replace' ? findAlnabaEntry(store, flow.section, flow.itemId) : null;
     if (flow.mode === 'replace' && !replacementTarget) {
       alnabaSessions.delete(uid);
-      await ctx.reply(en ? 'This item no longer exists. Open the management list again.' : 'لم يعد هذا المنشور موجوداً. افتح قائمة الإدارة مجدداً.');
+      await ctx.reply(en ? 'This item no longer exists. Open the management list again.' : 'لم يعد هذا المنشور موجوداً. افتح قائمة الإدارة مجدداً.', { reply_markup: alnabaHomeKeyboard(ctx) });
       return true;
     }
     try {
@@ -3204,7 +3216,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         const keyboard = new InlineKeyboard()
           .text(en ? '✅ Save replacement' : '✅ حفظ الاستبدال', `nb:edit-save:${token}`)
           .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
-        await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
+        await ctx.reply(text, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
         return true;
       }
       alnabaPendingUploads.set(uid, { ...prepared, createdAt: Date.now() });
@@ -3217,21 +3229,21 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       const keyboard = new InlineKeyboard()
         .text(en ? '✅ Publish now' : '✅ نشر الآن', 'nb:publish')
         .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
-      await ctx.reply(preview, { parse_mode: 'HTML', reply_markup: keyboard });
+      await ctx.reply(preview, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
       return true;
     } catch (error) {
-      await ctx.reply(alnabaUploadError(error, en));
+      await ctx.reply(alnabaUploadError(error, en), { reply_markup: alnabaHomeKeyboard(ctx) });
       return true;
     }
   };
   bot.on('message:photo', async (ctx, next) => {
     const uid = Number(ctx.from?.id);
     if (!alnabaOwner(ctx)) return next();
-    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.');
-    if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.');
+    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.', { reply_markup: alnabaHomeKeyboard(ctx) });
+    if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.', { reply_markup: alnabaHomeKeyboard(ctx) });
     if (!alnabaSessions.has(uid)) return next();
     const photo = ctx.message.photo?.at(-1);
-    if (!photo) return ctx.reply(langOf(ctx) === 'en' ? 'Send a photo file.' : 'أرسل ملف صورة.');
+    if (!photo) return ctx.reply(langOf(ctx) === 'en' ? 'Send a photo file.' : 'أرسل ملف صورة.', { reply_markup: alnabaHomeKeyboard(ctx) });
     return receiveAlnabaUpload(ctx, {
       title: ctx.message.caption || '',
       file_id: photo.file_id,
@@ -3244,11 +3256,11 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.on('message:document', async (ctx, next) => {
     const uid = Number(ctx.from?.id);
     if (!alnabaOwner(ctx)) return next();
-    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.');
-    if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.');
+    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.', { reply_markup: alnabaHomeKeyboard(ctx) });
+    if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.', { reply_markup: alnabaHomeKeyboard(ctx) });
     if (!alnabaSessions.has(uid)) return next();
     const document = ctx.message.document;
-    if (!document) return ctx.reply(langOf(ctx) === 'en' ? 'Send an image or PDF file.' : 'أرسل ملف صورة أو PDF.');
+    if (!document) return ctx.reply(langOf(ctx) === 'en' ? 'Send an image or PDF file.' : 'أرسل ملف صورة أو PDF.', { reply_markup: alnabaHomeKeyboard(ctx) });
     const section = alnabaSessions.get(Number(ctx.from.id))?.section;
     const title = section === 'weekly'
       ? (ctx.message.caption || String(document.file_name || '').replace(/\.pdf$/i, '').replace(/[_-]+/g, ' '))
@@ -3265,10 +3277,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.on('message:video', async (ctx, next) => {
     const uid = Number(ctx.from?.id);
     if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid))) {
-      return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview first.' : 'أكّد المعاينة الحالية أو ألغِها أولاً.');
+      return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview first.' : 'أكّد المعاينة الحالية أو ألغِها أولاً.', { reply_markup: alnabaHomeKeyboard(ctx) });
     }
     if (alnabaOwner(ctx) && alnabaSessions.has(uid)) {
-      return ctx.reply(langOf(ctx) === 'en' ? 'This section accepts images or PDF files, not videos.' : 'هذا القسم يقبل الصور أو ملفات PDF، وليس الفيديو.');
+      return ctx.reply(langOf(ctx) === 'en' ? 'This section accepts images or PDF files, not videos.' : 'هذا القسم يقبل الصور أو ملفات PDF، وليس الفيديو.', { reply_markup: alnabaHomeKeyboard(ctx) });
     }
     return next();
   });
@@ -3307,18 +3319,18 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const text = clean(ctx.message.text, 2000);
     if (text.startsWith('/')) return;
     const uid = Number(ctx.from?.id);
-    if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid))) return ctx.reply(langOf(ctx) === 'en' ? 'Use the Save/Confirm or Cancel buttons on the pending preview.' : 'استخدم زر «حفظ/تأكيد» أو «إلغاء» في المعاينة المعلّقة.');
+    if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid))) return ctx.reply(langOf(ctx) === 'en' ? 'Use the Save/Confirm or Cancel buttons on the pending preview.' : 'استخدم زر «حفظ/تأكيد» أو «إلغاء» في المعاينة المعلّقة.', { reply_markup: alnabaHomeKeyboard(ctx) });
     const managementFlow = alnabaEditSessions.get(uid);
     if (alnabaOwner(ctx) && managementFlow) {
       const en = langOf(ctx) === 'en';
       if (Date.now() - managementFlow.createdAt > 30 * 60_000) {
         alnabaEditSessions.delete(uid);
-        return ctx.reply(en ? 'The edit session expired. Open the management list again.' : 'انتهت جلسة التعديل. افتح قائمة الإدارة مجدداً.');
+        return ctx.reply(en ? 'The edit session expired. Open the management list again.' : 'انتهت جلسة التعديل. افتح قائمة الإدارة مجدداً.', { reply_markup: alnabaHomeKeyboard(ctx) });
       }
       const item = findAlnabaEntry(store, managementFlow.section, managementFlow.id);
       if (!item) {
         alnabaEditSessions.delete(uid);
-        return ctx.reply(en ? 'This item no longer exists. Open the management list again.' : 'لم يعد هذا المنشور موجوداً. افتح قائمة الإدارة مجدداً.');
+        return ctx.reply(en ? 'This item no longer exists. Open the management list again.' : 'لم يعد هذا المنشور موجوداً. افتح قائمة الإدارة مجدداً.', { reply_markup: alnabaHomeKeyboard(ctx) });
       }
       let changes;
       try {
@@ -3350,19 +3362,19 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       const keyboard = new InlineKeyboard()
         .text(en ? '✅ Save change' : '✅ حفظ التعديل', `nb:edit-save:${token}`)
         .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
-      return ctx.reply(preview, { parse_mode: 'HTML', reply_markup: keyboard, link_preview_options: { is_disabled: true } });
+      return ctx.reply(preview, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx), link_preview_options: { is_disabled: true } });
     }
     const alnabaFlow = alnabaSessions.get(uid);
     if (alnabaOwner(ctx) && alnabaFlow?.section === 'archive') {
       const en = langOf(ctx) === 'en';
       if (Date.now() - alnabaFlow.createdAt > 30 * 60_000) {
         alnabaSessions.delete(uid);
-        return ctx.reply(en ? 'The archive session expired. Start again with /alnaba.' : 'انتهت جلسة الأرشيف. ابدأ مجدداً عبر /alnaba.');
+        return ctx.reply(en ? 'The archive session expired. Start again with /alnaba.' : 'انتهت جلسة الأرشيف. ابدأ مجدداً عبر /alnaba.', { reply_markup: alnabaHomeKeyboard(ctx) });
       }
       const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
       if (lines.length !== 2) return ctx.reply(en
         ? 'Send exactly two lines: the channel/group title, then its full HTTPS Telegram link.'
-        : 'أرسل سطرين فقط: اسم/عنوان القناة أو المجموعة أولاً، ثم رابط Telegram الكامل في السطر الثاني.');
+        : 'أرسل سطرين فقط: اسم/عنوان القناة أو المجموعة أولاً، ثم رابط Telegram الكامل في السطر الثاني.', { reply_markup: alnabaHomeKeyboard(ctx) });
       try {
         const prepared = prepareAlnabaArchiveEntry({ title: lines[0], url: lines[1] });
         alnabaPendingArchiveEntries.set(uid, { ...prepared, createdAt: Date.now() });
@@ -3373,17 +3385,17 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         const keyboard = new InlineKeyboard()
           .text(en ? '✅ Publish now' : '✅ نشر الآن', 'nb:publish')
           .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
-        return ctx.reply(preview, { parse_mode: 'HTML', reply_markup: keyboard, link_preview_options: { is_disabled: true } });
+        return ctx.reply(preview, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx), link_preview_options: { is_disabled: true } });
       } catch (error) {
         const message = error.message === 'MISSING_TITLE'
           ? (en ? 'Please include the channel/group title on the first line.' : 'أضف اسم/عنوان القناة أو المجموعة في السطر الأول.')
           : error.message === 'TITLE_TOO_LONG'
             ? (en ? 'Keep the title within 180 characters.' : 'اجعل العنوان أقل من 180 حرفاً.')
             : (en ? 'Use a valid HTTPS Telegram link (t.me or telegram.me) for a channel, group, or invite.' : 'أرسل رابط Telegram صالحاً وآمناً يبدأ بـ https://t.me أو https://telegram.me لقناة أو مجموعة أو دعوة.');
-        return ctx.reply(message);
+        return ctx.reply(message, { reply_markup: alnabaHomeKeyboard(ctx) });
       }
     }
-    if (alnabaOwner(ctx) && alnabaFlow) return ctx.reply(langOf(ctx) === 'en' ? 'Send the selected image/PDF as a media file; add the photo headline as its caption.' : 'أرسل الصورة أو ملف PDF الذي اخترته؛ وضع عنوان الصورة في وصفها.');
+    if (alnabaOwner(ctx) && alnabaFlow) return ctx.reply(langOf(ctx) === 'en' ? 'Send the selected image/PDF as a media file; add the photo headline as its caption.' : 'أرسل الصورة أو ملف PDF الذي اخترته؛ وضع عنوان الصورة في وصفها.', { reply_markup: alnabaHomeKeyboard(ctx) });
     const d = getDraft(ctx);
     if (!d) return home(ctx);
     const l = L(ctx);
