@@ -1149,8 +1149,10 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
 .mobile-ticker { background: var(--bg-card); }
 .map-tools {
   top: 14px;
-  gap: 5px;
-  padding: 5px;
+  gap: 8px;
+  padding: 6px;
+  flex-wrap: wrap;
+  max-width: calc(100% - 28px);
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg-glass);
@@ -1159,12 +1161,16 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
   -webkit-backdrop-filter: blur(12px);
 }
 .map-btn {
-  height: 40px;
-  padding-inline: 12px;
+  height: 44px;
+  min-height: 44px;
+  min-width: 44px;
+  gap: 7px;
+  padding-inline: 13px;
   border-radius: 10px;
   box-shadow: none;
-  font-size: 13px;
+  font-size: 12.5px;
 }
+.map-btn svg { width: 18px; height: 18px; flex: none; }
 .map-btn:hover, .map-btn[aria-expanded='true'] {
   background: var(--bg-card-hover);
   border-color: color-mix(in srgb, var(--red) 35%, var(--border));
@@ -1213,6 +1219,7 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
     padding: 6px;
   }
   .map-tools > .dd, .map-tools > #btnSvc, .map-tools > #btnNabaa, .map-tools > #btnNotifications { min-width: 0; }
+  .map-tools > #btnNotifications { grid-column: span 2; }
   .map-btn {
     width: 100%;
     min-width: 44px;

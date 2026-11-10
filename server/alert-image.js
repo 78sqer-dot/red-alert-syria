@@ -356,21 +356,62 @@ export async function renderAlertPng(alert, opts = {}) {
   return Buffer.from(r.render().asPng());
 }
 
-function illustrationLines(value, limit, maxLines) {
-  const words = String(value || '').replace(/[\u0000-\u001f]/g, ' ').trim().split(/\s+/).filter(Boolean);
-  const lines = []; let line = '';
-  for (const word of words) {
+const illustrationWidthCache = new Map();
+const graphemes = new Intl.Segmenter('ar', { granularity: 'grapheme' });
+const glyphsOf = (value) => [...graphemes.segment(value)].map((part) => part.segment);
+const illustrationText = (value) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+export function illustrationTextWidth(text, size, weight = 500) {
+  const key = `${size}|${weight}|${text}`;
+  if (illustrationWidthCache.has(key)) return illustrationWidthCache.get(key);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16384" height="256"><text x="64" y="128" font-family="Noto Kufi Arabic" font-size="${size}" font-weight="${weight}">${ttx(text)}</text></svg>`;
+  const box = new Resvg(svg, { font: { fontFiles: FONT_FILES, loadSystemFonts: false, defaultFontFamily: 'Noto Kufi Arabic' } }).innerBBox();
+  const width = box?.width || 0;
+  if (illustrationWidthCache.size >= 1000) illustrationWidthCache.clear();
+  illustrationWidthCache.set(key, width);
+  return width;
+}
+/** Extractive only: retain at most two source sentences, shortened at a word boundary. */
+export function extractIllustrationBrief(value, max = 180) {
+  const text = illustrationText(value).split(/(?<=[.!?؟])\s+/u).slice(0, 2).join(' ');
+  if (text.length <= max) return text;
+  const prefix = text.slice(0, max + 1);
+  const end = prefix.lastIndexOf(' ');
+  return `${(end > 0 ? prefix.slice(0, end) : glyphsOf(prefix).slice(0, max).join('')).trimEnd()}…`;
+}
+function illustrationLines(value, width, maxLines, size, weight = 500) {
+  const words = illustrationText(value).split(/\s+/).filter(Boolean);
+  const lines = []; let line = ''; let overflow = false;
+  outer: for (const word of words) {
     const next = line ? `${line} ${word}` : word;
-    if (next.length > limit && line) { lines.push(line); line = word; }
-    else line = next;
+    if (illustrationTextWidth(next, size, weight) <= width - 8) { line = next; continue; }
+    if (line) { lines.push(line); line = ''; }
+    if (lines.length === maxLines) { overflow = true; break; }
+    if (illustrationTextWidth(word, size, weight) <= width - 8) { line = word; continue; }
+    for (const glyph of glyphsOf(word)) {
+      if (line && illustrationTextWidth(line + glyph, size, weight) > width - 8) { lines.push(line); line = ''; }
+      if (lines.length === maxLines) { overflow = true; break outer; }
+      line += glyph;
+    }
   }
   if (line) lines.push(line);
-  if (lines.length > maxLines) {
+  if (overflow || lines.length > maxLines) {
     lines.length = maxLines;
-    const last = [...lines[maxLines - 1]];
-    lines[maxLines - 1] = `${last.slice(0, Math.max(1, limit - 1)).join('').trimEnd()}…`;
+    const last = glyphsOf(lines[maxLines - 1]);
+    while (last.length && illustrationTextWidth(`${last.join('')}…`, size, weight) > width - 8) last.pop();
+    lines[maxLines - 1] = `${last.join('').trimEnd()}…`;
   }
   return lines;
+}
+export function illustrationTextLayout(alert, lang = 'ar') {
+  const en = lang === 'en';
+  const type = ALERT_TYPES[alert?.type] ? alert.type : 'breaking';
+  const title = illustrationText((en ? alert?.title_en : alert?.title) || (en ? ALERT_TYPES[type].en : ALERT_TYPES[type].ar)).slice(0, 600);
+  const description = illustrationText((en ? alert?.description_en : alert?.description) || title);
+  return {
+    titleLines: illustrationLines(title, 760, 3, 36, 800),
+    briefLines: illustrationLines(extractIllustrationBrief(description), 896, 3, 26),
+    locationLines: illustrationLines(placeText(alert || {}, lang) || (en ? 'Syria' : 'سوريا'), 840, 1, 22, 700),
+  };
 }
 
 /** Factual editorial graphic: only alert text, category icon and location; never a depicted incident scene. */
@@ -379,16 +420,11 @@ export function newsIllustrationSvg(alert, lang = 'ar') {
   const type = ALERT_TYPES[alert?.type] ? alert.type : 'breaking';
   const t = ALERT_TYPES[type];
   const visual = eventVisual(type);
-  const headline = String((en ? alert.title_en : alert.title) || (en ? t.en : t.ar)).trim();
-  const description = String((en ? alert.description_en : alert.description) || '').trim();
-  const titleLines = illustrationLines(headline, 34, 2);
-  const bodyLines = illustrationLines(description, en ? 62 : 34, 2);
-  const location = placeText(alert || {}, en ? 'en' : 'ar') || (en ? 'Syria' : 'سوريا');
-  const locationLines = illustrationLines(location, 44, 1);
+  const { titleLines, briefLines: bodyLines, locationLines } = illustrationTextLayout(alert, lang);
   const direction = en ? '' : ' direction="rtl"';
   const anchor = en ? 'start' : 'end';
   const textX = en ? 64 : 960;
-  const iconX = en ? 830 : 194;
+  const iconX = en ? 920 : 104;
   const bg = '#091322';
   const glyphKey = type === 'assassination' ? (assassinationWeaponGlyph(alert) || t.glyph)
     : type === 'shooting' ? (shootingWeaponGlyph(alert) || t.glyph)
@@ -408,15 +444,16 @@ export function newsIllustrationSvg(alert, lang = 'ar') {
   o.push('<rect x="0" y="0" width="1024" height="7" fill="url(#ig-line)"/>');
   if (logo.svg) o.push(logo.svg);
   o.push(`<text x="${en ? 64 : 960}" y="63" font-family="Noto Kufi Arabic" font-size="22" font-weight="800" fill="${visual.color}" text-anchor="${anchor}"${direction}>${ttx(category)}</text>`);
-  o.push(`<circle cx="${iconX}" cy="320" r="156" fill="url(#ig-glow)"/><circle cx="${iconX}" cy="320" r="96" fill="#101e30" stroke="${visual.color}" stroke-opacity=".7" stroke-width="2"/><circle cx="${iconX}" cy="320" r="78" fill="#f8fafc"/>`);
-  o.push(`<svg x="${iconX - 48}" y="${320 - 48}" width="96" height="96" viewBox="0 0 512 512"><g fill="${visual.color}" color="${visual.color}">${glyph}</g></svg>`);
-  titleLines.forEach((line, i) => o.push(`<text x="${textX}" y="${178 + i * 62}" font-family="Noto Kufi Arabic" font-size="${titleLines.length > 1 ? 40 : 46}" font-weight="800" fill="#f8fafc" text-anchor="${anchor}"${direction}>${ttx(line)}</text>`));
-  bodyLines.forEach((line, i) => o.push(`<text x="${textX}" y="${324 + i * 42}" font-family="Noto Kufi Arabic" font-size="25" font-weight="500" fill="#c6d2e1" text-anchor="${anchor}"${direction}>${ttx(line)}</text>`));
-  o.push(`<rect x="${en ? 64 : 585}" y="426" width="375" height="54" rx="15" fill="#14243a" stroke="#ffffff" stroke-opacity=".12"/>`);
-  o.push(`<text x="${en ? 84 : 930}" y="461" font-family="Noto Kufi Arabic" font-size="22" font-weight="700" fill="#e2e8f0" text-anchor="${anchor}"${direction}>${ttx(locationLines[0] || location)}</text>`);
+  o.push(`<circle cx="${iconX}" cy="176" r="65" fill="url(#ig-glow)"/><circle cx="${iconX}" cy="176" r="42" fill="#f8fafc" stroke="${visual.color}" stroke-width="2"/>`);
+  o.push(`<svg x="${iconX - 26}" y="150" width="52" height="52" viewBox="0 0 512 512"><g fill="${visual.color}" color="${visual.color}">${glyph}</g></svg>`);
+  titleLines.forEach((line, i) => o.push(`<text x="${textX}" y="${146 + i * 48}" font-family="Noto Kufi Arabic" font-size="36" font-weight="800" fill="#f8fafc" text-anchor="${anchor}"${direction}>${ttx(line)}</text>`));
+  o.push(`<text x="${textX}" y="286" font-family="Noto Kufi Arabic" font-size="18" font-weight="700" fill="#7dd3fc" text-anchor="${anchor}"${direction}>${en ? 'NEWS BRIEF' : 'نبذة الخبر'}</text>`);
+  bodyLines.forEach((line, i) => o.push(`<text x="${textX}" y="${328 + i * 36}" font-family="Noto Kufi Arabic" font-size="26" font-weight="500" fill="#c6d2e1" text-anchor="${anchor}"${direction}>${ttx(line)}</text>`));
+  o.push('<rect x="64" y="432" width="896" height="54" rx="15" fill="#14243a" stroke="#ffffff" stroke-opacity=".12"/>');
+  o.push(`<text x="${en ? 84 : 930}" y="467" font-family="Noto Kufi Arabic" font-size="22" font-weight="700" fill="#e2e8f0" text-anchor="${anchor}"${direction}>${ttx(locationLines[0] || '')}</text>`);
   o.push('<path d="M48 514H976" stroke="#ffffff" stroke-opacity=".14"/>');
-  o.push(`<text x="${en ? 64 : 960}" y="555" font-family="Noto Sans" font-size="17" font-weight="700" fill="#fca5a5" text-anchor="${anchor}"${direction}>${ttx(disclosure)}</text>`);
-  o.push(`<text x="${en ? 960 : 64}" y="555" font-family="Noto Sans" font-size="16" fill="#93a4b8" text-anchor="${en ? 'end' : 'start'}">${ttx(when)}</text>`);
+  o.push(`<text x="${textX}" y="548" font-family="Noto Kufi Arabic" font-size="17" font-weight="700" fill="#fca5a5" text-anchor="${anchor}"${direction}>${ttx(disclosure)}</text>`);
+  o.push(`<text x="${textX}" y="579" font-family="Noto Kufi Arabic" font-size="16" fill="#93a4b8" text-anchor="${anchor}"${direction}>${ttx(when)}</text>`);
   o.push('</svg>');
   return o.join('');
 }

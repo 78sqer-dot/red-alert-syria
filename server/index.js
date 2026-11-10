@@ -149,7 +149,7 @@ app.get('/api/alerts/:id/illustration', apiLimiter, async (req, res) => {
     timestamp: alert.timestamp,
     meta: { hazard: alert.meta?.hazard, signalPlatform: alert.meta?.signalPlatform, incursionKind: alert.meta?.incursionKind },
   };
-  const tag = `"${crypto.createHash('sha256').update(JSON.stringify([revision, lang])).digest('hex').slice(0, 16)}"`;
+  const tag = `"${crypto.createHash('sha256').update(JSON.stringify([revision, lang, 'brief-layout-v2'])).digest('hex').slice(0, 16)}"`;
   res.setHeader('ETag', tag);
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   res.setHeader('X-Content-Type-Options', 'nosniff');
