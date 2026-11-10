@@ -110,6 +110,12 @@ test('the bot offers Al-Nabaa only to 8270709633 and publishes an uploaded photo
   assert.ok(buttonsOf(preview).some((button) => button.callback_data === 'nb:publish'));
   assert.equal(store.state.alnaba.photos.length, 0, 'receiving the file alone must not publish it');
 
+  await sendText(authorizedId, '/menu');
+  await sendText(authorizedId, '/alnaba');
+  await tap(authorizedId, 'nb:photos');
+  await sendPhoto(authorizedId);
+  assert.ok(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), 'a discarded preview must not block a fresh upload');
+  assert.equal(store.state.alnaba.photos.length, 0);
   await tap(authorizedId, 'nb:publish');
   assert.equal(store.state.alnaba.photos.length, 1);
   assert.equal(store.state.alnaba.photos[0].title, 'صورة تجريبية للاختبار');

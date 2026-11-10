@@ -1718,6 +1718,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   };
   const home = async (ctx) => {
     if (ctx.message) ctx.ras.keepInput = true; // cleanMenuMessages tracks and deletes this command itself
+    alnabaSessions.delete(Number(ctx.from?.id));
+    alnabaPendingUploads.delete(Number(ctx.from?.id));
     await clearConvo(ctx);
     await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.message || ctx.callbackQuery?.message);
     sessions.delete(sk(ctx));
@@ -1729,6 +1731,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
   bot.command(['start', 'menu'], async (ctx) => {
     if (ctx.callbackQuery) return home(ctx);
+    alnabaSessions.delete(Number(ctx.from?.id));
+    alnabaPendingUploads.delete(Number(ctx.from?.id));
     if (ctx.message) ctx.ras.keepInput = true; // cleanMenuMessages tracks and deletes this command itself
     await clearConvo(ctx);
     await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.message);
@@ -1769,6 +1773,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       : '📄 <b>الصحيفة الأسبوعية</b>\n\nأرسل ملف PDF لا يتجاوز 20 ميغابايت. ضع عنوان العدد في وصف الملف، وإلا سيُستخدم اسم الملف. يُفحص PDF قبل معاينته ونشره.');
   bot.command('alnaba', async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.reply(langOf(ctx) === 'en' ? 'This publishing option is not available for this account.' : 'هذه الصلاحية غير متاحة لهذا الحساب.');
+    alnabaSessions.delete(Number(ctx.from.id));
+    alnabaPendingUploads.delete(Number(ctx.from.id));
     await ctx.reply(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
   });
   // Owner-only: render sample channel images on this server and send them to the owner's private chat
@@ -1813,6 +1819,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const uid = Number(ctx.from.id);
     if (action === 'open') {
       alnabaSessions.delete(uid);
+      alnabaPendingUploads.delete(uid);
       await ctx.answerCallbackQuery();
       return ctx.editMessageText(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
     }
