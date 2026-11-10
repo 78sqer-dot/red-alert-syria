@@ -382,7 +382,7 @@ export function newsIllustrationSvg(alert, lang = 'ar') {
   const headline = String((en ? alert.title_en : alert.title) || (en ? t.en : t.ar)).trim();
   const description = String((en ? alert.description_en : alert.description) || '').trim();
   const titleLines = illustrationLines(headline, 34, 2);
-  const bodyLines = illustrationLines(description, 62, 2);
+  const bodyLines = illustrationLines(description, en ? 62 : 34, 2);
   const location = placeText(alert || {}, en ? 'en' : 'ar') || (en ? 'Syria' : 'سوريا');
   const locationLines = illustrationLines(location, 44, 1);
   const direction = en ? '' : ' direction="rtl"';
@@ -407,7 +407,7 @@ export function newsIllustrationSvg(alert, lang = 'ar') {
   o.push('<g fill="none" stroke="#8aa2bd" stroke-opacity=".08"><path d="M-60 410C140 270 280 555 490 390s300-260 600-110"/><path d="M-80 455C120 315 270 590 480 425s310-250 620-100"/><path d="M-100 500C100 360 260 625 470 460s320-240 640-90"/></g>');
   o.push('<rect x="0" y="0" width="1024" height="7" fill="url(#ig-line)"/>');
   if (logo.svg) o.push(logo.svg);
-  o.push(`<text x="${en ? 960 : 64}" y="63" font-family="Noto Kufi Arabic" font-size="22" font-weight="800" fill="${visual.color}" text-anchor="${anchor}"${direction}>${ttx(category)}</text>`);
+  o.push(`<text x="${en ? 64 : 960}" y="63" font-family="Noto Kufi Arabic" font-size="22" font-weight="800" fill="${visual.color}" text-anchor="${anchor}"${direction}>${ttx(category)}</text>`);
   o.push(`<circle cx="${iconX}" cy="320" r="156" fill="url(#ig-glow)"/><circle cx="${iconX}" cy="320" r="96" fill="#101e30" stroke="${visual.color}" stroke-opacity=".7" stroke-width="2"/><circle cx="${iconX}" cy="320" r="78" fill="#f8fafc"/>`);
   o.push(`<svg x="${iconX - 48}" y="${320 - 48}" width="96" height="96" viewBox="0 0 512 512"><g fill="${visual.color}" color="${visual.color}">${glyph}</g></svg>`);
   titleLines.forEach((line, i) => o.push(`<text x="${textX}" y="${178 + i * 62}" font-family="Noto Kufi Arabic" font-size="${titleLines.length > 1 ? 40 : 46}" font-weight="800" fill="#f8fafc" text-anchor="${anchor}"${direction}>${ttx(line)}</text>`));

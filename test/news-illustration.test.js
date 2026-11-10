@@ -25,6 +25,15 @@ test('Arabic and English editorial graphics use only alert facts and label the i
   assert.doesNotMatch(ar, /<script|onload=/i);
 });
 
+test('Arabic category stays on the right and long descriptions wrap within the text column', () => {
+  const long = newsIllustrationSvg({ ...alert, description: Array(8).fill('تفاصيل اختبارية').join(' ') }, 'ar');
+  assert.match(long, /<text x="960" y="63"[^>]*direction="rtl">خبر عاجل<\/text>/);
+  assert.doesNotMatch(long, /<text x="64" y="63"[^>]*>خبر عاجل<\/text>/);
+  const bodyLines = [...long.matchAll(/<text x="960" y="(?:324|366)"[^>]*>(.*?)<\/text>/g)].map((match) => match[1]);
+  assert.equal(bodyLines.length, 2);
+  assert.ok(bodyLines.every((line) => line.length <= 34));
+});
+
 test('editorial card renders to a valid PNG without external photos or map tiles', () => {
   const png = renderNewsIllustrationPng(alert, 'ar');
   assert.ok(Buffer.isBuffer(png));
