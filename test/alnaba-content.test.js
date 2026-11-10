@@ -5,7 +5,9 @@ import {
   ALNABA_MAX_PDF_BYTES,
   ALNABA_MAX_PHOTO_BYTES,
   createAlnabaRouter,
+  deleteAlnabaEntry,
   fetchAlnabaTelegramBytes,
+  findAlnabaEntry,
   isAlnabaOwner,
   listPublicAlnabaItems,
   normalizeTelegramLink,
@@ -14,6 +16,7 @@ import {
   publishAlnabaArchiveEntry,
   publishAlnabaItem,
   sanitizeAlnabaState,
+  updateAlnabaEntry,
 } from '../server/alnaba.js';
 
 const OWNER = 8270709633;
@@ -138,6 +141,44 @@ test('archive entries are deduplicated and survive Al-Nabaa state serialization/
   assert.deepEqual(restored.photos, []);
   assert.deepEqual(restored.weekly, []);
   assert.deepEqual(sanitizeAlnabaState({ ...store.state.alnaba, archive: [{ ...item, url: 'https://t.me.evil.example/unsafe' }] }).archive, []);
+});
+
+test('Al-Nabaa entry edits and deletion helpers enforce owner access and preserve validated fields', () => {
+  const store = createStore();
+  const photo = publishAlnabaItem(store, OWNER, photoUpload(), new Date('2026-11-10T12:00:00.000Z'));
+  const archive = publishAlnabaArchiveEntry(store, OWNER, archiveEntry(), new Date('2026-11-10T12:05:00.000Z'));
+  const archivePeer = publishAlnabaArchiveEntry(store, OWNER, { title: 'قناة ثانية للاختبار', url: 'https://t.me/another_fixture_archive_01' }, new Date('2026-11-10T12:06:00.000Z'));
+  const persistCount = store.persistCalls;
+  assert.throws(() => updateAlnabaEntry(store, PREVIOUS_PROJECT_OWNER, 'photos', photo.id, { title: 'No' }), { message: 'FORBIDDEN' });
+  assert.throws(() => deleteAlnabaEntry(store, PREVIOUS_PROJECT_OWNER, 'archive', archive.id), { message: 'FORBIDDEN' });
+  assert.equal(store.persistCalls, persistCount, 'unauthorized management never mutates state');
+
+  const photoEdit = updateAlnabaEntry(store, OWNER, 'photos', photo.id, { title: 'عنوان معدل للاختبار' }, new Date('2026-11-10T12:10:00.000Z'));
+  assert.equal(photoEdit.title, 'عنوان معدل للاختبار');
+  assert.equal(photoEdit.updated_at, '2026-11-10T12:10:00.000Z');
+  const archiveEdit = updateAlnabaEntry(store, OWNER, 'archive', archive.id, {
+    title: 'اسم قناة معدل', url: 'https://telegram.me/ras_fixture_archive_edited/'
+  }, new Date('2026-11-10T12:15:00.000Z'));
+  assert.equal(archiveEdit.url, 'https://t.me/ras_fixture_archive_edited');
+  assert.equal(findAlnabaEntry(store, 'archive', archive.id).title, 'اسم قناة معدل');
+  assert.throws(() => updateAlnabaEntry(store, OWNER, 'archive', archive.id, { url: 'https://example.invalid/not-telegram' }), { message: 'INVALID_TELEGRAM_LINK' });
+  assert.throws(() => updateAlnabaEntry(store, OWNER, 'archive', archive.id, { url: archivePeer.url }), { message: 'DUPLICATE_ARCHIVE_LINK' });
+
+  const replaced = updateAlnabaEntry(store, OWNER, 'photos', photo.id, {
+    media: { ...photoUpload(), file_id: 'fixture_photo_replacement_id', file_unique_id: 'fixture_photo_replacement_unique' },
+  }, new Date('2026-11-10T12:20:00.000Z'));
+  assert.equal(replaced.file_id, 'fixture_photo_replacement_id');
+  assert.equal(replaced.title, 'عنوان معدل للاختبار');
+  const restored = sanitizeAlnabaState(JSON.parse(JSON.stringify(store.state.alnaba)));
+  assert.equal(restored.photos[0].updated_at, '2026-11-10T12:20:00.000Z');
+  assert.equal(restored.archive.find((item) => item.id === archive.id).url, 'https://t.me/ras_fixture_archive_edited');
+
+  const deleted = deleteAlnabaEntry(store, OWNER, 'archive', archive.id);
+  assert.equal(deleted.id, archive.id);
+  assert.equal(findAlnabaEntry(store, 'archive', archive.id), null);
+  deleteAlnabaEntry(store, OWNER, 'archive', archivePeer.id);
+  assert.deepEqual(store.state.alnaba.photos.map((item) => item.id), [photo.id]);
+  assert.equal(store.state.alnaba.archive.length, 0);
 });
 
 test('upload validation enforces allowed section types and size limits', () => {

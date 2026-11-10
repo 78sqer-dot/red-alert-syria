@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
 import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
@@ -31,7 +32,7 @@ function withLabel(loc, label) {
 }
 const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
 import { cleanAlertText } from './clean-text.js';
-import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, fetchAlnabaTelegramBytes } from './alnaba.js';
+import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, findAlnabaEntry, updateAlnabaEntry, deleteAlnabaEntry, sanitizeAlnabaState, fetchAlnabaTelegramBytes } from './alnaba.js';
 
 const PAGE = 24;
 const SUB_MENU_MIN = 40; // districts with more towns than this get a ناحية (sub-district) step first
@@ -147,6 +148,20 @@ const activeMediaSessions = new Map(); // userId -> { alertId, created }: admin 
 const alnabaSessions = new Map(); // ownerId -> { section, createdAt }
 const alnabaPendingUploads = new Map(); // ownerId -> validated media waiting for explicit publish confirmation
 const alnabaPendingArchiveEntries = new Map(); // ownerId -> validated Telegram directory entry waiting for confirmation
+const alnabaEditSessions = new Map(); // ownerId -> { section, id, field, page, createdAt }
+const alnabaPendingManagementEdits = new Map(); // ownerId -> validated edit waiting for explicit save confirmation
+const alnabaPendingManagementDeletes = new Map(); // ownerId -> entry waiting for explicit delete confirmation
+let alnabaWriteQueue = Promise.resolve();
+const withAlnabaWriteLock = (work) => {
+  const next = alnabaWriteQueue.then(work, work);
+  alnabaWriteQueue = next.then(() => undefined, () => undefined);
+  return next;
+};
+const clearAlnabaManagementState = (uid) => {
+  alnabaEditSessions.delete(uid);
+  alnabaPendingManagementEdits.delete(uid);
+  alnabaPendingManagementDeletes.delete(uid);
+};
 // pending reports live in the store (store.reportPut/Take): they survive restarts and deploys
 const lastReport = new Map();
 
@@ -1724,6 +1739,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     alnabaSessions.delete(Number(ctx.from?.id));
     alnabaPendingUploads.delete(Number(ctx.from?.id));
     alnabaPendingArchiveEntries.delete(Number(ctx.from?.id));
+    clearAlnabaManagementState(Number(ctx.from?.id));
     await clearConvo(ctx);
     await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.message || ctx.callbackQuery?.message);
     sessions.delete(sk(ctx));
@@ -1738,6 +1754,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     alnabaSessions.delete(Number(ctx.from?.id));
     alnabaPendingUploads.delete(Number(ctx.from?.id));
     alnabaPendingArchiveEntries.delete(Number(ctx.from?.id));
+    clearAlnabaManagementState(Number(ctx.from?.id));
     if (ctx.message) ctx.ras.keepInput = true; // cleanMenuMessages tracks and deletes this command itself
     await clearConvo(ctx);
     await cleanMenuMessages(ctx.api, role, ctx.chat?.id, ctx.message);
@@ -1781,11 +1798,79 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       ? '🔗 <b>Archive</b>\n\nSend one text message with two lines: the channel/group name or title first, then its HTTPS Telegram link (t.me or telegram.me). Public usernames and invite links are supported. The entry stays private until you confirm the preview.'
       : '🔗 <b>الأرشيف</b>\n\nأرسل رسالة نصية من سطرين: اسم/عنوان القناة أو المجموعة في السطر الأول، ثم رابط Telegram كامل يبدأ بـ HTTPS في السطر الثاني (t.me أو telegram.me). تُقبل الروابط العامة وروابط الدعوة، ولا يظهر الرابط للزوار قبل تأكيد المعاينة.';
   };
+  const alnabaSectionName = (section, en) => ({
+    photos: en ? 'Photo news' : 'الأخبار المصوّرة',
+    weekly: en ? 'Weekly newspaper' : 'الصحيفة الأسبوعية',
+    archive: en ? 'Archive' : 'الأرشيف',
+  })[section] || (en ? 'Al-Nabaa' : 'النبأ');
+  const alnabaSectionIcon = (section) => section === 'photos' ? '🖼' : section === 'weekly' ? '📄' : '🔗';
+  const shortAlnabaTitle = (title) => {
+    const chars = Array.from(String(title || ''));
+    return chars.length > 42 ? `${chars.slice(0, 39).join('')}…` : chars.join('');
+  };
+  const alnabaItemsForManagement = (section) => sanitizeAlnabaState(store.state.alnaba)[section]
+    .sort((a, b) => Date.parse(b.updated_at || b.published_at) - Date.parse(a.updated_at || a.published_at));
+  const alnabaManageListView = (ctx, section, page = 0) => {
+    const en = langOf(ctx) === 'en';
+    const items = alnabaItemsForManagement(section);
+    const pageSize = 6;
+    const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+    const safePage = Math.max(0, Math.min(Number(page) || 0, pageCount - 1));
+    const start = safePage * pageSize;
+    const keyboard = new InlineKeyboard();
+    for (const item of items.slice(start, start + pageSize)) {
+      keyboard.text(`${alnabaSectionIcon(section)} ${shortAlnabaTitle(item.title)}`, `nb:item:${section}:${item.id}:${safePage}`).row();
+    }
+    if (pageCount > 1) {
+      if (safePage > 0) keyboard.text(en ? '← Previous' : '← السابق', `nb:manage:${section}:${safePage - 1}`);
+      if (safePage + 1 < pageCount) keyboard.text(en ? 'Next →' : 'التالي →', `nb:manage:${section}:${safePage + 1}`);
+      keyboard.row();
+    }
+    keyboard.text(en ? '➕ Add new item' : '➕ إضافة محتوى', `nb:${section}`).row()
+      .text(en ? '↩️ Al-Nabaa menu' : '↩️ قائمة النبأ', 'nb:open');
+    const title = alnabaSectionName(section, en);
+    const pageInfo = pageCount > 1 ? `\n${en ? `Page ${safePage + 1} of ${pageCount}` : `الصفحة ${safePage + 1} من ${pageCount}`}` : '';
+    const text = en
+      ? `🛠 <b>Manage ${title}</b>\n\n${items.length ? `Choose an item to edit or delete (${items.length} total).` : 'No items in this section yet. You can add the first one below.'}${pageInfo}`
+      : `🛠 <b>إدارة ${title}</b>\n\n${items.length ? `اختر منشوراً لتعديله أو حذفه (${items.length} إجمالاً).` : 'لا توجد منشورات في هذا القسم حالياً. يمكنك إضافة أول منشور من الزر أدناه.'}${pageInfo}`;
+    return { text, keyboard, safePage };
+  };
+  const showAlnabaManageList = async (ctx, section, page = 0) => {
+    const view = alnabaManageListView(ctx, section, page);
+    return ctx.editMessageText(view.text, { parse_mode: 'HTML', reply_markup: view.keyboard });
+  };
+  const alnabaManageItemView = (ctx, section, id, page = 0) => {
+    const en = langOf(ctx) === 'en';
+    const item = findAlnabaEntry(store, section, id);
+    if (!item) return null;
+    const keyboard = new InlineKeyboard()
+      .text(en ? '✏️ Edit title' : '✏️ تعديل العنوان', `nb:edit-title:${section}:${id}:${page}`);
+    if (section === 'archive') keyboard.text(en ? '🔗 Edit link' : '🔗 تعديل الرابط', `nb:edit-link:${section}:${id}:${page}`);
+    else keyboard.text(en ? '♻️ Replace file' : '♻️ استبدال الملف', `nb:replace:${section}:${id}:${page}`);
+    keyboard.row()
+      .text(en ? '🗑 Delete' : '🗑 حذف', `nb:delete:${section}:${id}:${page}`).row()
+      .text(en ? '↩️ Back to list' : '↩️ رجوع للقائمة', `nb:manage:${section}:${page}`);
+    const dateSource = item.updated_at || item.published_at;
+    const date = dateSource ? fmtTime(dateSource, en ? 'en' : 'ar') : '';
+    const details = section === 'archive'
+      ? `<a href="${esc(item.url)}">${esc(item.url)}</a>`
+      : `${esc(item.file_name)} · ${esc(item.mime_type)}`;
+    const text = en
+      ? `🛠 <b>${alnabaSectionName(section, en)} · item controls</b>\n\n<b>${esc(item.title)}</b>\n${details}\n${date ? `Added/updated: ${esc(date)}` : ''}\n\nChoose an action. Nothing changes until you confirm the edit or deletion.`
+      : `🛠 <b>${alnabaSectionName(section, en)} · إدارة المنشور</b>\n\n<b>${esc(item.title)}</b>\n${details}\n${date ? `أُضيف/عُدّل: ${esc(date)}` : ''}\n\nاختر الإجراء. لا يُحفظ أي تعديل ولا يُحذف شيء قبل التأكيد.`;
+    return { item, text, keyboard };
+  };
+  const showAlnabaManageItem = async (ctx, section, id, page = 0) => {
+    const view = alnabaManageItemView(ctx, section, id, page);
+    if (!view) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This item no longer exists.' : 'لم يعد هذا المنشور موجوداً.');
+    return ctx.editMessageText(view.text, { parse_mode: 'HTML', reply_markup: view.keyboard, link_preview_options: { is_disabled: true } });
+  };
   bot.command('alnaba', async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.reply(langOf(ctx) === 'en' ? 'This publishing option is not available for this account.' : 'هذه الصلاحية غير متاحة لهذا الحساب.');
     alnabaSessions.delete(Number(ctx.from.id));
     alnabaPendingUploads.delete(Number(ctx.from.id));
     alnabaPendingArchiveEntries.delete(Number(ctx.from.id));
+    clearAlnabaManagementState(Number(ctx.from.id));
     await ctx.reply(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
   });
   // Owner-only: render sample channel images on this server and send them to the owner's private chat
@@ -1832,15 +1917,19 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       alnabaSessions.delete(uid);
       alnabaPendingUploads.delete(uid);
       alnabaPendingArchiveEntries.delete(uid);
+      clearAlnabaManagementState(uid);
       await ctx.answerCallbackQuery();
       return ctx.editMessageText(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
     }
     if (action === 'photos' || action === 'weekly' || action === 'archive') {
-      if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Confirm or cancel the pending preview first.' : 'أكّد المعاينة المعلّقة أو ألغِها أولاً.');
+      if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Confirm or cancel the pending preview first.' : 'أكّد المعاينة المعلّقة أو ألغِها أولاً.');
       const section = action;
       alnabaSessions.set(uid, { section, createdAt: Date.now() });
       const en = langOf(ctx) === 'en';
-      const back = new InlineKeyboard().text(en ? '↩️ Back' : '↩️ رجوع', 'nb:open').text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
+      const back = new InlineKeyboard()
+        .text(en ? '↩️ Back' : '↩️ رجوع', 'nb:open')
+        .text(en ? '🛠 Manage this section' : '🛠 إدارة هذا القسم', `nb:manage:${section}`).row()
+        .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
       await ctx.answerCallbackQuery();
       return ctx.editMessageText(alnabaSectionPrompt(section, en), { parse_mode: 'HTML', reply_markup: back });
     }
@@ -1848,8 +1937,14 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       alnabaSessions.delete(uid);
       alnabaPendingUploads.delete(uid);
       alnabaPendingArchiveEntries.delete(uid);
+      clearAlnabaManagementState(uid);
       await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Cancelled.' : 'تم الإلغاء.');
       return ctx.deleteMessage().catch(() => {});
+    }
+
+    return withAlnabaWriteLock(async () => {
+    if (action === 'publish' && (alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid))) {
+      return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Use the management preview controls to save this change.' : 'استخدم أزرار معاينة الإدارة لحفظ هذا التعديل.');
     }
 
     const archivePending = alnabaPendingArchiveEntries.get(uid);
@@ -1927,6 +2022,168 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       .url(en ? 'Open section' : 'فتح القسم', link)
       .url(en ? 'Al-Nabaa home' : 'صفحة النبأ', alnabaSite());
     await ctx.reply(en ? `✅ Published: <b>${esc(item.title)}</b>` : `✅ تم النشر: <b>${esc(item.title)}</b>`, { parse_mode: 'HTML', reply_markup: keyboard });
+    });
+  });
+  bot.callbackQuery(/^nb:manage:(photos|weekly|archive)(?::(\d{1,4}))?$/, async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
+    const uid = Number(ctx.from.id);
+    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) {
+      return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the current action first.' : 'أكمل الإجراء الحالي أو ألغِه أولاً.');
+    }
+    alnabaSessions.delete(uid);
+    await ctx.answerCallbackQuery();
+    return showAlnabaManageList(ctx, ctx.match[1], Number(ctx.match[2]) || 0);
+  });
+  bot.callbackQuery(/^nb:item:(photos|weekly|archive):([\w-]{36}):(\d{1,4})$/, async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
+    const uid = Number(ctx.from.id);
+    if (alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the current action first.' : 'أكمل الإجراء الحالي أو ألغِه أولاً.');
+    alnabaSessions.delete(uid);
+    await ctx.answerCallbackQuery();
+    return showAlnabaManageItem(ctx, ctx.match[1], ctx.match[2], Number(ctx.match[3]) || 0);
+  });
+  bot.callbackQuery(/^nb:edit-(title|link):(photos|weekly|archive):([\w-]{36}):(\d{1,4})$/, async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
+    const [, field, section, id, pageRaw] = ctx.match;
+    const uid = Number(ctx.from.id);
+    const item = findAlnabaEntry(store, section, id);
+    if (!item) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This item no longer exists.' : 'لم يعد هذا المنشور موجوداً.');
+    if (field === 'link' && section !== 'archive') return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Links can only be edited in the archive.' : 'تعديل الرابط متاح في الأرشيف فقط.');
+    if (alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the current action first.' : 'أكمل الإجراء الحالي أو ألغِه أولاً.');
+    const page = Number(pageRaw) || 0;
+    alnabaEditSessions.set(uid, { section, id, field, page, createdAt: Date.now() });
+    const en = langOf(ctx) === 'en';
+    const prompt = field === 'title'
+      ? (en ? `Send the new title for <b>${esc(item.title)}</b> (up to 180 characters).` : `أرسل العنوان الجديد للمنشور <b>${esc(item.title)}</b> (حتى 180 حرفاً).`)
+      : (en ? `Send the new HTTPS Telegram link for <b>${esc(item.title)}</b>.` : `أرسل رابط Telegram الجديد بصيغة HTTPS للعنصر <b>${esc(item.title)}</b>.`);
+    const keyboard = new InlineKeyboard()
+      .text(en ? '↩️ Back to item' : '↩️ رجوع للمنشور', `nb:item:${section}:${id}:${page}`)
+      .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
+    await ctx.answerCallbackQuery();
+    return ctx.editMessageText(prompt, { parse_mode: 'HTML', reply_markup: keyboard });
+  });
+  bot.callbackQuery(/^nb:replace:(photos|weekly):([\w-]{36}):(\d{1,4})$/, async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
+    const [, section, id, pageRaw] = ctx.match;
+    const uid = Number(ctx.from.id);
+    const item = findAlnabaEntry(store, section, id);
+    if (!item) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This item no longer exists.' : 'لم يعد هذا المنشور موجوداً.');
+    if (alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaPendingUploads.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the current action first.' : 'أكمل الإجراء الحالي أو ألغِه أولاً.');
+    const page = Number(pageRaw) || 0;
+    alnabaSessions.set(uid, { section, mode: 'replace', itemId: id, page, createdAt: Date.now() });
+    const en = langOf(ctx) === 'en';
+    const prompt = section === 'photos'
+      ? (en ? `Send a replacement image for <b>${esc(item.title)}</b>. It will replace the current image only after you confirm.` : `أرسل الصورة البديلة للمنشور <b>${esc(item.title)}</b>. لن تُستبدل الصورة الحالية حتى تؤكد المعاينة.`)
+      : (en ? `Send a replacement PDF for <b>${esc(item.title)}</b>. It will replace the current issue only after you confirm.` : `أرسل ملف PDF البديل للعدد <b>${esc(item.title)}</b>. لن يُستبدل الملف الحالي حتى تؤكد المعاينة.`);
+    const keyboard = new InlineKeyboard()
+      .text(en ? '↩️ Back to item' : '↩️ رجوع للمنشور', `nb:item:${section}:${id}:${page}`)
+      .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
+    await ctx.answerCallbackQuery();
+    return ctx.editMessageText(prompt, { parse_mode: 'HTML', reply_markup: keyboard });
+  });
+  bot.callbackQuery(/^nb:edit-save:([0-9a-f-]{36})$/, async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
+    return withAlnabaWriteLock(async () => {
+    const uid = Number(ctx.from.id);
+    const pending = alnabaPendingManagementEdits.get(uid);
+    const en = langOf(ctx) === 'en';
+    if (!pending || pending.token !== ctx.match[1]) return ctx.answerCallbackQuery(en ? 'This edit prompt is no longer current.' : 'لم تعد هذه المعاينة هي الحالية.');
+    if (Date.now() - pending.createdAt > 30 * 60_000) {
+      alnabaPendingManagementEdits.delete(uid);
+      return ctx.answerCallbackQuery(en ? 'This edit preview expired.' : 'انتهت صلاحية معاينة التعديل.');
+    }
+    if (!store.backup || !config.telegramBackup) return ctx.answerCallbackQuery(en ? 'Saving is paused: durable backup is unavailable.' : 'توقف الحفظ: النسخة الاحتياطية الدائمة غير متاحة حالياً.');
+    const oldState = store.state.alnaba;
+    let updated;
+    try {
+      updated = updateAlnabaEntry(store, uid, pending.section, pending.id, pending.changes, new Date());
+      await store.flushBackup();
+      if (store._backupPending) throw new Error('BACKUP_FAILED');
+    } catch (error) {
+      store.state.alnaba = oldState;
+      store.persist({ backupSoon: false });
+      const message = error.message === 'DUPLICATE_ARCHIVE_LINK'
+        ? (en ? 'This Telegram link is already in the archive.' : 'هذا الرابط موجود مسبقاً في الأرشيف.')
+        : error.message === 'DUPLICATE_MEDIA'
+          ? (en ? 'This exact file is already used by another item.' : 'هذا الملف مستخدم مسبقاً في منشور آخر.')
+          : (en ? 'Could not save a durable backup; the item was not changed. Retry after backup recovers.' : 'تعذّر حفظ النسخة الاحتياطية؛ لم يتغير المنشور. أعد المحاولة بعد استعادة النسخ الاحتياطي.');
+      return ctx.answerCallbackQuery(message);
+    }
+    alnabaPendingManagementEdits.delete(uid);
+    alnabaEditSessions.delete(uid);
+    alnabaSessions.delete(uid);
+    await ctx.answerCallbackQuery(en ? 'Changes saved.' : 'تم حفظ التعديلات.');
+    await ctx.deleteMessage().catch(() => {});
+    const keyboard = new InlineKeyboard()
+      .text(en ? '🛠 Manage item' : '🛠 إدارة المنشور', `nb:item:${pending.section}:${pending.id}:${pending.page}`).row()
+      .text(en ? 'Back to section list' : 'العودة لقائمة القسم', `nb:manage:${pending.section}:${pending.page}`);
+    const summary = pending.changes.media
+      ? (en ? 'Replacement file saved' : 'تم حفظ الملف البديل')
+      : (en ? 'Item updated' : 'تم تعديل المنشور');
+    return ctx.reply(`✅ ${summary}: <b>${esc(updated.title)}</b>`, { parse_mode: 'HTML', reply_markup: keyboard });
+    });
+  });
+  bot.callbackQuery(/^nb:delete:(photos|weekly|archive):([\w-]{36}):(\d{1,4})$/, async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
+    const [, section, id, pageRaw] = ctx.match;
+    const uid = Number(ctx.from.id);
+    const item = findAlnabaEntry(store, section, id);
+    if (!item) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This item no longer exists.' : 'لم يعد هذا المنشور موجوداً.');
+    if (alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the current action first.' : 'أكمل الإجراء الحالي أو ألغِه أولاً.');
+    const page = Number(pageRaw) || 0;
+    const token = randomUUID();
+    alnabaPendingManagementDeletes.set(uid, { section, id, page, title: item.title, token, createdAt: Date.now() });
+    const en = langOf(ctx) === 'en';
+    const text = en
+      ? `⚠️ <b>Confirm deletion</b>\n\nDelete <b>${esc(item.title)}</b> from ${alnabaSectionName(section, en)}? This cannot be undone. Nothing has been deleted yet.`
+      : `⚠️ <b>تأكيد الحذف</b>\n\nهل تريد حذف <b>${esc(item.title)}</b> من ${alnabaSectionName(section, en)}؟ لا يمكن التراجع بعد التأكيد. لم يُحذف شيء بعد.`;
+    const keyboard = new InlineKeyboard()
+      .text(en ? '🗑 Yes, delete' : '🗑 نعم، احذف', `nb:delete-confirm:${token}`)
+      .text(en ? 'Cancel' : 'إلغاء', `nb:delete-cancel:${token}`);
+    await ctx.answerCallbackQuery();
+    return ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard });
+  });
+  bot.callbackQuery(/^nb:delete-cancel:([0-9a-f-]{36})$/, async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
+    const uid = Number(ctx.from.id);
+    const pending = alnabaPendingManagementDeletes.get(uid);
+    if (!pending || pending.token !== ctx.match[1]) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This deletion prompt is no longer current.' : 'لم تعد هذه المعاينة هي الحالية.');
+    alnabaPendingManagementDeletes.delete(uid);
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Deletion cancelled.' : 'تم إلغاء الحذف.');
+    return showAlnabaManageItem(ctx, pending.section, pending.id, pending.page);
+  });
+  bot.callbackQuery(/^nb:delete-confirm:([0-9a-f-]{36})$/, async (ctx) => {
+    if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
+    return withAlnabaWriteLock(async () => {
+    const uid = Number(ctx.from.id);
+    const pending = alnabaPendingManagementDeletes.get(uid);
+    const en = langOf(ctx) === 'en';
+    if (!pending || pending.token !== ctx.match[1]) return ctx.answerCallbackQuery(en ? 'This deletion prompt is no longer current.' : 'لم تعد هذه المعاينة هي الحالية.');
+    if (Date.now() - pending.createdAt > 10 * 60_000) {
+      alnabaPendingManagementDeletes.delete(uid);
+      return ctx.answerCallbackQuery(en ? 'This deletion confirmation expired.' : 'انتهت صلاحية تأكيد الحذف.');
+    }
+    if (!findAlnabaEntry(store, pending.section, pending.id)) {
+      alnabaPendingManagementDeletes.delete(uid);
+      return ctx.answerCallbackQuery(en ? 'This item no longer exists.' : 'لم يعد هذا المنشور موجوداً.');
+    }
+    if (!store.backup || !config.telegramBackup) return ctx.answerCallbackQuery(en ? 'Deletion is paused: durable backup is unavailable.' : 'توقف الحذف: النسخة الاحتياطية الدائمة غير متاحة حالياً.');
+    const oldState = store.state.alnaba;
+    try {
+      deleteAlnabaEntry(store, uid, pending.section, pending.id);
+      await store.flushBackup();
+      if (store._backupPending) throw new Error('BACKUP_FAILED');
+    } catch {
+      store.state.alnaba = oldState;
+      store.persist({ backupSoon: false });
+      return ctx.answerCallbackQuery(en ? 'Could not save a durable backup; nothing was deleted. Retry later.' : 'تعذّر حفظ النسخة الاحتياطية؛ لم يُحذف شيء. أعد المحاولة لاحقاً.');
+    }
+    alnabaPendingManagementDeletes.delete(uid);
+    await ctx.answerCallbackQuery(en ? 'Item deleted.' : 'تم حذف المنشور.');
+    await ctx.deleteMessage().catch(() => {});
+    const keyboard = new InlineKeyboard().text(en ? '🛠 Manage section' : '🛠 إدارة القسم', `nb:manage:${pending.section}:${pending.page}`);
+    return ctx.reply(en ? '✅ The item was deleted from Al-Nabaa.' : '✅ تم حذف المنشور من النبأ.', { reply_markup: keyboard });
+    });
   });
   bot.callbackQuery('home', async (ctx) => { activeMediaSessions.delete(sk(ctx)); await ctx.answerCallbackQuery(); await home(ctx); });
   bot.callbackQuery('cancel', async (ctx) => { activeMediaSessions.delete(sk(ctx)); await ctx.answerCallbackQuery(L(ctx).cancelled); await home(ctx); });
@@ -2911,6 +3168,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const flow = alnabaSessions.get(uid);
     if (!flow) return false;
     const en = langOf(ctx) === 'en';
+    if (alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) {
+      await ctx.reply(en ? 'Finish or cancel the current management action first.' : 'أكمل إجراء الإدارة الحالي أو ألغِه أولاً.');
+      return true;
+    }
     if (flow.section === 'archive') {
       await ctx.reply(en ? 'Send the archive title and Telegram link as a two-line text message.' : 'أرسل عنوان الأرشيف ورابط Telegram في رسالة نصية من سطرين.');
       return true;
@@ -2924,9 +3185,28 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await ctx.reply(en ? 'Confirm or cancel the current upload before sending another.' : 'أكّد الملف الحالي أو ألغِه قبل إرسال ملف آخر.');
       return true;
     }
+    const replacementTarget = flow.mode === 'replace' ? findAlnabaEntry(store, flow.section, flow.itemId) : null;
+    if (flow.mode === 'replace' && !replacementTarget) {
+      alnabaSessions.delete(uid);
+      await ctx.reply(en ? 'This item no longer exists. Open the management list again.' : 'لم يعد هذا المنشور موجوداً. افتح قائمة الإدارة مجدداً.');
+      return true;
+    }
     try {
-      const prepared = prepareAlnabaUpload({ ...candidate, section: flow.section });
+      const prepared = prepareAlnabaUpload({ ...candidate, section: flow.section, ...(replacementTarget ? { title: replacementTarget.title } : {}) });
       await fetchAlnabaTelegramBytes(prepared, { api: ctx.api, token: TOKENS.admin });
+      if (replacementTarget) {
+        const token = randomUUID();
+        alnabaPendingManagementEdits.set(uid, { section: flow.section, id: flow.itemId, page: flow.page, changes: { media: prepared }, token, createdAt: Date.now() });
+        alnabaSessions.delete(uid);
+        const text = en
+          ? `Review the replacement for <b>${esc(replacementTarget.title)}</b>:\n${esc(prepared.file_name)}\n\nThe current file stays in place until you save this change.`
+          : `راجع الملف البديل للمنشور <b>${esc(replacementTarget.title)}</b>:\n${esc(prepared.file_name)}\n\nيبقى الملف الحالي كما هو حتى تؤكد التعديل.`;
+        const keyboard = new InlineKeyboard()
+          .text(en ? '✅ Save replacement' : '✅ حفظ الاستبدال', `nb:edit-save:${token}`)
+          .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
+        await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
+        return true;
+      }
       alnabaPendingUploads.set(uid, { ...prepared, createdAt: Date.now() });
       alnabaSessions.delete(uid);
       const photo = prepared.section === 'photos';
@@ -2947,7 +3227,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.on('message:photo', async (ctx, next) => {
     const uid = Number(ctx.from?.id);
     if (!alnabaOwner(ctx)) return next();
-    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.');
+    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.');
+    if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.');
     if (!alnabaSessions.has(uid)) return next();
     const photo = ctx.message.photo?.at(-1);
     if (!photo) return ctx.reply(langOf(ctx) === 'en' ? 'Send a photo file.' : 'أرسل ملف صورة.');
@@ -2963,7 +3244,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.on('message:document', async (ctx, next) => {
     const uid = Number(ctx.from?.id);
     if (!alnabaOwner(ctx)) return next();
-    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.');
+    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.');
+    if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.');
     if (!alnabaSessions.has(uid)) return next();
     const document = ctx.message.document;
     if (!document) return ctx.reply(langOf(ctx) === 'en' ? 'Send an image or PDF file.' : 'أرسل ملف صورة أو PDF.');
@@ -2982,7 +3264,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   });
   bot.on('message:video', async (ctx, next) => {
     const uid = Number(ctx.from?.id);
-    if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid))) {
+    if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid))) {
       return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview first.' : 'أكّد المعاينة الحالية أو ألغِها أولاً.');
     }
     if (alnabaOwner(ctx) && alnabaSessions.has(uid)) {
@@ -3025,7 +3307,51 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const text = clean(ctx.message.text, 2000);
     if (text.startsWith('/')) return;
     const uid = Number(ctx.from?.id);
-    if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid))) return ctx.reply(langOf(ctx) === 'en' ? 'Use the Publish or Cancel buttons on the pending preview.' : 'استخدم زري «نشر الآن» أو «إلغاء» في المعاينة المعلّقة.');
+    if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid))) return ctx.reply(langOf(ctx) === 'en' ? 'Use the Save/Confirm or Cancel buttons on the pending preview.' : 'استخدم زر «حفظ/تأكيد» أو «إلغاء» في المعاينة المعلّقة.');
+    const managementFlow = alnabaEditSessions.get(uid);
+    if (alnabaOwner(ctx) && managementFlow) {
+      const en = langOf(ctx) === 'en';
+      if (Date.now() - managementFlow.createdAt > 30 * 60_000) {
+        alnabaEditSessions.delete(uid);
+        return ctx.reply(en ? 'The edit session expired. Open the management list again.' : 'انتهت جلسة التعديل. افتح قائمة الإدارة مجدداً.');
+      }
+      const item = findAlnabaEntry(store, managementFlow.section, managementFlow.id);
+      if (!item) {
+        alnabaEditSessions.delete(uid);
+        return ctx.reply(en ? 'This item no longer exists. Open the management list again.' : 'لم يعد هذا المنشور موجوداً. افتح قائمة الإدارة مجدداً.');
+      }
+      let changes;
+      try {
+        if (managementFlow.field === 'title') {
+          const title = text.replace(/\s+/g, ' ').trim();
+          if (!title) throw new Error('MISSING_TITLE');
+          if (title.length > 180) throw new Error('TITLE_TOO_LONG');
+          changes = { title };
+        } else {
+          changes = { url: prepareAlnabaArchiveEntry({ title: item.title, url: text }).url };
+        }
+      } catch (error) {
+        const message = error.message === 'TITLE_TOO_LONG'
+          ? (en ? 'Keep the title within 180 characters.' : 'اجعل العنوان أقل من 180 حرفاً.')
+          : error.message === 'MISSING_TITLE'
+            ? (en ? 'The title cannot be empty.' : 'لا يمكن أن يكون العنوان فارغاً.')
+            : (en ? 'Use a valid HTTPS Telegram channel/group or invite link.' : 'أرسل رابط Telegram صالحاً وآمناً يبدأ بـ HTTPS لقناة أو مجموعة أو دعوة.');
+        return ctx.reply(message);
+      }
+      const token = randomUUID();
+      alnabaPendingManagementEdits.set(uid, { section: managementFlow.section, id: managementFlow.id, page: managementFlow.page, changes, token, createdAt: Date.now() });
+      alnabaEditSessions.delete(uid);
+      const changeSummary = changes.url
+        ? `<a href="${esc(changes.url)}">${esc(changes.url)}</a>`
+        : `<b>${esc(item.title)}</b> → <b>${esc(changes.title)}</b>`;
+      const preview = en
+        ? `Review this change for <b>${esc(item.title)}</b>:\n${changeSummary}\n\nNothing changes until you save it.`
+        : `راجع التعديل على <b>${esc(item.title)}</b>:\n${changeSummary}\n\nلن يتغير المنشور حتى تضغط «حفظ التعديل».`;
+      const keyboard = new InlineKeyboard()
+        .text(en ? '✅ Save change' : '✅ حفظ التعديل', `nb:edit-save:${token}`)
+        .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
+      return ctx.reply(preview, { parse_mode: 'HTML', reply_markup: keyboard, link_preview_options: { is_disabled: true } });
+    }
     const alnabaFlow = alnabaSessions.get(uid);
     if (alnabaOwner(ctx) && alnabaFlow?.section === 'archive') {
       const en = langOf(ctx) === 'en';

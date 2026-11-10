@@ -17,11 +17,15 @@ process.env.ALERT_IMAGES = 'false';
 const originalFetch = globalThis.fetch;
 const photoBytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
 const photoBytes2 = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x44, 0x00, 0x07, 0x08, 0x09, 0x0a, 0x0b]);
+const photoBytes3 = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x45, 0x00, 0x0c, 0x0d, 0x0e, 0x0f, 0x10]);
 const pdfBytes = Buffer.from('%PDF-1.7\nfixture only\n%%EOF\n');
+const pdfBytes2 = Buffer.from('%PDF-1.7\nreplacement fixture only\n%%EOF\n');
 const fixtureFiles = new Map([
   ['photos/fixture-photo.jpg', photoBytes],
   ['photos/fixture-photo-2.jpg', photoBytes2],
+  ['photos/fixture-photo-3.jpg', photoBytes3],
   ['documents/fixture-weekly.pdf', pdfBytes],
+  ['documents/fixture-weekly-2.pdf', pdfBytes2],
 ]);
 globalThis.fetch = async (url) => {
   const match = String(url).match(/\/file\/bot123456:LOCAL_TEST\/(.+)$/);
@@ -47,7 +51,9 @@ bot.api.config.use(async (_previous, method, payload) => {
     const filePaths = {
       fixture_photo_id: 'photos/fixture-photo.jpg',
       fixture_photo_2_id: 'photos/fixture-photo-2.jpg',
+      fixture_photo_3_id: 'photos/fixture-photo-3.jpg',
       fixture_pdf_id: 'documents/fixture-weekly.pdf',
+      fixture_pdf_2_id: 'documents/fixture-weekly-2.pdf',
     };
     return { ok: true, result: { file_path: filePaths[payload.file_id] } };
   }
@@ -82,7 +88,11 @@ const tap = (id, data) => bot.handleUpdate({
 });
 const sendPhoto = (id, n = 1) => {
   const second = n === 2;
-  const bytes = second ? photoBytes2 : photoBytes;
+  const third = n === 3;
+  const bytes = second ? photoBytes2 : third ? photoBytes3 : photoBytes;
+  const title = second ? 'خبر مصور ثانٍ للاختبار' : third ? 'صورة بديلة للاختبار' : 'صورة تجريبية للاختبار';
+  const fileId = second ? 'fixture_photo_2_id' : third ? 'fixture_photo_3_id' : 'fixture_photo_id';
+  const uniqueId = second ? 'fixture_photo_2_unique' : third ? 'fixture_photo_3_unique' : 'fixture_photo_unique';
   return bot.handleUpdate({
     update_id: updateId++,
     message: {
@@ -90,18 +100,37 @@ const sendPhoto = (id, n = 1) => {
       date: 0,
       chat: { id, type: 'private' },
       from: user(id),
-      caption: second ? 'خبر مصور ثانٍ للاختبار' : 'صورة تجريبية للاختبار',
+      caption: title,
       photo: [{
-        file_id: second ? 'fixture_photo_2_id' : 'fixture_photo_id',
-        file_unique_id: second ? 'fixture_photo_2_unique' : 'fixture_photo_unique',
+        file_id: fileId,
+        file_unique_id: uniqueId,
         file_size: bytes.length,
       }],
+    },
+  });
+};
+const sendPdf = (id, n = 1) => {
+  const replacement = n === 2;
+  return bot.handleUpdate({
+    update_id: updateId++,
+    message: {
+      message_id: ++messageId, date: 0,
+      chat: { id, type: 'private' }, from: user(id),
+      caption: replacement ? 'ملف بديل للاختبار' : 'العدد الأسبوعي التجريبي',
+      document: {
+        file_id: replacement ? 'fixture_pdf_2_id' : 'fixture_pdf_id',
+        file_unique_id: replacement ? 'fixture_pdf_2_unique' : 'fixture_pdf_unique',
+        file_name: replacement ? 'fixture-weekly-2.pdf' : 'fixture-weekly.pdf',
+        mime_type: 'application/pdf',
+        file_size: replacement ? pdfBytes2.length : pdfBytes.length,
+      },
     },
   });
 };
 const lastUiFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'sendMessage' && payload.chat_id === id);
 const lastEditFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'editMessageText' && payload.chat_id === id);
 const buttonsOf = (entry) => entry?.payload?.reply_markup?.inline_keyboard?.flat() || [];
+const callbackData = (entry, prefix) => buttonsOf(entry).find((button) => button.callback_data.startsWith(prefix))?.callback_data;
 
 after(() => {
   globalThis.fetch = originalFetch;
@@ -129,9 +158,13 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.equal(buttonsOf(lastUiFor(deniedId)).some((button) => button.callback_data === 'nb:publish'), false);
   await tap(deniedId, 'nb:archive');
   assert.equal(calls.some(({ method, payload }) => method === 'editMessageText' && payload.chat_id === deniedId && payload.text.includes('🔗 <b>الأرشيف</b>')), false);
+  await tap(deniedId, 'nb:manage:archive');
+  assert.equal(calls.some(({ method, payload }) => method === 'editMessageText' && payload.chat_id === deniedId && payload.text.includes('إدارة الأرشيف')), false,
+    'a non-owner cannot open the private archive management controls');
 
   await tap(authorizedId, 'nb:photos');
   assert.ok(calls.some(({ method, payload }) => method === 'editMessageText' && payload.text.includes('أخبار مصوّرة')));
+  assert.ok(buttonsOf(lastEditFor(authorizedId)).some((button) => button.callback_data === 'nb:manage:photos'));
   await sendPhoto(authorizedId);
   const preview = lastUiFor(authorizedId);
   assert.match(preview.payload.text, /راجع الملف قبل نشره/);
@@ -168,6 +201,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
 
   await sendText(authorizedId, '/alnaba');
   await tap(authorizedId, 'nb:weekly');
+  assert.ok(buttonsOf(lastEditFor(authorizedId)).some((button) => button.callback_data === 'nb:manage:weekly'));
   await bot.handleUpdate({
     update_id: updateId++,
     message: {
@@ -193,6 +227,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   await sendText(authorizedId, '/alnaba');
   await tap(authorizedId, 'nb:archive');
   assert.match(lastEditFor(authorizedId)?.payload?.text || '', /الأرشيف/);
+  assert.ok(buttonsOf(lastEditFor(authorizedId)).some((button) => button.callback_data === 'nb:manage:archive'));
   await sendText(authorizedId, 'قناة اختبارية\nhttps://example.invalid/not-telegram');
   assert.match(lastUiFor(authorizedId)?.payload?.text || '', /رابط Telegram صالح/);
   assert.equal(store.state.alnaba.archive.length, 0, 'invalid links never enter the archive');
@@ -240,6 +275,133 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   await tap(authorizedId, 'nb:publish');
   assert.equal(store.state.alnaba.archive.length, 3, 'the owner can retry the still-pending preview after backup recovers');
   assert.ok(JSON.parse(store.backup.json).alnaba.archive.some((entry) => entry.title === 'رابط إعادة المحاولة'));
+
+  const openManagement = async (section) => {
+    await sendText(authorizedId, '/alnaba');
+    await tap(authorizedId, `nb:${section}`);
+    assert.ok(buttonsOf(lastEditFor(authorizedId)).some((button) => button.callback_data === `nb:manage:${section}`));
+    await tap(authorizedId, `nb:manage:${section}`);
+    const list = lastEditFor(authorizedId);
+    assert.match(list?.payload?.text || '', /إدارة/);
+    return list;
+  };
+  const itemButton = (section, id, list) => buttonsOf(list).find((button) => button.callback_data.startsWith(`nb:item:${section}:${id}:`));
+
+  // Edit a photo-news title, then explicitly approve a replacement image.
+  const managedPhoto = store.state.alnaba.photos.find((item) => item.title === 'صورة تجريبية للاختبار');
+  let managementList = await openManagement('photos');
+  const photoButton = itemButton('photos', managedPhoto.id, managementList);
+  assert.ok(photoButton, 'the private photo-news list exposes the existing mock entry');
+  await tap(authorizedId, photoButton.callback_data);
+  const photoControls = lastEditFor(authorizedId);
+  const editPhotoTitle = buttonsOf(photoControls).find((button) => button.callback_data.startsWith('nb:edit-title:photos:'));
+  await tap(authorizedId, editPhotoTitle.callback_data);
+  await sendText(authorizedId, 'عنوان صورة معدّل للاختبار');
+  assert.equal(store.state.alnaba.photos.find((item) => item.id === managedPhoto.id).title, 'صورة تجريبية للاختبار', 'title edits stay private until save');
+  const staleEditToken = callbackData(lastUiFor(authorizedId), 'nb:edit-save:');
+  assert.ok(staleEditToken);
+  await sendText(authorizedId, '/alnaba'); // invalidate the old preview without changing the entry
+  assert.equal(store.state.alnaba.photos.find((item) => item.id === managedPhoto.id).title, 'صورة تجريبية للاختبار');
+  managementList = await openManagement('photos');
+  await tap(authorizedId, itemButton('photos', managedPhoto.id, managementList).callback_data);
+  await tap(authorizedId, buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:edit-title:photos:')).callback_data);
+  await sendText(authorizedId, 'عنوان صورة معدّل للاختبار');
+  const currentEditToken = callbackData(lastUiFor(authorizedId), 'nb:edit-save:');
+  assert.ok(currentEditToken && currentEditToken !== staleEditToken);
+  await tap(authorizedId, staleEditToken);
+  assert.equal(store.state.alnaba.photos.find((item) => item.id === managedPhoto.id).title, 'صورة تجريبية للاختبار', 'a stale button cannot save or clear a newer edit');
+  await Promise.all([tap(authorizedId, currentEditToken), tap(authorizedId, currentEditToken)]);
+  assert.equal(store.state.alnaba.photos.find((item) => item.id === managedPhoto.id).title, 'عنوان صورة معدّل للاختبار');
+  assert.ok(JSON.parse(store.backup.json).alnaba.photos.some((item) => item.id === managedPhoto.id && item.title === 'عنوان صورة معدّل للاختبار'));
+
+  managementList = await openManagement('photos');
+  await tap(authorizedId, itemButton('photos', managedPhoto.id, managementList).callback_data);
+  const replacePhoto = buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:replace:photos:'));
+  await tap(authorizedId, replacePhoto.callback_data);
+  await sendPhoto(authorizedId, 3);
+  assert.equal(store.state.alnaba.photos.find((item) => item.id === managedPhoto.id).file_id, 'fixture_photo_id', 'replacement image stays private until save');
+  await tap(authorizedId, callbackData(lastUiFor(authorizedId), 'nb:edit-save:'));
+  assert.equal(store.state.alnaba.photos.find((item) => item.id === managedPhoto.id).file_id, 'fixture_photo_3_id');
+  assert.equal(store.state.alnaba.photos.find((item) => item.id === managedPhoto.id).title, 'عنوان صورة معدّل للاختبار');
+
+  // A delete button only opens a confirmation screen; cancellation keeps the entry.
+  managementList = await openManagement('photos');
+  await tap(authorizedId, itemButton('photos', managedPhoto.id, managementList).callback_data);
+  let deleteButton = buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:delete:photos:'));
+  await tap(authorizedId, deleteButton.callback_data);
+  assert.equal(store.state.alnaba.photos.length, 2, 'opening a delete prompt does not delete anything');
+  const staleDeleteToken = callbackData(lastEditFor(authorizedId), 'nb:delete-confirm:');
+  await tap(authorizedId, callbackData(lastEditFor(authorizedId), 'nb:delete-cancel:'));
+  assert.equal(store.state.alnaba.photos.length, 2, 'cancelling deletion preserves the item');
+  await tap(authorizedId, buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:delete:photos:')).callback_data);
+  const currentDeleteToken = callbackData(lastEditFor(authorizedId), 'nb:delete-confirm:');
+  assert.notEqual(currentDeleteToken, staleDeleteToken);
+  await tap(authorizedId, staleDeleteToken);
+  assert.equal(store.state.alnaba.photos.length, 2, 'a stale delete button cannot act on the current prompt');
+  await tap(authorizedId, currentDeleteToken);
+  assert.equal(store.state.alnaba.photos.length, 1, 'the photo is removed only after the second confirmation');
+  assert.equal(JSON.parse(store.backup.json).alnaba.photos.some((item) => item.id === managedPhoto.id), false);
+
+  // Weekly issues support the same title/file management and durable deletion flow.
+  const managedWeekly = store.state.alnaba.weekly[0];
+  managementList = await openManagement('weekly');
+  await tap(authorizedId, itemButton('weekly', managedWeekly.id, managementList).callback_data);
+  await tap(authorizedId, buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:edit-title:weekly:')).callback_data);
+  await sendText(authorizedId, 'عدد أسبوعي معدل للاختبار');
+  await tap(authorizedId, callbackData(lastUiFor(authorizedId), 'nb:edit-save:'));
+  assert.equal(store.state.alnaba.weekly[0].title, 'عدد أسبوعي معدل للاختبار');
+
+  managementList = await openManagement('weekly');
+  await tap(authorizedId, itemButton('weekly', managedWeekly.id, managementList).callback_data);
+  await tap(authorizedId, buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:replace:weekly:')).callback_data);
+  await sendPdf(authorizedId, 2);
+  assert.equal(store.state.alnaba.weekly[0].file_id, 'fixture_pdf_id', 'replacement PDF stays private until save');
+  await tap(authorizedId, callbackData(lastUiFor(authorizedId), 'nb:edit-save:'));
+  assert.equal(store.state.alnaba.weekly[0].file_id, 'fixture_pdf_2_id');
+  assert.equal(store.state.alnaba.weekly[0].title, 'عدد أسبوعي معدل للاختبار');
+
+  managementList = await openManagement('weekly');
+  await tap(authorizedId, itemButton('weekly', managedWeekly.id, managementList).callback_data);
+  deleteButton = buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:delete:weekly:'));
+  await tap(authorizedId, deleteButton.callback_data);
+  const weeklyBackupBeforeFailure = store.backup.json;
+  const weeklyDeleteToken = callbackData(lastEditFor(authorizedId), 'nb:delete-confirm:');
+  failBackup = true;
+  await Promise.all([tap(authorizedId, weeklyDeleteToken), tap(authorizedId, weeklyDeleteToken)]);
+  assert.equal(store.state.alnaba.weekly.length, 1, 'a failed durable backup rolls the deletion back');
+  assert.equal(store.backup.json, weeklyBackupBeforeFailure);
+  failBackup = false;
+  await tap(authorizedId, weeklyDeleteToken);
+  assert.equal(store.state.alnaba.weekly.length, 0, 'the deletion can be retried when backup recovers');
+
+  // Archive titles and links are editable; invalid links stay in the prompt and never save.
+  const managedArchive = store.state.alnaba.archive.find((item) => item.title === 'قناة اختبارية');
+  managementList = await openManagement('archive');
+  await tap(authorizedId, itemButton('archive', managedArchive.id, managementList).callback_data);
+  await tap(authorizedId, buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:edit-link:archive:')).callback_data);
+  await sendText(authorizedId, 'https://example.invalid/not-telegram');
+  assert.match(lastUiFor(authorizedId)?.payload?.text || '', /رابط Telegram صالح/);
+  assert.equal(store.state.alnaba.archive.find((item) => item.id === managedArchive.id).url, 'https://t.me/ras_mock_archive_channel_01');
+  await sendText(authorizedId, 'https://t.me/ras_mock_edited_11');
+  assert.equal(store.state.alnaba.archive.find((item) => item.id === managedArchive.id).url, 'https://t.me/ras_mock_archive_channel_01', 'a valid link remains private until save');
+  await tap(authorizedId, callbackData(lastUiFor(authorizedId), 'nb:edit-save:'));
+  assert.equal(store.state.alnaba.archive.find((item) => item.id === managedArchive.id).url, 'https://t.me/ras_mock_edited_11');
+
+  managementList = await openManagement('archive');
+  await tap(authorizedId, itemButton('archive', managedArchive.id, managementList).callback_data);
+  await tap(authorizedId, buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:edit-title:archive:')).callback_data);
+  await sendText(authorizedId, 'قناة معدلة للاختبار');
+  await tap(authorizedId, callbackData(lastUiFor(authorizedId), 'nb:edit-save:'));
+  assert.equal(store.state.alnaba.archive.find((item) => item.id === managedArchive.id).title, 'قناة معدلة للاختبار');
+
+  managementList = await openManagement('archive');
+  await tap(authorizedId, itemButton('archive', managedArchive.id, managementList).callback_data);
+  await tap(authorizedId, buttonsOf(lastEditFor(authorizedId)).find((button) => button.callback_data.startsWith('nb:delete:archive:')).callback_data);
+  assert.equal(store.state.alnaba.archive.length, 3, 'archive removal also requires explicit confirmation');
+  await tap(authorizedId, callbackData(lastEditFor(authorizedId), 'nb:delete-confirm:'));
+  assert.equal(store.state.alnaba.archive.length, 2);
+  assert.equal(JSON.parse(store.backup.json).alnaba.archive.some((item) => item.id === managedArchive.id), false);
+
   assert.equal(calls.some(({ method, payload }) => ['sendPhoto', 'sendDocument'].includes(method) && payload.chat_id === '@mock_news_channel'), false,
     'Al-Nabaa uploads do not auto-post files to the Telegram channel');
 });

@@ -68,6 +68,8 @@ function sanitizeItem(raw, section) {
   const maxBytes = section === 'photos' ? ALNABA_MAX_PHOTO_BYTES : ALNABA_MAX_PDF_BYTES;
   const publishedAt = typeof raw.published_at === 'string' && Number.isFinite(Date.parse(raw.published_at))
     ? new Date(raw.published_at).toISOString() : null;
+  const updatedAt = typeof raw.updated_at === 'string' && Number.isFinite(Date.parse(raw.updated_at))
+    ? new Date(raw.updated_at).toISOString() : null;
   if (!id || !title || !fileId || !mimeType || !publishedAt || (fileSize !== null && fileSize > maxBytes)) return null;
   if (section === 'weekly' && !String(raw.file_name || '').toLowerCase().endsWith('.pdf')) return null;
   return {
@@ -80,6 +82,7 @@ function sanitizeItem(raw, section) {
     ...(fileSize !== null ? { file_size: fileSize } : {}),
     file_name: cleanFileName(raw.file_name, section === 'weekly' ? 'alnaba-weekly.pdf' : 'alnaba-photo.jpg'),
     published_at: publishedAt,
+    ...(updatedAt ? { updated_at: updatedAt } : {}),
   };
 }
 
@@ -89,10 +92,12 @@ function sanitizeArchiveEntry(raw) {
   const title = cleanTitle(raw.title);
   const publishedAt = typeof raw.published_at === 'string' && Number.isFinite(Date.parse(raw.published_at))
     ? new Date(raw.published_at).toISOString() : null;
+  const updatedAt = typeof raw.updated_at === 'string' && Number.isFinite(Date.parse(raw.updated_at))
+    ? new Date(raw.updated_at).toISOString() : null;
   let url = null;
   try { url = normalizeTelegramLink(raw.url); } catch { /* discard unsafe legacy entries */ }
   if (!id || !title || !url || !publishedAt) return null;
-  return { id, section: 'archive', title, url, published_at: publishedAt };
+  return { id, section: 'archive', title, url, published_at: publishedAt, ...(updatedAt ? { updated_at: updatedAt } : {}) };
 }
 
 export function sanitizeAlnabaState(value) {
@@ -175,6 +180,66 @@ export function publishAlnabaArchiveEntry(store, actorId, input, now = new Date(
   store.state.alnaba = state;
   store.persist();
   return item;
+}
+
+export function findAlnabaEntry(store, section, id) {
+  if (!['photos', 'weekly', 'archive'].includes(section) || typeof id !== 'string' || !UUID_RE.test(id)) return null;
+  return sanitizeAlnabaState(store?.state?.alnaba)[section].find((item) => item.id === id) || null;
+}
+
+export function updateAlnabaEntry(store, actorId, section, id, changes, now = new Date()) {
+  if (!isAlnabaOwner(actorId)) throw new Error('FORBIDDEN');
+  if (!['photos', 'weekly', 'archive'].includes(section)) throw new Error('INVALID_SECTION');
+  if (typeof id !== 'string' || !UUID_RE.test(id)) throw new Error('NOT_FOUND');
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes) || !Object.keys(changes).length) throw new Error('EMPTY_UPDATE');
+  if ((section === 'archive' && Object.hasOwn(changes, 'media')) || (section !== 'archive' && Object.hasOwn(changes, 'url'))) throw new Error('INVALID_UPDATE');
+
+  const state = sanitizeAlnabaState(store?.state?.alnaba);
+  const items = state[section];
+  const index = items.findIndex((item) => item.id === id);
+  if (index < 0) throw new Error('NOT_FOUND');
+  const current = items[index];
+  let updated = { ...current };
+
+  if (Object.hasOwn(changes, 'title')) {
+    const rawTitle = String(changes.title ?? '').trim();
+    const title = cleanTitle(rawTitle, 181);
+    if (!title) throw new Error('MISSING_TITLE');
+    if (title.length > 180) throw new Error('TITLE_TOO_LONG');
+    updated.title = title;
+  }
+
+  if (section === 'archive' && Object.hasOwn(changes, 'url')) {
+    const url = normalizeTelegramLink(changes.url);
+    if (items.some((item, itemIndex) => itemIndex !== index && item.url === url)) throw new Error('DUPLICATE_ARCHIVE_LINK');
+    updated.url = url;
+  }
+
+  if (section !== 'archive' && Object.hasOwn(changes, 'media')) {
+    const media = prepareAlnabaUpload({ ...changes.media, section, title: updated.title });
+    if (media.file_unique_id && items.some((item, itemIndex) => itemIndex !== index && item.file_unique_id === media.file_unique_id)) throw new Error('DUPLICATE_MEDIA');
+    updated = { ...updated, ...media };
+  }
+
+  updated.updated_at = new Date(now).toISOString();
+  state[section] = items.map((item, itemIndex) => itemIndex === index ? updated : item);
+  store.state.alnaba = state;
+  store.persist();
+  return updated;
+}
+
+export function deleteAlnabaEntry(store, actorId, section, id) {
+  if (!isAlnabaOwner(actorId)) throw new Error('FORBIDDEN');
+  if (!['photos', 'weekly', 'archive'].includes(section)) throw new Error('INVALID_SECTION');
+  if (typeof id !== 'string' || !UUID_RE.test(id)) throw new Error('NOT_FOUND');
+  const state = sanitizeAlnabaState(store?.state?.alnaba);
+  const items = state[section];
+  const index = items.findIndex((item) => item.id === id);
+  if (index < 0) throw new Error('NOT_FOUND');
+  const [deleted] = items.splice(index, 1);
+  store.state.alnaba = state;
+  store.persist();
+  return deleted;
 }
 
 export function publicAlnabaItem(item) {
