@@ -40,7 +40,8 @@ const DURATIONS = [15, 30, 60, 90, 120, 180, 360, 720];
 const REPORT_COOLDOWN_MS = 2 * 60_000;
 
 export const esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const clean = (s, max = 900) => String(s || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim().slice(0, max);
+const cleanInputText = (s) => String(s || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim();
+const clean = (s, max = 900) => cleanInputText(s).slice(0, max);
 
 const VEHICLE_COUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const VEHICLE_COUNT_MAX = 999;
@@ -3316,7 +3317,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.on('message:video', (ctx) => receiveAlertMedia(ctx, 'video'));
 
   bot.on('message:text', async (ctx) => {
-    const text = clean(ctx.message.text, 2000);
+    const text = cleanInputText(ctx.message.text);
     if (text.startsWith('/')) return;
     const uid = Number(ctx.from?.id);
     if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid))) return ctx.reply(langOf(ctx) === 'en' ? 'Use the Save/Confirm or Cancel buttons on the pending preview.' : 'استخدم زر «حفظ/تأكيد» أو «إلغاء» في المعاينة المعلّقة.', { reply_markup: alnabaHomeKeyboard(ctx) });
@@ -3401,7 +3402,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const l = L(ctx);
     if (d.mode === 'active_edit' && ['edit_title', 'edit_details'].includes(d.step)) {
       if (d.step === 'edit_title') { if (!text || text.length > 120) return ctx.reply(langOf(ctx) === 'en' ? 'Please send a headline up to 120 characters.' : 'أرسل عنواناً لا يتجاوز 120 حرفاً.'); d.editTitle = text; }
-      else { if (text.length > 900) return ctx.reply(l.tooLong); d.details = text === '-' ? '' : text; }
+      else { d.details = text === '-' ? '' : text; }
       d.step = 'edit_menu'; return showActiveEditForm(ctx, d);
     }
     if (d.step === 'vehicle_count_input') {
@@ -3414,13 +3415,11 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       return askLocation(ctx, d);
     }
     if (d.step === 'text') {
-      if (text.length > 900) return ctx.reply(l.tooLong);
       d.text = text;
       if (d.location) return showPreview(ctx, d);
       return askLocation(ctx, d);
     }
     if (d.step === 'details') {
-      if (text.length > 900) return ctx.reply(l.tooLong);
       d.details = text;
       return showPreview(ctx, d);
     }

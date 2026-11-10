@@ -1331,6 +1331,42 @@ test('public reporters can attach a photo and video to one pending report before
   assert.equal(store.reportDone(rid), false, 'the report is still awaiting an editor decision');
 });
 
+test('news text and details accept short and long input without a custom character limit', async () => {
+  const longDetails = 'تفصيل '.repeat(399) + 'النهاية';
+  const testGov = governorates.find((governorate) => governorate.ar === 'إدلب');
+  assert.ok(testGov, 'a governorate is available for the details flow');
+  const lastPrivateScreen = (start) => [...calls.slice(start)].reverse().find(({ method, chatId }) =>
+    ['sendMessage', 'editMessageText'].includes(method) && chatId === ownerId);
+
+  let start = calls.length;
+  await tap('t:breaking');
+  await sendText(longDetails);
+  await tap('noloc');
+  let screen = lastPrivateScreen(start);
+  assert.ok(screen?.payload?.text.includes(longDetails), 'breaking-news text beyond 900 and 2,000 characters is preserved');
+  assert.equal(calls.slice(start).some(({ chatId }) => chatId === '@mock_news_channel'), false, 'the synthetic draft is not published');
+  await tap('cancel');
+
+  start = calls.length;
+  await tap('t:attack');
+  await tap(`g:${testGov.code}`);
+  await tap(`wg:${testGov.code}`);
+  await sendText('س');
+  screen = lastPrivateScreen(start);
+  assert.ok(screen?.payload?.text.includes('📝 <b>التفاصيل:</b> س'), 'a one-character detail is accepted without a minimum');
+  await tap('cancel');
+
+  start = calls.length;
+  await tap('t:attack');
+  await tap(`g:${testGov.code}`);
+  await tap(`wg:${testGov.code}`);
+  await sendText(longDetails);
+  screen = lastPrivateScreen(start);
+  assert.ok(screen?.payload?.text.includes(longDetails), 'long details are preserved in the preview');
+  assert.equal(calls.slice(start).some(({ chatId }) => chatId === '@mock_news_channel'), false, 'the synthetic detail draft is not published');
+  await tap('cancel');
+});
+
 test('admins can add a video to the map without changing the existing channel post', async (t) => {
   fs.mkdirSync(dataDir, { recursive: true });
   const source = buildAlertInput({ type: 'uav', location: { scope: 'country' }, extra: [], ttlMin: 60 }, { id: ownerId, name: 'Local owner' });
