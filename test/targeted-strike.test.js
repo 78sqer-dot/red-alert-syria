@@ -38,7 +38,7 @@ test('targeted strike has its own reticle on the map and the channel image', () 
 test('browser cache keys refresh every client module that consumes the alert type registry', () => {
   assert.match(app, /shared\/types\.js\?v=41/);
   assert.match(app, /settings\.js\?v=14/);
-  assert.match(app, /map\.js\?v=81/);
+  assert.match(app, /map\.js\?v=82/);
   assert.match(map, /shared\/types\.js\?v=41/);
   assert.match(map, /target-svgs\.js\?v=20/);
   assert.match(map, /type-icons\.js\?v=7/);

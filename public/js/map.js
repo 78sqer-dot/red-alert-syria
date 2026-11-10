@@ -135,7 +135,7 @@ async function buildStyle({ dark, layer, lang }) {
 }
 
 function firstSymbolId(map) {
-  for (const l of map.getStyle().layers) if (l.type === 'symbol') return l.id;
+  for (const l of map.getStyle()?.layers || []) if (l.type === 'symbol') return l.id;
   return undefined;
 }
 function circlePolygon(lon, lat, km, steps = 96) {
@@ -175,12 +175,15 @@ export class AlertMap {
     this.onSelect = opts.onSelect || (() => {});
     this.popupHtml = opts.popupHtml || (() => '');
     this.ready = false;
+    this._styleEpoch = 0;
   }
 
   async init() {
     const M = ml();
     try {
-      if (M.getRTLTextPluginStatus && M.getRTLTextPluginStatus() === 'unavailable') M.setRTLTextPlugin('/vendor/mapbox-gl-rtl-text.js', true);
+      if (M.getRTLTextPluginStatus && M.getRTLTextPluginStatus() === 'unavailable') {
+        M.setRTLTextPlugin('/vendor/mapbox-gl-rtl-text.js', true)?.catch?.((e) => console.warn('[map] RTL plugin unavailable', e?.message || e));
+      }
     } catch { /* already set */ }
     // Start with a local style so a slow/broken third-party style endpoint (common in
     // Telegram's in-app Chrome) cannot block the map controls and incident overlays.
@@ -204,9 +207,9 @@ export class AlertMap {
     this.map.addControl(new M.AttributionControl({ compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · GeoNames · geoBoundaries' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
     this.map.addControl(new M.ScaleControl({ maxWidth: 110, unit: 'metric' }), this.opts.lang === 'ar' ? 'bottom-right' : 'bottom-left');
     window.__rasMap = this.map;
-    this.map.on('style.load', () => this.addOverlays());
+    this.map.on('style.load', () => this.addOverlays().catch((e) => console.warn('[map] overlays unavailable', e?.message || e)));
     stylePromise.then((style) => {
-      if (this.map) this.map.setStyle(style, { diff: false });
+      if (this.map) { this._styleEpoch++; this.map.setStyle(style, { diff: false }); }
     }).catch((e) => console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e));
     let lastOrbitUpdate = 0;
     const zoomTier = (forceOrbit = false) => {
@@ -296,6 +299,7 @@ export class AlertMap {
     const styleChanged = ['dark', 'layer', 'lang'].some((k) => k in patch && patch[k] !== prev[k]);
     if (styleChanged) {
       const style = await buildStyle(this.opts);
+      this._styleEpoch++;
       this.map.setStyle(style, { diff: false });
     } else {
       this.applyToggles();
@@ -304,7 +308,12 @@ export class AlertMap {
 
   async addOverlays() {
     const map = this.map;
+    const styleEpoch = this._styleEpoch;
+    if (!map) return;
     const { border, govs } = await loadData();
+    // The fallback style may be replaced while geographic data is still loading.
+    // Only the matching style.load may add overlays; the next event retries safely.
+    if (map !== this.map || styleEpoch !== this._styleEpoch || !map.getStyle()?.layers) return;
     const before = firstSymbolId(map);
     const dark = this.opts.dark || this.opts.layer === 'satellite';
     const add = (layer, beforeId = before) => {

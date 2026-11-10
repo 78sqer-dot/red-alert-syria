@@ -63,9 +63,9 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=81'/);
+  assert.match(app, /from '\.\/map\.js\?v=82'/);
   assert.match(html, /app\.css\?v=74/);
-  assert.match(html, /app\.js\?v=89/);
+  assert.match(html, /app\.js\?v=90/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
