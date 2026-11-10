@@ -15,7 +15,9 @@ export function sanitizeAlertMedia(media) {
   if (!fileId || fileId.length > 512 || !['admin', 'report'].includes(media.bot_role)) return null;
   const fileSize = Number.isSafeInteger(media.file_size) && media.file_size >= 0 ? media.file_size : undefined;
   if (fileSize > ALERT_MEDIA_MAX_BYTES) return null;
-  const mimeType = media.type === 'photo' ? 'image/jpeg' : (!media.mime_type || media.mime_type === 'video/mp4' ? 'video/mp4' : null);
+  const mimeType = media.type === 'photo'
+    ? (!media.mime_type ? 'image/jpeg' : ['image/jpeg', 'image/png', 'image/webp'].includes(media.mime_type) ? media.mime_type : null)
+    : (!media.mime_type ? 'video/mp4' : ['video/mp4', 'video/webm'].includes(media.mime_type) ? media.mime_type : null);
   if (!mimeType) return null;
   const uniqueId = typeof media.file_unique_id === 'string' ? media.file_unique_id.slice(0, 256) : '';
   return {
@@ -766,6 +768,7 @@ export function publicAlert(a) {
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : a.media;
   const mediaItems = sanitizeAlertMediaItems(rawMediaItems).map((media) => ({
     type: media.type,
+    mime_type: media.mime_type,
     version: crypto.createHash('sha256').update(media.file_unique_id || media.file_id).digest('hex').slice(0, 12),
   }));
   const media = mediaItems[0] || null;

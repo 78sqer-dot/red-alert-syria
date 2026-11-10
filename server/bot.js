@@ -1410,7 +1410,7 @@ async function alertMediaInput(value, targetRole = 'admin') {
   if (!media) throw new Error('invalid alert media');
   if (media.bot_role === targetRole) return media.file_id;
   const buffer = await downloadAlertMediaBuffer(media);
-  const extension = media.type === 'photo' ? 'jpg' : 'mp4';
+  const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm' })[media.mime_type] || (media.type === 'photo' ? 'jpg' : 'mp4');
   return new InputFile(buffer, `red-alert-${media.type}.${extension}`);
 }
 function mediaFromTelegramMessage(message, type, botRole) {
@@ -1443,7 +1443,7 @@ export async function fetchAlertMediaFile(id, requestedType = null) {
   const buffer = await downloadAlertMediaBuffer(media);
   const projected = publicAlert(alert);
   const publicMedia = projected.media_items?.find((item) => item.type === media.type) || projected.media;
-  return { buffer, contentType: media.type === 'photo' ? 'image/jpeg' : 'video/mp4', etag: `"${publicMedia.version}"` };
+  return { buffer, contentType: media.mime_type, etag: `"${publicMedia.version}"` };
 }
 function updateAlertChannelMedia(_api, alert, mediaValue) {
   const media = sanitizeAlertMedia(mediaValue);

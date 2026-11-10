@@ -64,8 +64,8 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=82'/);
-  assert.match(html, /app\.css\?v=74/);
-  assert.match(html, /app\.js\?v=90/);
+  assert.match(html, /app\.css\?v=75/);
+  assert.match(html, /app\.js\?v=91/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
@@ -84,7 +84,9 @@ test('changed type and icon modules use fresh cache keys', () => {
 
 test('alert popup switches between news and attached photo/video in the same window', () => {
   assert.match(app, /const mediaItems = \['photo', 'video'\]\.map\(\(type\) => rawMediaItems\.find\(\(item\) => item\?\.type === type\)\)\.filter\(Boolean\)/);
-  assert.match(app, /const displayModes = availableAlertDisplayModes\(newsText, mediaItems\)/);
+  assert.match(app, /const illustrationFallback = mediaItems\.length === 0/);
+  assert.match(app, /const displayModes = availableAlertDisplayModes\(newsText, mediaItems, \{ illustrationFallback \}\)/);
+  assert.match(app, /const displayMediaItems = mediaItems\.length \? mediaItems : illustrationFallback \? \[\{ type: 'photo', illustration: true \}\] : \[\]/);
   assert.match(app, /const initialMode = initialAlertDisplayMode\(displayModes\)/);
   assert.match(app, /const mediaActions = displayModes\.length \?/);
   assert.match(app, /const titleRow = `<div class="pp-title-row"><p class="pp-title">[\s\S]*?<\/p><\/div>`;/);
@@ -99,9 +101,15 @@ test('alert popup switches between news and attached photo/video in the same win
   assert.match(app, /panel\.hidden = !panels\.media/);
   assert.match(app, /mode === 'news' \? T\.alertNewsTab/);
   assert.match(app, /mediaVideo' : 'mediaImage/);
+  assert.match(app, /function alertMediaFrameHtml\(item, alertId\)/);
   assert.match(app, /<video class="pp-media-video" controls playsinline preload="none"/);
-  assert.equal((app.match(/<img class="pp-media-image"[^>]*loading="eager"/g) || []).length, 2);
-  assert.doesNotMatch(app, /class="pp-media-image"[^>]*loading="lazy"/);
+  assert.equal((app.match(/<img class="pp-media-image"[^>]*loading="eager"/g) || []).length, 1, 'source and illustrative images share one frame renderer');
+  assert.match(app, /data-pp-illustration=/);
+  assert.match(app, /display\.innerHTML = alertMediaFrameHtml\(/);
+  assert.match(app, /Source media; source marks, if present, are left visible\./);
+  assert.match(app, /Illustrative design based on alert details; not a scene photograph\./);
+  assert.match(css, /\.ras-media-frame-stage \{/);
+  assert.match(css, /\.ras-media-frame-note \{/);
   assert.match(app, /schedulePopupFit\?\.\(2\)/);
   assert.match(css, /\.pp-title-row \{ display: flex/);
   assert.match(css, /\.pp-media-actions \{ display: flex/);

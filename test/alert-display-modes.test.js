@@ -26,3 +26,10 @@ for (const scenario of scenarios) {
 test('popup tab order is always news, photo, then video when available', () => {
   assert.deepEqual(availableAlertDisplayModes('خبر', [{ type: 'video' }, { type: 'photo' }, { type: 'audio' }]), ['news', 'photo', 'video']);
 });
+
+test('photo fallback is available only when neither a source photo nor video exists', () => {
+  assert.deepEqual(availableAlertDisplayModes('عنوان الخبر', [], { illustrationFallback: true }), ['news', 'photo']);
+  assert.deepEqual(availableAlertDisplayModes('', [], { illustrationFallback: true }), ['photo']);
+  assert.deepEqual(availableAlertDisplayModes('عنوان الخبر', [{ type: 'video' }], { illustrationFallback: true }), ['news', 'video']);
+  assert.deepEqual(availableAlertDisplayModes('عنوان الخبر', [{ type: 'photo' }], { illustrationFallback: true }), ['news', 'photo']);
+});

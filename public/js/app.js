@@ -385,34 +385,44 @@ function distChip(a) {
   const txt = inside ? (LANG === 'ar' ? 'أنت ضمن المنطقة' : 'You are inside the area') : svc.fmtAway(r.d);
   return `<span class="dist-chip${r.near ? ' near' : ''}">${icon('locate', 12)}${esc(txt)}${r.near && !inside ? ` · ${esc(LANG === 'ar' ? 'قريب منك' : 'near you')}` : ''}</span>`;
 }
+function alertMediaFrameHtml(item, alertId) {
+  const illustration = item.illustration === true;
+  const url = illustration
+    ? `/api/alerts/${encodeURIComponent(alertId)}/illustration?lang=${LANG === 'en' ? 'en' : 'ar'}`
+    : `/api/alerts/${encodeURIComponent(alertId)}/media?type=${encodeURIComponent(item.type)}${/^[a-f0-9]{12}$/.test(item.version || '') ? `&v=${encodeURIComponent(item.version)}` : ''}`;
+  const viewer = item.type === 'video'
+    ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(url)}" type="${esc(item.mime_type || 'video/mp4')}"></video>`
+    : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(illustration ? (LANG === 'en' ? 'Illustrative alert graphic' : 'بطاقة توضيحية للخبر') : T.photoTab)}" loading="eager" decoding="async">`;
+  const label = illustration
+    ? (LANG === 'en' ? 'ILLUSTRATIVE GRAPHIC' : 'بطاقة توضيحية')
+    : (LANG === 'en' ? 'SOURCE MEDIA' : 'وسيط المصدر');
+  const note = illustration
+    ? (LANG === 'en' ? 'Illustrative design based on alert details; not a scene photograph.' : 'تصميم مبني على تفاصيل التنبيه، وليس صورةً للمشهد.')
+    : (LANG === 'en' ? 'Source media; source marks, if present, are left visible.' : 'وسيط المصدر؛ تُترك علاماته كما هي إن وُجدت.');
+  return `<div class="ras-media-frame" dir="ltr"><div class="ras-media-frame-head"><img src="/img/logo-wordmark.svg" alt="" loading="lazy"><span class="ras-media-frame-label">${esc(label)}</span></div><div class="ras-media-frame-stage">${viewer}</div><div class="ras-media-frame-note" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">${esc(note)}</div></div>`;
+}
 function popupHtml(a) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : (a.media ? [a.media] : []);
   const mediaItems = ['photo', 'video'].map((type) => rawMediaItems.find((item) => item?.type === type)).filter(Boolean);
   const newsText = [titleOf(a), descOf(a)].filter((value) => String(value || '').trim()).join('\n');
-  const displayModes = availableAlertDisplayModes(newsText, mediaItems);
+  const illustrationFallback = mediaItems.length === 0;
+  const displayModes = availableAlertDisplayModes(newsText, mediaItems, { illustrationFallback });
+  const displayMediaItems = mediaItems.length ? mediaItems : illustrationFallback ? [{ type: 'photo', illustration: true }] : [];
   const initialMode = initialAlertDisplayMode(displayModes);
-  const mediaUrl = (item) => {
-    const query = new URLSearchParams({ type: item.type });
-    if (/^[a-f0-9]{12}$/.test(item.version || '')) query.set('v', item.version);
-    return `/api/alerts/${encodeURIComponent(a.id)}/media?${query.toString()}`;
-  };
-  const mediaElement = (item) => item.type === 'video'
-    ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(mediaUrl(item))}" type="video/mp4"></video>`
-    : `<img class="pp-media-image" src="${esc(mediaUrl(item))}" alt="${esc(T.photoTab)}" loading="eager" decoding="async">`;
   const mediaActions = displayModes.length ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'محتوى التنبيه' : 'Alert content')}">${displayModes.map((mode) => {
-    const item = mediaItems.find((candidate) => candidate.type === mode);
+    const item = displayMediaItems.find((candidate) => candidate.type === mode);
     const label = mode === 'news' ? T.alertNewsTab : mode === 'video' ? T.videoTab : T.photoTab;
     const glyph = mode === 'news' ? 'news' : mode === 'video' ? 'mediaVideo' : 'mediaImage';
-    return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
+    return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}" data-pp-media-mime="${esc(item?.mime_type || '')}" data-pp-illustration="${item?.illustration === true}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
   }).join('')}</div>` : '';
   const titleRow = `<div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p></div>`;
   const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}><div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
     ${distChip(a)}
     ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">${icon('locate', 13)} ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
     ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}</section>` : '';
-  const activeMedia = mediaItems.find((item) => item.type === initialMode);
-  const mediaViewer = mediaItems.length ? `<section class="pp-media-panel" data-pp-media-panel role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"${initialMode === 'news' ? ' hidden' : ''}><div class="pp-media-content" data-pp-media-content>${activeMedia ? mediaElement(activeMedia) : ''}</div></section>` : '';
+  const activeMedia = displayMediaItems.find((item) => item.type === initialMode);
+  const mediaViewer = displayMediaItems.length ? `<section class="pp-media-panel" data-pp-media-panel role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"${initialMode === 'news' ? ' hidden' : ''}><div class="pp-media-content" data-pp-media-content>${activeMedia ? alertMediaFrameHtml(activeMedia, a.id) : ''}</div></section>` : '';
   const content = `${titleRow}${mediaActions}${newsPanel}${mediaViewer}`;
   return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" data-alert-id="${esc(a.id)}">
     ${content}
@@ -1293,11 +1303,12 @@ function bindEvents() {
       const display = panel.querySelector('[data-pp-media-content]');
       if (!display) return;
       panel.querySelector('video')?.pause();
-      const version = /^[a-f0-9]{12}$/.test(mediaButton.dataset.ppMediaVersion || '') ? `&v=${encodeURIComponent(mediaButton.dataset.ppMediaVersion)}` : '';
-      const url = `/api/alerts/${encodeURIComponent(root.dataset.alertId || '')}/media?type=${encodeURIComponent(panels.mediaType)}${version}`;
-      display.innerHTML = panels.mediaType === 'video'
-        ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(url)}" type="video/mp4"></video>`
-        : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(T.photoTab)}" loading="eager" decoding="async">`;
+      display.innerHTML = alertMediaFrameHtml({
+        type: panels.mediaType,
+        version: mediaButton.dataset.ppMediaVersion || '',
+        mime_type: mediaButton.dataset.ppMediaMime || '',
+        illustration: mediaButton.dataset.ppIllustration === 'true',
+      }, root.dataset.alertId || '');
       amap?.schedulePopupFit?.(2);
       return;
     }

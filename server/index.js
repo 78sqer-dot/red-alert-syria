@@ -21,6 +21,7 @@ import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug } from
 import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
 import { weatherDebug, checkWeather } from './weather.js';
 import { publicBorders } from './borders.js';
+import { renderNewsIllustrationPng } from './alert-image.js';
 import { startServices, publicRoads, publicPower } from './services.js';
 import { pushConfigured, pushPublicKey, saveSubscription, removeSubscription, sendPush } from './push.js';
 
@@ -129,6 +130,43 @@ app.get('/api/alerts/:id', apiLimiter, (req, res) => {
   res.json({ alert: publicAlert(a) });
 });
 
+const newsIllustrationCache = new Map();
+app.get('/api/alerts/:id/illustration', apiLimiter, async (req, res) => {
+  if (!/^[\w-]{36}$/.test(req.params.id)) return res.status(400).end();
+  const alert = store.getAlert(req.params.id);
+  if (!alert) return res.status(404).end();
+  if (publicAlert(alert).media_items?.length) return res.status(404).end();
+  const lang = req.query.lang === 'en' ? 'en' : 'ar';
+  const revision = {
+    id: alert.id, type: alert.type, title: alert.title, title_en: alert.title_en,
+    description: alert.description, description_en: alert.description_en,
+    location: alert.location, place: alert.place, scope: alert.scope, extra: alert.extra,
+    timestamp: alert.timestamp,
+    meta: { hazard: alert.meta?.hazard, signalPlatform: alert.meta?.signalPlatform, incursionKind: alert.meta?.incursionKind },
+  };
+  const tag = `"${crypto.createHash('sha256').update(JSON.stringify([revision, lang])).digest('hex').slice(0, 16)}"`;
+  res.setHeader('ETag', tag);
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `inline; filename="alert-${req.params.id}-illustration.png"`);
+  if (req.headers['if-none-match']?.split(',').map((value) => value.trim()).includes(tag)) return res.status(304).end();
+  const key = `${req.params.id}:${lang}:${tag}`;
+  try {
+    let buffer = newsIllustrationCache.get(key);
+    if (!buffer) {
+      buffer = renderNewsIllustrationPng(alert, lang);
+      newsIllustrationCache.set(key, buffer);
+      while (newsIllustrationCache.size > 32) newsIllustrationCache.delete(newsIllustrationCache.keys().next().value);
+    }
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Length', String(buffer.length));
+    return res.status(200).end(buffer);
+  } catch (error) {
+    console.warn(`[illustration] render failed for alert ${req.params.id}:`, error?.message || error);
+    return res.status(503).json({ error: 'illustration temporarily unavailable' });
+  }
+});
+
 app.get('/api/alerts/:id/media', apiLimiter, async (req, res) => {
   if (!/^[\w-]{36}$/.test(req.params.id)) return res.status(400).end();
   const requestedType = String(req.query.type || '');
@@ -143,7 +181,8 @@ app.get('/api/alerts/:id/media', apiLimiter, async (req, res) => {
   res.setHeader('ETag', etag);
   res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Content-Disposition', `inline; filename="alert-${req.params.id}.${publicMedia.type === 'photo' ? 'jpg' : 'mp4'}"`);
+  const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm' })[publicMedia.mime_type] || (publicMedia.type === 'photo' ? 'jpg' : 'mp4');
+  res.setHeader('Content-Disposition', `inline; filename="alert-${req.params.id}.${extension}"`);
   res.setHeader('Accept-Ranges', 'bytes');
   if (req.headers['if-none-match']?.split(',').map((value) => value.trim()).includes(etag)) return res.status(304).end();
   try {

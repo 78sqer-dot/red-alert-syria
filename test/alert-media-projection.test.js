@@ -10,7 +10,7 @@ test('public alert media exposes only its type and opaque cache version', () => 
   const alert = publicAlert({ ...base, media: { ...video } });
   assert.equal(alert.media.type, 'video');
   assert.match(alert.media.version, /^[a-f0-9]{12}$/);
-  assert.deepEqual(Object.keys(alert.media).sort(), ['type', 'version']);
+  assert.deepEqual(Object.keys(alert.media).sort(), ['mime_type', 'type', 'version']);
   assert.deepEqual(alert.media_items, [alert.media]);
   assert.equal(JSON.stringify(alert).includes('secret-video-file-id'), false);
   assert.equal(JSON.stringify(alert).includes('private-video-unique'), false);
@@ -22,7 +22,7 @@ test('public projection exposes both photo and video without Telegram identifier
   assert.deepEqual(alert.media, alert.media_items[0]);
   for (const item of alert.media_items) {
     assert.match(item.version, /^[a-f0-9]{12}$/);
-    assert.deepEqual(Object.keys(item).sort(), ['type', 'version']);
+    assert.deepEqual(Object.keys(item).sort(), ['mime_type', 'type', 'version']);
   }
   for (const secret of ['secret-photo-file-id', 'private-photo-unique', 'secret-video-file-id', 'private-video-unique']) {
     assert.equal(JSON.stringify(alert).includes(secret), false, `public output must not contain ${secret}`);
@@ -51,4 +51,11 @@ test('media validation rejects unsupported formats, roles, and oversized files',
   assert.equal(sanitizeAlertMedia({ ...photo, type: 'video', mime_type: 'video/quicktime' }), null);
   assert.equal(sanitizeAlertMedia({ ...photo, bot_role: 'other' }), null);
   assert.equal(sanitizeAlertMedia({ ...photo, file_id: '' }), null);
+});
+
+test('source documents retain supported image and video formats for the map viewer', () => {
+  assert.equal(sanitizeAlertMedia({ ...photo, mime_type: 'image/webp' }).mime_type, 'image/webp');
+  assert.equal(sanitizeAlertMedia({ ...photo, mime_type: 'image/png' }).mime_type, 'image/png');
+  assert.equal(sanitizeAlertMedia({ ...video, mime_type: 'video/webm' }).mime_type, 'video/webm');
+  assert.equal(sanitizeAlertMedia({ ...photo, type: 'video', mime_type: 'video/quicktime' }), null);
 });

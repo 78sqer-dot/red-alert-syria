@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { captureTelegramMedia, unlinkCapturedMedia } from './news-media.js';
 import { InlineKeyboard, InputFile } from 'grammy';
 import { config, isOwner } from './config.js';
-import { store } from './store.js';
+import { store, sanitizeAlertMedia, sanitizeAlertMediaItems } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji, alertButtonLabel } from '../shared/types.js';
 import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
@@ -615,6 +615,17 @@ function politicalCategoryKb(d, lang = 'ar', namespace = 'nw') {
   });
   return kb.row().text(tr(lang, '↩️ رجوع', '↩️ Back'), `${namespace}:b:${d.id}`);
 }
+export async function deliverCapturedMediaToReviewer(d, media, uid, apiInstance = api()) {
+  if (!apiInstance || media?.status !== 'captured' || !['photo', 'video'].includes(media.type)) return null;
+  const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm' })[media.mimeType] || 'bin';
+  const input = new InputFile(await readFile(media.path), `source-${media.type}.${extension}`);
+  const caption = tr(langOfId(uid), `📎 مرفق للمراجعة فقط · المسودة ${d.id} · المصدر ${media.channel}/${media.messageId}`, `📎 Review only · draft ${d.id} · source ${media.channel}/${media.messageId}`);
+  const method = media.type === 'photo' ? (/\.webp$/i.test(media.path) ? 'sendDocument' : 'sendPhoto') : (/\.webm$/i.test(media.path) ? 'sendDocument' : 'sendVideo');
+  const sent = await apiInstance[method](uid, input, { caption });
+  rememberMapMediaFromReviewMessage(media, sent);
+  d.mediaCards ||= []; d.mediaCards.push([uid, sent.message_id]);
+  return sent;
+}
 async function sendCards(d, only = null) {
   const a = api();
   if (!a) return 0;
@@ -624,13 +635,8 @@ async function sendCards(d, only = null) {
     const lang = langOfId(uid);
     try {
       for (const media of (d.sourceMedia || []).filter((m) => m.status === 'captured')) {
-        try {
-          const input = new InputFile(await readFile(media.path), `source-${media.type}.${media.mimeType.split('/')[1]}`);
-          const caption = tr(lang, `📎 مرفق للمراجعة فقط · المسودة ${d.id} · المصدر ${media.channel}/${media.messageId}`, `📎 Review only · draft ${d.id} · source ${media.channel}/${media.messageId}`);
-          const method = media.type === 'photo' ? (/\.webp$/i.test(media.path) ? 'sendDocument' : 'sendPhoto') : (/\.webm$/i.test(media.path) ? 'sendDocument' : 'sendVideo');
-          const sent = await a[method](uid, input, { caption });
-          d.mediaCards ||= []; d.mediaCards.push([uid, sent.message_id]);
-        } catch (e) { console.warn('[news] source media reviewer delivery failed', d.id, e.description || e.message); }
+        try { await deliverCapturedMediaToReviewer(d, media, uid, a); }
+        catch (e) { console.warn('[news] source media reviewer delivery failed', d.id, e.description || e.message); }
       }
       const m = await a.sendMessage(uid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang), link_preview_options: { is_disabled: true }, disable_notification: nightActive(), _keep: 'c' });
       d.cards.push([uid, m.message_id]); n++;
@@ -638,17 +644,30 @@ async function sendCards(d, only = null) {
   }
   return n;
 }
+export function rememberMapMediaFromReviewMessage(sourceMedia, message) {
+  if (sourceMedia?.publishedMedia) return sourceMedia.publishedMedia;
+  const item = sourceMedia?.type === 'photo'
+    ? message?.photo?.at(-1) || (message?.document?.mime_type?.startsWith('image/') ? message.document : null)
+    : message?.video || (message?.document?.mime_type?.startsWith('video/') ? message.document : null);
+  if (!item?.file_id) return null;
+  const isDocument = item === message.document;
+  const media = sanitizeAlertMedia({
+    type: sourceMedia.type,
+    file_id: item.file_id,
+    file_unique_id: item.file_unique_id,
+    bot_role: 'admin',
+    mime_type: sourceMedia.type === 'photo' ? (isDocument ? sourceMedia.mimeType : 'image/jpeg') : (item.mime_type || sourceMedia.mimeType || 'video/mp4'),
+    file_size: item.file_size || sourceMedia.size,
+  });
+  if (media) sourceMedia.publishedMedia = media;
+  return media;
+}
 async function deliverNewSourceMedia(d, mediaItems) {
   const a = api(); if (!a || !mediaItems.length) return;
   d.mediaCards ||= [];
   for (const uid of reviewerIds()) for (const media of mediaItems.filter((m) => m.status === 'captured')) {
-    try {
-      const input = new InputFile(await readFile(media.path), `source-${media.type}.${media.mimeType.split('/')[1]}`);
-      const caption = tr(langOfId(uid), `📎 مرفق للمراجعة فقط · المسودة ${d.id} · المصدر ${media.channel}/${media.messageId}`, `📎 Review only · draft ${d.id} · source ${media.channel}/${media.messageId}`);
-      const method = media.type === 'photo' ? (/\.webp$/i.test(media.path) ? 'sendDocument' : 'sendPhoto') : (/\.webm$/i.test(media.path) ? 'sendDocument' : 'sendVideo');
-      const sent = await a[method](uid, input, { caption });
-      d.mediaCards.push([uid, sent.message_id]);
-    } catch (e) { console.warn('[news] source media reviewer delivery failed', d.id, e.description || e.message); }
+    try { await deliverCapturedMediaToReviewer(d, media, uid, a); }
+    catch (e) { console.warn('[news] source media reviewer delivery failed', d.id, e.description || e.message); }
   }
 }
 async function refreshCards(d) {
@@ -843,6 +862,7 @@ async function nightSummaryTick() {
 export function toBotDraft(d) {
   newsState();
   const body = d.headline;
+  const mediaItems = sanitizeAlertMediaItems((d.sourceMedia || []).map((item) => item.publishedMedia).filter(Boolean));
   const patrolText = N(`${d.headline || ''} ${d.body || ''}`);
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
@@ -854,6 +874,7 @@ export function toBotDraft(d) {
     ...(patrolForm ? { patrolForm } : {}),
     ...(d.type === 'weather' && d.hazard ? { meta: { hazard: d.hazard } } : {}),
     ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
+    ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
     ...(d.type === 'political' ? {
       politicalCategory: POLITICAL_CATEGORIES[d.politicalCategory] ? d.politicalCategory : null,
       politicalSources: (d.srcs || []).map((s) => ({ name: s.name || s.u || '', url: s.url || '', timestamp: Number.isFinite(s.ts) ? new Date(s.ts).toISOString() : null })),

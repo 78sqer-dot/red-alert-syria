@@ -356,6 +356,74 @@ export async function renderAlertPng(alert, opts = {}) {
   return Buffer.from(r.render().asPng());
 }
 
+function illustrationLines(value, limit, maxLines) {
+  const words = String(value || '').replace(/[\u0000-\u001f]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const lines = []; let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > limit && line) { lines.push(line); line = word; }
+    else line = next;
+  }
+  if (line) lines.push(line);
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    const last = [...lines[maxLines - 1]];
+    lines[maxLines - 1] = `${last.slice(0, Math.max(1, limit - 1)).join('').trimEnd()}…`;
+  }
+  return lines;
+}
+
+/** Factual editorial graphic: only alert text, category icon and location; never a depicted incident scene. */
+export function newsIllustrationSvg(alert, lang = 'ar') {
+  const en = lang === 'en';
+  const type = ALERT_TYPES[alert?.type] ? alert.type : 'breaking';
+  const t = ALERT_TYPES[type];
+  const visual = eventVisual(type);
+  const headline = String((en ? alert.title_en : alert.title) || (en ? t.en : t.ar)).trim();
+  const description = String((en ? alert.description_en : alert.description) || '').trim();
+  const titleLines = illustrationLines(headline, 34, 2);
+  const bodyLines = illustrationLines(description, 62, 2);
+  const location = placeText(alert || {}, en ? 'en' : 'ar') || (en ? 'Syria' : 'سوريا');
+  const locationLines = illustrationLines(location, 44, 1);
+  const direction = en ? '' : ' direction="rtl"';
+  const anchor = en ? 'start' : 'end';
+  const textX = en ? 64 : 960;
+  const iconX = en ? 830 : 194;
+  const bg = '#091322';
+  const glyphKey = type === 'assassination' ? (assassinationWeaponGlyph(alert) || t.glyph)
+    : type === 'shooting' ? (shootingWeaponGlyph(alert) || t.glyph)
+      : type === 'military_incursion' ? (alert?.meta?.incursionKind === 'barrier' ? 'military_barrier' : alert?.meta?.incursionKind === 'soldiers' ? 'soldiers' : alert?.meta?.incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
+        : type === 'signal_sweep' && alert?.meta?.signalPlatform === 'uav' ? 'uav' : t.glyph;
+  const glyph = GLYPHS[glyphKey] || GLYPHS[t.glyph] || GLYPHS.other || '';
+  const logo = logoAt(52, 28, 50);
+  const category = en ? t.en : t.ar;
+  const disclosure = en ? 'ILLUSTRATIVE GRAPHIC · NOT A SCENE PHOTOGRAPH' : 'تصميم توضيحي · ليس صورة للمشهد';
+  const timestamp = Number.isFinite(Date.parse(alert?.timestamp || '')) ? Date.parse(alert.timestamp) : Date.now();
+  const when = whenText(timestamp, en ? 'en' : 'ar');
+  const o = [];
+  o.push('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="600" viewBox="0 0 1024 600">');
+  o.push(`<defs><linearGradient id="ig-bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${bg}"/><stop offset="1" stop-color="#13233a"/></linearGradient><linearGradient id="ig-line" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#2e83c8"/><stop offset="1" stop-color="#ed1c24"/></linearGradient><radialGradient id="ig-glow"><stop stop-color="${visual.color}" stop-opacity=".32"/><stop offset="1" stop-color="${visual.color}" stop-opacity="0"/></radialGradient></defs>`);
+  o.push('<rect width="1024" height="600" rx="28" fill="url(#ig-bg)"/>');
+  o.push('<g fill="none" stroke="#8aa2bd" stroke-opacity=".08"><path d="M-60 410C140 270 280 555 490 390s300-260 600-110"/><path d="M-80 455C120 315 270 590 480 425s310-250 620-100"/><path d="M-100 500C100 360 260 625 470 460s320-240 640-90"/></g>');
+  o.push('<rect x="0" y="0" width="1024" height="7" fill="url(#ig-line)"/>');
+  if (logo.svg) o.push(logo.svg);
+  o.push(`<text x="${en ? 960 : 64}" y="63" font-family="Noto Kufi Arabic" font-size="22" font-weight="800" fill="${visual.color}" text-anchor="${anchor}"${direction}>${ttx(category)}</text>`);
+  o.push(`<circle cx="${iconX}" cy="320" r="156" fill="url(#ig-glow)"/><circle cx="${iconX}" cy="320" r="96" fill="#101e30" stroke="${visual.color}" stroke-opacity=".7" stroke-width="2"/><circle cx="${iconX}" cy="320" r="78" fill="#f8fafc"/>`);
+  o.push(`<svg x="${iconX - 48}" y="${320 - 48}" width="96" height="96" viewBox="0 0 512 512"><g fill="${visual.color}" color="${visual.color}">${glyph}</g></svg>`);
+  titleLines.forEach((line, i) => o.push(`<text x="${textX}" y="${178 + i * 62}" font-family="Noto Kufi Arabic" font-size="${titleLines.length > 1 ? 40 : 46}" font-weight="800" fill="#f8fafc" text-anchor="${anchor}"${direction}>${ttx(line)}</text>`));
+  bodyLines.forEach((line, i) => o.push(`<text x="${textX}" y="${324 + i * 42}" font-family="Noto Kufi Arabic" font-size="25" font-weight="500" fill="#c6d2e1" text-anchor="${anchor}"${direction}>${ttx(line)}</text>`));
+  o.push(`<rect x="${en ? 64 : 585}" y="426" width="375" height="54" rx="15" fill="#14243a" stroke="#ffffff" stroke-opacity=".12"/>`);
+  o.push(`<text x="${en ? 84 : 930}" y="461" font-family="Noto Kufi Arabic" font-size="22" font-weight="700" fill="#e2e8f0" text-anchor="${anchor}"${direction}>${ttx(locationLines[0] || location)}</text>`);
+  o.push('<path d="M48 514H976" stroke="#ffffff" stroke-opacity=".14"/>');
+  o.push(`<text x="${en ? 64 : 960}" y="555" font-family="Noto Sans" font-size="17" font-weight="700" fill="#fca5a5" text-anchor="${anchor}"${direction}>${ttx(disclosure)}</text>`);
+  o.push(`<text x="${en ? 960 : 64}" y="555" font-family="Noto Sans" font-size="16" fill="#93a4b8" text-anchor="${en ? 'end' : 'start'}">${ttx(when)}</text>`);
+  o.push('</svg>');
+  return o.join('');
+}
+export function renderNewsIllustrationPng(alert, lang = 'ar') {
+  return svgToPng(newsIllustrationSvg(alert, lang), OUT_W);
+}
+
 
 /** Build a channel-ready map card for a single border crossing. */
 export async function borderImageSvg(crossing, status, opts = {}) {
