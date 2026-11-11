@@ -393,7 +393,7 @@ test('weekly PDFs are numbered independently and sort 5, 2, 1 as 1, 2, 5 through
   assert.deepEqual(parseWeeklyUploadCaption('', '500.pdf'), { issue_number: 500, title: 'العدد 500', description: '' });
 });
 
-test('Quran and nasheed accept audio and video, preserve descriptions, and list through safe pagination', async () => {
+test('Quran remains stored but private while nasheed accepts media and stays publicly listed', async () => {
   const store = createStore();
   const telegram = fakeTelegram();
   const quranPreview = prepareAlnabaUpload({
@@ -413,6 +413,7 @@ test('Quran and nasheed accept audio and video, preserve descriptions, and list 
   assert.equal(quran.sequence, 1);
   assert.equal(nasheed.sequence, 1);
   assert.equal(sanitizeAlnabaState(JSON.parse(JSON.stringify(store.state.alnaba))).quran[0].description, 'سورة البقرة');
+  assert.equal(store.state.alnaba.quran[0].id, quran.id, 'the Quran record remains stored for private bot management');
 
   const app = express();
   app.use('/api/alnaba', createAlnabaRouter({
@@ -421,13 +422,9 @@ test('Quran and nasheed accept audio and video, preserve descriptions, and list 
   }));
   await withServer(app, async (base) => {
     const quranResponse = await fetch(`${base}/api/alnaba?section=quran&limit=1`);
-    const quranPage = await quranResponse.json();
-    assert.equal(quranPage.items[0].id, quran.id);
-    assert.equal(quranPage.items[0].description, 'سورة البقرة');
-    assert.equal(quranPage.has_more, false);
-    const audioResponse = await fetch(`${base}${quranPage.items[0].media_url}`);
-    assert.equal(audioResponse.headers.get('content-type'), 'audio/ogg');
-    assert.deepEqual(Buffer.from(await audioResponse.arrayBuffer()), oggBytes);
+    assert.equal(quranResponse.status, 404, 'Quran items are not exposed through the public listing API');
+    const audioResponse = await fetch(`${base}/api/alnaba/media/${quran.id}`);
+    assert.equal(audioResponse.status, 404, 'Quran media remains private');
     const nasheedItem = listPublicAlnabaItems(store, 'nasheed')[0];
     const videoResponse = await fetch(`${base}${nasheedItem.media_url}`);
     assert.equal(videoResponse.headers.get('content-type'), 'video/mp4');

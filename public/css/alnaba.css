@@ -199,9 +199,7 @@ button { font: inherit; }
 
 
 /* Naba libraries and stable responsive PDF previews. */
-.an-quran-card::after, .an-quran-card .an-card-icon { background-color: rgba(83, 158, 126, .12); border-color: rgba(83, 158, 126, .38); color: #8ad8b3; }
 .an-nasheed-card::after, .an-nasheed-card .an-card-icon { background-color: rgba(163, 113, 190, .12); border-color: rgba(163, 113, 190, .38); color: #c9a1e4; }
-.an-quran-card .an-card-action { color: #8ad8b3; }
 .an-nasheed-card .an-card-action { color: #c9a1e4; }
 .an-notice { margin: 0 0 18px; padding: 12px 15px; border: 1px solid rgba(227, 60, 76, .32); border-radius: 11px; background: rgba(227, 60, 76, .075); color: #ffc0c6; font-size: 12px; line-height: 1.9; }
 .an-more-button { display: block; min-height: 42px; margin: 18px auto 0; padding: 8px 22px; border: 1px solid #35485d; border-radius: 10px; background: #17212d; color: #e5edf6; font-size: 12px; font-weight: 700; cursor: pointer; }

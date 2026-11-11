@@ -164,7 +164,6 @@ function renderArchive(item) {
 const SECTION_VIEWS = {
   photos: { list: $('#photoGrid'), loading: $('#photoLoading'), empty: $('#photoEmpty'), error: $('#photoError'), more: $('#photoMore'), render: renderPhoto, limit: 30 },
   weekly: { list: $('#weeklyList'), loading: $('#weeklyLoading'), empty: $('#weeklyEmpty'), error: $('#weeklyError'), more: $('#weeklyMore'), render: renderWeekly, limit: 10 },
-  quran: { list: $('#quranList'), loading: $('#quranLoading'), empty: $('#quranEmpty'), error: $('#quranError'), more: $('#quranMore'), render: renderLibrary, limit: 20 },
   nasheed: { list: $('#nasheedList'), loading: $('#nasheedLoading'), empty: $('#nasheedEmpty'), error: $('#nasheedError'), more: $('#nasheedMore'), render: renderLibrary, limit: 20 },
   archive: { list: $('#archiveList'), loading: $('#archiveLoading'), empty: $('#archiveEmpty'), error: $('#archiveError'), more: $('#archiveMore'), render: renderArchive, limit: 30 },
 };

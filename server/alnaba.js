@@ -553,6 +553,7 @@ export function createAlnabaRouter({ store, fetchMedia, limiter = next } = {}) {
   };
   router.get('/', limiter, (req, res) => {
     const section = String(req.query.section || '');
+    if (section === 'quran') return res.status(404).json({ error: 'not found' });
     const limit = Math.max(1, Math.min(Number.parseInt(String(req.query.limit || '30'), 10) || 30, 100));
     const rawOffset = Number.parseInt(String(req.query.offset || '0'), 10);
     const offset = Number.isSafeInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
@@ -564,7 +565,7 @@ export function createAlnabaRouter({ store, fetchMedia, limiter = next } = {}) {
   });
   router.get('/media/:id', limiter, async (req, res) => {
     const item = findAlnabaItem(store, req.params.id);
-    if (!item) return res.status(404).end();
+    if (!item || item.section === 'quran') return res.status(404).end();
     try {
       if (typeof fetchMedia !== 'function') throw new Error('BOT_UNAVAILABLE');
       const buffer = await fetchPublicMedia(item);
