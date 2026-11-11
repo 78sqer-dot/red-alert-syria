@@ -86,10 +86,13 @@ test('political prompt requires attribution and conservative Syrian categories w
   assert.match(sys, /places may be empty or contain only a place explicitly stated/);
   assert.match(sys, /opinion, analysis, commentary/);
   assert.match(sys, /foreign politics/);
-  assert.match(sys, /concise, factual, neutral Arabic news sentence/);
+  assert.match(sys, /concise, calm, factual, neutral Arabic news sentence/);
+  assert.match(sys, /calm, factual, neutral Arabic news sentence/);
+  assert.match(sys, /do not add political criticism, praise, condemnation, sarcasm, slogans, rhetorical hooks, loaded labels, or a sharply critical angle in straight news/);
+  assert.doesNotMatch(sys, /Criticism of a policy or party .* is allowed/);
   assert.match(sys, /Preserve material facts, dates\/times, locations, uncertainty, and relevant response\/context/);
-  assert.match(sys, /PRIVATE routing metadata: never repeat or reveal that monitored outlet\/channel name/);
-  assert.match(sys, /never invent a denial or counterclaim to create false balance/);
+  assert.match(sys, /PRIVATE routing metadata: never reveal it/);
+  assert.match(sys, /never invent a denial or counterclaim for false balance/);
   assert.match(sys, /Do not turn public-safety information into political advocacy/);
 });
 
@@ -98,6 +101,24 @@ test('Gemini response schema includes the political type and allowed category va
   assert.ok(properties.type.enum.includes('political'));
   assert.deepEqual(properties.political_category.enum, ['agreement', 'signing', 'treaty', 'circular', 'support', 'military_cooperation', 'statement', 'position', 'decision', 'appointment', 'official_announcement', 'government_announcement', 'official_entity', 'negotiation', 'meeting', 'visit', 'election', 'none']);
   assert.ok(AI_RESPONSE_SCHEMA.items.required.includes('political_category'));
+});
+
+test('explicit opinion rewrite is labeled, sharp toward transitional-government policy, and source-grounded', async () => {
+  let request;
+  const output = 'خفض الدعم يحمّل الأسر أعباء إضافية وفق الأرقام الواردة في المصدر.';
+  const result = await rewriteArabicNews('أعلنت الحكومة الانتقالية خفض الدعم، وتضمن البيان تقديراً لزيادة كلفة المعيشة.', {
+    key: 'dedicated-free-key', mode: 'opinion',
+    fetchImpl: async (url, options) => {
+      request = { url: String(url), options };
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: output }] } }] }) };
+    },
+  });
+  assert.match(result, /^رأي\/تحليل:/, 'opinion text is labeled even if the provider omits the label');
+  const system = JSON.parse(request.options.body).systemInstruction.parts[0].text;
+  assert.match(system, /بنقد حاد وواضح لسياسات الحكومة الانتقالية السورية/);
+  assert.match(system, /استند حصراً إلى وقائع قابلة للتحقق/);
+  assert.match(system, /لا تخترع وقائع أو أسباباً أو دوافع أو ردوداً/);
+  assert.match(system, /لا تستخدم تلاعباً نفسياً/);
 });
 
 test('professional rewrite is disabled without its dedicated key and does not fall back to GEMINI_API_KEY', async () => {
@@ -131,9 +152,10 @@ test('professional rewrite uses only the fixed fast free-tier model and returns 
   assert.match(request.url, new RegExp(`/models/${NEWS_REWRITE_MODEL}:generateContent\\?key=`));
   assert.match(request.url, /dedicated-free-key/);
   assert.match(request.options.body, /SOURCE:/);
-  assert.match(request.options.body, /درجة التأكد/);
+  assert.match(request.options.body, /حالة الحدث والشك/);
   assert.match(request.options.body, /اسم قناة الرصد المرسل/);
-  assert.match(request.options.body, /لا تخترع رداً أو ادعاءً مضاداً لصنع توازن زائف/);
-  assert.match(request.options.body, /لا تحوّل خبر السلامة العامة إلى دعاية سياسية/);
+  assert.match(request.options.body, /لا تخترع رداً أو ادعاء مضاداً لصنع توازن زائف/);
+  assert.match(request.options.body, /لا تضف نقداً سياسياً حاداً أو مديحاً أو إدانة/);
+  assert.match(request.options.body, /لا تحول الادعاء إلى حقيقة/);
   assert.equal(JSON.parse(request.options.body).generationConfig.temperature, 0.1);
 });

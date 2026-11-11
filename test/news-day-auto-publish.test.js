@@ -220,6 +220,25 @@ test('the local editorial gate accepts faithful copy and rejects omitted numbers
   }
 });
 
+test('sharp political criticism and explicitly requested opinion copy are never auto-published as straight news', () => {
+  const sharp = qualified({
+    type: 'political', politicalCategory: 'decision',
+    headline: 'صدر اليوم قرار الدعم عن الحكومة الانتقالية السورية في حمص، ويكشف عن حكومة انتقالية فاشلة.',
+    sourceText: 'صدر اليوم قرار جديد بشأن الدعم عن الحكومة الانتقالية السورية في حمص.',
+    loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 },
+  });
+  assert.deepEqual(_test.editorialGate(sharp), { ok: false, reason: 'sharp-political-tone-not-news' });
+  const opinion = qualified({
+    type: 'explosion', headline: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.',
+    sourceText: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.',
+    loc: { scope: 'place', name_ar: 'حلب', governorate_ar: 'حلب', latitude: 36.2, longitude: 37.1 },
+    srcs: [{ u: 'trusted-feed', name: 'قناة رصد خاصة', local: false }],
+    aiRewritePreview: { mode: 'opinion', applied: true },
+  });
+  assert.equal(nightEligible(opinion), false, 'an applied opinion/analysis preview cannot enter the auto-publish queue');
+  assert.deepEqual(_test.editorialGate(opinion), { ok: false, reason: 'opinion-analysis-not-auto-publish' });
+});
+
 test('failed editorial gate keeps an eligible draft pending, clears its timer, and never calls publication', async () => {
   const id = 'editorial-hold-synthetic';
   const draft = qualified({
