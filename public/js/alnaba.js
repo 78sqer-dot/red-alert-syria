@@ -1,4 +1,4 @@
-import { telegramArchiveOpenLink } from '/shared/telegram-links.js?v=1';
+import { telegramArchiveOpenLink } from '/shared/telegram-links.js?v=2';
 
 const page = document.documentElement.dataset.page || 'home';
 const $ = (selector) => document.querySelector(selector);
@@ -134,7 +134,7 @@ function bindNasheedPlayback(root) {
 }
 
 function renderArchive(item) {
-  const openLink = telegramArchiveOpenLink(item.url, navigator);
+  const openLink = telegramArchiveOpenLink(item.url);
   if (!openLink) return '';
   const title = esc(item.title || 'رابط Telegram');
   const date = formatDate(item.published_at);
@@ -145,8 +145,8 @@ function renderArchive(item) {
       <h2>${title}</h2>
       ${date ? `<time datetime="${esc(item.published_at)}">أُضيف ${esc(date)}</time>` : ''}
     </div>
-    <a class="an-action-link an-archive-open" href="${esc(openLink.href)}"${target} rel="${esc(openLink.rel)}" aria-label="${esc(`فتح ${item.title || 'رابط Telegram'} في Telegram`)}">
-      <span>فتح في Telegram</span><span aria-hidden="true">↗</span>
+    <a class="an-action-link an-archive-open" href="${esc(openLink.href)}"${target} rel="${esc(openLink.rel)}" aria-label="${esc(`فتح صفحة Telegram: ${item.title || 'رابط Telegram'}`)}">
+      <span>فتح صفحة Telegram</span><span aria-hidden="true">↗</span>
     </a>
   </article>`;
 }

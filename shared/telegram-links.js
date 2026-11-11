@@ -24,34 +24,8 @@ export function normalizeTelegramPublicUrl(value) {
   return null;
 }
 
-export function telegramAndroidIntentUrl(value) {
+export function telegramArchiveOpenLink(value) {
   const webUrl = normalizeTelegramPublicUrl(value);
   if (!webUrl) return null;
-
-  const pathname = new URL(webUrl).pathname;
-  const username = pathname.match(USERNAME_PATH);
-  const plusInvite = pathname.match(PLUS_INVITE_PATH);
-  const joinchatInvite = pathname.match(JOINCHAT_PATH);
-  const telegramRoute = username
-    ? `resolve?domain=${encodeURIComponent(username[1])}`
-    : `join?invite=${encodeURIComponent(plusInvite?.[1] || joinchatInvite?.[1] || '')}`;
-
-  return `intent://${telegramRoute}#Intent;scheme=tg;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
-}
-
-export function isAndroidTelegramClient(client = globalThis.navigator) {
-  if (!client) return false;
-  const platform = [client.userAgentData?.platform, client.platform, client.userAgent].filter(Boolean).join(' ');
-  return /\bAndroid\b/i.test(platform);
-}
-
-export function telegramArchiveOpenLink(value, client = globalThis.navigator) {
-  const webUrl = normalizeTelegramPublicUrl(value);
-  if (!webUrl) return null;
-  if (isAndroidTelegramClient(client)) {
-    const appUrl = telegramAndroidIntentUrl(webUrl);
-    if (!appUrl) return null;
-    return { href: appUrl, target: null, rel: 'noopener noreferrer' };
-  }
   return { href: webUrl, target: '_blank', rel: 'noopener noreferrer' };
 }
