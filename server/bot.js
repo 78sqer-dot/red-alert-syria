@@ -31,7 +31,7 @@ function withLabel(loc, label) {
   return { ...loc, name_ar: label, name_en: label, short_ar: label, short_en: label, custom_label: true, base };
 }
 const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
-import { cleanAlertText } from './clean-text.js';
+import { cleanAlertText, cleanAttributedNewsText } from './clean-text.js';
 import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, findAlnabaEntry, updateAlnabaEntry, deleteAlnabaEntry, sanitizeAlnabaState, fetchAlnabaTelegramBytes, parseWeeklyUploadCaption, mimeFromAlnabaFilename, weeklyIssueNumber, nextWeeklyIssueNumber } from './alnaba.js';
 
 const PAGE = 24;
@@ -299,8 +299,14 @@ export function channelPost(alert, { ended = false } = {}) {
   const versioned = alert.channel_format === 2;
   const emoji = versioned ? channelEventSymbol(alert) : alertEmoji(alert);
   const dot = versioned ? `${eventVisual(alert.type).dot} ` : '';
+  const preserveStoryAttribution = alert.source === 'news' || ['political', 'breaking'].includes(alert.type);
+  const privateSources = [...(Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []), ...(Array.isArray(alert.meta?.political?.sources) ? alert.meta.political.sources : [])];
+  const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
+  title = (preserveStoryAttribution ? cleanAttributedNewsText : cleanAlertText)(title, privateSourceNames) || title;
   const sections = [`${ended ? '✅ انتهى · ' : ''}${dot}<b>${esc(title)}</b>${emoji ? ` - ${emoji}` : ''}`];
-  const desc = cleanAlertText(alert.description || '');
+  const desc = preserveStoryAttribution
+    ? cleanAttributedNewsText(alert.description || '', privateSourceNames)
+    : cleanAlertText(alert.description || '');
   if (alert.type === 'breaking') sections.push(`<b>${esc(desc || alert.title)}</b>`);
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
@@ -311,13 +317,10 @@ export function channelPost(alert, { ended = false } = {}) {
     if (category) {
       sections.push(`🏛 <b>الفئة:</b> ${esc(category.emoji)} «${esc(category.ar)}»`);
     }
-    // Source citations remain in metadata and reviewer/admin cards, but not in public channel posts.
-    sections.push('<i>منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل</i>');
+    // Monitored outlet identities stay private; the story text retains any public speaker/institution attribution.
+    sections.push('<i>لم يُسجّل تحقق مستقل عن الخبر</i>');
   } else if (alert.source === 'news') {
-    const sources = (Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []).filter((s) => safeHttpUrl(s?.url)).slice(0, 5);
-    for (const source of sources) {
-      sections.push(`🔎 <b>المصدر:</b> ${esc(clean(source.name, 120) || 'مصدر إخباري')}`);
-    }
+    sections.push('<i>خبر منقول؛ لم يُسجّل تحقق مستقل</i>');
   }
   if (alert.type === 'political') {
     sections.push(`📅 <b>التاريخ:</b> ${esc(fmtDate(alert.timestamp))}`);
@@ -406,6 +409,9 @@ function draftSummary(d, lang) {
       ? '⚠️ Opinion or analysis is not news; report verifiable developments only.'
       : '⚠️ الرأي أو التحليل ليس خبراً؛ أدرج تطوراً قابلاً للتحقق فقط.');
   }
+  if (['breaking', 'political'].includes(d.type)) lines.push(lang === 'en'
+    ? '⚖️ Attribute claims to the speaker/institution stated in the story; preserve uncertainty and supplied context. Opinion is separate and clearly labeled; do not invent replies or balance.'
+    : '⚖️ انسب الادعاء إلى المتحدث أو المؤسسة المذكورة في الخبر، واحفظ الشك والسياق المتاح. الرأي منفصل وموسوم بوضوح؛ لا تخترع ردوداً أو توازناً.');
   lines.push(`⏱ <b>${l.durLabel}:</b> ${fmtDur(d.ttlMin, lang)}`);
   return lines.join('\n');
 }
@@ -1015,6 +1021,10 @@ export function buildAlertInput(d, author) {
     sourceTimestamp: sourceIso(d.politicalSourceTimestamp),
   } : null;
   const monitoredSources = d.source === 'news' && d.type !== 'political' ? monitoredSourcesFor(d) : [];
+  const privateSourceNames = [
+    ...(Array.isArray(d.srcs) ? d.srcs.flatMap((source) => [source?.name, source?.u]) : []),
+    ...(Array.isArray(d.politicalSources) ? d.politicalSources.flatMap((source) => [source?.name, source?.u]) : []),
+  ].filter(Boolean);
   const mediaItems = sanitizeAlertMediaItems(Array.isArray(d.media_items) && d.media_items.length ? d.media_items : d.media);
   const baseTitle = d.type === 'air_movement'
     ? (aircraft?.ar || titles.ar)
@@ -1027,7 +1037,8 @@ export function buildAlertInput(d, author) {
     title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}${signalPlatform ? ' — مسيّرة' : ''}`,
     title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
     extra,
-    description: cleanAlertText(d.type === 'breaking' ? d.text : d.details),
+    description: (d.source === 'news' || ['breaking', 'political'].includes(d.type)
+      ? (text) => cleanAttributedNewsText(text, privateSourceNames) : cleanAlertText)(d.type === 'breaking' ? d.text : d.details),
     ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
     location: loc,
     areas,

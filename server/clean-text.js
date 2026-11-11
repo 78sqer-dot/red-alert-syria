@@ -1,6 +1,5 @@
-// Published alert text (map + channel + share pages) carries no hashtags, links, @handles
-// or source credits ("الجزيرة سوريا", "#متداول", "(المصدر: سانا)").
-// The sources stay visible only in the owner's private draft card.
+// Generic alert text strips promotional tags and outlet credits. Factual news copy
+// should use cleanAttributedNewsText so attribution to a speaker/institution survives.
 
 const MEDIA = [
   'قناة الجزيرة سوريا', 'الجزيرة سوريا', 'الجزيرة مباشر', 'قناة الجزيرة', 'الجزيرة',
@@ -47,4 +46,30 @@ export function cleanAlertText(raw) {
   s = s.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n');
   s = s.replace(/\s+([.،,:؛!؟])/g, '$1').replace(/^[\s|•\-–—:،,]+|[\s|•\-–—:،,]+$/g, '');
   return s.trim();
+}
+
+/** Sanitize public news copy while preserving story attribution and removing private feed identities. */
+export function cleanAttributedNewsText(raw, privateNames = []) {
+  if (!raw) return raw;
+  let s = String(raw)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '')
+    .replace(/#([\p{L}\p{N}_]+)/gu, (_, word) => word.replace(/_/g, ' '));
+  s = s.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' ')
+    .replace(/(^|[\s(])@[A-Za-z0-9_]{4,}/g, '$1');
+  const names = [...new Set([
+    ...extraNames,
+    ...(Array.isArray(privateNames) ? privateNames : []),
+  ].map((value) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter((name) => name.length >= 3 && name.length <= 80))].sort((a, b) => b.length - a.length);
+  for (const name of names) {
+    const privateName = new RegExp(`(?<![\\p{L}\\p{N}_])${esc(name)}(?![\\p{L}\\p{N}_])`, 'giu');
+    s = s.replace(privateName, ' ');
+  }
+  s = s.replace(/(^|\n)\s*(?:المصدر|مصدر|source)\s*[:：]\s*(?=\n|$)/giu, '$1')
+    .replace(/(^|\n)\s*[:：|•\-–—]+\s*/gmu, '$1');
+  s = s.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n');
+  s = s.replace(/\s+([.،,:؛!؟])/g, '$1').trim();
+  return s;
 }

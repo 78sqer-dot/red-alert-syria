@@ -239,11 +239,12 @@ test('synthetic owner approval publishes the original photo and PDF to public se
   assert.deepEqual(await fetchAlnabaTelegramBytes(photoPreview, { api: telegram.api, token: TOKEN_FIXTURE, fetchImpl: telegram.fetchImpl }), photoBytes);
   assert.deepEqual(await fetchAlnabaTelegramBytes(pdfPreview, { api: telegram.api, token: TOKEN_FIXTURE, fetchImpl: telegram.fetchImpl }), pdfBytes);
 
-  const photo = publishAlnabaItem(store, OWNER, photoPreview, new Date('2026-11-10T12:00:00.000Z'));
-  const weekly = publishAlnabaItem(store, OWNER, pdfPreview, new Date('2026-11-10T12:05:00.000Z'));
+  const now = Date.now();
+  const photo = publishAlnabaItem(store, OWNER, photoPreview, new Date(now - 10 * 60 * 1000));
+  const weekly = publishAlnabaItem(store, OWNER, pdfPreview, new Date(now - 5 * 60 * 1000));
   const archive = publishAlnabaArchiveEntry(store, OWNER, archiveEntry(), new Date('2026-11-10T12:10:00.000Z'));
   assert.equal(store.persistCalls, 3);
-  assert.equal(listPublicAlnabaItems(store, 'photos', 80, 0, Date.parse('2026-11-10T13:00:00.000Z'))[0].id, photo.id);
+  assert.equal(listPublicAlnabaItems(store, 'photos', 80, 0, now)[0].id, photo.id);
   assert.equal(listPublicAlnabaItems(store, 'weekly')[0].id, weekly.id);
   assert.equal(listPublicAlnabaItems(store, 'archive')[0].id, archive.id);
 

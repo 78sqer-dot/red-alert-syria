@@ -100,6 +100,35 @@ const keyboardAfter = (start) => [...calls.slice(start)].reverse()
   .find(({ payload }) => Array.isArray(payload?.reply_markup?.inline_keyboard))?.payload.reply_markup.inline_keyboard || [];
 const callbacksOf = (keyboard) => keyboard.flat().map((button) => button.callback_data).filter(Boolean);
 
+test('monitored feed identities and links stay private while a public speaker remains attributed', () => {
+  const synthetic = {
+    id: 'synthetic-private-feed-test', type: 'attack', source: 'news', channel_format: 2,
+    title: 'قناة الرصد الخاصة: بيان وزارة الصحة في حلب',
+    title_en: 'Private Watch Feed: Health Ministry statement in Aleppo',
+    description: 'قالت وزارة الصحة السورية إن 3 أشخاص أُصيبوا في حلب مساء اليوم. قناة الرصد الخاصة https://t.me/private_watch/123',
+    description_en: 'The Ministry of Health said 3 people were injured in Aleppo tonight. Private Watch Feed https://t.me/private_watch/123',
+    timestamp: new Date().toISOString(), place: { scope: 'country' },
+    meta: {
+      channelTitle: 'قناة الرصد الخاصة: بيان وزارة الصحة',
+      newsSources: [
+        { name: 'قناة الرصد الخاصة', u: 'private_watch', url: 'https://t.me/private_watch/123' },
+        { name: 'Private Watch Feed', url: 'https://news.example/item' },
+      ],
+    },
+    history: [{ at: new Date().toISOString(), kind: 'update', title: 'قناة الرصد الخاصة: تحديث', description: 'قالت وزارة الصحة: لا وفيات جديدة. https://t.me/private_watch/123', is_active: true }],
+  };
+  const post = channelPost(synthetic);
+  const publicView = publicAlert(synthetic);
+  for (const value of [post, publicView.title, publicView.title_en, publicView.description, publicView.description_en, publicView.updates[0].title, publicView.updates[0].description]) {
+    assert.doesNotMatch(value, /قناة الرصد الخاصة|Private Watch Feed|private_watch|https?:\/\//i);
+  }
+  assert.match(post, /وزارة الصحة السورية/);
+  assert.match(publicView.description, /وزارة الصحة السورية/);
+  assert.match(publicView.description_en, /Ministry of Health/);
+  assert.match(publicView.updates[0].description, /وزارة الصحة/);
+  assert.equal(synthetic.meta.newsSources.length, 2, 'source records remain available internally');
+});
+
 test('home menu clears tracked private relay messages for this bot and chat only', async () => {
   store.convoAdd('admin', ownerId, 9101, 9102);
   store.convoAdd('report', reporter.id, 9103);
@@ -623,9 +652,9 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     location: { scope: 'country' }, extra: [], ttlMin: 60, details: 'تفاصيل الخبر',
   }, { id: ownerId, name: 'test' });
   const monitoredPost = channelPost({ ...monitoredInput, id: 'test-monitored-source', timestamp: new Date().toISOString(), place: { scope: 'country' } });
-  assert.match(monitoredPost, /🔎 <b>المصدر:<\/b> مصادر محلية/);
-  assert.doesNotMatch(monitoredPost, /<a\b|href=/, 'source is plain text with no clickable channel URL');
-  assert.doesNotMatch(monitoredPost, /<b>المصدر:<\/b>[^\n]*هجوم/);
+  assert.match(monitoredPost, /تفاصيل الخبر/);
+  assert.doesNotMatch(monitoredPost, /مصادر محلية|news\.example|المصدر:/, 'the monitored feed name and link stay private in the public post');
+  assert.doesNotMatch(monitoredPost, /<a\b|href=/, 'the post contains no monitored-source URL');
   assert.deepEqual(monitoredInput.meta.newsSources.map(({ name, url }) => ({ name, url })), [{ name: 'مصادر محلية', url: 'https://news.example/story' }]);
   const endedText = channelPost({
     id: 'test-channel-ended', type: 'warplane', timestamp: '2026-10-30T20:40:00.000Z', ended_at: '2026-10-30T20:55:00.000Z',
@@ -702,7 +731,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.doesNotMatch(decisionPost, /قرار أو تعيين/, 'the public category uses the event-specific label, not the broad bot button label');
   assert.doesNotMatch(politicalPost, /🔎 <b>المصدر:<\/b>|&lt;Official source&gt;|تاريخ المصدر/, 'political source names and citations stay out of public channel posts');
   assert.doesNotMatch(politicalPost, /<a\b|href=/, 'political source is plain text with no clickable link');
-  assert.match(politicalPost, /منقول بحسب المصدر؛ لم يُسجّل تحقق مستقل/);
+  assert.match(politicalPost, /لم يُسجّل تحقق مستقل عن الخبر/);
   assert.deepEqual(politicalAlert.meta.political.sources, [{ name: '<Official source>', url: 'https://official.example/news', timestamp: politicalNewsDate }], 'source metadata remains stored on the alert');
   const politicalReviewCard = newsMonitorTest.cardText({
     id: 'test-political-review-source', type: 'political', politicalCategory: 'negotiation',
@@ -1089,6 +1118,8 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     id: draftId,
     type: 'assassination',
     status: 'pending',
+    editorialHold: true,
+    editorialHoldReason: 'synthetic-test',
     headline: 'خبر محاكاة محلي',
     body: 'تفاصيل محاكاة محلية',
     loc: { scope: 'place', name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib' },
@@ -1113,6 +1144,17 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(newsState().drafts[draftId].status, 'published');
   assert.ok(calls.slice(publishStart).some((call) => call.method === 'deleteMessage' && call.payload.message_id === checkMessageId), 'publishing from the check result removes its stale buttons');
   assert.equal(newsState().drafts[draftId].cards.some(([, id]) => id === checkMessageId), false, 'the deleted result is also removed from persisted card tracking');
+  const shareMessage = calls.slice(publishStart).find((call) => call.method === 'sendMessage' && call.chatId === ownerId
+    && call.payload.reply_markup?.inline_keyboard?.flat().some((button) => button.url?.startsWith('https://wa.me/?text=')));
+  assert.ok(shareMessage, 'manual publication offers a WhatsApp share link to the owner');
+  const shareButtons = shareMessage.payload.reply_markup.inline_keyboard.flat();
+  const whatsAppButton = shareButtons.find((button) => button.url?.startsWith('https://wa.me/?text='));
+  const mapButton = shareButtons.find((button) => button.text?.includes('على الخريطة') || button.text?.includes('On the map'));
+  assert.ok(mapButton?.url, 'the published alert has a map link');
+  const whatsAppText = new URL(whatsAppButton.url).searchParams.get('text');
+  assert.ok(whatsAppText.includes(newsState().drafts[draftId].headline), 'share text contains the story headline');
+  assert.ok(whatsAppText.includes(mapButton.url), 'share text contains the public map link');
+  assert.equal(calls.slice(publishStart).some((call) => /whatsapp/i.test(call.method)), false, 'the bot only opens WhatsApp with a prepared link; it never sends a message');
 
   await tap(callback);
   assert.equal(newsState().drafts[draftId].status, 'published');
