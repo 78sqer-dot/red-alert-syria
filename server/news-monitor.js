@@ -370,9 +370,8 @@ const editorialHas = (text, phrase) => {
 const editorialHasAny = (text, phrases) => phrases.some((phrase) => editorialHas(text, phrase) || editorialHas(text, `و${phrase}`));
 const publicDraftCopyIssue = (d) => [d?.headline, d?.body, d?.details, d?.text, d?.description, d?.title, d?.title_en, d?.description_en].some(isPrivateEditorialCopy)
   ? 'private-editorial-copy-not-public' : null;
-const PRIVATE_EDITORIAL_DRAFT_TYPES = new Set(['political', 'breaking', 'protest']);
 function privateEditorialModeApplicable(d) {
-  if (!d || !PRIVATE_EDITORIAL_DRAFT_TYPES.has(d.type)) return false;
+  if (!d || !ALERT_TYPES[d.type]) return false;
   return rewriteSourceReviewReason(String(d.sourceText || d.headline || d.body || '')) === null;
 }
 /** A no-AI, fail-closed check: uncertain edits stay pending for the owner instead of reaching either public surface. */
@@ -1507,6 +1506,8 @@ export function registerNewsTools(bot, h) {
   const en = (ctx) => h.langOf(ctx) === 'en';
   const t = (ctx, ar, e) => (en(ctx) ? e : ar);
   const staff = (ctx) => isOwner(ctx.from?.id) || store.isEditor(ctx.from?.id);
+  const privateOwner = (ctx) => h.owner(ctx) && ownerIdsU().includes(Number(ctx.from?.id))
+    && ctx.chat?.type === 'private' && Number(ctx.chat.id) === Number(ctx.from?.id);
   const findDraft = async (id) => {
     const n = newsState();
     if (!n.drafts[id] && store.backup) await store.mergeFromBackup().catch(() => {});
@@ -1648,7 +1649,7 @@ export function registerNewsTools(bot, h) {
   });
   bot.callbackQuery(/^nw:(rw|op|sa):(\w+)$/, async (ctx) => {
     const mode = ctx.match[1] === 'op' ? 'opinion' : ctx.match[1] === 'sa' ? 'satire' : 'news';
-    if (!staff(ctx) || (mode !== 'news' && !ownerIdsU().includes(Number(ctx.from.id)))) return toast(ctx, '');
+    if (!staff(ctx) || (mode !== 'news' && !privateOwner(ctx))) return toast(ctx, '');
     const d = await findDraft(ctx.match[2]);
     if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
     const sourceText = String(d.sourceText || d.headline || '').trim();
@@ -1658,11 +1659,11 @@ export function registerNewsTools(bot, h) {
     if (mode !== 'news' && (!applicable || reviewReason)) {
       const message = reviewReason === 'non-political-event-source'
         ? t(ctx,
-          'هذا الحدث لا يرتبط في المصدر بقرار أو سياسة حكومية محددة؛ لا يمكن تطبيق النبرة المختارة دون اختلاق صلة. لم تُنشأ معاينة وبقي الخبر الوقائعي كما هو.',
-          'The source does not connect this event to a specific government policy or action. Applying this tone would invent a link; no preview was created and the factual draft is unchanged.')
+          'هذا المصدر عن حادث ولا يذكر الحكومة أو جهة حكومية/كوادر دولة بوضوح؛ لم تُنشأ معاينة وبقي الخبر الوقائعي كما هو.',
+          'This source reports an incident without clearly mentioning the government, a government entity, or state cadres; no preview was created and the factual draft is unchanged.')
         : t(ctx,
-          'لا تتضمن هذه المسودة وقائع حكومية محددة تكفي للنبرة المختارة دون تخمين. لم تُنشأ معاينة وبقي الخبر الوقائعي كما هو.',
-          'This draft lacks specific government facts to support the selected tone without speculation. No preview was created and the factual draft is unchanged.');
+          'لا يذكر المصدر جهة حكومية أو كوادر دولة بوضوح، أو أن نصه قصير جداً؛ لم تُنشأ معاينة وبقي الخبر الوقائعي كما هو.',
+          'The source does not clearly mention a government entity or state cadres, or is too short; no preview was created and the factual draft is unchanged.');
       return toast(ctx, message, true);
     }
     const preview = d.aiRewritePreview;
@@ -1687,7 +1688,7 @@ export function registerNewsTools(bot, h) {
         : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '', mode }));
       text = finalizeRewriteOutput(text, mode, d.srcs?.[0]?.name || '');
       d.aiRewritePreview = {
-        text, mode, sourceText, baseHeadline: d.headline, originalHeadline: d.headline,
+        text, mode, sourceText, baseHeadline: d.headline, baseType: d.type, originalHeadline: d.headline,
         createdAt: Date.now(), applied: false,
       };
       save();
@@ -1708,7 +1709,7 @@ export function registerNewsTools(bot, h) {
     const preview = d?.aiRewritePreview;
     const sourceText = String(d?.sourceText || d?.headline || '').trim();
     if (!d || d.status !== 'pending' || preview?.mode !== 'opinion' || preview.applied || !preview.text) return toast(ctx, t(ctx, 'معاينة الرأي الخاصة لم تعد متاحة للتعديل', 'The private opinion preview is no longer editable'), true);
-    if (preview.sourceText !== sourceText || preview.baseHeadline !== d.headline || !privateEditorialModeApplicable(d) || rewriteSourceReviewReason(sourceText)) return toast(ctx, t(ctx, 'هذه معاينة قديمة أو لم تعد مؤهلة؛ لم يتغير النص', 'This preview is stale or no longer eligible; no text was changed'), true);
+    if (preview.sourceText !== sourceText || preview.baseHeadline !== d.headline || (preview.baseType !== undefined && preview.baseType !== d.type) || !privateEditorialModeApplicable(d) || rewriteSourceReviewReason(sourceText)) return toast(ctx, t(ctx, 'هذه معاينة قديمة أو لم تعد مؤهلة؛ لم يتغير النص', 'This preview is stale or no longer eligible; no text was changed'), true);
     for (const draft of Object.values(newsState().drafts)) {
       if (draft.privateEditorialEdit?.userId === userId) delete draft.privateEditorialEdit;
     }
@@ -1748,9 +1749,9 @@ export function registerNewsTools(bot, h) {
     const d = await findDraft(ctx.match[1]);
     const preview = d?.aiRewritePreview;
     if (!d || d.status !== 'pending' || !preview?.text) return toast(ctx, t(ctx, 'المسودة أو المعاينة لم تعد متاحة', 'Draft or preview is no longer available'), true);
-    if (['opinion', 'satire'].includes(preview.mode) && !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, '');
+    if (['opinion', 'satire'].includes(preview.mode) && !privateOwner(ctx)) return toast(ctx, '');
     const sourceText = String(d.sourceText || d.headline || '').trim();
-    if (preview.sourceText !== sourceText || preview.baseHeadline !== d.headline) return toast(ctx, t(ctx, 'هذه معاينة قديمة؛ أعد فتح المراجعة', 'This preview is out of date; reopen the draft'), true);
+    if (preview.sourceText !== sourceText || preview.baseHeadline !== d.headline || (preview.baseType !== undefined && preview.baseType !== d.type)) return toast(ctx, t(ctx, 'هذه معاينة قديمة؛ أعد فتح المراجعة', 'This preview is out of date; reopen the draft'), true);
     if (['opinion', 'satire'].includes(preview.mode) && !privateEditorialModeApplicable(d)) return toast(ctx, t(ctx,
       'لم تعد هذه المسودة مؤهلة للنقد أو السخرية؛ بقي الخبر الوقائعي كما هو.',
       'This draft is no longer eligible for critique or satire; its factual story remains unchanged.'), true);
@@ -1787,7 +1788,7 @@ export function registerNewsTools(bot, h) {
     const d = await findDraft(ctx.match[1]);
     if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
     const preview = d.aiRewritePreview;
-    if (['opinion', 'satire'].includes(preview?.mode) && !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, '');
+    if (['opinion', 'satire'].includes(preview?.mode) && !privateOwner(ctx)) return toast(ctx, '');
     if (['opinion', 'satire'].includes(preview?.mode)) {
       if (d.privateEditorial) delete d.privateEditorial[preview.mode];
       if (!Object.keys(d.privateEditorial || {}).length) delete d.privateEditorial;
@@ -2271,6 +2272,7 @@ export function registerNewsTools(bot, h) {
       const isCurrent = manualDraft.status === 'pending' && preview?.mode === 'opinion' && !preview.applied
         && preview.sourceText === sourceText && preview.sourceText === edit.sourceText
         && preview.baseHeadline === manualDraft.headline && preview.baseHeadline === edit.baseHeadline
+        && (preview.baseType === undefined || preview.baseType === manualDraft.type)
         && preview.text === edit.baseText && privateEditorialModeApplicable(manualDraft)
         && !rewriteSourceReviewReason(sourceText);
       if (!isCurrent) {

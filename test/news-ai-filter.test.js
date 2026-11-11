@@ -104,7 +104,7 @@ test('Gemini response schema includes the political type and allowed category va
   assert.ok(AI_RESPONSE_SCHEMA.items.required.includes('political_category'));
 });
 
-test('explicit opinion rewrite is labeled, sharp toward transitional-government policy, and source-grounded', async () => {
+test('explicit opinion rewrite is labeled, sharp toward government targets, and separates opinion from facts', async () => {
   let request;
   const output = 'خفض الدعم يحمّل الأسر أعباء إضافية وفق الأرقام الواردة في المصدر.';
   const result = await rewriteArabicNews('أعلنت الحكومة الانتقالية خفض الدعم، وتضمن البيان تقديراً لزيادة كلفة المعيشة.', {
@@ -116,44 +116,57 @@ test('explicit opinion rewrite is labeled, sharp toward transitional-government 
   });
   assert.match(result, /^رأي\/تحليل:/, 'opinion text is labeled even if the provider omits the label');
   const system = JSON.parse(request.options.body).systemInstruction.parts[0].text;
-  assert.match(system, /بصوت معارض واضح يركز على الحكومة الانتقالية وكوادر الدولة/);
-  assert.match(system, /لا تُلطّف الموقف المعارض إلى صياغة محايدة/);
-  assert.match(system, /يركز على الحكومة الانتقالية وكوادر الدولة والمسؤولين/);
-  assert.match(system, /لا تعمم المسؤولية أو الاتهام على جميع كوادر الدولة/);
-  assert.match(system, /لا تنسب فعلاً إلى شخص غير مسمى/);
-  assert.match(system, /استند حصراً إلى تفاصيل المصدر/);
-  assert.match(system, /لا تخترع وقائع أو أرقاماً أو أسباباً أو ردوداً/);
+  assert.match(system, /بصوت معارض واضح يركز على الحكومة الانتقالية والوزارات/);
+  assert.match(system, /لا تشترط وجود صلة سببية/);
+  assert.match(system, /نقداً سياسياً قصيراً ومباشراً وحاداً بوصفه رأياً/);
+  assert.match(system, /لا تنسب مسؤولية الحدث أو فعلاً أو قراراً محدداً إلى جهة/);
+  assert.match(system, /ميّز الوقائع المذكورة عن الحكم والاستنتاج/);
+  assert.match(system, /لا تخترع وقائع أو أسماء أو أرقاماً/);
   assert.match(system, /لا تستخدم تلاعباً نفسياً/);
 });
 
-test('state-cadre criticism requires a source-linked action and forbids blanket accusations', () => {
+test('an explicit state-cadre mention is enough for private opinion without inventing a source-linked action', () => {
   const source = 'أظهر تقرير موثق أن كوادر الدولة في الجهة الحكومية تجاهلت شكاوى الأسر بعد قرار خفض الدعم، وفق الوثيقة المنشورة اليوم.';
   assert.equal(rewriteSourceReviewReason(source), null,
-    'state officials and cadres are eligible when the source links them to a specific decision or behavior');
-  assert.equal(rewriteSourceReviewReason('تحدث مقال عام عن كوادر الدولة في العبارة دون تفصيل واضح.'), 'no-specific-policy-or-action',
-    'mentioning state cadres alone is not enough to generate political criticism');
+    'state officials and cadres are eligible when named by the source');
+  assert.equal(rewriteSourceReviewReason('تحدث مقال عام عن كوادر الدولة في العبارة دون تفصيل واضح.'), null,
+    'mentioning state cadres without a policy/action is no longer a reason to refuse private opinion');
 });
 
-test('fictional political satire is unmistakably labeled and non-political events cannot request it or critique', async () => {
+test('ministry condolence source can request private critique or labeled satire without policy causality, but unrelated accidents cannot', async () => {
   let requests = 0;
-  const satire = await rewriteArabicNews('أعلنت الحكومة الانتقالية قراراً رسمياً بخفض الدعم في محافظة حمص، وفق البيان المنشور اليوم.', {
-    key: 'dedicated-free-key', mode: 'satire',
-    fetchImpl: async () => {
-      requests++;
-      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'في مسرح الخيال، يتحول القرار إلى مظلة مثقوبة فوق جيوب الناس.' }] } }] }) };
-    },
-  });
+  const prompts = [];
+  const outputs = [
+    'رأي/تحليل: لا يكفي بيان التعزية وحده لمعالجة أوجاع الأهالي.',
+    'محاكاة ساخرة خيالية (ليست خبراً): في مسرح الخيال تتحول الوزارة إلى لافتة كبيرة فوق باب مغلق.',
+  ];
+  const fetchImpl = async (_url, options) => {
+    prompts.push(JSON.parse(options.body).systemInstruction.parts[0].text);
+    const text = outputs[requests++];
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }) };
+  };
+  const ministryCondolence = 'وزارة الصحة السورية تتقدم بالتعازي إلى أسر ضحايا الحادث في حمص، وفق بيانها المنشور اليوم.';
+  assert.ok(keywordTypes(ministryCondolence).includes('accident'), 'the condolence source includes an incident keyword');
+  assert.equal(rewriteSourceReviewReason(ministryCondolence), null,
+    'an explicitly named ministry suffices even when the report does not connect it to the incident or a policy');
+  const opinion = await rewriteArabicNews(ministryCondolence, { key: 'dedicated-free-key', mode: 'opinion', fetchImpl });
+  const satire = await rewriteArabicNews(ministryCondolence, { key: 'dedicated-free-key', mode: 'satire', fetchImpl });
+  assert.match(opinion, /^رأي\/تحليل:/);
   assert.match(satire, /^محاكاة ساخرة خيالية \(ليست خبراً\):/);
   assert.match(satire, /مسرح الخيال/);
+  assert.ok(prompts.every((prompt) => /لا تشترط وجود صلة سببية/.test(prompt)), 'both tone prompts explicitly allow no direct causal link');
+  assert.match(prompts[0], /لا تنسب مسؤولية الحدث أو فعلاً أو قراراً محدداً/,
+    'opinion remains forceful but cannot state unsupported responsibility as fact');
+  assert.match(prompts[1], /لا تقدّم واقعة مختلقة أو اتهاماً واقعياً/,
+    'satire remains clearly fictional and cannot present an invented allegation as fact');
   const protest = 'خرجت مظاهرة في حمص احتجاجاً على قرار الحكومة الانتقالية بفرض رسوم جديدة، بحسب بيان المنظمين الصادر اليوم.';
-  assert.equal(rewriteSourceReviewReason(protest), null,
-    'a protest report can offer the private tone choices only when it names a concrete government policy/action');
+  assert.equal(rewriteSourceReviewReason(protest), null, 'a source that names a government target remains eligible');
   const accident = 'وقع حادث سير في حمص وأصيب 3 أشخاص، وأعلنت الشرطة تفاصيل التحقيق في الحادث مساء اليوم.';
   assert.equal(rewriteSourceReviewReason(accident), 'non-political-event-source');
   await assert.rejects(rewriteArabicNews(accident, {
     key: 'dedicated-free-key', mode: 'opinion', fetchImpl: async () => { requests++; throw new Error('must not call provider'); },
   }), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
-  assert.equal(requests, 1, 'only the political satire request reaches the provider; an accident is rejected before generation');
+  assert.equal(requests, 2, 'only the two ministry-targeted private tones reach the provider; an unrelated accident is rejected first');
   assert.throws(() => finalizeRewriteOutput('لا تقدم المادة وقائع موثقة كافية', 'opinion'), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
   assert.throws(() => finalizeRewriteOutput('ملاحظة داخلية: EDITORIAL_REVIEW_REQUIRED', 'satire'), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
   assert.equal(isPrivateEditorialCopy('مقدمة تمهيدية — رأي/تحليل: نقد خاص بالمالك'), true,

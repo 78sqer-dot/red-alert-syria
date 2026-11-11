@@ -1755,3 +1755,73 @@ test('admins can add a video to the map without changing the existing channel po
   const confirmation = [...calls.slice(start)].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText')?.payload?.text || '';
   assert.match(confirmation, /حُفظ الوسيط على الخريطة/);
 });
+
+test('ministry-condolence source enables owner-only opinion and satire without changing or publishing the factual report', async () => {
+  const sourceText = 'تقدمت وزارة الصحة السورية بالتعازي إلى أسر ضحايا حادث سير في حمص، وفق بيانها المنشور اليوم؛ ولا يذكر المصدر صلة الوزارة بوقوع الحادث.';
+  const factualHeadline = 'وزارة الصحة السورية تقدم التعازي لأسر ضحايا حادث سير في حمص';
+  const opinionId = 'synthetic_ministry_condolence_opinion';
+  const satireId = 'synthetic_ministry_condolence_satire';
+  const drafts = [opinionId, satireId].map((id) => ({
+    id, type: 'accident', status: 'pending', headline: factualHeadline, sourceText,
+    loc: { scope: 'place', name_ar: 'حمص', name_en: 'Homs', governorate_ar: 'حمص', governorate_en: 'Homs', latitude: 34.7, longitude: 36.7 },
+    extra: [], ttlMin: 360, srcs: [{ u: 'synthetic-ministry-source', name: 'synthetic source', local: false }], cards: [], created: Date.now(),
+  }));
+  const previousRewrite = newsMonitorTest.R.rewriteImpl;
+  const generatedModes = [];
+  const start = calls.length;
+  const publicPostsBefore = calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length;
+  newsMonitorTest.R.rewriteImpl = async (_source, { mode }) => {
+    generatedModes.push(mode);
+    return mode === 'satire'
+      ? 'محاكاة ساخرة خيالية (ليست خبراً): في مسرح الخيال تتحول الوزارة إلى لافتة كبيرة فوق باب مغلق.'
+      : 'رأي/تحليل: بيان التعزية وحده لا يجيب عن أسئلة الناس، وهذا رأي معارض لا خبر جديد.';
+  };
+  for (const draft of drafts) newsState().drafts[draft.id] = draft;
+  try {
+    for (const draft of drafts) assert.equal(newsMonitorTest.privateEditorialModeApplicable(draft), true,
+      'an explicit ministry mention is sufficient even when the source denies a causal link to the accident');
+    await tapInChat(`nw:op:${opinionId}`, owner, { id: -1001001001, type: 'group' });
+    assert.deepEqual(generatedModes, [], 'a group callback cannot start a private owner critique');
+    assert.equal(drafts[0].aiRewritePreview, undefined);
+
+    await tap(`nw:op:${opinionId}`, owner);
+    assert.deepEqual(generatedModes, ['opinion']);
+    const opinionPreview = [...calls.slice(start)].reverse().find((call) => call.method === 'editMessageText' && call.chatId === ownerId && /معاينة نقد معارض خاصة — لم تُعتمد ولم تُنشر/.test(call.payload.text));
+    assert.ok(opinionPreview, 'the critique preview is shown only in the owner’s private chat');
+    assert.equal(drafts[0].headline, factualHeadline, 'generating an opinion leaves the factual headline unchanged');
+    const beforeGroupApply = calls.length;
+    await tapInChat(`nw:ra:${opinionId}`, owner, { id: -1001001001, type: 'group' });
+    assert.equal(drafts[0].aiRewritePreview.applied, false, 'group callbacks cannot apply a private preview');
+    assert.equal(calls.slice(beforeGroupApply).some((call) => call.chatId === -1001001001 && /رأي\/تحليل:/.test(call.payload?.text || '')), false,
+      'no opinion text is sent to a group');
+    await tap(`nw:ra:${opinionId}`, owner);
+    assert.equal(drafts[0].privateEditorial.opinion, drafts[0].aiRewritePreview.text);
+    assert.equal(drafts[0].headline, factualHeadline, 'applying a critique saves it separately from the factual report');
+    assert.equal(drafts[0].editorialHold, true, 'the existing manual-review hold remains active');
+    assert.equal(nightEligible(drafts[0]), false, 'the opinion cannot enter automatic publication');
+
+    const satireStart = calls.length;
+    await tap(`nw:sa:${satireId}`, owner);
+    assert.deepEqual(generatedModes, ['opinion', 'satire']);
+    const satirePreview = [...calls.slice(satireStart)].reverse().find((call) => call.method === 'editMessageText' && call.chatId === ownerId && /معاينة محاكاة ساخرة خيالية خاصة — ليست خبراً/.test(call.payload.text));
+    assert.ok(satirePreview, 'the fictional satire preview is clearly labeled and private to the owner');
+    await tap(`nw:ra:${satireId}`, owner);
+    assert.match(drafts[1].privateEditorial.satire, /^محاكاة ساخرة خيالية \(ليست خبراً\):/);
+    assert.equal(drafts[1].headline, factualHeadline, 'applying satire also leaves the factual report unchanged');
+    assert.equal(nightEligible(drafts[1]), false, 'the satire cannot enter automatic publication');
+
+    for (const draft of drafts) {
+      const publicDraft = toBotDraft(draft);
+      assert.equal(publicDraft.details, factualHeadline);
+      assert.doesNotMatch(JSON.stringify(publicDraft), /رأي\/تحليل:|محاكاة ساخرة خيالية/,
+        'the public bot draft contains factual wording only');
+    }
+    assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, publicPostsBefore,
+      'neither preview nor private application posts to Telegram');
+    assert.equal(calls.slice(start).some((call) => call.chatId === -1001001001 && /محاكاة ساخرة خيالية|رأي\/تحليل:/.test(call.payload?.text || '')), false,
+      'neither private tone is sent to a group');
+  } finally {
+    newsMonitorTest.R.rewriteImpl = previousRewrite;
+    for (const draft of drafts) delete newsState().drafts[draft.id];
+  }
+});
