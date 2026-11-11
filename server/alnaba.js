@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import express from 'express';
+import { normalizeTelegramPublicUrl } from '../shared/telegram-links.js';
 
 export const ALNABA_OWNER_ID = 8270709633;
 export const ALNABA_MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -107,20 +108,9 @@ export function mimeFromAlnabaFilename(fileName) {
 }
 
 export function normalizeTelegramLink(value) {
-  const raw = String(value ?? '').trim();
-  if (!raw || raw.length > 512 || /\s|[\u0000-\u001f\u007f]/u.test(raw)) throw new Error('INVALID_TELEGRAM_LINK');
-  let url;
-  try { url = new URL(raw); } catch { throw new Error('INVALID_TELEGRAM_LINK'); }
-  if (url.protocol !== 'https:' || !['t.me', 'telegram.me'].includes(url.hostname.toLowerCase())
-    || url.username || url.password || url.port || url.search || url.hash) throw new Error('INVALID_TELEGRAM_LINK');
-  const pathname = url.pathname.replace(/\/+$/, '');
-  let match = pathname.match(/^\/([A-Za-z][A-Za-z0-9_]{4,31})$/);
-  if (match) return `https://t.me/${match[1]}`;
-  match = pathname.match(/^\/\+([A-Za-z0-9_-]{8,128})$/);
-  if (match) return `https://t.me/+${match[1]}`;
-  match = pathname.match(/^\/joinchat\/([A-Za-z0-9_-]{8,128})$/);
-  if (match) return `https://t.me/joinchat/${match[1]}`;
-  throw new Error('INVALID_TELEGRAM_LINK');
+  const normalized = normalizeTelegramPublicUrl(value);
+  if (!normalized) throw new Error('INVALID_TELEGRAM_LINK');
+  return normalized;
 }
 
 function cleanFileName(value, fallback) {

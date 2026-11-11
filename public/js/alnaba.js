@@ -1,3 +1,5 @@
+import { telegramArchiveOpenLink } from '/shared/telegram-links.js?v=1';
+
 const page = document.documentElement.dataset.page || 'home';
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
@@ -11,19 +13,6 @@ for (const link of document.querySelectorAll('[data-nav]')) {
 
 function mediaUrl(item) {
   return item && UUID.test(String(item.id || '')) ? `/api/alnaba/media/${item.id}` : null;
-}
-
-function safeTelegramUrl(value) {
-  try {
-    const url = new URL(String(value ?? '').trim());
-    if (url.protocol !== 'https:' || !['t.me', 'telegram.me'].includes(url.hostname.toLowerCase())
-      || url.username || url.password || url.port || url.search || url.hash) return null;
-    const path = url.pathname.replace(/\/+$/, '');
-    if (!/^\/(?:[A-Za-z][A-Za-z0-9_]{4,31}|\+[A-Za-z0-9_-]{8,128}|joinchat\/[A-Za-z0-9_-]{8,128})$/.test(path)) return null;
-    return `https://t.me${path}`;
-  } catch {
-    return null;
-  }
 }
 
 function formatDate(value) {
@@ -145,17 +134,18 @@ function bindNasheedPlayback(root) {
 }
 
 function renderArchive(item) {
-  const href = safeTelegramUrl(item.url);
-  if (!href) return '';
+  const openLink = telegramArchiveOpenLink(item.url, navigator);
+  if (!openLink) return '';
   const title = esc(item.title || 'رابط Telegram');
   const date = formatDate(item.published_at);
+  const target = openLink.target ? ` target="${esc(openLink.target)}"` : '';
   return `<article class="an-archive-entry">
     <div class="an-archive-copy">
       <span class="an-archive-kicker">النبأ <span aria-hidden="true">/</span> الأرشيف</span>
       <h2>${title}</h2>
       ${date ? `<time datetime="${esc(item.published_at)}">أُضيف ${esc(date)}</time>` : ''}
     </div>
-    <a class="an-action-link an-archive-open" href="${esc(href)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(`فتح ${item.title || 'رابط Telegram'} في Telegram`)}">
+    <a class="an-action-link an-archive-open" href="${esc(openLink.href)}"${target} rel="${esc(openLink.rel)}" aria-label="${esc(`فتح ${item.title || 'رابط Telegram'} في Telegram`)}">
       <span>فتح في Telegram</span><span aria-hidden="true">↗</span>
     </a>
   </article>`;
