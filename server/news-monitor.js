@@ -24,7 +24,7 @@ const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
-import { setSourceNames, cleanAlertText } from './clean-text.js';
+import { setSourceNames, cleanAlertText, cleanAttributedNewsText } from './clean-text.js';
 
 const NEWS_GROUP_PRIORITY = ['aerial', 'incursion', 'strikes', 'civil', 'smuggling', 'political', 'nature', 'other'];
 const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', patrol: '🚓', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
@@ -346,7 +346,7 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+  if (!d || d.test || d.rule || d.editorialHold || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
   if (['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'military_incursion', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
   if (d.type === 'political') {
     const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
@@ -355,6 +355,89 @@ export function nightEligible(d) {
   if (!d.loc || d.loc.scope === 'country' || !Number.isFinite(d.loc.latitude) || !Number.isFinite(d.loc.longitude)) return false;
   const ss = d.srcs || [];
   return ss.length >= 2 || ss.some((x) => !isLocalSrc(x));
+}
+const editorialDigits = (value) => String(value || '').replace(/[٠-٩۰-۹]/g, (digit) => {
+  const code = digit.charCodeAt(0);
+  return String(code >= 0x06f0 ? code - 0x06f0 : code - 0x0660);
+});
+const editorialNorm = (value) => normalizeArabic(editorialDigits(value)).toLowerCase().replace(/\s+/g, ' ').trim();
+const editorialPhrase = (value) => editorialNorm(value).replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+const editorialHas = (text, phrase) => {
+  const haystack = ` ${editorialPhrase(text)} `;
+  const needle = editorialPhrase(phrase);
+  return Boolean(needle && haystack.includes(` ${needle} `));
+};
+const editorialHasAny = (text, phrases) => phrases.some((phrase) => editorialHas(text, phrase) || editorialHas(text, `و${phrase}`));
+/** A no-AI, fail-closed check: uncertain edits stay pending for the owner instead of reaching either public surface. */
+function editorialGate(d) {
+  const fail = (reason) => ({ ok: false, reason });
+  const rawSource = String(d?.sourceText || d?.body || '').trim();
+  const rawHeadline = String(d?.headline || '').trim();
+  const source = editorialNorm(rawSource.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' '));
+  const headline = editorialNorm(rawHeadline);
+  if (!source || !headline || !(d.srcs || []).length) return fail('missing-source-or-text');
+  if (!NEWS_TYPES.includes(d.type) || !ALERT_TYPES[d.type]) return fail('invalid-type');
+  if (refineType(d.type, rawSource) !== d.type) return fail('type-conflict');
+  if (d.type === 'political') {
+    const inferred = inferPoliticalCategory(rawSource);
+    if (!POLITICAL_CATEGORIES[d.politicalCategory] || (inferred && inferred !== d.politicalCategory)) return fail('political-category-conflict');
+  }
+
+  const publicRaw = `${rawHeadline}\n${d.body || ''}`;
+  if (/https?:\/\/|www\.|t\.me\/|@[A-Za-z0-9_]{4,}/i.test(publicRaw)) return fail('public-link-or-handle');
+  const feedNames = (d.srcs || []).flatMap((sourceItem) => [sourceItem?.name, sourceItem?.u]).filter(Boolean);
+  if (feedNames.some((name) => editorialHas(publicRaw, name))) return fail('private-feed-identity');
+
+  const locs = locsOf(d.loc, d.extra);
+  const placeNames = locs.flatMap((loc) => [loc?.name_ar, loc?.district_ar, loc?.governorate_ar]).filter(Boolean);
+  const sourcePlaces = placeNames.filter((name) => nameInText(name, rawSource));
+  if (!sourcePlaces.length) return fail('place-missing-from-source');
+  if (!sourcePlaces.some((name) => nameInText(name, rawHeadline))) return fail('place-missing-from-headline');
+
+  const withoutLinks = editorialDigits(rawSource.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' '));
+  const publicDigits = editorialDigits(rawHeadline);
+  const numbers = withoutLinks.match(/\d+(?::\d+)?(?:[.,]\d+)?/g) || [];
+  if (numbers.some((number) => !publicDigits.includes(number))) return fail('number-or-time-omitted');
+  for (const marker of ['اليوم', 'امس', 'غدا', 'صباح', 'ظهرا', 'مساء', 'فجر', 'ليلا', 'الساعة', 'كانون', 'شباط', 'اذار', 'نيسان', 'ايار', 'حزيران', 'تموز', 'اب', 'ايلول', 'تشرين', 'يناير', 'فبراير', 'مارس', 'ابريل', 'مايو', 'يونيو', 'يوليو', 'اغسطس', 'سبتمبر', 'اكتوبر', 'نوفمبر', 'ديسمبر']) {
+    if (editorialHas(source, marker) && !editorialHas(headline, marker)) return fail('date-or-time-omitted');
+  }
+
+  const attribution = /(?:^|\s)و?(?:قال|قالت|اعلن|اعلنت|افاد|افادت|ذكر|ذكرت|اكد|اكدت|اوضح|اوضحت|صرح|صرحت|بحسب|وفقا)(?:\s|$)/u;
+  if (attribution.test(source) !== attribution.test(headline)) return fail('attribution-changed');
+  const actorPattern = /(?:^|[\s:])و?(?:قال|قالت|اعلن|اعلنت|افاد|افادت|ذكر|ذكرت|اكد|اكدت|اوضح|اوضحت|صرح|صرحت|بحسب|وفقا)(?:\s+ل)?\s+([^،؛:.\n]{2,100}?)(?=\s+(?:ان|اليوم|امس|غدا|حول|بشان|عن|بعد|في|مع|انه|انها|بانه|بدء|بدا|سيتم|جديد)(?:\s|$)|[،؛:.\n]|$)/gu;
+  const sourceActors = [...rawSource.matchAll(actorPattern)].map((match) => editorialPhrase(match[1])).filter((actor) => actor.length >= 3);
+  const headlineActors = [...rawHeadline.matchAll(actorPattern)].map((match) => editorialPhrase(match[1])).filter((actor) => actor.length >= 3);
+  if (sourceActors.some((actor) => !editorialHas(rawHeadline, actor))) return fail('attributed-actor-omitted');
+  if (headlineActors.some((actor) => !editorialHas(rawSource, actor))) return fail('attributed-actor-invented');
+
+  const uncertaintyGroups = [
+    ['قد', 'ربما', 'على الارجح', 'احتمال', 'من المحتمل'],
+    ['غير مؤكد', 'لم يتسن التحقق', 'لم يتم التحقق', 'انباء غير مؤكدة', 'معلومات اولية', 'اولية'],
+    ['يشتبه', 'مشتبه', 'مزعوم', 'مزعم', 'alleged', 'unconfirmed', 'possibly', 'may have'],
+  ];
+  for (const group of uncertaintyGroups) {
+    const inSource = editorialHasAny(source, group);
+    const inHeadline = editorialHasAny(headline, group);
+    if (inSource !== inHeadline) return fail('uncertainty-changed');
+  }
+
+  const responseGroups = [
+    ['نفى', 'نفت', 'ينفي', 'تنفي'], ['رد', 'ردت', 'ردوا'],
+    ['اوضح', 'اوضحت'], ['في المقابل', 'من جهته', 'من جانبها', 'من جانبهم'],
+    ['لم يعلق', 'رفض التعليق', 'تعليق رسمي'],
+  ];
+  for (const group of responseGroups) {
+    const inSource = editorialHasAny(source, group);
+    const inHeadline = editorialHasAny(headline, group);
+    if (inSource !== inHeadline) return fail('response-or-context-changed');
+  }
+
+  const evaluative = ['بطولي', 'عبقري', 'خائن', 'مجرم', 'فاشل', 'ناجح', 'عظيم', 'رائع', 'مذهل', 'كارثي', 'فضيحة', 'انتصار ساحق', 'هزيمة ساحقة', 'فشل ذريع', 'heroic', 'brilliant', 'traitorous', 'disastrous', 'humiliating victory'];
+  const attributionCue = /(?:^|\s)و?(?:قال|قالت|اعلن|اعلنت|افاد|افادت|ذكر|ذكرت|اكد|اكدت|اوضح|اوضحت|صرح|صرحت|وصف|وصفت|اعتبر|اعتبرت|اتهم|اتهمت|بحسب|وفقا)(?:\s|$)/u;
+  for (const word of evaluative) {
+    if (editorialHas(headline, word) && (!editorialHas(source, word) || !attributionCue.test(headline))) return fail('unsupported-evaluation');
+  }
+  return { ok: true, reason: null };
 }
 /** Daytime uses the same AI and source-confidence gate as overnight auto-publishing. */
 export function daytimeAutoEligible(d) { return Boolean(d && d.type !== 'political' && d.status === 'pending' && nightEligible(d)); }
@@ -510,8 +593,11 @@ function cardText(d, lang = 'ar') {
   const nMain = (d.srcs || []).filter((s) => !isLocal(s)).length;
   if (d.type === 'political') {
     lines.push(tr(lang, 'ℹ️ <i>صياغة منسوبة لما نشرته المصادر — ليست تحققاً مستقلاً، وتحتاج مراجعة بشرية.</i>', 'ℹ️ <i>Attributed to the cited sources; this is not independent verification and needs human review.</i>'));
-  } else if ((d.srcs || []).length >= 2) lines.push(tr(lang, `✅ <i>مؤكد من ${((k) => (k === 2 ? 'مصدرين' : k <= 10 ? `${k} مصادر` : `${k} مصدراً`))((d.srcs || []).length)}</i>`, `✅ <i>Confirmed by ${(d.srcs || []).length} sources</i>`));
+  } else if ((d.srcs || []).length >= 2) lines.push(tr(lang, `📡 <i>ورد الخبر في ${((k) => (k === 2 ? 'مصدرين' : k <= 10 ? `${k} مصادر` : `${k} مصدراً`))((d.srcs || []).length)}؛ وهذا لا يثبت تحققاً مستقلاً.</i>`, `📡 <i>Reported in ${(d.srcs || []).length} feeds; this alone is not independent verification.</i>`));
   else if (!nMain) lines.push(tr(lang, '⚠️ <i>مصدر محلي/ناشط واحد — غير مؤكد بعد، تأكد قبل النشر.</i>', '⚠️ <i>Single local/activist source — not confirmed yet, check before publishing.</i>'));
+  if (d.editorialHold) lines.push('', tr(lang,
+    '⚖️ <b>موقوفة للمراجعة التحريرية:</b> لم تجتز التحقق الآلي المحافظ من حفظ الوقائع والإسناد والمكان والأرقام والسياق؛ لم تُنشر تلقائياً.',
+    '⚖️ <b>Held for editorial review:</b> the conservative check could not confirm that facts, attribution, place, numbers, and context were preserved; nothing was auto-published.'));
   lines.push(`🕒 ${tr(lang, 'أول خبر', 'First report')}: ${esc(clock(d.ts || d.created))} ${tr(lang, '(بتوقيت دمشق)', '(Damascus time)')}`);
   if (d.rule) lines.push(tr(lang, '⚙️ <i>تصنيف آلي بسيط (الذكاء الاصطناعي غير متاح حالياً) — راجع النوع والمكان.</i>', '⚙️ <i>Simple automatic classification (AI unavailable) — check type and place.</i>'));
   return lines.join('\n');
@@ -788,6 +874,19 @@ async function nightPublish(d) {
   if (!a || !R.H?.publishDraft || d.status !== 'pending' || !nightEligible(d)) return false;
   const n = newsState();
   const mode = d.autoMode === 'day' ? 'day' : 'night';
+  const editorial = editorialGate(d);
+  if (!editorial.ok) {
+    d.status = 'pending';
+    d.editorialHold = true;
+    d.editorialHoldReason = editorial.reason;
+    d.editorialHoldAt = Date.now();
+    d.dayAutoAt = null;
+    delete d.autoMode;
+    save();
+    await refreshCards(d);
+    console.warn(`[news] automatic publication held for editorial review: ${d.id} (${editorial.reason})`);
+    return false;
+  }
   const duplicate = knownDuplicateDraft(d);
   if (duplicate) { await suppressDuplicateDraft(d, duplicate); return false; }
   d.status = 'publishing'; save();
@@ -871,6 +970,7 @@ export function toBotDraft(d) {
     location: d.loc || locationFrom({}), extra: d.extra || [],
     details: d.type === 'breaking' ? '' : (d.body || body), text: d.type === 'breaking' ? body : '',
     created: Date.now(), source: 'news',
+    srcs: (d.srcs || []).map((s) => ({ u: s.u, name: s.name, url: s.url, ts: s.ts, local: !!s.local })),
     ...(d.type === 'military_incursion' && ['soldiers', 'vehicles', 'barrier'].includes(d.incursionKind) ? { incursionKind: d.incursionKind } : {}),
     ...(patrolForm ? { patrolForm } : {}),
     ...((d.type === 'weather' && d.hazard) || d.dronePresence === true ? { meta: { ...(d.type === 'weather' && d.hazard ? { hazard: d.hazard } : {}), ...(d.dronePresence === true ? { dronePresence: true } : {}) } } : {}),
@@ -985,8 +1085,8 @@ async function handleResult(it, r, known, pmap) {
   if (m && m[1].toUpperCase() === 'P') target = pmap.get(Number(m[2])) || null;
   let rejectedSameAs = false;
   const locs = buildLocations(r, it);
-  const tidy = (x) => cleanAlertText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/\s+/g, ' ').trim();
-  const headline = (tidy(r.headline) || tidy(it.text.split('\n')[0])).slice(0, 160);
+  const tidy = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/\s+/g, ' ').trim();
+  const headline = (tidy(r.headline) || tidy(it.text.split('\n')[0])).slice(0, 240);
   const politicalCategory = r.type === 'political'
     ? (inferPoliticalCategory(it.text) || (POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null))
     : null;
@@ -1487,7 +1587,7 @@ export function registerNewsTools(bot, h) {
     try {
       const text = String(R.rewriteImpl
         ? await R.rewriteImpl(sourceText)
-        : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY })).trim();
+        : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '' })).trim();
       if (!text || text.length > 280) throw new Error('unsafe rewrite length');
       d.aiRewritePreview = {
         text, sourceText, baseHeadline: d.headline, originalHeadline: d.headline,
@@ -1639,8 +1739,13 @@ export function registerNewsTools(bot, h) {
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
     forgetCurrentCard(d, ctx); save();
     const kb = new InlineKeyboard();
-    if (h.mapUrl && alert) kb.url(t(ctx, '🗺 على الخريطة', '🗺 On the map'), h.mapUrl(alert.id, h.langOf(ctx)));
+    const mapUrl = h.mapUrl && alert ? h.mapUrl(alert.id, h.langOf(ctx)) : null;
+    if (mapUrl) kb.url(t(ctx, '🗺 على الخريطة', '🗺 On the map'), mapUrl);
     if (alert?.channel_message_id && config.channel.startsWith('@')) kb.url(t(ctx, '📣 المنشور', '📣 Post'), `https://t.me/${config.channel.slice(1)}/${alert.channel_message_id}`);
+    if (mapUrl && (config.ownerIds || []).some((id) => Number(id) === Number(ctx.from.id))) {
+      const shareText = `${d.headline || d.title || ''}\n\n${mapUrl}`;
+      kb.url(t(ctx, '🟢 فتح واتساب للمشاركة اليدوية', '🟢 Open WhatsApp to share manually'), `https://wa.me/?text=${encodeURIComponent(shareText)}`);
+    }
     const publishedType = editableDraftTypeLabel(d, h.langOf(ctx));
     await h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ تم النشر: ${typeOf(d.type).emoji} ${esc(publishedType)} — ${esc(whereOf(locsOf(d.loc, d.extra)))}`, `✅ Published: ${typeOf(d.type).emoji} ${esc(publishedType)}`), { parse_mode: 'HTML', reply_markup: kb });
   });
@@ -1974,4 +2079,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, editorialGate, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };

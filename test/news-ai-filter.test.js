@@ -86,6 +86,11 @@ test('political prompt requires attribution and conservative Syrian categories w
   assert.match(sys, /places may be empty or contain only a place explicitly stated/);
   assert.match(sys, /opinion, analysis, commentary/);
   assert.match(sys, /foreign politics/);
+  assert.match(sys, /concise, factual, neutral Arabic news sentence/);
+  assert.match(sys, /Preserve material facts, dates\/times, locations, uncertainty, and relevant response\/context/);
+  assert.match(sys, /PRIVATE routing metadata: never repeat or reveal that monitored outlet\/channel name/);
+  assert.match(sys, /never invent a denial or counterclaim to create false balance/);
+  assert.match(sys, /Do not turn public-safety information into political advocacy/);
 });
 
 test('Gemini response schema includes the political type and allowed category values', () => {
@@ -127,5 +132,8 @@ test('professional rewrite uses only the fixed fast free-tier model and returns 
   assert.match(request.url, /dedicated-free-key/);
   assert.match(request.options.body, /SOURCE:/);
   assert.match(request.options.body, /درجة التأكد/);
+  assert.match(request.options.body, /اسم قناة الرصد المرسل/);
+  assert.match(request.options.body, /لا تخترع رداً أو ادعاءً مضاداً لصنع توازن زائف/);
+  assert.match(request.options.body, /لا تحوّل خبر السلامة العامة إلى دعاية سياسية/);
   assert.equal(JSON.parse(request.options.body).generationConfig.temperature, 0.1);
 });

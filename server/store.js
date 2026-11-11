@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
 import { alertZones, selectedAlertZones, regionFix } from './places.js';
-import { cleanAlertText } from './clean-text.js';
+import { cleanAlertText, cleanAttributedNewsText } from './clean-text.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
 import { expireAlnabaPhotos, sanitizeAlnabaState, sanitizeAlnabaBatchQueue, mergeAlnabaBatchQueues } from './alnaba.js';
 
@@ -786,20 +786,9 @@ function monitoredNewsSources(a) {
   }
   return sources;
 }
-/** Only expose a named provider when the alert was generated from a known feed. */
-function publicSourceInfo(a, sources, newsSources) {
-  if (a.type === 'political') {
-    const source = sources?.[0];
-    return source
-      ? { kind: 'publisher', name: source.name, url: source.url }
-      : { kind: 'publisher', name: 'Red Alert Syria' };
-  }
-  if (a.source === 'news') {
-    const source = newsSources?.[0];
-    return source
-      ? { kind: 'publisher', name: source.name, url: source.url }
-      : { kind: 'publisher', name: 'Red Alert Syria' };
-  }
+/** Monitoring feed identities are private; public attribution stays in the story text itself. */
+function publicSourceInfo(a) {
+  if (a.type === 'political' || a.source === 'news') return { kind: 'publisher', name: 'Red Alert Syria' };
   if (a.source === 'weather') return { kind: 'provider', name: 'Open-Meteo', url: 'https://open-meteo.com/' };
   if (a.source === 'quake') {
     const src = String(a.meta?.src || '').toLowerCase();
@@ -819,8 +808,13 @@ export function publicAlert(a) {
     version: crypto.createHash('sha256').update(media.file_unique_id || media.file_id).digest('hex').slice(0, 12),
   }));
   const media = mediaItems[0] || null;
-  const sources = politicalSources(a);
-  const newsSources = monitoredNewsSources(a);
+  const privateSources = [
+    ...(Array.isArray(a.meta?.newsSources) ? a.meta.newsSources : []),
+    ...(Array.isArray(a.meta?.political?.sources) ? a.meta.political.sources : []),
+  ];
+  const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
+  const publicText = (value) => a.source === 'news' || ['political', 'breaking'].includes(a.type)
+    ? cleanAttributedNewsText(value, privateSourceNames) : cleanAlertText(value);
   const rawFlightTarget = a.type === 'air_movement' ? a.meta?.flightTarget : null;
   const targetScope = ['country', 'governorate'].includes(rawFlightTarget?.scope) ? rawFlightTarget.scope : null;
   const targetHasCoordinates = Number.isFinite(rawFlightTarget?.latitude) && Number.isFinite(rawFlightTarget?.longitude)
@@ -836,7 +830,6 @@ export function publicAlert(a) {
   } : null;
   const political = a.type === 'political' ? a.meta?.political : null;
   const category = political && Object.hasOwn(POLITICAL_CATEGORIES, political.category) ? political.category : undefined;
-  const sourceTimestamp = safeSourceTimestamp(political?.sourceTimestamp);
   return {
     id: a.id,
     type: a.type,
@@ -856,15 +849,12 @@ export function publicAlert(a) {
     incursion_kind: a.type === 'military_incursion'
       ? (['soldiers', 'vehicles', 'barrier'].includes(a.meta?.incursionKind) ? a.meta.incursionKind : Number.isInteger(a.meta?.vehicleCount) ? 'vehicles' : undefined)
       : undefined,
-    ...(a.type === 'political' ? {
-      ...(category ? { political_category: category } : {}),
-      political_sources: sources,
-      ...(sourceTimestamp ? { political_source_timestamp: sourceTimestamp } : {}),
-    } : {}),
-    title: a.title,
-    title_en: a.title_en,
-    description: cleanAlertText(a.description) || undefined,
-    description_en: a.description_en || undefined,
+    ...(a.type === 'political' && category ? { political_category: category } : {}),
+    title: a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title) : a.title,
+    title_en: a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title_en) : a.title_en,
+    description: publicText(a.description) || undefined,
+    description_en: a.source === 'news' || ['political', 'breaking'].includes(a.type)
+      ? publicText(a.description_en) || undefined : a.description_en || undefined,
     ...(media ? { media, media_items: mediaItems } : {}),
     location: a.location,
     place: {
@@ -878,12 +868,12 @@ export function publicAlert(a) {
     zones: a.location ? (a.type === 'political' ? selectedAlertZones(a) : alertZones(a)) : undefined,
     more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
-    source_info: publicSourceInfo(a, sources, newsSources),
+    source_info: publicSourceInfo(a),
     verification: {
       status: a.source === 'weather' || a.meta?.political?.official ? 'official' : a.source ? 'attributed' : 'unverified',
       label: a.source === 'weather' || a.meta?.political?.official ? 'مصدر رسمي' : a.source ? 'منسوب إلى المصدر' : 'غير موثق مستقلًا',
     },
-    updates: Array.isArray(a.history) ? a.history.slice(-20).map((h) => ({ at: h.at, kind: h.kind, title: h.title, description: h.description, is_active: h.is_active })) : undefined,
+    updates: Array.isArray(a.history) ? a.history.slice(-20).map((h) => ({ at: h.at, kind: h.kind, title: publicText(h.title), description: publicText(h.description), is_active: h.is_active })) : undefined,
     expires_at: a.expires_at,
     ended_at: a.ended_at,
     is_active: a.is_active,

@@ -22,37 +22,52 @@ test('other alerts identify the publisher without claiming independent verificat
   assert.equal('verification_status' in alert, false);
 });
 
-test('monitored news exposes its original validated publisher, not the selected alert category', () => {
-  const alert = publicAlert({
+test('monitored news hides its feed identity from the public map payload', () => {
+  const input = {
     ...base, type: 'attack', source: 'news',
+    title: 'قناة الرصد الخاصة: بيان وزارة الصحة في حلب',
+    title_en: 'Private Watch Feed: Health Ministry statement in Aleppo',
+    description: 'قالت وزارة الصحة السورية إن 3 أشخاص أُصيبوا في حلب مساء اليوم. قناة الرصد الخاصة https://t.me/private_watch/123',
+    description_en: 'The Syrian Ministry of Health said 3 people were injured in Aleppo tonight. Private Watch Feed https://t.me/private_watch/123',
     meta: { newsSources: [
-      { name: 'مصادر محلية', url: 'https://news.example/story', timestamp: '2026-11-02T09:00:00.000Z' },
+      { name: 'قناة الرصد الخاصة', u: 'private_watch', url: 'https://news.example/story', timestamp: '2026-11-02T09:00:00.000Z' },
+      { name: 'Private Watch Feed', url: 'https://news.example/english' },
       { name: 'Unsafe', url: 'javascript:alert(1)' },
     ] },
-  });
-  assert.deepEqual(alert.source_info, { kind: 'publisher', name: 'مصادر محلية', url: 'https://news.example/story' });
+    history: [{ at: '2026-11-02T10:00:00.000Z', kind: 'update', title: 'قناة الرصد الخاصة: تحديث من وزارة الصحة', description: 'قالت وزارة الصحة: لا وفيات جديدة. https://t.me/private_watch/123', is_active: true }],
+  };
+  const alert = publicAlert(input);
+  assert.deepEqual(alert.source_info, { kind: 'publisher', name: 'Red Alert Syria' });
+  assert.equal('news_sources' in alert, false);
+  assert.equal('meta' in alert, false);
+  for (const value of [alert.title, alert.title_en, alert.description, alert.description_en, alert.updates[0].title, alert.updates[0].description]) {
+    assert.doesNotMatch(value, /قناة الرصد الخاصة|Private Watch Feed|private_watch|https?:\/\//i);
+  }
+  assert.match(alert.description, /وزارة الصحة السورية/);
+  assert.match(alert.description_en, /Ministry of Health/);
+  assert.match(alert.updates[0].description, /وزارة الصحة/);
+  assert.equal(input.meta.newsSources.length, 3, 'internal source records remain unchanged');
 });
 
-test('political alerts expose only five validated source links and use the first as source_info', () => {
+test('political alerts keep source records internally but omit them from the public map payload', () => {
   const sources = Array.from({ length: 7 }, (_, i) => ({
     name: `Source ${i + 1}`,
     url: `https://news.example/${i + 1}`,
     timestamp: '2026-05-06T07:08:09Z',
     internal: 'must not leak',
   }));
-  const alert = publicAlert({
+  const input = {
     ...base, type: 'political', meta: { secret: 'do not expose', political: {
       category: 'meeting', sources, sourceTimestamp: '2026-05-06T07:08:09Z', private: true,
     } },
-  });
+  };
+  const alert = publicAlert(input);
   assert.equal(alert.political_category, 'meeting');
-  assert.equal(alert.political_sources.length, 5);
-  assert.deepEqual(alert.political_sources[0], {
-    name: 'Source 1', url: 'https://news.example/1', timestamp: '2026-05-06T07:08:09.000Z',
-  });
-  assert.equal(alert.political_source_timestamp, '2026-05-06T07:08:09.000Z');
-  assert.deepEqual(alert.source_info, { kind: 'publisher', name: 'Source 1', url: 'https://news.example/1' });
+  assert.equal('political_sources' in alert, false);
+  assert.equal('political_source_timestamp' in alert, false);
+  assert.deepEqual(alert.source_info, { kind: 'publisher', name: 'Red Alert Syria' });
   assert.equal('meta' in alert, false);
+  assert.equal(input.meta.political.sources.length, 7, 'the original internal source records remain intact');
 });
 
 test('political map rings use explicitly selected areas only and never infer them from article text', () => {
@@ -74,7 +89,7 @@ test('political map rings use explicitly selected areas only and never infer the
   assert.equal(generalArticle.zones, undefined, 'a locationless article must not get an inferred marker or ring');
 });
 
-test('political source sanitizer rejects javascript/data schemes and invalid categories', () => {
+test('political public payload omits source details and rejects invalid categories', () => {
   const alert = publicAlert({
     ...base, type: 'political', meta: { political: {
       category: 'not-a-category', sourceTimestamp: 'not-a-date',
@@ -87,15 +102,15 @@ test('political source sanitizer rejects javascript/data schemes and invalid cat
     } },
   });
   assert.equal(alert.political_category, undefined);
-  assert.equal(alert.political_source_timestamp, undefined);
-  assert.deepEqual(alert.political_sources, [{ name: 'Safe', url: 'http://news.example/story' }]);
-  assert.deepEqual(alert.source_info, { kind: 'publisher', name: 'Safe', url: 'http://news.example/story' });
+  assert.equal('political_source_timestamp' in alert, false);
+  assert.equal('political_sources' in alert, false);
+  assert.deepEqual(alert.source_info, { kind: 'publisher', name: 'Red Alert Syria' });
 });
 
 test('invalid political categories are omitted and non-political alerts keep publisher attribution', () => {
   const political = publicAlert({ ...base, type: 'political', meta: { political: { category: 'constructor' } } });
   assert.equal(political.political_category, undefined);
-  assert.deepEqual(political.political_sources, []);
+  assert.equal('political_sources' in political, false);
   const other = publicAlert({ ...base, meta: { political: { category: 'meeting', sources: [{ name: 'Secret', url: 'https://example.com' }] } } });
   assert.deepEqual(other.source_info, { kind: 'publisher', name: 'Red Alert Syria' });
   assert.equal('political_sources' in other, false);

@@ -144,6 +144,7 @@ test('Syrian political news without a verified place remains a locationless revi
   const botDraft = toBotDraft(draft);
   assert.equal(botDraft.politicalCategory, 'negotiation');
   assert.deepEqual(botDraft.politicalSources, [{ name: 'وكالة اختبار', url: item.url, timestamp: new Date(ts).toISOString() }]);
+  assert.deepEqual(botDraft.srcs, [{ u: item.src.u, name: item.src.name, url: item.url, ts, local: false }]);
   assert.equal(botDraft.politicalSourceTimestamp, new Date(ts).toISOString());
 });
 
@@ -185,4 +186,77 @@ test('the scheduler considers only still-pending eligible drafts whose saved dea
   assert.equal(dayAutoReady(draft, due), true);
   assert.equal(dayAutoReady({ ...draft, status: 'ignored' }, due), false);
   assert.equal(dayAutoReady({ ...draft, rule: true }, due), false);
+});
+
+test('the local editorial gate accepts faithful copy and rejects omitted numbers', () => {
+  const faithful = qualified({
+    type: 'explosion',
+    headline: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.',
+    sourceText: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.',
+    loc: { scope: 'place', name_ar: 'حلب', governorate_ar: 'حلب', latitude: 36.2, longitude: 37.1 },
+    srcs: [{ u: 'trusted-feed', name: 'قناة الرصد الخاصة', local: false }],
+  });
+  assert.deepEqual(_test.editorialGate(faithful), { ok: true, reason: null });
+  const changedNumber = { ...faithful, headline: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 4 أشخاص.' };
+  assert.deepEqual(_test.editorialGate(changedNumber), { ok: false, reason: 'number-or-time-omitted' });
+  const rejected = [
+    [{ type: 'attack' }, 'type-conflict'],
+    [{ loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 } }, 'place-missing-from-source'],
+    [{ headline: 'قال الدفاع المدني السوري: وقع انفجار مساء اليوم وأصاب 3 أشخاص.' }, 'place-missing-from-headline'],
+    [{ headline: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب وأصاب 3 أشخاص.' }, 'date-or-time-omitted'],
+    [{ headline: 'وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.' }, 'attribution-changed'],
+    [{ headline: 'قالت وزارة الطوارئ: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.' }, 'attributed-actor-omitted'],
+    [{ headline: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص، وقالت وزارة الطوارئ إن الحصيلة 3 أشخاص.' }, 'attributed-actor-invented'],
+    [{ sourceText: 'قال الدفاع المدني السوري: ربما وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.' }, 'uncertainty-changed'],
+    [{ headline: 'قال الدفاع المدني السوري: ربما وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.' }, 'uncertainty-changed'],
+    [{ sourceText: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص، ونفت الشرطة المحلية وقوع إصابات.' }, 'response-or-context-changed'],
+    [{ headline: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص، وردت وزارة الطوارئ على الخبر.' }, 'response-or-context-changed'],
+    [{ headline: 'قال الدفاع المدني السوري: وقع انفجار كارثي في مدينة حلب مساء اليوم وأصاب 3 أشخاص.' }, 'unsupported-evaluation'],
+    [{ headline: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص — قناة الرصد الخاصة.' }, 'private-feed-identity'],
+    [{ headline: 'قال الدفاع المدني السوري: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص https://t.me/private_feed/55' }, 'public-link-or-handle'],
+  ];
+  for (const [overrides, reason] of rejected) {
+    assert.deepEqual(_test.editorialGate({ ...faithful, ...overrides }), { ok: false, reason }, `expected rejection: ${reason}`);
+  }
+});
+
+test('failed editorial gate keeps an eligible draft pending, clears its timer, and never calls publication', async () => {
+  const id = 'editorial-hold-synthetic';
+  const draft = qualified({
+    id,
+    type: 'explosion',
+    headline: 'قال الدفاع المدني السوري: وقع انفجار في قرية كودنة مساء اليوم وأصيب 4 أشخاص.',
+    sourceText: 'قال الدفاع المدني السوري: وقع انفجار في قرية كودنة مساء اليوم وأصيب 3 أشخاص.',
+    loc: { scope: 'place', name_ar: 'كودنة', governorate_ar: 'القنيطرة', latitude: 33.2, longitude: 35.9 },
+    srcs: [{ u: 'trusted-feed', name: 'قناة الرصد الخاصة', local: false }],
+    dayAutoAt: daytimeStart,
+    autoMode: 'day',
+    created: Date.now(),
+    cards: [],
+  });
+  const previousHandler = _test.R.H;
+  let publishAttempts = 0;
+  const telegramCalls = [];
+  _test.R.H = {
+    apis: () => ({ admin: { sendMessage: async (...args) => telegramCalls.push(args) } }),
+    publishDraft: async () => { publishAttempts++; return { id: 'should-not-exist' }; },
+  };
+  newsState().drafts[id] = draft;
+  try {
+    assert.equal(nightEligible(draft), true, 'the synthetic draft reaches the editorial gate');
+    assert.equal(await _test.nightPublish(draft), false);
+    assert.equal(draft.status, 'pending');
+    assert.equal(draft.editorialHold, true);
+    assert.equal(draft.dayAutoAt, null);
+    assert.equal('autoMode' in draft, false);
+    assert.equal(nightEligible(draft), false, 'the persistent hold blocks later night and daytime retries');
+    assert.equal(dayAutoReady({ ...draft, dayAutoAt: daytimeStart }, daytimeStart + 1), false);
+    assert.match(_test.cardText(draft, 'ar'), /موقوفة للمراجعة التحريرية/);
+    assert.equal(await _test.nightPublish(draft), false, 'a repeated trigger is stopped before publication');
+    assert.equal(publishAttempts, 0, 'the combined Telegram/map publisher is never called');
+    assert.equal(telegramCalls.length, 0, 'no Telegram notice or public post is sent by the failed gate');
+  } finally {
+    _test.R.H = previousHandler;
+    delete newsState().drafts[id];
+  }
 });

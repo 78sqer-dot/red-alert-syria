@@ -12,16 +12,25 @@ const frontend = fs.readFileSync(path.join(ROOT, 'public/js/alnaba.js'), 'utf8')
 const bot = fs.readFileSync(path.join(ROOT, 'server/bot.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'public/css/alnaba.css'), 'utf8');
 
-test('Al-Nabaa removes Quran from public pages and links while preserving other sections and private bot controls', () => {
+test('Al-Nabaa exposes only the requested public section links while preserving private nasheed management', () => {
   const nav = page.match(/<nav class="an-nav"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
   assert.ok(nav, 'the public Al-Nabaa navigation exists');
   assert.doesNotMatch(nav, /data-nav="quran"|href="\/alnaba\/quran\//, 'Quran is no longer a top-navigation item');
+
+  const publicSections = [...nav.matchAll(/<a\b[^>]*data-nav="(photos|weekly|archive)"/g)].map((match) => match[1]);
+  assert.deepEqual(publicSections, ['photos', 'weekly', 'archive'], 'the visible section buttons are exactly photos, weekly, and archive');
+  assert.doesNotMatch(nav, /data-nav="nasheed"|href="\/alnaba\/nasheed\//, 'nasheed has no public navigation link');
+  const home = page.match(/<section class="an-view an-home"[^>]*>([\s\S]*?)<\/section>/)?.[1];
+  assert.ok(home, 'the public homepage exists');
+  assert.equal((home.match(/class="an-section-card\b/g) || []).length, 3, 'the homepage presents exactly three section cards');
+  assert.doesNotMatch(home, /href="\/alnaba\/nasheed\/"|an-nasheed-card|أناشيد/, 'the homepage does not publicly link or advertise nasheeds');
+  assert.match(page, /<section class="an-view" data-view="nasheed"/, 'the existing nasheed page content remains in the template');
+  assert.match(routes, /\/alnaba\/nasheed/, 'the existing nasheed page route remains available by direct URL');
 
   for (const [section, href] of [
     ['home', '/alnaba/'],
     ['photos', '/alnaba/photos/'],
     ['weekly', '/alnaba/weekly/'],
-    ['nasheed', '/alnaba/nasheed/'],
     ['archive', '/alnaba/archive/'],
   ]) {
     assert.match(nav, new RegExp(`href="${href.replaceAll('/', '\\/')}" data-nav="${section}"`), `${section} remains in the navigation`);

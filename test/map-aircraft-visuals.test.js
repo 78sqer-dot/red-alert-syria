@@ -31,13 +31,15 @@ test('drone is hidden with impact circles alone at country zoom and orbits at de
   assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });
 
-test('helicopter uses option 2 olive X-rotor art and hides its craft until detail zoom', () => {
+test('helicopter keeps the sleek #2 dark/red silhouette, blue glow, lifted orbit, and detail-only visibility', () => {
   assert.match(css, /\.mk-helicopter \.mk-s\s*\{\s*transform:\s*none;\s*\}/);
   assert.match(css, /\.heli-craft\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*rotate\(90deg\);/);
   assert.match(css, /\.heli-craft-second \{ top: 100%; transform: translate\(-50%, -50%\) rotate\(270deg\); \}/);
-  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*fill:\s*#65764a;/);
-  assert.match(css, /\.helicopter-svg \.heli-main-rotor \{ fill: #303a2a; opacity: 1;/);
-  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{ fill: #303a2a; opacity: 1;/);
+  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*fill:\s*#17212d;[^}]*rgba\(59,142,255,\.78\)/);
+  assert.match(css, /\.helicopter-svg \.heli-main-rotor \{ fill: #0b1220; opacity: \.96;/);
+  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{ fill: #ef4444; opacity: 1;/);
+  assert.match(css, /\.helicopter-svg \.heli-cockpit \{ fill: #e11d48; \}/);
+  assert.match(css, /\.heli-orbit \{ --heli-orb: calc\(var\(--orb, 14px\) \+ 4px\);[^}]*animation: heliOrbit 9s linear infinite/);
   assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-helicopter \.heli-orbit \{ visibility: hidden; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-helicopter \.heli-orbit \{ visibility: visible; \}/);
   assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: visible; \}/);
@@ -56,6 +58,17 @@ test('helicopter uses option 2 olive X-rotor art and hides its craft until detai
   assert.match(mapJs, /el\.insertAdjacentHTML\('afterbegin', '<span class="news-pulse-ring"/);
   assert.doesNotMatch(css, /\.heli-orbit::(?:before|after)/, 'the helicopter must not gain decorative orbit rings');
   assert.match(targetSvgs, /helicopter_simple:[\s\S]{0,850}rotate\(45 256 256\)[\s\S]{0,120}rotate\(-45 256 256\)/);
+  assert.match(targetSvgs, /helicopter_simple:[\s\S]*?class="heli-body"[\s\S]*?class="heli-cockpit"[\s\S]*?class="heli-tail-boom"[\s\S]*?class="heli-tail-rotor"/);
+});
+
+test('the slim helicopter tail rotor stays connected to the tail boom', () => {
+  const simple = targetSvgs.match(/helicopter_simple:\s*'([^']+)'/)?.[1] || '';
+  const boom = simple.match(/class="heli-tail-boom" d="M(\d+) (\d+)h(\d+)v(\d+)/);
+  const rotor = simple.match(/class="heli-tail-rotor"><rect x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)"/);
+  assert.ok(boom && rotor, 'the boom and tail rotor geometry must exist');
+  assert.equal(Number(rotor[1]) + Number(rotor[3]) / 2, Number(boom[1]) + Number(boom[3]) / 2);
+  const rotorY = Number(rotor[2]) + Number(rotor[4]) / 2;
+  assert.ok(rotorY >= Number(boom[2]) && rotorY <= Number(boom[2]) + Number(boom[4]));
 });
 
 test('helicopter uses the simplified silhouette while legacy glyphs remain available', () => {
