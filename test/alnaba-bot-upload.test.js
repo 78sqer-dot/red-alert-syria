@@ -33,6 +33,7 @@ const fixtureFiles = new Map([
   ['audio/quran.ogg', oggBytes],
   ['video/nasheed.mp4', mp4Bytes],
 ]);
+for (let index = 1; index <= 53; index += 1) fixtureFiles.set(`documents/batch-${index}.pdf`, pdfBytes);
 globalThis.fetch = async (url) => {
   const match = String(url).match(/\/file\/bot123456:LOCAL_TEST\/(.+)$/);
   assert.ok(match, 'media download must use the isolated Telegram fixture');
@@ -46,7 +47,7 @@ await store.init(null);
 let failBackup = false;
 store.backup = { async save(json) { if (failBackup) throw new Error('fixture backup failure'); this.json = json; } };
 store.state.alnaba = { photos: [], weekly: [], archive: [] };
-const { createBot } = await import('../server/bot.js');
+const { createBot, runtimeHooks } = await import('../server/bot.js');
 const bot = createBot({ token: process.env.BOT_TOKEN });
 bot.botInfo = { id: 1, is_bot: true, first_name: 'Fixture bot', username: 'FixtureBot' };
 const calls = [];
@@ -68,6 +69,8 @@ bot.api.config.use(async (_previous, method, payload) => {
       fixture_forwarded_nasheed_video_id: 'video/nasheed.mp4',
       fixture_followup_nasheed_video_1_id: 'video/nasheed.mp4',
       fixture_followup_nasheed_video_2_id: 'video/nasheed.mp4',
+      ...Object.fromEntries(Array.from({ length: 53 }, (_, index) => [`fixture_batch_pdf_${index + 1}_id`, `documents/batch-${index + 1}.pdf`])),
+      ...Object.fromEntries(Array.from({ length: 4 }, (_, index) => [`fixture_batch_nasheed_${index + 1}_id`, 'video/nasheed.mp4'])),
     };
     return { ok: true, result: { file_path: filePaths[payload.file_id] } };
   }
@@ -142,6 +145,33 @@ const sendPdf = (id, n = 1) => {
     },
   });
 };
+const sendBatchPdf = (id, n, mediaGroupId = null) => bot.handleUpdate({
+  update_id: updateId++,
+  message: {
+    message_id: ++messageId, date: 0,
+    chat: { id, type: 'private' }, from: user(id),
+    ...(mediaGroupId ? { media_group_id: mediaGroupId } : {}),
+    document: {
+      file_id: `fixture_batch_pdf_${n}_id`, file_unique_id: `fixture_batch_pdf_${n}_unique`,
+      file_name: `batch-${n}.pdf`, mime_type: 'application/pdf',
+      file_size: n === 17 ? 20 * 1024 * 1024 + 1 : pdfBytes.length,
+    },
+  },
+});
+const sendBatchNasheed = (id, n, mediaGroupId = null) => bot.handleUpdate({
+  update_id: updateId++,
+  message: {
+    message_id: ++messageId, date: 0,
+    chat: { id, type: 'private' }, from: user(id),
+    forward_origin: forwardedFrom('أناشيد'),
+    ...(mediaGroupId ? { media_group_id: mediaGroupId } : {}),
+    caption: `نشيد دفعي ${n} للاختبار`,
+    video: {
+      file_id: `fixture_batch_nasheed_${n}_id`, file_unique_id: `fixture_batch_nasheed_${n}_unique`,
+      file_name: `nasheed-${n}.mp4`, mime_type: 'video/mp4', file_size: mp4Bytes.length,
+    },
+  },
+});
 const sendAudio = (id) => bot.handleUpdate({
   update_id: updateId++,
   message: {
@@ -202,13 +232,13 @@ const sendAudio = (id) => bot.handleUpdate({
       audio: { file_id: 'fixture_forwarded_quran_audio_id', file_unique_id: 'fixture_forwarded_quran_audio_unique', file_name: 'quran.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
     },
   });
-  const sendForwardedVoiceMissingTitle = (id) => bot.handleUpdate({
+  const sendForwardedVoiceMissingTitle = (id, n = 1) => bot.handleUpdate({
     update_id: updateId++,
     message: {
       message_id: ++messageId, date: 0,
       chat: { id, type: 'private' }, from: user(id),
       forward_origin: forwardedFrom('قناة القرآن الكريم'),
-      voice: { file_id: 'fixture_quran_audio_id', file_unique_id: 'fixture_quran_voice_unique', mime_type: 'audio/ogg', file_size: oggBytes.length },
+      voice: { file_id: 'fixture_quran_audio_id', file_unique_id: `fixture_quran_voice_unique_${n}`, mime_type: 'audio/ogg', file_size: oggBytes.length },
     },
   });
   const sendForwardedVideo = (id) => bot.handleUpdate({
@@ -245,6 +275,7 @@ const sendAudio = (id) => bot.handleUpdate({
 const lastEditFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'editMessageText' && payload.chat_id === id);
 const buttonsOf = (entry) => entry?.payload?.reply_markup?.inline_keyboard?.flat() || [];
 const callbackData = (entry, prefix) => buttonsOf(entry).find((button) => button.callback_data.startsWith(prefix))?.callback_data;
+const waitForAlnabaBatch = (ms = 1200) => new Promise((resolve) => setTimeout(resolve, ms));
 
 after(() => {
   globalThis.fetch = originalFetch;
@@ -334,6 +365,7 @@ test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploa
       document: { file_id: 'fixture_pdf_id', file_unique_id: 'fixture_pdf_unique', file_name: 'fixture-weekly.pdf', mime_type: 'application/pdf', file_size: pdfBytes.length },
     },
   });
+  await waitForAlnabaBatch();
   assert.equal(store.state.alnaba.weekly.length, 1);
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
   assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
@@ -354,6 +386,7 @@ test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploa
   await tap(authorizedId, 'nb:quran');
   assert.match(lastEditFor(authorizedId)?.payload?.text || '', /القرآن الكريم/);
   await sendAudio(authorizedId);
+  await waitForAlnabaBatch();
   assert.equal(store.state.alnaba.quran.length, 1);
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
   assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
@@ -367,6 +400,7 @@ test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploa
   await sendText(authorizedId, '/alnaba');
   await tap(authorizedId, 'nb:nasheed');
   await sendVideo(authorizedId);
+  await waitForAlnabaBatch();
   assert.equal(store.state.alnaba.nasheed.length, 1, 'the owner nasheed upload publishes directly after validation');
   assert.equal(store.state.alnaba.nasheed[0].description, 'وصف النشيد');
   assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
@@ -596,36 +630,37 @@ test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploa
   assert.equal(store.state.alnaba.photos.at(-1).expiry_policy, 'photo-news-24h-v1');
 
   await sendForwardedPdf(authorizedId);
+  await waitForAlnabaBatch();
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
   assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   assert.equal(store.state.alnaba.weekly.length, 1);
   assert.equal(store.state.alnaba.weekly[0].issue_number, 2, 'a forwarded PDF keeps its issue number from the caption');
 
   await sendForwardedPdfMissingNumber(authorizedId);
-  assert.match(lastUiFor(authorizedId).payload.text, /رقم العدد الموجب/);
-  assert.equal(store.state.alnaba.weekly.length, 1, 'missing issue metadata keeps a forwarded PDF private');
-  await sendText(authorizedId, '3\nعدد ثالث معاد توجيهه للاختبار');
+  await waitForAlnabaBatch();
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
-  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
+  assert.equal(store.state.alnaba.weekly.length, 2, 'a PDF without an issue number publishes directly with the next issue number');
   assert.deepEqual(store.state.alnaba.weekly.map((item) => item.issue_number), [2, 3]);
+  assert.equal(store.state.alnaba.weekly.find((item) => item.issue_number === 3).title, 'العدد 3', 'a missing title defaults to the assigned issue number');
 
   const quranCount = store.state.alnaba.quran.length;
   await sendForwardedAudio(authorizedId);
+  await waitForAlnabaBatch();
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
   assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   assert.equal(store.state.alnaba.quran.length, quranCount + 1, 'audio forwarded from a Quran channel is classified and published directly');
   assert.equal(store.state.alnaba.quran.at(-1).expiry_policy, undefined);
 
-  await sendForwardedVoiceMissingTitle(authorizedId);
-  assert.match(lastUiFor(authorizedId).payload.text, /أرسل العنوان في السطر الأول/);
-  assert.equal(store.state.alnaba.quran.length, quranCount + 1, 'missing voice metadata stays private until completed');
-  await sendText(authorizedId, 'تلاوة بعنوان واضح للاختبار\nوصف التلاوة للاختبار');
+  await sendForwardedVoiceMissingTitle(authorizedId, 1);
+  await waitForAlnabaBatch();
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
   assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
-  assert.equal(store.state.alnaba.quran.length, quranCount + 2, 'the voice publishes directly once its title is supplied');
+  assert.equal(store.state.alnaba.quran.length, quranCount + 2, 'a voice with no title is directly published with a generated title');
+  assert.match(store.state.alnaba.quran.at(-1).title, /تلاوة قرآنية/);
 
   const nasheedCount = store.state.alnaba.nasheed.length;
   await sendForwardedVideo(authorizedId);
+  await waitForAlnabaBatch();
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
   assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   assert.equal(store.state.alnaba.nasheed.length, nasheedCount + 1, 'video from a nasheed channel publishes directly in nasheeds');
@@ -633,11 +668,12 @@ test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploa
 
   await sendAmbiguousForwardAudio(authorizedId);
   const ambiguousPrompt = lastUiFor(authorizedId);
-  assert.match(ambiguousPrompt.payload.text, /لم أستطع تحديد/);
-  assert.ok(buttonsOf(ambiguousPrompt).some((button) => button.callback_data === 'nb:forward:section:quran'));
-  assert.ok(buttonsOf(ambiguousPrompt).some((button) => button.callback_data === 'nb:forward:section:nasheed'));
+  assert.match(ambiguousPrompt.payload.text, /ملتبس/);
+  const ambiguousNasheedChoice = buttonsOf(ambiguousPrompt).find((button) => button.callback_data.startsWith('nb:batch-section:') && button.callback_data.endsWith(':nasheed'));
+  assert.ok(ambiguousNasheedChoice);
   assert.equal(store.state.alnaba.nasheed.length, nasheedCount + 1, 'ambiguous media is not filed or published automatically');
-  await tap(authorizedId, 'nb:forward:section:nasheed');
+  await tap(authorizedId, ambiguousNasheedChoice.callback_data);
+  await waitForAlnabaBatch();
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
   assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   assert.equal(store.state.alnaba.nasheed.length, nasheedCount + 2, 'choosing the ambiguous section causes direct website publication');
@@ -650,20 +686,83 @@ test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploa
 
   const beforeCancel = store.state.alnaba.nasheed.length;
   await sendAmbiguousForwardAudio(authorizedId);
-  assert.match(lastUiFor(authorizedId).payload.text, /لم أستطع تحديد/);
-  await tap(authorizedId, 'nb:cancel');
+  const privateChoice = lastUiFor(authorizedId);
+  const cancelThisFile = buttonsOf(privateChoice).find((button) => button.callback_data.startsWith('nb:batch-cancel:'));
+  assert.ok(cancelThisFile);
+  await tap(authorizedId, cancelThisFile.callback_data);
   assert.equal(store.state.alnaba.nasheed.length, beforeCancel, 'cancelling an ambiguous forward leaves it private');
   await sendFollowupForwardVideo(authorizedId, 1);
+  await waitForAlnabaBatch();
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
   assert.equal(store.state.alnaba.nasheed.length, beforeCancel + 1, 'the next clearly classified forward publishes after Cancel clears the pending state');
 
   const quranBeforeSupersede = store.state.alnaba.quran.length;
   const nasheedBeforeSupersede = store.state.alnaba.nasheed.length;
-  await sendForwardedVoiceMissingTitle(authorizedId);
-  assert.match(lastUiFor(authorizedId).payload.text, /أرسل العنوان في السطر الأول/);
+  await sendForwardedVoiceMissingTitle(authorizedId, 2);
   await sendFollowupForwardVideo(authorizedId, 2);
+  await waitForAlnabaBatch();
   assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
-  assert.doesNotMatch(lastUiFor(authorizedId).payload.text, /أكمل تجهيز العنصر المعاد توجيهه/);
-  assert.equal(store.state.alnaba.quran.length, quranBeforeSupersede, 'superseding a pending item never publishes the old item');
-  assert.equal(store.state.alnaba.nasheed.length, nasheedBeforeSupersede + 1, 'a new classified forward supersedes stale metadata state and publishes directly');
+  assert.equal(store.state.alnaba.quran.length, quranBeforeSupersede + 1, 'a title-less voice is independently queued and published with a generated title');
+  assert.equal(store.state.alnaba.nasheed.length, nasheedBeforeSupersede + 1, 'a new classified forward publishes directly');
+});
+
+test('PDF albums and separate messages publish in message order with an individual result for all 52 files', async () => {
+  const authorizedId = 8270709633;
+  const existingIssues = store.state.alnaba.weekly.map((item) => item.issue_number).filter(Number.isFinite);
+  const expectedFirstIssue = Math.max(0, ...existingIssues) + 1;
+  for (let album = 1; album <= 5; album += 1) {
+    for (let offset = 1; offset <= 10; offset += 1) {
+      const number = (album - 1) * 10 + offset;
+      await sendBatchPdf(authorizedId, number, `fixture-album-${album}`);
+    }
+  }
+  await sendBatchPdf(authorizedId, 51);
+  await sendBatchPdf(authorizedId, 52);
+  await waitForAlnabaBatch(6500);
+
+  const batchItems = store.state.alnaba.weekly.filter((item) => item.file_id.startsWith('fixture_batch_pdf_'));
+  assert.equal(batchItems.length, 51, 'the oversized seventeenth file fails without dropping any other PDF');
+  const orderedItems = [...batchItems].sort((a, b) => a.sequence - b.sequence);
+  assert.deepEqual(orderedItems.map((item) => item.issue_number), Array.from({ length: 51 }, (_, index) => expectedFirstIssue + index));
+  assert.equal(orderedItems[0].file_id, 'fixture_batch_pdf_1_id');
+  assert.equal(orderedItems.at(-1).file_id, 'fixture_batch_pdf_52_id');
+
+  const fileResults = calls.filter(({ method, payload }) => method === 'sendMessage'
+    && payload.chat_id === authorizedId && /batch-\d+\.pdf/.test(payload.text || ''));
+  assert.equal(fileResults.length, 52, 'every PDF, including the failure, receives its own result');
+  assert.equal(fileResults.filter(({ payload }) => payload.text.includes('✅')).length, 51);
+  assert.equal(fileResults.filter(({ payload }) => payload.text.includes('❌') && payload.text.includes('batch-17.pdf')).length, 1);
+  assert.equal(fileResults.filter(({ payload }) => payload.text.includes('❌')).length, 1);
+  assert.equal(JSON.parse(store.backup.json).alnaba.weekly.filter((item) => item.file_id.startsWith('fixture_batch_pdf_')).length, 51);
+
+  await sendBatchPdf(authorizedId, 53, 'fixture-shutdown-flush');
+  assert.equal(store.state.alnaba.weekly.some((item) => item.file_id === 'fixture_batch_pdf_53_id'), false,
+    'the short media-group collection window leaves the last PDF pending before shutdown');
+  assert.equal(typeof runtimeHooks.flushAlnabaBatches, 'function');
+  await runtimeHooks.flushAlnabaBatches();
+  assert.equal(store.state.alnaba.weekly.some((item) => item.file_id === 'fixture_batch_pdf_53_id'), true,
+    'the graceful-shutdown hook flushes the queued PDF before the process exits');
+});
+
+test('nasheed albums keep every clear item moving while an ambiguous forwarded item stays private until chosen', async () => {
+  const authorizedId = 8270709633;
+  const nasheedBefore = store.state.alnaba.nasheed.length;
+  const quranBefore = store.state.alnaba.quran.length;
+  await sendAmbiguousForwardAudio(authorizedId);
+  const ambiguousPrompt = lastUiFor(authorizedId);
+  const quranChoice = buttonsOf(ambiguousPrompt).find((button) => button.callback_data.startsWith('nb:batch-section:') && button.callback_data.endsWith(':quran'));
+  assert.ok(quranChoice, 'an unclear file offers an independent Quran choice');
+  for (let number = 1; number <= 3; number += 1) await sendBatchNasheed(authorizedId, number, 'fixture-nasheed-album-1');
+  await waitForAlnabaBatch(1800);
+  assert.equal(store.state.alnaba.nasheed.length, nasheedBefore + 3, 'the three clear nasheeds publish despite the earlier ambiguous file');
+  assert.equal(store.state.alnaba.quran.length, quranBefore, 'the ambiguous file remains private without a section choice');
+  assert.deepEqual(store.state.alnaba.nasheed.slice(-3).map((item) => item.file_id), [
+    'fixture_batch_nasheed_1_id', 'fixture_batch_nasheed_2_id', 'fixture_batch_nasheed_3_id',
+  ]);
+
+  await tap(authorizedId, quranChoice.callback_data);
+  await waitForAlnabaBatch();
+  assert.equal(store.state.alnaba.quran.length, quranBefore + 1, 'choosing a section publishes only that previously private file');
+  assert.equal(store.state.alnaba.quran.at(-1).file_id, 'fixture_ambiguous_audio_id');
+  assert.equal(store.state.alnaba.nasheed.length, nasheedBefore + 3);
 });

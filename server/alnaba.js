@@ -61,6 +61,17 @@ export function weeklyIssueNumber(item) {
   return match ? parseIssueNumber(match[1]) : null;
 }
 
+export function nextWeeklyIssueNumber(items = []) {
+  const used = (Array.isArray(items) ? items : []).map(weeklyIssueNumber).filter(Boolean);
+  const next = Math.max(0, ...used) + 1;
+  if (next <= ALNABA_MAX_ISSUE_NUMBER) return next;
+  const occupied = new Set(used);
+  for (let number = 1; number <= ALNABA_MAX_ISSUE_NUMBER; number += 1) {
+    if (!occupied.has(number)) return number;
+  }
+  return null;
+}
+
 export function parseWeeklyUploadCaption(caption, fileName = '') {
   const lines = String(caption ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   let issueNumber = null;
@@ -81,7 +92,8 @@ export function parseWeeklyUploadCaption(caption, fileName = '') {
   }
   if (issueNumber === null) {
     const name = String(fileName ?? '').replace(/\\/g, '/').split('/').pop() || '';
-    const filenameMatch = name.match(/^([0-9٠-٩۰-۹]{1,10})(?=\D|$)/u);
+    const filenameMatch = name.match(/^(?:العدد|issue|#)\s*[:#_\- ]?\s*([0-9٠-٩۰-۹]{1,10})(?=\D|$)/iu)
+      || name.match(/^([0-9٠-٩۰-۹]{1,10})(?=\D|$)/u);
     if (filenameMatch) issueNumber = parseIssueNumber(filenameMatch[1]);
   }
   const title = cleanTitle(titleLines.shift() || (issueNumber ? `العدد ${issueNumber}` : ''));

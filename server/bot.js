@@ -32,7 +32,7 @@ function withLabel(loc, label) {
 }
 const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
 import { cleanAlertText } from './clean-text.js';
-import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, findAlnabaEntry, updateAlnabaEntry, deleteAlnabaEntry, sanitizeAlnabaState, fetchAlnabaTelegramBytes, parseWeeklyUploadCaption, mimeFromAlnabaFilename, weeklyIssueNumber } from './alnaba.js';
+import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, findAlnabaEntry, updateAlnabaEntry, deleteAlnabaEntry, sanitizeAlnabaState, fetchAlnabaTelegramBytes, parseWeeklyUploadCaption, mimeFromAlnabaFilename, weeklyIssueNumber, nextWeeklyIssueNumber } from './alnaba.js';
 
 const PAGE = 24;
 const SUB_MENU_MIN = 40; // districts with more towns than this get a ناحية (sub-district) step first
@@ -149,6 +149,9 @@ const activeMediaSessions = new Map(); // userId -> { alertId, created }: admin 
 const alnabaSessions = new Map(); // ownerId -> { section, createdAt }
 const alnabaPendingUploads = new Map(); // ownerId -> validated media waiting for explicit publish confirmation
 const alnabaPendingForwardInputs = new Map(); // ownerId -> forwarded media waiting for section choice or required metadata
+const alnabaUploadBatches = new Map(); // ownerId -> incoming owner files grouped by a short quiet period
+const alnabaBatchQueues = new Map(); // ownerId -> ordered batch processing promise
+const alnabaBatchSectionChoices = new Map(); // token -> one ambiguous forwarded file awaiting section choice
 const alnabaPendingArchiveEntries = new Map(); // ownerId -> validated Telegram directory entry waiting for confirmation
 const alnabaEditSessions = new Map(); // ownerId -> { section, id, field, page, createdAt }
 const alnabaPendingManagementEdits = new Map(); // ownerId -> validated edit waiting for explicit save confirmation
@@ -1803,13 +1806,13 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       ? '🖼 <b>Photo news</b>\n\nSend one photo with its headline in the caption, or attach a JPG, PNG, or WebP file with a headline (maximum 10 MB). The original image is published directly on the Al-Nabaa website only and expires after 24 hours.'
       : '🖼 <b>أخبار مصوّرة</b>\n\nأرسل صورة مع عنوانها في وصفها، أو أرفق JPG أو PNG أو WebP مع العنوان (حتى 10 ميغابايت). تُنشر الصورة كما هي على موقع النبأ فقط، وتُزال بعد 24 ساعة.';
     if (section === 'weekly') return en
-      ? '📄 <b>Weekly newspaper</b>\n\nSend one PDF (up to 20 MB). Enter its positive issue number in the first caption line (for example, 5 then the title) or start the filename with that number, such as 5.pdf. After validation, it is published directly on the Al-Nabaa website only; visitors can view it in-page or download it.'
-      : '📄 <b>الصحيفة الأسبوعية</b>\n\nأرسل ملف PDF واحداً (حتى 20 ميغابايت)، واكتب رقم العدد الموجب في أول سطر من الوصف (مثلاً: 5 ثم العنوان)، أو ابدأ اسم الملف بالرقم مثل 5.pdf. بعد التحقق يُنشر مباشرةً على موقع النبأ فقط، ويمكن للزوار عرضه داخل الصفحة أو تنزيله.';
+      ? '📄 <b>Weekly newspaper</b>\n\nSend PDFs up to 20 MB each. A positive issue number in the caption or filename is kept; otherwise the next number is assigned. The title is optional and defaults to the issue number. Telegram albums contain up to 10 same-type documents; consecutive albums or separate messages are processed in order, with a result for every file. Files publish directly on the Al-Nabaa website only.'
+      : '📄 <b>الصحيفة الأسبوعية</b>\n\nأرسل ملفات PDF حتى 20 ميغابايت لكل ملف. يُحفظ رقم العدد الموجب الموجود في الوصف أو اسم الملف، وإلا يُخصّص الرقم التالي تلقائياً. العنوان اختياري، وعند غيابه يكون «العدد [الرقم]». حد ألبوم تيليغرام 10 ملفات من النوع نفسه؛ وتُعالج الألبومات المتتابعة أو الرسائل المنفصلة بالترتيب مع بيان نتيجة كل ملف. النشر مباشرةً على موقع النبأ فقط.';
     if (section === 'quran' || section === 'nasheed') {
       const name = section === 'quran' ? (en ? 'Quran' : 'القرآن الكريم') : (en ? 'Nasheeds' : 'الأناشيد');
       return en
-        ? `📚 <b>${name}</b>\n\nSend one audio/video item, image, or PDF at a time (maximum 20 MB per file; images up to 10 MB). Put the title on the first caption line and an optional description on the next lines. After validation, it is published directly to this section of the Al-Nabaa website only.`
-        : `📚 <b>${name}</b>\n\nأرسل عنصراً واحداً كل مرة: صوتاً أو فيديو أو صورة أو PDF (حتى 20 ميغابايت للملف، والصورة حتى 10 ميغابايت). ضع العنوان في أول سطر من الوصف، والوصف الاختياري في الأسطر التالية. بعد التحقق يُنشر المحتوى مباشرةً في هذا القسم على موقع النبأ فقط.`;
+        ? `📚 <b>${name}</b>\n\nSend audio/video files (up to 20 MB each; images up to 10 MB). A title in the caption or media metadata is used; if missing, a simple numbered title is generated. Telegram albums contain up to 10 same-type files; consecutive albums or separate messages are processed in order, with an individual result for every file. After validation, media is published directly to this Al-Nabaa website section only.`
+        : `📚 <b>${name}</b>\n\nأرسل ملفات الصوت أو الفيديو (حتى 20 ميغابايت لكل ملف، والصور حتى 10 ميغابايت). يُستخدم العنوان الموجود في الوصف أو بيانات الوسيط، وإن غاب يُنشأ عنوان بسيط مرقّم. يضم ألبوم تيليغرام حتى 10 ملفات من النوع نفسه؛ وتُعالج الألبومات المتتابعة أو الرسائل المنفصلة بالترتيب مع نتيجة مستقلة لكل ملف. بعد التحقق يُنشر المحتوى مباشرةً في هذا القسم على موقع النبأ فقط.`;
     }
     return en
       ? '🔗 <b>Archive</b>\n\nSend one text message with two lines: the channel/group name or title first, then its HTTPS Telegram link (t.me or telegram.me). Public usernames and invite links are supported. The entry stays private until you confirm the preview.'
@@ -3212,7 +3215,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (['INVALID_MEDIA_TYPE', 'INVALID_FILE_NAME', 'INVALID_FILE_CONTENT'].includes(error?.message)) return en ? 'This file is not a valid supported image, PDF, audio, or video file for the selected section.' : 'الملف ليس صورة أو PDF أو صوتاً أو فيديو صالحاً ومدعوماً للقسم المحدد.';
     return en ? 'Telegram could not verify the file. Please retry with a smaller supported file.' : 'تعذّر التحقق من الملف عبر Telegram. أعد المحاولة بملف أصغر وبصيغة مدعومة.';
   };
-  const receiveAlnabaUpload = async (ctx, candidate) => {
+  const receiveAlnabaUpload = async (ctx, candidate, { batch = false, keepSession = false } = {}) => {
     const uid = Number(ctx.from?.id);
     if (!alnabaOwner(ctx)) return false;
     const flow = alnabaSessions.get(uid);
@@ -3242,7 +3245,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       return true;
     }
     try {
-      const prepared = prepareAlnabaUpload({
+      let uploadInput = {
         ...candidate,
         section: flow.section,
         ...(replacementTarget ? {
@@ -3250,8 +3253,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
           description: candidate.description || replacementTarget.description,
           ...(flow.section === 'weekly' ? { issue_number: weeklyIssueNumber(replacementTarget) || candidate.issue_number } : {}),
         } : {}),
-      });
-      if (!replacementTarget && flow.section === 'weekly' && !prepared.issue_number) throw new Error('MISSING_ISSUE_NUMBER');
+      };
+      if (!replacementTarget && flow.section === 'weekly') {
+        const suppliedIssue = Number(uploadInput.issue_number);
+        const issueNumber = Number.isSafeInteger(suppliedIssue) && suppliedIssue > 0
+          ? suppliedIssue : nextWeeklyIssueNumber(store.state.alnaba?.weekly || []);
+        if (!issueNumber) throw new Error('ISSUE_NUMBER_EXHAUSTED');
+        uploadInput = { ...uploadInput, issue_number: issueNumber, title: uploadInput.title || `العدد ${issueNumber}` };
+      }
+      const prepared = prepareAlnabaUpload(uploadInput);
       await fetchAlnabaTelegramBytes(prepared, { api: ctx.api, token: TOKENS.admin });
       if (replacementTarget) {
         const token = randomUUID();
@@ -3267,19 +3277,29 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         return true;
       }
       if (!store.backup || !config.telegramBackup) throw new Error('BACKUP_UNAVAILABLE');
-      const oldState = store.state.alnaba;
-      let item;
-      try {
-        item = publishAlnabaItem(store, uid, prepared, new Date());
-        await store.flushBackup();
-        if (store._backupPending) throw new Error('BACKUP_FAILED');
-      } catch (error) {
-        store.state.alnaba = oldState;
-        store.persist({ backupSoon: false });
-        throw error;
-      }
-      alnabaSessions.delete(uid);
+      const item = await withAlnabaWriteLock(async () => {
+        let finalPrepared = prepared;
+        if (flow.section === 'weekly' && !replacementTarget && !candidate.issue_number) {
+          const issueNumber = nextWeeklyIssueNumber(store.state.alnaba?.weekly || []);
+          if (!issueNumber) throw new Error('ISSUE_NUMBER_EXHAUSTED');
+          finalPrepared = prepareAlnabaUpload({ ...uploadInput, issue_number: issueNumber, title: candidate.title || `العدد ${issueNumber}` });
+        }
+        const oldState = store.state.alnaba;
+        try {
+          const published = publishAlnabaItem(store, uid, finalPrepared, new Date());
+          await store.flushBackup();
+          if (store._backupPending) throw new Error('BACKUP_FAILED');
+          return published;
+        } catch (error) {
+          store.state.alnaba = oldState;
+          store.persist({ backupSoon: false });
+          throw error;
+        }
+      });
+      if (keepSession) alnabaSessions.set(uid, { section: item.section, createdAt: Date.now() });
+      else alnabaSessions.delete(uid);
       alnabaPendingUploads.delete(uid);
+      if (batch) return { status: 'published', item };
       const link = alnabaSite(item.section);
       const addLabel = item.section === 'photos'
         ? (en ? '➕ Add another item' : '➕ إضافة خبر جديد')
@@ -3295,6 +3315,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await ctx.reply(success, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
       return true;
     } catch (error) {
+      if (batch) return { status: 'failed', error };
       await ctx.reply(alnabaUploadError(error, en), { reply_markup: alnabaHomeKeyboard(ctx) });
       return true;
     }
@@ -3328,9 +3349,12 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const { media, fileName, inferredMime } = attachment;
     const metadata = captionMetadata(section, message.caption, fileName,
       section === 'quran' ? 'تلاوة قرآنية' : section === 'nasheed' ? 'محتوى صوتي' : '');
+    const embeddedTitle = [media.performer, media.title].filter(Boolean).join(' — ').trim();
+    if (['quran', 'nasheed'].includes(section) && embeddedTitle && !String(message.caption || '').trim()) metadata.title = embeddedTitle;
     const genericTitle = String(fileName || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
-    if (forwarded && ['quran', 'nasheed'].includes(section) && !String(message.caption || '').trim()
-      && /^(?:alnaba[\s_-]*)?(?:voice|audio|video|recording|media|file|clip|voice message)$/iu.test(genericTitle)) metadata.title = '';
+    if (['quran', 'nasheed'].includes(section) && !String(message.caption || '').trim()
+      && !embeddedTitle
+      && /^(?:alnaba[\s_-]*)?(?:voice|audio|video|recording|media|file|clip|voice message|quran|koran|nasheed|nashid)$/iu.test(genericTitle)) metadata.title = '';
     return {
       ...metadata,
       file_id: media.file_id,
@@ -3370,10 +3394,130 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (type === 'photo' || mime.startsWith('image/') || /\.(?:jpe?g|png|webp)$/i.test(attachment.fileName)) return 'photos';
     return null;
   };
+  const ALNABA_BATCH_QUIET_MS = 700;
+  const ALNABA_BATCH_MAX_WAIT_MS = 3500;
+  const finishAlnabaBatch = (uid) => {
+    const batch = alnabaUploadBatches.get(uid);
+    if (!batch) return Promise.resolve();
+    clearTimeout(batch.timer);
+    alnabaUploadBatches.delete(uid);
+    const items = batch.items.sort((a, b) => a.messageId - b.messageId);
+    const previous = alnabaBatchQueues.get(uid) || Promise.resolve();
+    const task = previous.catch(() => {}).then(async () => {
+      for (const entry of items) {
+        const en = langOf(entry.ctx) === 'en';
+        alnabaSessions.set(uid, { section: entry.section, createdAt: Date.now() });
+        if (['quran', 'nasheed'].includes(entry.section) && !entry.candidate.title) {
+          const count = store.state.alnaba?.[entry.section]?.length || 0;
+          entry.candidate.title = entry.section === 'nasheed' ? `نشيد ${count + 1}` : `تلاوة قرآنية ${count + 1}`;
+        }
+        let result;
+        try {
+          result = await receiveAlnabaUpload(entry.ctx, entry.candidate, { batch: true });
+        } catch (error) {
+          result = { status: 'failed', error };
+        }
+        const fileLabel = entry.candidate.file_name || `message ${entry.messageId}`;
+        if (result?.status === 'published') {
+          const published = result.item;
+          const label = published.section === 'weekly' ? `#${published.issue_number} — ${published.title}` : published.title;
+          const text = en
+            ? `✅ ${entry.messageId}: published directly on the Al-Nabaa website only: <b>${esc(fileLabel)}</b> as <b>${esc(label)}</b>.`
+            : `✅ الرسالة ${entry.messageId}: نُشر مباشرةً على موقع النبأ فقط: <b>${esc(fileLabel)}</b> بعنوان <b>${esc(label)}</b>.`;
+          const addLabel = published.section === 'photos'
+            ? (en ? '➕ Add another item' : '➕ إضافة خبر جديد')
+            : (en ? '➕ Add another item' : '➕ إضافة محتوى');
+          const keyboard = new InlineKeyboard()
+            .text(addLabel, `nb:${published.section}`).row()
+            .url(en ? 'Open section' : 'فتح القسم', alnabaSite(published.section))
+            .url(en ? 'Al-Nabaa home' : 'صفحة النبأ', alnabaSite());
+          await entry.ctx.reply(text, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, entry.ctx) }).catch((error) => console.error('[alnaba] batch success reply failed', error?.message));
+        } else {
+          const reason = result?.error ? alnabaUploadError(result.error, en) : (en ? 'Could not process this file.' : 'تعذّرت معالجة هذا الملف.');
+          const text = en
+            ? `❌ ${entry.messageId}: <b>${esc(fileLabel)}</b> was not published: ${esc(reason)}`
+            : `❌ الرسالة ${entry.messageId}: لم يُنشر الملف <b>${esc(fileLabel)}</b>: ${esc(reason)}`;
+          await entry.ctx.reply(text, { parse_mode: 'HTML', reply_markup: alnabaHomeKeyboard(entry.ctx) }).catch((error) => console.error('[alnaba] batch failure reply failed', error?.message));
+        }
+      }
+    }).catch((error) => console.error('[alnaba] batch processing failed', error?.message));
+    alnabaBatchQueues.set(uid, task);
+    task.then(() => { if (alnabaBatchQueues.get(uid) === task) alnabaBatchQueues.delete(uid); });
+    return task;
+  };
+  if (role === 'admin') {
+    runtimeHooks.flushAlnabaBatches = async () => {
+      const ownerIds = new Set([...alnabaUploadBatches.keys(), ...alnabaBatchQueues.keys()]);
+      await Promise.all([...ownerIds].map(async (uid) => {
+        await finishAlnabaBatch(uid);
+        const pending = alnabaBatchQueues.get(uid);
+        if (pending) await pending;
+      }));
+    };
+  }
+  const queueAlnabaBatchUpload = (ctx, section, candidate, sourceMessageId = null) => {
+    const uid = Number(ctx.from?.id);
+    if (!alnabaOwner(ctx) || !candidate) return false;
+    let batch = alnabaUploadBatches.get(uid);
+    if (!batch) {
+      batch = { items: [], firstAt: Date.now(), timer: null };
+      alnabaUploadBatches.set(uid, batch);
+    }
+    const messageId = Number(sourceMessageId || ctx.message?.message_id) || Date.now();
+    if (!batch.items.some((entry) => entry.messageId === messageId)) {
+      batch.items.push({ ctx, section, candidate, messageId, mediaGroupId: ctx.message?.media_group_id || null });
+    }
+    clearTimeout(batch.timer);
+    const remainingMaxWait = Math.max(0, ALNABA_BATCH_MAX_WAIT_MS - (Date.now() - batch.firstAt));
+    batch.timer = setTimeout(() => { void finishAlnabaBatch(uid); }, Math.min(ALNABA_BATCH_QUIET_MS, remainingMaxWait));
+    return true;
+  };
+  const askAlnabaBatchSection = async (ctx, message, type) => {
+    const token = randomUUID().replace(/-/g, '').slice(0, 12);
+    const ownerId = Number(ctx.from?.id);
+    for (const [key, pending] of alnabaBatchSectionChoices) {
+      if (Date.now() - pending.createdAt > 30 * 60_000) alnabaBatchSectionChoices.delete(key);
+    }
+    alnabaBatchSectionChoices.set(token, { ownerId, ctx, message, type, createdAt: Date.now() });
+    const keyboard = new InlineKeyboard()
+      .text(langOf(ctx) === 'en' ? '📖 Quran' : '📖 القرآن الكريم', `nb:batch-section:${token}:quran`)
+      .text(langOf(ctx) === 'en' ? '🎵 Nasheeds' : '🎵 الأناشيد', `nb:batch-section:${token}:nasheed`).row()
+      .text(langOf(ctx) === 'en' ? 'Keep private / cancel this file' : 'إبقاء خاصاً / إلغاء هذا الملف', `nb:batch-cancel:${token}`);
+    return ctx.reply(langOf(ctx) === 'en'
+      ? `This forwarded file is ambiguous (message ${message.message_id}); it remains private. Choose its section. Other files continue processing independently.`
+      : `هذا الملف المعاد توجيهه ملتبس (الرسالة ${message.message_id}) وسيبقى خاصاً. اختر قسمه؛ وتستمر معالجة بقية الملفات بشكل مستقل.`,
+    { reply_markup: withAlnabaHomeButton(keyboard, ctx) });
+  };
+  bot.callbackQuery(/^nb:batch-section:([0-9a-f]{12}):(quran|nasheed)$/, async (ctx) => {
+    if (!alnabaOwner(ctx) || ctx.chat?.type !== 'private') return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية النشر.');
+    const [, token, section] = ctx.match;
+    const pending = alnabaBatchSectionChoices.get(token);
+    if (!pending || pending.ownerId !== Number(ctx.from.id) || Date.now() - pending.createdAt > 30 * 60_000) {
+      alnabaBatchSectionChoices.delete(token);
+      await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This file choice expired.' : 'انتهت صلاحية اختيار هذا الملف.');
+      return ctx.deleteMessage().catch(() => {});
+    }
+    const candidate = alnabaUploadCandidate(pending.message, pending.type, section, { forwarded: true });
+    if (!candidate) {
+      alnabaBatchSectionChoices.delete(token);
+      return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Unsupported media file.' : 'ملف الوسائط غير مدعوم.');
+    }
+    alnabaBatchSectionChoices.delete(token);
+    queueAlnabaBatchUpload(pending.ctx, section, candidate, pending.message.message_id);
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Queued for website publishing.' : 'أُضيف إلى قائمة النشر على الموقع.');
+    return ctx.deleteMessage().catch(() => {});
+  });
+  bot.callbackQuery(/^nb:batch-cancel:([0-9a-f]{12})$/, async (ctx) => {
+    if (!alnabaOwner(ctx) || ctx.chat?.type !== 'private') return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية النشر.');
+    const pending = alnabaBatchSectionChoices.get(ctx.match[1]);
+    if (pending?.ownerId === Number(ctx.from.id)) alnabaBatchSectionChoices.delete(ctx.match[1]);
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This file stays private.' : 'سيبقى هذا الملف خاصاً.');
+    return ctx.deleteMessage().catch(() => {});
+  });
   const forwardMetadataPrompt = (section, candidate, en) => {
     if (section === 'weekly') return en
-      ? (candidate.title ? 'Send the positive issue number for this PDF (for example, 5). The verified newspaper will then publish directly on the Al-Nabaa website only.' : 'Send the positive issue number on the first line and the newspaper title on the second line. The verified newspaper will then publish directly on the Al-Nabaa website only.')
-      : (candidate.title ? 'أرسل رقم العدد الموجب لهذا الـPDF (مثلاً: 5)، ثم يُنشر العدد بعد التحقق على موقع النبأ فقط.' : 'أرسل رقم العدد الموجب في السطر الأول وعنوان الصحيفة في السطر الثاني، ثم يُنشر الملف بعد التحقق على موقع النبأ فقط.');
+      ? 'The issue number is optional: a number in the caption or filename is preserved; otherwise the next number is assigned. The title is optional and defaults to the issue number.'
+      : 'رقم العدد اختياري: يُحفظ الرقم الموجود في الوصف أو اسم الملف، وإلا يُخصّص الرقم التالي. العنوان اختياري ويُشتق من رقم العدد.';
     if (section === 'photos') return en
       ? 'Send the photo-news headline as text. The image will publish on the Al-Nabaa website only after its title is complete, then expire after 24 hours.'
       : 'أرسل عنوان الخبر المصوّر برسالة نصية. تُنشر الصورة على موقع النبأ فقط بعد اكتمال عنوانها، ثم تُزال بعد 24 ساعة.';
@@ -3391,11 +3535,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await ctx.reply(langOf(ctx) === 'en' ? 'This forwarded message has no supported media file.' : 'لا يحتوي هذا التوجيه على ملف وسائط مدعوم.', { reply_markup: alnabaHomeKeyboard(ctx) });
       return true;
     }
-    if (!candidate.title || (section === 'weekly' && !candidate.issue_number)) {
+    if (section !== 'weekly' && !candidate.title) {
       const pending = { message, type, section, candidate, awaiting: 'metadata', createdAt: Date.now() };
       alnabaPendingForwardInputs.set(uid, pending);
       await ctx.reply(forwardMetadataPrompt(section, candidate, langOf(ctx) === 'en'), { reply_markup: forwardInputKeyboard(ctx) });
       return true;
+    }
+    if (['quran', 'nasheed'].includes(section) && !candidate.title) {
+      const count = store.state.alnaba?.[section]?.length || 0;
+      candidate.title = section === 'nasheed' ? `نشيد ${count + 1}` : `تلاوة قرآنية ${count + 1}`;
     }
     alnabaSessions.set(uid, { section, createdAt: Date.now() });
     return receiveAlnabaUpload(ctx, candidate);
@@ -3437,22 +3585,33 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.', { reply_markup: alnabaHomeKeyboard(ctx) });
     }
     if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.', { reply_markup: alnabaHomeKeyboard(ctx) });
-    if (!flow && !forwarded) return next();
     if (flow?.section === 'archive') return next();
+    if (flow?.mode !== 'replace') {
+      const attachment = alnabaMediaFromMessage(message, type);
+      const isPdf = type === 'document' && (attachment?.inferredMime === 'application/pdf' || /\.pdf$/i.test(attachment?.fileName || ''));
+      if (isPdf) {
+        const candidate = alnabaUploadCandidate(message, type, 'weekly', { forwarded });
+        if (!candidate) return ctx.reply(langOf(ctx) === 'en' ? 'Send one supported PDF file (up to 20 MB).' : 'أرسل ملف PDF مدعوماً (حتى 20 ميغابايت).', { reply_markup: alnabaHomeKeyboard(ctx) });
+        return queueAlnabaBatchUpload(ctx, 'weekly', candidate);
+      }
+      if (flow && ['quran', 'nasheed'].includes(flow.section) && isAudioVideoAlnabaMessage(message, type)) {
+        const candidate = alnabaUploadCandidate(message, type, flow.section, { forwarded });
+        if (!candidate) return ctx.reply(langOf(ctx) === 'en' ? 'Send one supported audio or video file.' : 'أرسل ملف صوت أو فيديو مدعوماً.', { reply_markup: alnabaHomeKeyboard(ctx) });
+        return queueAlnabaBatchUpload(ctx, flow.section, candidate);
+      }
+    }
+    if (!flow && !forwarded) return next();
     if (forwarded && flow?.mode !== 'replace') {
       const section = flow?.section || classifyForwardedAlnabaSection(message, type);
+      if (section === 'weekly' || (['quran', 'nasheed'].includes(section) && isAudioVideoAlnabaMessage(message, type))) {
+        const candidate = alnabaUploadCandidate(message, type, section, { forwarded: true });
+        if (!candidate) return ctx.reply(langOf(ctx) === 'en' ? 'Send one supported media file.' : 'أرسل ملف وسائط مدعوماً.', { reply_markup: alnabaHomeKeyboard(ctx) });
+        return queueAlnabaBatchUpload(ctx, section, candidate);
+      }
       if (section) return beginForwardedAlnabaUpload(ctx, message, type, section);
       if (isAudioVideoAlnabaMessage(message, type)) {
         if (!alnabaMediaFromMessage(message, type)) return ctx.reply(langOf(ctx) === 'en' ? 'Send one supported audio or video file.' : 'أرسل ملف صوت أو فيديو مدعوماً.', { reply_markup: alnabaHomeKeyboard(ctx) });
-        alnabaPendingForwardInputs.set(uid, { message, type, awaiting: 'section', createdAt: Date.now() });
-        const keyboard = new InlineKeyboard()
-          .text(langOf(ctx) === 'en' ? '📖 Quran' : '📖 القرآن الكريم', 'nb:forward:section:quran')
-          .text(langOf(ctx) === 'en' ? '🎵 Nasheeds' : '🎵 الأناشيد', 'nb:forward:section:nasheed').row()
-          .text(langOf(ctx) === 'en' ? 'Cancel' : 'إلغاء', 'nb:cancel');
-        return ctx.reply(langOf(ctx) === 'en'
-          ? 'I could not confidently tell whether this forwarded audio/video belongs in Quran or nasheeds. Choose its section; it will then publish directly on the Al-Nabaa website only.'
-          : 'لم أستطع تحديد قسم الصوت أو الفيديو بثقة. اختر القرآن أو الأناشيد؛ ثم يُنشر مباشرةً على موقع النبأ فقط.',
-        { reply_markup: withAlnabaHomeButton(keyboard, ctx) });
+        return askAlnabaBatchSection(ctx, message, type);
       }
       return next();
     }

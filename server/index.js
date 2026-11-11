@@ -616,6 +616,7 @@ const shutdown = async () => {
   try { stopNewsMonitor(); } catch { /* ignore */ }
   try { stopJobsMonitor(); } catch { /* ignore */ }
   try { stopArmyMonitor(); } catch { /* ignore */ }
+  try { await Promise.race([runtimeHooks.flushAlnabaBatches?.(), new Promise((r) => setTimeout(r, 20_000))]); } catch (e) { console.warn('alnaba batch shutdown flush failed', e?.message || e); }
   try { store._writeLocal(); } catch { /* ignore */ }
   try { await Promise.race([store.flushBackup(true), new Promise((r) => setTimeout(r, 5000))]); } catch { /* ignore */ }
   try { if (config.botMode !== 'webhook') { for (const b of Object.values(bots)) if (b) await b.stop(); } } catch { /* ignore */ }
