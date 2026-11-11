@@ -12,7 +12,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -487,6 +487,10 @@ async function start() {
   // 1) restore state with the bot from the environment (the backup lives in its chat with the owner)
   const envBot = createBot({ role: 'admin' });
   const backup = envBot ? telegramBackupAdapter(envBot.api) : null;
+  if (backup && config.telegramBackup) {
+    store._backupWritesPaused = true;
+    pauseAlnabaBatchIntake();
+  }
   await store.init(backup);
   // 2) apply hand-over overrides saved from the bot (owner / tokens / channel)
   applyProject(store.project);
@@ -508,7 +512,31 @@ async function start() {
   // Deploy hand-off: the previous instance keeps answering for a few seconds after this one loaded
   // its data, then saves its final state to the backup as it stops. Pick up what it received.
   if (store.backup && config.telegramBackup) {
-    for (const sec of [20, 60, 180]) setTimeout(() => store.mergeFromBackup().catch(() => {}), sec * 1000).unref();
+    const retryDelays = [60_000, 120_000, 300_000];
+    let retryIndex = 0;
+    let recovered = false;
+    const recoverHandoff = async () => {
+      if (recovered) return;
+      try {
+        if (typeof runtimeHooks.resumeAlnabaBatches !== 'function') throw new Error('bot recovery hook is not ready');
+        const merge = await store.mergeFromBackup();
+        if (!merge.backupLoaded) throw new Error('durable backup is not readable yet');
+        store._backupWritesPaused = false;
+        store.persist();
+        const backupSaved = await store.flushBackup(true);
+        if (!backupSaved || store._backupPending) throw new Error('merged durable backup save was not confirmed');
+        await runtimeHooks.resumeAlnabaBatches();
+        recovered = true;
+      } catch (error) {
+        store._backupWritesPaused = true;
+        pauseAlnabaBatchIntake();
+        console.error('[alnaba] handoff recovery failed', error?.message || error);
+        const delay = retryDelays[Math.min(retryIndex, retryDelays.length - 1)];
+        retryIndex += 1;
+        setTimeout(recoverHandoff, delay).unref();
+      }
+    };
+    setTimeout(recoverHandoff, 20_000).unref();
   }
 
   if (!config.botToken) {

@@ -33,7 +33,7 @@ const fixtureFiles = new Map([
   ['audio/quran.ogg', oggBytes],
   ['video/nasheed.mp4', mp4Bytes],
 ]);
-for (let index = 1; index <= 53; index += 1) fixtureFiles.set(`documents/batch-${index}.pdf`, pdfBytes);
+for (let index = 1; index <= 56; index += 1) fixtureFiles.set(`documents/batch-${index}.pdf`, pdfBytes);
 globalThis.fetch = async (url) => {
   const match = String(url).match(/\/file\/bot123456:LOCAL_TEST\/(.+)$/);
   assert.ok(match, 'media download must use the isolated Telegram fixture');
@@ -44,16 +44,26 @@ globalThis.fetch = async (url) => {
 
 const { store } = await import('../server/store.js');
 await store.init(null);
+const { publishAlnabaItem, nextWeeklyIssueNumber } = await import('../server/alnaba.js');
 let failBackup = false;
-store.backup = { async save(json) { if (failBackup) throw new Error('fixture backup failure'); this.json = json; } };
+let failBackupPredicate = null;
+let failBackupPin = false;
+store.backup = { async save(json) {
+  const state = JSON.parse(json);
+  if (failBackup || failBackupPredicate?.(state)) {
+    failBackupPredicate = null;
+    throw new Error('fixture backup failure');
+  }
+  this.json = json;
+} };
 store.state.alnaba = { photos: [], weekly: [], archive: [] };
-const { createBot, runtimeHooks } = await import('../server/bot.js');
+const { createBot, runtimeHooks, telegramBackupAdapter } = await import('../server/bot.js');
 const bot = createBot({ token: process.env.BOT_TOKEN });
 bot.botInfo = { id: 1, is_bot: true, first_name: 'Fixture bot', username: 'FixtureBot' };
 const calls = [];
 let messageId = 100;
 bot.api.config.use(async (_previous, method, payload) => {
-  calls.push({ method, payload: structuredClone(payload) });
+  calls.push({ method, payload: method === 'sendDocument' ? { chat_id: payload.chat_id, caption: payload.caption } : structuredClone(payload) });
   if (method === 'getFile') {
     const filePaths = {
       fixture_photo_id: 'photos/fixture-photo.jpg',
@@ -69,7 +79,7 @@ bot.api.config.use(async (_previous, method, payload) => {
       fixture_forwarded_nasheed_video_id: 'video/nasheed.mp4',
       fixture_followup_nasheed_video_1_id: 'video/nasheed.mp4',
       fixture_followup_nasheed_video_2_id: 'video/nasheed.mp4',
-      ...Object.fromEntries(Array.from({ length: 53 }, (_, index) => [`fixture_batch_pdf_${index + 1}_id`, `documents/batch-${index + 1}.pdf`])),
+      ...Object.fromEntries(Array.from({ length: 56 }, (_, index) => [`fixture_batch_pdf_${index + 1}_id`, `documents/batch-${index + 1}.pdf`])),
       ...Object.fromEntries(Array.from({ length: 4 }, (_, index) => [`fixture_batch_nasheed_${index + 1}_id`, 'video/nasheed.mp4'])),
     };
     return { ok: true, result: { file_path: filePaths[payload.file_id] } };
@@ -77,6 +87,8 @@ bot.api.config.use(async (_previous, method, payload) => {
   if (method === 'sendMessage' || method === 'editMessageText' || method === 'editMessageCaption') {
     return { ok: true, result: { message_id: ++messageId, date: 0, chat: { id: payload.chat_id, type: 'private' }, text: payload.text || payload.caption || '' } };
   }
+  if (method === 'sendDocument') return { ok: true, result: { message_id: ++messageId, date: 0, chat: { id: payload.chat_id, type: 'private' } } };
+  if (method === 'pinChatMessage' && failBackupPin) throw new Error('fixture pin failure');
   return { ok: true, result: true };
 });
 
@@ -154,7 +166,7 @@ const sendBatchPdf = (id, n, mediaGroupId = null) => bot.handleUpdate({
     document: {
       file_id: `fixture_batch_pdf_${n}_id`, file_unique_id: `fixture_batch_pdf_${n}_unique`,
       file_name: `batch-${n}.pdf`, mime_type: 'application/pdf',
-      file_size: n === 17 ? 20 * 1024 * 1024 + 1 : pdfBytes.length,
+      file_size: [17, 55].includes(n) ? 20 * 1024 * 1024 + 1 : pdfBytes.length,
     },
   },
 });
@@ -261,14 +273,14 @@ const sendAudio = (id) => bot.handleUpdate({
       video: { file_id: `fixture_followup_nasheed_video_${n}_id`, file_unique_id: `fixture_followup_nasheed_video_${n}_unique`, file_name: 'nasheed.mp4', mime_type: 'video/mp4', file_size: mp4Bytes.length },
     },
   });
-  const sendAmbiguousForwardAudio = (id) => bot.handleUpdate({
+  const sendAmbiguousForwardAudio = (id, uniqueId = 'fixture_ambiguous_audio_unique') => bot.handleUpdate({
     update_id: updateId++,
     message: {
       message_id: ++messageId, date: 0,
       chat: { id, type: 'private' }, from: user(id),
       forward_origin: forwardedFrom('قناة عامة'),
       caption: 'عنوان صوتي للاختبار\nوصف صوتي للاختبار',
-      audio: { file_id: 'fixture_ambiguous_audio_id', file_unique_id: 'fixture_ambiguous_audio_unique', file_name: 'recording.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
+      audio: { file_id: 'fixture_ambiguous_audio_id', file_unique_id: uniqueId, file_name: 'recording.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
     },
   });
   const lastUiFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'sendMessage' && payload.chat_id === id);
@@ -549,7 +561,7 @@ test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploa
   failBackup = false;
   assert.equal(store.state.alnaba.photos.length, 1, 'a failed durable backup rolls back the direct photo publication');
   assert.equal(store.backup.json, photoBackupBeforeFailure, 'a failed direct publication leaves the durable snapshot unchanged');
-  assert.match(lastUiFor(authorizedId).payload.text, /نسخة احتياطية/);
+  assert.match(lastUiFor(authorizedId).payload.text, /النسخة الاحتياطية/);
   assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   await sendPhoto(authorizedId, 4);
   assert.equal(store.state.alnaba.photos.length, 2, 'the owner can resend and publish once the backup is healthy');
@@ -744,6 +756,120 @@ test('PDF albums and separate messages publish in message order with an individu
     'the graceful-shutdown hook flushes the queued PDF before the process exits');
 });
 
+test('pending PDF and nasheed batches recover after a synthetic restart without duplicate publishing', async () => {
+  const authorizedId = 8270709633;
+  const restartAlbum = 'fixture-restart-pdf-album';
+  const beforeRestart = store.state.alnaba.weekly.length;
+  await sendBatchPdf(authorizedId, 54, restartAlbum);
+  await sendBatchPdf(authorizedId, 55, restartAlbum);
+  await sendBatchPdf(authorizedId, 56, restartAlbum);
+  const record = store.state.alnabaBatches.find((batch) => batch.media_group_id === restartAlbum);
+  assert.ok(record && record.items.length === 3, 'the complete ordered album is in the durable queue before processing');
+  assert.ok(JSON.parse(store.backup.json).alnabaBatches.some((batch) => batch.id === record.id), 'the remote snapshot contains the queued file references');
+
+  // Simulate a process dying after the website write succeeded but before its queue item was marked complete.
+  const first = record.items[0];
+  const issueNumber = nextWeeklyIssueNumber(store.state.alnaba.weekly);
+  const recoveredExisting = publishAlnabaItem(store, authorizedId, {
+    ...first.candidate, section: 'weekly', issue_number: issueNumber, title: `العدد ${issueNumber}`,
+  });
+  first.status = 'processing';
+  first.updated_at = new Date().toISOString();
+  record.status = 'processing';
+  record.updated_at = first.updated_at;
+  store.persist();
+  await store.flushBackup();
+  runtimeHooks.resetAlnabaBatchRuntime();
+  store._apply(JSON.parse(store.backup.json));
+  await runtimeHooks.resumeAlnabaBatches();
+
+  assert.equal(store.state.alnaba.weekly.filter((item) => item.file_unique_id === first.candidate.file_unique_id).length, 1,
+    'recovery detects a file already published before the simulated crash and does not duplicate it');
+  assert.equal(store.state.alnaba.weekly.some((item) => item.file_id === 'fixture_batch_pdf_55_id'), false,
+    'the oversized PDF fails individually');
+  assert.equal(store.state.alnaba.weekly.some((item) => item.file_id === 'fixture_batch_pdf_56_id'), true,
+    'processing continues after the failed file');
+  assert.equal(store.state.alnaba.weekly.length, beforeRestart + 2, 'only the one pre-crash and one post-failure PDF are added');
+  const recoveredRecord = store.state.alnabaBatches.find((batch) => batch.id === record.id);
+  assert.deepEqual(recoveredRecord.items.map((item) => item.status), ['published', 'failed', 'published']);
+  assert.equal(recoveredRecord.items[0].published_item_id, recoveredExisting.id);
+  assert.ok(JSON.parse(store.backup.json).alnabaBatches.find((batch) => batch.id === record.id).items.every((item) => ['published', 'failed'].includes(item.status)),
+    'terminal per-file states are saved back to the remote backup');
+
+  const nasheedAlbum = 'fixture-restart-nasheed-album';
+  await sendBatchNasheed(authorizedId, 4, nasheedAlbum);
+  const nasheedRecord = store.state.alnabaBatches.find((batch) => batch.media_group_id === nasheedAlbum);
+  assert.ok(nasheedRecord && nasheedRecord.items[0].status === 'pending');
+  runtimeHooks.resetAlnabaBatchRuntime();
+  store._apply(JSON.parse(store.backup.json));
+  await runtimeHooks.resumeAlnabaBatches();
+  assert.equal(store.state.alnaba.nasheed.filter((item) => item.file_unique_id === 'fixture_batch_nasheed_4_unique').length, 1,
+    'nasheed uploads also resume from persistent file references after restart');
+  assert.equal(store.state.alnabaBatches.find((batch) => batch.id === nasheedRecord.id).items[0].status, 'published');
+});
+
+test('Telegram albums stop at 10 files and expired pending batches are not published', async () => {
+  const authorizedId = 8270709633;
+  const weeklyBefore = store.state.alnaba.weekly.length;
+  const mediaGroupId = 'fixture-album-limit';
+  for (let number = 1; number <= 10; number += 1) await sendBatchPdf(authorizedId, number, mediaGroupId);
+  const album = store.state.alnabaBatches.find((batch) => batch.media_group_id === mediaGroupId);
+  assert.equal(album.items.length, 10, 'the persistent album contains no more than 10 files');
+  await sendBatchPdf(authorizedId, 11, mediaGroupId);
+  assert.equal(album.items.length, 10, 'the eleventh Telegram album item is not persisted or queued');
+  assert.match(lastUiFor(authorizedId).payload.text, /10-file limit|10 ملفات/);
+  await runtimeHooks.flushAlnabaBatches();
+  assert.equal(store.state.alnaba.weekly.length, weeklyBefore, 'idempotent recognition of these already-published fixtures creates no duplicates');
+
+  const now = Date.now();
+  const expiredId = 'fixture-expired-batch';
+  const expiredMessageId = ++messageId;
+  store.state.alnabaBatches.push({
+    id: expiredId, owner_id: authorizedId, media_group_id: 'fixture-expired-group', status: 'queued',
+    created_at: new Date(now - 25 * 60 * 60_000).toISOString(),
+    updated_at: new Date(now - 25 * 60 * 60_000).toISOString(),
+    expires_at: new Date(now - 60 * 60_000).toISOString(),
+    items: [{
+      key: `expired:${expiredMessageId}`, message_id: expiredMessageId, media_group_id: 'fixture-expired-group',
+      section: 'weekly', status: 'pending', attempts: 0,
+      candidate: { file_id: 'fixture_batch_pdf_56_id', file_unique_id: 'fixture_expired_pdf_unique', file_size: pdfBytes.length, mime_type: 'application/pdf', file_name: 'expired.pdf', title: 'العدد المنتهي', issue_number: 900 },
+      created_at: new Date(now - 25 * 60 * 60_000).toISOString(), updated_at: new Date(now - 25 * 60 * 60_000).toISOString(),
+    }],
+  });
+  store.persist();
+  await store.flushBackup();
+  const getFileCallsBeforeExpiryRecovery = calls.filter(({ method }) => method === 'getFile').length;
+  runtimeHooks.resetAlnabaBatchRuntime();
+  store._apply(JSON.parse(store.backup.json));
+  await runtimeHooks.resumeAlnabaBatches();
+  const expired = store.state.alnabaBatches.find((batch) => batch.id === expiredId);
+  assert.equal(expired.items[0].status, 'expired');
+  assert.equal(calls.filter(({ method }) => method === 'getFile').length, getFileCallsBeforeExpiryRecovery,
+    'recovery reports the expired file without fetching or publishing it');
+});
+
+test('a transient ambiguous backup failure retries idempotently without creating a second item', async () => {
+  const authorizedId = 8270709633;
+  const uniqueId = 'fixture_batch_pdf_56_unique';
+  const before = store.state.alnaba.weekly.filter((item) => item.file_unique_id === uniqueId).length;
+  assert.equal(before, 1, 'the fixture media is already published once');
+  const mediaGroupId = 'fixture-backup-ambiguous-retry';
+  await sendBatchPdf(authorizedId, 56, mediaGroupId);
+  failBackupPredicate = (state) => state.alnabaBatches.some((batch) => batch.media_group_id === mediaGroupId
+    && batch.items.some((item) => item.status === 'published'));
+
+  await runtimeHooks.flushAlnabaBatches();
+  const afterAmbiguousFailure = store.state.alnabaBatches.find((batch) => batch.media_group_id === mediaGroupId);
+  assert.equal(afterAmbiguousFailure.items[0].status, 'processing', 'uncertain backup commits stay retryable rather than falsely terminal');
+  assert.equal(store.state.alnaba.weekly.filter((item) => item.file_unique_id === uniqueId).length, 1);
+
+  await runtimeHooks.flushAlnabaBatches();
+  const afterRetry = store.state.alnabaBatches.find((batch) => batch.media_group_id === mediaGroupId);
+  assert.equal(afterRetry.items[0].status, 'published');
+  assert.equal(store.state.alnaba.weekly.filter((item) => item.file_unique_id === uniqueId).length, 1,
+    'the retry checkpoints the existing publication without a duplicate');
+});
+
 test('nasheed albums keep every clear item moving while an ambiguous forwarded item stays private until chosen', async () => {
   const authorizedId = 8270709633;
   const nasheedBefore = store.state.alnaba.nasheed.length;
@@ -765,4 +891,100 @@ test('nasheed albums keep every clear item moving while an ambiguous forwarded i
   assert.equal(store.state.alnaba.quran.length, quranBefore + 1, 'choosing a section publishes only that previously private file');
   assert.equal(store.state.alnaba.quran.at(-1).file_id, 'fixture_ambiguous_audio_id');
   assert.equal(store.state.alnaba.nasheed.length, nasheedBefore + 3);
+});
+
+test('an ambiguous forwarded file safely re-prompts for its section after a synthetic restart', async () => {
+  const authorizedId = 8270709633;
+  const uniqueId = 'fixture_restart_ambiguous_audio_unique';
+  const quranBefore = store.state.alnaba.quran.filter((item) => item.file_unique_id === uniqueId).length;
+  await sendAmbiguousForwardAudio(authorizedId, uniqueId);
+  const originalPrompt = lastUiFor(authorizedId);
+  const originalToken = callbackData(originalPrompt, 'nb:batch-section:');
+  const pendingRecord = store.state.alnabaBatches.find((batch) => batch.items.some((item) => item.choices?.quran?.file_unique_id === uniqueId));
+  assert.ok(pendingRecord, 'the ambiguous file and its message reference are durable before restart');
+  assert.equal(pendingRecord.items[0].status, 'awaiting_section');
+  assert.ok(JSON.parse(store.backup.json).alnabaBatches.some((batch) => batch.id === pendingRecord.id));
+
+  runtimeHooks.resetAlnabaBatchRuntime();
+  store._apply(JSON.parse(store.backup.json));
+  await runtimeHooks.resumeAlnabaBatches();
+  const recoveredPrompt = lastUiFor(authorizedId);
+  const recoveredChoice = buttonsOf(recoveredPrompt).find((button) => button.callback_data.startsWith('nb:batch-section:') && button.callback_data.endsWith(':quran'));
+  assert.ok(recoveredChoice, 'restart recovery reissues the section choice instead of publishing an ambiguous file');
+  assert.notEqual(recoveredChoice.callback_data, originalToken, 'the restarted prompt gets a fresh, valid callback token');
+  assert.equal(store.state.alnaba.quran.filter((item) => item.file_unique_id === uniqueId).length, quranBefore,
+    'the file remains private until the owner chooses a section');
+
+  await tap(authorizedId, recoveredChoice.callback_data);
+  await waitForAlnabaBatch();
+  assert.equal(store.state.alnaba.quran.filter((item) => item.file_unique_id === uniqueId).length, quranBefore + 1,
+    'the chosen section is published exactly once after restart');
+  assert.equal(store.state.alnabaBatches.find((batch) => batch.id === pendingRecord.id).items[0].status, 'published');
+});
+
+test('a failed cancel checkpoint keeps an ambiguous file private and reissues the section choice', async () => {
+  const authorizedId = 8270709633;
+  const uniqueId = 'fixture_cancel_backup_failure_unique';
+  const quranBefore = store.state.alnaba.quran.filter((item) => item.file_unique_id === uniqueId).length;
+  await sendAmbiguousForwardAudio(authorizedId, uniqueId);
+  const initialPrompt = lastUiFor(authorizedId);
+  const cancel = buttonsOf(initialPrompt).find((button) => button.callback_data.startsWith('nb:batch-cancel:'));
+  assert.ok(cancel);
+  const record = store.state.alnabaBatches.find((batch) => batch.items.some((item) => item.choices?.quran?.file_unique_id === uniqueId));
+  const backupBeforeFailure = store.backup.json;
+
+  failBackup = true;
+  await tap(authorizedId, cancel.callback_data);
+  const restoredPrompt = lastUiFor(authorizedId);
+  const quranChoice = buttonsOf(restoredPrompt).find((button) => button.callback_data.startsWith('nb:batch-section:') && button.callback_data.endsWith(':quran'));
+  assert.ok(quranChoice, 'a new choice is issued because the cancellation was not durably saved');
+  assert.equal(store.state.alnabaBatches.find((batch) => batch.id === record.id).items[0].status, 'awaiting_section');
+  assert.equal(store.backup.json, backupBeforeFailure, 'the failed cancellation cannot replace the last durable pending state');
+  assert.match([...calls].reverse().find(({ method }) => method === 'answerCallbackQuery')?.payload?.text || '', /تعذّر حفظ الإلغاء/);
+  assert.equal(store.state.alnaba.quran.filter((item) => item.file_unique_id === uniqueId).length, quranBefore);
+
+  failBackup = false;
+  await tap(authorizedId, quranChoice.callback_data);
+  await waitForAlnabaBatch();
+  assert.equal(store.state.alnaba.quran.filter((item) => item.file_unique_id === uniqueId).length, quranBefore + 1);
+});
+
+test('backup flush reports success only after the pending snapshot is durably saved', async () => {
+  const previousSnapshot = store.backup.json;
+  const previousPaused = store._backupWritesPaused;
+  store.state.handoff_fixture = 'merged snapshot';
+  store._backupWritesPaused = true;
+  store.persist();
+  assert.equal(await store.flushBackup(true), false, 'the handoff barrier blocks ordinary backup writes');
+  assert.equal(store.backup.json, previousSnapshot);
+
+  store._backupWritesPaused = false;
+  failBackup = true;
+  assert.equal(await store.flushBackup(true), false, 'a failed remote save is not reported as durable');
+  assert.equal(store.backup.json, previousSnapshot);
+  assert.equal(store._backupPending, true, 'a failed save remains pending for retry');
+
+  failBackup = false;
+  store._backupWritesPaused = true;
+  assert.equal(await store.flushBackup(true), false, 're-closing the handoff barrier leaves the pending write intact');
+  assert.equal(store._backupPending, true);
+  store._backupWritesPaused = false;
+  assert.equal(await store.flushBackup(true), true, 'the retry confirms success only after the mock remote accepts it');
+  assert.equal(JSON.parse(store.backup.json).handoff_fixture, 'merged snapshot');
+  store._backupWritesPaused = previousPaused;
+
+  const originalBackup = store.backup;
+  store.backup = { async load() { return ''; } };
+  const emptyBackup = await store.mergeFromBackup();
+  assert.equal(emptyBackup.backupLoaded, false, 'an empty pinned snapshot is a read failure, not an empty backup');
+  store.backup = originalBackup;
+});
+
+test('Telegram backup adapter rejects a replacement until the new snapshot is pinned', async () => {
+  const adapter = telegramBackupAdapter(bot.api);
+  failBackupPin = true;
+  await assert.rejects(adapter.save('{"fixture":"not pinned"}'), /fixture pin failure/);
+  failBackupPin = false;
+  await adapter.save('{"fixture":"pinned"}');
+  assert.ok(calls.some(({ method }) => method === 'pinChatMessage'), 'a confirmed pin is required before the adapter reports success');
 });

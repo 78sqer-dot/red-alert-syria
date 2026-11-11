@@ -152,6 +152,8 @@ const alnabaPendingForwardInputs = new Map(); // ownerId -> forwarded media wait
 const alnabaUploadBatches = new Map(); // ownerId -> incoming owner files grouped by a short quiet period
 const alnabaBatchQueues = new Map(); // ownerId -> ordered batch processing promise
 const alnabaBatchSectionChoices = new Map(); // token -> one ambiguous forwarded file awaiting section choice
+let alnabaBatchIntakePaused = false;
+export function pauseAlnabaBatchIntake() { alnabaBatchIntakePaused = true; }
 const alnabaPendingArchiveEntries = new Map(); // ownerId -> validated Telegram directory entry waiting for confirmation
 const alnabaEditSessions = new Map(); // ownerId -> { section, id, field, page, createdAt }
 const alnabaPendingManagementEdits = new Map(); // ownerId -> validated edit waiting for explicit save confirmation
@@ -3211,13 +3213,87 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (error?.message === 'INVALID_ISSUE_NUMBER') return en ? 'Use a positive whole-number issue number.' : 'استخدم رقماً صحيحاً موجباً للعدد.';
     if (error?.message === 'DUPLICATE_ISSUE_NUMBER') return en ? 'That issue number is already in use; choose another number.' : 'رقم هذا العدد مستخدم مسبقاً؛ اختر رقماً آخر.';
     if (error?.message === 'DUPLICATE_MEDIA') return en ? 'This exact file is already published in Al-Nabaa.' : 'هذا الملف منشور مسبقاً في النبأ.';
-    if (['BACKUP_UNAVAILABLE', 'BACKUP_FAILED'].includes(error?.message)) return en ? 'Publishing is paused: a durable backup could not be saved, so nothing was published. Retry after backup is available.' : 'توقف النشر: تعذّر حفظ نسخة احتياطية دائمة، لذلك لم يُنشر شيء. أعد المحاولة عند توفر النسخة الاحتياطية.';
+    if (['BACKUP_UNAVAILABLE', 'BACKUP_FAILED'].includes(error?.message)) return en ? 'The durable backup is unavailable. Files already saved in the queue will retry after recovery; resend only if the initial queue save failed.' : 'النسخة الاحتياطية الدائمة غير متاحة. ستُعاد محاولة الملفات المحفوظة في القائمة بعد استعادتها؛ أعد الإرسال فقط إذا فشل حفظ الملف في القائمة أول مرة.';
     if (['INVALID_MEDIA_TYPE', 'INVALID_FILE_NAME', 'INVALID_FILE_CONTENT'].includes(error?.message)) return en ? 'This file is not a valid supported image, PDF, audio, or video file for the selected section.' : 'الملف ليس صورة أو PDF أو صوتاً أو فيديو صالحاً ومدعوماً للقسم المحدد.';
     return en ? 'Telegram could not verify the file. Please retry with a smaller supported file.' : 'تعذّر التحقق من الملف عبر Telegram. أعد المحاولة بملف أصغر وبصيغة مدعومة.';
   };
-  const receiveAlnabaUpload = async (ctx, candidate, { batch = false, keepSession = false } = {}) => {
+  const alnabaQueueCheckpointError = (error, en) => ['BACKUP_UNAVAILABLE', 'BACKUP_FAILED'].includes(error?.message)
+    ? (en ? 'This file was not durably queued or published because the backup could not be saved. Resend it after backup recovery.' : 'لم يُحفظ هذا الملف في قائمة انتظار دائمة ولم يُنشر لتعذّر حفظ النسخة الاحتياطية. أعد إرساله بعد استعادة النسخ الاحتياطي.')
+    : alnabaUploadError(error, en);
+  const ALNABA_BATCH_TTL_MS = 24 * 60 * 60_000;
+  const batchRecord = (id) => store.state.alnabaBatches?.find((record) => record.id === id) || null;
+  const batchEntry = (batchId, itemKey) => batchRecord(batchId)?.items.find((item) => item.key === itemKey) || null;
+  const setBatchEntry = (batchId, itemKey, patch) => {
+    const record = batchRecord(batchId);
+    const entry = record?.items.find((item) => item.key === itemKey);
+    if (!record || !entry) return false;
+    Object.assign(entry, patch, { updated_at: new Date().toISOString() });
+    record.updated_at = entry.updated_at;
+    if (record.items.every((item) => ['published', 'failed', 'cancelled', 'expired'].includes(item.status))) record.status = 'complete';
+    else if (record.status !== 'collecting') record.status = 'processing';
+    return true;
+  };
+  const persistAlnabaBatchState = async () => withAlnabaWriteLock(async () => {
+    if (!store.backup || !config.telegramBackup) throw new Error('BACKUP_UNAVAILABLE');
+    store.persist();
+    clearTimeout(store._saveTimer);
+    store._writeLocal();
+    await store.flushBackup();
+    if (store._backupPending) throw new Error('BACKUP_FAILED');
+  });
+  let batchCheckpointTimer = null;
+  let batchCheckpointPromise = null;
+  let batchCheckpointResolve = null;
+  let batchCheckpointReject = null;
+  let batchCheckpointRevision = 0;
+  const runBatchCheckpoint = async () => {
+    const savedRevision = batchCheckpointRevision;
+    try {
+      await persistAlnabaBatchState();
+      if (savedRevision !== batchCheckpointRevision) {
+        batchCheckpointTimer = setTimeout(runBatchCheckpoint, 180).unref();
+        return;
+      }
+      const resolve = batchCheckpointResolve;
+      batchCheckpointPromise = null;
+      batchCheckpointResolve = null;
+      batchCheckpointReject = null;
+      resolve?.();
+    } catch (error) {
+      const reject = batchCheckpointReject;
+      batchCheckpointPromise = null;
+      batchCheckpointResolve = null;
+      batchCheckpointReject = null;
+      reject?.(error);
+    }
+  };
+  const scheduleBatchCheckpoint = () => {
+    batchCheckpointRevision += 1;
+    store.persist();
+    store._writeLocal();
+    if (!batchCheckpointPromise) {
+      batchCheckpointPromise = new Promise((resolve, reject) => {
+        batchCheckpointResolve = resolve;
+        batchCheckpointReject = reject;
+      });
+    }
+    clearTimeout(batchCheckpointTimer);
+    batchCheckpointTimer = setTimeout(runBatchCheckpoint, 180).unref();
+    return batchCheckpointPromise;
+  };
+  const findPublishedAlnabaUpload = (section, candidate) => (store.state.alnaba?.[section] || []).find((item) =>
+    candidate.file_unique_id && item.file_unique_id
+      ? item.file_unique_id === candidate.file_unique_id
+      : item.file_id === candidate.file_id) || null;
+  const receiveAlnabaUpload = async (ctx, candidate, { batch = false, keepSession = false, batchRef = null } = {}) => {
     const uid = Number(ctx.from?.id);
     if (!alnabaOwner(ctx)) return false;
+    if (alnabaBatchIntakePaused) {
+      await ctx.reply(langOf(ctx) === 'en'
+        ? 'Al-Nabaa uploads are temporarily paused while the previous backup is being restored. Nothing was queued or published; please retry shortly.'
+        : 'رفع النبأ متوقف مؤقتاً أثناء استعادة النسخة السابقة. لم يُحفظ الملف ولم يُنشر؛ أعد المحاولة بعد قليل.');
+      return true;
+    }
     const flow = alnabaSessions.get(uid);
     if (!flow) return false;
     const en = langOf(ctx) === 'en';
@@ -3262,6 +3338,23 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         uploadInput = { ...uploadInput, issue_number: issueNumber, title: uploadInput.title || `العدد ${issueNumber}` };
       }
       const prepared = prepareAlnabaUpload(uploadInput);
+      if (batchRef) {
+        const alreadyPublished = findPublishedAlnabaUpload(flow.section, prepared);
+        if (alreadyPublished) {
+          await withAlnabaWriteLock(async () => {
+            if (!store.backup || !config.telegramBackup) throw new Error('BACKUP_UNAVAILABLE');
+            setBatchEntry(batchRef.batchId, batchRef.itemKey, { status: 'published', published_item_id: alreadyPublished.id, error: undefined });
+            store.persist();
+            await store.flushBackup();
+            if (store._backupPending) {
+              setBatchEntry(batchRef.batchId, batchRef.itemKey, { status: 'processing', error: 'BACKUP_FAILED' });
+              store.persist({ backupSoon: false });
+              throw new Error('BACKUP_FAILED');
+            }
+          });
+          return { status: 'already_published', item: alreadyPublished };
+        }
+      }
       await fetchAlnabaTelegramBytes(prepared, { api: ctx.api, token: TOKENS.admin });
       if (replacementTarget) {
         const token = randomUUID();
@@ -3284,38 +3377,86 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
           if (!issueNumber) throw new Error('ISSUE_NUMBER_EXHAUSTED');
           finalPrepared = prepareAlnabaUpload({ ...uploadInput, issue_number: issueNumber, title: candidate.title || `العدد ${issueNumber}` });
         }
-        const oldState = store.state.alnaba;
+        const oldSectionItems = structuredClone(store.state.alnaba?.[flow.section] || []);
+        let publishedItemId = null;
         try {
+          const alreadyPublished = findPublishedAlnabaUpload(flow.section, finalPrepared);
+          if (alreadyPublished) {
+            publishedItemId = alreadyPublished.id;
+            if (batchRef) {
+              setBatchEntry(batchRef.batchId, batchRef.itemKey, { status: 'published', published_item_id: alreadyPublished.id, error: undefined });
+              store.persist();
+            }
+            await store.flushBackup();
+            if (store._backupPending) throw new Error('BACKUP_FAILED');
+            return { item: alreadyPublished, duplicate: true };
+          }
           const published = publishAlnabaItem(store, uid, finalPrepared, new Date());
+          publishedItemId = published.id;
+          if (batchRef) {
+            setBatchEntry(batchRef.batchId, batchRef.itemKey, { status: 'published', published_item_id: published.id, error: undefined });
+            store.persist();
+          }
           await store.flushBackup();
           if (store._backupPending) throw new Error('BACKUP_FAILED');
-          return published;
+          return { item: published, duplicate: false };
         } catch (error) {
-          store.state.alnaba = oldState;
-          store.persist({ backupSoon: false });
+          if (batchRef && ['BACKUP_FAILED', 'BACKUP_UNAVAILABLE'].includes(error?.message)) {
+            // The remote write may have landed even if Telegram returned an error. Keep the content
+            // and the stable file reference, but leave this item processing so retry/recovery can
+            // detect the existing publication and checkpoint it without creating another item.
+            const entry = batchEntry(batchRef.batchId, batchRef.itemKey);
+            setBatchEntry(batchRef.batchId, batchRef.itemKey, {
+              status: 'processing', attempts: Math.min(100, entry?.attempts || 0), error: error.message,
+            });
+            store.persist({ backupSoon: false });
+          } else if (batchRef && publishedItemId) {
+            // A non-backup failure after the website item exists is also an ambiguous commit.
+            // Keep that item and retry by its stable file reference; never roll back other queue entries.
+            setBatchEntry(batchRef.batchId, batchRef.itemKey, {
+              status: 'processing', published_item_id: publishedItemId,
+              error: 'PUBLISH_COMMIT_UNCERTAIN',
+            });
+            store.persist({ backupSoon: false });
+          } else {
+            store.state.alnaba = { ...store.state.alnaba, [flow.section]: oldSectionItems };
+            store.persist({ backupSoon: false });
+          }
           throw error;
         }
       });
-      if (keepSession) alnabaSessions.set(uid, { section: item.section, createdAt: Date.now() });
+      const publishedItem = item.item;
+      if (keepSession) alnabaSessions.set(uid, { section: publishedItem.section, createdAt: Date.now() });
       else alnabaSessions.delete(uid);
       alnabaPendingUploads.delete(uid);
-      if (batch) return { status: 'published', item };
-      const link = alnabaSite(item.section);
-      const addLabel = item.section === 'photos'
+      if (batch) return { status: item.duplicate ? 'already_published' : 'published', item: publishedItem };
+      const link = alnabaSite(publishedItem.section);
+      const addLabel = publishedItem.section === 'photos'
         ? (en ? '➕ Add another item' : '➕ إضافة خبر جديد')
         : (en ? '➕ Add another item' : '➕ إضافة محتوى');
       const keyboard = new InlineKeyboard()
-        .text(addLabel, `nb:${item.section}`).row()
+        .text(addLabel, `nb:${publishedItem.section}`).row()
         .url(en ? 'Open section' : 'فتح القسم', link)
         .url(en ? 'Al-Nabaa home' : 'صفحة النبأ', alnabaSite());
-      const expiry = item.section === 'photos' ? (en ? ' This photo-news item will be removed after 24 hours.' : ' سيُزال الخبر المصوّر بعد 24 ساعة.') : '';
+      const expiry = publishedItem.section === 'photos' ? (en ? ' This photo-news item will be removed after 24 hours.' : ' سيُزال الخبر المصوّر بعد 24 ساعة.') : '';
       const success = en
-        ? `✅ Published directly on the Al-Nabaa website only: <b>${esc(item.title)}</b>. It was not sent to the Telegram channel.${expiry}`
-        : `✅ نُشر مباشرةً على موقع النبأ فقط: <b>${esc(item.title)}</b>، ولم يُرسل إلى قناة تيليغرام.${expiry}`;
+        ? `✅ Published directly on the Al-Nabaa website only: <b>${esc(publishedItem.title)}</b>. It was not sent to the Telegram channel.${expiry}`
+        : `✅ نُشر مباشرةً على موقع النبأ فقط: <b>${esc(publishedItem.title)}</b>، ولم يُرسل إلى قناة تيليغرام.${expiry}`;
       await ctx.reply(success, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
       return true;
     } catch (error) {
-      if (batch) return { status: 'failed', error };
+      if (batch) {
+        if (batchRef && !['BACKUP_FAILED', 'BACKUP_UNAVAILABLE'].includes(error?.message)) {
+          const entry = batchEntry(batchRef.batchId, batchRef.itemKey);
+          const publicationMayExist = entry?.published_item_id
+            && store.state.alnaba?.[entry.section]?.some((item) => item.id === entry.published_item_id);
+          if (!publicationMayExist) {
+            setBatchEntry(batchRef.batchId, batchRef.itemKey, { status: 'failed', attempts: (entry?.attempts || 0) + 1, error: String(error?.message || 'UPLOAD_FAILED').slice(0, 80) });
+            try { await persistAlnabaBatchState(); } catch { /* keep the processing record for safe retry */ }
+          }
+        }
+        return { status: 'failed', error };
+      }
       await ctx.reply(alnabaUploadError(error, en), { reply_markup: alnabaHomeKeyboard(ctx) });
       return true;
     }
@@ -3396,34 +3537,117 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   };
   const ALNABA_BATCH_QUIET_MS = 700;
   const ALNABA_BATCH_MAX_WAIT_MS = 3500;
+  const batchContext = (ownerId, messageId, mediaGroupId = null) => ({
+    from: { id: Number(ownerId) }, chat: { id: Number(ownerId), type: 'private' },
+    message: { message_id: Number(messageId), ...(mediaGroupId ? { media_group_id: mediaGroupId } : {}) },
+    api: bot.api,
+    reply: (text, options) => bot.api.sendMessage(Number(ownerId), text, options),
+  });
+  const attachRuntimeBatchItem = (ctx, record, savedItem) => {
+    const uid = Number(record.owner_id);
+    let batch = alnabaUploadBatches.get(uid);
+    if (!batch) {
+      batch = { items: [], firstAt: Date.now(), timer: null };
+      alnabaUploadBatches.set(uid, batch);
+    }
+    if (!batch.items.some((entry) => entry.itemKey === savedItem.key)) {
+      batch.items.push({
+        ctx, batchId: record.id, itemKey: savedItem.key, section: savedItem.section,
+        candidate: savedItem.candidate, messageId: savedItem.message_id, mediaGroupId: savedItem.media_group_id || null,
+      });
+    }
+    clearTimeout(batch.timer);
+    const remainingMaxWait = Math.max(0, ALNABA_BATCH_MAX_WAIT_MS - (Date.now() - batch.firstAt));
+    batch.timer = setTimeout(() => { void finishAlnabaBatch(uid); }, Math.min(ALNABA_BATCH_QUIET_MS, remainingMaxWait)).unref();
+    return batch;
+  };
+  const retryRuntimeBatch = (uid, batch, delay = 30_000) => {
+    const retry = { ...batch, timer: null };
+    alnabaUploadBatches.set(uid, retry);
+    retry.timer = setTimeout(() => { void finishAlnabaBatch(uid); }, delay).unref();
+  };
   const finishAlnabaBatch = (uid) => {
-    const batch = alnabaUploadBatches.get(uid);
+    const batch = alnabaUploadBatches.get(Number(uid));
     if (!batch) return Promise.resolve();
     clearTimeout(batch.timer);
-    alnabaUploadBatches.delete(uid);
+    alnabaUploadBatches.delete(Number(uid));
     const items = batch.items.sort((a, b) => a.messageId - b.messageId);
-    const previous = alnabaBatchQueues.get(uid) || Promise.resolve();
+    const previous = alnabaBatchQueues.get(Number(uid)) || Promise.resolve();
     const task = previous.catch(() => {}).then(async () => {
-      for (const entry of items) {
-        const en = langOf(entry.ctx) === 'en';
-        alnabaSessions.set(uid, { section: entry.section, createdAt: Date.now() });
-        if (['quran', 'nasheed'].includes(entry.section) && !entry.candidate.title) {
-          const count = store.state.alnaba?.[entry.section]?.length || 0;
-          entry.candidate.title = entry.section === 'nasheed' ? `نشيد ${count + 1}` : `تلاوة قرآنية ${count + 1}`;
+      const eligible = items.filter((entry) => {
+        const saved = batchEntry(entry.batchId, entry.itemKey);
+        return saved && ['pending', 'processing'].includes(saved.status);
+      });
+      if (!eligible.length) return;
+      for (const entry of eligible) {
+        const saved = batchEntry(entry.batchId, entry.itemKey);
+        setBatchEntry(entry.batchId, entry.itemKey, { status: 'processing', attempts: Math.min(100, (saved?.attempts || 0) + 1), error: undefined });
+        const record = batchRecord(entry.batchId);
+        if (record) record.status = 'processing';
+      }
+      try {
+        await persistAlnabaBatchState();
+      } catch (error) {
+        for (const entry of eligible) {
+          const en = langOf(entry.ctx) === 'en';
+          await entry.ctx.reply(en
+            ? '⏸️ This file is durably queued but was not published because the backup is unavailable. It will retry after backup recovery.'
+            : '⏸️ الملف محفوظ في قائمة الانتظار ولم يُنشر لتعذّر النسخ الاحتياطي. ستُستأنف المحاولة عند عودته.').catch(() => {});
         }
+        retryRuntimeBatch(uid, batch);
+        console.error('[alnaba] could not checkpoint batch processing state', error?.message);
+        return;
+      }
+      let retryNeeded = false;
+      for (const entry of eligible) {
+        let saved = batchEntry(entry.batchId, entry.itemKey);
+        if (!saved || !['pending', 'processing'].includes(saved.status)) continue;
+        const record = batchRecord(entry.batchId);
+        const en = langOf(entry.ctx) === 'en';
+        const fileLabel = saved.candidate?.file_name || `message ${entry.messageId}`;
+        if (record && Date.parse(record.expires_at) <= Date.now()) {
+          setBatchEntry(entry.batchId, entry.itemKey, { status: 'expired', error: 'BATCH_EXPIRED' });
+          record.status = 'expired';
+          try { await persistAlnabaBatchState(); } catch (error) { retryRuntimeBatch(uid, batch); break; }
+          await entry.ctx.reply(en
+            ? `⌛ ${entry.messageId}: <b>${esc(fileLabel)}</b> expired before publishing and was not published. Please resend it.`
+            : `⌛ الرسالة ${entry.messageId}: انتهت مهلة الملف <b>${esc(fileLabel)}</b> قبل النشر ولم يُنشر. أعد إرساله.`, { parse_mode: 'HTML' }).catch(() => {});
+          continue;
+        }
+        const section = saved.section;
+        if (!section || !saved.candidate) continue;
+        const candidate = { ...saved.candidate };
+        if (['quran', 'nasheed'].includes(section) && !candidate.title) {
+          const count = store.state.alnaba?.[section]?.length || 0;
+          candidate.title = section === 'nasheed' ? `نشيد ${count + 1}` : `تلاوة قرآنية ${count + 1}`;
+          saved.candidate.title = candidate.title;
+        }
+        alnabaSessions.set(Number(uid), { section, createdAt: Date.now() });
         let result;
         try {
-          result = await receiveAlnabaUpload(entry.ctx, entry.candidate, { batch: true });
+          result = await receiveAlnabaUpload(entry.ctx, candidate, { batch: true, batchRef: { batchId: entry.batchId, itemKey: entry.itemKey } });
         } catch (error) {
           result = { status: 'failed', error };
         }
-        const fileLabel = entry.candidate.file_name || `message ${entry.messageId}`;
-        if (result?.status === 'published') {
+        saved = batchEntry(entry.batchId, entry.itemKey);
+        if (result?.status === 'failed' && ['BACKUP_FAILED', 'BACKUP_UNAVAILABLE'].includes(result.error?.message)) {
+          await entry.ctx.reply(alnabaUploadError(result.error, en), { reply_markup: alnabaHomeKeyboard(entry.ctx) }).catch(() => {});
+          retryRuntimeBatch(uid, batch);
+          break;
+        }
+        if (result?.status === 'failed' && saved?.status === 'processing' && saved.published_item_id) {
+          await entry.ctx.reply(en
+            ? `↻ ${entry.messageId}: the website may already have accepted this file. It remains queued for a duplicate-safe retry.`
+            : `↻ الرسالة ${entry.messageId}: قد يكون الموقع قد قبل هذا الملف بالفعل. بقي في قائمة الانتظار لإعادة محاولة آمنة تمنع التكرار.`).catch(() => {});
+          retryNeeded = true;
+          continue;
+        }
+        if (['published', 'already_published'].includes(result?.status)) {
           const published = result.item;
           const label = published.section === 'weekly' ? `#${published.issue_number} — ${published.title}` : published.title;
-          const text = en
-            ? `✅ ${entry.messageId}: published directly on the Al-Nabaa website only: <b>${esc(fileLabel)}</b> as <b>${esc(label)}</b>.`
-            : `✅ الرسالة ${entry.messageId}: نُشر مباشرةً على موقع النبأ فقط: <b>${esc(fileLabel)}</b> بعنوان <b>${esc(label)}</b>.`;
+          const text = result.status === 'already_published'
+            ? (en ? `↩️ ${entry.messageId}: this exact file was already published as <b>${esc(label)}</b>; no duplicate was created.` : `↩️ الرسالة ${entry.messageId}: هذا الملف منشور مسبقاً بعنوان <b>${esc(label)}</b>؛ لم تُنشأ نسخة مكررة.`)
+            : (en ? `✅ ${entry.messageId}: published directly on the Al-Nabaa website only, in <b>${esc(section)}</b>: <b>${esc(fileLabel)}</b> as <b>${esc(label)}</b>.` : `✅ الرسالة ${entry.messageId}: نُشر مباشرةً على موقع النبأ فقط، في قسم <b>${esc(section)}</b>: <b>${esc(fileLabel)}</b> بعنوان <b>${esc(label)}</b>.`);
           const addLabel = published.section === 'photos'
             ? (en ? '➕ Add another item' : '➕ إضافة خبر جديد')
             : (en ? '➕ Add another item' : '➕ إضافة محتوى');
@@ -3440,80 +3664,252 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
           await entry.ctx.reply(text, { parse_mode: 'HTML', reply_markup: alnabaHomeKeyboard(entry.ctx) }).catch((error) => console.error('[alnaba] batch failure reply failed', error?.message));
         }
       }
+      if (retryNeeded) retryRuntimeBatch(uid, batch);
+      alnabaSessions.delete(Number(uid));
     }).catch((error) => console.error('[alnaba] batch processing failed', error?.message));
-    alnabaBatchQueues.set(uid, task);
-    task.then(() => { if (alnabaBatchQueues.get(uid) === task) alnabaBatchQueues.delete(uid); });
+    alnabaBatchQueues.set(Number(uid), task);
+    task.then(() => { if (alnabaBatchQueues.get(Number(uid)) === task) alnabaBatchQueues.delete(Number(uid)); });
     return task;
   };
+  const issueBatchSectionPrompt = async (ctx, record, savedItem) => {
+    for (const [existingToken, choice] of alnabaBatchSectionChoices) {
+      if (choice.batchId !== record.id || choice.itemKey !== savedItem.key) continue;
+      if (Date.now() - choice.createdAt <= 30 * 60_000) return null;
+      alnabaBatchSectionChoices.delete(existingToken);
+    }
+    const token = randomUUID().replace(/-/g, '').slice(0, 12);
+    const ownerId = Number(record.owner_id);
+    alnabaBatchSectionChoices.set(token, { ownerId, batchId: record.id, itemKey: savedItem.key, createdAt: Date.now() });
+    const keyboard = new InlineKeyboard()
+      .text(langOf(ctx) === 'en' ? '📖 Quran' : '📖 القرآن الكريم', `nb:batch-section:${token}:quran`)
+      .text(langOf(ctx) === 'en' ? '🎵 Nasheeds' : '🎵 الأناشيد', `nb:batch-section:${token}:nasheed`).row()
+      .text(langOf(ctx) === 'en' ? 'Keep private / cancel this file' : 'إبقاء خاصاً / إلغاء هذا الملف', `nb:batch-cancel:${token}`);
+    return ctx.reply(langOf(ctx) === 'en'
+      ? `This forwarded file is ambiguous (message ${savedItem.message_id}); it remains private. Choose its section. Other files continue processing independently.`
+      : `هذا الملف المعاد توجيهه ملتبس (الرسالة ${savedItem.message_id}) وسيبقى خاصاً. اختر قسمه؛ وتستمر معالجة بقية الملفات بشكل مستقل.`,
+    { reply_markup: withAlnabaHomeButton(keyboard, ctx) });
+  };
+  const queueAlnabaBatchUpload = async (ctx, section, candidate, sourceMessageId = null, existingRef = null) => {
+    const uid = Number(ctx.from?.id);
+    if (!alnabaOwner(ctx) || !candidate || !['photos', 'weekly', 'quran', 'nasheed'].includes(section)) return false;
+    if (alnabaBatchIntakePaused) {
+      await ctx.reply(langOf(ctx) === 'en'
+        ? 'Al-Nabaa uploads are temporarily paused while the previous backup is being restored. Nothing was queued or published; please retry shortly.'
+        : 'رفع النبأ متوقف مؤقتاً أثناء استعادة النسخة السابقة. لم يُحفظ الملف ولم يُنشر؛ أعد المحاولة بعد قليل.');
+      return true;
+    }
+    const messageId = Number(sourceMessageId || ctx.message?.message_id) || Date.now();
+    const mediaGroupId = ctx.message?.media_group_id || null;
+    const batchId = existingRef?.batchId || (mediaGroupId ? `alnaba:${uid}:group:${mediaGroupId}` : `alnaba:${uid}:message:${messageId}`);
+    const itemKey = existingRef?.itemKey || `${uid}:${messageId}:${candidate.file_unique_id || candidate.file_id}`;
+    let record = batchRecord(batchId);
+    const priorItem = record?.items.find((item) => item.key === itemKey);
+    if (priorItem && !existingRef) return true;
+    if (!record) {
+      const now = new Date().toISOString();
+      record = { id: batchId, owner_id: uid, ...(mediaGroupId ? { media_group_id: String(mediaGroupId) } : {}), status: 'collecting', created_at: now, updated_at: now, expires_at: new Date(Date.now() + ALNABA_BATCH_TTL_MS).toISOString(), items: [] };
+      store.state.alnabaBatches ||= [];
+      store.state.alnabaBatches.push(record);
+    }
+    if (!priorItem && mediaGroupId && record.items.length >= 10) {
+      await ctx.reply(langOf(ctx) === 'en' ? 'This album exceeds Telegram’s 10-file limit. This extra file was not queued or published.' : 'تجاوز هذا الألبوم حدّ تيليغرام البالغ 10 ملفات. لم يُضف هذا الملف الزائد ولم يُنشر.', { reply_markup: alnabaHomeKeyboard(ctx) });
+      return true;
+    }
+    let savedItem = priorItem;
+    if (existingRef && savedItem) {
+      savedItem.section = section;
+      savedItem.candidate = { ...candidate };
+      savedItem.status = 'pending';
+      delete savedItem.choices;
+      delete savedItem.error;
+      savedItem.updated_at = new Date().toISOString();
+      record.status = 'queued';
+      record.updated_at = savedItem.updated_at;
+    } else if (!savedItem) {
+      const now = new Date().toISOString();
+      savedItem = { key: itemKey, message_id: messageId, ...(mediaGroupId ? { media_group_id: String(mediaGroupId) } : {}), section, status: 'pending', candidate: { ...candidate }, attempts: 0, created_at: now, updated_at: now };
+      record.items.push(savedItem);
+      record.status = 'collecting';
+      record.updated_at = now;
+    }
+    try {
+      await scheduleBatchCheckpoint();
+    } catch (error) {
+      setBatchEntry(batchId, itemKey, { status: 'failed', error: String(error?.message || 'BACKUP_FAILED').slice(0, 80) });
+      store.persist({ backupSoon: false });
+      store._writeLocal();
+      await ctx.reply(alnabaQueueCheckpointError(error, langOf(ctx) === 'en'), { reply_markup: alnabaHomeKeyboard(ctx) }).catch(() => {});
+      return true;
+    }
+    record = batchRecord(batchId);
+    savedItem = record?.items.find((item) => item.key === itemKey);
+    if (!savedItem) return true;
+    attachRuntimeBatchItem(ctx, record, savedItem);
+    return true;
+  };
+  const askAlnabaBatchSection = async (ctx, message, type) => {
+    if (alnabaBatchIntakePaused) {
+      await ctx.reply(langOf(ctx) === 'en'
+        ? 'Al-Nabaa uploads are temporarily paused while the previous backup is being restored. Please forward this file again shortly.'
+        : 'رفع النبأ متوقف مؤقتاً أثناء استعادة النسخة السابقة. أعد توجيه هذا الملف بعد قليل.');
+      return true;
+    }
+    const ownerId = Number(ctx.from?.id);
+    const messageId = Number(message.message_id);
+    const mediaGroupId = message.media_group_id || null;
+    const batchId = mediaGroupId ? `alnaba:${ownerId}:group:${mediaGroupId}` : `alnaba:${ownerId}:message:${messageId}`;
+    const key = `${ownerId}:${messageId}:ambiguous:${type}`;
+    store.state.alnabaBatches ||= [];
+    let record = batchRecord(batchId);
+    if (!record) {
+      const now = new Date().toISOString();
+      record = { id: batchId, owner_id: ownerId, ...(mediaGroupId ? { media_group_id: String(mediaGroupId) } : {}), status: 'collecting', created_at: now, updated_at: now, expires_at: new Date(Date.now() + ALNABA_BATCH_TTL_MS).toISOString(), items: [] };
+      store.state.alnabaBatches.push(record);
+    }
+    if (!record.items.some((item) => item.key === key)) {
+      if (mediaGroupId && record.items.length >= 10) {
+        await ctx.reply(langOf(ctx) === 'en' ? 'This album exceeds Telegram’s 10-file limit. This extra file was not queued.' : 'تجاوز هذا الألبوم حدّ تيليغرام البالغ 10 ملفات. لم يُضف هذا الملف الزائد.', { reply_markup: alnabaHomeKeyboard(ctx) });
+        return true;
+      }
+      const choices = { quran: alnabaUploadCandidate(message, type, 'quran', { forwarded: true }), nasheed: alnabaUploadCandidate(message, type, 'nasheed', { forwarded: true }) };
+      if (!choices.quran || !choices.nasheed) return false;
+      const now = new Date().toISOString();
+      record.items.push({ key, message_id: messageId, ...(mediaGroupId ? { media_group_id: String(mediaGroupId) } : {}), section: null, status: 'awaiting_section', choices, attempts: 0, created_at: now, updated_at: now });
+      record.updated_at = now;
+      try {
+        await scheduleBatchCheckpoint();
+      } catch (error) {
+        setBatchEntry(batchId, key, { status: 'failed', error: String(error?.message || 'BACKUP_FAILED').slice(0, 80) });
+        store.persist({ backupSoon: false });
+        store._writeLocal();
+        await ctx.reply(alnabaQueueCheckpointError(error, langOf(ctx) === 'en'), { reply_markup: alnabaHomeKeyboard(ctx) }).catch(() => {});
+        return true;
+      }
+    }
+    const savedItem = batchRecord(batchId)?.items.find((item) => item.key === key);
+    if (savedItem) await issueBatchSectionPrompt(ctx, batchRecord(batchId), savedItem);
+    return true;
+  };
+  bot.callbackQuery(/^nb:batch-section:([0-9a-f]{12}):(quran|nasheed)$/, async (ctx) => {
+    if (!alnabaOwner(ctx) || ctx.chat?.type !== 'private') return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية للنشر.');
+    const [, token, section] = ctx.match;
+    const pending = alnabaBatchSectionChoices.get(token);
+    const savedItem = pending && batchEntry(pending.batchId, pending.itemKey);
+    if (!pending || pending.ownerId !== Number(ctx.from.id) || Date.now() - pending.createdAt > 30 * 60_000 || savedItem?.status !== 'awaiting_section') {
+      alnabaBatchSectionChoices.delete(token);
+      await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This file choice expired.' : 'انتهت صلاحية اختيار هذا الملف.');
+      return ctx.deleteMessage().catch(() => {});
+    }
+    const candidate = savedItem.choices?.[section];
+    if (!candidate) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Unsupported media file.' : 'ملف الوسائط غير مدعوم.');
+    alnabaBatchSectionChoices.delete(token);
+    const savedCtx = batchContext(pending.ownerId, savedItem.message_id, savedItem.media_group_id);
+    await queueAlnabaBatchUpload(savedCtx, section, candidate, savedItem.message_id, { batchId: pending.batchId, itemKey: pending.itemKey });
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Queued for website publishing.' : 'أُضيف إلى قائمة النشر على الموقع.');
+    return ctx.deleteMessage().catch(() => {});
+  });
+  bot.callbackQuery(/^nb:batch-cancel:([0-9a-f]{12})$/, async (ctx) => {
+    if (!alnabaOwner(ctx) || ctx.chat?.type !== 'private') return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية للنشر.');
+    const pending = alnabaBatchSectionChoices.get(ctx.match[1]);
+    let cancellationSaved = true;
+    if (pending?.ownerId === Number(ctx.from.id)) {
+      alnabaBatchSectionChoices.delete(ctx.match[1]);
+      const record = batchRecord(pending.batchId);
+      const itemIndex = record?.items.findIndex((item) => item.key === pending.itemKey) ?? -1;
+      const oldItem = itemIndex >= 0 ? structuredClone(record.items[itemIndex]) : null;
+      const oldRecordStatus = record?.status;
+      const oldRecordUpdatedAt = record?.updated_at;
+      setBatchEntry(pending.batchId, pending.itemKey, { status: 'cancelled' });
+      try {
+        await persistAlnabaBatchState();
+      } catch (error) {
+        console.error('[alnaba] could not persist batch cancellation', error?.message);
+        const current = batchRecord(pending.batchId);
+        const currentIndex = current?.items.findIndex((item) => item.key === pending.itemKey) ?? -1;
+        if (current && currentIndex >= 0 && oldItem) current.items[currentIndex] = oldItem;
+        if (current) { current.status = oldRecordStatus; current.updated_at = oldRecordUpdatedAt; }
+        store.persist({ backupSoon: false });
+        store._writeLocal();
+        cancellationSaved = false;
+        if (current && currentIndex >= 0 && oldItem) {
+          await issueBatchSectionPrompt(batchContext(pending.ownerId, oldItem.message_id, oldItem.media_group_id), current, current.items[currentIndex])
+            .catch((promptError) => console.error('[alnaba] could not reissue private section choice', promptError?.message));
+        }
+      }
+    }
+    if (!cancellationSaved) {
+      await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'The cancel could not be saved; the file remains private and still needs a section choice.' : 'تعذّر حفظ الإلغاء؛ سيبقى الملف خاصاً وما زال يحتاج إلى اختيار القسم.');
+      return ctx.deleteMessage().catch(() => {});
+    }
+    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This file stays private.' : 'سيبقى هذا الملف خاصاً.');
+    return ctx.deleteMessage().catch(() => {});
+  });
   if (role === 'admin') {
     runtimeHooks.flushAlnabaBatches = async () => {
+      if (batchCheckpointPromise) await batchCheckpointPromise.catch(() => {});
       const ownerIds = new Set([...alnabaUploadBatches.keys(), ...alnabaBatchQueues.keys()]);
       await Promise.all([...ownerIds].map(async (uid) => {
         await finishAlnabaBatch(uid);
         const pending = alnabaBatchQueues.get(uid);
         if (pending) await pending;
       }));
+      try { await persistAlnabaBatchState(); } catch (error) { console.error('[alnaba] final batch checkpoint failed', error?.message); }
+    };
+    runtimeHooks.resetAlnabaBatchRuntime = () => {
+      for (const batch of alnabaUploadBatches.values()) clearTimeout(batch.timer);
+      alnabaUploadBatches.clear();
+      alnabaBatchQueues.clear();
+      alnabaBatchSectionChoices.clear();
+      clearTimeout(batchCheckpointTimer);
+    };
+    runtimeHooks.resumeAlnabaBatches = async () => {
+      const now = Date.now();
+      const owners = new Set();
+      let changed = false;
+      for (const record of [...(store.state.alnabaBatches || [])].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))) {
+        if (!isAlnabaOwner(record.owner_id)) continue;
+        if (Date.parse(record.expires_at) <= now) {
+          for (const item of record.items) {
+            if (!['published', 'failed', 'cancelled', 'expired'].includes(item.status)) {
+              setBatchEntry(record.id, item.key, { status: 'expired', error: 'BATCH_EXPIRED' });
+              changed = true;
+              const ctx = batchContext(record.owner_id, item.message_id, item.media_group_id);
+              await ctx.reply(langOf(ctx) === 'en'
+                ? `⌛ ${item.message_id}: <b>${esc(item.candidate?.file_name || 'file')}</b> expired before publishing and was not published. Please resend it.`
+                : `⌛ الرسالة ${item.message_id}: انتهت مهلة الملف <b>${esc(item.candidate?.file_name || 'ملف')}</b> قبل النشر ولم يُنشر. أعد إرساله.`, { parse_mode: 'HTML' }).catch(() => {});
+            }
+          }
+          record.status = 'expired';
+          continue;
+        }
+        for (const item of record.items) {
+          const ctx = batchContext(record.owner_id, item.message_id, item.media_group_id);
+          if (item.status === 'awaiting_section') {
+            await issueBatchSectionPrompt(ctx, record, item).catch((error) => console.error('[alnaba] recovery prompt failed', error?.message));
+          } else if (['pending', 'processing'].includes(item.status)) {
+            attachRuntimeBatchItem(ctx, record, item);
+            owners.add(Number(record.owner_id));
+          }
+        }
+      }
+      if (changed) {
+        try { await persistAlnabaBatchState(); } catch (error) { console.error('[alnaba] could not persist expired batch state', error?.message); }
+      }
+      for (const uid of owners) {
+        const remaining = (store.state.alnabaBatches || []).filter((record) => Number(record.owner_id) === uid)
+          .flatMap((record) => record.items.filter((item) => ['pending', 'processing'].includes(item.status)));
+        if (!remaining.length) continue;
+        const ctx = batchContext(uid, remaining[0].message_id, remaining[0].media_group_id);
+        await ctx.reply(langOf(ctx) === 'en'
+          ? `↻ Recovered ${remaining.length} queued file(s) after restart. Processing them in message order; already-published files will not be duplicated.`
+          : `↻ استُعيدت ${remaining.length} ملفات من قائمة الانتظار بعد إعادة التشغيل. ستُعالج حسب ترتيب الرسائل، مع منع تكرار ما نُشر سابقاً.`).catch(() => {});
+        await finishAlnabaBatch(uid);
+        const task = alnabaBatchQueues.get(uid);
+        if (task) await task;
+      }
+      alnabaBatchIntakePaused = false;
     };
   }
-  const queueAlnabaBatchUpload = (ctx, section, candidate, sourceMessageId = null) => {
-    const uid = Number(ctx.from?.id);
-    if (!alnabaOwner(ctx) || !candidate) return false;
-    let batch = alnabaUploadBatches.get(uid);
-    if (!batch) {
-      batch = { items: [], firstAt: Date.now(), timer: null };
-      alnabaUploadBatches.set(uid, batch);
-    }
-    const messageId = Number(sourceMessageId || ctx.message?.message_id) || Date.now();
-    if (!batch.items.some((entry) => entry.messageId === messageId)) {
-      batch.items.push({ ctx, section, candidate, messageId, mediaGroupId: ctx.message?.media_group_id || null });
-    }
-    clearTimeout(batch.timer);
-    const remainingMaxWait = Math.max(0, ALNABA_BATCH_MAX_WAIT_MS - (Date.now() - batch.firstAt));
-    batch.timer = setTimeout(() => { void finishAlnabaBatch(uid); }, Math.min(ALNABA_BATCH_QUIET_MS, remainingMaxWait));
-    return true;
-  };
-  const askAlnabaBatchSection = async (ctx, message, type) => {
-    const token = randomUUID().replace(/-/g, '').slice(0, 12);
-    const ownerId = Number(ctx.from?.id);
-    for (const [key, pending] of alnabaBatchSectionChoices) {
-      if (Date.now() - pending.createdAt > 30 * 60_000) alnabaBatchSectionChoices.delete(key);
-    }
-    alnabaBatchSectionChoices.set(token, { ownerId, ctx, message, type, createdAt: Date.now() });
-    const keyboard = new InlineKeyboard()
-      .text(langOf(ctx) === 'en' ? '📖 Quran' : '📖 القرآن الكريم', `nb:batch-section:${token}:quran`)
-      .text(langOf(ctx) === 'en' ? '🎵 Nasheeds' : '🎵 الأناشيد', `nb:batch-section:${token}:nasheed`).row()
-      .text(langOf(ctx) === 'en' ? 'Keep private / cancel this file' : 'إبقاء خاصاً / إلغاء هذا الملف', `nb:batch-cancel:${token}`);
-    return ctx.reply(langOf(ctx) === 'en'
-      ? `This forwarded file is ambiguous (message ${message.message_id}); it remains private. Choose its section. Other files continue processing independently.`
-      : `هذا الملف المعاد توجيهه ملتبس (الرسالة ${message.message_id}) وسيبقى خاصاً. اختر قسمه؛ وتستمر معالجة بقية الملفات بشكل مستقل.`,
-    { reply_markup: withAlnabaHomeButton(keyboard, ctx) });
-  };
-  bot.callbackQuery(/^nb:batch-section:([0-9a-f]{12}):(quran|nasheed)$/, async (ctx) => {
-    if (!alnabaOwner(ctx) || ctx.chat?.type !== 'private') return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية النشر.');
-    const [, token, section] = ctx.match;
-    const pending = alnabaBatchSectionChoices.get(token);
-    if (!pending || pending.ownerId !== Number(ctx.from.id) || Date.now() - pending.createdAt > 30 * 60_000) {
-      alnabaBatchSectionChoices.delete(token);
-      await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This file choice expired.' : 'انتهت صلاحية اختيار هذا الملف.');
-      return ctx.deleteMessage().catch(() => {});
-    }
-    const candidate = alnabaUploadCandidate(pending.message, pending.type, section, { forwarded: true });
-    if (!candidate) {
-      alnabaBatchSectionChoices.delete(token);
-      return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Unsupported media file.' : 'ملف الوسائط غير مدعوم.');
-    }
-    alnabaBatchSectionChoices.delete(token);
-    queueAlnabaBatchUpload(pending.ctx, section, candidate, pending.message.message_id);
-    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Queued for website publishing.' : 'أُضيف إلى قائمة النشر على الموقع.');
-    return ctx.deleteMessage().catch(() => {});
-  });
-  bot.callbackQuery(/^nb:batch-cancel:([0-9a-f]{12})$/, async (ctx) => {
-    if (!alnabaOwner(ctx) || ctx.chat?.type !== 'private') return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية النشر.');
-    const pending = alnabaBatchSectionChoices.get(ctx.match[1]);
-    if (pending?.ownerId === Number(ctx.from.id)) alnabaBatchSectionChoices.delete(ctx.match[1]);
-    await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This file stays private.' : 'سيبقى هذا الملف خاصاً.');
-    return ctx.deleteMessage().catch(() => {});
-  });
   const forwardMetadataPrompt = (section, candidate, en) => {
     if (section === 'weekly') return en
       ? 'The issue number is optional: a number in the caption or filename is preserved; otherwise the next number is assigned. The title is optional and defaults to the issue number.'
@@ -3868,7 +4264,7 @@ export function telegramBackupAdapter(api0) {
       }
     }
     const m = await api.sendDocument(chat, file(), { caption, disable_notification: true, _keep: 'b' });
-    try { await api.pinChatMessage(chat, m.message_id, { disable_notification: true }); } catch { /* ignore */ }
+    await api.pinChatMessage(chat, m.message_id, { disable_notification: true });
     if (prev) { try { await api.deleteMessage(chat, prev); } catch { /* ignore */ } }
     last.set(key, m.message_id);
   };
@@ -3896,8 +4292,10 @@ export function telegramBackupAdapter(api0) {
       last.set(`${config.botToken}|${config.ownerIds[0]}`, pm.message_id);
       const f = await api.getFile(pm.document.file_id);
       const res = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${f.file_path}`);
-      if (!res.ok) return null;
-      return await res.text();
+      if (!res.ok) throw new Error(`backup download failed (${res.status})`);
+      const payload = await res.text();
+      if (!payload.trim()) throw new Error('backup payload is empty');
+      return payload;
     },
   };
 }

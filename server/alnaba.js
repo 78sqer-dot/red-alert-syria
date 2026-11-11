@@ -246,6 +246,118 @@ export function sanitizeAlnabaState(value) {
   return { ...content, archive: archive.slice(0, ALNABA_MAX_ARCHIVE_ENTRIES), sequence_counters: sequenceCounters };
 }
 
+const ALNABA_BATCH_STATUSES = new Set(['collecting', 'queued', 'processing', 'complete', 'expired']);
+const ALNABA_BATCH_ITEM_STATUSES = new Set(['pending', 'processing', 'awaiting_section', 'published', 'failed', 'cancelled', 'expired']);
+const safeIso = (value, fallback) => typeof value === 'string' && Number.isFinite(Date.parse(value))
+  ? new Date(value).toISOString() : fallback;
+
+function sanitizeAlnabaBatchCandidate(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const fileId = safeFileId(raw.file_id);
+  if (!fileId) return null;
+  const uniqueId = typeof raw.file_unique_id === 'string' && UNIQUE_ID_RE.test(raw.file_unique_id) ? raw.file_unique_id : null;
+  const fileSize = Number.isSafeInteger(raw.file_size) && raw.file_size >= 0 && raw.file_size <= 2 * 1024 * 1024 * 1024 ? raw.file_size : null;
+  const mimeType = typeof raw.mime_type === 'string' && /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(raw.mime_type) ? raw.mime_type.slice(0, 100) : '';
+  const fileName = cleanFileName(raw.file_name, 'alnaba-upload.bin');
+  return {
+    file_id: fileId,
+    ...(uniqueId ? { file_unique_id: uniqueId } : {}),
+    ...(fileSize !== null ? { file_size: fileSize } : {}),
+    ...(mimeType ? { mime_type: mimeType } : {}),
+    file_name: fileName,
+    title: cleanTitle(raw.title),
+    description: cleanDescription(raw.description),
+    ...(parseIssueNumber(raw.issue_number) ? { issue_number: parseIssueNumber(raw.issue_number) } : {}),
+  };
+}
+
+function sanitizeAlnabaBatchItem(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const messageId = Number(raw.message_id);
+  const key = typeof raw.key === 'string' && raw.key.length <= 1200 && !/[\u0000-\u001f\u007f]/.test(raw.key) ? raw.key : '';
+  const section = ALNABA_UPLOAD_SECTIONS.includes(raw.section) ? raw.section : null;
+  if (!ALNABA_BATCH_ITEM_STATUSES.has(raw.status)) return null;
+  const status = raw.status;
+  const candidate = sanitizeAlnabaBatchCandidate(raw.candidate);
+  const choicesRaw = raw.choices && typeof raw.choices === 'object' ? raw.choices : {};
+  const choices = {
+    ...(sanitizeAlnabaBatchCandidate(choicesRaw.quran) ? { quran: sanitizeAlnabaBatchCandidate(choicesRaw.quran) } : {}),
+    ...(sanitizeAlnabaBatchCandidate(choicesRaw.nasheed) ? { nasheed: sanitizeAlnabaBatchCandidate(choicesRaw.nasheed) } : {}),
+  };
+  if (!Number.isSafeInteger(messageId) || messageId < 1 || !key || (!candidate && !Object.keys(choices).length)) return null;
+  if (!section && status !== 'awaiting_section') return null;
+  if (status === 'awaiting_section' && (!choices.quran || !choices.nasheed)) return null;
+  if (status !== 'awaiting_section' && !candidate) return null;
+  const mediaGroupId = typeof raw.media_group_id === 'string' && raw.media_group_id.length <= 128 && !/[\u0000-\u001f\u007f]/.test(raw.media_group_id)
+    ? raw.media_group_id : null;
+  const now = new Date().toISOString();
+  const attempts = Number.isSafeInteger(raw.attempts) && raw.attempts >= 0 && raw.attempts <= 100 ? raw.attempts : 0;
+  return {
+    key, message_id: messageId, ...(mediaGroupId ? { media_group_id: mediaGroupId } : {}),
+    section, status, ...(candidate ? { candidate } : {}), ...(Object.keys(choices).length ? { choices } : {}),
+    attempts, created_at: safeIso(raw.created_at, now), updated_at: safeIso(raw.updated_at, now),
+    ...(typeof raw.error === 'string' ? { error: raw.error.slice(0, 80) } : {}),
+    ...(typeof raw.published_item_id === 'string' && UUID_RE.test(raw.published_item_id) ? { published_item_id: raw.published_item_id } : {}),
+  };
+}
+
+/** Persist only Telegram file references and bounded metadata; no media bytes or live Context objects. */
+export function sanitizeAlnabaBatchQueue(value, now = Date.now()) {
+  if (!Array.isArray(value)) return [];
+  const records = value.map((raw) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Number(raw.owner_id) !== ALNABA_OWNER_ID) return null;
+    const id = typeof raw.id === 'string' && raw.id.length <= 256 && !/[\u0000-\u001f\u007f]/.test(raw.id) ? raw.id : '';
+    if (!id) return null;
+    const items = Array.isArray(raw.items) ? raw.items.map(sanitizeAlnabaBatchItem).filter(Boolean).sort((a, b) => a.message_id - b.message_id).slice(0, 10) : [];
+    if (!items.length) return null;
+    const created = safeIso(raw.created_at, new Date(now).toISOString());
+    const createdMs = Date.parse(created);
+    const expires = safeIso(raw.expires_at, new Date(createdMs + 24 * 60 * 60_000).toISOString());
+    const mediaGroupId = typeof raw.media_group_id === 'string' && raw.media_group_id.length <= 128 && !/[\u0000-\u001f\u007f]/.test(raw.media_group_id)
+      ? raw.media_group_id : null;
+    return {
+      id, owner_id: ALNABA_OWNER_ID, ...(mediaGroupId ? { media_group_id: mediaGroupId } : {}),
+      status: ALNABA_BATCH_STATUSES.has(raw.status) ? raw.status : 'collecting',
+      created_at: created, updated_at: safeIso(raw.updated_at, created), expires_at: expires, items,
+    };
+  }).filter(Boolean);
+  const byId = new Map();
+  for (const record of records) byId.set(record.id, record);
+  const allItemsTerminal = (record) => record.items.every((item) => ['published', 'failed', 'cancelled', 'expired'].includes(item.status));
+  const cutoff = now - 30 * 24 * 60 * 60_000;
+  const retained = [...byId.values()].filter((record) => !allItemsTerminal(record) || Date.parse(record.updated_at) >= cutoff);
+  const active = retained.filter((record) => !allItemsTerminal(record));
+  const terminal = retained.filter(allItemsTerminal).sort((a, b) => Date.parse(a.updated_at) - Date.parse(b.updated_at)).slice(-500);
+  return [...active, ...terminal].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+}
+
+/** Merge old/new instance queues by batch and item key; the newest durable state wins per item. */
+export function mergeAlnabaBatchQueues(localValue, remoteValue) {
+  const local = sanitizeAlnabaBatchQueue(localValue);
+  const remote = sanitizeAlnabaBatchQueue(remoteValue);
+  const merged = new Map(local.map((batch) => [batch.id, batch]));
+  const stateRank = (status) => ({ collecting: 0, queued: 1, processing: 2, complete: 3, expired: 4 })[status] || 0;
+  const itemStateRank = (status) => ({
+    pending: 0, awaiting_section: 0, processing: 1, failed: 2, cancelled: 3, expired: 4, published: 5,
+  })[status] || 0;
+  for (const incoming of remote) {
+    const current = merged.get(incoming.id);
+    if (!current) { merged.set(incoming.id, incoming); continue; }
+    const byKey = new Map(current.items.map((item) => [item.key, item]));
+    for (const candidate of incoming.items) {
+      const previous = byKey.get(candidate.key);
+      if (!previous || Date.parse(candidate.updated_at) > Date.parse(previous.updated_at)
+        || (candidate.updated_at === previous.updated_at && itemStateRank(candidate.status) > itemStateRank(previous.status))) byKey.set(candidate.key, candidate);
+    }
+    const newest = Date.parse(incoming.updated_at) > Date.parse(current.updated_at)
+      || (incoming.updated_at === current.updated_at && stateRank(incoming.status) > stateRank(current.status));
+    merged.set(incoming.id, {
+      ...(newest ? incoming : current), items: [...byKey.values()].sort((a, b) => a.message_id - b.message_id).slice(0, 10),
+    });
+  }
+  return sanitizeAlnabaBatchQueue([...merged.values()]);
+}
+
 export function isAlnabaOwner(actorId) {
   return Number(actorId) === ALNABA_OWNER_ID;
 }

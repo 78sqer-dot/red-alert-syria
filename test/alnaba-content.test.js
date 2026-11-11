@@ -20,7 +20,9 @@ import {
   publishAlnabaArchiveEntry,
   publishAlnabaItem,
   parseWeeklyUploadCaption,
+  sanitizeAlnabaBatchQueue,
   sanitizeAlnabaState,
+  mergeAlnabaBatchQueues,
   updateAlnabaEntry,
   weeklyIssueNumber,
 } from '../server/alnaba.js';
@@ -40,6 +42,31 @@ function createStore() {
     persist() { this.persistCalls += 1; },
   };
 }
+
+test('Al-Nabaa batch snapshots sanitize references and preserve pending records during merge/retention', () => {
+  const now = Date.now();
+  const iso = (value) => new Date(value).toISOString();
+  const item = (key, status, updatedAt, fileId = 'fixture_batch_pdf_id') => ({
+    key, message_id: Number(key.replace(/\D/g, '')) || 1, section: 'weekly', status,
+    candidate: { file_id: fileId, file_unique_id: `${fileId}_unique`, file_size: 42, mime_type: 'application/pdf', file_name: 'issue.pdf', title: 'العدد 1', issue_number: 1, bytes: 'must not survive' },
+    attempts: 0, created_at: iso(now), updated_at: iso(updatedAt),
+  });
+  const record = (id, savedItem, updatedAt = now) => ({
+    id, owner_id: OWNER, status: 'processing', created_at: iso(now), updated_at: iso(updatedAt), expires_at: iso(now + 86_400_000),
+    items: [savedItem], context: { must_not_survive: true },
+  });
+  const pending = record('terminal-tie', item('msg-1', 'pending', now), now);
+  const published = record('terminal-tie', { ...item('msg-1', 'published', now), published_item_id: '123e4567-e89b-42d3-a456-426614174000' }, now);
+  const merged = mergeAlnabaBatchQueues([pending], [published]);
+  assert.equal(merged[0].items[0].status, 'published', 'terminal state wins on equal timestamps during handoff');
+  assert.equal(merged[0].items[0].candidate.bytes, undefined, 'snapshots never store file bytes or contexts');
+
+  const active = Array.from({ length: 505 }, (_, index) => record(`active-${index}`, item(`msg-${index + 1}`, 'pending', now + index, `fixture_${index}`), now + index));
+  const oldTerminal = record('old-terminal', item('old-msg-1', 'failed', now - 31 * 86_400_000), now - 31 * 86_400_000);
+  const retained = sanitizeAlnabaBatchQueue([...active, oldTerminal], now);
+  assert.equal(retained.length, 505, 'the record cap never silently evicts active batches');
+  assert.equal(retained.some((batch) => batch.id === 'old-terminal'), false, 'old terminal records are pruned after retention');
+});
 
 function fakeTelegram() {
   const files = new Map([
