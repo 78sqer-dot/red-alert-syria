@@ -42,7 +42,7 @@ test('Al-Nabaa exposes only the requested public section links while preserving 
   assert.match(api, /item\.section === 'quran'.*status\(404\)/, 'public Quran media requests are unavailable');
   assert.doesNotMatch(frontend, /quranList|quranLoading|section=quran/, 'the public frontend no longer loads Quran content');
   assert.doesNotMatch(css, /an-quran-card/, 'the removed Quran card has no public styling');
-  assert.match(page, /\/css\/alnaba\.css\?v=5/, 'public assets use a new cache version');
+  assert.match(page, /\/css\/alnaba\.css\?v=6/, 'public assets use a new cache version');
   assert.match(bot, /\.text\(en \? '📖 Quran' : '📖 القرآن الكريم', 'nb:quran'\)/, 'the owner bot upload control for Quran remains unchanged');
   assert.match(bot, /nb:manage:\(photos\|weekly\|quran\|nasheed\|archive\)/, 'private Quran content management remains available');
   assert.match(bot, /\.text\(en \? '🎵 Nasheeds' : '🎵 أناشيد', 'nb:nasheed'\)/, 'the owner bot upload control for nasheeds remains unchanged');

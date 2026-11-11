@@ -160,6 +160,11 @@ button { font: inherit; }
 .an-archive-kicker span { color: #536477; }
 .an-archive-entry h2 { margin: 4px 0 0; color: #f2f5f9; font-size: 16px; line-height: 1.7; overflow-wrap: anywhere; }
 .an-archive-entry time { display: block; margin-top: 4px; color: var(--an-muted); font-size: 10px; }
+.an-archive-url { display: block; max-width: 100%; margin-top: 9px; color: #9ce2c9; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.7; direction: ltr; text-align: left; overflow-wrap: anywhere; word-break: break-word; user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
+.an-archive-url:focus-visible { outline: 2px solid #9ce2c9; outline-offset: 3px; }
+.an-archive-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 8px; }
+.an-archive-copy-button { border-color: rgba(73, 168, 139, .38); background: rgba(73, 168, 139, .08); color: #9ce2c9; }
+.an-archive-copy-button:hover { background: rgba(73, 168, 139, .16); }
 .an-archive-open { flex: 0 0 auto; border-color: rgba(73, 168, 139, .38); background: rgba(73, 168, 139, .08); color: #9ce2c9; }
 .an-state { display: grid; min-height: 120px; place-items: center; padding: 22px; border: 1px dashed #354455; border-radius: 14px; color: var(--an-muted); text-align: center; font-size: 12px; }
 .an-error { border-color: rgba(227, 60, 76, .42); color: #ff9ca5; }
@@ -187,7 +192,8 @@ button { font: inherit; }
   .an-page-heading h1 { font-size: 28px; }
   .an-paper-card { grid-template-columns: 1fr; }
   .an-archive-entry { align-items: stretch; flex-direction: column; gap: 12px; padding: 15px; }
-  .an-archive-open { width: 100%; }
+  .an-archive-actions > * { min-height: 44px; flex: 1 1 calc(50% - 4px); }
+  .an-archive-open { width: auto; }
   .an-paper-copy { min-height: 190px; padding: 16px; }
   .an-pdf-frame { min-height: 300px; border-inline-start: 0; border-top: 1px solid var(--an-line); }
   .an-pdf-frame iframe { min-height: 300px; }

@@ -62,14 +62,17 @@ test('public archive links stay HTTPS on Android, Android desktop-site mode and 
 
 test('map and archive no longer rewrite Telegram links to app schemes', () => {
   assert.doesNotMatch(mapFrontend, /intent:\/\/|tg:\/\/|tgDeep\(/);
-  assert.match(frontend, /telegramArchiveOpenLink\(item\.url\)/);
+  assert.match(frontend, /normalizeTelegramPublicUrl\(url\)/);
   assert.doesNotMatch(frontend, /navigator\.userAgent|intent:\/\/|tg:\/\//);
 });
 
-test('the archive has a fresh module URL and explains Telegram account limits', () => {
+test('the copy-first archive keeps HTTPS links and current cached assets', () => {
   assert.match(frontend, /shared\/telegram-links\.js\?v=2/);
-  assert.match(frontend, /href="\$\{esc\(openLink\.href\)\}"\$\{target\}/);
-  assert.match(page, /\/js\/alnaba\.js\?v=7/);
-  assert.match(page, /دون تسجيل دخول للموقع/);
+  assert.doesNotMatch(frontend, /telegramArchiveOpenLink/);
+  assert.match(frontend, /href="\$\{safeUrl\}" rel="noopener noreferrer"/);
+  assert.match(frontend, /data-copy-archive-link="\$\{safeUrl\}"/);
+  assert.match(page, /\/js\/alnaba\.js\?v=8/);
+  assert.match(page, /\/css\/alnaba\.css\?v=6/);
+  assert.match(page, /لا يتطلب استعراض الأرشيف تسجيل دخول للموقع/);
   assert.match(page, /قد يتطلب حساب Telegram/);
 });

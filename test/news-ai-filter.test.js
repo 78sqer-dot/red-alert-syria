@@ -116,11 +116,22 @@ test('explicit opinion rewrite is labeled, sharp toward transitional-government 
   });
   assert.match(result, /^رأي\/تحليل:/, 'opinion text is labeled even if the provider omits the label');
   const system = JSON.parse(request.options.body).systemInstruction.parts[0].text;
-  assert.match(system, /بصوت معارض واضح للسياسة الحالية للحكومة الانتقالية أو النظام ومؤسساته/);
+  assert.match(system, /بصوت معارض واضح يركز على الحكومة الانتقالية وكوادر الدولة/);
   assert.match(system, /لا تُلطّف الموقف المعارض إلى صياغة محايدة/);
+  assert.match(system, /يركز على الحكومة الانتقالية وكوادر الدولة والمسؤولين/);
+  assert.match(system, /لا تعمم المسؤولية أو الاتهام على جميع كوادر الدولة/);
+  assert.match(system, /لا تنسب فعلاً إلى شخص غير مسمى/);
   assert.match(system, /استند حصراً إلى تفاصيل المصدر/);
   assert.match(system, /لا تخترع وقائع أو أرقاماً أو أسباباً أو ردوداً/);
   assert.match(system, /لا تستخدم تلاعباً نفسياً/);
+});
+
+test('state-cadre criticism requires a source-linked action and forbids blanket accusations', () => {
+  const source = 'أظهر تقرير موثق أن كوادر الدولة في الجهة الحكومية تجاهلت شكاوى الأسر بعد قرار خفض الدعم، وفق الوثيقة المنشورة اليوم.';
+  assert.equal(rewriteSourceReviewReason(source), null,
+    'state officials and cadres are eligible when the source links them to a specific decision or behavior');
+  assert.equal(rewriteSourceReviewReason('تحدث مقال عام عن كوادر الدولة في العبارة دون تفصيل واضح.'), 'no-specific-policy-or-action',
+    'mentioning state cadres alone is not enough to generate political criticism');
 });
 
 test('fictional political satire is unmistakably labeled and non-political events cannot request it or critique', async () => {

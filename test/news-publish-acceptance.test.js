@@ -82,9 +82,23 @@ const tap = async (data, user = owner, targetBot = bot, targetMessageId = 700) =
     message: { message_id: targetMessageId, date: 0, chat: { id: user.id, type: 'private' }, from: targetBot.botInfo, text: 'Local test draft' },
   },
 });
+const tapInChat = async (data, user = owner, chat = { id: user.id, type: 'private' }, targetBot = bot, targetMessageId = 700) => targetBot.handleUpdate({
+  update_id: updateId++,
+  callback_query: {
+    id: `local-${updateId}`,
+    from: user,
+    chat_instance: 'local',
+    data,
+    message: { message_id: targetMessageId, date: 0, chat, from: targetBot.botInfo, text: 'Local test draft' },
+  },
+});
 const sendText = async (text, user = owner, targetBot = bot) => targetBot.handleUpdate({
   update_id: updateId++,
   message: { message_id: ++messageId, date: 0, chat: { id: user.id, type: 'private' }, from: user, text },
+});
+const sendTextInChat = async (text, user = owner, chat = { id: user.id, type: 'private' }, targetBot = bot) => targetBot.handleUpdate({
+  update_id: updateId++,
+  message: { message_id: ++messageId, date: 0, chat, from: user, text },
 });
 const sendPhoto = async (user, targetBot = reportBot, fileId = 'report-photo-1') => targetBot.handleUpdate({
   update_id: updateId++,
@@ -1197,7 +1211,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   };
   const ownerCard = newsMonitorTest.cardKb(opinionDraft, 'ar', ownerId).inline_keyboard.flat();
   const nonOwnerCard = newsMonitorTest.cardKb(opinionDraft, 'ar', reporter.id).inline_keyboard.flat();
-  assert.ok(ownerCard.some((button) => button.callback_data === `nw:op:${opinionId}`), 'the opinion preview is offered to the owner');
+  assert.ok(ownerCard.some((button) => button.callback_data === `nw:op:${opinionId}` && button.text === '🧭 نقد سياسي حاد موثّق'), 'the clearly labeled sharp political-critique preview is offered to the owner');
   assert.ok(ownerCard.some((button) => button.callback_data === `nw:sa:${opinionId}`), 'the fictional-satire preview is offered to the owner');
   assert.equal(nonOwnerCard.some((button) => button.callback_data === `nw:op:${opinionId}`), false, 'the opinion preview is not offered to non-owners');
   assert.equal(nonOwnerCard.some((button) => button.callback_data === `nw:sa:${opinionId}`), false, 'the satire preview is not offered to non-owners');
@@ -1220,6 +1234,52 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     const previewMessage = calls.slice(opinionCallsStart).find((call) => call.method === 'editMessageText' && call.chatId === ownerId && /معاينة نقد معارض خاصة — لم تُعتمد ولم تُنشر/.test(call.payload.text));
     assert.ok(previewMessage, 'the preview is visibly labeled and remains unpublished');
     assert.equal(opinionDraft.headline, 'إعلان الحكومة الانتقالية خفض الدعم في حمص', 'generating a private critique never changes the factual headline');
+    const originalPrivatePreview = opinionDraft.aiRewritePreview.text;
+    let editStart = calls.length;
+    await tapInChat(`nw:oe:${opinionId}`, owner, { id: -1001001001, type: 'group' });
+    assert.equal(opinionDraft.privateEditorialEdit, undefined, 'an owner callback from a group cannot start private editing');
+    assert.equal(calls.slice(editStart).some((call) => call.method === 'sendMessage' && /تعديل خاص للرأي/.test(call.payload?.text || '')), false,
+      'group chats do not receive the private editing prompt');
+    await tap(`nw:oe:${opinionId}`, reporter);
+    assert.equal(calls.slice(editStart).some((call) => call.method === 'sendMessage' && call.chatId === reporter.id && /تعديل خاص للرأي/.test(call.payload?.text || '')), false,
+      'a non-owner cannot start the manual private editing flow');
+    assert.equal(opinionDraft.privateEditorialEdit, undefined, 'a forged non-owner edit callback creates no editing state');
+    await tap(`nw:oe:${opinionId}`, owner);
+    const editPrompt = [...calls.slice(editStart)].reverse().find((call) => call.method === 'sendMessage' && call.chatId === ownerId);
+    assert.match(editPrompt?.payload?.text || '', /تعديل خاص للرأي/);
+    assert.equal(editPrompt?.payload?.reply_markup?.force_reply, true, 'manual edits are requested as a private owner reply');
+    assert.equal(opinionDraft.privateEditorialEdit?.mode, 'opinion');
+    assert.ok(callbacksOf(keyboardAfter(editStart)).includes(`nw:oc:${opinionId}`), 'the preview offers a cancel button while editing');
+    await sendTextInChat('يزيد => يضاعف', owner, { id: -1001001001, type: 'group' });
+    assert.equal(opinionDraft.aiRewritePreview.text, originalPrivatePreview, 'owner text sent from a group cannot mutate the private preview');
+    assert.equal(opinionDraft.privateEditorialEdit?.mode, 'opinion', 'group text cannot close or replace the active private edit session');
+    await sendText('/cancel');
+    assert.equal(opinionDraft.privateEditorialEdit, undefined, 'the typed cancel command clears the editing session');
+    assert.equal(opinionDraft.aiRewritePreview.text, originalPrivatePreview, 'cancelling leaves the private preview unchanged');
+    await tap(`nw:oe:${opinionId}`, owner);
+    await tap(`nw:oc:${opinionId}`, owner);
+    assert.equal(opinionDraft.privateEditorialEdit, undefined, 'the inline cancel button clears the editing session');
+    assert.equal(opinionDraft.aiRewritePreview.text, originalPrivatePreview, 'inline cancellation also preserves the text');
+    await tap(`nw:oe:${opinionId}`, owner);
+    await sendText('يزيد => يضاعف');
+    assert.equal(opinionDraft.aiRewritePreview.text, 'رأي/تحليل: قرار خفض الدعم يضاعف الأعباء على الأسر وفق الوقائع المنشورة.',
+      'the owner can change an individual word without altering the private tone label or surrounding facts');
+    assert.equal(opinionDraft.aiRewritePreview.manuallyEdited, true, 'the saved preview is marked as manually edited');
+    assert.equal(opinionDraft.aiRewritePreview.applied, false, 'manual edits do not accept the private draft automatically');
+    assert.equal(opinionDraft.privateEditorialEdit, undefined, 'successful edits close the pending editing session');
+    assert.equal(opinionDraft.headline, 'إعلان الحكومة الانتقالية خفض الدعم في حمص', 'manual editing cannot change the factual headline');
+    const numberGuard = newsMonitorTest.applyPrivateOpinionReplacements('رأي/تحليل: خُفّض الدعم بنسبة 20% في القرار.', '20 => 25');
+    assert.equal(numberGuard.ok, false, 'manual edits cannot alter factual numbers');
+    assert.equal(numberGuard.reason, 'numbers');
+    for (const label of ['رأي:', 'تحليل:']) {
+      const variant = newsMonitorTest.applyPrivateOpinionReplacements(`${label} القرار واضح.`, 'واضح => صريح');
+      assert.equal(variant.ok, true, `${label} previews remain editable`);
+      assert.equal(variant.text, `${label} القرار صريح.`, `${label} is preserved exactly`);
+    }
+    const editedPreviewMessage = [...calls.slice(editStart)].reverse().find((call) => call.method === 'editMessageText' && call.chatId === ownerId && /يضاعف الأعباء/.test(call.payload.text || ''));
+    assert.ok(editedPreviewMessage, 'the updated copy is shown back in the private preview');
+    assert.match(editedPreviewMessage.payload.text, /عُدلت الصياغة يدوياً/);
+    assert.equal(calls.slice(editStart).some((call) => call.chatId === process.env.CHANNEL_ID), false, 'editing never calls the public channel');
     await tap(`nw:ra:${opinionId}`, owner);
     assert.equal(opinionDraft.aiRewritePreview.applied, true);
     assert.equal(opinionDraft.headline, 'إعلان الحكومة الانتقالية خفض الدعم في حمص', 'applying private critique never replaces the factual headline');
@@ -1228,13 +1288,13 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     assert.equal(nightEligible(opinionDraft), false, 'the applied opinion cannot enter automatic publication');
     const publicDraft = toBotDraft(opinionDraft);
     assert.equal(publicDraft.details, 'إعلان الحكومة الانتقالية خفض الدعم في حمص');
-    assert.doesNotMatch(JSON.stringify(publicDraft), /رأي\/تحليل|قرار خفض الدعم يزيد الأعباء/,
+    assert.doesNotMatch(JSON.stringify(publicDraft), /رأي\/تحليل|قرار خفض الدعم يضاعف الأعباء/,
       'toBotDraft carries the factual headline only and excludes the private opinion field');
     const publicInput = buildAlertInput(publicDraft, { id: ownerId, name: 'Local owner' });
     const projection = publicAlert(publicInput);
     const simulatedChannelPost = channelPost({ ...publicInput, place: publicInput.location, timestamp: new Date().toISOString() });
-    assert.doesNotMatch(JSON.stringify(projection), /رأي\/تحليل|قرار خفض الدعم يزيد الأعباء/);
-    assert.doesNotMatch(simulatedChannelPost, /رأي\/تحليل|قرار خفض الدعم يزيد الأعباء/);
+    assert.doesNotMatch(JSON.stringify(projection), /رأي\/تحليل|قرار خفض الدعم يضاعف الأعباء/);
+    assert.doesNotMatch(simulatedChannelPost, /رأي\/تحليل|قرار خفض الدعم يضاعف الأعباء/);
     const leakedPublicInput = { ...publicInput, title: 'رأي/تحليل: نص خاص لا يجوز نشره' };
     assert.equal(publicAlert(leakedPublicInput).title, '', 'the public map projection drops an unsafe title');
     assert.throws(() => channelPost(leakedPublicInput), /Private editorial or internal review text/,
@@ -1250,6 +1310,8 @@ test('every monitored alert type builds, and accepting the same mock draft twice
 
     await tap(`nw:sa:${opinionId}`, owner);
     assert.deepEqual(rewriteModes, ['opinion', 'satire']);
+    assert.equal(callbacksOf(keyboardAfter(opinionCallsStart)).includes(`nw:oe:${opinionId}`), false,
+      'manual word editing is specific to opinion/analysis, not the satire preview');
     assert.equal(opinionDraft.headline, 'إعلان الحكومة الانتقالية خفض الدعم في حمص');
     await tap(`nw:ra:${opinionId}`, owner);
     assert.match(opinionDraft.privateEditorial.satire, /^محاكاة ساخرة خيالية \(ليست خبراً\):/);
@@ -1276,11 +1338,36 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 },
     extra: [], ttlMin: 360, srcs: [{ u: 'mock-accident-source', local: false }], cards: [],
   };
-  assert.equal(newsMonitorTest.cardKb(accidentDraft, 'ar', ownerId).inline_keyboard.flat().some((button) => ['nw:op:' + accidentDraft.id, 'nw:sa:' + accidentDraft.id].includes(button.callback_data)), false,
-    'private political options are not displayed on a traffic-accident card');
+  const accidentOwnerButtons = newsMonitorTest.cardKb(accidentDraft, 'ar', ownerId).inline_keyboard.flat();
+  const accidentReporterButtons = newsMonitorTest.cardKb(accidentDraft, 'ar', reporter.id).inline_keyboard.flat();
+  assert.ok(accidentOwnerButtons.some((button) => button.callback_data === `nw:op:${accidentDraft.id}`),
+    'the owner sees the sharp-critique option beside the rewrite button even on an unrelated incident');
+  assert.ok(accidentOwnerButtons.some((button) => button.callback_data === `nw:sa:${accidentDraft.id}`),
+    'the owner sees the labeled fictional-satire option on every rewrite card');
+  assert.equal(accidentReporterButtons.some((button) => ['nw:op:' + accidentDraft.id, 'nw:sa:' + accidentDraft.id].includes(button.callback_data)), false,
+    'both private tones remain hidden from non-owners');
+  for (const type of Object.keys(ALERT_TYPES)) {
+    const draft = { id: `tone_controls_${type}`, type, status: 'pending', headline: 'حدث اختباري في حمص', sourceText: 'حدث اختباري في حمص دون صلة بسياسة حكومية.', srcs: [], loc: { scope: 'place', name_ar: 'حمص' } };
+    const ownerButtons = newsMonitorTest.cardKb(draft, 'ar', ownerId).inline_keyboard.flat();
+    assert.ok(ownerButtons.some((button) => button.callback_data === `nw:op:${draft.id}`), `owner critique option is present for ${type}`);
+    assert.ok(ownerButtons.some((button) => button.callback_data === `nw:sa:${draft.id}`), `owner satire option is present for ${type}`);
+  }
+  const accidentCallsStart = calls.length;
+  const publicPostsBeforeAccidentTone = calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length;
   await tap(`nw:op:${accidentDraft.id}`, owner);
   await tap(`nw:sa:${accidentDraft.id}`, owner);
   assert.deepEqual(rewriteModes, ['opinion', 'satire', 'opinion'], 'even forged owner callbacks cannot send a traffic accident to opinion or satire');
+  assert.equal(accidentDraft.aiRewritePreview, undefined);
+  assert.equal(accidentDraft.headline, 'حادث سير في حمص أسفر عن إصابة 3 أشخاص مساء اليوم');
+  const accidentFeedback = calls.slice(accidentCallsStart).filter((call) => call.method === 'answerCallbackQuery').map((call) => call.payload.text || '').join('\n');
+  assert.match(accidentFeedback, /حادث|حدث|سياسة حكومية/,
+    'the owner gets a private, plain-language explanation when the selected tone has no factual relationship');
+  assert.doesNotMatch(accidentFeedback, /non-political-event-source|EDITORIAL_REVIEW_REQUIRED/,
+    'internal review diagnostics are not shown in the user-facing explanation');
+  assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, publicPostsBeforeAccidentTone,
+    'selecting either political tone for an accident creates no channel post');
+  assert.equal(calls.slice(accidentCallsStart).some((call) => call.method === 'sendMessage' && call.chatId === ownerId), false,
+    'the failure explanation stays in the private callback response instead of becoming a public or regular post');
   assert.equal(accidentDraft.aiRewritePreview, undefined);
   delete newsState().drafts[accidentDraft.id];
 

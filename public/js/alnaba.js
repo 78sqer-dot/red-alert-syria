@@ -1,4 +1,5 @@
-import { telegramArchiveOpenLink } from '/shared/telegram-links.js?v=2';
+import { normalizeTelegramPublicUrl } from '/shared/telegram-links.js?v=2';
+import { copyArchiveUrl } from '/js/archive-copy.js?v=1';
 
 const page = document.documentElement.dataset.page || 'home';
 const $ = (selector) => document.querySelector(selector);
@@ -134,20 +135,24 @@ function bindNasheedPlayback(root) {
 }
 
 function renderArchive(item) {
-  const openLink = telegramArchiveOpenLink(item.url);
-  if (!openLink) return '';
+  const url = String(item.url || '');
+  if (!normalizeTelegramPublicUrl(url)) return '';
+  const safeUrl = esc(url);
   const title = esc(item.title || 'رابط Telegram');
   const date = formatDate(item.published_at);
-  const target = openLink.target ? ` target="${esc(openLink.target)}"` : '';
   return `<article class="an-archive-entry">
     <div class="an-archive-copy">
       <span class="an-archive-kicker">النبأ <span aria-hidden="true">/</span> الأرشيف</span>
       <h2>${title}</h2>
       ${date ? `<time datetime="${esc(item.published_at)}">أُضيف ${esc(date)}</time>` : ''}
+      <a class="an-archive-url" href="${safeUrl}" dir="ltr" aria-label="${esc(`الرابط المباشر: ${url}`)}">${safeUrl}</a>
     </div>
-    <a class="an-action-link an-archive-open" href="${esc(openLink.href)}"${target} rel="${esc(openLink.rel)}" aria-label="${esc(`فتح صفحة Telegram: ${item.title || 'رابط Telegram'}`)}">
-      <span>فتح صفحة Telegram</span><span aria-hidden="true">↗</span>
-    </a>
+    <div class="an-archive-actions">
+      <button class="an-copy-button an-archive-copy-button" type="button" data-copy-archive-link="${safeUrl}" aria-label="${esc(`نسخ رابط ${item.title || 'Telegram'}`)}">نسخ الرابط</button>
+      <a class="an-action-link an-archive-open" href="${safeUrl}" rel="noopener noreferrer" aria-label="${esc(`فتح صفحة Telegram: ${item.title || 'رابط Telegram'}`)}">
+        <span>فتح صفحة Telegram</span><span aria-hidden="true">↗</span>
+      </a>
+    </div>
   </article>`;
 }
 
@@ -157,6 +162,22 @@ const SECTION_VIEWS = {
   nasheed: { list: $('#nasheedList'), loading: $('#nasheedLoading'), empty: $('#nasheedEmpty'), error: $('#nasheedError'), more: $('#nasheedMore'), render: renderLibrary, limit: 20 },
   archive: { list: $('#archiveList'), loading: $('#archiveLoading'), empty: $('#archiveEmpty'), error: $('#archiveError'), more: $('#archiveMore'), render: renderArchive, limit: 30 },
 };
+
+const archiveList = $('#archiveList');
+archiveList?.addEventListener('click', (event) => {
+  const button = event.target.closest?.('[data-copy-archive-link]');
+  if (!button || !archiveList.contains(button)) return;
+  const link = button.closest('.an-archive-entry')?.querySelector('.an-archive-url');
+  const url = button.dataset.copyArchiveLink || link?.textContent?.trim();
+  if (!url || !link) return;
+  button.disabled = true;
+  copyArchiveUrl(url, { selectionTarget: link })
+    .then((result) => showToast(result === 'copied'
+      ? 'تم نسخ الرابط'
+      : 'تعذّر النسخ تلقائياً؛ اضغط مطولاً على الرابط الظاهر واختر «نسخ».'))
+    .catch(() => showToast('تعذّر النسخ تلقائياً؛ اضغط مطولاً على الرابط الظاهر واختر «نسخ».'))
+    .finally(() => { button.disabled = false; });
+});
 
 async function loadSection(section, reset = false) {
   const view = SECTION_VIEWS[section];

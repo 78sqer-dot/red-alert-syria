@@ -626,8 +626,8 @@ function cardKb(d, lang = 'ar', chatId = null) {
     .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id).row()
     .text(tr(lang, '🪄 صياغة صحفية', '🪄 Rewrite professionally'), 'nw:rw:' + d.id)
     .text(tr(lang, '🔎 تحقق من سجل القناة', '🔎 Check channel records'), 'nw:c:' + d.id);
-  if (privateEditorialModeApplicable(d) && ownerIdsU().includes(Number(chatId))) kb.row()
-    .text(tr(lang, '🧭 نقد معارض موثّق', '🧭 Source-grounded opposition critique'), 'nw:op:' + d.id)
+  if (ownerIdsU().includes(Number(chatId))) kb.row()
+    .text(tr(lang, '🧭 نقد سياسي حاد موثّق', '🧭 Sharp sourced political critique'), 'nw:op:' + d.id)
     .text(tr(lang, '🎭 محاكاة ساخرة خيالية', '🎭 Fictional political satire'), 'nw:sa:' + d.id);
 
   if (d.originalHeadline && d.originalHeadline !== d.headline) {
@@ -654,6 +654,7 @@ function rewritePreviewText(d, lang = 'ar') {
     `📝 <b>${tr(lang, 'عنوان المسودة الحالي', 'Current draft headline')}:</b> ${esc(original)}`,
     `📄 <b>${tr(lang, 'النص الأصلي من المصدر (مقتطف)', 'Original source text (excerpt)')}:</b> ${esc(excerpt)}`,
     `✨ <b>${tr(lang, 'المقترح', 'Suggestion')}:</b> ${esc(preview.text || '')}`,
+    preview.manuallyEdited ? tr(lang, '🖊 عُدلت الصياغة يدوياً في هذه المعاينة الخاصة.', '🖊 Wording manually edited in this private preview.') : null,
     '',
     preview.mode === 'opinion'
       ? tr(lang, 'هذه ملاحظة خاصة بالمالك وليست خبراً؛ يجب أن يستند النقد إلى الوقائع المذكورة، ولن تظهر على القناة أو الخريطة أو الموقع.', 'Private owner-only commentary, not news; criticism must be grounded in the stated facts and will not appear on the channel, map, or site.')
@@ -666,6 +667,10 @@ function rewritePreviewText(d, lang = 'ar') {
   return text;
 }
 function rewritePreviewKb(d, lang = 'ar') {
+  const preview = d.aiRewritePreview || {};
+  if (d.privateEditorialEdit?.mode === 'opinion' && d.privateEditorialEdit?.draftId === d.id) {
+    return new InlineKeyboard().text(tr(lang, '❌ إلغاء تعديل الكلمات', '❌ Cancel word edits'), 'nw:oc:' + d.id);
+  }
   if (d.aiRewritePreview?.applied) {
     if (['opinion', 'satire'].includes(d.aiRewritePreview.mode)) {
       return new InlineKeyboard()
@@ -676,9 +681,43 @@ function rewritePreviewKb(d, lang = 'ar') {
       .text(tr(lang, '↩️ استعادة الأصل', '↩️ Restore original'), 'nw:ro:' + d.id)
       .text(tr(lang, '↩️ رجوع للمسودة', '↩️ Back to draft'), 'nw:rr:' + d.id);
   }
-  return new InlineKeyboard()
+  const kb = new InlineKeyboard();
+  if (preview.mode === 'opinion') kb.text(tr(lang, '✏️ تعديل كلمات الرأي يدوياً', '✏️ Edit opinion wording'), 'nw:oe:' + d.id).row();
+  return kb
     .text(tr(lang, '✅ اعتماد الصياغة', '✅ Apply wording'), 'nw:ra:' + d.id)
     .text(tr(lang, '↩️ إبقاء النص الحالي', '↩️ Keep current wording'), 'nw:rr:' + d.id);
+}
+const OPINION_LABEL = /^(رأي\s*\/\s*تحليل|رأي|تحليل)\s*[:：—-]\s*/u;
+function applyPrivateOpinionReplacements(baseText, instructions) {
+  const base = String(baseText || '').trim();
+  const label = OPINION_LABEL.exec(base);
+  if (!label) return { ok: false, reason: 'not-opinion' };
+  const edits = String(instructions || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!edits.length || edits.length > 5) return { ok: false, reason: 'edit-count' };
+  let body = base.slice(label[0].length);
+  for (const edit of edits) {
+    const match = edit.match(/^(.+?)\s*=>\s*(.+)$/u);
+    if (!match) return { ok: false, reason: 'format' };
+    const from = match[1].trim();
+    const to = match[2].trim();
+    if (!from || !to || from === to || from.length > 80 || to.length > 80) return { ok: false, reason: 'replacement' };
+    const count = body.split(from).length - 1;
+    if (count !== 1) return { ok: false, reason: count ? 'ambiguous' : 'not-found' };
+    body = body.replace(from, to);
+  }
+  const candidate = `${label[0]}${body}`;
+  const numbers = (value) => [...String(value).matchAll(/\p{N}+(?:[.,٫]\p{N}+)*/gu)].map((match) => match[0]);
+  if (JSON.stringify(numbers(candidate)) !== JSON.stringify(numbers(base))) return { ok: false, reason: 'numbers' };
+  try {
+    const finalized = finalizeRewriteOutput(candidate, 'opinion');
+    const finalizedLabel = OPINION_LABEL.exec(finalized);
+    if (!finalizedLabel) return { ok: false, reason: 'label' };
+    const text = `${label[0]}${finalized.slice(finalizedLabel[0].length)}`;
+    if (!text.startsWith(label[0]) || text.length > 280 || JSON.stringify(numbers(text)) !== JSON.stringify(numbers(base))) return { ok: false, reason: 'label' };
+    return { ok: true, text };
+  } catch {
+    return { ok: false, reason: 'unsafe' };
+  }
 }
 const helicopterAuto = (text) => /مروحيتين|مروحيات|مروحيتا|مروحيتان|مروحيات|عدة مروحيات|طائرات مروحية|helicopters|multiple helicopters|two helicopters|intensive/i.test(String(text || ''));
 const helicopterOn = (d) => (typeof d.intense === 'boolean' ? d.intense : helicopterAuto(`${d.headline || ''} ${d.body || ''}`));
@@ -1612,15 +1651,20 @@ export function registerNewsTools(bot, h) {
     if (!staff(ctx) || (mode !== 'news' && !ownerIdsU().includes(Number(ctx.from.id)))) return toast(ctx, '');
     const d = await findDraft(ctx.match[2]);
     if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
-    if (mode !== 'news' && !privateEditorialModeApplicable(d)) return toast(ctx, t(ctx,
-      'النقد والسخرية متاحان للمالك فقط عندما يذكر المصدر فعلاً أو سياسة حكومية محددة؛ تبقى حوادث السلامة والأخبار غير المرتبطة خبرية.',
-      'Private critique and satire are available to the owner only when the source states a specific government action or policy; safety reports and unrelated news remain factual.'), true);
     const sourceText = String(d.sourceText || d.headline || '').trim();
     if (!sourceText) return toast(ctx, t(ctx, 'لا يوجد نص مصدر لإعادة صياغته', 'No source text is available to rewrite'), true);
     const reviewReason = mode === 'news' ? null : rewriteSourceReviewReason(sourceText);
-    if (reviewReason) return toast(ctx, t(ctx,
-      'لا توجد في المصدر وقائع سياسية محددة كافية لصياغة نقد أو سخرية؛ بقي الخبر كما هو.',
-      'The source has no sufficiently specific political facts for critique or satire; the factual draft is unchanged.'), true);
+    const applicable = mode === 'news' || privateEditorialModeApplicable(d);
+    if (mode !== 'news' && (!applicable || reviewReason)) {
+      const message = reviewReason === 'non-political-event-source'
+        ? t(ctx,
+          'هذا الحدث لا يرتبط في المصدر بقرار أو سياسة حكومية محددة؛ لا يمكن تطبيق النبرة المختارة دون اختلاق صلة. لم تُنشأ معاينة وبقي الخبر الوقائعي كما هو.',
+          'The source does not connect this event to a specific government policy or action. Applying this tone would invent a link; no preview was created and the factual draft is unchanged.')
+        : t(ctx,
+          'لا تتضمن هذه المسودة وقائع حكومية محددة تكفي للنبرة المختارة دون تخمين. لم تُنشأ معاينة وبقي الخبر الوقائعي كما هو.',
+          'This draft lacks specific government facts to support the selected tone without speculation. No preview was created and the factual draft is unchanged.');
+      return toast(ctx, message, true);
+    }
     const preview = d.aiRewritePreview;
     const previewIsCurrent = preview && preview.mode === mode && preview.sourceText === sourceText && preview.baseHeadline === d.headline;
     const previewAlreadyApplied = preview?.applied && (mode === 'news' ? preview.text === d.headline : d.privateEditorial?.[mode] === preview.text);
@@ -1656,6 +1700,48 @@ export function registerNewsTools(bot, h) {
     } finally {
       delete d.aiRewriteBusy;
     }
+  });
+  bot.callbackQuery(/^nw:oe:(\w+)$/, async (ctx) => {
+    const userId = Number(ctx.from?.id);
+    if (!h.owner(ctx) || !ownerIdsU().includes(userId) || ctx.chat?.type !== 'private' || Number(ctx.chat.id) !== userId) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    const preview = d?.aiRewritePreview;
+    const sourceText = String(d?.sourceText || d?.headline || '').trim();
+    if (!d || d.status !== 'pending' || preview?.mode !== 'opinion' || preview.applied || !preview.text) return toast(ctx, t(ctx, 'معاينة الرأي الخاصة لم تعد متاحة للتعديل', 'The private opinion preview is no longer editable'), true);
+    if (preview.sourceText !== sourceText || preview.baseHeadline !== d.headline || !privateEditorialModeApplicable(d) || rewriteSourceReviewReason(sourceText)) return toast(ctx, t(ctx, 'هذه معاينة قديمة أو لم تعد مؤهلة؛ لم يتغير النص', 'This preview is stale or no longer eligible; no text was changed'), true);
+    for (const draft of Object.values(newsState().drafts)) {
+      if (draft.privateEditorialEdit?.userId === userId) delete draft.privateEditorialEdit;
+    }
+    d.privateEditorialEdit = {
+      userId, draftId: d.id, mode: 'opinion', baseText: preview.text,
+      sourceText, baseHeadline: d.headline, chatId: Number(ctx.chat.id),
+      messageId: Number(ctx.callbackQuery.message?.message_id), expiresAt: Date.now() + PEND_MS,
+      promptMessageIds: [],
+    };
+    save();
+    await toast(ctx, '');
+    const prompt = await ctx.reply(t(ctx,
+      '✏️ <b>تعديل خاص للرأي/التحليل</b>\nأرسل كل تعديل في سطر بصيغة <code>العبارة الحالية =&gt; العبارة الجديدة</code>؛ يمكن تعديل كلمة واحدة أو أكثر. يجب أن تبقى الوقائع كما في المصدر، ولا يُسمح بتغيير الأرقام. أرسل <code>/cancel</code> أو اضغط زر الإلغاء. هذا التعديل خاص ولن يغيّر الخبر العام أو يُنشر.',
+      '✏️ <b>Private opinion/analysis edit</b>\nSend each change on a new line as <code>current wording =&gt; replacement wording</code>; one or more words can be changed. Keep the facts from the source and do not change numbers. Send <code>/cancel</code> or tap Cancel. This stays private and will not change or publish the public story.'), {
+      parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true, input_field_placeholder: t(ctx, 'العبارة الحالية => الجديدة', 'current wording => replacement') },
+    });
+    if (prompt?.message_id) d.privateEditorialEdit.promptMessageIds.push(Number(prompt.message_id));
+    save();
+    try { await ctx.editMessageReplyMarkup({ reply_markup: rewritePreviewKb(d, h.langOf(ctx)) }); } catch { /* preview may have been removed */ }
+  });
+  bot.callbackQuery(/^nw:oc:(\w+)$/, async (ctx) => {
+    const userId = Number(ctx.from?.id);
+    if (!h.owner(ctx) || !ownerIdsU().includes(userId) || ctx.chat?.type !== 'private' || Number(ctx.chat.id) !== userId) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    const edit = d?.privateEditorialEdit;
+    if (!d || d.status !== 'pending' || edit?.mode !== 'opinion' || edit.userId !== userId || edit.draftId !== d.id) return toast(ctx, '');
+    delete d.privateEditorialEdit;
+    save();
+    for (const messageId of edit.promptMessageIds || []) {
+      try { await ctx.api.deleteMessage(edit.chatId, messageId); } catch { /* already gone */ }
+    }
+    await toast(ctx, t(ctx, 'أُلغي التعديل؛ بقيت المعاينة كما هي', 'Edit cancelled; the preview is unchanged'));
+    try { await ctx.editMessageText(rewritePreviewText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: rewritePreviewKb(d, h.langOf(ctx)), link_preview_options: { is_disabled: true } }); } catch { /* preview may have been removed */ }
   });
   bot.callbackQuery(/^nw:ra:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
@@ -2145,6 +2231,82 @@ export function registerNewsTools(bot, h) {
   bot.callbackQuery('nws:sa', (ctx) => addSourcePrompt(ctx, 'nws:src'));
   bot.callbackQuery('nws:sa:main', (ctx) => addSourcePrompt(ctx, 'nws'));
   bot.on('message', async (ctx, next) => {
+    const userId = Number(ctx.from?.id);
+    const manualDraft = Object.values(newsState().drafts).find((draft) => draft.privateEditorialEdit?.userId === userId);
+    if (manualDraft && h.owner(ctx) && ownerIdsU().includes(userId) && ctx.chat?.type === 'private' && Number(ctx.chat.id) === userId) {
+      const edit = manualDraft.privateEditorialEdit;
+      const text = String(ctx.message?.text || '').trim();
+      const removeEditMessages = async (deleteIncoming = true) => {
+        for (const messageId of edit.promptMessageIds || []) {
+          try { await ctx.api.deleteMessage(edit.chatId, messageId); } catch { /* already gone */ }
+        }
+        if (deleteIncoming && ctx.message?.message_id) {
+          try { await ctx.api.deleteMessage(edit.chatId, Number(ctx.message.message_id)); } catch { /* already gone */ }
+        }
+      };
+      const restorePreview = async () => {
+        try {
+          await ctx.api.editMessageText(edit.chatId, edit.messageId, rewritePreviewText(manualDraft, langOfId(edit.chatId)), {
+            parse_mode: 'HTML', reply_markup: rewritePreviewKb(manualDraft, langOfId(edit.chatId)), link_preview_options: { is_disabled: true },
+          });
+        } catch { /* preview may have been removed */ }
+      };
+      if (Date.now() > Number(edit.expiresAt || 0)) {
+        delete manualDraft.privateEditorialEdit;
+        save();
+        await removeEditMessages(false);
+        await restorePreview();
+        return next();
+      }
+      if (/^\/cancel(?:@\w+)?$/i.test(text)) {
+        delete manualDraft.privateEditorialEdit;
+        save();
+        await removeEditMessages();
+        await restorePreview();
+        return;
+      }
+      if (text.startsWith('/')) return next();
+      const preview = manualDraft.aiRewritePreview;
+      const sourceText = String(manualDraft.sourceText || manualDraft.headline || '').trim();
+      const isCurrent = manualDraft.status === 'pending' && preview?.mode === 'opinion' && !preview.applied
+        && preview.sourceText === sourceText && preview.sourceText === edit.sourceText
+        && preview.baseHeadline === manualDraft.headline && preview.baseHeadline === edit.baseHeadline
+        && preview.text === edit.baseText && privateEditorialModeApplicable(manualDraft)
+        && !rewriteSourceReviewReason(sourceText);
+      if (!isCurrent) {
+        delete manualDraft.privateEditorialEdit;
+        save();
+        await removeEditMessages();
+        await restorePreview();
+        await ctx.reply(t(ctx, '⚠️ انتهت صلاحية المعاينة أو تغيّر مصدرها؛ أُلغيت التعديلات ولم يتغير النص.', '⚠️ The preview expired or its source changed; edits were cancelled and the text is unchanged.'));
+        return;
+      }
+      const result = applyPrivateOpinionReplacements(edit.baseText, text);
+      if (!result.ok) {
+        const reason = {
+          'format': ['استخدم الصيغة: العبارة الحالية => العبارة الجديدة.', 'Use: current wording => replacement wording.'],
+          'not-found': ['لم أجد العبارة الحالية كما كُتبت في المعاينة؛ لم يتغير النص.', 'That exact current wording was not found; the preview is unchanged.'],
+          'ambiguous': ['تتكرر العبارة الحالية؛ اختر عبارة أدق لتجنب استبدال غير مقصود.', 'That wording occurs more than once; use a more specific phrase.'],
+          'numbers': ['لا يمكن تغيير الأرقام؛ يجب أن تبقى الوقائع الرقمية كما في المعاينة والمصدر.', 'Numbers cannot be changed; factual figures must remain as in the preview and source.'],
+          'edit-count': ['أرسل من سطر واحد إلى خمسة أسطر من التعديلات.', 'Send between one and five replacement lines.'],
+          'replacement': ['اكتب عبارة قديمة وجديدة مختلفتين، كل منهما حتى 80 حرفاً.', 'Use distinct old and new wording, each up to 80 characters.'],
+        }[result.reason] || ['لم يُقبل هذا التعديل الآمن؛ المعاينة لم تتغير.', 'This edit did not pass the safety check; the preview is unchanged.'];
+        const prompt = await ctx.reply(t(ctx, `⚠️ ${reason[0]}\nأعد الإرسال بصيغة <code>العبارة الحالية =&gt; العبارة الجديدة</code> أو أرسل <code>/cancel</code>.`, `⚠️ ${reason[1]}\nResend as <code>current wording =&gt; replacement wording</code> or send <code>/cancel</code>.`), {
+          parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true, input_field_placeholder: t(ctx, 'العبارة الحالية => الجديدة', 'current wording => replacement') },
+        });
+        if (prompt?.message_id) edit.promptMessageIds.push(Number(prompt.message_id));
+        save();
+        return;
+      }
+      preview.text = result.text;
+      preview.manuallyEdited = true;
+      preview.manuallyEditedAt = Date.now();
+      delete manualDraft.privateEditorialEdit;
+      save();
+      await removeEditMessages();
+      await restorePreview();
+      return;
+    }
     const p = pend.get(ctx.from?.id);
     if (!p) return next();
     if (!h.owner(ctx) || Date.now() > p.exp) { pend.delete(ctx.from.id); return next(); }
@@ -2170,4 +2332,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, editorialGate, privateEditorialModeApplicable, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
