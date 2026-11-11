@@ -66,6 +66,8 @@ bot.api.config.use(async (_previous, method, payload) => {
       fixture_ambiguous_audio_id: 'audio/quran.ogg',
       fixture_nasheed_video_id: 'video/nasheed.mp4',
       fixture_forwarded_nasheed_video_id: 'video/nasheed.mp4',
+      fixture_followup_nasheed_video_1_id: 'video/nasheed.mp4',
+      fixture_followup_nasheed_video_2_id: 'video/nasheed.mp4',
     };
     return { ok: true, result: { file_path: filePaths[payload.file_id] } };
   }
@@ -217,6 +219,16 @@ const sendAudio = (id) => bot.handleUpdate({
       forward_origin: forwardedFrom('أناشيد'),
       caption: 'نشيد معاد توجيهه للاختبار\nوصف النشيد المعاد توجيهه',
       video: { file_id: 'fixture_forwarded_nasheed_video_id', file_unique_id: 'fixture_forwarded_nasheed_video_unique', file_name: 'nasheed.mp4', mime_type: 'video/mp4', file_size: mp4Bytes.length },
+    },
+  });
+  const sendFollowupForwardVideo = (id, n) => bot.handleUpdate({
+    update_id: updateId++,
+    message: {
+      message_id: ++messageId, date: 0,
+      chat: { id, type: 'private' }, from: user(id),
+      forward_origin: forwardedFrom('أناشيد'),
+      caption: `نشيد متابعة ${n} للاختبار\nوصف جديد للاختبار`,
+      video: { file_id: `fixture_followup_nasheed_video_${n}_id`, file_unique_id: `fixture_followup_nasheed_video_${n}_unique`, file_name: 'nasheed.mp4', mime_type: 'video/mp4', file_size: mp4Bytes.length },
     },
   });
   const sendAmbiguousForwardAudio = (id) => bot.handleUpdate({
@@ -635,4 +647,23 @@ test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploa
   await sendForwardedPhoto(deniedId);
   assert.equal(store.state.alnaba.photos.length, beforeDeniedForward, 'a non-owner cannot create a forwarded Al-Nabaa item');
   assert.equal(buttonsOf(lastUiFor(deniedId)).some((button) => button.callback_data === 'nb:publish'), false);
+
+  const beforeCancel = store.state.alnaba.nasheed.length;
+  await sendAmbiguousForwardAudio(authorizedId);
+  assert.match(lastUiFor(authorizedId).payload.text, /لم أستطع تحديد/);
+  await tap(authorizedId, 'nb:cancel');
+  assert.equal(store.state.alnaba.nasheed.length, beforeCancel, 'cancelling an ambiguous forward leaves it private');
+  await sendFollowupForwardVideo(authorizedId, 1);
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(store.state.alnaba.nasheed.length, beforeCancel + 1, 'the next clearly classified forward publishes after Cancel clears the pending state');
+
+  const quranBeforeSupersede = store.state.alnaba.quran.length;
+  const nasheedBeforeSupersede = store.state.alnaba.nasheed.length;
+  await sendForwardedVoiceMissingTitle(authorizedId);
+  assert.match(lastUiFor(authorizedId).payload.text, /أرسل العنوان في السطر الأول/);
+  await sendFollowupForwardVideo(authorizedId, 2);
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.doesNotMatch(lastUiFor(authorizedId).payload.text, /أكمل تجهيز العنصر المعاد توجيهه/);
+  assert.equal(store.state.alnaba.quran.length, quranBeforeSupersede, 'superseding a pending item never publishes the old item');
+  assert.equal(store.state.alnaba.nasheed.length, nasheedBeforeSupersede + 1, 'a new classified forward supersedes stale metadata state and publishes directly');
 });

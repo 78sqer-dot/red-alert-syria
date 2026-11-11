@@ -3418,13 +3418,25 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const uid = Number(ctx.from?.id);
     if (!alnabaOwner(ctx)) return next();
     const message = ctx.message;
-    if (alnabaPendingForwardInputs.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Finish the current forwarded item or cancel it before sending another.' : 'أكمل تجهيز العنصر المعاد توجيهه أو ألغِه قبل إرسال عنصر آخر.', { reply_markup: forwardInputKeyboard(ctx) });
+    const flow = alnabaSessions.get(uid);
+    const forwarded = isForwardedAlnabaMessage(message) && ctx.chat?.type === 'private';
+    const pendingForward = alnabaPendingForwardInputs.get(uid);
+    if (pendingForward) {
+      const expired = Date.now() - Number(pendingForward.createdAt || 0) > 30 * 60_000;
+      if (expired || forwarded) {
+        // A new owner-forward supersedes the previous private, unresolved item; never publish the old one.
+        alnabaPendingForwardInputs.delete(uid);
+      } else {
+        return ctx.reply(langOf(ctx) === 'en'
+          ? 'The previous forwarded item is still private. Tap Cancel or send /menu, then send the new item.'
+          : 'العنصر السابق ما زال خاصاً. اضغط «إلغاء» أو أرسل /menu لمسح حالته، ثم أرسل العنصر الجديد.',
+        { reply_markup: forwardInputKeyboard(ctx) });
+      }
+    }
     if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) {
       return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.', { reply_markup: alnabaHomeKeyboard(ctx) });
     }
     if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.', { reply_markup: alnabaHomeKeyboard(ctx) });
-    const flow = alnabaSessions.get(uid);
-    const forwarded = isForwardedAlnabaMessage(message) && ctx.chat?.type === 'private';
     if (!flow && !forwarded) return next();
     if (flow?.section === 'archive') return next();
     if (forwarded && flow?.mode !== 'replace') {
