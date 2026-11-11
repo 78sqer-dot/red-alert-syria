@@ -1796,20 +1796,20 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return withAlnabaHomeButton(keyboard, ctx);
   };
   const alnabaMenuText = (ctx) => langOf(ctx) === 'en'
-    ? '📰 <b>Al-Nabaa publishing</b>\n\nChoose photo news, the weekly newspaper, Quran, nasheeds, or the archive. You can also forward an item here for automatic section preparation; if audio/video is unclear, the bot will ask whether it is Quran or a nasheed. Upload one item at a time. Nothing becomes public until you review its preview and confirm.'
-    : '📰 <b>نشر محتوى النبأ</b>\n\nاختر الأخبار المصوّرة أو الصحيفة الأسبوعية أو القرآن الكريم أو الأناشيد أو الأرشيف، أو أعد توجيه الملف إلى البوت ليُجهّزه للقسم المناسب تلقائياً. إذا لم يتضح هل الصوت أو الفيديو قرآن أم نشيد، سيطلب البوت تحديد القسم. يبقى كل عنصر خاصاً حتى تراجع معاينته وتؤكد النشر.';
+    ? '📰 <b>Al-Nabaa publishing</b>\n\nChoose photo news, the weekly newspaper, Quran, or nasheeds, or forward an item for automatic section preparation. Owner uploads are published directly to the Al-Nabaa website only, never to the Telegram channel. If an audio/video item is ambiguous, the bot will keep it private and ask you to choose Quran or nasheeds before publishing.'
+    : '📰 <b>نشر محتوى النبأ</b>\n\nاختر الأخبار المصوّرة أو الصحيفة الأسبوعية أو القرآن الكريم أو الأناشيد، أو أعد توجيه مادة ليجهّزها البوت للقسم المناسب تلقائياً. ما ترسله من حساب المالك يُنشر مباشرةً على موقع النبأ فقط، ولا يُنشر في قناة تيليغرام. إذا التبس قسم الصوت أو الفيديو، سيبقى خاصاً حتى تختار القرآن أو الأناشيد.';
   const alnabaSectionPrompt = (section, en) => {
     if (section === 'photos') return en
-      ? '🖼 <b>Photo news</b>\n\nSend one photo with its headline in the caption, or attach a JPG, PNG, or WebP file with a headline. Maximum 10 MB. The original image is preserved; nothing goes public until you confirm.'
-      : '🖼 <b>أخبار مصوّرة</b>\n\nأرسل صورة مع عنوانها في وصف الصورة، أو أرفق JPG أو PNG أو WebP مع العنوان. الحد الأقصى 10 ميغابايت. تُعرض الصورة كما هي، ولا تظهر للمتابعين قبل تأكيد النشر.';
+      ? '🖼 <b>Photo news</b>\n\nSend one photo with its headline in the caption, or attach a JPG, PNG, or WebP file with a headline (maximum 10 MB). The original image is published directly on the Al-Nabaa website only and expires after 24 hours.'
+      : '🖼 <b>أخبار مصوّرة</b>\n\nأرسل صورة مع عنوانها في وصفها، أو أرفق JPG أو PNG أو WebP مع العنوان (حتى 10 ميغابايت). تُنشر الصورة كما هي على موقع النبأ فقط، وتُزال بعد 24 ساعة.';
     if (section === 'weekly') return en
-      ? '📄 <b>Weekly newspaper</b>\n\nSend one PDF (up to 20 MB). Enter its number in the first caption line (for example, 5 then the title) or start the filename with that number, such as 5.pdf. The public list is sorted numerically from low to high. Each file is checked and previewed before you confirm.'
-      : '📄 <b>الصحيفة الأسبوعية</b>\n\nأرسل ملف PDF واحداً (حتى 20 ميغابايت). اكتب رقم العدد في أول سطر من الوصف (مثلاً: 5 ثم العنوان)، أو ابدأ اسم الملف بالرقم مثل 5.pdf. تُرتّب الأعداد للزوار تصاعدياً حسب الرقم. يُفحص كل ملف وتراجعه قبل التأكيد.';
+      ? '📄 <b>Weekly newspaper</b>\n\nSend one PDF (up to 20 MB). Enter its positive issue number in the first caption line (for example, 5 then the title) or start the filename with that number, such as 5.pdf. After validation, it is published directly on the Al-Nabaa website only; visitors can view it in-page or download it.'
+      : '📄 <b>الصحيفة الأسبوعية</b>\n\nأرسل ملف PDF واحداً (حتى 20 ميغابايت)، واكتب رقم العدد الموجب في أول سطر من الوصف (مثلاً: 5 ثم العنوان)، أو ابدأ اسم الملف بالرقم مثل 5.pdf. بعد التحقق يُنشر مباشرةً على موقع النبأ فقط، ويمكن للزوار عرضه داخل الصفحة أو تنزيله.';
     if (section === 'quran' || section === 'nasheed') {
       const name = section === 'quran' ? (en ? 'Quran' : 'القرآن الكريم') : (en ? 'Nasheeds' : 'الأناشيد');
       return en
-        ? `📚 <b>${name}</b>\n\nSend one audio/video item, image, or PDF at a time (maximum 20 MB per file; images up to 10 MB). Put the title on the first caption line and an optional description on the next lines. Audio and video are supported. Nothing is public until you review the preview and confirm.`
-        : `📚 <b>${name}</b>\n\nأرسل عنصراً واحداً كل مرة: صوتاً أو فيديو أو صورة أو PDF (حتى 20 ميغابايت للملف، والصورة حتى 10 ميغابايت). ضع العنوان في أول سطر من الوصف، والوصف الاختياري في الأسطر التالية. لا يظهر المحتوى للزوار حتى تراجع المعاينة وتؤكد النشر.`;
+        ? `📚 <b>${name}</b>\n\nSend one audio/video item, image, or PDF at a time (maximum 20 MB per file; images up to 10 MB). Put the title on the first caption line and an optional description on the next lines. After validation, it is published directly to this section of the Al-Nabaa website only.`
+        : `📚 <b>${name}</b>\n\nأرسل عنصراً واحداً كل مرة: صوتاً أو فيديو أو صورة أو PDF (حتى 20 ميغابايت للملف، والصورة حتى 10 ميغابايت). ضع العنوان في أول سطر من الوصف، والوصف الاختياري في الأسطر التالية. بعد التحقق يُنشر المحتوى مباشرةً في هذا القسم على موقع النبأ فقط.`;
     }
     return en
       ? '🔗 <b>Archive</b>\n\nSend one text message with two lines: the channel/group name or title first, then its HTTPS Telegram link (t.me or telegram.me). Public usernames and invite links are supported. The entry stays private until you confirm the preview.'
@@ -3207,6 +3207,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (error?.message === 'MISSING_ISSUE_NUMBER') return en ? 'Add a positive issue number in the caption or start the PDF filename with that number (for example, 5.pdf).' : 'أضف رقم العدد الموجب في الوصف أو ابدأ اسم ملف PDF بالرقم (مثلاً 5.pdf).';
     if (error?.message === 'INVALID_ISSUE_NUMBER') return en ? 'Use a positive whole-number issue number.' : 'استخدم رقماً صحيحاً موجباً للعدد.';
     if (error?.message === 'DUPLICATE_ISSUE_NUMBER') return en ? 'That issue number is already in use; choose another number.' : 'رقم هذا العدد مستخدم مسبقاً؛ اختر رقماً آخر.';
+    if (error?.message === 'DUPLICATE_MEDIA') return en ? 'This exact file is already published in Al-Nabaa.' : 'هذا الملف منشور مسبقاً في النبأ.';
+    if (['BACKUP_UNAVAILABLE', 'BACKUP_FAILED'].includes(error?.message)) return en ? 'Publishing is paused: a durable backup could not be saved, so nothing was published. Retry after backup is available.' : 'توقف النشر: تعذّر حفظ نسخة احتياطية دائمة، لذلك لم يُنشر شيء. أعد المحاولة عند توفر النسخة الاحتياطية.';
     if (['INVALID_MEDIA_TYPE', 'INVALID_FILE_NAME', 'INVALID_FILE_CONTENT'].includes(error?.message)) return en ? 'This file is not a valid supported image, PDF, audio, or video file for the selected section.' : 'الملف ليس صورة أو PDF أو صوتاً أو فيديو صالحاً ومدعوماً للقسم المحدد.';
     return en ? 'Telegram could not verify the file. Please retry with a smaller supported file.' : 'تعذّر التحقق من الملف عبر Telegram. أعد المحاولة بملف أصغر وبصيغة مدعومة.';
   };
@@ -3264,19 +3266,33 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         await ctx.reply(text, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
         return true;
       }
-      alnabaPendingUploads.set(uid, { ...prepared, createdAt: Date.now() });
+      if (!store.backup || !config.telegramBackup) throw new Error('BACKUP_UNAVAILABLE');
+      const oldState = store.state.alnaba;
+      let item;
+      try {
+        item = publishAlnabaItem(store, uid, prepared, new Date());
+        await store.flushBackup();
+        if (store._backupPending) throw new Error('BACKUP_FAILED');
+      } catch (error) {
+        store.state.alnaba = oldState;
+        store.persist({ backupSoon: false });
+        throw error;
+      }
       alnabaSessions.delete(uid);
-      const sectionName = alnabaSectionName(prepared.section, en);
-      const size = prepared.file_size ? `\n${en ? 'Size' : 'الحجم'}: ${(prepared.file_size / (1024 * 1024)).toFixed(1)} MB` : '';
-      const issue = prepared.issue_number ? `\n${en ? 'Issue number' : 'رقم العدد'}: ${prepared.issue_number}` : '';
-      const description = prepared.description ? `\n${en ? 'Description' : 'الوصف'}: ${esc(prepared.description)}` : '';
-      const preview = en
-        ? `Review before publishing to ${sectionName}:\n<b>${esc(prepared.title)}</b>${issue}${description}\n${esc(prepared.file_name)} · ${esc(prepared.mime_type)}${size}\n\nNothing is public until you press Publish.${prepared.section === 'photos' ? ' This photo-news item will expire 24 hours after publishing.' : ''}`
-        : `راجع الملف قبل نشره في ${sectionName}:\n<b>${esc(prepared.title)}</b>${issue}${description}\n${esc(prepared.file_name)} · ${esc(prepared.mime_type)}${size}\n\nلن يظهر للزوار حتى تضغط «نشر الآن».${prepared.section === 'photos' ? ' سيُزال الخبر المصوّر بعد 24 ساعة من وقت النشر.' : ''}`;
+      alnabaPendingUploads.delete(uid);
+      const link = alnabaSite(item.section);
+      const addLabel = item.section === 'photos'
+        ? (en ? '➕ Add another item' : '➕ إضافة خبر جديد')
+        : (en ? '➕ Add another item' : '➕ إضافة محتوى');
       const keyboard = new InlineKeyboard()
-        .text(en ? '✅ Publish now' : '✅ نشر الآن', 'nb:publish')
-        .text(en ? 'Cancel' : 'إلغاء', 'nb:cancel');
-      await ctx.reply(preview, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
+        .text(addLabel, `nb:${item.section}`).row()
+        .url(en ? 'Open section' : 'فتح القسم', link)
+        .url(en ? 'Al-Nabaa home' : 'صفحة النبأ', alnabaSite());
+      const expiry = item.section === 'photos' ? (en ? ' This photo-news item will be removed after 24 hours.' : ' سيُزال الخبر المصوّر بعد 24 ساعة.') : '';
+      const success = en
+        ? `✅ Published directly on the Al-Nabaa website only: <b>${esc(item.title)}</b>. It was not sent to the Telegram channel.${expiry}`
+        : `✅ نُشر مباشرةً على موقع النبأ فقط: <b>${esc(item.title)}</b>، ولم يُرسل إلى قناة تيليغرام.${expiry}`;
+      await ctx.reply(success, { parse_mode: 'HTML', reply_markup: withAlnabaHomeButton(keyboard, ctx) });
       return true;
     } catch (error) {
       await ctx.reply(alnabaUploadError(error, en), { reply_markup: alnabaHomeKeyboard(ctx) });
@@ -3356,14 +3372,14 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   };
   const forwardMetadataPrompt = (section, candidate, en) => {
     if (section === 'weekly') return en
-      ? (candidate.title ? 'Send the positive issue number for this PDF (for example, 5). It will stay private until you confirm the preview.' : 'Send the positive issue number on the first line and the newspaper title on the second line. It will stay private until you confirm the preview.')
-      : (candidate.title ? 'أرسل رقم العدد الموجب لهذا الـPDF (مثلاً: 5). سيبقى خاصاً حتى تؤكد معاينته.' : 'أرسل رقم العدد الموجب في السطر الأول وعنوان الصحيفة في السطر الثاني. سيبقى الملف خاصاً حتى تؤكد معاينته.');
+      ? (candidate.title ? 'Send the positive issue number for this PDF (for example, 5). The verified newspaper will then publish directly on the Al-Nabaa website only.' : 'Send the positive issue number on the first line and the newspaper title on the second line. The verified newspaper will then publish directly on the Al-Nabaa website only.')
+      : (candidate.title ? 'أرسل رقم العدد الموجب لهذا الـPDF (مثلاً: 5)، ثم يُنشر العدد بعد التحقق على موقع النبأ فقط.' : 'أرسل رقم العدد الموجب في السطر الأول وعنوان الصحيفة في السطر الثاني، ثم يُنشر الملف بعد التحقق على موقع النبأ فقط.');
     if (section === 'photos') return en
-      ? 'Send the photo-news headline as text. The forwarded image stays private until you confirm its preview.'
-      : 'أرسل عنوان الخبر المصوّر برسالة نصية. ستبقى الصورة خاصة حتى تؤكد معاينتها.';
+      ? 'Send the photo-news headline as text. The image will publish on the Al-Nabaa website only after its title is complete, then expire after 24 hours.'
+      : 'أرسل عنوان الخبر المصوّر برسالة نصية. تُنشر الصورة على موقع النبأ فقط بعد اكتمال عنوانها، ثم تُزال بعد 24 ساعة.';
     return en
-      ? 'Send the title on the first line and an optional description on the next lines. The media stays private until you confirm its preview.'
-      : 'أرسل العنوان في السطر الأول والوصف الاختياري في الأسطر التالية. ستبقى الوسائط خاصة حتى تؤكد معاينتها.';
+      ? 'Send the title on the first line and an optional description on the next lines. The media will then publish directly in its selected Al-Nabaa section only.'
+      : 'أرسل العنوان في السطر الأول والوصف الاختياري في الأسطر التالية، ثم تُنشر الوسائط مباشرةً في قسم النبأ المختار فقط.';
   };
   const forwardInputKeyboard = (ctx) => withAlnabaHomeButton(
     new InlineKeyboard().text(langOf(ctx) === 'en' ? 'Cancel' : 'إلغاء', 'nb:cancel'), ctx,
@@ -3422,8 +3438,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
           .text(langOf(ctx) === 'en' ? '🎵 Nasheeds' : '🎵 الأناشيد', 'nb:forward:section:nasheed').row()
           .text(langOf(ctx) === 'en' ? 'Cancel' : 'إلغاء', 'nb:cancel');
         return ctx.reply(langOf(ctx) === 'en'
-          ? 'I could not tell whether this forwarded audio/video belongs in Quran or nasheeds. Choose its section; the file will remain private until you review and confirm the preview.'
-          : 'لم أستطع تحديد ما إذا كان الصوت أو الفيديو المعاد توجيهه للقرآن الكريم أم للأناشيد. اختر القسم؛ وسيبقى الملف خاصاً حتى تراجع المعاينة وتؤكد النشر.',
+          ? 'I could not confidently tell whether this forwarded audio/video belongs in Quran or nasheeds. Choose its section; it will then publish directly on the Al-Nabaa website only.'
+          : 'لم أستطع تحديد قسم الصوت أو الفيديو بثقة. اختر القرآن أو الأناشيد؛ ثم يُنشر مباشرةً على موقع النبأ فقط.',
         { reply_markup: withAlnabaHomeButton(keyboard, ctx) });
       }
       return next();

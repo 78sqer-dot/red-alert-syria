@@ -222,3 +222,22 @@ button { font: inherit; }
   .an-library-pdf { width: calc(100% - 28px); height: min(68vh, 540px); min-height: 280px; margin-bottom: 14px; }
   .an-pdf-frame { height: min(68vh, 540px); min-height: 280px; }
 }
+
+/* Discreet nasheed playback visualizer; motion is enabled only while media is playing. */
+.an-nasheed-player { width: min(100% - 32px, 760px); margin: 4px auto 16px; padding: 12px 14px; overflow: hidden; border: 1px solid rgba(163, 113, 190, .28); border-radius: 12px; background: linear-gradient(135deg, rgba(163, 113, 190, .09), transparent 62%), #0d141d; }
+.an-nasheed-player .an-library-media { width: 100%; max-height: 520px; margin: 0; border-radius: 7px; }
+.an-nasheed-wave { display: flex; min-height: 24px; align-items: center; justify-content: center; gap: 4px; margin-bottom: 9px; color: #c9a1e4; }
+.an-nasheed-wave__bar { display: block; width: 3px; height: 22px; flex: 0 0 3px; transform: scaleY(.28); transform-origin: center; border-radius: 999px; background: currentColor; opacity: .72; }
+@media (prefers-reduced-motion: no-preference) {
+  .an-nasheed-player.is-playing .an-nasheed-wave__bar { animation: an-nasheed-wave .72s ease-in-out infinite alternate; opacity: 1; }
+  .an-nasheed-wave__bar:nth-child(3n + 1) { animation-duration: .58s; animation-delay: -.22s; }
+  .an-nasheed-wave__bar:nth-child(3n + 2) { animation-duration: .83s; animation-delay: -.51s; }
+  .an-nasheed-wave__bar:nth-child(3n) { animation-duration: .67s; animation-delay: -.37s; }
+}
+@keyframes an-nasheed-wave {
+  from { transform: scaleY(.22); }
+  to { transform: scaleY(1); }
+}
+@media (max-width: 760px) {
+  .an-nasheed-player { width: calc(100% - 28px); padding: 10px; }
+}

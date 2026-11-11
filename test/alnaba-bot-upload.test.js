@@ -18,6 +18,7 @@ const originalFetch = globalThis.fetch;
 const photoBytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
 const photoBytes2 = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x44, 0x00, 0x07, 0x08, 0x09, 0x0a, 0x0b]);
 const photoBytes3 = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x45, 0x00, 0x0c, 0x0d, 0x0e, 0x0f, 0x10]);
+const photoBytes4 = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x46, 0x00, 0x11, 0x12, 0x13, 0x14, 0x15]);
 const pdfBytes = Buffer.from('%PDF-1.7\nfixture only\n%%EOF\n');
 const pdfBytes2 = Buffer.from('%PDF-1.7\nreplacement fixture only\n%%EOF\n');
 const oggBytes = Buffer.from('OggSfixture-quran-audio');
@@ -26,6 +27,7 @@ const fixtureFiles = new Map([
   ['photos/fixture-photo.jpg', photoBytes],
   ['photos/fixture-photo-2.jpg', photoBytes2],
   ['photos/fixture-photo-3.jpg', photoBytes3],
+  ['photos/fixture-photo-4.jpg', photoBytes4],
   ['documents/fixture-weekly.pdf', pdfBytes],
   ['documents/fixture-weekly-2.pdf', pdfBytes2],
   ['audio/quran.ogg', oggBytes],
@@ -56,10 +58,14 @@ bot.api.config.use(async (_previous, method, payload) => {
       fixture_photo_id: 'photos/fixture-photo.jpg',
       fixture_photo_2_id: 'photos/fixture-photo-2.jpg',
       fixture_photo_3_id: 'photos/fixture-photo-3.jpg',
+      fixture_photo_4_id: 'photos/fixture-photo-4.jpg',
       fixture_pdf_id: 'documents/fixture-weekly.pdf',
       fixture_pdf_2_id: 'documents/fixture-weekly-2.pdf',
       fixture_quran_audio_id: 'audio/quran.ogg',
+      fixture_forwarded_quran_audio_id: 'audio/quran.ogg',
+      fixture_ambiguous_audio_id: 'audio/quran.ogg',
       fixture_nasheed_video_id: 'video/nasheed.mp4',
+      fixture_forwarded_nasheed_video_id: 'video/nasheed.mp4',
     };
     return { ok: true, result: { file_path: filePaths[payload.file_id] } };
   }
@@ -95,10 +101,11 @@ const tap = (id, data) => bot.handleUpdate({
 const sendPhoto = (id, n = 1) => {
   const second = n === 2;
   const third = n === 3;
-  const bytes = second ? photoBytes2 : third ? photoBytes3 : photoBytes;
-  const title = second ? 'خبر مصور ثانٍ للاختبار' : third ? 'صورة بديلة للاختبار' : 'صورة تجريبية للاختبار';
-  const fileId = second ? 'fixture_photo_2_id' : third ? 'fixture_photo_3_id' : 'fixture_photo_id';
-  const uniqueId = second ? 'fixture_photo_2_unique' : third ? 'fixture_photo_3_unique' : 'fixture_photo_unique';
+  const fourth = n === 4;
+  const bytes = second ? photoBytes2 : third ? photoBytes3 : fourth ? photoBytes4 : photoBytes;
+  const title = second ? 'خبر مصور ثانٍ للاختبار' : third ? 'صورة بديلة للاختبار' : fourth ? 'خبر بعد استعادة النسخة للاختبار' : 'صورة تجريبية للاختبار';
+  const fileId = second ? 'fixture_photo_2_id' : third ? 'fixture_photo_3_id' : fourth ? 'fixture_photo_4_id' : 'fixture_photo_id';
+  const uniqueId = second ? 'fixture_photo_2_unique' : third ? 'fixture_photo_3_unique' : fourth ? 'fixture_photo_4_unique' : 'fixture_photo_unique';
   return bot.handleUpdate({
     update_id: updateId++,
     message: {
@@ -190,7 +197,7 @@ const sendAudio = (id) => bot.handleUpdate({
       chat: { id, type: 'private' }, from: user(id),
       forward_origin: forwardedFrom('قناة القرآن الكريم'),
       caption: 'تلاوة معاد توجيهها للاختبار\nسورة البقرة',
-      audio: { file_id: 'fixture_quran_audio_id', file_unique_id: 'fixture_quran_audio_unique', file_name: 'quran.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
+      audio: { file_id: 'fixture_forwarded_quran_audio_id', file_unique_id: 'fixture_forwarded_quran_audio_unique', file_name: 'quran.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
     },
   });
   const sendForwardedVoiceMissingTitle = (id) => bot.handleUpdate({
@@ -209,7 +216,7 @@ const sendAudio = (id) => bot.handleUpdate({
       chat: { id, type: 'private' }, from: user(id),
       forward_origin: forwardedFrom('أناشيد'),
       caption: 'نشيد معاد توجيهه للاختبار\nوصف النشيد المعاد توجيهه',
-      video: { file_id: 'fixture_nasheed_video_id', file_unique_id: 'fixture_nasheed_video_unique', file_name: 'nasheed.mp4', mime_type: 'video/mp4', file_size: mp4Bytes.length },
+      video: { file_id: 'fixture_forwarded_nasheed_video_id', file_unique_id: 'fixture_forwarded_nasheed_video_unique', file_name: 'nasheed.mp4', mime_type: 'video/mp4', file_size: mp4Bytes.length },
     },
   });
   const sendAmbiguousForwardAudio = (id) => bot.handleUpdate({
@@ -219,7 +226,7 @@ const sendAudio = (id) => bot.handleUpdate({
       chat: { id, type: 'private' }, from: user(id),
       forward_origin: forwardedFrom('قناة عامة'),
       caption: 'عنوان صوتي للاختبار\nوصف صوتي للاختبار',
-      audio: { file_id: 'fixture_quran_audio_id', file_unique_id: 'fixture_quran_audio_unique', file_name: 'recording.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
+      audio: { file_id: 'fixture_ambiguous_audio_id', file_unique_id: 'fixture_ambiguous_audio_unique', file_name: 'recording.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
     },
   });
   const lastUiFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'sendMessage' && payload.chat_id === id);
@@ -234,7 +241,7 @@ after(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
-test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publishes only after confirmation', async () => {
+test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploads directly to the website only', async () => {
   const authorizedId = 8270709633;
   const deniedId = 8808894711;
 
@@ -278,23 +285,13 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   await sendText(authorizedId, '/alnaba');
   await tap(authorizedId, 'nb:photos');
   await sendPhoto(authorizedId);
-  const preview = lastUiFor(authorizedId);
-  assert.match(preview.payload.text, /راجع الملف قبل نشره/);
-  assert.ok(buttonsOf(preview).some((button) => button.callback_data === 'nb:publish'));
-  assert.equal(store.state.alnaba.photos.length, 0, 'receiving the file alone must not publish it');
-
-  await sendText(authorizedId, '/menu');
-  await sendText(authorizedId, '/alnaba');
-  await tap(authorizedId, 'nb:photos');
-  await sendPhoto(authorizedId);
-  assert.ok(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), 'a discarded preview must not block a fresh upload');
-  assert.equal(store.state.alnaba.photos.length, 0);
-  await tap(authorizedId, 'nb:publish');
-  assert.equal(store.state.alnaba.photos.length, 1);
+  const firstSuccess = lastUiFor(authorizedId);
+  assert.match(firstSuccess.payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(firstSuccess).some((button) => button.callback_data === 'nb:publish'), false);
+  assert.equal(store.state.alnaba.photos.length, 1, 'the owner upload is published as soon as verification succeeds');
   assert.equal(store.state.alnaba.photos[0].title, 'صورة تجريبية للاختبار');
   assert.ok(JSON.parse(store.backup.json).alnaba.photos.some((item) => item.file_id === 'fixture_photo_id'));
-  assert.ok(calls.some(({ method, payload }) => method === 'sendMessage' && payload.text.includes('تم النشر')));
-  const firstSuccess = lastUiFor(authorizedId);
+  assert.ok(calls.some(({ method, payload }) => method === 'sendMessage' && payload.text.includes('نُشر مباشرةً على موقع النبأ فقط')));
   assert.ok(buttonsOf(firstSuccess).some((button) => button.callback_data === 'nb:home'));
   const addPhoto = buttonsOf(firstSuccess).find((button) => button.callback_data === 'nb:photos');
   assert.equal(addPhoto?.text, '➕ إضافة خبر جديد');
@@ -304,9 +301,8 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
 
   await sendPhoto(authorizedId, 2);
   const secondPreview = lastUiFor(authorizedId);
-  assert.ok(buttonsOf(secondPreview).some((button) => button.callback_data === 'nb:publish'));
-  assert.equal(store.state.alnaba.photos.length, 1, 'the next photo remains private until confirmed');
-  await tap(authorizedId, 'nb:publish');
+  assert.match(secondPreview.payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(secondPreview).some((button) => button.callback_data === 'nb:publish'), false);
   assert.equal(store.state.alnaba.photos.length, 2);
   assert.deepEqual(store.state.alnaba.photos.map((item) => item.title), ['صورة تجريبية للاختبار', 'خبر مصور ثانٍ للاختبار']);
   assert.equal(new Set(store.state.alnaba.photos.map((item) => item.file_unique_id)).size, 2, 'each distinct upload is published exactly once');
@@ -326,12 +322,12 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
       document: { file_id: 'fixture_pdf_id', file_unique_id: 'fixture_pdf_unique', file_name: 'fixture-weekly.pdf', mime_type: 'application/pdf', file_size: pdfBytes.length },
     },
   });
-  assert.equal(store.state.alnaba.weekly.length, 0, 'the PDF is private until confirmed');
-  assert.ok(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'));
-  await tap(authorizedId, 'nb:publish');
   assert.equal(store.state.alnaba.weekly.length, 1);
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   assert.equal(store.state.alnaba.weekly[0].title, 'العدد الأسبوعي التجريبي');
   assert.equal(store.state.alnaba.weekly[0].issue_number, 1);
+  assert.equal(store.state.alnaba.weekly[0].expiry_policy, undefined, 'weekly PDFs do not use the 24-hour photo-news expiry');
   assert.ok(JSON.parse(store.backup.json).alnaba.weekly.some((item) => item.file_id === 'fixture_pdf_id'));
   assert.ok(JSON.parse(store.backup.json).alnaba.weekly.some((item) => item.issue_number === 1));
   const weeklySuccess = lastUiFor(authorizedId);
@@ -346,19 +342,11 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   await tap(authorizedId, 'nb:quran');
   assert.match(lastEditFor(authorizedId)?.payload?.text || '', /القرآن الكريم/);
   await sendAudio(authorizedId);
-  const quranPreview = lastUiFor(authorizedId);
-  assert.match(quranPreview.payload.text, /تلاوة تجريبية/);
-  assert.match(quranPreview.payload.text, /سورة البقرة/);
-  assert.equal(store.state.alnaba.quran.length, 0, 'audio stays private until owner confirmation');
-  assert.ok(buttonsOf(quranPreview).some((button) => button.callback_data === 'nb:publish'));
-  await tap(authorizedId, 'nb:cancel');
-  assert.equal(store.state.alnaba.quran.length, 0, 'cancelled audio is never published');
-  await sendText(authorizedId, '/alnaba');
-  await tap(authorizedId, 'nb:quran');
-  await sendAudio(authorizedId);
-  await tap(authorizedId, 'nb:publish');
   assert.equal(store.state.alnaba.quran.length, 1);
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   assert.equal(store.state.alnaba.quran[0].mime_type, 'audio/ogg');
+  assert.equal(store.state.alnaba.quran[0].expiry_policy, undefined, 'Quran items do not use photo-news expiry');
   assert.equal(store.state.alnaba.quran[0].description, 'سورة البقرة');
   assert.ok(JSON.parse(store.backup.json).alnaba.quran.some((item) => item.title === 'تلاوة تجريبية' && item.description === 'سورة البقرة'));
   const addQuran = buttonsOf(lastUiFor(authorizedId)).find((button) => button.callback_data === 'nb:quran');
@@ -367,11 +355,11 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   await sendText(authorizedId, '/alnaba');
   await tap(authorizedId, 'nb:nasheed');
   await sendVideo(authorizedId);
-  assert.equal(store.state.alnaba.nasheed.length, 0, 'video remains private while its preview awaits confirmation');
-  assert.match(lastUiFor(authorizedId).payload.text, /وصف النشيد/);
-  await tap(authorizedId, 'nb:publish');
-  assert.equal(store.state.alnaba.nasheed.length, 1);
+  assert.equal(store.state.alnaba.nasheed.length, 1, 'the owner nasheed upload publishes directly after validation');
+  assert.equal(store.state.alnaba.nasheed[0].description, 'وصف النشيد');
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   assert.equal(store.state.alnaba.nasheed[0].mime_type, 'video/mp4');
+  assert.equal(store.state.alnaba.nasheed[0].expiry_policy, undefined, 'nasheeds do not use photo-news expiry');
   assert.equal(store.state.alnaba.nasheed[0].description, 'وصف النشيد');
   assert.ok(JSON.parse(store.backup.json).alnaba.nasheed.some((item) => item.file_id === 'fixture_nasheed_video_id'));
 
@@ -507,6 +495,20 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.equal(store.state.alnaba.photos.length, 1, 'the photo is removed only after the second confirmation');
   assert.equal(JSON.parse(store.backup.json).alnaba.photos.some((item) => item.id === managedPhoto.id), false);
 
+  const photoBackupBeforeFailure = store.backup.json;
+  await sendText(authorizedId, '/alnaba');
+  await tap(authorizedId, 'nb:photos');
+  failBackup = true;
+  await sendPhoto(authorizedId, 4);
+  failBackup = false;
+  assert.equal(store.state.alnaba.photos.length, 1, 'a failed durable backup rolls back the direct photo publication');
+  assert.equal(store.backup.json, photoBackupBeforeFailure, 'a failed direct publication leaves the durable snapshot unchanged');
+  assert.match(lastUiFor(authorizedId).payload.text, /نسخة احتياطية/);
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
+  await sendPhoto(authorizedId, 4);
+  assert.equal(store.state.alnaba.photos.length, 2, 'the owner can resend and publish once the backup is healthy');
+  assert.ok(JSON.parse(store.backup.json).alnaba.photos.some((item) => item.file_id === 'fixture_photo_4_id'));
+
   // Weekly issues support the same title/file management and durable deletion flow.
   const managedWeekly = store.state.alnaba.weekly[0];
   managementList = await openManagement('weekly');
@@ -569,25 +571,21 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.equal(store.state.alnaba.archive.length, 2);
   assert.equal(JSON.parse(store.backup.json).alnaba.archive.some((item) => item.id === managedArchive.id), false);
 
-  assert.equal(calls.some(({ method, payload }) => ['sendPhoto', 'sendDocument'].includes(method) && payload.chat_id === '@mock_news_channel'), false,
-    'Al-Nabaa uploads do not auto-post files to the Telegram channel');
+  assert.equal(calls.some(({ payload }) => payload.chat_id === '@mock_news_channel'), false,
+    'Al-Nabaa uploads do not send messages or files to the Telegram news channel');
 
   const photosBeforeForward = store.state.alnaba.photos.length;
   await sendForwardedPhoto(authorizedId);
-  const forwardedPhotoPreview = lastUiFor(authorizedId);
-  assert.match(forwardedPhotoPreview.payload.text, /الأخبار المصوّرة/);
-  assert.ok(buttonsOf(forwardedPhotoPreview).some((button) => button.callback_data === 'nb:publish'));
-  assert.equal(store.state.alnaba.photos.length, photosBeforeForward, 'a forwarded image is only a private preview before confirmation');
-  await tap(authorizedId, 'nb:publish');
-  assert.equal(store.state.alnaba.photos.length, photosBeforeForward + 1);
+  const forwardedPhotoSuccess = lastUiFor(authorizedId);
+  assert.match(forwardedPhotoSuccess.payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(forwardedPhotoSuccess).some((button) => button.callback_data === 'nb:publish'), false);
+  assert.equal(store.state.alnaba.photos.length, photosBeforeForward + 1, 'a titled image forwarded from another channel publishes directly');
   assert.equal(store.state.alnaba.photos.at(-1).title, 'خبر مصوّر معاد توجيهه للاختبار');
   assert.equal(store.state.alnaba.photos.at(-1).expiry_policy, 'photo-news-24h-v1');
 
   await sendForwardedPdf(authorizedId);
-  const forwardedPdfPreview = lastUiFor(authorizedId);
-  assert.match(forwardedPdfPreview.payload.text, /رقم العدد: 2/);
-  assert.equal(store.state.alnaba.weekly.length, 0, 'a forwarded PDF is not public before confirmation');
-  await tap(authorizedId, 'nb:publish');
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   assert.equal(store.state.alnaba.weekly.length, 1);
   assert.equal(store.state.alnaba.weekly[0].issue_number, 2, 'a forwarded PDF keeps its issue number from the caption');
 
@@ -595,51 +593,43 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.match(lastUiFor(authorizedId).payload.text, /رقم العدد الموجب/);
   assert.equal(store.state.alnaba.weekly.length, 1, 'missing issue metadata keeps a forwarded PDF private');
   await sendText(authorizedId, '3\nعدد ثالث معاد توجيهه للاختبار');
-  assert.match(lastUiFor(authorizedId).payload.text, /رقم العدد: 3/);
-  assert.equal(store.state.alnaba.weekly.length, 1, 'completing metadata still requires the publish button');
-  await tap(authorizedId, 'nb:publish');
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
   assert.deepEqual(store.state.alnaba.weekly.map((item) => item.issue_number), [2, 3]);
 
   const quranCount = store.state.alnaba.quran.length;
   await sendForwardedAudio(authorizedId);
-  assert.match(lastUiFor(authorizedId).payload.text, /القرآن الكريم/);
-  assert.match(lastUiFor(authorizedId).payload.text, /سورة البقرة/);
-  assert.equal(store.state.alnaba.quran.length, quranCount, 'forwarded Quran audio remains private until confirmation');
-  await tap(authorizedId, 'nb:cancel');
-  assert.equal(store.state.alnaba.quran.length, quranCount);
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
+  assert.equal(store.state.alnaba.quran.length, quranCount + 1, 'audio forwarded from a Quran channel is classified and published directly');
+  assert.equal(store.state.alnaba.quran.at(-1).expiry_policy, undefined);
 
   await sendForwardedVoiceMissingTitle(authorizedId);
   assert.match(lastUiFor(authorizedId).payload.text, /أرسل العنوان في السطر الأول/);
-  assert.equal(store.state.alnaba.quran.length, quranCount, 'missing voice metadata does not publish or skip owner review');
+  assert.equal(store.state.alnaba.quran.length, quranCount + 1, 'missing voice metadata stays private until completed');
   await sendText(authorizedId, 'تلاوة بعنوان واضح للاختبار\nوصف التلاوة للاختبار');
-  const forwardedVoicePreview = lastUiFor(authorizedId);
-  assert.match(forwardedVoicePreview.payload.text, /تلاوة بعنوان واضح للاختبار/);
-  assert.match(forwardedVoicePreview.payload.text, /وصف التلاوة للاختبار/);
-  assert.ok(buttonsOf(forwardedVoicePreview).some((button) => button.callback_data === 'nb:publish'));
-  assert.equal(store.state.alnaba.quran.length, quranCount, 'forwarded voice remains private until explicit confirmation');
-  await tap(authorizedId, 'nb:cancel');
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
+  assert.equal(store.state.alnaba.quran.length, quranCount + 2, 'the voice publishes directly once its title is supplied');
 
   const nasheedCount = store.state.alnaba.nasheed.length;
   await sendForwardedVideo(authorizedId);
-  assert.match(lastUiFor(authorizedId).payload.text, /الأناشيد/);
-  assert.match(lastUiFor(authorizedId).payload.text, /وصف النشيد المعاد توجيهه/);
-  assert.equal(store.state.alnaba.nasheed.length, nasheedCount, 'forwarded nasheed video remains private until confirmation');
-  await tap(authorizedId, 'nb:cancel');
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
+  assert.equal(store.state.alnaba.nasheed.length, nasheedCount + 1, 'video from a nasheed channel publishes directly in nasheeds');
+  assert.equal(store.state.alnaba.nasheed.at(-1).expiry_policy, undefined);
 
   await sendAmbiguousForwardAudio(authorizedId);
   const ambiguousPrompt = lastUiFor(authorizedId);
   assert.match(ambiguousPrompt.payload.text, /لم أستطع تحديد/);
   assert.ok(buttonsOf(ambiguousPrompt).some((button) => button.callback_data === 'nb:forward:section:quran'));
   assert.ok(buttonsOf(ambiguousPrompt).some((button) => button.callback_data === 'nb:forward:section:nasheed'));
-  assert.equal(store.state.alnaba.nasheed.length, nasheedCount, 'ambiguous media is not filed or published automatically');
+  assert.equal(store.state.alnaba.nasheed.length, nasheedCount + 1, 'ambiguous media is not filed or published automatically');
   await tap(authorizedId, 'nb:forward:section:nasheed');
-  const selectedNasheedPreview = lastUiFor(authorizedId);
-  assert.match(selectedNasheedPreview.payload.text, /عنوان صوتي للاختبار/);
-  assert.match(selectedNasheedPreview.payload.text, /وصف صوتي للاختبار/);
-  assert.ok(buttonsOf(selectedNasheedPreview).some((button) => button.callback_data === 'nb:publish'));
-  assert.equal(store.state.alnaba.nasheed.length, nasheedCount, 'choosing the section still only creates a private preview');
-  await tap(authorizedId, 'nb:cancel');
-  assert.equal(store.state.alnaba.nasheed.length, nasheedCount, 'cancelling the forwarded preview never publishes it');
+  assert.match(lastUiFor(authorizedId).payload.text, /نُشر مباشرةً على موقع النبأ فقط/);
+  assert.equal(buttonsOf(lastUiFor(authorizedId)).some((button) => button.callback_data === 'nb:publish'), false);
+  assert.equal(store.state.alnaba.nasheed.length, nasheedCount + 2, 'choosing the ambiguous section causes direct website publication');
+  assert.equal(store.state.alnaba.nasheed.at(-1).expiry_policy, undefined);
 
   const beforeDeniedForward = store.state.alnaba.photos.length;
   await sendForwardedPhoto(deniedId);

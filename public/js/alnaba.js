@@ -88,6 +88,7 @@ function renderPhoto(item) {
 function renderWeekly(item) {
   const src = mediaUrl(item);
   if (!src || item.mime_type !== 'application/pdf') return '';
+  const previewId = `weekly-pdf-${item.id}`;
   const title = esc(item.title || 'الصحيفة الأسبوعية');
   const date = formatDate(item.published_at);
   const issue = Number.isSafeInteger(Number(item.issue_number)) && Number(item.issue_number) > 0
@@ -99,15 +100,15 @@ function renderWeekly(item) {
       ${item.description ? `<p>${esc(item.description)}</p>` : ''}
       <div class="an-paper-meta">${date ? `<time datetime="${esc(item.published_at)}">${esc(date)}</time>` : ''}<span>PDF</span></div>
       <div class="an-paper-actions">
-        <a class="an-action-link" href="${src}" target="_blank" rel="noopener noreferrer">فتح الصحيفة</a>
+        <a class="an-action-link" href="#${previewId}" aria-controls="${previewId}">عرض الصحيفة داخل الصفحة</a>
         <a class="an-action-link secondary" href="${src}" download>تنزيل PDF</a>
       </div>
     </div>
-    <div class="an-pdf-frame"><iframe src="${src}#toolbar=1&navpanes=0" title="معاينة ${title}" loading="lazy"></iframe></div>
+    <div class="an-pdf-frame" id="${previewId}" tabindex="-1"><iframe src="${src}#toolbar=1&navpanes=0" title="معاينة ${title}" loading="lazy"></iframe></div>
   </article>`;
 }
 
-function renderLibrary(item) {
+function renderLibrary(item, section) {
   const src = mediaUrl(item);
   if (!src) return '';
   const mime = String(item.mime_type || '');
@@ -123,7 +124,24 @@ function renderLibrary(item) {
   const actions = mime === 'application/pdf'
     ? `<div class="an-paper-actions"><a class="an-action-link" href="${src}" target="_blank" rel="noopener noreferrer">فتح الملف</a><a class="an-action-link secondary" href="${src}" download>تنزيل</a></div>`
     : '';
-  return `<article class="an-library-card"><div class="an-library-copy"><h2>${title}</h2>${description}<div class="an-library-meta">${date ? `<time datetime="${esc(item.published_at)}">${esc(date)}</time>` : ''}<span>${esc(mime)}</span></div>${actions}</div>${media}</article>`;
+  const hasAudioPlayer = section === 'nasheed' && (mime.startsWith('audio/') || mime.startsWith('video/'));
+  const player = hasAudioPlayer
+    ? `<div class="an-nasheed-player" data-nasheed-player><div class="an-nasheed-wave" aria-hidden="true">${'<span class="an-nasheed-wave__bar"></span>'.repeat(15)}</div>${media}</div>`
+    : media;
+  return `<article class="an-library-card"><div class="an-library-copy"><h2>${title}</h2>${description}<div class="an-library-meta">${date ? `<time datetime="${esc(item.published_at)}">${esc(date)}</time>` : ''}<span>${esc(mime)}</span></div>${actions}</div>${player}</article>`;
+}
+
+function bindNasheedPlayback(root) {
+  for (const player of root.querySelectorAll('[data-nasheed-player]')) {
+    if (player.dataset.motionBound === 'true') continue;
+    const media = player.querySelector('audio, video');
+    if (!media) continue;
+    player.dataset.motionBound = 'true';
+    media.addEventListener('playing', () => player.classList.add('is-playing'));
+    for (const eventName of ['pause', 'ended', 'waiting', 'stalled', 'emptied', 'error']) {
+      media.addEventListener(eventName, () => player.classList.remove('is-playing'));
+    }
+  }
 }
 
 function renderArchive(item) {
@@ -175,8 +193,9 @@ async function loadSection(section, reset = false) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (data.section !== section || !Array.isArray(data.items)) throw new Error('Invalid response');
-    const cards = data.items.map(view.render).filter(Boolean);
+    const cards = data.items.map((item) => view.render(item, section)).filter(Boolean);
     view.list.insertAdjacentHTML('beforeend', cards.join(''));
+    if (section === 'nasheed') bindNasheedPlayback(view.list);
     view.list.dataset.offset = String(offset + data.items.length);
     view.empty.hidden = view.list.childElementCount > 0;
     if (view.more) view.more.hidden = !data.has_more;
