@@ -31,7 +31,7 @@ function withLabel(loc, label) {
   return { ...loc, name_ar: label, name_en: label, short_ar: label, short_en: label, custom_label: true, base };
 }
 const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
-import { cleanAlertText, cleanAttributedNewsText } from './clean-text.js';
+import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
 import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, findAlnabaEntry, updateAlnabaEntry, deleteAlnabaEntry, sanitizeAlnabaState, fetchAlnabaTelegramBytes, parseWeeklyUploadCaption, mimeFromAlnabaFilename, weeklyIssueNumber, nextWeeklyIssueNumber } from './alnaba.js';
 
 const PAGE = 24;
@@ -42,6 +42,9 @@ const REPORT_COOLDOWN_MS = 2 * 60_000;
 export const esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const cleanInputText = (s) => String(s || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim();
 const clean = (s, max = 900) => cleanInputText(s).slice(0, max);
+function assertPublicCopySafe(...values) {
+  if (values.some(isPrivateEditorialCopy)) throw new Error('Private editorial or internal review text cannot be published as public news');
+}
 
 const VEHICLE_COUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const VEHICLE_COUNT_MAX = 999;
@@ -278,6 +281,7 @@ function channelEventSymbol(alert) {
 //
 //   (no footer; map and channel links remain on the inline buttons)
 export function channelPost(alert, { ended = false } = {}) {
+  assertPublicCopySafe(alert?.title, alert?.title_en, alert?.description, alert?.description_en, alert?.meta?.channelTitle);
   const t = typeOf(alert.type);
   let title = alert.meta?.channelTitle || (TITLES[alert.type] || {}).ar || t.ar;
   if (alert.type === 'military_incursion') {
@@ -317,10 +321,6 @@ export function channelPost(alert, { ended = false } = {}) {
     if (category) {
       sections.push(`🏛 <b>الفئة:</b> ${esc(category.emoji)} «${esc(category.ar)}»`);
     }
-    // Monitored outlet identities stay private; the story text retains any public speaker/institution attribution.
-    sections.push('<i>لم يُسجّل تحقق مستقل عن الخبر</i>');
-  } else if (alert.source === 'news') {
-    sections.push('<i>خبر منقول؛ لم يُسجّل تحقق مستقل</i>');
   }
   if (alert.type === 'political') {
     sections.push(`📅 <b>التاريخ:</b> ${esc(fmtDate(alert.timestamp))}`);
@@ -972,6 +972,7 @@ async function showPreview(ctx, d) {
 }
 
 export function buildAlertInput(d, author) {
+  assertPublicCopySafe(d?.title, d?.title_en, d?.headline, d?.body, d?.text, d?.details, d?.description, d?.description_en);
   const incursionKind = d.type === 'military_incursion'
     ? (d.incursionKind === 'vehicles' || Number.isInteger(d.vehicleCount) ? 'vehicles' : ['soldiers', 'barrier'].includes(d.incursionKind) ? d.incursionKind : null)
     : null;
@@ -1292,6 +1293,7 @@ export async function editPublishedAlert(api, id, d, author) {
 }
 /** add an alert to the map and (unless toChannel=false) post it to the channel */
 export async function publishInput(api, input, { toChannel = true, renderSnapshot = null } = {}) {
+  assertPublicCopySafe(input?.title, input?.title_en, input?.description, input?.description_en, input?.meta?.channelTitle);
   const alert = store.addAlert(input);
   if (input.meta) alert.meta = input.meta;
   if (!toChannel || !config.channel) return alert;

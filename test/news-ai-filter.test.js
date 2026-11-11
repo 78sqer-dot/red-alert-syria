@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_RESPONSE_SCHEMA, buildPrompt, hasExplicitDroneFlight, isGroundIncursionReport, keywordTypes, prefilter, refineType, rewriteArabicNews, ruleClassify, NEWS_REWRITE_MODEL } from '../server/news-ai.js';
+import { AI_RESPONSE_SCHEMA, buildPrompt, finalizeRewriteOutput, hasExplicitDroneFlight, isGroundIncursionReport, keywordTypes, prefilter, refineType, rewriteArabicNews, rewriteSourceReviewReason, ruleClassify, NEWS_REWRITE_MODEL } from '../server/news-ai.js';
+import { isPrivateEditorialCopy } from '../server/clean-text.js';
 
 test('Syria-only general feeds reject foreign weather warnings before the weather shortcut', () => {
   const foreign = prefilter('عاجل: تحذير جوي رسمي من عواصف رعدية وأمطار غزيرة في كييف يرجى الحذر', { general: true, breaking: true });
@@ -115,10 +116,39 @@ test('explicit opinion rewrite is labeled, sharp toward transitional-government 
   });
   assert.match(result, /^رأي\/تحليل:/, 'opinion text is labeled even if the provider omits the label');
   const system = JSON.parse(request.options.body).systemInstruction.parts[0].text;
-  assert.match(system, /بنقد حاد وواضح لسياسات الحكومة الانتقالية السورية/);
-  assert.match(system, /استند حصراً إلى وقائع قابلة للتحقق/);
-  assert.match(system, /لا تخترع وقائع أو أسباباً أو دوافع أو ردوداً/);
+  assert.match(system, /بصوت معارض واضح للسياسة الحالية للحكومة الانتقالية أو النظام ومؤسساته/);
+  assert.match(system, /لا تُلطّف الموقف المعارض إلى صياغة محايدة/);
+  assert.match(system, /استند حصراً إلى تفاصيل المصدر/);
+  assert.match(system, /لا تخترع وقائع أو أرقاماً أو أسباباً أو ردوداً/);
   assert.match(system, /لا تستخدم تلاعباً نفسياً/);
+});
+
+test('fictional political satire is unmistakably labeled and non-political events cannot request it or critique', async () => {
+  let requests = 0;
+  const satire = await rewriteArabicNews('أعلنت الحكومة الانتقالية قراراً رسمياً بخفض الدعم في محافظة حمص، وفق البيان المنشور اليوم.', {
+    key: 'dedicated-free-key', mode: 'satire',
+    fetchImpl: async () => {
+      requests++;
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'في مسرح الخيال، يتحول القرار إلى مظلة مثقوبة فوق جيوب الناس.' }] } }] }) };
+    },
+  });
+  assert.match(satire, /^محاكاة ساخرة خيالية \(ليست خبراً\):/);
+  assert.match(satire, /مسرح الخيال/);
+  const protest = 'خرجت مظاهرة في حمص احتجاجاً على قرار الحكومة الانتقالية بفرض رسوم جديدة، بحسب بيان المنظمين الصادر اليوم.';
+  assert.equal(rewriteSourceReviewReason(protest), null,
+    'a protest report can offer the private tone choices only when it names a concrete government policy/action');
+  const accident = 'وقع حادث سير في حمص وأصيب 3 أشخاص، وأعلنت الشرطة تفاصيل التحقيق في الحادث مساء اليوم.';
+  assert.equal(rewriteSourceReviewReason(accident), 'non-political-event-source');
+  await assert.rejects(rewriteArabicNews(accident, {
+    key: 'dedicated-free-key', mode: 'opinion', fetchImpl: async () => { requests++; throw new Error('must not call provider'); },
+  }), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
+  assert.equal(requests, 1, 'only the political satire request reaches the provider; an accident is rejected before generation');
+  assert.throws(() => finalizeRewriteOutput('لا تقدم المادة وقائع موثقة كافية', 'opinion'), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
+  assert.throws(() => finalizeRewriteOutput('ملاحظة داخلية: EDITORIAL_REVIEW_REQUIRED', 'satire'), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
+  assert.equal(isPrivateEditorialCopy('مقدمة تمهيدية — رأي/تحليل: نقد خاص بالمالك'), true,
+    'a private opinion label is detected even when it is not the first characters');
+  assert.equal(isPrivateEditorialCopy('مقدمة: EDITORIAL_REVIEW_REQUIRED'), true,
+    'the internal review marker is detected anywhere in the text');
 });
 
 test('professional rewrite is disabled without its dedicated key and does not fall back to GEMINI_API_KEY', async () => {

@@ -127,6 +127,28 @@ test('monitored feed identities and links stay private while a public speaker re
   assert.match(publicView.description_en, /Ministry of Health/);
   assert.match(publicView.updates[0].description, /وزارة الصحة/);
   assert.equal(synthetic.meta.newsSources.length, 2, 'source records remain available internally');
+
+  const nonNewsPrivateDescription = publicAlert({
+    ...synthetic, type: 'accident', source: 'telegram', title: 'حادث سير في حمص', title_en: 'Traffic accident in Homs',
+    description: 'وقع حادث سير في حمص مساء اليوم.', description_en: 'Traffic accident in Homs. Opinion/analysis: private owner note.',
+  });
+  assert.equal(nonNewsPrivateDescription.description_en, undefined,
+    'the English description sanitizer also blocks owner-only text for non-news alerts');
+  const safetyStory = {
+    ...synthetic, type: 'accident', source: 'news', title: 'حادث سير في حمص أسفر عن إصابة 3 أشخاص', title_en: 'Traffic accident in Homs injures 3',
+    description: 'أُصيب 3 أشخاص في حادث سير بحمص مساء اليوم.', description_en: 'Three people were injured in a traffic accident in Homs tonight.',
+    editorialHold: true, editorialHoldReason: 'private-editorial-copy-not-public',
+  };
+  const safetyPost = channelPost(safetyStory);
+  const safetyPublicView = publicAlert(safetyStory);
+  assert.doesNotMatch(safetyPost, /EDITORIAL_REVIEW_REQUIRED|لا تقدم المادة وقائع موثقة كافية|موقوفة للمراجعة التحريرية|لم يُسجّل تحقق مستقل|خبر منقول|not independent verification|held for editorial review/i,
+    'a public traffic-accident post contains no internal gate note or generic verification disclaimer');
+  assert.equal(Object.hasOwn(safetyPublicView, 'editorialHold'), false);
+  assert.equal(Object.hasOwn(safetyPublicView, 'editorialHoldReason'), false,
+    'internal review state is not projected to the public map/site API');
+  assert.throws(() => channelPost({
+    ...synthetic, type: 'political', title: 'إعلان رسمي في حمص', meta: { channelTitle: 'رأي/تحليل: نص خاص' },
+  }), /Private editorial or internal review text/, 'a private note cannot bypass the final channel check through its metadata title');
 });
 
 test('home menu clears tracked private relay messages for this bot and chat only', async () => {
@@ -731,7 +753,8 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.doesNotMatch(decisionPost, /قرار أو تعيين/, 'the public category uses the event-specific label, not the broad bot button label');
   assert.doesNotMatch(politicalPost, /🔎 <b>المصدر:<\/b>|&lt;Official source&gt;|تاريخ المصدر/, 'political source names and citations stay out of public channel posts');
   assert.doesNotMatch(politicalPost, /<a\b|href=/, 'political source is plain text with no clickable link');
-  assert.match(politicalPost, /لم يُسجّل تحقق مستقل عن الخبر/);
+  assert.doesNotMatch(politicalPost, /لم يُسجّل تحقق مستقل عن الخبر|خبر منقول/,
+    'ordinary political posts do not add a generic verification disclaimer');
   assert.deepEqual(politicalAlert.meta.political.sources, [{ name: '<Official source>', url: 'https://official.example/news', timestamp: politicalNewsDate }], 'source metadata remains stored on the alert');
   const politicalReviewCard = newsMonitorTest.cardText({
     id: 'test-political-review-source', type: 'political', politicalCategory: 'negotiation',
@@ -1168,36 +1191,172 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const opinionId = 'owner_opinion_preview';
   const opinionDraft = newsState().drafts[opinionId] = {
     id: opinionId, type: 'political', status: 'pending', politicalCategory: 'government_announcement',
-    headline: 'إعلان الحكومة الانتقالية خفض الدعم في حمص', sourceText: 'أعلنت الحكومة الانتقالية خفض الدعم في حمص.',
-    loc: { scope: 'place', name_ar: 'حمص', name_en: 'Homs', governorate_ar: 'حمص', governorate_en: 'Homs' },
+    headline: 'إعلان الحكومة الانتقالية خفض الدعم في حمص', sourceText: 'أعلنت الحكومة الانتقالية قراراً رسمياً بخفض الدعم في محافظة حمص وفق البيان المنشور اليوم.',
+    loc: { scope: 'place', name_ar: 'حمص', name_en: 'Homs', governorate_ar: 'حمص', governorate_en: 'Homs', latitude: 34.7, longitude: 36.7 },
     extra: [], ttlMin: 360, srcs: [{ u: 'mock-source', name: 'private mock feed', local: false }], cards: [], created: Date.now(),
   };
   const ownerCard = newsMonitorTest.cardKb(opinionDraft, 'ar', ownerId).inline_keyboard.flat();
   const nonOwnerCard = newsMonitorTest.cardKb(opinionDraft, 'ar', reporter.id).inline_keyboard.flat();
   assert.ok(ownerCard.some((button) => button.callback_data === `nw:op:${opinionId}`), 'the opinion preview is offered to the owner');
+  assert.ok(ownerCard.some((button) => button.callback_data === `nw:sa:${opinionId}`), 'the fictional-satire preview is offered to the owner');
   assert.equal(nonOwnerCard.some((button) => button.callback_data === `nw:op:${opinionId}`), false, 'the opinion preview is not offered to non-owners');
+  assert.equal(nonOwnerCard.some((button) => button.callback_data === `nw:sa:${opinionId}`), false, 'the satire preview is not offered to non-owners');
   const previousRewrite = newsMonitorTest.R.rewriteImpl;
-  let rewriteMode;
-  newsMonitorTest.R.rewriteImpl = async (_source, options) => { rewriteMode = options.mode; return 'رأي/تحليل: قرار خفض الدعم يزيد الأعباء على الأسر.'; };
+  const rewriteModes = [];
+  newsMonitorTest.R.rewriteImpl = async (_source, options) => {
+    rewriteModes.push(options.mode);
+    return options.mode === 'satire'
+      ? 'محاكاة ساخرة خيالية (ليست خبراً): في مسرح الخيال تتحول وعود خفض الأعباء إلى مظلة مثقوبة.'
+      : 'رأي/تحليل: قرار خفض الدعم يزيد الأعباء على الأسر وفق الوقائع المنشورة.';
+  };
   const opinionCallsStart = calls.length;
   try {
     await tap(`nw:op:${opinionId}`, reporter);
-    assert.equal(rewriteMode, undefined, 'a non-owner cannot start an opinion analysis');
+    await tap(`nw:sa:${opinionId}`, reporter);
+    assert.deepEqual(rewriteModes, [], 'a non-owner cannot start either private editorial mode');
     await tap(`nw:op:${opinionId}`, owner);
-    assert.equal(rewriteMode, 'opinion', 'the owner button requests the separate opinion mode');
+    assert.deepEqual(rewriteModes, ['opinion'], 'the owner button requests the separate opinion mode');
     assert.equal(opinionDraft.aiRewritePreview.mode, 'opinion');
-    const previewMessage = calls.slice(opinionCallsStart).find((call) => call.method === 'editMessageText' && call.chatId === ownerId && /معاينة رأي\/تحليل نقدي — لم يُعتمد ولم يُنشر/.test(call.payload.text));
+    const previewMessage = calls.slice(opinionCallsStart).find((call) => call.method === 'editMessageText' && call.chatId === ownerId && /معاينة نقد معارض خاصة — لم تُعتمد ولم تُنشر/.test(call.payload.text));
     assert.ok(previewMessage, 'the preview is visibly labeled and remains unpublished');
+    assert.equal(opinionDraft.headline, 'إعلان الحكومة الانتقالية خفض الدعم في حمص', 'generating a private critique never changes the factual headline');
     await tap(`nw:ra:${opinionId}`, owner);
     assert.equal(opinionDraft.aiRewritePreview.applied, true);
-    assert.equal(opinionDraft.headline, 'رأي/تحليل: قرار خفض الدعم يزيد الأعباء على الأسر.');
+    assert.equal(opinionDraft.headline, 'إعلان الحكومة الانتقالية خفض الدعم في حمص', 'applying private critique never replaces the factual headline');
+    assert.match(opinionDraft.privateEditorial.opinion, /^رأي\/تحليل:/, 'the owner-only opinion is saved in its private field');
     assert.equal(opinionDraft.editorialHold, true, 'applying opinion sets a review hold');
     assert.equal(nightEligible(opinionDraft), false, 'the applied opinion cannot enter automatic publication');
+    const publicDraft = toBotDraft(opinionDraft);
+    assert.equal(publicDraft.details, 'إعلان الحكومة الانتقالية خفض الدعم في حمص');
+    assert.doesNotMatch(JSON.stringify(publicDraft), /رأي\/تحليل|قرار خفض الدعم يزيد الأعباء/,
+      'toBotDraft carries the factual headline only and excludes the private opinion field');
+    const publicInput = buildAlertInput(publicDraft, { id: ownerId, name: 'Local owner' });
+    const projection = publicAlert(publicInput);
+    const simulatedChannelPost = channelPost({ ...publicInput, place: publicInput.location, timestamp: new Date().toISOString() });
+    assert.doesNotMatch(JSON.stringify(projection), /رأي\/تحليل|قرار خفض الدعم يزيد الأعباء/);
+    assert.doesNotMatch(simulatedChannelPost, /رأي\/تحليل|قرار خفض الدعم يزيد الأعباء/);
+    const leakedPublicInput = { ...publicInput, title: 'رأي/تحليل: نص خاص لا يجوز نشره' };
+    assert.equal(publicAlert(leakedPublicInput).title, '', 'the public map projection drops an unsafe title');
+    assert.throws(() => channelPost(leakedPublicInput), /Private editorial or internal review text/,
+      'the final channel-post builder fails closed on private editorial copy');
+    assert.throws(() => buildAlertInput({ ...publicDraft, details: 'لا تقدم المادة وقائع موثقة كافية' }, { id: ownerId, name: 'Local owner' }),
+      /Private editorial or internal review text/, 'alert construction rejects an internal review diagnostic');
+    const alertCountBeforeBlockedInput = store.state.alerts.length;
+    await assert.rejects(publishInput(bot.api, leakedPublicInput), /Private editorial or internal review text/,
+      'the final manual publishing function rejects private copy before storing or posting it');
+    await assert.rejects(publishInput(bot.api, { ...publicInput, meta: { channelTitle: 'رأي/تحليل: نص خاص' } }),
+      /Private editorial or internal review text/, 'unsafe metadata is rejected before it can create a map alert');
+    assert.equal(store.state.alerts.length, alertCountBeforeBlockedInput, 'a rejected public payload creates no map record');
+
+    await tap(`nw:sa:${opinionId}`, owner);
+    assert.deepEqual(rewriteModes, ['opinion', 'satire']);
+    assert.equal(opinionDraft.headline, 'إعلان الحكومة الانتقالية خفض الدعم في حمص');
+    await tap(`nw:ra:${opinionId}`, owner);
+    assert.match(opinionDraft.privateEditorial.satire, /^محاكاة ساخرة خيالية \(ليست خبراً\):/);
+    assert.equal(nightEligible(opinionDraft), false, 'owner-only satire is also excluded from automatic publishing');
+    await tap(`nw:ro:${opinionId}`, owner);
+    assert.equal(opinionDraft.privateEditorial.satire, undefined, 'the owner can delete the private satire text');
+    assert.ok(opinionDraft.privateEditorial.opinion, 'deleting satire leaves the separate opinion note intact');
+    await tap(`nw:op:${opinionId}`, owner);
+    assert.deepEqual(rewriteModes, ['opinion', 'satire', 'opinion']);
+    await tap(`nw:ra:${opinionId}`, owner);
+    await tap(`nw:ro:${opinionId}`, owner);
+    assert.equal(opinionDraft.privateEditorial, undefined, 'the owner can delete the private opinion text');
+    assert.equal(opinionDraft.headline, 'إعلان الحكومة الانتقالية خفض الدعم في حمص', 'deleting private text preserves the factual headline');
     assert.equal(calls.slice(opinionCallsStart).filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, 0, 'opinion preview and application never post a public channel message');
   } finally {
     newsMonitorTest.R.rewriteImpl = previousRewrite;
     delete newsState().drafts[opinionId];
   }
+
+  const accidentDraft = newsState().drafts.owner_accident_opinion_forbidden = {
+    id: 'owner_accident_opinion_forbidden', type: 'accident', status: 'pending',
+    headline: 'حادث سير في حمص أسفر عن إصابة 3 أشخاص مساء اليوم',
+    sourceText: 'وقع حادث سير في حمص وأصيب 3 أشخاص، وأعلنت الشرطة تفاصيل التحقيق مساء اليوم.',
+    loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 },
+    extra: [], ttlMin: 360, srcs: [{ u: 'mock-accident-source', local: false }], cards: [],
+  };
+  assert.equal(newsMonitorTest.cardKb(accidentDraft, 'ar', ownerId).inline_keyboard.flat().some((button) => ['nw:op:' + accidentDraft.id, 'nw:sa:' + accidentDraft.id].includes(button.callback_data)), false,
+    'private political options are not displayed on a traffic-accident card');
+  await tap(`nw:op:${accidentDraft.id}`, owner);
+  await tap(`nw:sa:${accidentDraft.id}`, owner);
+  assert.deepEqual(rewriteModes, ['opinion', 'satire', 'opinion'], 'even forged owner callbacks cannot send a traffic accident to opinion or satire');
+  assert.equal(accidentDraft.aiRewritePreview, undefined);
+  delete newsState().drafts[accidentDraft.id];
+
+  rewriteModes.length = 0;
+  newsMonitorTest.R.rewriteImpl = async (_source, options) => {
+    rewriteModes.push(options.mode);
+    return options.mode === 'satire'
+      ? 'محاكاة ساخرة خيالية (ليست خبراً): في مسرح الخيال تتحول الرسوم إلى مظلة مثقوبة.'
+      : 'رأي/تحليل: قرار حكومي محدد يثقل كاهل الأسر وفق المصدر.';
+  };
+  const breakingSource = 'أعلنت الحكومة الانتقالية قراراً رسمياً بخفض الدعم في محافظة حمص، وفق البيان المنشور اليوم.';
+  const breakingDraft = newsState().drafts.owner_breaking_opinion = {
+    id: 'owner_breaking_opinion', type: 'breaking', status: 'pending',
+    headline: 'قرار رسمي بخفض الدعم في حمص', sourceText: breakingSource,
+    loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 },
+    extra: [], ttlMin: 360, srcs: [{ u: 'mock-breaking-source', name: 'private mock feed', local: false }], cards: [],
+  };
+  assert.equal(newsMonitorTest.privateEditorialModeApplicable(breakingDraft), true,
+    'a verified specific political action can use the private modes across the general breaking-news rewrite flow');
+  const breakingOwnerButtons = newsMonitorTest.cardKb(breakingDraft, 'ar', ownerId).inline_keyboard.flat();
+  assert.ok(breakingOwnerButtons.some((button) => button.callback_data === `nw:op:${breakingDraft.id}`));
+  assert.ok(breakingOwnerButtons.some((button) => button.callback_data === `nw:sa:${breakingDraft.id}`));
+  assert.equal(newsMonitorTest.cardKb(breakingDraft, 'ar', reporter.id).inline_keyboard.flat().some((button) => ['nw:op:' + breakingDraft.id, 'nw:sa:' + breakingDraft.id].includes(button.callback_data)), false,
+    'the same modes remain owner-only on breaking-news cards');
+  await tap(`nw:op:${breakingDraft.id}`, owner);
+  assert.deepEqual(rewriteModes, ['opinion']);
+  breakingDraft.type = 'accident';
+  await tap(`nw:ra:${breakingDraft.id}`, owner);
+  assert.equal(breakingDraft.privateEditorial, undefined,
+    'a forged type change between preview and apply cannot attach an opinion to a safety report');
+  assert.equal(breakingDraft.headline, 'قرار رسمي بخفض الدعم في حمص');
+  delete newsState().drafts[breakingDraft.id];
+
+  const protestSource = 'خرجت مظاهرة في حمص احتجاجاً على قرار الحكومة الانتقالية بفرض رسوم جديدة، بحسب بيان المنظمين الصادر اليوم.';
+  const protestDraft = newsState().drafts.owner_protest_opinion = {
+    id: 'owner_protest_opinion', type: 'protest', status: 'pending',
+    headline: 'مظاهرة في حمص احتجاجاً على قرار فرض رسوم جديدة', sourceText: protestSource,
+    loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 },
+    extra: [], ttlMin: 360, srcs: [{ u: 'mock-protest-source', local: false }], cards: [], created: Date.now(),
+  };
+  assert.equal(newsMonitorTest.privateEditorialModeApplicable(protestDraft), true);
+  const protestButtons = newsMonitorTest.cardKb(protestDraft, 'ar', ownerId).inline_keyboard.flat();
+  assert.ok(protestButtons.some((button) => button.callback_data === `nw:op:${protestDraft.id}`));
+  assert.ok(protestButtons.some((button) => button.callback_data === `nw:sa:${protestDraft.id}`));
+  await tap(`nw:sa:${protestDraft.id}`, owner);
+  assert.deepEqual(rewriteModes, ['opinion', 'satire']);
+  await tap(`nw:ra:${protestDraft.id}`, owner);
+  assert.match(protestDraft.privateEditorial.satire, /^محاكاة ساخرة خيالية \(ليست خبراً\):/);
+  assert.equal(protestDraft.headline, 'مظاهرة في حمص احتجاجاً على قرار فرض رسوم جديدة',
+    'applying satire in the protest workflow never changes the factual public headline');
+  assert.doesNotMatch(newsMonitorTest.cardText(protestDraft, 'ar'), /مسرح الخيال|ملاحظة رأي\/سخرية خاصة بالمالك/,
+    'shared review cards do not reveal the private owner-only text or its existence');
+  delete newsState().drafts[protestDraft.id];
+  newsMonitorTest.R.rewriteImpl = previousRewrite;
+
+  const blockedChannelPosts = calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length;
+  const blockedAlerts = store.state.alerts.length;
+  for (const [id, headline] of [
+    ['manual_opinion_leak_block', 'رأي/تحليل: قرار حكومي خيالي يضر الجميع'],
+    ['manual_diagnostic_leak_block', 'لا تقدم المادة وقائع موثقة كافية'],
+  ]) {
+    const unsafe = newsState().drafts[id] = {
+      id, type: 'political', status: 'pending', politicalCategory: 'government_announcement', headline,
+      sourceText: 'أعلنت الحكومة الانتقالية قراراً رسمياً بشأن الدعم في حمص اليوم.',
+      loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 },
+      extra: [], ttlMin: 360, srcs: [{ u: 'mock-source', local: false }], cards: [],
+    };
+    await tap(`nw:p:${id}`, owner);
+    assert.equal(unsafe.status, 'pending', 'unsafe public copy remains in the review queue');
+    assert.equal(unsafe.editorialHoldReason, 'private-editorial-copy-not-public');
+    assert.throws(() => toBotDraft(unsafe), /cannot be converted to a public alert/);
+    delete newsState().drafts[id];
+  }
+  assert.equal(store.state.alerts.length, blockedAlerts, 'blocked manual drafts create no map alerts');
+  assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, blockedChannelPosts,
+    'opinion and review diagnostics never reach the public channel through manual approval');
 
   const editorId = 8270709666;
   const editor = { id: editorId, is_bot: false, first_name: 'Local editor', language_code: 'ar' };
@@ -1276,7 +1435,7 @@ test('news draft ignore action marks the draft ignored without publishing it', a
 test('professional rewrite is a comparison preview, requires a separate apply action, and can restore the original', async (t) => {
   const draftId = 'rewrite_human_approval';
   const original = 'خبر مصدره محلي يذكر وقوع اشتباك قرب حارم مساء اليوم.';
-  const rewritten = 'أفاد مصدر محلي بوقوع اشتباك قرب حارم مساء اليوم.';
+  const rewritten = 'أفاد بوقوع اشتباك قرب حارم مساء اليوم.';
   let receivedSource = '';
   const channelPostsBefore = calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length;
   newsMonitorTest.R.rewriteImpl = async (source) => { receivedSource = source; return rewritten; };
@@ -1296,6 +1455,8 @@ test('professional rewrite is a comparison preview, requires a separate apply ac
   assert.match(preview?.payload?.text || '', /النص الأصلي من المصدر/);
   assert.match(preview?.payload?.text || '', /لم تُعتمد ولم تُنشر/);
   assert.match(preview?.payload?.text || '', new RegExp(rewritten));
+  assert.doesNotMatch(preview?.payload?.text || '', /مصدر محلي/,
+    'the private monitoring-feed identity is removed from rewrite previews');
   assert.ok(callbacksOf(keyboardAfter(previewStart)).includes(`nw:ra:${draftId}`), 'the preview requires an explicit apply button');
   assert.equal(newsState().drafts[draftId].status, 'pending');
 

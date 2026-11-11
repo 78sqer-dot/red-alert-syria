@@ -237,6 +237,59 @@ test('sharp political criticism and explicitly requested opinion copy are never 
   });
   assert.equal(nightEligible(opinion), false, 'an applied opinion/analysis preview cannot enter the auto-publish queue');
   assert.deepEqual(_test.editorialGate(opinion), { ok: false, reason: 'opinion-analysis-not-auto-publish' });
+  const satire = { ...opinion, aiRewritePreview: { mode: 'satire', applied: true } };
+  assert.equal(nightEligible(satire), false, 'an applied fictional satire preview cannot enter the auto-publish queue');
+  const privateNote = { ...opinion, aiRewritePreview: undefined, privateEditorial: { opinion: 'رأي/تحليل: نقد خاص للمالك' } };
+  assert.equal(nightEligible(privateNote), false, 'a saved owner-only opinion blocks all automatic publishing');
+  assert.equal(daytimeAutoEligible(privateNote), false);
+  assert.equal(dayAutoDueAt(privateNote, daytimeStart), null);
+  assert.equal(dayAutoReady({ ...privateNote, dayAutoAt: daytimeStart }, daytimeStart + 1), false);
+  const privateBotDraft = toBotDraft(privateNote);
+  assert.doesNotMatch(JSON.stringify(privateBotDraft), /رأي\/تحليل|نقد خاص للمالك/);
+});
+
+test('opinion and satire remain private, while review diagnostics are held before automatic publishing', async () => {
+  const previousHandler = _test.R.H;
+  let publishAttempts = 0;
+  const telegramCalls = [];
+  _test.R.H = {
+    apis: () => ({ admin: { sendMessage: async (...args) => telegramCalls.push(args) } }),
+    publishDraft: async () => { publishAttempts++; return { id: 'must-not-publish' }; },
+  };
+  const shared = {
+    type: 'political', status: 'pending', politicalCategory: 'decision',
+    headline: 'أعلنت الحكومة الانتقالية قراراً رسمياً بخفض الدعم في حمص اليوم.',
+    sourceText: 'أعلنت الحكومة الانتقالية قراراً رسمياً بخفض الدعم في حمص اليوم.',
+    loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 },
+    srcs: [{ u: 'trusted-feed', local: false }], created: Date.now(), cards: [],
+  };
+  const privateDrafts = [
+    qualified({ ...shared, id: 'auto-private-opinion', privateEditorial: { opinion: 'رأي/تحليل: نقد خاص' } }),
+    qualified({ ...shared, id: 'auto-private-satire', privateEditorial: { satire: 'محاكاة ساخرة خيالية (ليست خبراً): نص خيالي' } }),
+  ];
+  const diagnostic = qualified({
+    ...shared, id: 'auto-review-diagnostic', headline: 'لا تقدم المادة وقائع موثقة كافية',
+    dayAutoAt: daytimeStart, autoMode: 'day',
+  });
+  for (const draft of [...privateDrafts, diagnostic]) newsState().drafts[draft.id] = draft;
+  try {
+    for (const draft of privateDrafts) {
+      assert.equal(nightEligible(draft), false);
+      assert.equal(await _test.nightPublish(draft), false);
+      assert.equal(draft.status, 'pending', 'private commentary remains as an unpublished pending factual draft');
+    }
+    assert.deepEqual(_test.editorialGate(diagnostic), { ok: false, reason: 'private-editorial-copy-not-public' });
+    assert.equal(await _test.nightPublish(diagnostic), false);
+    assert.equal(diagnostic.status, 'pending', 'a diagnostic failure remains pending for internal review');
+    assert.equal(diagnostic.editorialHold, true);
+    assert.equal(diagnostic.dayAutoAt, null, 'the diagnostic draft loses its automatic publication timer');
+    assert.throws(() => toBotDraft(diagnostic), /cannot be converted to a public alert/);
+    assert.equal(publishAttempts, 0, 'no automatic publisher is called for private notes or review diagnostics');
+    assert.equal(telegramCalls.length, 0, 'no public Telegram notice is sent for held drafts');
+  } finally {
+    _test.R.H = previousHandler;
+    for (const draft of [...privateDrafts, diagnostic]) delete newsState().drafts[draft.id];
+  }
 });
 
 test('failed editorial gate keeps an eligible draft pending, clears its timer, and never calls publication', async () => {

@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
 import { alertZones, selectedAlertZones, regionFix } from './places.js';
-import { cleanAlertText, cleanAttributedNewsText } from './clean-text.js';
+import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
 import { expireAlnabaPhotos, sanitizeAlnabaState, sanitizeAlnabaBatchQueue, mergeAlnabaBatchQueues } from './alnaba.js';
 
@@ -813,8 +813,12 @@ export function publicAlert(a) {
     ...(Array.isArray(a.meta?.political?.sources) ? a.meta.political.sources : []),
   ];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
-  const publicText = (value) => a.source === 'news' || ['political', 'breaking'].includes(a.type)
-    ? cleanAttributedNewsText(value, privateSourceNames) : cleanAlertText(value);
+  const publicText = (value) => {
+    if (isPrivateEditorialCopy(value)) return '';
+    const cleaned = a.source === 'news' || ['political', 'breaking'].includes(a.type)
+      ? cleanAttributedNewsText(value, privateSourceNames) : cleanAlertText(value);
+    return isPrivateEditorialCopy(cleaned) ? '' : cleaned;
+  };
   const rawFlightTarget = a.type === 'air_movement' ? a.meta?.flightTarget : null;
   const targetScope = ['country', 'governorate'].includes(rawFlightTarget?.scope) ? rawFlightTarget.scope : null;
   const targetHasCoordinates = Number.isFinite(rawFlightTarget?.latitude) && Number.isFinite(rawFlightTarget?.longitude)
@@ -850,11 +854,10 @@ export function publicAlert(a) {
       ? (['soldiers', 'vehicles', 'barrier'].includes(a.meta?.incursionKind) ? a.meta.incursionKind : Number.isInteger(a.meta?.vehicleCount) ? 'vehicles' : undefined)
       : undefined,
     ...(a.type === 'political' && category ? { political_category: category } : {}),
-    title: a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title) : a.title,
-    title_en: a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title_en) : a.title_en,
+    title: isPrivateEditorialCopy(a.title) ? '' : a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title) : a.title,
+    title_en: isPrivateEditorialCopy(a.title_en) ? '' : a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title_en) : a.title_en,
     description: publicText(a.description) || undefined,
-    description_en: a.source === 'news' || ['political', 'breaking'].includes(a.type)
-      ? publicText(a.description_en) || undefined : a.description_en || undefined,
+    description_en: publicText(a.description_en) || undefined,
     ...(media ? { media, media_items: mediaItems } : {}),
     location: a.location,
     place: {

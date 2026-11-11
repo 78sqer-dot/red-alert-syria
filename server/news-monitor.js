@@ -22,9 +22,9 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
-import { setSourceNames, cleanAlertText, cleanAttributedNewsText } from './clean-text.js';
+import { setSourceNames, cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
 
 const NEWS_GROUP_PRIORITY = ['aerial', 'incursion', 'strikes', 'civil', 'smuggling', 'political', 'nature', 'other'];
 const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', patrol: '🚓', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
@@ -346,7 +346,7 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || d.editorialHold || (d.aiRewritePreview?.applied && d.aiRewritePreview.mode === 'opinion') || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+  if (!d || d.test || d.rule || d.editorialHold || Object.keys(d.privateEditorial || {}).length > 0 || (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
   if (['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'military_incursion', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
   if (d.type === 'political') {
     const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
@@ -368,15 +368,23 @@ const editorialHas = (text, phrase) => {
   return Boolean(needle && haystack.includes(` ${needle} `));
 };
 const editorialHasAny = (text, phrases) => phrases.some((phrase) => editorialHas(text, phrase) || editorialHas(text, `و${phrase}`));
+const publicDraftCopyIssue = (d) => [d?.headline, d?.body, d?.details, d?.text, d?.description, d?.title, d?.title_en, d?.description_en].some(isPrivateEditorialCopy)
+  ? 'private-editorial-copy-not-public' : null;
+const PRIVATE_EDITORIAL_DRAFT_TYPES = new Set(['political', 'breaking', 'protest']);
+function privateEditorialModeApplicable(d) {
+  if (!d || !PRIVATE_EDITORIAL_DRAFT_TYPES.has(d.type)) return false;
+  return rewriteSourceReviewReason(String(d.sourceText || d.headline || d.body || '')) === null;
+}
 /** A no-AI, fail-closed check: uncertain edits stay pending for the owner instead of reaching either public surface. */
 function editorialGate(d) {
   const fail = (reason) => ({ ok: false, reason });
   const rawSource = String(d?.sourceText || d?.body || '').trim();
   const rawHeadline = String(d?.headline || '').trim();
+  if (publicDraftCopyIssue(d)) return fail('private-editorial-copy-not-public');
   const source = editorialNorm(rawSource.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' '));
   const headline = editorialNorm(rawHeadline);
   if (!source || !headline || !(d.srcs || []).length) return fail('missing-source-or-text');
-  if (d.aiRewritePreview?.applied && d.aiRewritePreview.mode === 'opinion') return fail('opinion-analysis-not-auto-publish');
+  if (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) return fail('opinion-analysis-not-auto-publish');
   if (!NEWS_TYPES.includes(d.type) || !ALERT_TYPES[d.type]) return fail('invalid-type');
   if (refineType(d.type, rawSource) !== d.type) return fail('type-conflict');
   if (d.type === 'political') {
@@ -598,9 +606,16 @@ function cardText(d, lang = 'ar') {
     lines.push(tr(lang, 'ℹ️ <i>صياغة منسوبة لما نشرته المصادر — ليست تحققاً مستقلاً، وتحتاج مراجعة بشرية.</i>', 'ℹ️ <i>Attributed to the cited sources; this is not independent verification and needs human review.</i>'));
   } else if ((d.srcs || []).length >= 2) lines.push(tr(lang, `📡 <i>ورد الخبر في ${((k) => (k === 2 ? 'مصدرين' : k <= 10 ? `${k} مصادر` : `${k} مصدراً`))((d.srcs || []).length)}؛ وهذا لا يثبت تحققاً مستقلاً.</i>`, `📡 <i>Reported in ${(d.srcs || []).length} feeds; this alone is not independent verification.</i>`));
   else if (!nMain) lines.push(tr(lang, '⚠️ <i>مصدر محلي/ناشط واحد — غير مؤكد بعد، تأكد قبل النشر.</i>', '⚠️ <i>Single local/activist source — not confirmed yet, check before publishing.</i>'));
-  if (d.editorialHold) lines.push('', tr(lang,
-    '⚖️ <b>موقوفة للمراجعة التحريرية:</b> لم تجتز التحقق الآلي المحافظ من حفظ الوقائع والإسناد والمكان والأرقام والسياق؛ لم تُنشر تلقائياً.',
-    '⚖️ <b>Held for editorial review:</b> the conservative check could not confirm that facts, attribution, place, numbers, and context were preserved; nothing was auto-published.'));
+  if (d.editorialHold) {
+    const reason = d.editorialHoldReason === 'private-editorial-copy-not-public'
+      ? tr(lang, 'النص يتضمن مادة رأي/سخرية خاصة أو تشخيصاً داخلياً، لذلك لم يُدرج في الخبر العام.', 'The text contains private opinion/satire or an internal diagnostic, so it was excluded from public news.')
+      : d.editorialHoldReason === 'owner-private-editorial-note'
+        ? tr(lang, 'المسودة موقوفة للمراجعة اليدوية؛ لم يُنشر شيء تلقائياً.', 'The draft is held for human review; nothing was auto-published.')
+      : d.editorialHoldReason === 'opinion-analysis-requires-explicit-owner-publish'
+        ? tr(lang, 'الرأي/التحليل محفوظ للمالك فقط ولا يدخل النشر الآلي أو العام.', 'Opinion/analysis is saved for the owner only and cannot enter automatic or public publishing.')
+        : tr(lang, 'تعذّر التحقق الآلي المحافظ من حفظ الوقائع والإسناد والمكان والأرقام والسياق؛ راجع المصدر قبل القرار.', 'The conservative check could not confirm that facts, attribution, place, numbers, and context were preserved; review the source before deciding.');
+    lines.push('', tr(lang, '⚖️ <b>موقوفة للمراجعة التحريرية:</b>', '⚖️ <b>Held for editorial review:</b>'), esc(reason));
+  }
   lines.push(`🕒 ${tr(lang, 'أول خبر', 'First report')}: ${esc(clock(d.ts || d.created))} ${tr(lang, '(بتوقيت دمشق)', '(Damascus time)')}`);
   if (d.rule) lines.push(tr(lang, '⚙️ <i>تصنيف آلي بسيط (الذكاء الاصطناعي غير متاح حالياً) — راجع النوع والمكان.</i>', '⚙️ <i>Simple automatic classification (AI unavailable) — check type and place.</i>'));
   return lines.join('\n');
@@ -611,7 +626,9 @@ function cardKb(d, lang = 'ar', chatId = null) {
     .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id).row()
     .text(tr(lang, '🪄 صياغة صحفية', '🪄 Rewrite professionally'), 'nw:rw:' + d.id)
     .text(tr(lang, '🔎 تحقق من سجل القناة', '🔎 Check channel records'), 'nw:c:' + d.id);
-  if (ownerIdsU().includes(Number(chatId))) kb.row().text(tr(lang, '🧭 معاينة رأي/تحليل نقدي', '🧭 Preview critical opinion/analysis'), 'nw:op:' + d.id);
+  if (privateEditorialModeApplicable(d) && ownerIdsU().includes(Number(chatId))) kb.row()
+    .text(tr(lang, '🧭 نقد معارض موثّق', '🧭 Source-grounded opposition critique'), 'nw:op:' + d.id)
+    .text(tr(lang, '🎭 محاكاة ساخرة خيالية', '🎭 Fictional political satire'), 'nw:sa:' + d.id);
 
   if (d.originalHeadline && d.originalHeadline !== d.headline) {
     kb.row().text(tr(lang, '↩️ استعادة الصياغة الأصلية', '↩️ Restore original wording'), 'nw:ro:' + d.id);
@@ -629,7 +646,9 @@ function rewritePreviewText(d, lang = 'ar') {
   const original = String(preview.originalHeadline || d.originalHeadline || d.headline || '');
   const render = (excerpt) => [
     preview.mode === 'opinion'
-      ? tr(lang, '🧭 <b>معاينة رأي/تحليل نقدي — لم يُعتمد ولم يُنشر</b>', '🧭 <b>Critical opinion/analysis preview — not applied or published</b>')
+      ? tr(lang, preview.applied ? '🧭 <b>رأي/تحليل محفوظ لك خاصاً — لا يُنشر</b>' : '🧭 <b>معاينة نقد معارض خاصة — لم تُعتمد ولم تُنشر</b>', preview.applied ? '🧭 <b>Opinion/analysis saved privately for you — never published</b>' : '🧭 <b>Private opposition-critique preview — not applied or published</b>')
+      : preview.mode === 'satire'
+        ? tr(lang, preview.applied ? '🎭 <b>محاكاة ساخرة خيالية محفوظة لك خاصاً — لا تُنشر</b>' : '🎭 <b>معاينة محاكاة ساخرة خيالية خاصة — ليست خبراً</b>', preview.applied ? '🎭 <b>Fictional satire saved privately for you — never published</b>' : '🎭 <b>Private fictional-satire preview — not news</b>')
       : tr(lang, '🪄 <b>معاينة صياغة صحفية محايدة — لم تُعتمد ولم تُنشر</b>', '🪄 <b>Neutral news rewrite preview — not applied or published</b>'),
     '',
     `📝 <b>${tr(lang, 'عنوان المسودة الحالي', 'Current draft headline')}:</b> ${esc(original)}`,
@@ -637,8 +656,10 @@ function rewritePreviewText(d, lang = 'ar') {
     `✨ <b>${tr(lang, 'المقترح', 'Suggestion')}:</b> ${esc(preview.text || '')}`,
     '',
     preview.mode === 'opinion'
-      ? tr(lang, 'هذه مادة رأي/تحليل وليست خبراً؛ النقد محصور بالسياسات ومسنود بالمصدر. راجع الوقائع، ثم اعتمدها صراحةً إن رغبت؛ لن تُنشر تلقائياً.', 'This is opinion/analysis, not straight news; criticism targets policy and must be source-grounded. Verify it and apply explicitly if wanted; it will not auto-publish.')
-      : tr(lang, 'راجع الوقائع والمصدر بنفسك. هذه صياغة خبرية محايدة؛ لن يتغير نص المسودة إلا بعد اختيار اعتماد الصياغة.', 'Verify the facts and source yourself. This is neutral news wording; the draft changes only if you choose to apply it.'),
+      ? tr(lang, 'هذه ملاحظة خاصة بالمالك وليست خبراً؛ يجب أن يستند النقد إلى الوقائع المذكورة، ولن تظهر على القناة أو الخريطة أو الموقع.', 'Private owner-only commentary, not news; criticism must be grounded in the stated facts and will not appear on the channel, map, or site.')
+      : preview.mode === 'satire'
+        ? tr(lang, 'هذه محاكاة خيالية موسومة بوضوح، وليست خبراً. تبقى خاصة بالمالك ولا تظهر على القناة أو الخريطة أو الموقع.', 'Clearly labeled fictional satire, not news. It remains private to the owner and will not appear on the channel, map, or site.')
+        : tr(lang, 'راجع الوقائع والمصدر بنفسك. هذه صياغة خبرية محايدة؛ لن يتغير نص المسودة إلا بعد اختيار اعتماد الصياغة.', 'Verify the facts and source yourself. This is neutral news wording; the draft changes only if you choose to apply it.'),
   ].join('\n');
   let text = render(source);
   while (text.length > 3900 && source.length > 80) { source = source.slice(0, Math.max(80, source.length - 80)); text = render(source); }
@@ -646,6 +667,11 @@ function rewritePreviewText(d, lang = 'ar') {
 }
 function rewritePreviewKb(d, lang = 'ar') {
   if (d.aiRewritePreview?.applied) {
+    if (['opinion', 'satire'].includes(d.aiRewritePreview.mode)) {
+      return new InlineKeyboard()
+        .text(tr(lang, '🗑 حذف النص الخاص', '🗑 Delete private text'), 'nw:ro:' + d.id)
+        .text(tr(lang, '↩️ رجوع للمسودة', '↩️ Back to draft'), 'nw:rr:' + d.id);
+    }
     return new InlineKeyboard()
       .text(tr(lang, '↩️ استعادة الأصل', '↩️ Restore original'), 'nw:ro:' + d.id)
       .text(tr(lang, '↩️ رجوع للمسودة', '↩️ Back to draft'), 'nw:rr:' + d.id);
@@ -979,6 +1005,7 @@ async function nightSummaryTick() {
 /** the bot's normal draft (same as a hand-made alert) from a news draft */
 export function toBotDraft(d) {
   newsState();
+  if (publicDraftCopyIssue(d)) throw new Error('Private editorial or internal review text cannot be converted to a public alert');
   const body = d.headline;
   const mediaItems = sanitizeAlertMediaItems((d.sourceMedia || []).map((item) => item.publishedMedia).filter(Boolean));
   const patrolText = N(`${d.headline || ''} ${d.body || ''}`);
@@ -1580,16 +1607,23 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, t(ctx, d.intense ? 'مكثف: 2-3 مسيّرات فوق كل منطقة' : 'عادي: مسيّرة وحدة فوق كل منطقة', d.intense ? 'Intensive: 2-3 drones per area' : 'Normal: one drone per area'));
     try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id) }); } catch { /* ignore */ }
   });
-  bot.callbackQuery(/^nw:(rw|op):(\w+)$/, async (ctx) => {
-    const mode = ctx.match[1] === 'op' ? 'opinion' : 'news';
-    if (!staff(ctx) || (mode === 'opinion' && !ownerIdsU().includes(Number(ctx.from.id)))) return toast(ctx, '');
+  bot.callbackQuery(/^nw:(rw|op|sa):(\w+)$/, async (ctx) => {
+    const mode = ctx.match[1] === 'op' ? 'opinion' : ctx.match[1] === 'sa' ? 'satire' : 'news';
+    if (!staff(ctx) || (mode !== 'news' && !ownerIdsU().includes(Number(ctx.from.id)))) return toast(ctx, '');
     const d = await findDraft(ctx.match[2]);
     if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
+    if (mode !== 'news' && !privateEditorialModeApplicable(d)) return toast(ctx, t(ctx,
+      'النقد والسخرية متاحان للمالك فقط عندما يذكر المصدر فعلاً أو سياسة حكومية محددة؛ تبقى حوادث السلامة والأخبار غير المرتبطة خبرية.',
+      'Private critique and satire are available to the owner only when the source states a specific government action or policy; safety reports and unrelated news remain factual.'), true);
     const sourceText = String(d.sourceText || d.headline || '').trim();
     if (!sourceText) return toast(ctx, t(ctx, 'لا يوجد نص مصدر لإعادة صياغته', 'No source text is available to rewrite'), true);
+    const reviewReason = mode === 'news' ? null : rewriteSourceReviewReason(sourceText);
+    if (reviewReason) return toast(ctx, t(ctx,
+      'لا توجد في المصدر وقائع سياسية محددة كافية لصياغة نقد أو سخرية؛ بقي الخبر كما هو.',
+      'The source has no sufficiently specific political facts for critique or satire; the factual draft is unchanged.'), true);
     const preview = d.aiRewritePreview;
     const previewIsCurrent = preview && preview.mode === mode && preview.sourceText === sourceText && preview.baseHeadline === d.headline;
-    const previewAlreadyApplied = preview?.applied && preview.text === d.headline;
+    const previewAlreadyApplied = preview?.applied && (mode === 'news' ? preview.text === d.headline : d.privateEditorial?.[mode] === preview.text);
     const lang = h.langOf(ctx);
     if (previewIsCurrent || previewAlreadyApplied) {
       await toast(ctx, '');
@@ -1606,18 +1640,19 @@ export function registerNewsTools(bot, h) {
     try {
       let text = String(R.rewriteImpl
         ? await R.rewriteImpl(sourceText, { mode })
-        : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '', mode })).trim();
-      if (mode === 'opinion' && !/^(?:رأي\s*\/\s*تحليل|رأي|تحليل)\s*[:：—-]/u.test(text)) text = `رأي/تحليل: ${text}`;
-      if (!text || text.length > 280) throw new Error('unsafe rewrite length');
+        : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '', mode }));
+      text = finalizeRewriteOutput(text, mode, d.srcs?.[0]?.name || '');
       d.aiRewritePreview = {
         text, mode, sourceText, baseHeadline: d.headline, originalHeadline: d.headline,
         createdAt: Date.now(), applied: false,
       };
       save();
       await showRewritePreview(ctx, d, lang);
-    } catch {
+    } catch (error) {
       console.warn('[news] professional rewrite unavailable; draft unchanged');
-      await toast(ctx, t(ctx, 'تعذرت إعادة الصياغة الآن؛ بقيت المسودة كما هي ولم يُنشر شيء.', 'Rewrite failed; the draft is unchanged and nothing was published.'), true);
+      await toast(ctx, error?.code === 'REWRITE_NOT_APPLICABLE'
+        ? t(ctx, 'لا توجد وقائع كافية لتكوين مادة خاصة آمنة؛ بقي الخبر الوقائعي كما هو.', 'There is not enough factual basis for safe private commentary; the factual story is unchanged.')
+        : t(ctx, 'تعذرت إعادة الصياغة الآن؛ بقيت المسودة كما هي ولم يُنشر شيء.', 'Rewrite failed; the draft is unchanged and nothing was published.'), true);
     } finally {
       delete d.aiRewriteBusy;
     }
@@ -1627,23 +1662,32 @@ export function registerNewsTools(bot, h) {
     const d = await findDraft(ctx.match[1]);
     const preview = d?.aiRewritePreview;
     if (!d || d.status !== 'pending' || !preview?.text) return toast(ctx, t(ctx, 'المسودة أو المعاينة لم تعد متاحة', 'Draft or preview is no longer available'), true);
+    if (['opinion', 'satire'].includes(preview.mode) && !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, '');
     const sourceText = String(d.sourceText || d.headline || '').trim();
     if (preview.sourceText !== sourceText || preview.baseHeadline !== d.headline) return toast(ctx, t(ctx, 'هذه معاينة قديمة؛ أعد فتح المراجعة', 'This preview is out of date; reopen the draft'), true);
-    if (preview.applied && d.headline === preview.text) return toast(ctx, t(ctx, 'الصياغة مطبقة بالفعل؛ لم يُنشر شيء', 'Wording already applied; nothing was published'));
-    d.originalHeadline ||= d.headline;
-    d.headline = preview.text;
-    preview.applied = true;
-    preview.appliedAt = Date.now();
-    if (preview.mode === 'opinion') {
+    if (['opinion', 'satire'].includes(preview.mode) && !privateEditorialModeApplicable(d)) return toast(ctx, t(ctx,
+      'لم تعد هذه المسودة مؤهلة للنقد أو السخرية؛ بقي الخبر الوقائعي كما هو.',
+      'This draft is no longer eligible for critique or satire; its factual story remains unchanged.'), true);
+    if (preview.mode === 'news') {
+      if (preview.applied && d.headline === preview.text) return toast(ctx, t(ctx, 'الصياغة مطبقة بالفعل؛ لم يُنشر شيء', 'Wording already applied; nothing was published'));
+      d.originalHeadline ||= d.headline;
+      d.headline = preview.text;
+    } else if (['opinion', 'satire'].includes(preview.mode)) {
+      d.privateEditorial ||= {};
+      d.privateEditorial[preview.mode] = preview.text;
       d.editorialHold = true;
-      d.editorialHoldReason = 'opinion-analysis-requires-explicit-owner-publish';
+      d.editorialHoldReason = 'owner-private-editorial-note';
       d.editorialHoldAt = Date.now();
       d.dayAutoAt = null;
       delete d.autoMode;
-    }
+    } else return toast(ctx, t(ctx, 'نوع المعاينة غير صالح', 'Invalid preview mode'), true);
+    preview.applied = true;
+    preview.appliedAt = Date.now();
     save();
     await refreshCards(d);
-    await toast(ctx, t(ctx, 'تم اعتماد الصياغة في المسودة فقط — ما زال النشر يحتاج موافقتك', 'Wording applied to the draft only — publishing still needs your approval'));
+    await toast(ctx, ['opinion', 'satire'].includes(preview.mode)
+      ? t(ctx, 'حُفظت الملاحظة لك في البوت فقط؛ لم يتغير الخبر ولم يُرسل شيء إلى الخريطة أو الموقع أو القناة.', 'Saved privately for you in the bot; the factual story is unchanged and nothing was sent to the map, site, or channel.')
+      : t(ctx, 'تم اعتماد الصياغة الخبرية في المسودة فقط — لم يُنشر شيء', 'Factual wording applied to the draft only — nothing was published'));
   });
   bot.callbackQuery(/^nw:rr:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
@@ -1656,6 +1700,19 @@ export function registerNewsTools(bot, h) {
     if (!staff(ctx)) return toast(ctx, '');
     const d = await findDraft(ctx.match[1]);
     if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
+    const preview = d.aiRewritePreview;
+    if (['opinion', 'satire'].includes(preview?.mode) && !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, '');
+    if (['opinion', 'satire'].includes(preview?.mode)) {
+      if (d.privateEditorial) delete d.privateEditorial[preview.mode];
+      if (!Object.keys(d.privateEditorial || {}).length) delete d.privateEditorial;
+      if (d.editorialHoldReason === 'owner-private-editorial-note') {
+        delete d.editorialHold; delete d.editorialHoldReason; delete d.editorialHoldAt;
+      }
+      preview.applied = false;
+      save();
+      await refreshCards(d);
+      return toast(ctx, t(ctx, 'حُذفت الملاحظة الخاصة؛ لم يتغير الخبر الوقائعي.', 'Private note deleted; the factual story is unchanged.'));
+    }
     if (!d.originalHeadline || d.headline === d.originalHeadline) return toast(ctx, t(ctx, 'النص الحالي هو الصياغة الأصلية', 'The current wording is already the original'));
     d.headline = d.originalHeadline;
     d.originalHeadline = null;
@@ -1711,6 +1768,16 @@ export function registerNewsTools(bot, h) {
       forgetCurrentCard(d, ctx); save();
       return;
     }
+    if ((act === 'p' || act === 'e') && publicDraftCopyIssue(d)) {
+      d.editorialHold = true;
+      d.editorialHoldReason = 'private-editorial-copy-not-public';
+      d.editorialHoldAt = Date.now();
+      d.dayAutoAt = null;
+      delete d.autoMode;
+      save();
+      await refreshCards(d);
+      return toast(ctx, t(ctx, 'توقفت هذه المسودة: النص يحتوي رأياً خاصاً أو تشخيص مراجعة، ولم يُرسل إلى النشر العام.', 'Draft held: the text contains private opinion or a review diagnostic and was not sent to public publishing.'), true);
+    }
     const n = newsState();
     if (act === 'x') {
       d.status = 'ignored'; d.by = ctx.from.id; n.stats.ignored++;
@@ -1721,7 +1788,7 @@ export function registerNewsTools(bot, h) {
       forgetCurrentCard(d, ctx); save();
       return;
     }
-    if (act === 'p' && d.aiRewritePreview?.applied && d.aiRewritePreview.mode === 'opinion' && !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, t(ctx, 'نشر مادة الرأي/التحليل يحتاج موافقتك كمالك', 'Only the owner may publish opinion/analysis'), true);
+    if (act === 'p' && d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode) && !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, t(ctx, 'نشر مادة الرأي/السخرية يحتاج موافقتك كمالك', 'Only the owner may publish opinion/satire'), true);
     if (d.type === 'political' && !POLITICAL_CATEGORIES[d.politicalCategory] && (act === 'p' || act === 'e')) {
       return toast(ctx, t(ctx, 'اختر فئة سياسية صالحة قبل النشر أو التعديل', 'Choose a valid political category before publishing or editing'), true);
     }
@@ -2103,4 +2170,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, editorialGate, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, editorialGate, privateEditorialModeApplicable, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
