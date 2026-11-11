@@ -142,16 +142,87 @@ const sendAudio = (id) => bot.handleUpdate({
     audio: { file_id: 'fixture_quran_audio_id', file_unique_id: 'fixture_quran_audio_unique', file_name: 'quran.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
   },
 });
-const sendVideo = (id) => bot.handleUpdate({
-  update_id: updateId++,
-  message: {
+  const sendVideo = (id) => bot.handleUpdate({
+    update_id: updateId++,
+    message: {
     message_id: ++messageId, date: 0,
     chat: { id, type: 'private' }, from: user(id),
     caption: 'نشيد تجريبي\nوصف النشيد',
     video: { file_id: 'fixture_nasheed_video_id', file_unique_id: 'fixture_nasheed_video_unique', file_name: 'nasheed.mp4', mime_type: 'video/mp4', file_size: mp4Bytes.length },
-  },
-});
-const lastUiFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'sendMessage' && payload.chat_id === id);
+    },
+  });
+  const forwardedFrom = (title) => ({
+    type: 'channel', date: 0, chat: { id: -1001234567890, title }, message_id: 77,
+  });
+  const sendForwardedPhoto = (id) => bot.handleUpdate({
+    update_id: updateId++,
+    message: {
+      message_id: ++messageId, date: 0,
+      chat: { id, type: 'private' }, from: user(id),
+      forward_origin: forwardedFrom('أخبار سوريا'),
+      caption: 'خبر مصوّر معاد توجيهه للاختبار',
+      photo: [{ file_id: 'fixture_photo_3_id', file_unique_id: 'fixture_photo_3_unique', file_size: photoBytes3.length }],
+    },
+  });
+  const sendForwardedPdf = (id) => bot.handleUpdate({
+    update_id: updateId++,
+    message: {
+      message_id: ++messageId, date: 0,
+      chat: { id, type: 'private' }, from: user(id),
+      forward_origin: forwardedFrom('صحيفة أسبوعية'),
+      caption: '2\nعدد معاد توجيهه للاختبار',
+      document: { file_id: 'fixture_pdf_id', file_unique_id: 'fixture_pdf_unique', file_name: '2-forwarded.pdf', mime_type: 'application/pdf', file_size: pdfBytes.length },
+    },
+  });
+  const sendForwardedPdfMissingNumber = (id) => bot.handleUpdate({
+    update_id: updateId++,
+    message: {
+      message_id: ++messageId, date: 0,
+      chat: { id, type: 'private' }, from: user(id),
+      forward_origin: forwardedFrom('صحيفة أسبوعية'),
+      document: { file_id: 'fixture_pdf_2_id', file_unique_id: 'fixture_pdf_2_unique', file_name: 'weekly.pdf', mime_type: 'application/pdf', file_size: pdfBytes2.length },
+    },
+  });
+  const sendForwardedAudio = (id) => bot.handleUpdate({
+    update_id: updateId++,
+    message: {
+      message_id: ++messageId, date: 0,
+      chat: { id, type: 'private' }, from: user(id),
+      forward_origin: forwardedFrom('قناة القرآن الكريم'),
+      caption: 'تلاوة معاد توجيهها للاختبار\nسورة البقرة',
+      audio: { file_id: 'fixture_quran_audio_id', file_unique_id: 'fixture_quran_audio_unique', file_name: 'quran.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
+    },
+  });
+  const sendForwardedVoiceMissingTitle = (id) => bot.handleUpdate({
+    update_id: updateId++,
+    message: {
+      message_id: ++messageId, date: 0,
+      chat: { id, type: 'private' }, from: user(id),
+      forward_origin: forwardedFrom('قناة القرآن الكريم'),
+      voice: { file_id: 'fixture_quran_audio_id', file_unique_id: 'fixture_quran_voice_unique', mime_type: 'audio/ogg', file_size: oggBytes.length },
+    },
+  });
+  const sendForwardedVideo = (id) => bot.handleUpdate({
+    update_id: updateId++,
+    message: {
+      message_id: ++messageId, date: 0,
+      chat: { id, type: 'private' }, from: user(id),
+      forward_origin: forwardedFrom('أناشيد'),
+      caption: 'نشيد معاد توجيهه للاختبار\nوصف النشيد المعاد توجيهه',
+      video: { file_id: 'fixture_nasheed_video_id', file_unique_id: 'fixture_nasheed_video_unique', file_name: 'nasheed.mp4', mime_type: 'video/mp4', file_size: mp4Bytes.length },
+    },
+  });
+  const sendAmbiguousForwardAudio = (id) => bot.handleUpdate({
+    update_id: updateId++,
+    message: {
+      message_id: ++messageId, date: 0,
+      chat: { id, type: 'private' }, from: user(id),
+      forward_origin: forwardedFrom('قناة عامة'),
+      caption: 'عنوان صوتي للاختبار\nوصف صوتي للاختبار',
+      audio: { file_id: 'fixture_quran_audio_id', file_unique_id: 'fixture_quran_audio_unique', file_name: 'recording.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
+    },
+  });
+  const lastUiFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'sendMessage' && payload.chat_id === id);
 const lastEditFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'editMessageText' && payload.chat_id === id);
 const buttonsOf = (entry) => entry?.payload?.reply_markup?.inline_keyboard?.flat() || [];
 const callbackData = (entry, prefix) => buttonsOf(entry).find((button) => button.callback_data.startsWith(prefix))?.callback_data;
@@ -500,4 +571,78 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
 
   assert.equal(calls.some(({ method, payload }) => ['sendPhoto', 'sendDocument'].includes(method) && payload.chat_id === '@mock_news_channel'), false,
     'Al-Nabaa uploads do not auto-post files to the Telegram channel');
+
+  const photosBeforeForward = store.state.alnaba.photos.length;
+  await sendForwardedPhoto(authorizedId);
+  const forwardedPhotoPreview = lastUiFor(authorizedId);
+  assert.match(forwardedPhotoPreview.payload.text, /الأخبار المصوّرة/);
+  assert.ok(buttonsOf(forwardedPhotoPreview).some((button) => button.callback_data === 'nb:publish'));
+  assert.equal(store.state.alnaba.photos.length, photosBeforeForward, 'a forwarded image is only a private preview before confirmation');
+  await tap(authorizedId, 'nb:publish');
+  assert.equal(store.state.alnaba.photos.length, photosBeforeForward + 1);
+  assert.equal(store.state.alnaba.photos.at(-1).title, 'خبر مصوّر معاد توجيهه للاختبار');
+  assert.equal(store.state.alnaba.photos.at(-1).expiry_policy, 'photo-news-24h-v1');
+
+  await sendForwardedPdf(authorizedId);
+  const forwardedPdfPreview = lastUiFor(authorizedId);
+  assert.match(forwardedPdfPreview.payload.text, /رقم العدد: 2/);
+  assert.equal(store.state.alnaba.weekly.length, 0, 'a forwarded PDF is not public before confirmation');
+  await tap(authorizedId, 'nb:publish');
+  assert.equal(store.state.alnaba.weekly.length, 1);
+  assert.equal(store.state.alnaba.weekly[0].issue_number, 2, 'a forwarded PDF keeps its issue number from the caption');
+
+  await sendForwardedPdfMissingNumber(authorizedId);
+  assert.match(lastUiFor(authorizedId).payload.text, /رقم العدد الموجب/);
+  assert.equal(store.state.alnaba.weekly.length, 1, 'missing issue metadata keeps a forwarded PDF private');
+  await sendText(authorizedId, '3\nعدد ثالث معاد توجيهه للاختبار');
+  assert.match(lastUiFor(authorizedId).payload.text, /رقم العدد: 3/);
+  assert.equal(store.state.alnaba.weekly.length, 1, 'completing metadata still requires the publish button');
+  await tap(authorizedId, 'nb:publish');
+  assert.deepEqual(store.state.alnaba.weekly.map((item) => item.issue_number), [2, 3]);
+
+  const quranCount = store.state.alnaba.quran.length;
+  await sendForwardedAudio(authorizedId);
+  assert.match(lastUiFor(authorizedId).payload.text, /القرآن الكريم/);
+  assert.match(lastUiFor(authorizedId).payload.text, /سورة البقرة/);
+  assert.equal(store.state.alnaba.quran.length, quranCount, 'forwarded Quran audio remains private until confirmation');
+  await tap(authorizedId, 'nb:cancel');
+  assert.equal(store.state.alnaba.quran.length, quranCount);
+
+  await sendForwardedVoiceMissingTitle(authorizedId);
+  assert.match(lastUiFor(authorizedId).payload.text, /أرسل العنوان في السطر الأول/);
+  assert.equal(store.state.alnaba.quran.length, quranCount, 'missing voice metadata does not publish or skip owner review');
+  await sendText(authorizedId, 'تلاوة بعنوان واضح للاختبار\nوصف التلاوة للاختبار');
+  const forwardedVoicePreview = lastUiFor(authorizedId);
+  assert.match(forwardedVoicePreview.payload.text, /تلاوة بعنوان واضح للاختبار/);
+  assert.match(forwardedVoicePreview.payload.text, /وصف التلاوة للاختبار/);
+  assert.ok(buttonsOf(forwardedVoicePreview).some((button) => button.callback_data === 'nb:publish'));
+  assert.equal(store.state.alnaba.quran.length, quranCount, 'forwarded voice remains private until explicit confirmation');
+  await tap(authorizedId, 'nb:cancel');
+
+  const nasheedCount = store.state.alnaba.nasheed.length;
+  await sendForwardedVideo(authorizedId);
+  assert.match(lastUiFor(authorizedId).payload.text, /الأناشيد/);
+  assert.match(lastUiFor(authorizedId).payload.text, /وصف النشيد المعاد توجيهه/);
+  assert.equal(store.state.alnaba.nasheed.length, nasheedCount, 'forwarded nasheed video remains private until confirmation');
+  await tap(authorizedId, 'nb:cancel');
+
+  await sendAmbiguousForwardAudio(authorizedId);
+  const ambiguousPrompt = lastUiFor(authorizedId);
+  assert.match(ambiguousPrompt.payload.text, /لم أستطع تحديد/);
+  assert.ok(buttonsOf(ambiguousPrompt).some((button) => button.callback_data === 'nb:forward:section:quran'));
+  assert.ok(buttonsOf(ambiguousPrompt).some((button) => button.callback_data === 'nb:forward:section:nasheed'));
+  assert.equal(store.state.alnaba.nasheed.length, nasheedCount, 'ambiguous media is not filed or published automatically');
+  await tap(authorizedId, 'nb:forward:section:nasheed');
+  const selectedNasheedPreview = lastUiFor(authorizedId);
+  assert.match(selectedNasheedPreview.payload.text, /عنوان صوتي للاختبار/);
+  assert.match(selectedNasheedPreview.payload.text, /وصف صوتي للاختبار/);
+  assert.ok(buttonsOf(selectedNasheedPreview).some((button) => button.callback_data === 'nb:publish'));
+  assert.equal(store.state.alnaba.nasheed.length, nasheedCount, 'choosing the section still only creates a private preview');
+  await tap(authorizedId, 'nb:cancel');
+  assert.equal(store.state.alnaba.nasheed.length, nasheedCount, 'cancelling the forwarded preview never publishes it');
+
+  const beforeDeniedForward = store.state.alnaba.photos.length;
+  await sendForwardedPhoto(deniedId);
+  assert.equal(store.state.alnaba.photos.length, beforeDeniedForward, 'a non-owner cannot create a forwarded Al-Nabaa item');
+  assert.equal(buttonsOf(lastUiFor(deniedId)).some((button) => button.callback_data === 'nb:publish'), false);
 });

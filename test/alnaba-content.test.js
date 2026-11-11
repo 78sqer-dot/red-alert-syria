@@ -265,12 +265,39 @@ test('synthetic owner approval publishes the original photo and PDF to public se
     }]);
     assert.equal(JSON.stringify(archiveList).includes('file_id'), false);
 
+    const pdfFetchCountBefore = telegram.calls.filter(([method]) => method === 'getFile').length;
     const pdfResponse = await fetch(`${base}${weeklyList.items[0].media_url}`, { credentials: 'omit' });
     assert.equal(pdfResponse.status, 200);
     assert.equal(pdfResponse.headers.get('content-type'), 'application/pdf');
     assert.match(pdfResponse.headers.get('content-disposition'), /^inline;/);
     assert.equal(pdfResponse.headers.get('content-security-policy'), "frame-ancestors 'self'");
+    assert.equal(pdfResponse.headers.get('accept-ranges'), 'bytes');
     assert.deepEqual(Buffer.from(await pdfResponse.arrayBuffer()), pdfBytes);
+
+    const pdfRangeResponse = await fetch(`${base}${weeklyList.items[0].media_url}`, {
+      credentials: 'omit', headers: { Range: 'bytes=0-7' },
+    });
+    assert.equal(pdfRangeResponse.status, 206);
+    assert.equal(pdfRangeResponse.headers.get('accept-ranges'), 'bytes');
+    assert.equal(pdfRangeResponse.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(pdfRangeResponse.headers.get('content-range'), `bytes 0-7/${pdfBytes.length}`);
+    assert.deepEqual(Buffer.from(await pdfRangeResponse.arrayBuffer()), pdfBytes.subarray(0, 8));
+
+    const pdfSuffixResponse = await fetch(`${base}${weeklyList.items[0].media_url}`, {
+      credentials: 'omit', headers: { Range: 'bytes=-4' },
+    });
+    assert.equal(pdfSuffixResponse.status, 206);
+    assert.equal(pdfSuffixResponse.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(pdfSuffixResponse.headers.get('content-range'), `bytes ${pdfBytes.length - 4}-${pdfBytes.length - 1}/${pdfBytes.length}`);
+    assert.deepEqual(Buffer.from(await pdfSuffixResponse.arrayBuffer()), pdfBytes.subarray(-4));
+    const invalidRange = await fetch(`${base}${weeklyList.items[0].media_url}`, {
+      credentials: 'omit', headers: { Range: `bytes=${pdfBytes.length + 1}-` },
+    });
+    assert.equal(invalidRange.status, 416);
+    assert.equal(invalidRange.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(invalidRange.headers.get('content-range'), `bytes */${pdfBytes.length}`);
+    assert.equal(telegram.calls.filter(([method]) => method === 'getFile').length, pdfFetchCountBefore + 1,
+      'the same PDF is downloaded from Telegram only once while its bounded range cache is warm');
 
     assert.equal((await fetch(`${base}/api/alnaba?section=unknown`)).status, 400);
     assert.equal((await fetch(`${base}/api/alnaba/media/not-an-id`)).status, 404);

@@ -148,6 +148,7 @@ const sessions = new Map(); // userId -> draft
 const activeMediaSessions = new Map(); // userId -> { alertId, created }: admin attachment to an already-published alert
 const alnabaSessions = new Map(); // ownerId -> { section, createdAt }
 const alnabaPendingUploads = new Map(); // ownerId -> validated media waiting for explicit publish confirmation
+const alnabaPendingForwardInputs = new Map(); // ownerId -> forwarded media waiting for section choice or required metadata
 const alnabaPendingArchiveEntries = new Map(); // ownerId -> validated Telegram directory entry waiting for confirmation
 const alnabaEditSessions = new Map(); // ownerId -> { section, id, field, page, createdAt }
 const alnabaPendingManagementEdits = new Map(); // ownerId -> validated edit waiting for explicit save confirmation
@@ -1739,6 +1740,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (ctx.message) ctx.ras.keepInput = true; // cleanMenuMessages tracks and deletes this command itself
     alnabaSessions.delete(Number(ctx.from?.id));
     alnabaPendingUploads.delete(Number(ctx.from?.id));
+    alnabaPendingForwardInputs.delete(Number(ctx.from?.id));
     alnabaPendingArchiveEntries.delete(Number(ctx.from?.id));
     clearAlnabaManagementState(Number(ctx.from?.id));
     await clearConvo(ctx);
@@ -1754,6 +1756,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (ctx.callbackQuery) return home(ctx);
     alnabaSessions.delete(Number(ctx.from?.id));
     alnabaPendingUploads.delete(Number(ctx.from?.id));
+    alnabaPendingForwardInputs.delete(Number(ctx.from?.id));
     alnabaPendingArchiveEntries.delete(Number(ctx.from?.id));
     clearAlnabaManagementState(Number(ctx.from?.id));
     if (ctx.message) ctx.ras.keepInput = true; // cleanMenuMessages tracks and deletes this command itself
@@ -1793,8 +1796,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return withAlnabaHomeButton(keyboard, ctx);
   };
   const alnabaMenuText = (ctx) => langOf(ctx) === 'en'
-    ? '📰 <b>Al-Nabaa publishing</b>\n\nChoose photo news, the weekly newspaper, Quran, nasheeds, or the archive. Upload one item at a time. Files and links stay private until you review the preview and confirm publishing.'
-    : '📰 <b>نشر محتوى النبأ</b>\n\nاختر الأخبار المصوّرة أو الصحيفة الأسبوعية أو القرآن الكريم أو الأناشيد أو الأرشيف. ارفع عنصراً واحداً في كل مرة؛ ويبقى خاصاً حتى تراجع المعاينة وتؤكد النشر.';
+    ? '📰 <b>Al-Nabaa publishing</b>\n\nChoose photo news, the weekly newspaper, Quran, nasheeds, or the archive. You can also forward an item here for automatic section preparation; if audio/video is unclear, the bot will ask whether it is Quran or a nasheed. Upload one item at a time. Nothing becomes public until you review its preview and confirm.'
+    : '📰 <b>نشر محتوى النبأ</b>\n\nاختر الأخبار المصوّرة أو الصحيفة الأسبوعية أو القرآن الكريم أو الأناشيد أو الأرشيف، أو أعد توجيه الملف إلى البوت ليُجهّزه للقسم المناسب تلقائياً. إذا لم يتضح هل الصوت أو الفيديو قرآن أم نشيد، سيطلب البوت تحديد القسم. يبقى كل عنصر خاصاً حتى تراجع معاينته وتؤكد النشر.';
   const alnabaSectionPrompt = (section, en) => {
     if (section === 'photos') return en
       ? '🖼 <b>Photo news</b>\n\nSend one photo with its headline in the caption, or attach a JPG, PNG, or WebP file with a headline. Maximum 10 MB. The original image is preserved; nothing goes public until you confirm.'
@@ -1889,6 +1892,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!alnabaOwner(ctx)) return ctx.reply(langOf(ctx) === 'en' ? 'This publishing option is not available for this account.' : 'هذه الصلاحية غير متاحة لهذا الحساب.');
     alnabaSessions.delete(Number(ctx.from.id));
     alnabaPendingUploads.delete(Number(ctx.from.id));
+    alnabaPendingForwardInputs.delete(Number(ctx.from.id));
     alnabaPendingArchiveEntries.delete(Number(ctx.from.id));
     clearAlnabaManagementState(Number(ctx.from.id));
     await ctx.reply(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
@@ -1929,6 +1933,13 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   }));
 
   // -------- callbacks
+  bot.callbackQuery(/^nb:/, async (ctx, next) => {
+    const uid = Number(ctx.from?.id);
+    if (!alnabaOwner(ctx) || !alnabaPendingForwardInputs.has(uid)) return next();
+    const data = String(ctx.callbackQuery.data || '');
+    if (['nb:cancel', 'nb:home', 'nb:open'].includes(data) || data.startsWith('nb:forward:section:')) return next();
+    return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the forwarded item first.' : 'أكمل العنصر المعاد توجيهه أو ألغِه أولاً.');
+  });
   bot.callbackQuery(/^nb:(open|photos|weekly|quran|nasheed|archive|publish|cancel|home)$/, async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية النشر.');
     const action = ctx.match[1];
@@ -1940,13 +1951,14 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (action === 'open') {
       alnabaSessions.delete(uid);
       alnabaPendingUploads.delete(uid);
+      alnabaPendingForwardInputs.delete(uid);
       alnabaPendingArchiveEntries.delete(uid);
       clearAlnabaManagementState(uid);
       await ctx.answerCallbackQuery();
       return ctx.editMessageText(alnabaMenuText(ctx), { parse_mode: 'HTML', reply_markup: alnabaMenuKeyboard(ctx) });
     }
     if (action === 'photos' || action === 'weekly' || action === 'quran' || action === 'nasheed' || action === 'archive') {
-      if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Confirm or cancel the pending preview first.' : 'أكّد المعاينة المعلّقة أو ألغِها أولاً.');
+      if (alnabaPendingUploads.has(uid) || alnabaPendingForwardInputs.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the current forwarded item first.' : 'أكمل العنصر المعاد توجيهه أو ألغِه أولاً.');
       const section = action;
       alnabaSessions.set(uid, { section, createdAt: Date.now() });
       const en = langOf(ctx) === 'en';
@@ -1961,6 +1973,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (action === 'cancel') {
       alnabaSessions.delete(uid);
       alnabaPendingUploads.delete(uid);
+      alnabaPendingForwardInputs.delete(uid);
       alnabaPendingArchiveEntries.delete(uid);
       clearAlnabaManagementState(uid);
       await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Cancelled.' : 'تم الإلغاء.');
@@ -1968,7 +1981,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
 
     return withAlnabaWriteLock(async () => {
-    if (action === 'publish' && (alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid))) {
+    if (action === 'publish' && (alnabaPendingForwardInputs.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid))) {
       return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Use the management preview controls to save this change.' : 'استخدم أزرار معاينة الإدارة لحفظ هذا التعديل.');
     }
 
@@ -2059,7 +2072,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery(/^nb:manage:(photos|weekly|quran|nasheed|archive)(?::(\d{1,9}))?$/, async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
     const uid = Number(ctx.from.id);
-    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) {
+    if (alnabaPendingUploads.has(uid) || alnabaPendingForwardInputs.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) {
       return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the current action first.' : 'أكمل الإجراء الحالي أو ألغِه أولاً.');
     }
     alnabaSessions.delete(uid);
@@ -2069,7 +2082,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery(/^nb:item:(photos|weekly|quran|nasheed|archive):([\w-]{36}):(\d{1,9})$/, async (ctx) => {
     if (!alnabaOwner(ctx)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية الإدارة.');
     const uid = Number(ctx.from.id);
-    if (alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the current action first.' : 'أكمل الإجراء الحالي أو ألغِه أولاً.');
+    if (alnabaPendingForwardInputs.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid) || alnabaEditSessions.has(uid)) return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Finish or cancel the current action first.' : 'أكمل الإجراء الحالي أو ألغِه أولاً.');
     alnabaSessions.delete(uid);
     await ctx.answerCallbackQuery();
     return showAlnabaManageItem(ctx, ctx.match[1], ctx.match[2], Number(ctx.match[3]) || 0);
@@ -3279,39 +3292,145 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     return { title: String(caption || '').trim() || fallbackTitle, description: '' };
   };
-  const handleAlnabaAttachment = async (ctx, next, type) => {
-    const uid = Number(ctx.from?.id);
-    if (!alnabaOwner(ctx)) return next();
-    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) {
-      return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.', { reply_markup: alnabaHomeKeyboard(ctx) });
-    }
-    if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.', { reply_markup: alnabaHomeKeyboard(ctx) });
-    const flow = alnabaSessions.get(uid);
-    if (!flow) return next();
-    if (flow.section === 'archive') return next();
-    const message = ctx.message;
+  const alnabaMediaFromMessage = (message, type) => {
     let media;
     if (type === 'photo') {
       media = message.photo?.at(-1);
-      if (!media) return ctx.reply(langOf(ctx) === 'en' ? 'Send a photo file.' : 'أرسل ملف صورة.', { reply_markup: alnabaHomeKeyboard(ctx) });
-      media = { ...media, mime_type: 'image/jpeg', file_name: 'alnaba-photo.jpg' };
+      if (media) media = { ...media, mime_type: 'image/jpeg', file_name: 'alnaba-photo.jpg' };
     } else if (type === 'document') media = message.document;
     else if (type === 'voice') media = message.voice ? { ...message.voice, mime_type: message.voice.mime_type || 'audio/ogg', file_name: 'alnaba-voice.ogg' } : null;
     else media = message[type];
-    if (!media) return ctx.reply(langOf(ctx) === 'en' ? 'Send one supported media file.' : 'أرسل ملف وسائط واحداً بصيغة مدعومة.', { reply_markup: alnabaHomeKeyboard(ctx) });
+    if (!media) return null;
     const fileName = media.file_name || (type === 'video' ? 'alnaba-video.mp4' : type === 'audio' ? 'alnaba-audio.mp3' : '');
     const inferredMime = media.mime_type || mimeFromAlnabaFilename(fileName)
       || (type === 'video' ? 'video/mp4' : type === 'audio' ? 'audio/mpeg' : '');
-    const metadata = captionMetadata(flow.section, message.caption, fileName,
-      flow.section === 'quran' ? 'تلاوة قرآنية' : flow.section === 'nasheed' ? 'محتوى صوتي' : '');
-    return receiveAlnabaUpload(ctx, {
+    return { media, fileName, inferredMime };
+  };
+  const alnabaUploadCandidate = (message, type, section, { forwarded = false } = {}) => {
+    const attachment = alnabaMediaFromMessage(message, type);
+    if (!attachment) return null;
+    const { media, fileName, inferredMime } = attachment;
+    const metadata = captionMetadata(section, message.caption, fileName,
+      section === 'quran' ? 'تلاوة قرآنية' : section === 'nasheed' ? 'محتوى صوتي' : '');
+    const genericTitle = String(fileName || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+    if (forwarded && ['quran', 'nasheed'].includes(section) && !String(message.caption || '').trim()
+      && /^(?:alnaba[\s_-]*)?(?:voice|audio|video|recording|media|file|clip|voice message)$/iu.test(genericTitle)) metadata.title = '';
+    return {
       ...metadata,
       file_id: media.file_id,
       file_unique_id: media.file_unique_id,
       file_size: media.file_size,
       mime_type: type === 'photo' ? 'image/jpeg' : inferredMime,
       file_name: fileName,
-    });
+    };
+  };
+  const isForwardedAlnabaMessage = (message) => Boolean(message?.forward_origin || message?.forward_date || message?.forward_from || message?.forward_from_chat || message?.forward_sender_name);
+  const isAudioVideoAlnabaMessage = (message, type) => {
+    const attachment = alnabaMediaFromMessage(message, type);
+    const mime = attachment?.inferredMime || '';
+    return ['audio', 'voice', 'video'].includes(type) || mime.startsWith('audio/') || mime.startsWith('video/');
+  };
+  const classifyForwardedAlnabaSection = (message, type) => {
+    const attachment = alnabaMediaFromMessage(message, type);
+    if (!attachment) return null;
+    const contentText = [message.caption, attachment.fileName, attachment.media.title, attachment.media.performer].filter(Boolean).join(' ');
+    const origin = message.forward_origin || {};
+    const originText = [origin.chat?.title, origin.chat?.username, message.forward_from_chat?.title, message.forward_from_chat?.username].filter(Boolean).join(' ');
+    const quranPattern = /(?:^|[^\p{L}\p{N}])(?:القرآن|القران|قرآن|قران|قرآني(?:ة|ات)?|قراني(?:ة|ات)?|تلاو(?:ة|ات)|سورة|سور(?:ة|ات)?|آيات?|آية|ترتيل|مرتّل|qur(?:an|ān)|koran|surah|ayat|recitation|tajwid|tajweed)(?:$|[^\p{L}\p{N}])/iu;
+    const nasheedPattern = /(?:^|[^\p{L}\p{N}])(?:أناشيد|اناشيد|نشيد(?:ة|ات)?|أنشودة|انشودة|إنشاد|انشاد|مدائح|nasheed(?:s)?|nashid(?:s)?)(?:$|[^\p{L}\p{N}])/iu;
+    const classifyText = (value) => {
+      const quran = quranPattern.test(value);
+      const nasheed = nasheedPattern.test(value);
+      return quran === nasheed ? null : quran ? 'quran' : 'nasheed';
+    };
+    const contentSection = classifyText(contentText);
+    if (contentSection) return contentSection;
+    if (quranPattern.test(contentText) && nasheedPattern.test(contentText)) return null;
+    const originSection = classifyText(originText);
+    if (originSection) return originSection;
+    if (quranPattern.test(originText) && nasheedPattern.test(originText)) return null;
+    const mime = attachment.inferredMime || '';
+    if (mime === 'application/pdf' || /\.pdf$/i.test(attachment.fileName)) return 'weekly';
+    if (type === 'photo' || mime.startsWith('image/') || /\.(?:jpe?g|png|webp)$/i.test(attachment.fileName)) return 'photos';
+    return null;
+  };
+  const forwardMetadataPrompt = (section, candidate, en) => {
+    if (section === 'weekly') return en
+      ? (candidate.title ? 'Send the positive issue number for this PDF (for example, 5). It will stay private until you confirm the preview.' : 'Send the positive issue number on the first line and the newspaper title on the second line. It will stay private until you confirm the preview.')
+      : (candidate.title ? 'أرسل رقم العدد الموجب لهذا الـPDF (مثلاً: 5). سيبقى خاصاً حتى تؤكد معاينته.' : 'أرسل رقم العدد الموجب في السطر الأول وعنوان الصحيفة في السطر الثاني. سيبقى الملف خاصاً حتى تؤكد معاينته.');
+    if (section === 'photos') return en
+      ? 'Send the photo-news headline as text. The forwarded image stays private until you confirm its preview.'
+      : 'أرسل عنوان الخبر المصوّر برسالة نصية. ستبقى الصورة خاصة حتى تؤكد معاينتها.';
+    return en
+      ? 'Send the title on the first line and an optional description on the next lines. The media stays private until you confirm its preview.'
+      : 'أرسل العنوان في السطر الأول والوصف الاختياري في الأسطر التالية. ستبقى الوسائط خاصة حتى تؤكد معاينتها.';
+  };
+  const forwardInputKeyboard = (ctx) => withAlnabaHomeButton(
+    new InlineKeyboard().text(langOf(ctx) === 'en' ? 'Cancel' : 'إلغاء', 'nb:cancel'), ctx,
+  );
+  const beginForwardedAlnabaUpload = async (ctx, message, type, section) => {
+    const uid = Number(ctx.from?.id);
+    const candidate = alnabaUploadCandidate(message, type, section, { forwarded: true });
+    if (!candidate) {
+      await ctx.reply(langOf(ctx) === 'en' ? 'This forwarded message has no supported media file.' : 'لا يحتوي هذا التوجيه على ملف وسائط مدعوم.', { reply_markup: alnabaHomeKeyboard(ctx) });
+      return true;
+    }
+    if (!candidate.title || (section === 'weekly' && !candidate.issue_number)) {
+      const pending = { message, type, section, candidate, awaiting: 'metadata', createdAt: Date.now() };
+      alnabaPendingForwardInputs.set(uid, pending);
+      await ctx.reply(forwardMetadataPrompt(section, candidate, langOf(ctx) === 'en'), { reply_markup: forwardInputKeyboard(ctx) });
+      return true;
+    }
+    alnabaSessions.set(uid, { section, createdAt: Date.now() });
+    return receiveAlnabaUpload(ctx, candidate);
+  };
+  bot.callbackQuery(/^nb:forward:section:(quran|nasheed)$/, async (ctx) => {
+    if (!alnabaOwner(ctx) || ctx.chat?.type !== 'private') return ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Not authorized.' : 'ليست لديك صلاحية النشر.');
+    const uid = Number(ctx.from.id);
+    const pending = alnabaPendingForwardInputs.get(uid);
+    if (!pending || pending.awaiting !== 'section' || Date.now() - pending.createdAt > 30 * 60_000) {
+      alnabaPendingForwardInputs.delete(uid);
+      await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'This forwarded item expired. Forward it again.' : 'انتهت صلاحية هذا العنصر. أعد توجيهه مجدداً.');
+      return ctx.deleteMessage().catch(() => {});
+    }
+    const section = ctx.match[1];
+    alnabaPendingForwardInputs.delete(uid);
+    await ctx.answerCallbackQuery();
+    return beginForwardedAlnabaUpload(ctx, pending.message, pending.type, section);
+  });
+  const handleAlnabaAttachment = async (ctx, next, type) => {
+    const uid = Number(ctx.from?.id);
+    if (!alnabaOwner(ctx)) return next();
+    const message = ctx.message;
+    if (alnabaPendingForwardInputs.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'Finish the current forwarded item or cancel it before sending another.' : 'أكمل تجهيز العنصر المعاد توجيهه أو ألغِه قبل إرسال عنصر آخر.', { reply_markup: forwardInputKeyboard(ctx) });
+    if (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid)) {
+      return ctx.reply(langOf(ctx) === 'en' ? 'Confirm or cancel the current preview before sending another item.' : 'أكّد المعاينة الحالية أو ألغِها قبل إرسال عنصر آخر.', { reply_markup: alnabaHomeKeyboard(ctx) });
+    }
+    if (alnabaEditSessions.has(uid)) return ctx.reply(langOf(ctx) === 'en' ? 'This edit is waiting for text; use Cancel or send the requested title/link.' : 'ينتظر هذا التعديل نصاً؛ استخدم «إلغاء» أو أرسل العنوان/الرابط المطلوب.', { reply_markup: alnabaHomeKeyboard(ctx) });
+    const flow = alnabaSessions.get(uid);
+    const forwarded = isForwardedAlnabaMessage(message) && ctx.chat?.type === 'private';
+    if (!flow && !forwarded) return next();
+    if (flow?.section === 'archive') return next();
+    if (forwarded && flow?.mode !== 'replace') {
+      const section = flow?.section || classifyForwardedAlnabaSection(message, type);
+      if (section) return beginForwardedAlnabaUpload(ctx, message, type, section);
+      if (isAudioVideoAlnabaMessage(message, type)) {
+        if (!alnabaMediaFromMessage(message, type)) return ctx.reply(langOf(ctx) === 'en' ? 'Send one supported audio or video file.' : 'أرسل ملف صوت أو فيديو مدعوماً.', { reply_markup: alnabaHomeKeyboard(ctx) });
+        alnabaPendingForwardInputs.set(uid, { message, type, awaiting: 'section', createdAt: Date.now() });
+        const keyboard = new InlineKeyboard()
+          .text(langOf(ctx) === 'en' ? '📖 Quran' : '📖 القرآن الكريم', 'nb:forward:section:quran')
+          .text(langOf(ctx) === 'en' ? '🎵 Nasheeds' : '🎵 الأناشيد', 'nb:forward:section:nasheed').row()
+          .text(langOf(ctx) === 'en' ? 'Cancel' : 'إلغاء', 'nb:cancel');
+        return ctx.reply(langOf(ctx) === 'en'
+          ? 'I could not tell whether this forwarded audio/video belongs in Quran or nasheeds. Choose its section; the file will remain private until you review and confirm the preview.'
+          : 'لم أستطع تحديد ما إذا كان الصوت أو الفيديو المعاد توجيهه للقرآن الكريم أم للأناشيد. اختر القسم؛ وسيبقى الملف خاصاً حتى تراجع المعاينة وتؤكد النشر.',
+        { reply_markup: withAlnabaHomeButton(keyboard, ctx) });
+      }
+      return next();
+    }
+    const candidate = alnabaUploadCandidate(message, type, flow.section);
+    if (!candidate) return ctx.reply(langOf(ctx) === 'en' ? 'Send one supported media file.' : 'أرسل ملف وسائط واحداً بصيغة مدعومة.', { reply_markup: alnabaHomeKeyboard(ctx) });
+    return receiveAlnabaUpload(ctx, candidate);
   };
   bot.on('message:photo', (ctx, next) => handleAlnabaAttachment(ctx, next, 'photo'));
   bot.on('message:document', (ctx, next) => handleAlnabaAttachment(ctx, next, 'document'));
@@ -3353,6 +3472,38 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const text = cleanInputText(ctx.message.text);
     if (text.startsWith('/')) return;
     const uid = Number(ctx.from?.id);
+    const forwardedInput = alnabaPendingForwardInputs.get(uid);
+    if (alnabaOwner(ctx) && forwardedInput) {
+      const en = langOf(ctx) === 'en';
+      if (Date.now() - forwardedInput.createdAt > 30 * 60_000) {
+        alnabaPendingForwardInputs.delete(uid);
+        return ctx.reply(en ? 'The forwarded item expired. Forward it again.' : 'انتهت صلاحية العنصر المعاد توجيهه. أعد توجيهه مجدداً.', { reply_markup: alnabaHomeKeyboard(ctx) });
+      }
+      if (forwardedInput.awaiting === 'section') return ctx.reply(en ? 'Choose Quran or nasheeds using the buttons above, or cancel this item.' : 'اختر القرآن الكريم أو الأناشيد من الزرين أعلاه، أو ألغِ هذا العنصر.', { reply_markup: forwardInputKeyboard(ctx) });
+      const candidate = { ...forwardedInput.candidate };
+      if (forwardedInput.section === 'weekly') {
+        const metadata = captionMetadata('weekly', text, candidate.file_name, '');
+        if (!candidate.issue_number) candidate.issue_number = metadata.issue_number;
+        const firstLine = text.trim().split(/\r?\n/)[0] || '';
+        const invalidNumberLine = /^[0-9٠-٩۰-۹]+$/.test(firstLine) && !metadata.issue_number;
+        if (!candidate.title && metadata.title && !invalidNumberLine) candidate.title = metadata.title;
+        if (!candidate.description) candidate.description = metadata.description;
+      } else if (forwardedInput.section === 'photos') {
+        candidate.title = text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || '';
+      } else {
+        const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        candidate.title = lines.shift() || candidate.title;
+        if (lines.length) candidate.description = lines.join('\n');
+      }
+      if (!candidate.title || (forwardedInput.section === 'weekly' && !candidate.issue_number)) {
+        forwardedInput.candidate = candidate;
+        alnabaPendingForwardInputs.set(uid, forwardedInput);
+        return ctx.reply(forwardMetadataPrompt(forwardedInput.section, candidate, en), { reply_markup: forwardInputKeyboard(ctx) });
+      }
+      alnabaPendingForwardInputs.delete(uid);
+      alnabaSessions.set(uid, { section: forwardedInput.section, createdAt: Date.now() });
+      return receiveAlnabaUpload(ctx, candidate);
+    }
     if (alnabaOwner(ctx) && (alnabaPendingUploads.has(uid) || alnabaPendingArchiveEntries.has(uid) || alnabaPendingManagementEdits.has(uid) || alnabaPendingManagementDeletes.has(uid))) return ctx.reply(langOf(ctx) === 'en' ? 'Use the Save/Confirm or Cancel buttons on the pending preview.' : 'استخدم زر «حفظ/تأكيد» أو «إلغاء» في المعاينة المعلّقة.', { reply_markup: alnabaHomeKeyboard(ctx) });
     const managementFlow = alnabaEditSessions.get(uid);
     if (alnabaOwner(ctx) && managementFlow) {

@@ -28,6 +28,8 @@ const MIME_EXTENSIONS = Object.freeze({
 });
 const EXTENSION_MIME = new Map(Object.entries(MIME_EXTENSIONS).flatMap(([mime, extensions]) => extensions.map((extension) => [extension, mime])));
 const next = (_req, _res, done) => done();
+const PDF_MEDIA_CACHE_TTL_MS = 60_000;
+const PDF_MEDIA_CACHE_MAX_ENTRIES = 2;
 
 function cleanTitle(value, max = 180) {
   return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -497,8 +499,58 @@ export async function fetchAlnabaTelegramBytes(item, { api, token, fetchImpl = f
   return buffer;
 }
 
+function parseSingleByteRange(header, size) {
+  const match = String(header || '').match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match) return null;
+  let start;
+  let end;
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return null;
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Number(match[2]) : size - 1;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= size || end < start) return null;
+    end = Math.min(end, size - 1);
+  }
+  return { start, end };
+}
+
 export function createAlnabaRouter({ store, fetchMedia, limiter = next } = {}) {
   const router = express.Router();
+  const pdfMediaCache = new Map();
+  const pdfMediaPending = new Map();
+  const fetchPublicMedia = async (item) => {
+    if (item.mime_type !== 'application/pdf') return fetchMedia(item);
+    const cacheKey = `${item.id}:${item.file_unique_id || item.file_id}`;
+    const now = Date.now();
+    const cached = pdfMediaCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      pdfMediaCache.delete(cacheKey);
+      pdfMediaCache.set(cacheKey, { ...cached, expiresAt: now + PDF_MEDIA_CACHE_TTL_MS });
+      return cached.buffer;
+    }
+    if (cached) pdfMediaCache.delete(cacheKey);
+    let pending = pdfMediaPending.get(cacheKey);
+    if (!pending) {
+      pending = Promise.resolve().then(() => fetchMedia(item));
+      pdfMediaPending.set(cacheKey, pending);
+    }
+    try {
+      const result = await pending;
+      const buffer = Buffer.isBuffer(result) ? result : Buffer.from(result);
+      if (buffer.length <= ALNABA_MAX_PDF_BYTES) {
+        for (const [key, entry] of pdfMediaCache) if (entry.expiresAt <= Date.now()) pdfMediaCache.delete(key);
+        pdfMediaCache.set(cacheKey, { buffer, expiresAt: Date.now() + PDF_MEDIA_CACHE_TTL_MS });
+        while (pdfMediaCache.size > PDF_MEDIA_CACHE_MAX_ENTRIES) pdfMediaCache.delete(pdfMediaCache.keys().next().value);
+      }
+      return buffer;
+    } finally {
+      if (pdfMediaPending.get(cacheKey) === pending) pdfMediaPending.delete(cacheKey);
+    }
+  };
   router.get('/', limiter, (req, res) => {
     const section = String(req.query.section || '');
     const limit = Math.max(1, Math.min(Number.parseInt(String(req.query.limit || '30'), 10) || 30, 100));
@@ -515,13 +567,29 @@ export function createAlnabaRouter({ store, fetchMedia, limiter = next } = {}) {
     if (!item) return res.status(404).end();
     try {
       if (typeof fetchMedia !== 'function') throw new Error('BOT_UNAVAILABLE');
-      const buffer = await fetchMedia(item);
+      const buffer = await fetchPublicMedia(item);
       const extension = MIME_EXTENSIONS[item.mime_type]?.[0] || 'bin';
       res.setHeader('Content-Type', item.mime_type);
       res.setHeader('Content-Disposition', `inline; filename="alnaba-${item.id}.${extension}"`);
       res.setHeader('Cache-Control', item.section === 'photos' ? 'no-store' : 'public, max-age=300');
-      if (item.mime_type === 'application/pdf') res.setHeader('Content-Security-Policy', "frame-ancestors 'self'");
       res.setHeader('X-Content-Type-Options', 'nosniff');
+      if (item.mime_type === 'application/pdf') {
+        res.setHeader('Content-Security-Policy', "frame-ancestors 'self'");
+        res.setHeader('Accept-Ranges', 'bytes');
+        const rangeHeader = req.get('range');
+        if (rangeHeader) {
+          const range = parseSingleByteRange(rangeHeader, buffer.length);
+          if (!range) {
+            res.setHeader('Content-Range', `bytes */${buffer.length}`);
+            res.setHeader('Content-Length', '0');
+            return res.status(416).end();
+          }
+          const partial = buffer.subarray(range.start, range.end + 1);
+          res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${buffer.length}`);
+          res.setHeader('Content-Length', String(partial.length));
+          return res.status(206).end(partial);
+        }
+      }
       res.setHeader('Content-Length', String(buffer.length));
       return res.status(200).end(buffer);
     } catch (error) {
