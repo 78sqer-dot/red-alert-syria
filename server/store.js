@@ -7,7 +7,7 @@ import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneLevel, BORDER_REGIONS, 
 import { alertZones, selectedAlertZones, regionFix } from './places.js';
 import { cleanAlertText } from './clean-text.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
-import { sanitizeAlnabaState } from './alnaba.js';
+import { expireAlnabaPhotos, sanitizeAlnabaState } from './alnaba.js';
 
 export const ALERT_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
 export function sanitizeAlertMedia(media) {
@@ -121,7 +121,22 @@ class Store extends EventEmitter {
     if (historyMigrated) this.persist({ backupSoon: false });
     if (!Array.isArray(this.state.log)) this.state.log = this.state.alerts.map((a) => this._logEntry(a)).reverse();
     this.expireSweep();
+    const expiredPhotos = expireAlnabaPhotos(this);
+    if (expiredPhotos) {
+      clearTimeout(this._saveTimer);
+      this._writeLocal();
+      await this.flushBackup();
+      console.log(`[alnaba] removed ${expiredPhotos} expired photo-news item(s) on restore`);
+    }
     setInterval(() => this.expireSweep(), 30_000).unref();
+    setInterval(() => {
+      const expired = expireAlnabaPhotos(this);
+      if (!expired) return;
+      clearTimeout(this._saveTimer);
+      this._writeLocal();
+      this.flushBackup().catch((e) => console.error('[alnaba] expiry backup failed', e.message));
+      console.log(`[alnaba] removed ${expired} expired photo-news item(s)`);
+    }, 30_000).unref();
   }
 
   _apply(s) {

@@ -81,7 +81,7 @@ function renderPhoto(item) {
       <div class="an-story-frame-label"><b>النبأ</b><span>أخبار مصوّرة</span></div>
       <div class="an-story-media"><img src="${src}" alt="${esc(`صورة: ${item.title || 'خبر مصوّر'}`)}" loading="lazy" decoding="async" /></div>
     </div>
-    <div class="an-story-body">${date ? `<time datetime="${esc(item.published_at)}">${esc(date)}</time>` : ''}<h2>${title}</h2></div>
+    <div class="an-story-body">${date ? `<time datetime="${esc(item.published_at)}">${esc(date)}</time>` : ''}<h2>${title}</h2>${item.description ? `<p>${esc(item.description)}</p>` : ''}</div>
   </article>`;
 }
 
@@ -90,10 +90,13 @@ function renderWeekly(item) {
   if (!src || item.mime_type !== 'application/pdf') return '';
   const title = esc(item.title || 'الصحيفة الأسبوعية');
   const date = formatDate(item.published_at);
+  const issue = Number.isSafeInteger(Number(item.issue_number)) && Number(item.issue_number) > 0
+    ? `العدد ${new Intl.NumberFormat('ar-SY', { useGrouping: false }).format(Number(item.issue_number))}` : 'عدد أسبوعي';
   return `<article class="an-paper-card">
     <div class="an-paper-copy">
-      <span class="an-paper-badge">النبأ · الصحيفة الأسبوعية</span>
+      <span class="an-paper-badge">النبأ · الصحيفة الأسبوعية · ${issue}</span>
       <h2>${title}</h2>
+      ${item.description ? `<p>${esc(item.description)}</p>` : ''}
       <div class="an-paper-meta">${date ? `<time datetime="${esc(item.published_at)}">${esc(date)}</time>` : ''}<span>PDF</span></div>
       <div class="an-paper-actions">
         <a class="an-action-link" href="${src}" target="_blank" rel="noopener noreferrer">فتح الصحيفة</a>
@@ -102,6 +105,25 @@ function renderWeekly(item) {
     </div>
     <div class="an-pdf-frame"><iframe src="${src}#toolbar=1&navpanes=0" title="معاينة ${title}" loading="lazy"></iframe></div>
   </article>`;
+}
+
+function renderLibrary(item) {
+  const src = mediaUrl(item);
+  if (!src) return '';
+  const mime = String(item.mime_type || '');
+  const title = esc(item.title || 'محتوى النبأ');
+  const date = formatDate(item.published_at);
+  const description = item.description ? `<p>${esc(item.description)}</p>` : '';
+  let media = '';
+  if (mime.startsWith('audio/')) media = `<audio class="an-library-media" controls preload="none"><source src="${src}" type="${esc(mime)}" />متصفحك لا يدعم تشغيل الصوت.</audio>`;
+  else if (mime.startsWith('video/')) media = `<video class="an-library-media" controls playsinline preload="metadata"><source src="${src}" type="${esc(mime)}" />متصفحك لا يدعم تشغيل الفيديو.</video>`;
+  else if (mime.startsWith('image/')) media = `<img class="an-library-media" src="${src}" alt="${esc(`صورة: ${item.title || 'محتوى النبأ'}`)}" loading="lazy" decoding="async" />`;
+  else if (mime === 'application/pdf') media = `<iframe class="an-library-pdf" src="${src}#toolbar=1&navpanes=0" title="معاينة ${title}" loading="lazy"></iframe>`;
+  else return '';
+  const actions = mime === 'application/pdf'
+    ? `<div class="an-paper-actions"><a class="an-action-link" href="${src}" target="_blank" rel="noopener noreferrer">فتح الملف</a><a class="an-action-link secondary" href="${src}" download>تنزيل</a></div>`
+    : '';
+  return `<article class="an-library-card"><div class="an-library-copy"><h2>${title}</h2>${description}<div class="an-library-meta">${date ? `<time datetime="${esc(item.published_at)}">${esc(date)}</time>` : ''}<span>${esc(mime)}</span></div>${actions}</div>${media}</article>`;
 }
 
 function renderArchive(item) {
@@ -121,31 +143,54 @@ function renderArchive(item) {
   </article>`;
 }
 
-async function loadSection(section) {
-  const sections = {
-    photos: { list: $('#photoGrid'), loading: $('#photoLoading'), empty: $('#photoEmpty'), error: $('#photoError'), render: renderPhoto },
-    weekly: { list: $('#weeklyList'), loading: $('#weeklyLoading'), empty: $('#weeklyEmpty'), error: $('#weeklyError'), render: renderWeekly },
-    archive: { list: $('#archiveList'), loading: $('#archiveLoading'), empty: $('#archiveEmpty'), error: $('#archiveError'), render: renderArchive },
-  };
-  const view = sections[section];
+const SECTION_VIEWS = {
+  photos: { list: $('#photoGrid'), loading: $('#photoLoading'), empty: $('#photoEmpty'), error: $('#photoError'), more: $('#photoMore'), render: renderPhoto, limit: 30 },
+  weekly: { list: $('#weeklyList'), loading: $('#weeklyLoading'), empty: $('#weeklyEmpty'), error: $('#weeklyError'), more: $('#weeklyMore'), render: renderWeekly, limit: 10 },
+  quran: { list: $('#quranList'), loading: $('#quranLoading'), empty: $('#quranEmpty'), error: $('#quranError'), more: $('#quranMore'), render: renderLibrary, limit: 20 },
+  nasheed: { list: $('#nasheedList'), loading: $('#nasheedLoading'), empty: $('#nasheedEmpty'), error: $('#nasheedError'), more: $('#nasheedMore'), render: renderLibrary, limit: 20 },
+  archive: { list: $('#archiveList'), loading: $('#archiveLoading'), empty: $('#archiveEmpty'), error: $('#archiveError'), more: $('#archiveMore'), render: renderArchive, limit: 30 },
+};
+
+async function loadSection(section, reset = false) {
+  const view = SECTION_VIEWS[section];
   if (!view?.list || !view.loading || !view.empty || !view.error) return;
+  if (view.loading.dataset.busy === 'true') return;
+  const offset = reset ? 0 : Number(view.list.dataset.offset || 0);
+  view.loading.dataset.busy = 'true';
+  if (reset) {
+    view.list.innerHTML = '';
+    view.list.dataset.offset = '0';
+    view.empty.hidden = true;
+    view.error.hidden = true;
+    view.loading.hidden = false;
+  }
+  if (view.more) view.more.disabled = true;
   try {
-    const response = await fetch(`/api/alnaba?section=${section}`, {
+    const params = new URLSearchParams({ section, limit: String(view.limit), offset: String(offset) });
+    const response = await fetch(`/api/alnaba?${params}`, {
       headers: { Accept: 'application/json' },
       credentials: 'omit',
-      cache: 'default',
+      cache: section === 'photos' ? 'no-store' : 'default',
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (data.section !== section || !Array.isArray(data.items)) throw new Error('Invalid response');
     const cards = data.items.map(view.render).filter(Boolean);
-    view.list.innerHTML = cards.join('');
-    view.empty.hidden = cards.length > 0;
+    view.list.insertAdjacentHTML('beforeend', cards.join(''));
+    view.list.dataset.offset = String(offset + data.items.length);
+    view.empty.hidden = view.list.childElementCount > 0;
+    if (view.more) view.more.hidden = !data.has_more;
   } catch {
     view.error.hidden = false;
   } finally {
     view.loading.hidden = true;
+    view.loading.dataset.busy = 'false';
+    if (view.more) view.more.disabled = false;
   }
 }
 
-if (page === 'photos' || page === 'weekly' || page === 'archive') loadSection(page);
+for (const [section, view] of Object.entries(SECTION_VIEWS)) {
+  view.more?.addEventListener('click', () => loadSection(section));
+}
+
+if (SECTION_VIEWS[page]) loadSection(page, true);

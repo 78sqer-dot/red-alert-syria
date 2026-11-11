@@ -4,9 +4,13 @@ import express from 'express';
 import {
   ALNABA_MAX_PDF_BYTES,
   ALNABA_MAX_PHOTO_BYTES,
+  ALNABA_MAX_AUDIO_VIDEO_BYTES,
+  ALNABA_PHOTO_EXPIRY_MS,
   createAlnabaRouter,
   deleteAlnabaEntry,
+  expireAlnabaPhotos,
   fetchAlnabaTelegramBytes,
+  findAlnabaItem,
   findAlnabaEntry,
   isAlnabaOwner,
   listPublicAlnabaItems,
@@ -15,8 +19,10 @@ import {
   prepareAlnabaUpload,
   publishAlnabaArchiveEntry,
   publishAlnabaItem,
+  parseWeeklyUploadCaption,
   sanitizeAlnabaState,
   updateAlnabaEntry,
+  weeklyIssueNumber,
 } from '../server/alnaba.js';
 
 const OWNER = 8270709633;
@@ -24,6 +30,8 @@ const PREVIOUS_PROJECT_OWNER = 8808894711;
 const TOKEN_FIXTURE = '123456:fixture_token_without_real_credentials';
 const photoBytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
 const pdfBytes = Buffer.from('%PDF-1.7\nfixture only\n%%EOF\n');
+const oggBytes = Buffer.from('OggSfixture-audio-data');
+const mp4Bytes = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(8)]);
 
 function createStore() {
   return {
@@ -37,6 +45,8 @@ function fakeTelegram() {
   const files = new Map([
     ['fixture_photo_id', { file_path: 'photos/fixture-photo.jpg', bytes: photoBytes }],
     ['fixture_pdf_id', { file_path: 'documents/fixture-weekly.pdf', bytes: pdfBytes }],
+    ['fixture_quran_id', { file_path: 'audio/quran-recitation.ogg', bytes: oggBytes }],
+    ['fixture_nasheed_id', { file_path: 'video/nasheed.mp4', bytes: mp4Bytes }],
   ]);
   const calls = [];
   const api = {
@@ -91,6 +101,7 @@ const weeklyUpload = () => ({
   mime_type: 'application/pdf',
   file_size: pdfBytes.length,
   file_name: 'fixture-weekly.pdf',
+  issue_number: 1,
 });
 
 const archiveEntry = () => ({
@@ -205,7 +216,7 @@ test('synthetic owner approval publishes the original photo and PDF to public se
   const weekly = publishAlnabaItem(store, OWNER, pdfPreview, new Date('2026-11-10T12:05:00.000Z'));
   const archive = publishAlnabaArchiveEntry(store, OWNER, archiveEntry(), new Date('2026-11-10T12:10:00.000Z'));
   assert.equal(store.persistCalls, 3);
-  assert.equal(listPublicAlnabaItems(store, 'photos')[0].id, photo.id);
+  assert.equal(listPublicAlnabaItems(store, 'photos', 80, 0, Date.parse('2026-11-10T13:00:00.000Z'))[0].id, photo.id);
   assert.equal(listPublicAlnabaItems(store, 'weekly')[0].id, weekly.id);
   assert.equal(listPublicAlnabaItems(store, 'archive')[0].id, archive.id);
 
@@ -225,6 +236,7 @@ test('synthetic owner approval publishes the original photo and PDF to public se
     const photoList = await photoListResponse.json();
     assert.equal(photoList.items.length, 1);
     assert.equal(photoList.items[0].media_url, `/api/alnaba/media/${photo.id}`);
+    assert.equal(photoList.items[0].expires_at, new Date(Date.parse(photo.published_at) + ALNABA_PHOTO_EXPIRY_MS).toISOString());
     assert.equal(JSON.stringify(photoList).includes('fixture_photo_id'), false);
     assert.equal(JSON.stringify(photoList).includes('fixture_photo_unique'), false);
     assert.equal(JSON.stringify(photoList).includes('file_name'), false);
@@ -257,6 +269,7 @@ test('synthetic owner approval publishes the original photo and PDF to public se
     assert.equal(pdfResponse.status, 200);
     assert.equal(pdfResponse.headers.get('content-type'), 'application/pdf');
     assert.match(pdfResponse.headers.get('content-disposition'), /^inline;/);
+    assert.equal(pdfResponse.headers.get('content-security-policy'), "frame-ancestors 'self'");
     assert.deepEqual(Buffer.from(await pdfResponse.arrayBuffer()), pdfBytes);
 
     assert.equal((await fetch(`${base}/api/alnaba?section=unknown`)).status, 400);
@@ -275,4 +288,152 @@ test('invalid file signatures are rejected before an upload can be published', a
     fetchAlnabaTelegramBytes(badPdf, { api: fake.api, token: TOKEN_FIXTURE, fetchImpl: fake.fetchImpl }),
     { message: 'INVALID_FILE_CONTENT' },
   );
+});
+
+
+const fixtureItem = (section, index) => {
+  const id = `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+  const media = section === 'weekly' ? { mime_type: 'application/pdf', file_name: `issue-${index}.pdf` }
+    : section === 'photos' ? { mime_type: 'image/jpeg', file_name: `photo-${index}.jpg` }
+      : section === 'quran' ? { mime_type: 'audio/ogg', file_name: `quran-${index}.ogg` }
+        : { mime_type: 'video/mp4', file_name: `nasheed-${index}.mp4` };
+  return {
+    id, section, title: section === 'weekly' ? `صحيفة العدد ${index}` : `${section} ${index}`,
+    file_id: `fixture_${section}_${index}`, ...media,
+    published_at: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+    sequence: index,
+    ...(section === 'weekly' ? { issue_number: index } : {}),
+  };
+};
+
+test('legacy photo news never expires retroactively; new photo news expires exactly 24 hours after publish and survives restore', async () => {
+  const store = createStore();
+  const legacy = {
+    id: '00000000-0000-4000-8000-999999999999', section: 'photos', title: 'خبر قديم قائم',
+    file_id: 'fixture_photo_id', file_unique_id: 'legacy_photo_unique', mime_type: 'image/jpeg',
+    file_size: photoBytes.length, file_name: 'legacy-photo.jpg', published_at: '2020-01-01T00:00:00.000Z',
+  };
+  store.state.alnaba.photos = [legacy];
+  const publishedAt = new Date('2026-11-01T10:00:00.000Z');
+  const newPhoto = publishAlnabaItem(store, OWNER, { ...photoUpload(), file_id: 'fixture_new_photo_id', file_unique_id: 'new_photo_unique' }, publishedAt);
+  assert.equal(newPhoto.expires_at, new Date(publishedAt.getTime() + ALNABA_PHOTO_EXPIRY_MS).toISOString());
+  const beforeExpiry = publishedAt.getTime() + ALNABA_PHOTO_EXPIRY_MS - 1;
+  const expiryTime = publishedAt.getTime() + ALNABA_PHOTO_EXPIRY_MS;
+  assert.deepEqual(listPublicAlnabaItems(store, 'photos', 20, 0, beforeExpiry).map((item) => item.id), [newPhoto.id, legacy.id]);
+  assert.deepEqual(listPublicAlnabaItems(store, 'photos', 20, 0, expiryTime).map((item) => item.id), [legacy.id]);
+  assert.equal(findAlnabaItem(store, newPhoto.id, expiryTime), null);
+  assert.equal(findAlnabaItem(store, legacy.id, expiryTime).id, legacy.id);
+
+  const durableSnapshot = JSON.parse(JSON.stringify(store.state.alnaba));
+  const restored = createStore();
+  restored.state.alnaba = sanitizeAlnabaState(durableSnapshot);
+  assert.equal(findAlnabaItem(restored, newPhoto.id, expiryTime), null, 'expiry is calculated from persisted publish time and marker after restart');
+  assert.equal(findAlnabaItem(restored, legacy.id, expiryTime).id, legacy.id, 'legacy stories without the opt-in marker remain available');
+  assert.equal(expireAlnabaPhotos(restored, expiryTime), 1);
+  assert.deepEqual(restored.state.alnaba.photos.map((item) => item.id), [legacy.id]);
+
+  let mediaFetches = 0;
+  const app = express();
+  app.use('/api/alnaba', createAlnabaRouter({ store: restored, fetchMedia: async () => { mediaFetches += 1; return photoBytes; } }));
+  await withServer(app, async (base) => {
+    assert.equal((await fetch(`${base}/api/alnaba?section=photos`)).headers.get('cache-control'), 'no-store');
+    assert.equal((await fetch(`${base}/api/alnaba/media/${newPhoto.id}`)).status, 404);
+    const legacyResponse = await fetch(`${base}/api/alnaba/media/${legacy.id}`);
+    assert.equal(legacyResponse.status, 200);
+    assert.equal(legacyResponse.headers.get('cache-control'), 'no-store');
+  });
+  assert.equal(mediaFetches, 1, 'expired media is rejected before any Telegram-media lookup');
+});
+
+test('weekly PDFs are numbered independently and sort 5, 2, 1 as 1, 2, 5 through edits and restore', () => {
+  const store = createStore();
+  const orderedUploads = [5, 2, 1].map((number) => ({
+    ...weeklyUpload(), title: `عنوان العدد ${number}`, file_id: `fixture_pdf_${number}`,
+    file_unique_id: `weekly_unique_${number}`, file_name: `issue-${number}.pdf`, issue_number: number,
+  }));
+  for (let index = 0; index < orderedUploads.length; index += 1) {
+    publishAlnabaItem(store, OWNER, orderedUploads[index], new Date(Date.UTC(2026, 10, 1, 0, index)));
+  }
+  assert.deepEqual(listPublicAlnabaItems(store, 'weekly', 10).map((item) => item.issue_number), [1, 2, 5]);
+  assert.throws(() => publishAlnabaItem(store, OWNER, { ...orderedUploads[0], file_id: 'another_pdf', file_unique_id: 'another_unique' }), { message: 'DUPLICATE_ISSUE_NUMBER' });
+  const issueOne = store.state.alnaba.weekly.find((item) => weeklyIssueNumber(item) === 1);
+  updateAlnabaEntry(store, OWNER, 'weekly', issueOne.id, { title: 'عنوان العدد الأول بعد التعديل' });
+  const restored = sanitizeAlnabaState(JSON.parse(JSON.stringify(store.state.alnaba)));
+  assert.equal(restored.weekly.find((item) => item.id === issueOne.id).issue_number, 1);
+  assert.deepEqual(listPublicAlnabaItems({ state: { alnaba: restored } }, 'weekly', 10).map((item) => item.issue_number), [1, 2, 5]);
+  assert.deepEqual(parseWeeklyUploadCaption('٥\nصحيفة النبأ', 'edition.pdf'), { issue_number: 5, title: 'صحيفة النبأ', description: '' });
+  assert.deepEqual(parseWeeklyUploadCaption('صحيفة النبأ\nرقم العدد: ٢', 'edition.pdf'), { issue_number: 2, title: 'صحيفة النبأ', description: '' });
+  assert.deepEqual(parseWeeklyUploadCaption('', '500.pdf'), { issue_number: 500, title: 'العدد 500', description: '' });
+});
+
+test('Quran and nasheed accept audio and video, preserve descriptions, and list through safe pagination', async () => {
+  const store = createStore();
+  const telegram = fakeTelegram();
+  const quranPreview = prepareAlnabaUpload({
+    section: 'quran', title: 'تلاوة للاختبار', description: 'سورة البقرة', file_id: 'fixture_quran_id',
+    file_unique_id: 'quran_unique', mime_type: 'audio/ogg', file_name: 'quran-recitation.ogg', file_size: oggBytes.length,
+  });
+  const nasheedPreview = prepareAlnabaUpload({
+    section: 'nasheed', title: 'نشيد للاختبار', description: 'وصف النشيد', file_id: 'fixture_nasheed_id',
+    file_unique_id: 'nasheed_unique', mime_type: 'video/mp4', file_name: 'nasheed.mp4', file_size: mp4Bytes.length,
+  });
+  assert.doesNotThrow(() => prepareAlnabaUpload({ ...quranPreview, file_size: ALNABA_MAX_AUDIO_VIDEO_BYTES }));
+  assert.throws(() => prepareAlnabaUpload({ ...quranPreview, file_size: ALNABA_MAX_AUDIO_VIDEO_BYTES + 1 }), { message: 'FILE_TOO_LARGE' });
+  assert.deepEqual(await fetchAlnabaTelegramBytes(quranPreview, { api: telegram.api, token: TOKEN_FIXTURE, fetchImpl: telegram.fetchImpl }), oggBytes);
+  assert.deepEqual(await fetchAlnabaTelegramBytes(nasheedPreview, { api: telegram.api, token: TOKEN_FIXTURE, fetchImpl: telegram.fetchImpl }), mp4Bytes);
+  const quran = publishAlnabaItem(store, OWNER, quranPreview, new Date('2026-11-10T10:00:00.000Z'));
+  const nasheed = publishAlnabaItem(store, OWNER, nasheedPreview, new Date('2026-11-10T11:00:00.000Z'));
+  assert.equal(quran.sequence, 1);
+  assert.equal(nasheed.sequence, 1);
+  assert.equal(sanitizeAlnabaState(JSON.parse(JSON.stringify(store.state.alnaba))).quran[0].description, 'سورة البقرة');
+
+  const app = express();
+  app.use('/api/alnaba', createAlnabaRouter({
+    store,
+    fetchMedia: (item) => fetchAlnabaTelegramBytes(item, { api: telegram.api, token: TOKEN_FIXTURE, fetchImpl: telegram.fetchImpl }),
+  }));
+  await withServer(app, async (base) => {
+    const quranResponse = await fetch(`${base}/api/alnaba?section=quran&limit=1`);
+    const quranPage = await quranResponse.json();
+    assert.equal(quranPage.items[0].id, quran.id);
+    assert.equal(quranPage.items[0].description, 'سورة البقرة');
+    assert.equal(quranPage.has_more, false);
+    const audioResponse = await fetch(`${base}${quranPage.items[0].media_url}`);
+    assert.equal(audioResponse.headers.get('content-type'), 'audio/ogg');
+    assert.deepEqual(Buffer.from(await audioResponse.arrayBuffer()), oggBytes);
+    const nasheedItem = listPublicAlnabaItems(store, 'nasheed')[0];
+    const videoResponse = await fetch(`${base}${nasheedItem.media_url}`);
+    assert.equal(videoResponse.headers.get('content-type'), 'video/mp4');
+    assert.deepEqual(Buffer.from(await videoResponse.arrayBuffer()), mp4Bytes);
+  });
+});
+
+test('sanitization and public pagination retain more than former section caps', async () => {
+  const data = {
+    photos: Array.from({ length: 205 }, (_, index) => fixtureItem('photos', index + 1)),
+    weekly: Array.from({ length: 105 }, (_, index) => fixtureItem('weekly', index + 1)),
+    quran: Array.from({ length: 125 }, (_, index) => fixtureItem('quran', index + 1)),
+    nasheed: Array.from({ length: 135 }, (_, index) => fixtureItem('nasheed', index + 1)),
+    archive: [],
+  };
+  const normalized = sanitizeAlnabaState(data);
+  assert.equal(normalized.photos.length, 205);
+  assert.equal(normalized.weekly.length, 105);
+  assert.equal(normalized.quran.length, 125);
+  assert.equal(normalized.nasheed.length, 135);
+  const store = createStore();
+  store.state.alnaba = normalized;
+  assert.deepEqual(listPublicAlnabaItems(store, 'quran', 20, 100).map((item) => item.sequence), Array.from({ length: 20 }, (_, index) => index + 101));
+  const app = express();
+  app.use('/api/alnaba', createAlnabaRouter({ store }));
+  await withServer(app, async (base) => {
+    const response = await fetch(`${base}/api/alnaba?section=nasheed&limit=20&offset=100`);
+    const page = await response.json();
+    assert.equal(page.items.length, 20);
+    assert.equal(page.items[0].sequence, 101);
+    assert.equal(page.has_more, true);
+    const finalPage = await fetch(`${base}/api/alnaba?section=nasheed&limit=20&offset=120`).then((res) => res.json());
+    assert.equal(finalPage.items.length, 15);
+    assert.equal(finalPage.has_more, false);
+  });
 });

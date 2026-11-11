@@ -17,8 +17,8 @@
   <meta property="og:image" content="/img/og.png" />
   <meta property="og:url" content="{{CANONICAL}}" />
   <link rel="icon" type="image/svg+xml" href="/img/icon.svg" />
-  <link rel="stylesheet" href="/css/alnaba.css?v=2" />
-  <script type="module" src="/js/alnaba.js?v=2"></script>
+  <link rel="stylesheet" href="/css/alnaba.css?v=3" />
+  <script type="module" src="/js/alnaba.js?v=3"></script>
 </head>
 <body>
   <div class="an-shell">
@@ -32,6 +32,8 @@
         <a href="/alnaba/" data-nav="home">النبأ</a>
         <a href="/alnaba/photos/" data-nav="photos">أخبار مصوّرة</a>
         <a href="/alnaba/weekly/" data-nav="weekly">الصحيفة الأسبوعية</a>
+        <a href="/alnaba/quran/" data-nav="quran">القرآن الكريم</a>
+        <a href="/alnaba/nasheed/" data-nav="nasheed">أناشيد</a>
         <a href="/alnaba/archive/" data-nav="archive">الأرشيف</a>
         <a class="an-map-link" href="/ar/">العودة إلى الخريطة</a>
       </nav>
@@ -42,7 +44,7 @@
         <div class="an-eyebrow"><span class="an-live-dot"></span> Red Alert Syria <span class="an-slash">/</span> النبأ</div>
         <div class="an-home-copy">
           <h1>النبأ</h1>
-          <p>مساحة تحريرية للأخبار المصوّرة والأعداد الأسبوعية، مع دليل روابط منظم، يُضاف بعد المراجعة.</p>
+          <p>مساحة تحريرية للأخبار المصوّرة والأعداد الأسبوعية والقرآن الكريم والأناشيد، مع دليل روابط منظم.</p>
         </div>
         <div class="an-section-grid">
           <a class="an-section-card an-photo-card" href="/alnaba/photos/">
@@ -62,6 +64,24 @@
             <b>الصحيفة الأسبوعية</b>
             <span class="an-card-description">الأعداد الأسبوعية بصيغة PDF، جاهزة للفتح والمشاركة.</span>
             <span class="an-card-action">تصفّح الأعداد <span aria-hidden="true">←</span></span>
+          </a>
+          <a class="an-section-card an-quran-card" href="/alnaba/quran/">
+            <span class="an-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21z"></path><path d="M4 5.5v13A2.5 2.5 0 0 1 6.5 16H20M9 7h7M9 10h7"></path></svg>
+            </span>
+            <span class="an-card-kicker">تلاوات ومحتوى قرآني</span>
+            <b>القرآن الكريم</b>
+            <span class="an-card-description">مكتبة للمحتوى القرآني الصوتي والمرئي والملفات المرفقة.</span>
+            <span class="an-card-action">افتح المكتبة <span aria-hidden="true">←</span></span>
+          </a>
+          <a class="an-section-card an-nasheed-card" href="/alnaba/nasheed/">
+            <span class="an-card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            </span>
+            <span class="an-card-kicker">صوت ومقاطع مختارة</span>
+            <b>أناشيد</b>
+            <span class="an-card-description">أناشيد صوتية ومرئية مع عناوينها ووصفها.</span>
+            <span class="an-card-action">افتح المكتبة <span aria-hidden="true">←</span></span>
           </a>
           <a class="an-section-card an-archive-card-link" href="/alnaba/archive/">
             <span class="an-card-icon" aria-hidden="true">
@@ -88,10 +108,12 @@
           </div>
           <button class="an-copy-button" type="button" data-copy-link>نسخ رابط القسم</button>
         </div>
+        <div class="an-notice" role="note">تنبيه: الأخبار المصوّرة الجديدة تُزال تلقائياً بعد 24 ساعة من وقت نشرها. لا يشمل ذلك الأعداد الأسبوعية أو الأرشيف.</div>
         <div class="an-story-grid" id="photoGrid" aria-live="polite"></div>
         <div class="an-state" id="photoLoading">جارٍ تحميل الأخبار المصوّرة…</div>
         <div class="an-state" id="photoEmpty" hidden>لا توجد أخبار مصوّرة منشورة حالياً.</div>
         <div class="an-state an-error" id="photoError" hidden>تعذّر تحميل المحتوى الآن. حاول فتح الصفحة مجدداً بعد قليل.</div>
+        <button class="an-more-button" id="photoMore" type="button" hidden>عرض المزيد</button>
       </section>
 
       <section class="an-view" data-view="weekly" hidden>
@@ -99,7 +121,7 @@
           <div>
             <div class="an-eyebrow"><a href="/alnaba/">النبأ</a><span class="an-slash">/</span> الأعداد</div>
             <h1>الصحيفة الأسبوعية</h1>
-            <p>اقرأ أحدث عدد أو افتح أرشيف الأعداد المنشورة بصيغة PDF.</p>
+            <p>تُعرض الأعداد بترتيب رقم العدد تصاعدياً؛ يفتح الرابط ملف PDF وتظهر معاينته أدناه.</p>
           </div>
           <button class="an-copy-button" type="button" data-copy-link>نسخ رابط القسم</button>
         </div>
@@ -107,6 +129,31 @@
         <div class="an-state" id="weeklyLoading">جارٍ تحميل أعداد الصحيفة…</div>
         <div class="an-state" id="weeklyEmpty" hidden>لا توجد أعداد منشورة حالياً.</div>
         <div class="an-state an-error" id="weeklyError" hidden>تعذّر تحميل المحتوى الآن. حاول فتح الصفحة مجدداً بعد قليل.</div>
+        <button class="an-more-button" id="weeklyMore" type="button" hidden>عرض المزيد</button>
+      </section>
+
+      <section class="an-view" data-view="quran" hidden>
+        <div class="an-page-heading">
+          <div><div class="an-eyebrow"><a href="/alnaba/">النبأ</a><span class="an-slash">/</span> المكتبة</div><h1>القرآن الكريم</h1><p>محتوى قرآني صوتي ومرئي وملفات مرفقة، مرتبة حسب الإضافة.</p></div>
+          <button class="an-copy-button" type="button" data-copy-link>نسخ رابط القسم</button>
+        </div>
+        <div class="an-library-list" id="quranList" aria-live="polite"></div>
+        <div class="an-state" id="quranLoading">جارٍ تحميل المحتوى…</div>
+        <div class="an-state" id="quranEmpty" hidden>لا يوجد محتوى منشور حالياً.</div>
+        <div class="an-state an-error" id="quranError" hidden>تعذّر تحميل المحتوى الآن. حاول فتح الصفحة مجدداً بعد قليل.</div>
+        <button class="an-more-button" id="quranMore" type="button" hidden>عرض المزيد</button>
+      </section>
+
+      <section class="an-view" data-view="nasheed" hidden>
+        <div class="an-page-heading">
+          <div><div class="an-eyebrow"><a href="/alnaba/">النبأ</a><span class="an-slash">/</span> المكتبة</div><h1>أناشيد</h1><p>أناشيد صوتية ومرئية مع عنوان ووصف، مرتبة حسب الإضافة.</p></div>
+          <button class="an-copy-button" type="button" data-copy-link>نسخ رابط القسم</button>
+        </div>
+        <div class="an-library-list" id="nasheedList" aria-live="polite"></div>
+        <div class="an-state" id="nasheedLoading">جارٍ تحميل الأناشيد…</div>
+        <div class="an-state" id="nasheedEmpty" hidden>لا توجد أناشيد منشورة حالياً.</div>
+        <div class="an-state an-error" id="nasheedError" hidden>تعذّر تحميل المحتوى الآن. حاول فتح الصفحة مجدداً بعد قليل.</div>
+        <button class="an-more-button" id="nasheedMore" type="button" hidden>عرض المزيد</button>
       </section>
 
       <section class="an-view" data-view="archive" hidden>
@@ -122,6 +169,7 @@
         <div class="an-state" id="archiveLoading">جارٍ تحميل الأرشيف…</div>
         <div class="an-state" id="archiveEmpty" hidden>لا توجد روابط مضافة إلى الأرشيف حالياً.</div>
         <div class="an-state an-error" id="archiveError" hidden>تعذّر تحميل الأرشيف الآن. حاول فتح الصفحة مجدداً بعد قليل.</div>
+        <button class="an-more-button" id="archiveMore" type="button" hidden>عرض المزيد</button>
       </section>
     </main>
 

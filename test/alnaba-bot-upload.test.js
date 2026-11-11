@@ -20,12 +20,16 @@ const photoBytes2 = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x44, 0x00, 0x07,
 const photoBytes3 = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x45, 0x00, 0x0c, 0x0d, 0x0e, 0x0f, 0x10]);
 const pdfBytes = Buffer.from('%PDF-1.7\nfixture only\n%%EOF\n');
 const pdfBytes2 = Buffer.from('%PDF-1.7\nreplacement fixture only\n%%EOF\n');
+const oggBytes = Buffer.from('OggSfixture-quran-audio');
+const mp4Bytes = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(8)]);
 const fixtureFiles = new Map([
   ['photos/fixture-photo.jpg', photoBytes],
   ['photos/fixture-photo-2.jpg', photoBytes2],
   ['photos/fixture-photo-3.jpg', photoBytes3],
   ['documents/fixture-weekly.pdf', pdfBytes],
   ['documents/fixture-weekly-2.pdf', pdfBytes2],
+  ['audio/quran.ogg', oggBytes],
+  ['video/nasheed.mp4', mp4Bytes],
 ]);
 globalThis.fetch = async (url) => {
   const match = String(url).match(/\/file\/bot123456:LOCAL_TEST\/(.+)$/);
@@ -54,6 +58,8 @@ bot.api.config.use(async (_previous, method, payload) => {
       fixture_photo_3_id: 'photos/fixture-photo-3.jpg',
       fixture_pdf_id: 'documents/fixture-weekly.pdf',
       fixture_pdf_2_id: 'documents/fixture-weekly-2.pdf',
+      fixture_quran_audio_id: 'audio/quran.ogg',
+      fixture_nasheed_video_id: 'video/nasheed.mp4',
     };
     return { ok: true, result: { file_path: filePaths[payload.file_id] } };
   }
@@ -116,7 +122,7 @@ const sendPdf = (id, n = 1) => {
     message: {
       message_id: ++messageId, date: 0,
       chat: { id, type: 'private' }, from: user(id),
-      caption: replacement ? 'ملف بديل للاختبار' : 'العدد الأسبوعي التجريبي',
+      caption: replacement ? 'ملف بديل للاختبار' : '1\nالعدد الأسبوعي التجريبي',
       document: {
         file_id: replacement ? 'fixture_pdf_2_id' : 'fixture_pdf_id',
         file_unique_id: replacement ? 'fixture_pdf_2_unique' : 'fixture_pdf_unique',
@@ -127,6 +133,24 @@ const sendPdf = (id, n = 1) => {
     },
   });
 };
+const sendAudio = (id) => bot.handleUpdate({
+  update_id: updateId++,
+  message: {
+    message_id: ++messageId, date: 0,
+    chat: { id, type: 'private' }, from: user(id),
+    caption: 'تلاوة تجريبية\nسورة البقرة',
+    audio: { file_id: 'fixture_quran_audio_id', file_unique_id: 'fixture_quran_audio_unique', file_name: 'quran.ogg', mime_type: 'audio/ogg', file_size: oggBytes.length },
+  },
+});
+const sendVideo = (id) => bot.handleUpdate({
+  update_id: updateId++,
+  message: {
+    message_id: ++messageId, date: 0,
+    chat: { id, type: 'private' }, from: user(id),
+    caption: 'نشيد تجريبي\nوصف النشيد',
+    video: { file_id: 'fixture_nasheed_video_id', file_unique_id: 'fixture_nasheed_video_unique', file_name: 'nasheed.mp4', mime_type: 'video/mp4', file_size: mp4Bytes.length },
+  },
+});
 const lastUiFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'sendMessage' && payload.chat_id === id);
 const lastEditFor = (id) => [...calls].reverse().find(({ method, payload }) => method === 'editMessageText' && payload.chat_id === id);
 const buttonsOf = (entry) => entry?.payload?.reply_markup?.inline_keyboard?.flat() || [];
@@ -152,11 +176,17 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.match(menu.payload.text, /نشر محتوى النبأ/);
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:photos'));
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:weekly'));
+  assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:quran'));
+  assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:nasheed'));
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:archive'));
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:home'));
 
   await tap(deniedId, 'nb:photos');
   assert.equal(buttonsOf(lastUiFor(deniedId)).some((button) => button.callback_data === 'nb:publish'), false);
+  await tap(deniedId, 'nb:quran');
+  assert.equal(calls.some(({ method, payload }) => method === 'editMessageText' && payload.chat_id === deniedId && payload.text.includes('القرآن الكريم')), false);
+  await tap(deniedId, 'nb:nasheed');
+  assert.equal(calls.some(({ method, payload }) => method === 'editMessageText' && payload.chat_id === deniedId && payload.text.includes('الأناشيد')), false);
   await tap(deniedId, 'nb:archive');
   assert.equal(calls.some(({ method, payload }) => method === 'editMessageText' && payload.chat_id === deniedId && payload.text.includes('🔗 <b>الأرشيف</b>')), false);
   await tap(deniedId, 'nb:manage:archive');
@@ -207,7 +237,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   assert.equal(store.state.alnaba.photos.length, 1, 'the next photo remains private until confirmed');
   await tap(authorizedId, 'nb:publish');
   assert.equal(store.state.alnaba.photos.length, 2);
-  assert.deepEqual(store.state.alnaba.photos.map((item) => item.title), ['خبر مصور ثانٍ للاختبار', 'صورة تجريبية للاختبار']);
+  assert.deepEqual(store.state.alnaba.photos.map((item) => item.title), ['صورة تجريبية للاختبار', 'خبر مصور ثانٍ للاختبار']);
   assert.equal(new Set(store.state.alnaba.photos.map((item) => item.file_unique_id)).size, 2, 'each distinct upload is published exactly once');
   assert.ok(JSON.parse(store.backup.json).alnaba.photos.some((item) => item.file_id === 'fixture_photo_2_id'));
 
@@ -221,7 +251,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
     message: {
       message_id: ++messageId, date: 0,
       chat: { id: authorizedId, type: 'private' }, from: user(authorizedId),
-      caption: 'العدد الأسبوعي التجريبي',
+      caption: '1\nالعدد الأسبوعي التجريبي',
       document: { file_id: 'fixture_pdf_id', file_unique_id: 'fixture_pdf_unique', file_name: 'fixture-weekly.pdf', mime_type: 'application/pdf', file_size: pdfBytes.length },
     },
   });
@@ -230,14 +260,49 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   await tap(authorizedId, 'nb:publish');
   assert.equal(store.state.alnaba.weekly.length, 1);
   assert.equal(store.state.alnaba.weekly[0].title, 'العدد الأسبوعي التجريبي');
+  assert.equal(store.state.alnaba.weekly[0].issue_number, 1);
   assert.ok(JSON.parse(store.backup.json).alnaba.weekly.some((item) => item.file_id === 'fixture_pdf_id'));
+  assert.ok(JSON.parse(store.backup.json).alnaba.weekly.some((item) => item.issue_number === 1));
   const weeklySuccess = lastUiFor(authorizedId);
   assert.ok(buttonsOf(weeklySuccess).some((button) => button.callback_data === 'nb:home'));
   const addWeekly = buttonsOf(weeklySuccess).find((button) => button.callback_data === 'nb:weekly');
-  assert.equal(addWeekly?.text, '➕ إضافة خبر جديد');
+  assert.equal(addWeekly?.text, '➕ إضافة محتوى');
   await tap(authorizedId, addWeekly.callback_data);
   assert.match(lastEditFor(authorizedId)?.payload?.text || '', /الصحيفة الأسبوعية/);
   assert.equal(store.state.alnaba.weekly.length, 1, 'starting the next PDF upload does not republish the previous issue');
+
+  await sendText(authorizedId, '/alnaba');
+  await tap(authorizedId, 'nb:quran');
+  assert.match(lastEditFor(authorizedId)?.payload?.text || '', /القرآن الكريم/);
+  await sendAudio(authorizedId);
+  const quranPreview = lastUiFor(authorizedId);
+  assert.match(quranPreview.payload.text, /تلاوة تجريبية/);
+  assert.match(quranPreview.payload.text, /سورة البقرة/);
+  assert.equal(store.state.alnaba.quran.length, 0, 'audio stays private until owner confirmation');
+  assert.ok(buttonsOf(quranPreview).some((button) => button.callback_data === 'nb:publish'));
+  await tap(authorizedId, 'nb:cancel');
+  assert.equal(store.state.alnaba.quran.length, 0, 'cancelled audio is never published');
+  await sendText(authorizedId, '/alnaba');
+  await tap(authorizedId, 'nb:quran');
+  await sendAudio(authorizedId);
+  await tap(authorizedId, 'nb:publish');
+  assert.equal(store.state.alnaba.quran.length, 1);
+  assert.equal(store.state.alnaba.quran[0].mime_type, 'audio/ogg');
+  assert.equal(store.state.alnaba.quran[0].description, 'سورة البقرة');
+  assert.ok(JSON.parse(store.backup.json).alnaba.quran.some((item) => item.title === 'تلاوة تجريبية' && item.description === 'سورة البقرة'));
+  const addQuran = buttonsOf(lastUiFor(authorizedId)).find((button) => button.callback_data === 'nb:quran');
+  assert.equal(addQuran?.text, '➕ إضافة محتوى');
+
+  await sendText(authorizedId, '/alnaba');
+  await tap(authorizedId, 'nb:nasheed');
+  await sendVideo(authorizedId);
+  assert.equal(store.state.alnaba.nasheed.length, 0, 'video remains private while its preview awaits confirmation');
+  assert.match(lastUiFor(authorizedId).payload.text, /وصف النشيد/);
+  await tap(authorizedId, 'nb:publish');
+  assert.equal(store.state.alnaba.nasheed.length, 1);
+  assert.equal(store.state.alnaba.nasheed[0].mime_type, 'video/mp4');
+  assert.equal(store.state.alnaba.nasheed[0].description, 'وصف النشيد');
+  assert.ok(JSON.parse(store.backup.json).alnaba.nasheed.some((item) => item.file_id === 'fixture_nasheed_video_id'));
 
   await sendText(authorizedId, '/alnaba');
   await tap(authorizedId, 'nb:archive');
@@ -309,6 +374,12 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   };
   const itemButton = (section, id, list) => buttonsOf(list).find((button) => button.callback_data.startsWith(`nb:item:${section}:${id}:`));
 
+  for (const section of ['quran', 'nasheed']) {
+    const libraryList = await openManagement(section);
+    const libraryItem = store.state.alnaba[section][0];
+    assert.ok(itemButton(section, libraryItem.id, libraryList), `${section} appears in the owner's private management list`);
+  }
+
   // Edit a photo-news title, then explicitly approve a replacement image.
   const managedPhoto = store.state.alnaba.photos.find((item) => item.title === 'صورة تجريبية للاختبار');
   let managementList = await openManagement('photos');
@@ -373,6 +444,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   await sendText(authorizedId, 'عدد أسبوعي معدل للاختبار');
   await tap(authorizedId, callbackData(lastUiFor(authorizedId), 'nb:edit-save:'));
   assert.equal(store.state.alnaba.weekly[0].title, 'عدد أسبوعي معدل للاختبار');
+  assert.equal(store.state.alnaba.weekly[0].issue_number, 1, 'editing a title preserves the separately stored issue number');
 
   managementList = await openManagement('weekly');
   await tap(authorizedId, itemButton('weekly', managedWeekly.id, managementList).callback_data);
@@ -382,6 +454,7 @@ test('the bot offers Al-Nabaa only to the confirmed owner 8270709633 and publish
   await tap(authorizedId, callbackData(lastUiFor(authorizedId), 'nb:edit-save:'));
   assert.equal(store.state.alnaba.weekly[0].file_id, 'fixture_pdf_2_id');
   assert.equal(store.state.alnaba.weekly[0].title, 'عدد أسبوعي معدل للاختبار');
+  assert.equal(store.state.alnaba.weekly[0].issue_number, 1, 'replacing a PDF preserves its issue number');
 
   managementList = await openManagement('weekly');
   await tap(authorizedId, itemButton('weekly', managedWeekly.id, managementList).callback_data);

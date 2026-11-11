@@ -196,3 +196,29 @@ button { font: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+
+/* Naba libraries and stable responsive PDF previews. */
+.an-quran-card::after, .an-quran-card .an-card-icon { background-color: rgba(83, 158, 126, .12); border-color: rgba(83, 158, 126, .38); color: #8ad8b3; }
+.an-nasheed-card::after, .an-nasheed-card .an-card-icon { background-color: rgba(163, 113, 190, .12); border-color: rgba(163, 113, 190, .38); color: #c9a1e4; }
+.an-quran-card .an-card-action { color: #8ad8b3; }
+.an-nasheed-card .an-card-action { color: #c9a1e4; }
+.an-notice { margin: 0 0 18px; padding: 12px 15px; border: 1px solid rgba(227, 60, 76, .32); border-radius: 11px; background: rgba(227, 60, 76, .075); color: #ffc0c6; font-size: 12px; line-height: 1.9; }
+.an-more-button { display: block; min-height: 42px; margin: 18px auto 0; padding: 8px 22px; border: 1px solid #35485d; border-radius: 10px; background: #17212d; color: #e5edf6; font-size: 12px; font-weight: 700; cursor: pointer; }
+.an-more-button:hover { border-color: #55718c; background: #1c2a39; }
+.an-library-list { display: grid; gap: 14px; }
+.an-library-card { min-width: 0; overflow: hidden; border: 1px solid var(--an-line); border-radius: 15px; background: var(--an-panel); }
+.an-library-copy { padding: 16px 18px 10px; }
+.an-library-copy h2 { margin: 0; color: #f2f5f9; font-size: 16px; }
+.an-library-copy p { margin: 7px 0 0; color: #c0cad5; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.an-library-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; color: var(--an-muted); font-size: 10px; }
+.an-library-media { display: block; width: min(100% - 32px, 760px); max-height: 520px; margin: 4px auto 16px; border-radius: 9px; background: #070a0e; }
+.an-library-pdf { display: block; width: min(100% - 32px, 760px); height: clamp(280px, 42vw, 560px); margin: 4px auto 16px; border: 0; border-radius: 9px; background: #fff; }
+.an-pdf-frame { height: clamp(320px, 44vw, 620px); min-height: 0; }
+.an-pdf-frame iframe { height: 100%; min-height: 0; }
+@media (max-width: 760px) {
+  .an-library-copy { padding: 14px 14px 8px; }
+  .an-library-media { width: calc(100% - 28px); max-height: 420px; margin-bottom: 14px; }
+  .an-library-pdf { width: calc(100% - 28px); height: min(68vh, 540px); min-height: 280px; margin-bottom: 14px; }
+  .an-pdf-frame { height: min(68vh, 540px); min-height: 280px; }
+}
