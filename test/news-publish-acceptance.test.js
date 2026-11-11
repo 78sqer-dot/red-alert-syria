@@ -1164,6 +1164,77 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(newAlerts.length, 1, 'the repeated approval must not create another map alert');
   assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, 1, 'the repeated approval must not post to the channel twice');
   assert.ok(calls.every((call) => !call.chatId || [ownerId, reporter.id, 8270709635, 8270709638, 8270709639, 8270709644, 8270709645, process.env.CHANNEL_ID].includes(call.chatId)), 'all Telegram API calls are intercepted locally');
+
+  const opinionId = 'owner_opinion_preview';
+  const opinionDraft = newsState().drafts[opinionId] = {
+    id: opinionId, type: 'political', status: 'pending', politicalCategory: 'government_announcement',
+    headline: 'إعلان الحكومة الانتقالية خفض الدعم في حمص', sourceText: 'أعلنت الحكومة الانتقالية خفض الدعم في حمص.',
+    loc: { scope: 'place', name_ar: 'حمص', name_en: 'Homs', governorate_ar: 'حمص', governorate_en: 'Homs' },
+    extra: [], ttlMin: 360, srcs: [{ u: 'mock-source', name: 'private mock feed', local: false }], cards: [], created: Date.now(),
+  };
+  const ownerCard = newsMonitorTest.cardKb(opinionDraft, 'ar', ownerId).inline_keyboard.flat();
+  const nonOwnerCard = newsMonitorTest.cardKb(opinionDraft, 'ar', reporter.id).inline_keyboard.flat();
+  assert.ok(ownerCard.some((button) => button.callback_data === `nw:op:${opinionId}`), 'the opinion preview is offered to the owner');
+  assert.equal(nonOwnerCard.some((button) => button.callback_data === `nw:op:${opinionId}`), false, 'the opinion preview is not offered to non-owners');
+  const previousRewrite = newsMonitorTest.R.rewriteImpl;
+  let rewriteMode;
+  newsMonitorTest.R.rewriteImpl = async (_source, options) => { rewriteMode = options.mode; return 'رأي/تحليل: قرار خفض الدعم يزيد الأعباء على الأسر.'; };
+  const opinionCallsStart = calls.length;
+  try {
+    await tap(`nw:op:${opinionId}`, reporter);
+    assert.equal(rewriteMode, undefined, 'a non-owner cannot start an opinion analysis');
+    await tap(`nw:op:${opinionId}`, owner);
+    assert.equal(rewriteMode, 'opinion', 'the owner button requests the separate opinion mode');
+    assert.equal(opinionDraft.aiRewritePreview.mode, 'opinion');
+    const previewMessage = calls.slice(opinionCallsStart).find((call) => call.method === 'editMessageText' && call.chatId === ownerId && /معاينة رأي\/تحليل نقدي — لم يُعتمد ولم يُنشر/.test(call.payload.text));
+    assert.ok(previewMessage, 'the preview is visibly labeled and remains unpublished');
+    await tap(`nw:ra:${opinionId}`, owner);
+    assert.equal(opinionDraft.aiRewritePreview.applied, true);
+    assert.equal(opinionDraft.headline, 'رأي/تحليل: قرار خفض الدعم يزيد الأعباء على الأسر.');
+    assert.equal(opinionDraft.editorialHold, true, 'applying opinion sets a review hold');
+    assert.equal(nightEligible(opinionDraft), false, 'the applied opinion cannot enter automatic publication');
+    assert.equal(calls.slice(opinionCallsStart).filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, 0, 'opinion preview and application never post a public channel message');
+  } finally {
+    newsMonitorTest.R.rewriteImpl = previousRewrite;
+    delete newsState().drafts[opinionId];
+  }
+
+  const editorId = 8270709666;
+  const editor = { id: editorId, is_bot: false, first_name: 'Local editor', language_code: 'ar' };
+  const editorDraftId = 'editor_share_notification';
+  const editorDraft = newsState().drafts[editorDraftId] = {
+    id: editorDraftId, type: 'assassination', status: 'pending',
+    headline: 'اعتقال تجريبي في حارم', body: 'تفاصيل محاكاة: أعلنت جهة عامة عن توقيف شخص في حارم.',
+    loc: { scope: 'place', name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib' },
+    extra: [], ttlMin: 360, srcs: [{ u: 'mock-source', local: false }], cards: [], created: Date.now(),
+  };
+  await store.addEditor(editorId);
+  const editorBeforeAlerts = new Set(store.state.alerts.map((alert) => alert.id));
+  const editorChannelBefore = calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length;
+  const editorPublishStart = calls.length;
+  try {
+    await tap(`nw:p:${editorDraftId}`, editor);
+    assert.equal(editorDraft.status, 'published');
+    const ownerNotice = calls.slice(editorPublishStart).find((call) => call.method === 'sendMessage' && call.chatId === ownerId && /نُشر تنبيه جديد على الخريطة/.test(call.payload.text));
+    assert.ok(ownerNotice, 'successful publication by an editor sends a separate private notice to the owner');
+    const buttons = ownerNotice.payload.reply_markup.inline_keyboard.flat();
+    const whatsapp = buttons.find((button) => button.url?.startsWith('https://wa.me/?text='));
+    const map = buttons.find((button) => button.text?.includes('على الخريطة'));
+    assert.ok(map?.url, 'the owner notice contains a direct map link for this alert');
+    assert.ok(whatsapp, 'the owner notice contains a WhatsApp manual-share button');
+    const shareText = new URL(whatsapp.url).searchParams.get('text');
+    assert.ok(shareText.includes(editorDraft.headline), 'WhatsApp share text contains the published headline');
+    assert.ok(shareText.includes(editorDraft.body), 'WhatsApp share text contains the story details');
+    assert.ok(shareText.includes(map.url), 'WhatsApp share text contains the direct map link');
+    assert.equal(calls.slice(editorPublishStart).some((call) => /whatsapp/i.test(call.method)), false, 'the bot never sends a WhatsApp message automatically');
+    const editorNewAlerts = store.state.alerts.filter((alert) => !editorBeforeAlerts.has(alert.id));
+    assert.equal(editorNewAlerts.length, 1, 'the local editor approval creates exactly one mock map alert');
+    addedAlertIds.push(...editorNewAlerts.map((alert) => alert.id));
+    assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, editorChannelBefore + 1, 'the editor action creates one intercepted mock channel post');
+  } finally {
+    await store.removeEditor(editorId);
+    delete newsState().drafts[editorDraftId];
+  }
 });
 
 test('news draft ignore action marks the draft ignored without publishing it', async () => {

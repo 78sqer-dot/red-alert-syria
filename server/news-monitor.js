@@ -346,7 +346,7 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || d.editorialHold || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+  if (!d || d.test || d.rule || d.editorialHold || (d.aiRewritePreview?.applied && d.aiRewritePreview.mode === 'opinion') || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
   if (['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'military_incursion', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
   if (d.type === 'political') {
     const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
@@ -376,6 +376,7 @@ function editorialGate(d) {
   const source = editorialNorm(rawSource.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' '));
   const headline = editorialNorm(rawHeadline);
   if (!source || !headline || !(d.srcs || []).length) return fail('missing-source-or-text');
+  if (d.aiRewritePreview?.applied && d.aiRewritePreview.mode === 'opinion') return fail('opinion-analysis-not-auto-publish');
   if (!NEWS_TYPES.includes(d.type) || !ALERT_TYPES[d.type]) return fail('invalid-type');
   if (refineType(d.type, rawSource) !== d.type) return fail('type-conflict');
   if (d.type === 'political') {
@@ -433,6 +434,8 @@ function editorialGate(d) {
   }
 
   const evaluative = ['بطولي', 'عبقري', 'خائن', 'مجرم', 'فاشل', 'ناجح', 'عظيم', 'رائع', 'مذهل', 'كارثي', 'فضيحة', 'انتصار ساحق', 'هزيمة ساحقة', 'فشل ذريع', 'heroic', 'brilliant', 'traitorous', 'disastrous', 'humiliating victory'];
+  const sharpPoliticalPhrases = ['حكومة فاشلة', 'سياسة فاشلة', 'سياسات فاشلة', 'فشل ذريع', 'تخبط حكومي', 'فضيحة سياسية', 'نهج كارثي', 'حكومة عاجزة', 'قمع وحشي', 'عار سياسي', 'خيانة سياسية', 'حكومة انتقالية فاشلة'];
+  if (d.type === 'political' && sharpPoliticalPhrases.some((phrase) => editorialHas(publicRaw, phrase))) return fail('sharp-political-tone-not-news');
   const attributionCue = /(?:^|\s)و?(?:قال|قالت|اعلن|اعلنت|افاد|افادت|ذكر|ذكرت|اكد|اكدت|اوضح|اوضحت|صرح|صرحت|وصف|وصفت|اعتبر|اعتبرت|اتهم|اتهمت|بحسب|وفقا)(?:\s|$)/u;
   for (const word of evaluative) {
     if (editorialHas(headline, word) && (!editorialHas(source, word) || !attributionCue.test(headline))) return fail('unsupported-evaluation');
@@ -602,12 +605,13 @@ function cardText(d, lang = 'ar') {
   if (d.rule) lines.push(tr(lang, '⚙️ <i>تصنيف آلي بسيط (الذكاء الاصطناعي غير متاح حالياً) — راجع النوع والمكان.</i>', '⚙️ <i>Simple automatic classification (AI unavailable) — check type and place.</i>'));
   return lines.join('\n');
 }
-function cardKb(d, lang = 'ar') {
+function cardKb(d, lang = 'ar', chatId = null) {
   const kb = new InlineKeyboard()
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
     .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id).row()
     .text(tr(lang, '🪄 صياغة صحفية', '🪄 Rewrite professionally'), 'nw:rw:' + d.id)
     .text(tr(lang, '🔎 تحقق من سجل القناة', '🔎 Check channel records'), 'nw:c:' + d.id);
+  if (ownerIdsU().includes(Number(chatId))) kb.row().text(tr(lang, '🧭 معاينة رأي/تحليل نقدي', '🧭 Preview critical opinion/analysis'), 'nw:op:' + d.id);
 
   if (d.originalHeadline && d.originalHeadline !== d.headline) {
     kb.row().text(tr(lang, '↩️ استعادة الصياغة الأصلية', '↩️ Restore original wording'), 'nw:ro:' + d.id);
@@ -624,13 +628,17 @@ function rewritePreviewText(d, lang = 'ar') {
   let source = String(preview.sourceText || d.sourceText || d.headline || '').slice(0, 500);
   const original = String(preview.originalHeadline || d.originalHeadline || d.headline || '');
   const render = (excerpt) => [
-    tr(lang, '🪄 <b>معاينة صياغة صحفية — لم تُعتمد ولم تُنشر</b>', '🪄 <b>Professional rewrite preview — not applied or published</b>'),
+    preview.mode === 'opinion'
+      ? tr(lang, '🧭 <b>معاينة رأي/تحليل نقدي — لم يُعتمد ولم يُنشر</b>', '🧭 <b>Critical opinion/analysis preview — not applied or published</b>')
+      : tr(lang, '🪄 <b>معاينة صياغة صحفية محايدة — لم تُعتمد ولم تُنشر</b>', '🪄 <b>Neutral news rewrite preview — not applied or published</b>'),
     '',
     `📝 <b>${tr(lang, 'عنوان المسودة الحالي', 'Current draft headline')}:</b> ${esc(original)}`,
     `📄 <b>${tr(lang, 'النص الأصلي من المصدر (مقتطف)', 'Original source text (excerpt)')}:</b> ${esc(excerpt)}`,
     `✨ <b>${tr(lang, 'المقترح', 'Suggestion')}:</b> ${esc(preview.text || '')}`,
     '',
-    tr(lang, 'راجع الوقائع والمصدر بنفسك. لن يتغير نص المسودة إلا بعد اختيار اعتماد الصياغة.', 'Verify the facts and source yourself. The draft changes only if you choose to apply this wording.'),
+    preview.mode === 'opinion'
+      ? tr(lang, 'هذه مادة رأي/تحليل وليست خبراً؛ النقد محصور بالسياسات ومسنود بالمصدر. راجع الوقائع، ثم اعتمدها صراحةً إن رغبت؛ لن تُنشر تلقائياً.', 'This is opinion/analysis, not straight news; criticism targets policy and must be source-grounded. Verify it and apply explicitly if wanted; it will not auto-publish.')
+      : tr(lang, 'راجع الوقائع والمصدر بنفسك. هذه صياغة خبرية محايدة؛ لن يتغير نص المسودة إلا بعد اختيار اعتماد الصياغة.', 'Verify the facts and source yourself. This is neutral news wording; the draft changes only if you choose to apply it.'),
   ].join('\n');
   let text = render(source);
   while (text.length > 3900 && source.length > 80) { source = source.slice(0, Math.max(80, source.length - 80)); text = render(source); }
@@ -725,7 +733,7 @@ async function sendCards(d, only = null) {
         try { await deliverCapturedMediaToReviewer(d, media, uid, a); }
         catch (e) { console.warn('[news] source media reviewer delivery failed', d.id, e.description || e.message); }
       }
-      const m = await a.sendMessage(uid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang), link_preview_options: { is_disabled: true }, disable_notification: nightActive(), _keep: 'c' });
+      const m = await a.sendMessage(uid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang, uid), link_preview_options: { is_disabled: true }, disable_notification: nightActive(), _keep: 'c' });
       d.cards.push([uid, m.message_id]); n++;
     } catch (e) { console.warn('[news] card not delivered to', uid, e.description || e.message); }
   }
@@ -762,7 +770,7 @@ async function refreshCards(d) {
   if (!a) return;
   for (const [chat, mid] of d.cards || []) {
     const lang = langOfId(chat);
-    try { await a.editMessageText(chat, mid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang), link_preview_options: { is_disabled: true } }); } catch { /* not modified / gone */ }
+    try { await a.editMessageText(chat, mid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang, chat), link_preview_options: { is_disabled: true } }); } catch { /* not modified / gone */ }
   }
 }
 /** Add current review controls to existing pending cards without changing their text or creating messages. */
@@ -772,7 +780,7 @@ export async function refreshPendingCardKeyboards() {
   for (const d of Object.values(newsState().drafts)) {
     if (d.status !== 'pending' || d.test) continue;
     for (const [chat, mid] of d.cards || []) {
-      try { await a.editMessageReplyMarkup(chat, mid, { reply_markup: cardKb(d, langOfId(chat)) }); } catch { /* not modified / gone */ }
+      try { await a.editMessageReplyMarkup(chat, mid, { reply_markup: cardKb(d, langOfId(chat), chat) }); } catch { /* not modified / gone */ }
     }
   }
 }
@@ -794,6 +802,19 @@ async function closeCards(d, keep = null, closeMedia = false) {
 }
 // ---------------------------------------------------------------- 🌙 night auto-publish + owner notice (undo)
 const postUrl = (mid) => (mid && String(config.channel || '').startsWith('@') ? `https://t.me/${config.channel.slice(1)}/${mid}` : '');
+function publishedLinksKb(d, alert, lang = 'ar', includeWhatsApp = false) {
+  const kb = new InlineKeyboard();
+  const alertId = alert?.id || d.alertId;
+  const map = alertId && R.H?.mapUrl ? R.H.mapUrl(alertId, lang) : '';
+  const post = postUrl(alert?.channel_message_id || d.postId);
+  if (map) kb.url(tr(lang, '🗺 على الخريطة', '🗺 On the map'), map);
+  if (post) kb.url(tr(lang, '📣 المنشور', '📣 Post'), post);
+  if (includeWhatsApp && map) {
+    const shareText = [d.headline || d.title || '', d.body || d.details || '', map].filter(Boolean).join('\n\n');
+    kb.row().url(tr(lang, '🟢 فتح واتساب للمشاركة اليدوية', '🟢 Open WhatsApp to share manually'), `https://wa.me/?text=${encodeURIComponent(shareText)}`);
+  }
+  return kb;
+}
 function noticeText(d, lang = 'ar') {
   const head = d.undone
     ? tr(lang, '↩️ <b>تم التراجع — حُذف من القناة والخريطة</b>', '↩️ <b>Undone — removed from the channel and the map</b>')
@@ -804,10 +825,7 @@ function noticeText(d, lang = 'ar') {
 }
 function noticeKb(d, lang = 'ar') {
   if (d.undone) return undefined;
-  const kb = new InlineKeyboard();
-  const u = postUrl(d.postId);
-  if (u) kb.url(tr(lang, '📣 المنشور', '📣 Post'), u);
-  if (R.H?.mapUrl && d.alertId) kb.url(tr(lang, '🗺 على الخريطة', '🗺 On the map'), R.H.mapUrl(d.alertId, lang));
+  const kb = publishedLinksKb(d, { id: d.alertId, channel_message_id: d.postId }, lang, true);
   kb.row().text(tr(lang, '🏷 تغيير نوع الخبر', '🏷 Change news type'), 'nw:pt:' + d.id);
   kb.row().text(tr(lang, '✏️ تعديل صيغة الخبر', '✏️ Edit story format'), 'nw:ed:' + d.id);
   return kb.row().text(tr(lang, '↩️ تراجع (حذف من القناة والخريطة)', '↩️ Undo (remove from channel + map)'), 'nw:u:' + d.id);
@@ -1560,16 +1578,17 @@ export function registerNewsTools(bot, h) {
     if (!d || d.type !== 'uav' || (d.status !== 'pending' && !d.test)) return toast(ctx, '');
     d.intense = !intenseOn(d); save();
     await toast(ctx, t(ctx, d.intense ? 'مكثف: 2-3 مسيّرات فوق كل منطقة' : 'عادي: مسيّرة وحدة فوق كل منطقة', d.intense ? 'Intensive: 2-3 drones per area' : 'Normal: one drone per area'));
-    try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
+    try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id) }); } catch { /* ignore */ }
   });
-  bot.callbackQuery(/^nw:rw:(\w+)$/, async (ctx) => {
-    if (!staff(ctx)) return toast(ctx, '');
-    const d = await findDraft(ctx.match[1]);
+  bot.callbackQuery(/^nw:(rw|op):(\w+)$/, async (ctx) => {
+    const mode = ctx.match[1] === 'op' ? 'opinion' : 'news';
+    if (!staff(ctx) || (mode === 'opinion' && !ownerIdsU().includes(Number(ctx.from.id)))) return toast(ctx, '');
+    const d = await findDraft(ctx.match[2]);
     if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
     const sourceText = String(d.sourceText || d.headline || '').trim();
     if (!sourceText) return toast(ctx, t(ctx, 'لا يوجد نص مصدر لإعادة صياغته', 'No source text is available to rewrite'), true);
     const preview = d.aiRewritePreview;
-    const previewIsCurrent = preview && preview.sourceText === sourceText && preview.baseHeadline === d.headline;
+    const previewIsCurrent = preview && preview.mode === mode && preview.sourceText === sourceText && preview.baseHeadline === d.headline;
     const previewAlreadyApplied = preview?.applied && preview.text === d.headline;
     const lang = h.langOf(ctx);
     if (previewIsCurrent || previewAlreadyApplied) {
@@ -1585,12 +1604,13 @@ export function registerNewsTools(bot, h) {
     d.aiRewriteBusy = true;
     await toast(ctx, t(ctx, '🪄 جارٍ إعداد معاينة فقط…', '🪄 Preparing a preview only…'));
     try {
-      const text = String(R.rewriteImpl
-        ? await R.rewriteImpl(sourceText)
-        : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '' })).trim();
+      let text = String(R.rewriteImpl
+        ? await R.rewriteImpl(sourceText, { mode })
+        : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '', mode })).trim();
+      if (mode === 'opinion' && !/^(?:رأي\s*\/\s*تحليل|رأي|تحليل)\s*[:：—-]/u.test(text)) text = `رأي/تحليل: ${text}`;
       if (!text || text.length > 280) throw new Error('unsafe rewrite length');
       d.aiRewritePreview = {
-        text, sourceText, baseHeadline: d.headline, originalHeadline: d.headline,
+        text, mode, sourceText, baseHeadline: d.headline, originalHeadline: d.headline,
         createdAt: Date.now(), applied: false,
       };
       save();
@@ -1614,6 +1634,13 @@ export function registerNewsTools(bot, h) {
     d.headline = preview.text;
     preview.applied = true;
     preview.appliedAt = Date.now();
+    if (preview.mode === 'opinion') {
+      d.editorialHold = true;
+      d.editorialHoldReason = 'opinion-analysis-requires-explicit-owner-publish';
+      d.editorialHoldAt = Date.now();
+      d.dayAutoAt = null;
+      delete d.autoMode;
+    }
     save();
     await refreshCards(d);
     await toast(ctx, t(ctx, 'تم اعتماد الصياغة في المسودة فقط — ما زال النشر يحتاج موافقتك', 'Wording applied to the draft only — publishing still needs your approval'));
@@ -1676,7 +1703,7 @@ export function registerNewsTools(bot, h) {
       return;
     }
     if (act === 't') { await toast(ctx, ''); try { await ctx.editMessageReplyMarkup({ reply_markup: typeKb(d, h.langOf(ctx)) }); } catch { /* ignore */ } return; }
-    if (act === 'b') { await toast(ctx, ''); try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx)) }); } catch { /* ignore */ } return; }
+    if (act === 'b') { await toast(ctx, ''); try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id) }); } catch { /* ignore */ } return; }
     if (d.status !== 'pending') {
       const by = d.status === 'published' ? t(ctx, 'نُشرت مسبقاً ✔️', 'already published ✔️') : d.status === 'expired' ? t(ctx, 'انتهت صلاحيتها', 'expired') : t(ctx, 'تمت معالجتها مسبقاً ✔️', 'already handled ✔️');
       await closeCards(d, cur(ctx));
@@ -1694,6 +1721,7 @@ export function registerNewsTools(bot, h) {
       forgetCurrentCard(d, ctx); save();
       return;
     }
+    if (act === 'p' && d.aiRewritePreview?.applied && d.aiRewritePreview.mode === 'opinion' && !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, t(ctx, 'نشر مادة الرأي/التحليل يحتاج موافقتك كمالك', 'Only the owner may publish opinion/analysis'), true);
     if (d.type === 'political' && !POLITICAL_CATEGORIES[d.politicalCategory] && (act === 'p' || act === 'e')) {
       return toast(ctx, t(ctx, 'اختر فئة سياسية صالحة قبل النشر أو التعديل', 'Choose a valid political category before publishing or editing'), true);
     }
@@ -1721,31 +1749,27 @@ export function registerNewsTools(bot, h) {
     } catch (e) {
       d.status = 'pending'; save();
       console.error('[news] publish failed', e.description || e.message);
-      try { await ctx.editMessageText(cardText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: cardKb(d, h.langOf(ctx)), link_preview_options: { is_disabled: true } }); } catch { /* ignore */ }
+      try { await ctx.editMessageText(cardText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id), link_preview_options: { is_disabled: true } }); } catch { /* ignore */ }
       return toast(ctx, t(ctx, '⚠️ تعذّر النشر — اضغط «نشر» مرة ثانية.', '⚠️ Publishing failed — tap Publish again.'), true);
     }
-    d.status = 'published'; d.alertId = alert?.id; d.by = ctx.from.id;
+    d.status = 'published'; d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.by = ctx.from.id;
     await unlinkCapturedMedia(d.sourceMedia);
     d.approvedBy = { id: ctx.from.id, name: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' '), username: ctx.from.username || null };
     d.approvedAt = new Date().toISOString(); n.stats.published++;
     save();
-    const ownerId = config.ownerIds?.[0];
-    if (ownerId && Number(ownerId) !== Number(ctx.from.id)) {
-      const reviewer = d.approvedBy.username ? `@${d.approvedBy.username}` : d.approvedBy.name;
-      try { await ctx.api.sendMessage(ownerId, `<b>تم اعتماد ونشر خبر جديد</b>\n${esc(d.headline || d.title || '')}\nالمشرف: ${esc(reviewer || String(ctx.from.id))}\nالوقت: ${esc(new Date(d.approvedAt).toLocaleString('ar-SY', { timeZone: 'Asia/Damascus' }))}`, { parse_mode: 'HTML' }); } catch (e) { console.warn('[news] owner approval notification failed', e.message); }
+    const reviewer = d.approvedBy.username ? `@${d.approvedBy.username}` : d.approvedBy.name;
+    for (const ownerId of ownerIdsU()) {
+      if (Number(ownerId) === Number(ctx.from.id)) continue;
+      const ownerLang = langOfId(ownerId);
+      const ownerText = tr(ownerLang, `<b>✅ نُشر تنبيه جديد على الخريطة</b>\n${esc(d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nالمشرف: ${esc(reviewer || String(ctx.from.id))}\nالوقت: ${esc(new Date(d.approvedAt).toLocaleString('ar-SY', { timeZone: 'Asia/Damascus' }))}`, `<b>✅ New alert published to the map</b>\n${esc(d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nApproved by: ${esc(reviewer || String(ctx.from.id))}\n${esc(new Date(d.approvedAt).toLocaleString('en-GB', { timeZone: 'Asia/Damascus' }))}`);
+      try { await ctx.api.sendMessage(ownerId, ownerText, { parse_mode: 'HTML', reply_markup: publishedLinksKb(d, alert, ownerLang, true), link_preview_options: { is_disabled: true }, _keep: 'c' }); } catch (e) { console.warn('[news] owner approval notification failed', e.message); }
     }
     await closeCards(d, cur(ctx), true);
     await unlinkCapturedMedia(d.sourceMedia);
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
     forgetCurrentCard(d, ctx); save();
-    const kb = new InlineKeyboard();
-    const mapUrl = h.mapUrl && alert ? h.mapUrl(alert.id, h.langOf(ctx)) : null;
-    if (mapUrl) kb.url(t(ctx, '🗺 على الخريطة', '🗺 On the map'), mapUrl);
-    if (alert?.channel_message_id && config.channel.startsWith('@')) kb.url(t(ctx, '📣 المنشور', '📣 Post'), `https://t.me/${config.channel.slice(1)}/${alert.channel_message_id}`);
-    if (mapUrl && (config.ownerIds || []).some((id) => Number(id) === Number(ctx.from.id))) {
-      const shareText = `${d.headline || d.title || ''}\n\n${mapUrl}`;
-      kb.url(t(ctx, '🟢 فتح واتساب للمشاركة اليدوية', '🟢 Open WhatsApp to share manually'), `https://wa.me/?text=${encodeURIComponent(shareText)}`);
-    }
+    const isOwner = ownerIdsU().includes(Number(ctx.from.id));
+    const kb = publishedLinksKb(d, alert, h.langOf(ctx), isOwner);
     const publishedType = editableDraftTypeLabel(d, h.langOf(ctx));
     await h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ تم النشر: ${typeOf(d.type).emoji} ${esc(publishedType)} — ${esc(whereOf(locsOf(d.loc, d.extra)))}`, `✅ Published: ${typeOf(d.type).emoji} ${esc(publishedType)}`), { parse_mode: 'HTML', reply_markup: kb });
   });
