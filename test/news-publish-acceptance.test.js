@@ -656,7 +656,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(legacyHeader, /^<b>خبر عاجل<\/b> - 🚨/, 'an already-published alert keeps the legacy header by default');
   assert.doesNotMatch(legacyHeader, /🔴/, 'existing channel posts are not reformatted retroactively');
   const futureBreaking = channelPost({ type: 'breaking', channel_format: 2, timestamp: new Date().toISOString(), place: { scope: 'country' } });
-  assert.match(futureBreaking, /^🔴 <b>خبر عاجل<\/b> - 🚨/, 'new breaking posts lead with the red category dot and retain one event symbol');
+  assert.match(futureBreaking, /^⚠️ <b>خبر عاجل<\/b> - 🚨/, 'new breaking posts lead with the warning category symbol and retain one event symbol');
   const futureWeather = channelPost({ type: 'weather', channel_format: 2, timestamp: new Date().toISOString(), meta: { hazard: 'snow' }, place: { scope: 'country' } });
   assert.match(futureWeather, /^🟣 <b>تحذير جوي<\/b> - ❄️/, 'weather uses the purple dot and the report-specific hazard symbol');
   const meetingInLebanon = channelPost({
@@ -710,7 +710,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   addedAlertIds.push(publishedFuture.id);
   assert.equal(publishedFuture.channel_format, 2, 'the new template version persists with the new alert');
   assert.equal(simulatedPosts.length, 1, 'the publishing path calls only the local fake Telegram API');
-  assert.match(simulatedPosts[0].text, /^🔴 /, 'the normal publishing-bot path sends the new category header');
+  assert.match(simulatedPosts[0].text, /^⚠️ /, 'the normal publishing-bot path sends the new category header');
 
   const lastUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const buttons = () => lastUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];

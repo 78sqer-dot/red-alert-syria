@@ -14,7 +14,9 @@ test('every alert type receives one shared color-dot category visual', () => {
     [...new Set(Object.values(EVENT_VISUALS).map(({ category }) => category))].sort(),
     ['aerial', 'breaking', 'civil', 'political', 'quake', 'security', 'strikes', 'weather'],
   );
-  assert.equal(eventVisual('breaking').dot, '🔴');
+  assert.equal(eventVisual('breaking').dot, '⚠️');
+  assert.equal(eventVisual('breaking').color, '#ef233c', 'the map/category color is unchanged');
+  assert.equal(ALERT_TYPES.breaking.emoji, '🚨', 'the event icon is unchanged');
   assert.equal(eventVisual('weather').dot, '🟣');
   assert.equal(eventVisual('political').dot, '🟡');
   assert.equal(eventVisual('uav').dot, '🔵');

@@ -235,7 +235,7 @@ export const ALERT_GROUPS = {
 // Shared channel/map visual language. Event-specific ALERT_TYPES colors remain
 // available for legacy UI and severity; these colors are only for category coding.
 const EVENT_PALETTES = Object.freeze({
-  breaking: Object.freeze({ dot: '🔴', color: '#ef233c' }),
+  breaking: Object.freeze({ dot: '⚠️', color: '#ef233c' }),
   weather: Object.freeze({ dot: '🟣', color: '#6d28d9' }),
   political: Object.freeze({ dot: '🟡', color: '#a16207' }),
   aerial: Object.freeze({ dot: '🔵', color: '#2476c9' }),
