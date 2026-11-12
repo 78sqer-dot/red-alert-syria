@@ -257,3 +257,39 @@ button { font: inherit; }
 @media (max-width: 760px) {
   .an-nasheed-player { width: calc(100% - 28px); padding: 10px; }
 }
+
+/* Weekly newspaper: readable mobile copy and clear, touch-friendly PDF controls. */
+html[data-page="weekly"] .an-nav a { min-height: 44px; font-size: 13px; }
+html[data-page="weekly"] .an-page-heading p { color: #cbd6e2; font-size: 15px; line-height: 1.9; }
+html[data-page="weekly"] .an-copy-button, html[data-page="weekly"] .an-paper-actions .an-action-link { min-height: 44px; font-size: 14px; }
+html[data-page="weekly"] .an-paper-badge { font-size: 12px; }
+html[data-page="weekly"] .an-paper-copy h2 { font-size: 20px; }
+html[data-page="weekly"] .an-paper-meta, html[data-page="weekly"] .an-paper-meta time { color: #c2ceda; font-size: 13px; }
+html[data-page="weekly"] .an-paper-copy p { margin: 10px 0 0; color: #d6e0e9; font-size: 15px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+html[data-page="weekly"] .an-pdf-control { min-height: 44px; font-size: 14px; }
+html[data-page="weekly"] .an-pdf-zoom { font-size: 21px; }
+html[data-page="weekly"] .an-pdf-page, html[data-page="weekly"] .an-pdf-zoom-label { font-size: 13px; }
+html[data-page="weekly"] .an-pdf-hint { margin: 0; padding: 8px 12px; background: #111923; color: #d6e0e9; font-size: 13px; line-height: 1.7; text-align: center; }
+html[data-page="weekly"] .an-pdf-retry { display: block; min-height: 44px; margin: 0 auto 18px; padding: 8px 18px; border: 1px solid #476783; border-radius: 9px; background: #172b3c; color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+html[data-page="weekly"] .an-pdf-reader.has-error .an-pdf-status { min-height: 100px; padding-bottom: 8px; }
+html[data-page="weekly"] .an-pdf-reader.has-error .an-pdf-canvas-wrap { display: none; }
+html[data-page="weekly"] .an-pdf-canvas-wrap { overscroll-behavior-x: contain; }
+@media (max-width: 760px) {
+  html[data-page="weekly"] .an-nav a { min-height: 44px; font-size: 13px; }
+  html[data-page="weekly"] .an-eyebrow { font-size: 13px; }
+  html[data-page="weekly"] .an-page-heading p { color: #cbd6e2; font-size: 15px; line-height: 1.9; }
+  html[data-page="weekly"] .an-copy-button { min-height: 44px; font-size: 14px; }
+  html[data-page="weekly"] .an-paper-copy { min-height: 0; padding: 18px; }
+  html[data-page="weekly"] .an-paper-badge { font-size: 12px; }
+  html[data-page="weekly"] .an-paper-copy h2 { font-size: 20px; }
+  html[data-page="weekly"] .an-paper-meta, html[data-page="weekly"] .an-paper-meta time { color: #c2ceda; font-size: 13px; }
+  html[data-page="weekly"] .an-paper-actions { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 18px; }
+  html[data-page="weekly"] .an-paper-actions .an-action-link { min-height: 48px; padding: 8px; font-size: 14px; }
+  html[data-page="weekly"] .an-paper-actions .an-action-link:not(.secondary) { grid-column: 1 / -1; border-color: #3d8cba; background: #246b99; color: #fff; }
+  html[data-page="weekly"] .an-paper-actions .an-action-link.secondary { color: #e2eaf3; }
+  html[data-page="weekly"] .an-pdf-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; padding: 9px; }
+  html[data-page="weekly"] .an-pdf-control { min-height: 44px; font-size: 14px; }
+  html[data-page="weekly"] .an-pdf-zoom { font-size: 21px; }
+  html[data-page="weekly"] .an-pdf-page, html[data-page="weekly"] .an-pdf-zoom-label { min-width: 0; font-size: 13px; }
+  html[data-page="weekly"] .an-pdf-status { font-size: 14px; }
+}

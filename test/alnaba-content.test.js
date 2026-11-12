@@ -489,3 +489,76 @@ test('sanitization and public pagination retain more than former section caps', 
     assert.equal(finalPage.has_more, false);
   });
 });
+
+test('weekly PDF media retries one transient failure and preserves HEAD and range semantics', async () => {
+  const store = createStore();
+  const weekly = publishAlnabaItem(store, OWNER, weeklyUpload());
+  let attempts = 0;
+  const app = express();
+  app.use('/api/alnaba', createAlnabaRouter({
+    store,
+    fetchMedia: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error('upstream temporarily unavailable');
+        error.retryable = true;
+        throw error;
+      }
+      return pdfBytes;
+    },
+  }));
+  await withServer(app, async (base) => {
+    const url = `${base}/api/alnaba/media/${weekly.id}`;
+    const head = await fetch(url, { method: 'HEAD' });
+    assert.equal(head.status, 200);
+    assert.equal(head.headers.get('content-length'), String(pdfBytes.length));
+    assert.equal(attempts, 2, 'exactly one immediate retry recovers the cold failure');
+    const range = await fetch(url, { headers: { Range: 'bytes=2-6' } });
+    assert.equal(range.status, 206);
+    assert.equal(range.headers.get('content-range'), `bytes 2-6/${pdfBytes.length}`);
+    assert.deepEqual(Buffer.from(await range.arrayBuffer()), pdfBytes.subarray(2, 7));
+    assert.equal(attempts, 2, 'recovered PDF stays within the existing bounded cache');
+  });
+});
+
+test('weekly PDF media does not retry permanent upstream failures', async () => {
+  const store = createStore();
+  const weekly = publishAlnabaItem(store, OWNER, weeklyUpload());
+  let attempts = 0;
+  const app = express();
+  app.use('/api/alnaba', createAlnabaRouter({
+    store,
+    fetchMedia: async () => {
+      attempts += 1;
+      throw new Error('INVALID_FILE_CONTENT');
+    },
+  }));
+  await withServer(app, async (base) => {
+    const response = await fetch(`${base}/api/alnaba/media/${weekly.id}`);
+    assert.equal(response.status, 503);
+    assert.equal(attempts, 1);
+  });
+});
+
+test('concurrent weekly PDF requests share the transient retry', async () => {
+  const store = createStore();
+  const weekly = publishAlnabaItem(store, OWNER, weeklyUpload());
+  let attempts = 0;
+  const app = express();
+  app.use('/api/alnaba', createAlnabaRouter({
+    store,
+    fetchMedia: async () => {
+      attempts += 1;
+      await new Promise((resolve) => setTimeout(resolve, 35));
+      if (attempts === 1) throw new TypeError('fetch failed');
+      return pdfBytes;
+    },
+  }));
+  await withServer(app, async (base) => {
+    const url = `${base}/api/alnaba/media/${weekly.id}`;
+    const responses = await Promise.all([fetch(url), fetch(url), fetch(url)]);
+    assert.deepEqual(responses.map((response) => response.status), [200, 200, 200]);
+    assert.equal(attempts, 2, 'all callers share both the initial request and the single retry');
+    await Promise.all(responses.map((response) => response.arrayBuffer()));
+  });
+});

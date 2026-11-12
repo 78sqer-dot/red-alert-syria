@@ -90,8 +90,8 @@ function renderWeekly(item) {
       ${item.description ? `<p>${esc(item.description)}</p>` : ''}
       <div class="an-paper-meta">${date ? `<time datetime="${esc(item.published_at)}">${esc(date)}</time>` : ''}<span>PDF</span></div>
       <div class="an-paper-actions">
-        <a class="an-action-link" href="#${previewId}" aria-controls="${previewId}">عرض الصحيفة داخل الصفحة</a>
-        <a class="an-action-link secondary" href="${src}" target="_blank" rel="noopener noreferrer">فتح PDF</a>
+        <a class="an-action-link" href="#${previewId}" aria-controls="${previewId}" data-pdf-open>فتح PDF للقراءة</a>
+        <a class="an-action-link secondary" href="${src}" target="_blank" rel="noopener noreferrer">الملف الأصلي</a>
         <a class="an-action-link secondary" href="${src}" download>تنزيل PDF</a>
       </div>
     </div>
@@ -104,8 +104,10 @@ function renderWeekly(item) {
         <button class="an-pdf-control an-pdf-zoom" type="button" data-pdf-action data-pdf-zoom-out disabled aria-label="تصغير">−</button>
         <button class="an-pdf-control an-pdf-zoom" type="button" data-pdf-action data-pdf-zoom-in disabled aria-label="تكبير">+</button>
       </div>
+      <p class="an-pdf-hint">للقراءة بوضوح، اضغط + ثم اسحب الصفحة يميناً ويساراً.</p>
       <div class="an-pdf-status" data-pdf-status role="status">جارٍ تهيئة معاينة الصحيفة…</div>
-      <div class="an-pdf-canvas-wrap" data-pdf-canvas-wrap><canvas data-pdf-canvas></canvas></div>
+      <button class="an-pdf-retry" type="button" data-pdf-retry hidden>إعادة المحاولة</button>
+      <div class="an-pdf-canvas-wrap" data-pdf-canvas-wrap><canvas data-pdf-canvas dir="ltr"></canvas></div>
     </div>
   </article>`;
 }
@@ -220,11 +222,11 @@ async function loadSection(section, reset = false) {
     if (section === 'nasheed') bindNasheedPlayback(view.list);
     if (section === 'weekly' && cards.length) {
       try {
-        const { initializePdfReaders } = await import('/js/alnaba-pdf.js?v=1');
+        const { initializePdfReaders } = await import('/js/alnaba-pdf.js?v=2');
         initializePdfReaders(view.list);
       } catch {
         for (const status of view.list.querySelectorAll('[data-pdf-status]')) {
-          status.textContent = 'تعذّرت تهيئة المعاينة. يمكنك فتح ملف PDF أو تنزيله من الأزرار أعلاه.';
+          status.textContent = 'تعذّر تشغيل القارئ. حدّث الصفحة أو نزّل ملف PDF من الأزرار أعلاه.';
         }
       }
     }

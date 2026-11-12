@@ -606,7 +606,11 @@ export async function fetchAlnabaTelegramBytes(item, { api, token, fetchImpl = f
   const encodedPath = filePath.split('/').map(encodeURIComponent).join('/');
   const url = `https://api.telegram.org/file/bot${token}/${encodedPath}`;
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error('REMOTE_FILE_UNAVAILABLE');
+  if (!response.ok) {
+    const error = new Error('REMOTE_FILE_UNAVAILABLE');
+    if (response.status === 408 || response.status === 429 || response.status >= 500) error.retryable = true;
+    throw error;
+  }
   const buffer = await readBounded(response, maxBytes);
   if (safeItem.file_size && buffer.length > maxBytes) throw new Error('FILE_TOO_LARGE');
   if (!validBytes(buffer, safeItem.mime_type)) throw new Error('INVALID_FILE_CONTENT');
@@ -649,7 +653,17 @@ export function createAlnabaRouter({ store, fetchMedia, limiter = next } = {}) {
     if (cached) pdfMediaCache.delete(cacheKey);
     let pending = pdfMediaPending.get(cacheKey);
     if (!pending) {
-      pending = Promise.resolve().then(() => fetchMedia(item));
+      pending = Promise.resolve().then(async () => {
+        try {
+          return await fetchMedia(item);
+        } catch (error) {
+          const transient = error?.retryable === true || error?.name === 'TypeError'
+            || error?.name === 'AbortError' || error?.name === 'TimeoutError';
+          if (item.section !== 'weekly' || item.mime_type !== 'application/pdf' || !transient) throw error;
+          // Share one bounded retry between all concurrent requests for this PDF.
+          return fetchMedia(item);
+        }
+      });
       pdfMediaPending.set(cacheKey, pending);
     }
     try {

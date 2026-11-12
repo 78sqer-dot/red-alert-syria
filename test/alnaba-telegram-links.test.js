@@ -71,8 +71,8 @@ test('the copy-first archive keeps HTTPS links and current cached assets', () =>
   assert.doesNotMatch(frontend, /telegramArchiveOpenLink/);
   assert.match(frontend, /href="\$\{safeUrl\}" rel="noopener noreferrer"/);
   assert.match(frontend, /data-copy-archive-link="\$\{safeUrl\}"/);
-  assert.match(page, /\/js\/alnaba\.js\?v=8/);
-  assert.match(page, /\/css\/alnaba\.css\?v=6/);
+  assert.match(page, /\/js\/alnaba\.js\?v=9/);
+  assert.match(page, /\/css\/alnaba\.css\?v=7/);
   assert.match(page, /لا يتطلب استعراض الأرشيف تسجيل دخول للموقع/);
   assert.match(page, /قد يتطلب حساب Telegram/);
 });

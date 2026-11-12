@@ -24,6 +24,8 @@ copy(nm('@mapbox/mapbox-gl-rtl-text/dist/mapbox-gl-rtl-text.js'), out('vendor/ma
 const pdfjsVersion = JSON.parse(fs.readFileSync(nm('pdfjs-dist/package.json'), 'utf8')).version;
 copy(nm('pdfjs-dist/build/pdf.min.mjs'), out(`vendor/pdfjs-${pdfjsVersion}.min.mjs`));
 copy(nm('pdfjs-dist/build/pdf.worker.min.mjs'), out(`vendor/pdfjs-worker-${pdfjsVersion}.min.mjs`));
+copy(nm('pdfjs-dist/legacy/build/pdf.min.mjs'), out(`vendor/pdfjs-legacy-${pdfjsVersion}.min.mjs`));
+copy(nm('pdfjs-dist/legacy/build/pdf.worker.min.mjs'), out(`vendor/pdfjs-legacy-worker-${pdfjsVersion}.min.mjs`));
 copy(nm('pdfjs-dist/LICENSE'), out('vendor/pdfjs-LICENSE.txt'));
 for (const directory of ['cmaps', 'standard_fonts']) {
   const destination = out(`vendor/pdfjs/${directory}`);

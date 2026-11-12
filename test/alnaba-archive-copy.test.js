@@ -93,6 +93,6 @@ test('archive cards show the unchanged full HTTPS URL, keep it clickable, and pr
   assert.doesNotMatch(frontend, /telegramArchiveOpenLink|intent:\/\//);
   assert.match(styles, /-webkit-user-select: text; -webkit-touch-callout: default;/);
   assert.match(frontend, /اضغط مطولاً على الرابط الظاهر واختر «نسخ»/);
-  assert.match(page, /\/js\/alnaba\.js\?v=8/);
-  assert.match(page, /\/css\/alnaba\.css\?v=6/);
+  assert.match(page, /\/js\/alnaba\.js\?v=9/);
+  assert.match(page, /\/css\/alnaba\.css\?v=7/);
 });
