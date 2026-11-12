@@ -165,6 +165,14 @@ button { font: inherit; }
 .an-pdf-canvas-wrap { min-height: 240px; padding: 10px; overflow: auto; background: #dfe4ea; -webkit-overflow-scrolling: touch; }
 .an-pdf-canvas-wrap canvas { display: block; max-width: none; margin: 0 auto; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .18); }
 .an-pdf-reader:focus-visible { outline: 2px solid #86b8e2; outline-offset: 3px; }
+.an-pdf-reader:fullscreen { width: 100vw; height: 100vh; border: 0; background: #dfe4ea; }
+.an-pdf-reader:fullscreen .an-pdf-canvas-wrap { min-height: calc(100vh - 126px); height: calc(100vh - 126px); }
+.an-pdf-fullscreen { min-width: 86px; }
+@media (min-width: 1100px) {
+  .an-paper-card { grid-template-columns: minmax(360px, .72fr) minmax(620px, 1.28fr); }
+  .an-pdf-reader { min-height: 560px; }
+  .an-pdf-canvas-wrap { min-height: 500px; }
+}
 .an-archive-list { display: grid; gap: 12px; }
 .an-archive-entry { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 19px; border: 1px solid var(--an-line); border-radius: 14px; background: linear-gradient(105deg, rgba(73, 168, 139, .055), transparent 45%), var(--an-panel); }
 .an-archive-copy { min-width: 0; }

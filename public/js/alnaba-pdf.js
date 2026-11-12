@@ -3,6 +3,7 @@ const PDFJS_WORKER_URL = '/vendor/pdfjs-legacy-worker-4.10.38.min.mjs';
 const MAX_CANVAS_PIXELS = 6_000_000;
 const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 4;
+const PDF_FETCH_TIMEOUT = 120_000;
 let pdfjsPromise;
 let pdfjsImportAttempts = 0;
 
@@ -118,6 +119,31 @@ async function renderPage(reader, state) {
   }
 }
 
+async function fetchPdfBytes(url, reader) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PDF_FETCH_TIMEOUT);
+  try {
+    const response = await fetch(url, { credentials: 'omit', cache: 'force-cache', signal: controller.signal, headers: { Accept: 'application/pdf' } });
+    if (!response.ok) throw new Error(`PDF HTTP ${response.status}`);
+    if (!response.body) return new Uint8Array(await response.arrayBuffer());
+    const total = Number(response.headers.get('content-length')) || 0;
+    const stream = response.body.getReader();
+    const chunks = [];
+    let loaded = 0;
+    while (true) {
+      const part = await stream.read();
+      if (part.done) break;
+      chunks.push(part.value);
+      loaded += part.value.byteLength;
+      setStatus(reader, `جارٍ تحميل الصحيفة…${total ? ` ${Math.min(99, Math.round((loaded / total) * 100))}%` : ''}`);
+    }
+    const data = new Uint8Array(loaded);
+    let offset = 0;
+    for (const chunk of chunks) { data.set(chunk, offset); offset += chunk.byteLength; }
+    return data;
+  } finally { clearTimeout(timeout); }
+}
+
 async function openPdf(reader, state) {
   if (state.loading || state.pdf) return state.loading;
   state.loading = (async () => {
@@ -128,9 +154,9 @@ async function openPdf(reader, state) {
     let loadingTask;
     try {
       const pdfjs = await loadPdfJs();
+      const data = await fetchPdfBytes(reader.dataset.src, reader);
       loadingTask = pdfjs.getDocument({
-        url: reader.dataset.src,
-        rangeChunkSize: 512 * 1024,
+        data,
         cMapUrl: '/vendor/pdfjs/cmaps/',
         cMapPacked: true,
         standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
@@ -170,6 +196,12 @@ function bindReader(reader) {
     if (retry && reader.contains(retry)) {
       if (state.pdf) await renderPage(reader, state);
       else await openPdf(reader, state);
+      return;
+    }
+    const fullscreen = event.target.closest?.('[data-pdf-fullscreen]');
+    if (fullscreen && reader.contains(fullscreen)) {
+      if (!document.fullscreenElement) await reader.requestFullscreen?.();
+      else await document.exitFullscreen?.();
       return;
     }
     const button = event.target.closest?.('button[data-pdf-action]');

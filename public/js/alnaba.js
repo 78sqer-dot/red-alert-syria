@@ -103,6 +103,7 @@ function renderWeekly(item) {
         <span class="an-pdf-zoom-label" data-pdf-zoom>١٠٠٪</span>
         <button class="an-pdf-control an-pdf-zoom" type="button" data-pdf-action data-pdf-zoom-out disabled aria-label="تصغير">−</button>
         <button class="an-pdf-control an-pdf-zoom" type="button" data-pdf-action data-pdf-zoom-in disabled aria-label="تكبير">+</button>
+        <button class="an-pdf-control an-pdf-fullscreen" type="button" data-pdf-fullscreen aria-label="ملء الشاشة">ملء الشاشة</button>
       </div>
       <p class="an-pdf-hint">للقراءة بوضوح، اضغط + ثم اسحب الصفحة يميناً ويساراً.</p>
       <div class="an-pdf-status" data-pdf-status role="status">جارٍ تهيئة معاينة الصحيفة…</div>
