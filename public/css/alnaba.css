@@ -151,8 +151,20 @@ button { font: inherit; }
 .an-paper-meta { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 7px; }
 .an-paper-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 22px; }
 .an-paper-actions .an-action-link.secondary { border-color: var(--an-line); background: transparent; color: #c1cbd6; }
-.an-pdf-frame { min-height: 340px; border-inline-start: 1px solid var(--an-line); background: #e7eaf0; }
-.an-pdf-frame iframe { display: block; width: 100%; height: 100%; min-height: 340px; border: 0; background: #fff; }
+.an-pdf-reader { min-width: 0; min-height: 340px; overflow: hidden; border-inline-start: 1px solid var(--an-line); background: #e7eaf0; }
+.an-pdf-toolbar { display: flex; min-height: 54px; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; padding: 7px; border-bottom: 1px solid var(--an-line); background: #111923; }
+.an-pdf-control { display: inline-flex; min-width: 42px; min-height: 38px; align-items: center; justify-content: center; padding: 5px 10px; border: 1px solid #35485d; border-radius: 8px; background: #17212d; color: #e5edf6; font-size: 11px; font-weight: 700; cursor: pointer; }
+.an-pdf-control:disabled { opacity: .48; cursor: default; }
+.an-pdf-control:not(:disabled):hover { border-color: #66839f; background: #1d2b3a; }
+.an-pdf-zoom { font-family: Arial, sans-serif; font-size: 17px; }
+.an-pdf-page, .an-pdf-zoom-label { color: #d5deea; font-size: 10.5px; white-space: nowrap; }
+.an-pdf-page { min-width: 92px; text-align: center; }
+.an-pdf-zoom-label { min-width: 38px; text-align: center; }
+.an-pdf-status { display: grid; min-height: 240px; place-items: center; padding: 18px; color: #34404d; text-align: center; font-size: 12px; line-height: 1.9; }
+.an-pdf-status:empty { display: none; }
+.an-pdf-canvas-wrap { min-height: 240px; padding: 10px; overflow: auto; background: #dfe4ea; -webkit-overflow-scrolling: touch; }
+.an-pdf-canvas-wrap canvas { display: block; max-width: none; margin: 0 auto; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .18); }
+.an-pdf-reader:focus-visible { outline: 2px solid #86b8e2; outline-offset: 3px; }
 .an-archive-list { display: grid; gap: 12px; }
 .an-archive-entry { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 19px; border: 1px solid var(--an-line); border-radius: 14px; background: linear-gradient(105deg, rgba(73, 168, 139, .055), transparent 45%), var(--an-panel); }
 .an-archive-copy { min-width: 0; }
@@ -195,8 +207,11 @@ button { font: inherit; }
   .an-archive-actions > * { min-height: 44px; flex: 1 1 calc(50% - 4px); }
   .an-archive-open { width: auto; }
   .an-paper-copy { min-height: 190px; padding: 16px; }
-  .an-pdf-frame { min-height: 300px; border-inline-start: 0; border-top: 1px solid var(--an-line); }
-  .an-pdf-frame iframe { min-height: 300px; }
+  .an-pdf-reader { min-height: 280px; border-inline-start: 0; border-top: 1px solid var(--an-line); }
+  .an-pdf-status, .an-pdf-canvas-wrap { min-height: 220px; }
+  .an-pdf-toolbar { gap: 5px; padding: 7px 6px; }
+  .an-pdf-control { min-height: 42px; padding-inline: 9px; }
+  .an-pdf-page { min-width: 84px; font-size: 10px; }
   .an-footer { align-items: flex-start; flex-direction: column; justify-content: center; padding-block: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -218,13 +233,10 @@ button { font: inherit; }
 .an-library-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; color: var(--an-muted); font-size: 10px; }
 .an-library-media { display: block; width: min(100% - 32px, 760px); max-height: 520px; margin: 4px auto 16px; border-radius: 9px; background: #070a0e; }
 .an-library-pdf { display: block; width: min(100% - 32px, 760px); height: clamp(280px, 42vw, 560px); margin: 4px auto 16px; border: 0; border-radius: 9px; background: #fff; }
-.an-pdf-frame { height: clamp(320px, 44vw, 620px); min-height: 0; }
-.an-pdf-frame iframe { height: 100%; min-height: 0; }
 @media (max-width: 760px) {
   .an-library-copy { padding: 14px 14px 8px; }
   .an-library-media { width: calc(100% - 28px); max-height: 420px; margin-bottom: 14px; }
   .an-library-pdf { width: calc(100% - 28px); height: min(68vh, 540px); min-height: 280px; margin-bottom: 14px; }
-  .an-pdf-frame { height: min(68vh, 540px); min-height: 280px; }
 }
 
 /* Discreet nasheed playback visualizer; motion is enabled only while media is playing. */

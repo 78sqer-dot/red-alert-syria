@@ -91,10 +91,22 @@ function renderWeekly(item) {
       <div class="an-paper-meta">${date ? `<time datetime="${esc(item.published_at)}">${esc(date)}</time>` : ''}<span>PDF</span></div>
       <div class="an-paper-actions">
         <a class="an-action-link" href="#${previewId}" aria-controls="${previewId}">عرض الصحيفة داخل الصفحة</a>
+        <a class="an-action-link secondary" href="${src}" target="_blank" rel="noopener noreferrer">فتح PDF</a>
         <a class="an-action-link secondary" href="${src}" download>تنزيل PDF</a>
       </div>
     </div>
-    <div class="an-pdf-frame" id="${previewId}" tabindex="-1"><iframe src="${src}#toolbar=1&navpanes=0" title="معاينة ${title}" loading="lazy"></iframe></div>
+    <div class="an-pdf-reader" id="${previewId}" data-pdf-reader data-src="${src}" role="region" aria-label="قارئ ${title}" tabindex="-1">
+      <div class="an-pdf-toolbar" role="group" aria-label="أدوات قراءة الصحيفة">
+        <button class="an-pdf-control" type="button" data-pdf-action data-pdf-prev disabled>السابق</button>
+        <span class="an-pdf-page" data-pdf-page aria-live="polite">معاينة الصحيفة</span>
+        <button class="an-pdf-control" type="button" data-pdf-action data-pdf-next disabled>التالي</button>
+        <span class="an-pdf-zoom-label" data-pdf-zoom>١٠٠٪</span>
+        <button class="an-pdf-control an-pdf-zoom" type="button" data-pdf-action data-pdf-zoom-out disabled aria-label="تصغير">−</button>
+        <button class="an-pdf-control an-pdf-zoom" type="button" data-pdf-action data-pdf-zoom-in disabled aria-label="تكبير">+</button>
+      </div>
+      <div class="an-pdf-status" data-pdf-status role="status">جارٍ تهيئة معاينة الصحيفة…</div>
+      <div class="an-pdf-canvas-wrap" data-pdf-canvas-wrap><canvas data-pdf-canvas></canvas></div>
+    </div>
   </article>`;
 }
 
@@ -206,6 +218,16 @@ async function loadSection(section, reset = false) {
     const cards = data.items.map((item) => view.render(item, section)).filter(Boolean);
     view.list.insertAdjacentHTML('beforeend', cards.join(''));
     if (section === 'nasheed') bindNasheedPlayback(view.list);
+    if (section === 'weekly' && cards.length) {
+      try {
+        const { initializePdfReaders } = await import('/js/alnaba-pdf.js?v=1');
+        initializePdfReaders(view.list);
+      } catch {
+        for (const status of view.list.querySelectorAll('[data-pdf-status]')) {
+          status.textContent = 'تعذّرت تهيئة المعاينة. يمكنك فتح ملف PDF أو تنزيله من الأزرار أعلاه.';
+        }
+      }
+    }
     view.list.dataset.offset = String(offset + data.items.length);
     view.empty.hidden = view.list.childElementCount > 0;
     if (view.more) view.more.hidden = !data.has_more;
