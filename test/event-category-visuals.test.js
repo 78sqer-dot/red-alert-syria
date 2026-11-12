@@ -61,7 +61,7 @@ test('category recoloring preserves readable light/dark markers and approved siz
   assert.match(css, /\.helicopter-svg \.heli-main-rotor \{[^}]*fill: #0b1220; opacity: \.96;[^}]*animation: heliRotor/);
   assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{[^}]*fill: #ef4444;[^}]*animation: heliRotor/);
   assert.match(css, /\.heli-orbit \{ --heli-orb: calc\(var\(--orb, 14px\) \+ 4px\);[^}]*animation: heliOrbit 9s linear infinite/);
-  assert.match(css, /\.mk-breaking-news \.news-marker-svg \{ width: 15px; height: 15px/);
+  assert.match(css, /\.news-marker-category \{ display: block; width: 15px; height: 15px;/);
   assert.match(css, /\.mk-breaking-news \.news-pulse-ring \{ width: 34px; height: 34px; border-color: #ef233c/);
   assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
   assert.match(css, /\.ic-svg \{[^}]*width: 24px; height: 24px/);

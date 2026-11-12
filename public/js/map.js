@@ -973,8 +973,7 @@ export class AlertMap {
       el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 24)}${plane('is-left', 24)}${plane('is-right', 24)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
     } else if (a.type === 'breaking') {
       el.classList.add('mk-breaking-news');
-      const triangle = '<svg class="news-marker-svg" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 1.3 23.2 21H.8Z" fill="#ef233c"/><path d="m12 6.1-7.2 12.7h14.4Z" fill="#000000"/><path d="M11 9h2v5h-2zm0 6h2v2h-2z" fill="#ef233c"/></svg>';
-      el.innerHTML = `<span class="news-marker-core">${triangle}</span>`;
+      el.innerHTML = `<span class="news-marker-core"><span class="news-marker-category" aria-hidden="true">${visual.dot}</span></span>`;
     } else if (eventEmoji) {
       el.innerHTML = `<span class="sai map-event-disc map-event-emoji" style="width:34px;height:34px;border-color:${visual.color};--c:${visual.color}" aria-hidden="true">${eventEmoji}</span>`;
     } else if (marker === 'icon') {

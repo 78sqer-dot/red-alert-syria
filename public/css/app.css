@@ -363,12 +363,11 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .news-pulse-ring::after { content: ''; position: absolute; inset: 0; border: 1px solid color-mix(in srgb, var(--c, #e11d2e) 34%, transparent); border-radius: inherit; animation: newsPulseWave 2.5s ease-out infinite; }
 .news-marker-core { position: absolute; left: 0; top: 0; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; box-sizing: border-box; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 0 0 1px rgba(15,23,42,.58), 0 2px 5px rgba(0,0,0,.24); }
 .news-marker-core::after { content: ''; position: absolute; top: -3px; inset-inline-end: -3px; width: 8px; height: 8px; box-sizing: border-box; border: 1.5px solid #fff; border-radius: 50%; background: #ef233c; box-shadow: 0 0 0 1px rgba(15,23,42,.55); }
-.news-marker-svg { display: block; width: 24px; height: 24px; color: #111827; stroke: none; fill: #111827; filter: drop-shadow(0 0 1px #fff); }
+.news-marker-category { display: block; width: 15px; height: 15px; font: 14px/15px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; text-align: center; }
 .mk-breaking-news .news-pulse-ring { width: 34px; height: 34px; border-color: #ef233c; background: transparent; box-shadow: 0 0 5px rgba(239,35,60,.28); }
 .mk-breaking-news .news-pulse-ring::after { border-color: #ef233c; animation: urgentPulseWave 2s ease-out infinite; }
 .mk-breaking-news .news-marker-core { width: 26px; height: 26px; border-width: 1.7px; border-color: #ef233c; box-shadow: 0 0 0 1px rgba(239,35,60,.34), 0 2px 5px rgba(239,35,60,.18); }
 .mk-breaking-news .news-marker-core::after { border-color: #ef233c; box-shadow: 0 0 0 1px rgba(239,35,60,.28); }
-.mk-breaking-news .news-marker-svg { width: 15px; height: 15px; filter: none; }
 @keyframes urgentPulseWave { 0% { transform: scale(.7); opacity: .72; } 100% { transform: scale(1.5); opacity: 0; } }
 .mk:hover .news-marker-core, .mk.sel .news-marker-core { transform: translate(-50%, -50%) scale(1.12); }
 .mk.inactive .news-pulse-ring { animation: none; opacity: .55; }
