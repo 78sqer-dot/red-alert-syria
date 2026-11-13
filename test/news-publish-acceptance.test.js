@@ -1640,6 +1640,7 @@ test('public reporters can attach a photo and video to one pending report before
   fs.mkdirSync(dataDir, { recursive: true });
   const mediaReporter = { id: 8270709661, is_bot: false, first_name: 'Media reporter', language_code: 'ar' };
   const reportIdsBefore = new Set(Object.keys(store.state.reports || {}));
+  const alertIdsBefore = new Set(store.state.alerts.map((alert) => alert.id));
   const start = calls.length;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
@@ -1690,6 +1691,15 @@ test('public reporters can attach a photo and video to one pending report before
   assert.equal(JSON.stringify(projectedPending).includes('report-video-e2e'), false);
   assert.equal(calls.slice(start).some(({ chatId }) => chatId === '@mock_news_channel'), false, 'the synthetic report remains pending and is never published');
   assert.equal(store.reportDone(rid), false, 'the report is still awaiting an editor decision');
+
+  await tap(`rap:${rid}`, owner, bot);
+  assert.equal(store.reportDone(rid), true, 'the owner approval handles the report exactly once');
+  const published = store.state.alerts.find((alert) => !alertIdsBefore.has(alert.id));
+  assert.ok(published, 'the alert is created only after the owner approves');
+  const projectedPublished = publicAlert(published);
+  assert.deepEqual(projectedPublished.media_items.map((item) => item.type), ['photo', 'video'], 'both report attachments remain available to the alert popup');
+  assert.equal(projectedPublished.media_items.some((item) => Object.hasOwn(item, 'file_id')), false, 'the approved popup projection does not expose Telegram file identifiers');
+  assert.equal(calls.slice(start).some(({ method, chatId }) => ['sendPhoto', 'sendVideo'].includes(method) && chatId === '@mock_news_channel'), false, 'report media is kept on the website map, not uploaded as source media to the channel');
 });
 
 test('news text and details accept short and long input without a custom character limit', async () => {
