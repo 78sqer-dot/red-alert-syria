@@ -183,6 +183,15 @@ test('kidnapping is a distinct security type with a restraint icon and human rev
   assert.ok(ICONS.handcuffs);
   assert.ok(EXTRA_SVG.handcuffs);
   assert.equal(eventVisual('kidnapping').category, 'security');
+  assert.ok(NEWS_TYPES.includes('kidnapping'), 'the automatic news monitor can route drafts to the dedicated kidnapping button');
+  const release = 'قوى الأمن الداخلي بمدينة حلب يحرر المختطف فادي بركات صاحب معمل بركات للأدوية ويوقف أحد المشتبه بهم في عملية الخطف التي جرت قبل أيام في بلدة';
+  assert.equal(keywordTypes(release).includes('explosion'), false, 'دوي inside الأدوية is not an explosion cue');
+  assert.equal(keywordTypes(release).includes('kidnapping'), true);
+  assert.equal(ruleClassify(release)?.type, 'kidnapping', 'the rules-only fallback uses the kidnapping button for the reported rescue');
+  assert.equal(refineType('explosion', release), 'kidnapping', 'a false AI explosion label is corrected from explicit kidnapping evidence');
+  assert.equal(refineType('arrest', release), 'kidnapping', 'the rescue remains the primary event despite the suspect arrest');
+  const realExplosion = 'سُمع دوي انفجار في مدينة حلب السورية اليوم.';
+  assert.equal(ruleClassify(realExplosion)?.type, 'explosion', 'a real explosion retains its category');
   const kidnappingDraft = { type: 'kidnapping', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
   assert.equal(nightEligible(kidnappingDraft), false, 'kidnapping reports always require human review overnight');
   assert.equal(dayAutoReady({ ...kidnappingDraft, dayAutoAt: Date.now() - 1 }), false, 'kidnapping reports are never daytime auto-published');
