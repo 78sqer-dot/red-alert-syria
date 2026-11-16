@@ -39,16 +39,16 @@ const EDIT_TYPE_GROUPS = Object.freeze({
   targeting: Object.freeze(['uav_strike', 'assassination']),
   strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination')),
   incursion: Object.freeze(['military_incursion']),
-  patrol: Object.freeze(['patrol', 'kidnapping']),
+  patrol: Object.freeze(['patrol']),
   protests: Object.freeze(['protest_action', 'protest']),
   civil: Object.freeze(ALERT_GROUPS.civil.types.filter((type) => type !== 'protest' && type !== 'protest_action')),
   smuggling: Object.freeze([...ALERT_GROUPS.smuggling.types]),
   nature: Object.freeze([...ALERT_GROUPS.nature.types]),
 });
-const EDIT_TYPE_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'signal_sweep']);
+const EDIT_TYPE_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'kidnapping', 'signal_sweep']);
 const EDIT_TYPE_MENU = Object.freeze([
   { type: 'breaking' }, { type: 'political' }, { group: 'aerial' }, { group: 'targeting' },
-  { group: 'strikes' }, { group: 'incursion' }, { group: 'patrol' }, { group: 'protests' },
+  { group: 'strikes' }, { group: 'incursion' }, { group: 'patrol' }, { type: 'kidnapping' }, { group: 'protests' },
   { group: 'civil' }, { group: 'smuggling' }, { group: 'nature' }, { type: 'border' }, { type: 'signal_sweep' },
 ]);
 const INCURSION_TYPE_CHOICES = Object.freeze([

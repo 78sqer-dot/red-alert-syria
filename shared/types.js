@@ -67,7 +67,7 @@ export const ALERT_TYPES = {
     tag_ar: 'دورية', tag_en: 'Patrol',
   },
   kidnapping: {
-    ar: 'اختطاف', en: 'Kidnapping', button_ar: 'اختطاف', button_en: 'Kidnapping',
+    ar: 'اختطاف', en: 'Kidnapping', button_ar: 'خطف أو اختطاف', button_en: 'Kidnapping',
     emoji: '⛓️', color: '#7c2d12', ring: '#451a03', group: 'other', ttlMin: 360,
     marker: 'icon', glyph: 'handcuffs', icon: '#7c2d12', disc: '#451a03', size: 32, zone: false,
     tag_ar: 'اختطاف', tag_en: 'Kidnapping',
