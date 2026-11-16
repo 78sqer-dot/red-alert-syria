@@ -175,9 +175,9 @@ test('kidnapping is a distinct security type with a restraint icon and human rev
   const kidnapping = ALERT_TYPES.kidnapping;
   assert.ok(TYPE_KEYS.includes('kidnapping'));
   assert.ok(ALERT_GROUPS.other.types.includes('kidnapping'));
-  assert.equal(kidnapping.button_ar, 'اختطاف');
+  assert.equal(kidnapping.button_ar, 'خطف أو اختطاف');
   assert.equal(kidnapping.button_en, 'Kidnapping');
-  assert.equal(alertButtonLabel('kidnapping'), '⛓️ اختطاف');
+  assert.equal(alertButtonLabel('kidnapping'), '⛓️ خطف أو اختطاف');
   assert.equal(kidnapping.glyph, 'handcuffs');
   assert.equal(typeIcon('kidnapping'), 'handcuffs');
   assert.ok(ICONS.handcuffs);
@@ -190,6 +190,9 @@ test('kidnapping is a distinct security type with a restraint icon and human rev
   assert.equal(ruleClassify(release)?.type, 'kidnapping', 'the rules-only fallback uses the kidnapping button for the reported rescue');
   assert.equal(refineType('explosion', release), 'kidnapping', 'a false AI explosion label is corrected from explicit kidnapping evidence');
   assert.equal(refineType('arrest', release), 'kidnapping', 'the rescue remains the primary event despite the suspect arrest');
+  const shortKidnappingStory = 'عاجل: مصدر أمني لسوريا الآن يؤكد خطف مواطن في المنصورة بريف حلب.';
+  assert.equal(ruleClassify(shortKidnappingStory)?.type, 'kidnapping', 'the automatic rules classify a short, explicit Syrian kidnapping report correctly');
+  assert.equal(refineType('explosion', shortKidnappingStory), 'kidnapping', 'an incorrect AI explosion button is corrected when the source explicitly reports a kidnapping');
   const realExplosion = 'سُمع دوي انفجار في مدينة حلب السورية اليوم.';
   assert.equal(ruleClassify(realExplosion)?.type, 'explosion', 'a real explosion retains its category');
   const kidnappingDraft = { type: 'kidnapping', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };

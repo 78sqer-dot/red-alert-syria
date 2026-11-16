@@ -62,8 +62,7 @@ export const BOT_ALERT_MENU_GROUPS = Object.freeze({
   smuggling: Object.freeze([...ALERT_GROUPS.smuggling.types]),
   nature: Object.freeze([...ALERT_GROUPS.nature.types]),
 });
-export const BOT_ALERT_MENU_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'military_incursion', 'patrol', 'signal_sweep']);
-export const BOT_ALERT_MENU_PATROL_CHILD_TYPES = Object.freeze(['kidnapping']);
+export const BOT_ALERT_MENU_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'military_incursion', 'patrol', 'kidnapping', 'signal_sweep']);
 const REPORT_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', protests: '📢', civil: '🛡️', smuggling: '🚚', nature: '🌦️' });
 const quoteButtonLabel = (label, lang) => lang === 'en' ? `“${label}”` : `«${label}»`;
 function reportGroupLabel(group, lang) {
@@ -489,6 +488,7 @@ function mainKeyboard(ctx) {
     { group: 'strikes', callback: 'ag:strikes' },
     { type: 'military_incursion', callback: 'mi' },
     { type: 'patrol', callback: 't:patrol' },
+    { type: 'kidnapping', callback: 't:kidnapping' },
     { type: 'signal_sweep', callback: 't:signal_sweep' },
     { group: 'protests', callback: 'ag:protests' },
     { group: 'civil', callback: 'cv' },
@@ -761,7 +761,6 @@ async function askPatrolForm(ctx, d) {
   const kb = new InlineKeyboard()
     .text(en ? 'Single patrol' : 'دورية واحدة', 'pt:singular')
     .text(en ? 'Multiple patrols' : 'عدة دوريات', 'pt:plural').row()
-    .text(quoteButtonLabel(alertButtonLabel('kidnapping', en ? 'en' : 'ar'), en ? 'en' : 'ar'), 't:kidnapping').row()
     .text(L(ctx).btnCancel, 'cancel');
   await show(ctx, en ? 'Choose the patrol count:' : 'اختر عدد الدوريات:', kb);
 }
