@@ -116,11 +116,11 @@ test('explicit opinion rewrite is labeled, sharp toward government targets, and 
   });
   assert.match(result, /^رأي\/تحليل:/, 'opinion text is labeled even if the provider omits the label');
   const system = JSON.parse(request.options.body).systemInstruction.parts[0].text;
-  assert.match(system, /بصوت معارض واضح يركز على الحكومة الانتقالية والوزارات/);
+  assert.match(system, /كاتب رأي\/تحليل عربي حاد وواضح/);
+  assert.match(system, /يجوز ذكر الجهة الحكومية أو المسؤول الذي يسميه المصدر فقط/);
   assert.match(system, /لا تشترط وجود صلة سببية/);
-  assert.match(system, /نقداً سياسياً قصيراً ومباشراً وحاداً بوصفه رأياً/);
-  assert.match(system, /لا تنسب مسؤولية الحدث أو فعلاً أو قراراً محدداً إلى جهة/);
-  assert.match(system, /ميّز الوقائع المذكورة عن الحكم والاستنتاج/);
+  assert.match(system, /لا تنسب مسؤولية أو سبباً أو فعلاً أو قراراً محدداً إلى جهة/);
+  assert.match(system, /ميّز الوقائع عن الحكم والاستنتاج/);
   assert.match(system, /لا تخترع وقائع أو أسماء أو أرقاماً/);
   assert.match(system, /لا تستخدم تلاعباً نفسياً/);
 });
@@ -133,40 +133,47 @@ test('an explicit state-cadre mention is enough for private opinion without inve
     'mentioning state cadres without a policy/action is no longer a reason to refuse private opinion');
 });
 
-test('ministry condolence source can request private critique or labeled satire without policy causality, but unrelated accidents cannot', async () => {
+test('private critique and satire work on unrelated reports without inventing government blame or causality', async () => {
   let requests = 0;
   const prompts = [];
   const outputs = [
-    'رأي/تحليل: لا يكفي بيان التعزية وحده لمعالجة أوجاع الأهالي.',
-    'محاكاة ساخرة خيالية (ليست خبراً): في مسرح الخيال تتحول الوزارة إلى لافتة كبيرة فوق باب مغلق.',
+    'رأي/تحليل: الحادث يذكّر بأن الاستنتاج يجب أن ينتظر الوقائع والتحقيق.',
+    'محاكاة ساخرة خيالية (ليست خبراً): في مسرح الخيال تتحول لوحة الطريق إلى علامة استفهام كبيرة.',
   ];
   const fetchImpl = async (_url, options) => {
     prompts.push(JSON.parse(options.body).systemInstruction.parts[0].text);
     const text = outputs[requests++];
     return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }) };
   };
-  const ministryCondolence = 'وزارة الصحة السورية تتقدم بالتعازي إلى أسر ضحايا الحادث في حمص، وفق بيانها المنشور اليوم.';
-  assert.ok(keywordTypes(ministryCondolence).includes('accident'), 'the condolence source includes an incident keyword');
-  assert.equal(rewriteSourceReviewReason(ministryCondolence), null,
-    'an explicitly named ministry suffices even when the report does not connect it to the incident or a policy');
-  const opinion = await rewriteArabicNews(ministryCondolence, { key: 'dedicated-free-key', mode: 'opinion', fetchImpl });
-  const satire = await rewriteArabicNews(ministryCondolence, { key: 'dedicated-free-key', mode: 'satire', fetchImpl });
+  const accident = 'وقع حادث سير في حمص وأصيب 3 أشخاص، وأعلنت الشرطة تفاصيل التحقيق في الحادث مساء اليوم.';
+  assert.ok(keywordTypes(accident).includes('accident'), 'the traffic incident is a monitored news type');
+  assert.equal(rewriteSourceReviewReason(accident), null,
+    'a sufficiently detailed non-political source is eligible for a private preview');
+  const opinion = await rewriteArabicNews(accident, { key: 'dedicated-free-key', mode: 'opinion', fetchImpl });
+  const satire = await rewriteArabicNews(accident, { key: 'dedicated-free-key', mode: 'satire', fetchImpl });
   assert.match(opinion, /^رأي\/تحليل:/);
   assert.match(satire, /^محاكاة ساخرة خيالية \(ليست خبراً\):/);
-  assert.match(satire, /مسرح الخيال/);
-  assert.ok(prompts.every((prompt) => /لا تشترط وجود صلة سببية/.test(prompt)), 'both tone prompts explicitly allow no direct causal link');
-  assert.match(prompts[0], /لا تنسب مسؤولية الحدث أو فعلاً أو قراراً محدداً/,
-    'opinion remains forceful but cannot state unsupported responsibility as fact');
+  assert.match(satire, /لوحة الطريق/);
+  assert.ok(prompts.every((prompt) => /لا تشترط وجود صلة سببية/.test(prompt)), 'both tone prompts forbid implying an unsupported causal link');
+  assert.match(prompts[0], /لا يذكر المصدر جهة حكومية أو مسؤولاً أو سياسة/,
+    'an unrelated event does not invite an invented government target');
+  assert.match(prompts[0], /لا تنسب مسؤولية أو سبباً أو فعلاً أو قراراً محدداً/,
+    'opinion can be sharp without stating unsupported responsibility or causation');
   assert.match(prompts[1], /لا تقدّم واقعة مختلقة أو اتهاماً واقعياً/,
     'satire remains clearly fictional and cannot present an invented allegation as fact');
-  const protest = 'خرجت مظاهرة في حمص احتجاجاً على قرار الحكومة الانتقالية بفرض رسوم جديدة، بحسب بيان المنظمين الصادر اليوم.';
-  assert.equal(rewriteSourceReviewReason(protest), null, 'a source that names a government target remains eligible');
-  const accident = 'وقع حادث سير في حمص وأصيب 3 أشخاص، وأعلنت الشرطة تفاصيل التحقيق في الحادث مساء اليوم.';
-  assert.equal(rewriteSourceReviewReason(accident), 'non-political-event-source');
+  const ministryCondolence = 'وزارة الصحة السورية تتقدم بالتعازي إلى أسر ضحايا الحادث في حمص، وفق بيانها المنشور اليوم.';
+  assert.equal(rewriteSourceReviewReason(ministryCondolence), null, 'a source that names a ministry remains eligible');
+  const unsafeNoTarget = 'رأي/تحليل: سياسة الحكومة تسببت بالحادث.';
+  const unsafeNamedTarget = 'رأي/تحليل: تسببت الوزارة بالحادث.';
   await assert.rejects(rewriteArabicNews(accident, {
-    key: 'dedicated-free-key', mode: 'opinion', fetchImpl: async () => { requests++; throw new Error('must not call provider'); },
+    key: 'dedicated-free-key', mode: 'opinion',
+    fetchImpl: async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: unsafeNoTarget }] } }] }) }),
   }), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
-  assert.equal(requests, 2, 'only the two ministry-targeted private tones reach the provider; an unrelated accident is rejected first');
+  await assert.rejects(rewriteArabicNews(ministryCondolence, {
+    key: 'dedicated-free-key', mode: 'opinion',
+    fetchImpl: async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: unsafeNamedTarget }] } }] }) }),
+  }), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
+  assert.equal(requests, 2, 'safe private previews reach the provider; unsafe target/causality claims are stopped before being returned');
   assert.throws(() => finalizeRewriteOutput('لا تقدم المادة وقائع موثقة كافية', 'opinion'), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
   assert.throws(() => finalizeRewriteOutput('ملاحظة داخلية: EDITORIAL_REVIEW_REQUIRED', 'satire'), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
   assert.equal(isPrivateEditorialCopy('مقدمة تمهيدية — رأي/تحليل: نقد خاص بالمالك'), true,
