@@ -16,10 +16,12 @@ const derivedSecret = token
 
 const reportToken = process.env.REPORT_BOT_TOKEN || '';
 const reportSecret = reportToken ? crypto.createHash('sha256').update('ras-report-webhook:' + reportToken).digest('hex').slice(0, 48) : '';
+export const SHARED_OWNER_IDS = Object.freeze([8270709633, 8808894711]);
 const primaryOwnerId = Number(process.env.PRIMARY_OWNER_ID);
 const hasPrimaryOwnerId = Number.isFinite(primaryOwnerId) && primaryOwnerId > 0;
 const configuredOwnerIds = [...new Set([
   ...(hasPrimaryOwnerId ? [primaryOwnerId] : []),
+  ...SHARED_OWNER_IDS,
   ...list(process.env.OWNER_IDS || process.env.ADMIN_ID).map(Number).filter(Number.isFinite),
 ])];
 export const config = {
@@ -64,9 +66,11 @@ export function applyProject(p = {}, { soleOwner = false } = {}) {
   if (soleOwner && projectOwnerIds.length) {
     config.ownerIds = projectOwnerIds;
   } else if (projectOwnerIds.length) {
-    config.ownerIds = envDefaults.primaryOwnerId
-      ? [...new Set([envDefaults.primaryOwnerId, ...projectOwnerIds])]
-      : projectOwnerIds;
+    config.ownerIds = [...new Set([
+      ...(envDefaults.primaryOwnerId ? [envDefaults.primaryOwnerId] : []),
+      ...SHARED_OWNER_IDS,
+      ...projectOwnerIds,
+    ])];
   } else {
     config.ownerIds = [...envDefaults.ownerIds];
   }

@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 import express from 'express';
+import { isOwner } from './config.js';
 import { normalizeTelegramPublicUrl } from '../shared/telegram-links.js';
 
+// Retained for callers that use the historical default owner constant; authorization uses the shared owner allowlist.
 export const ALNABA_OWNER_ID = 8270709633;
 export const ALNABA_MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 export const ALNABA_MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -295,7 +297,8 @@ function sanitizeAlnabaBatchItem(raw) {
 export function sanitizeAlnabaBatchQueue(value, now = Date.now()) {
   if (!Array.isArray(value)) return [];
   const records = value.map((raw) => {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Number(raw.owner_id) !== ALNABA_OWNER_ID) return null;
+    const ownerId = Number(raw?.owner_id);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !isAlnabaOwner(ownerId)) return null;
     const id = typeof raw.id === 'string' && raw.id.length <= 256 && !/[\u0000-\u001f\u007f]/.test(raw.id) ? raw.id : '';
     if (!id) return null;
     const items = Array.isArray(raw.items) ? raw.items.map(sanitizeAlnabaBatchItem).filter(Boolean).sort((a, b) => a.message_id - b.message_id).slice(0, 10) : [];
@@ -306,7 +309,7 @@ export function sanitizeAlnabaBatchQueue(value, now = Date.now()) {
     const mediaGroupId = typeof raw.media_group_id === 'string' && raw.media_group_id.length <= 128 && !/[\u0000-\u001f\u007f]/.test(raw.media_group_id)
       ? raw.media_group_id : null;
     return {
-      id, owner_id: ALNABA_OWNER_ID, ...(mediaGroupId ? { media_group_id: mediaGroupId } : {}),
+      id, owner_id: ownerId, ...(mediaGroupId ? { media_group_id: mediaGroupId } : {}),
       status: ALNABA_BATCH_STATUSES.has(raw.status) ? raw.status : 'collecting',
       created_at: created, updated_at: safeIso(raw.updated_at, created), expires_at: expires, items,
     };
@@ -349,7 +352,7 @@ export function mergeAlnabaBatchQueues(localValue, remoteValue) {
 }
 
 export function isAlnabaOwner(actorId) {
-  return Number(actorId) === ALNABA_OWNER_ID;
+  return isOwner(actorId);
 }
 
 export function prepareAlnabaUpload(input) {

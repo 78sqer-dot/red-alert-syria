@@ -28,6 +28,15 @@ test('when no project owner is saved, all existing environment owners remain ava
   assert.equal(isOwner(otherConfiguredOwnerId), true);
 });
 
+test('the two shared owners remain full admins when a different project owner is saved', () => {
+  applyProject({ ownerId: otherConfiguredOwnerId });
+  assert.deepEqual(config.ownerIds, [primaryOwnerId, backupOwnerId, otherConfiguredOwnerId]);
+  assert.equal(isOwner(primaryOwnerId), true);
+  assert.equal(isOwner(backupOwnerId), true);
+  assert.equal(isOwner(otherConfiguredOwnerId), true);
+  assert.equal(isOwner(1234567890), false);
+});
+
 test('an explicit sole-owner handover can still revoke the previous owner list', () => {
   const nextOwnerId = 1234567890;
   applyProject({ ownerId: nextOwnerId }, { soleOwner: true });

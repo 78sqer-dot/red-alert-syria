@@ -51,8 +51,8 @@ test('Al-Nabaa batch snapshots sanitize references and preserve pending records 
     candidate: { file_id: fileId, file_unique_id: `${fileId}_unique`, file_size: 42, mime_type: 'application/pdf', file_name: 'issue.pdf', title: 'العدد 1', issue_number: 1, bytes: 'must not survive' },
     attempts: 0, created_at: iso(now), updated_at: iso(updatedAt),
   });
-  const record = (id, savedItem, updatedAt = now) => ({
-    id, owner_id: OWNER, status: 'processing', created_at: iso(now), updated_at: iso(updatedAt), expires_at: iso(now + 86_400_000),
+  const record = (id, savedItem, updatedAt = now, ownerId = OWNER) => ({
+    id, owner_id: ownerId, status: 'processing', created_at: iso(now), updated_at: iso(updatedAt), expires_at: iso(now + 86_400_000),
     items: [savedItem], context: { must_not_survive: true },
   });
   const pending = record('terminal-tie', item('msg-1', 'pending', now), now);
@@ -60,6 +60,11 @@ test('Al-Nabaa batch snapshots sanitize references and preserve pending records 
   const merged = mergeAlnabaBatchQueues([pending], [published]);
   assert.equal(merged[0].items[0].status, 'published', 'terminal state wins on equal timestamps during handoff');
   assert.equal(merged[0].items[0].candidate.bytes, undefined, 'snapshots never store file bytes or contexts');
+
+  const otherOwner = record('other-owner', item('msg-2', 'pending', now), now, PREVIOUS_PROJECT_OWNER);
+  const unrelatedUser = record('unrelated-user', item('msg-3', 'pending', now), now, PREVIOUS_PROJECT_OWNER + 1);
+  const sharedOwnerQueues = sanitizeAlnabaBatchQueue([pending, otherOwner, unrelatedUser], now);
+  assert.deepEqual(sharedOwnerQueues.map((batch) => batch.owner_id), [OWNER, PREVIOUS_PROJECT_OWNER], 'both owners retain their own pending batch while unrelated IDs are rejected');
 
   const active = Array.from({ length: 505 }, (_, index) => record(`active-${index}`, item(`msg-${index + 1}`, 'pending', now + index, `fixture_${index}`), now + index));
   const oldTerminal = record('old-terminal', item('old-msg-1', 'failed', now - 31 * 86_400_000), now - 31 * 86_400_000);
@@ -136,16 +141,21 @@ const archiveEntry = () => ({
   url: 'https://t.me/ras_fixture_archive_entry_123',
 });
 
-test('only 8270709633 can use Al-Nabaa publishing; 8808894711 and nearby IDs are denied', () => {
+test('both shared owners can publish and manage Al-Nabaa; unrelated IDs are denied', () => {
   const store = createStore();
   assert.equal(isAlnabaOwner(OWNER), true);
-  assert.equal(isAlnabaOwner(PREVIOUS_PROJECT_OWNER), false);
+  assert.equal(isAlnabaOwner(PREVIOUS_PROJECT_OWNER), true);
   assert.equal(isAlnabaOwner(8808894712), false);
-  assert.throws(() => publishAlnabaItem(store, PREVIOUS_PROJECT_OWNER, photoUpload()), { message: 'FORBIDDEN' });
+  const photo = publishAlnabaItem(store, OWNER, photoUpload(), new Date('2026-11-10T12:10:00.000Z'));
+  const archive = publishAlnabaArchiveEntry(store, PREVIOUS_PROJECT_OWNER, archiveEntry(), new Date('2026-11-10T12:10:00.000Z'));
+  const updated = updateAlnabaEntry(store, PREVIOUS_PROJECT_OWNER, 'photos', photo.id, { title: 'عنوان معدل من المالك الثاني' });
+  assert.equal(updated.title, 'عنوان معدل من المالك الثاني');
+  assert.equal(deleteAlnabaEntry(store, OWNER, 'archive', archive.id).id, archive.id);
   assert.throws(() => publishAlnabaItem(store, OWNER + 1, photoUpload()), { message: 'FORBIDDEN' });
-  assert.throws(() => publishAlnabaArchiveEntry(store, PREVIOUS_PROJECT_OWNER, archiveEntry()), { message: 'FORBIDDEN' });
-  assert.deepEqual(store.state.alnaba, { photos: [], weekly: [], archive: [] });
-  assert.equal(store.persistCalls, 0);
+  assert.throws(() => publishAlnabaArchiveEntry(store, 8808894712, archiveEntry()), { message: 'FORBIDDEN' });
+  assert.equal(store.state.alnaba.photos[0].title, 'عنوان معدل من المالك الثاني');
+  assert.deepEqual(store.state.alnaba.archive, []);
+  assert.equal(store.persistCalls, 4);
 });
 
 test('archive accepts only direct HTTPS Telegram public or invite links and normalizes their host', () => {
@@ -187,8 +197,8 @@ test('Al-Nabaa entry edits and deletion helpers enforce owner access and preserv
   const archive = publishAlnabaArchiveEntry(store, OWNER, archiveEntry(), new Date('2026-11-10T12:05:00.000Z'));
   const archivePeer = publishAlnabaArchiveEntry(store, OWNER, { title: 'قناة ثانية للاختبار', url: 'https://t.me/another_fixture_archive_01' }, new Date('2026-11-10T12:06:00.000Z'));
   const persistCount = store.persistCalls;
-  assert.throws(() => updateAlnabaEntry(store, PREVIOUS_PROJECT_OWNER, 'photos', photo.id, { title: 'No' }), { message: 'FORBIDDEN' });
-  assert.throws(() => deleteAlnabaEntry(store, PREVIOUS_PROJECT_OWNER, 'archive', archive.id), { message: 'FORBIDDEN' });
+  assert.throws(() => updateAlnabaEntry(store, PREVIOUS_PROJECT_OWNER + 1, 'photos', photo.id, { title: 'No' }), { message: 'FORBIDDEN' });
+  assert.throws(() => deleteAlnabaEntry(store, PREVIOUS_PROJECT_OWNER + 1, 'archive', archive.id), { message: 'FORBIDDEN' });
   assert.equal(store.persistCalls, persistCount, 'unauthorized management never mutates state');
 
   const photoEdit = updateAlnabaEntry(store, OWNER, 'photos', photo.id, { title: 'عنوان معدل للاختبار' }, new Date('2026-11-10T12:10:00.000Z'));

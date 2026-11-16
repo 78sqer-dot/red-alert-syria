@@ -30,6 +30,7 @@ test('Syrian–Palestinian border alert pin lies on the actual Syria border geom
 });
 
 const ownerId = 8270709633;
+const sharedOwnerId = 8808894711;
 const owner = { id: ownerId, is_bot: false, first_name: 'Local owner', language_code: 'ar' };
 const reporter = { id: 8270709634, is_bot: false, first_name: 'Local reporter', language_code: 'ar' };
 const bot = createBot();
@@ -1211,7 +1212,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   addedAlertIds.push(...newAlerts.map((alert) => alert.id));
   assert.equal(newAlerts.length, 1, 'the repeated approval must not create another map alert');
   assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, 1, 'the repeated approval must not post to the channel twice');
-  assert.ok(calls.every((call) => !call.chatId || [ownerId, reporter.id, 8270709635, 8270709638, 8270709639, 8270709644, 8270709645, process.env.CHANNEL_ID].includes(call.chatId)), 'all Telegram API calls are intercepted locally');
+  assert.ok(calls.every((call) => !call.chatId || [ownerId, sharedOwnerId, reporter.id, 8270709635, 8270709638, 8270709639, 8270709644, 8270709645, process.env.CHANNEL_ID].includes(call.chatId)), 'all Telegram API calls are intercepted locally');
 
   const opinionId = 'owner_opinion_preview';
   const opinionDraft = newsState().drafts[opinionId] = {

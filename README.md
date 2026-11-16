@@ -19,7 +19,7 @@
 
 ```bash
 npm ci
-BOT_TOKEN=xxxx OWNER_IDS=8270709633 npm run dev   # محلياً (long polling)
+BOT_TOKEN=xxxx OWNER_IDS=8270709633,8808894711 npm run dev   # محلياً (long polling)
 ```
 
 | المتغير | الوصف |
