@@ -296,12 +296,13 @@ after(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
-test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploads directly to the website only', async () => {
+test('both shared owners get the same Al-Nabaa controls and uploads publish to the website only', async () => {
   const authorizedId = 8270709633;
-  const deniedId = 8808894711;
+  const coOwnerId = 8808894711;
+  const deniedId = 8808894712;
 
   await sendText(deniedId, '/alnaba');
-  assert.match(lastUiFor(deniedId)?.payload?.text || '', /غير متاحة/);
+  assert.match(lastUiFor(deniedId)?.payload?.text || '', /المشرفين/);
   assert.equal(buttonsOf(lastUiFor(deniedId)).some((button) => button.callback_data === 'nb:photos'), false);
 
   await sendText(authorizedId, '/alnaba');
@@ -313,6 +314,15 @@ test('the bot offers Al-Nabaa only to owner 8270709633 and publishes owner uploa
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:nasheed'));
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:archive'));
   assert.ok(buttonsOf(menu).some((button) => button.callback_data === 'nb:home'));
+
+  await sendText(coOwnerId, '/alnaba');
+  const coOwnerMenu = lastUiFor(coOwnerId);
+  assert.match(coOwnerMenu?.payload?.text || '', /نشر محتوى النبأ/);
+  assert.deepEqual(buttonsOf(coOwnerMenu).map((button) => button.callback_data), buttonsOf(menu).map((button) => button.callback_data));
+  await tap(coOwnerId, 'nb:archive');
+  assert.match(lastEditFor(coOwnerId)?.payload?.text || '', /الأرشيف/);
+  await tap(coOwnerId, 'nb:manage:archive');
+  assert.match(lastEditFor(coOwnerId)?.payload?.text || '', /إدارة الأرشيف/);
 
   await tap(deniedId, 'nb:photos');
   assert.equal(buttonsOf(lastUiFor(deniedId)).some((button) => button.callback_data === 'nb:publish'), false);
