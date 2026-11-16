@@ -21,7 +21,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
 
@@ -370,7 +370,7 @@ const editorialHasAny = (text, phrases) => phrases.some((phrase) => editorialHas
 const publicDraftCopyIssue = (d) => [d?.headline, d?.body, d?.details, d?.text, d?.description, d?.title, d?.title_en, d?.description_en].some(isPrivateEditorialCopy)
   ? 'private-editorial-copy-not-public' : null;
 function privateEditorialModeApplicable(d) {
-  if (!d || !ALERT_TYPES[d.type]) return false;
+  if (!d || !NEWS_TYPES.includes(d.type) || !ALERT_TYPES[d.type]) return false;
   return rewriteSourceReviewReason(String(d.sourceText || d.headline || d.body || '')) === null;
 }
 /** A no-AI, fail-closed check: uncertain edits stay pending for the owner instead of reaching either public surface. */
@@ -621,9 +621,9 @@ function cardKb(d, lang = 'ar', chatId = null) {
     .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id).row()
     .text(tr(lang, '🪄 صياغة صحفية', '🪄 Rewrite professionally'), 'nw:rw:' + d.id)
     .text(tr(lang, '🔎 تحقق من سجل القناة', '🔎 Check channel records'), 'nw:c:' + d.id);
-  if (ownerIdsU().includes(Number(chatId))) kb.row()
-    .text(tr(lang, '🧭 نقد سياسي حاد موثّق', '🧭 Sharp sourced political critique'), 'nw:op:' + d.id)
-    .text(tr(lang, '🎭 محاكاة ساخرة خيالية', '🎭 Fictional political satire'), 'nw:sa:' + d.id);
+  if (ownerIdsU().includes(Number(chatId)) && NEWS_TYPES.includes(d.type)) kb.row()
+    .text(tr(lang, '🧭 نقد حاد موثّق', '🧭 Sharp fact-based critique'), 'nw:op:' + d.id)
+    .text(tr(lang, '🎭 محاكاة ساخرة خيالية', '🎭 Fictional satire'), 'nw:sa:' + d.id);
 
   if (d.originalHeadline && d.originalHeadline !== d.headline) {
     kb.row().text(tr(lang, '↩️ استعادة الصياغة الأصلية', '↩️ Restore original wording'), 'nw:ro:' + d.id);
@@ -641,7 +641,7 @@ function rewritePreviewText(d, lang = 'ar') {
   const original = String(preview.originalHeadline || d.originalHeadline || d.headline || '');
   const render = (excerpt) => [
     preview.mode === 'opinion'
-      ? tr(lang, preview.applied ? '🧭 <b>رأي/تحليل محفوظ لك خاصاً — لا يُنشر</b>' : '🧭 <b>معاينة نقد معارض خاصة — لم تُعتمد ولم تُنشر</b>', preview.applied ? '🧭 <b>Opinion/analysis saved privately for you — never published</b>' : '🧭 <b>Private opposition-critique preview — not applied or published</b>')
+      ? tr(lang, preview.applied ? '🧭 <b>رأي/تحليل محفوظ لك خاصاً — لا يُنشر</b>' : '🧭 <b>معاينة نقد/تحليل خاصة — لم تُعتمد ولم تُنشر</b>', preview.applied ? '🧭 <b>Opinion/analysis saved privately for you — never published</b>' : '🧭 <b>Private critical-analysis preview — not applied or published</b>')
       : preview.mode === 'satire'
         ? tr(lang, preview.applied ? '🎭 <b>محاكاة ساخرة خيالية محفوظة لك خاصاً — لا تُنشر</b>' : '🎭 <b>معاينة محاكاة ساخرة خيالية خاصة — ليست خبراً</b>', preview.applied ? '🎭 <b>Fictional satire saved privately for you — never published</b>' : '🎭 <b>Private fictional-satire preview — not news</b>')
       : tr(lang, '🪄 <b>معاينة صياغة صحفية محايدة — لم تُعتمد ولم تُنشر</b>', '🪄 <b>Neutral news rewrite preview — not applied or published</b>'),
@@ -1107,7 +1107,9 @@ function explicitWeatherResult(it) {
 async function handleResult(it, r, known, pmap) {
   const n = newsState();
   if (!r || !r.event || !NEWS_TYPES.includes(r.type)) { note(it, 'not an event'); return; }
-  { const t2 = refineType(r.type, `${r.headline || ''}\n${it.text}`); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
+  // ruleClassify already chooses from the primary headline; scanning the whole body
+  // again here could let an unrelated secondary mention override that decision.
+  if (!r.rule) { const t2 = refineType(r.type, `${r.headline || ''}\n${it.text}`); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
   if (r.type === 'weather' && !weatherWarningInfo(it.text)) { note(it, 'not an explicit actionable weather warning'); return; }
   // the AI linked it to a known incident / an earlier post of this batch
   let target = null;
@@ -1603,14 +1605,9 @@ export function registerNewsTools(bot, h) {
     const reviewReason = mode === 'news' ? null : rewriteSourceReviewReason(sourceText);
     const applicable = mode === 'news' || privateEditorialModeApplicable(d);
     if (mode !== 'news' && (!applicable || reviewReason)) {
-      const message = reviewReason === 'non-political-event-source'
-        ? t(ctx,
-          'هذا المصدر عن حادث ولا يذكر الحكومة أو جهة حكومية/كوادر دولة بوضوح؛ لم تُنشأ معاينة وبقي الخبر الوقائعي كما هو.',
-          'This source reports an incident without clearly mentioning the government, a government entity, or state cadres; no preview was created and the factual draft is unchanged.')
-        : t(ctx,
-          'لا يذكر المصدر جهة حكومية أو كوادر دولة بوضوح، أو أن نصه قصير جداً؛ لم تُنشأ معاينة وبقي الخبر الوقائعي كما هو.',
-          'The source does not clearly mention a government entity or state cadres, or is too short; no preview was created and the factual draft is unchanged.');
-      return toast(ctx, message, true);
+      return toast(ctx, t(ctx,
+        'لا توجد وقائع مصدرية كافية لمعاينة نقد أو سخرية آمنة؛ بقي الخبر الوقائعي كما هو.',
+        'The source lacks enough factual detail for a safe private critique or satire preview; the factual story is unchanged.'), true);
     }
     const preview = d.aiRewritePreview;
     const previewIsCurrent = preview && preview.mode === mode && preview.sourceText === sourceText && preview.baseHeadline === d.headline;
@@ -1632,6 +1629,12 @@ export function registerNewsTools(bot, h) {
       let text = String(R.rewriteImpl
         ? await R.rewriteImpl(sourceText, { mode })
         : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '', mode }));
+      const editorialReviewReason = mode === 'news' ? null : privateEditorialOutputReviewReason(sourceText, text);
+      if (editorialReviewReason) {
+        const error = new Error(editorialReviewReason);
+        error.code = 'REWRITE_NOT_APPLICABLE';
+        throw error;
+      }
       text = finalizeRewriteOutput(text, mode, d.srcs?.[0]?.name || '');
       d.aiRewritePreview = {
         text, mode, sourceText, baseHeadline: d.headline, baseType: d.type, originalHeadline: d.headline,

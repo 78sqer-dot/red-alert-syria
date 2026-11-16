@@ -25,8 +25,12 @@ test('weekly newspaper uses an in-page canvas reader and keeps direct open and d
 test('weekly page initializes the local PDF.js reader only for weekly items with lazy loading', () => {
   assert.match(script, /await import\('\/js\/alnaba-pdf\.js\?v=2'\)/);
   assert.match(script, /initializePdfReaders\(view\.list\)/);
-  assert.match(reader, /pdfjs\.getDocument\(\{/);
-  assert.match(reader, /rangeChunkSize: 512 \* 1024/);
+  assert.match(reader, /async function fetchPdfBytes\(url, reader\)/);
+  assert.match(reader, /response\.body\.getReader\(\)/);
+  assert.match(reader, /while \(true\) \{[\s\S]{0,220}const part = await stream\.read\(\)/);
+  assert.match(reader, /const data = new Uint8Array\(loaded\);[\s\S]{0,180}return data;/);
+  assert.match(reader, /pdfjs\.getDocument\(\{\s*data,/);
+  assert.doesNotMatch(reader, /rangeChunkSize/);
   assert.match(reader, /new IntersectionObserver/);
   assert.match(reader, /PDFJS_URL = '\/vendor\/pdfjs-legacy-4\.10\.38\.min\.mjs'/);
   assert.match(reader, /PDFJS_WORKER_URL = '\/vendor\/pdfjs-legacy-worker-4\.10\.38\.min\.mjs'/);

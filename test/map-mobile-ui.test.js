@@ -12,13 +12,30 @@ const css = read('public/css/app.css');
 
 test('map tools are grouped accessibly and the Syria overview remains a separate button', () => {
   assert.match(html, /id="mapControlsToggle"[^>]*aria-expanded="false"[^>]*aria-controls="mapCtrlPanel"/);
-  const panel = html.match(/<div class="map-ctrl-panel" id="mapCtrlPanel"[\s\S]*?<\/div>/)?.[0];
+  const panelStart = html.indexOf('<div class="map-ctrl-panel" id="mapCtrlPanel"');
+  const panelEnd = html.indexOf('\n          <button class="ctrl-btn" id="resetView"', panelStart);
+  const panel = panelStart >= 0 && panelEnd > panelStart ? html.slice(panelStart, panelEnd) : '';
   assert.ok(panel, 'a collapsed map-tools panel must exist');
-  for (const id of ['zoomIn', 'zoomOut', 'locateMe', 'shareSite']) assert.match(panel, new RegExp(`id="${id}"`));
+  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNabaa', 'btnLiveScene', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
+    assert.match(panel, new RegExp(`id="${id}"`));
+  }
   assert.doesNotMatch(panel, /id="resetView"/);
   assert.match(html, /id="resetView"[^>]*type="button"/);
   assert.match(app, /setAttribute\('aria-expanded', String\(open\)\)/);
-  assert.match(app, /e\.key !== 'Escape'[^\n]*[\s\S]{0,100}setMapControlsOpen\(false\)/);
+  assert.ok(app.includes("if (!$('#filterPanel').hidden || !$('#layersPanel').hidden) { closeDropdowns(); return; }"));
+  assert.ok(app.includes("if (!mapCtrlPanel.hidden) { setMapControlsOpen(false); return; }"));
+  assert.match(css, /\.map-tool-grid \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: 1 \/ -1; \}/);
+});
+
+test('map tools provide a return route from filter, layers, services and Al-Nabaa', () => {
+  assert.match(app, /data-dd-close/);
+  assert.match(app, /backToTools/);
+  assert.match(app, /returnToToolsAfterService = true/);
+  assert.match(app, /if \(!svc\?\.mode\?\.\(\)\) \{ setMapControlsOpen\(true\)/);
+  assert.match(app, /sessionStorage\.setItem\('ras:return-map-tools', '1'\)/);
+  assert.match(app, /window\.addEventListener\('pageshow', restoreMapTools\)/);
+  assert.match(css, /\.dd-panel\.dd-sheet \{ position: fixed;/);
 });
 
 test('map attribution keeps a compact information button and readable credits', () => {
@@ -32,11 +49,11 @@ test('map attribution keeps a compact information button and readable credits', 
   assert.match(css, /@media \(max-width: 340px\)[\s\S]{0,220}\.about-pill \{ max-width: calc\(100vw - 170px\)/);
 });
 
-test('phone map controls and about pill share a lower safe-area-aware bottom row', () => {
-  assert.match(css, /\.map-ctrls \{ bottom: calc\(20px \+ env\(safe-area-inset-bottom, 0px\)\); gap: 7px;/);
+test('phone map tools stay at the top while the about pill remains bottom-aligned', () => {
+  assert.match(css, /\.map-ctrls \{ top: 12px; bottom: auto; gap: 7px;/);
   assert.match(css, /\.about-pill \{\s*bottom: calc\(23px \+ env\(safe-area-inset-bottom, 0px\)\);/);
   assert.match(css, /\.map-ctrls > \.ctrl-btn \{ width: 44px; height: 44px;/);
-  assert.match(css, /\.map-ctrl-panel \{ position: absolute; bottom: calc\(100% \+ 9px\)/);
+  assert.match(css, /\.map-ctrl-panel \{ position: absolute; top: calc\(100% \+ 9px\); bottom: auto;/);
 });
 
 test('alert details stay centered on the map and their popup tip points to the event on every screen', () => {
@@ -63,15 +80,15 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=83'/);
-  assert.match(html, /app\.css\?v=76/);
-  assert.match(html, /app\.js\?v=92/);
+  assert.match(app, /from '\.\/map\.js\?v=84'/);
+  assert.match(html, /app\.css\?v=81/);
+  assert.match(html, /app\.js\?v=96/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
   assert.match(app, /from '\.\/services\.js\?v=38'/);
   assert.match(app, /from '\.\/icons\.js\?v=7'/);
-  assert.match(app, /from '\.\/i18n\.js\?v=7'/);
+  assert.match(app, /from '\.\/i18n\.js\?v=9'/);
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);
   assert.match(map, /from '\/shared\/types\.js\?v=41'/);
