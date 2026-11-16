@@ -22,6 +22,7 @@ function normalizeFeedItem(item) {
     source: cleanText(firstText(item.source, item.source_name, item.publisher), 120),
     url: safeLiveSceneUrl(item.url || item.link),
     publishedAt: cleanText(firstText(item.publishedAt, item.published_at, item.observedAt, item.observed_at, item.time, item.date), 64),
+    region: item.region === 'syria' ? 'syria' : 'world',
   };
 }
 
@@ -44,10 +45,13 @@ function normalizeMarketItem(item, locale) {
 
 export function normalizeLiveScenePayload(payload, locale = 'en') {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    return { news: [], osint: [], markets: [], updatedAt: '', degraded: false };
+    return { news: [], syriaNews: [], worldNews: [], osint: [], markets: [], updatedAt: '', degraded: false };
   }
+  const news = asList(payload.news ?? payload.ticker).map(normalizeFeedItem).filter(Boolean);
   return {
-    news: asList(payload.news ?? payload.ticker).map(normalizeFeedItem).filter(Boolean),
+    news,
+    syriaNews: news.filter((item) => item.region === 'syria'),
+    worldNews: news.filter((item) => item.region === 'world'),
     osint: asList(payload.osint ?? payload.signals).map(normalizeFeedItem).filter(Boolean),
     markets: asList(payload.markets ?? payload.market).map((item) => normalizeMarketItem(item, locale)).filter(Boolean),
     updatedAt: cleanText(firstText(payload.updatedAt, payload.updated_at), 64),

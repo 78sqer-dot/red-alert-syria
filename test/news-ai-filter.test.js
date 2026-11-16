@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_RESPONSE_SCHEMA, buildPrompt, finalizeRewriteOutput, hasExplicitDroneFlight, isGroundIncursionReport, keywordTypes, prefilter, refineType, rewriteArabicNews, rewriteSourceReviewReason, ruleClassify, NEWS_REWRITE_MODEL } from '../server/news-ai.js';
+import { AI_RESPONSE_SCHEMA, buildPrompt, finalizeRewriteOutput, hasExplicitDroneFlight, isGroundIncursionReport, keywordTypes, prefilter, refineType, rewriteArabicNews, rewriteSourceReviewReason, ruleClassify, NEWS_REWRITE_MODEL, NEWS_TYPES } from '../server/news-ai.js';
 import { isPrivateEditorialCopy } from '../server/clean-text.js';
 
 test('Syria-only general feeds reject foreign weather warnings before the weather shortcut', () => {
@@ -19,6 +19,21 @@ test('routine forecast posts do not pass the filter merely because they start wi
   const forecast = prefilter('عاجل: توقعات الطقس لليوم في دمشق ودرجات الحرارة المتوقعة', { general: true, breaking: true });
   assert.equal(forecast.ok, false);
   assert.equal(forecast.why, 'routine-weather');
+});
+
+
+test('explicit demonstrations/marches and other protest actions use separate types', () => {
+  assert.ok(NEWS_TYPES.includes('protest_action'));
+  for (const wording of ['مظاهرة في دمشق', 'مسيرة في حمص', 'demonstration في دمشق', 'march في حمص']) {
+    assert.ok(keywordTypes(wording).includes('protest'), wording);
+    assert.equal(ruleClassify(`${wording} اليوم في سوريا`)?.type, 'protest', wording);
+  }
+  for (const wording of ['احتجاج في دمشق', 'اعتصام في حمص']) {
+    assert.ok(keywordTypes(wording).includes('protest_action'), wording);
+    assert.equal(keywordTypes(wording).includes('protest'), false, wording);
+    assert.equal(ruleClassify(`${wording} اليوم في سوريا`)?.type, 'protest_action', wording);
+  }
+  assert.ok(keywordTypes('sit-in reported in Syria').includes('protest_action'));
 });
 
 test('rules-only news typing follows the lead instead of unrelated event words in the body', () => {

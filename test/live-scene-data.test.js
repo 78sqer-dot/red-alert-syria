@@ -6,7 +6,8 @@ test('normalizes feed and market records while dropping malformed entries', () =
   const result = normalizeLiveScenePayload({
     updated_at: '2026-11-16T18:00:00Z',
     news: [
-      { headline: '  News headline  ', source_name: 'Source A', link: 'https://example.com/news', published_at: '2026-11-16T17:55:00Z' },
+      { headline: '  News headline  ', source_name: 'Source A', link: 'https://example.com/news', published_at: '2026-11-16T17:55:00Z', region: 'syria' },
+      { title: 'World headline', region: 'world' },
       { title: '   ' },
       null,
     ],
@@ -15,9 +16,11 @@ test('normalizes feed and market records while dropping malformed entries', () =
   });
   assert.equal(result.updatedAt, '2026-11-16T18:00:00Z');
   assert.deepEqual(result.news[0], {
-    title: 'News headline', source: 'Source A', url: 'https://example.com/news', publishedAt: '2026-11-16T17:55:00Z',
+    title: 'News headline', source: 'Source A', url: 'https://example.com/news', publishedAt: '2026-11-16T17:55:00Z', region: 'syria',
   });
-  assert.equal(result.news.length, 1);
+  assert.equal(result.news.length, 2);
+  assert.equal(result.syriaNews.length, 1);
+  assert.equal(result.worldNews.length, 1);
   assert.equal(result.osint[0].url, null);
   assert.equal(result.markets[0].name, 'Brent');
   assert.equal(result.markets[0].value, '82.5');
@@ -39,7 +42,7 @@ test('limits feed sizes and text lengths and ignores invalid payload types', () 
   });
   assert.equal(result.news.length, 24);
   assert.ok(result.news[0].title.length <= 320);
-  assert.deepEqual(normalizeLiveScenePayload(null), { news: [], osint: [], markets: [], updatedAt: '', degraded: false });
+  assert.deepEqual(normalizeLiveScenePayload(null), { news: [], syriaNews: [], worldNews: [], osint: [], markets: [], updatedAt: '', degraded: false });
 });
 
 test('formats valid timestamps and leaves invalid timestamps blank', () => {

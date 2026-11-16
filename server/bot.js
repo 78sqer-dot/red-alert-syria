@@ -31,7 +31,7 @@ function withLabel(loc, label) {
   return { ...loc, name_ar: label, name_en: label, short_ar: label, short_en: label, custom_label: true, base };
 }
 const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
-import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
+import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, findAlnabaEntry, updateAlnabaEntry, deleteAlnabaEntry, sanitizeAlnabaState, fetchAlnabaTelegramBytes, parseWeeklyUploadCaption, mimeFromAlnabaFilename, weeklyIssueNumber, nextWeeklyIssueNumber } from './alnaba.js';
 
 const PAGE = 24;
@@ -44,6 +44,12 @@ const cleanInputText = (s) => String(s || '').replace(/[\u0000-\u0008\u000B-\u00
 const clean = (s, max = 900) => cleanInputText(s).slice(0, max);
 function assertPublicCopySafe(...values) {
   if (values.some(isPrivateEditorialCopy)) throw new Error('Private editorial or internal review text cannot be published as public news');
+}
+function assertPublicCopySafeWithEditorial(selectedCopy, mode, ...values) {
+  const allowed = isPublicEditorialCopy(selectedCopy, mode) ? selectedCopy : null;
+  if (values.some((value) => isPrivateEditorialCopy(value) && !(allowed && value === allowed))) {
+    throw new Error('Private editorial or internal review text cannot be published as public news');
+  }
 }
 
 const VEHICLE_COUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -280,7 +286,9 @@ function channelEventSymbol(alert) {
 //
 //   (no footer; map and channel links remain on the inline buttons)
 export function channelPost(alert, { ended = false } = {}) {
-  assertPublicCopySafe(alert?.title, alert?.title_en, alert?.description, alert?.description_en, alert?.meta?.channelTitle);
+  const editorialMode = alert?.source === 'news' && ['opinion', 'satire'].includes(alert?.meta?.publicEditorialTone) ? alert.meta.publicEditorialTone : null;
+  const editorialCopy = editorialMode && isPublicEditorialCopy(alert?.description, editorialMode) ? alert.description : null;
+  assertPublicCopySafeWithEditorial(editorialCopy, editorialMode, alert?.title, alert?.title_en, alert?.description, alert?.description_en, alert?.meta?.channelTitle);
   const t = typeOf(alert.type);
   let title = alert.meta?.channelTitle || (TITLES[alert.type] || {}).ar || t.ar;
   if (alert.type === 'military_incursion') {
@@ -971,7 +979,10 @@ async function showPreview(ctx, d) {
 }
 
 export function buildAlertInput(d, author) {
-  assertPublicCopySafe(d?.title, d?.title_en, d?.headline, d?.body, d?.text, d?.details, d?.description, d?.description_en);
+  const editorialMode = d?.source === 'news' && ['opinion', 'satire'].includes(d?.publicEditorialTone) && d?.publicEditorialText === d?.headline
+    ? d.publicEditorialTone : null;
+  const editorialCopy = editorialMode && isPublicEditorialCopy(d?.publicEditorialText, editorialMode) ? d.publicEditorialText : null;
+  assertPublicCopySafeWithEditorial(editorialCopy, editorialMode, d?.title, d?.title_en, d?.headline, d?.body, d?.text, d?.details, d?.description, d?.description_en);
   const incursionKind = d.type === 'military_incursion'
     ? (d.incursionKind === 'vehicles' || Number.isInteger(d.vehicleCount) ? 'vehicles' : ['soldiers', 'barrier'].includes(d.incursionKind) ? d.incursionKind : null)
     : null;
@@ -1045,7 +1056,7 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length ? {
+    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || editorialMode ? {
       meta: {
         ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
@@ -1062,6 +1073,7 @@ export function buildAlertInput(d, author) {
         ...(dronePresence ? { dronePresence: true } : {}),
         ...(politicalMeta ? { political: politicalMeta } : {}),
         ...(monitoredSources.length ? { newsSources: monitoredSources } : {}),
+        ...(editorialMode ? { publicEditorialTone: editorialMode } : {}),
       },
     } : {}),
   };
@@ -1292,7 +1304,9 @@ export async function editPublishedAlert(api, id, d, author) {
 }
 /** add an alert to the map and (unless toChannel=false) post it to the channel */
 export async function publishInput(api, input, { toChannel = true, renderSnapshot = null } = {}) {
-  assertPublicCopySafe(input?.title, input?.title_en, input?.description, input?.description_en, input?.meta?.channelTitle);
+  const editorialMode = input?.source === 'news' && ['opinion', 'satire'].includes(input?.meta?.publicEditorialTone) ? input.meta.publicEditorialTone : null;
+  const editorialCopy = editorialMode && isPublicEditorialCopy(input?.description, editorialMode) ? input.description : null;
+  assertPublicCopySafeWithEditorial(editorialCopy, editorialMode, input?.title, input?.title_en, input?.description, input?.description_en, input?.meta?.channelTitle);
   const alert = store.addAlert(input);
   if (input.meta) alert.meta = input.meta;
   if (!toChannel || !config.channel) return alert;

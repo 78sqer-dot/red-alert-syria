@@ -416,7 +416,7 @@ test('signal-sweep offers an optional drone marker and public submissions remain
 
 test('public protest-action reports are saved for human review, not auto-published', async (t) => {
   const protestReporter = { id: 8270709638, is_bot: false, first_name: 'Local protest reporter', language_code: 'ar' };
-  assert.equal(NEWS_TYPES.includes('protest_action'), false, 'public protest reports do not enter the automatic news-publishing pipeline');
+  assert.equal(NEWS_TYPES.includes('protest_action'), true, 'the news monitor recognizes protest-action events');
   const reportIdsBefore = new Set(Object.keys(store.state.reports || {}));
   const activeBefore = store.activeAlerts().length;
   const start = calls.length;
@@ -1338,6 +1338,52 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     assert.equal(opinionDraft.privateEditorial, undefined, 'the owner can delete the private opinion text');
     assert.equal(opinionDraft.headline, 'إعلان الحكومة الانتقالية خفض الدعم في حمص', 'deleting private text preserves the factual headline');
     assert.equal(calls.slice(opinionCallsStart).filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, 0, 'opinion preview and application never post a public channel message');
+
+    const manualId = 'owner_manual_opinion_publish';
+    const manualHeadline = 'قال الدفاع المدني السوري: وقع انفجار في قرية كودنة بمحافظة القنيطرة مساء اليوم وأصيب 3 أشخاص.';
+    const manualOpinion = newsState().drafts[manualId] = {
+      id: manualId, type: 'explosion', status: 'pending', headline: manualHeadline,
+      sourceText: manualHeadline, loc: { scope: 'place', name_ar: 'كودنة', name_en: 'Kudna', governorate_ar: 'القنيطرة', governorate_en: 'Quneitra', latitude: 33.2, longitude: 35.9 },
+      extra: [], ttlMin: 360, srcs: [{ u: 'unique-manual-source', name: 'مصدر اختبار كودنة', local: false }], cards: [], created: Date.now(),
+    };
+    newsMonitorTest.R.rewriteImpl = async (_source, options) => {
+      assert.equal(options.mode, 'opinion');
+      return 'رأي/تحليل: الوقائع المنشورة تذكر انفجاراً في كودنة وإصابة 3 أشخاص مساء اليوم؛ لكنها لا تحسم كامل الصورة.';
+    };
+    await tap(`nw:op:${manualId}`, owner);
+    await tap(`nw:ra:${manualId}`, owner);
+    assert.equal(manualOpinion.aiRewritePreview.applied, true, 'the owner explicitly applies the private editorial preview first');
+    assert.equal(nightEligible(manualOpinion), false, 'the selected opinion remains excluded from automatic publishing');
+    const factualCopy = toBotDraft(manualOpinion);
+    assert.equal(factualCopy.details, manualHeadline, 'ordinary conversion still yields the factual headline');
+    const selectedCopy = toBotDraft(manualOpinion, { editorialMode: 'opinion', ownerId });
+    assert.equal(selectedCopy.details, manualOpinion.privateEditorial.opinion);
+    assert.equal(selectedCopy.publicEditorialTone, 'opinion');
+    assert.throws(() => toBotDraft(manualOpinion, { editorialMode: 'opinion', ownerId: reporter.id }), /stale or not approved/);
+    const beforeManualChannel = calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length;
+    const oldEditors = [...store.state.editors];
+    store.state.editors = [...new Set([...oldEditors, reporter.id])];
+    try {
+      await tap(`nw:p:${manualId}`, reporter);
+      assert.equal(manualOpinion.status, 'pending', 'even an editor cannot publish the owner-selected private tone');
+      assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, beforeManualChannel);
+      const ownerPublishStart = calls.length;
+      await tap(`nw:p:${manualId}`, owner);
+      assert.equal(manualOpinion.status, 'published');
+      assert.equal(manualOpinion.publishedHeadline, manualOpinion.privateEditorial.opinion);
+      const published = store.getAlert(manualOpinion.alertId);
+      assert.ok(published, 'owner approval creates the synthetic public alert');
+      const publicView = publicAlert(published);
+      assert.match(publicView.description, /^رأي\/تحليل:/);
+      assert.equal(publicView.editorial_tone, 'opinion');
+      assert.match(channelPost(published), /رأي\/تحليل:/, 'the selected, labeled copy appears in the channel post');
+      const channelMessage = calls.slice(ownerPublishStart).find((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID);
+      assert.ok(channelMessage && plainChannelText(channelMessage.payload.text).includes('رأي/تحليل:'), 'the owner-triggered channel send contains only the explicitly selected labeled copy');
+      addedAlertIds.push(published.id);
+    } finally {
+      store.state.editors = oldEditors;
+      delete newsState().drafts[manualId];
+    }
   } finally {
     newsMonitorTest.R.rewriteImpl = previousRewrite;
     delete newsState().drafts[opinionId];

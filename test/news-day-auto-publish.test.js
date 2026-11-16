@@ -292,6 +292,104 @@ test('opinion and satire remain private, while review diagnostics are held befor
   }
 });
 
+test('automatic publication requests neutral news wording only and safely falls back when rewriting fails', async () => {
+  const previousHandler = _test.R.H;
+  const previousRewrite = _test.R.rewriteImpl;
+  const state = newsState();
+  const previousPublished = state.stats.published;
+  const previousAuto = state.stats.auto;
+  const calls = [];
+  const modes = [];
+  _test.R.H = {
+    apis: () => ({ admin: { sendMessage: async () => ({ message_id: 77 }) } }),
+    publishDraft: async (_api, draft) => { calls.push(draft); return { id: `synthetic-auto-${calls.length}` }; },
+  };
+  const base = {
+    type: 'explosion', status: 'pending', test: false, rule: false, created: Date.now(), cards: [],
+    headline: 'قالت مصادر محلية: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.',
+    sourceText: 'قالت مصادر محلية: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.',
+    loc: { scope: 'place', name_ar: 'حلب', governorate_ar: 'حلب', latitude: 36.2, longitude: 37.1 },
+    srcs: [{ u: 'trusted-auto-feed', name: 'مصدر اختبار خاص', local: false }],
+  };
+  const rewritten = qualified({ ...base, id: 'auto-neutral-rewrite' });
+  const fallback = qualified({
+    ...base, id: 'auto-neutral-fallback',
+    headline: 'قالت وزارة الطوارئ السورية: وقع انفجار في حمص مساء اليوم وأصاب شخصين.',
+    sourceText: 'قالت وزارة الطوارئ السورية: وقع انفجار في حمص مساء اليوم وأصاب شخصين.',
+    loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 },
+  });
+  rewritten.srcs = base.srcs;
+  rewritten.headline = base.headline;
+  rewritten.sourceText = base.sourceText;
+  rewritten.loc = base.loc;
+  fallback.srcs = base.srcs;
+  newsState().drafts[rewritten.id] = rewritten;
+  newsState().drafts[fallback.id] = fallback;
+  try {
+    _test.R.rewriteImpl = async (_source, options) => {
+      modes.push(options.mode);
+      return 'قالت مصادر محلية: وقع انفجار في مدينة حلب مساء اليوم وأُصيب 3 أشخاص.';
+    };
+    assert.equal(nightEligible(rewritten), true);
+    assert.equal(await _test.nightPublish(rewritten), true);
+    assert.deepEqual(modes, ['news'], 'the automatic publisher never requests opinion or satire mode');
+    assert.match(calls[0].headline, /حلب مساء اليوم وأُصيب 3 أشخاص/);
+    assert.doesNotMatch(JSON.stringify(calls[0]), /رأي\/تحليل|محاكاة ساخرة|EDITORIAL_REVIEW_REQUIRED/);
+    assert.equal(rewritten.publishedHeadline, calls[0].headline);
+
+    _test.R.rewriteImpl = async (_source, options) => {
+      modes.push(options.mode);
+      return 'محاكاة ساخرة خيالية (ليست خبراً): في مسرح الخيال تتغير الوقائع.';
+    };
+    assert.equal(nightEligible(fallback), true);
+    assert.equal(await _test.nightPublish(fallback), true, 'a rejected private-tone rewrite does not change eligibility');
+    assert.deepEqual(modes, ['news', 'news']);
+    assert.equal(calls[1].headline, fallback.headline, 'failed neutral-only rewriting preserves the classified factual copy');
+    assert.doesNotMatch(JSON.stringify(calls[1]), /محاكاة ساخرة|ليست خبراً/);
+  } finally {
+    _test.R.H = previousHandler;
+    _test.R.rewriteImpl = previousRewrite;
+    state.stats.published = previousPublished;
+    state.stats.auto = previousAuto;
+    delete state.drafts[rewritten.id];
+    delete state.drafts[fallback.id];
+  }
+});
+
+test('automatic draft-preparation failures never strand a draft in publishing', async () => {
+  const previousHandler = _test.R.H;
+  const previousRewrite = _test.R.rewriteImpl;
+  const id = 'auto-draft-preparation-failure';
+  const headline = 'قالت مصادر محلية: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.';
+  const sources = [{ u: 'trusted-auto-feed', name: 'مصدر اختبار خاص', local: false }];
+  sources.map = null;
+  const draft = qualified({
+    id, type: 'explosion', headline, sourceText: headline, srcs: sources,
+    loc: { scope: 'place', name_ar: 'حلب', governorate_ar: 'حلب', latitude: 36.2, longitude: 37.1 },
+    created: Date.now(), cards: [], autoMode: 'day', dayAutoAt: Date.now() - 1,
+  });
+  let publishAttempts = 0;
+  _test.R.H = {
+    apis: () => ({ admin: { sendMessage: async () => ({ message_id: 78 }) } }),
+    publishDraft: async () => { publishAttempts++; return { id: 'must-not-publish' }; },
+  };
+  _test.R.rewriteImpl = async () => { throw new Error('synthetic rewrite failure'); };
+  newsState().drafts[id] = draft;
+  try {
+    assert.equal(nightEligible(draft), true);
+    const attemptedAt = Date.now();
+    assert.equal(await _test.nightPublish(draft), false);
+    assert.equal(draft.status, 'pending');
+    assert.ok(draft.dayAutoAt > attemptedAt, 'daytime retry is moved forward after a preparation failure');
+    assert.equal(publishAttempts, 0);
+  } finally {
+    delete sources.map;
+    _test.R.H = previousHandler;
+    _test.R.rewriteImpl = previousRewrite;
+    delete newsState().drafts[id];
+  }
+});
+
 test('failed editorial gate keeps an eligible draft pending, clears its timer, and never calls publication', async () => {
   const id = 'editorial-hold-synthetic';
   const draft = qualified({

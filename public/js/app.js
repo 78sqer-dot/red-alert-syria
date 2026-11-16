@@ -8,11 +8,11 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon } from './icons.js?v=7';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=84';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=85';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
-import { normalizeLiveScenePayload, formatLiveSceneTime } from './live-scene.js?v=1';
+import { normalizeLiveScenePayload, formatLiveSceneTime } from './live-scene.js?v=2';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
@@ -876,16 +876,41 @@ function renderLiveSceneTicker(target, items) {
       const entry = document.createElement(href ? 'a' : 'span');
       entry.className = 'live-scene-ticker-item';
       if (href) { entry.href = href; entry.target = '_blank'; entry.rel = 'noopener noreferrer'; if (copyIndex) entry.tabIndex = -1; }
+      const region = document.createElement('b');
+      region.className = 'live-scene-ticker-region';
+      region.textContent = item.region === 'syria' ? T.liveSyria : T.liveWorld;
       const source = document.createElement('b');
+      source.className = 'live-scene-ticker-source';
       source.textContent = item.source || T.liveNews;
       const title = document.createElement('span');
       title.textContent = item.title;
-      entry.append(source, title);
+      entry.append(region, source, title);
       group.append(entry);
     }
     track.append(group);
   }
   target.append(track);
+  const groupWidth = track.firstElementChild?.scrollWidth || 0;
+  const duration = Math.max(28, Math.min(100, groupWidth / 62));
+  track.style.setProperty('--live-scene-ticker-duration', `${duration}s`);
+}
+function setupLiveSceneTicker(controller) {
+  const ticker = $('#liveSceneTicker');
+  const toggle = $('#liveSceneTickerToggle');
+  if (!ticker || !toggle) return;
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  let paused = Boolean(reducedMotion?.matches);
+  const syncMotion = () => {
+    ticker.classList.toggle('is-paused', paused);
+    ticker.classList.toggle('is-motion-enabled', !paused && Boolean(reducedMotion?.matches));
+    toggle.setAttribute('aria-pressed', String(paused));
+    toggle.setAttribute('aria-label', paused ? T.liveTickerPlay : T.liveTickerPause);
+    toggle.title = paused ? T.liveTickerPlay : T.liveTickerPause;
+    toggle.querySelector('[data-ticker-motion-icon]').textContent = paused ? '▶' : 'Ⅱ';
+  };
+  toggle.addEventListener('click', () => { paused = !paused; syncMotion(); }, { signal: controller.signal });
+  reducedMotion?.addEventListener?.('change', (event) => { paused = event.matches; syncMotion(); }, { signal: controller.signal });
+  syncMotion();
 }
 function showLiveScene(onClose) {
   const modal = $('#modal');
@@ -898,10 +923,11 @@ function showLiveScene(onClose) {
       <div class="live-scene-heading"><span class="live-scene-indicator" aria-hidden="true"></span><div><h2 id="liveSceneTitle">${esc(T.liveScene)}</h2><p>${esc(T.liveSceneSub)}</p></div></div>
       <div class="live-scene-actions"><span class="live-scene-status-label">${esc(T.liveStatus)}</span><button class="live-scene-icon-btn" id="liveSceneRefresh" type="button" aria-label="${esc(T.liveRefresh)}" title="${esc(T.liveRefresh)}">${icon('refresh', 17)}</button><button class="live-scene-icon-btn" type="button" data-m="close" aria-label="${esc(T.close)}">${icon('x', 17)}</button></div>
     </header>
-    <section class="live-scene-ticker-wrap" aria-label="${esc(T.liveTicker)}"><b class="live-scene-ticker-label">${esc(T.liveTicker)}</b><div class="live-scene-ticker" id="liveSceneTicker"></div></section>
+    <section class="live-scene-ticker-wrap" aria-label="${esc(T.liveTicker)}"><b class="live-scene-ticker-label">${esc(T.liveTicker)}</b><div class="live-scene-ticker" id="liveSceneTicker" aria-label="${esc(T.liveTicker)}"></div><button class="live-scene-ticker-toggle" id="liveSceneTickerToggle" type="button" aria-label="${esc(T.liveTickerPause)}" aria-pressed="false" title="${esc(T.liveTickerPause)}"><span data-ticker-motion-icon aria-hidden="true">Ⅱ</span></button></section>
     <div class="live-scene-status" id="liveSceneStatus" role="status" aria-live="polite">${esc(T.liveLoading)}</div>
     <main class="live-scene-content">
-      <section class="live-scene-panel"><h3><span class="live-scene-panel-mark news-mark" aria-hidden="true"></span>${esc(T.liveNews)}</h3><div class="live-scene-list" id="liveSceneNews"></div></section>
+      <section class="live-scene-panel"><h3><span class="live-scene-panel-mark news-mark" aria-hidden="true"></span>${esc(T.liveSyria)}</h3><div class="live-scene-list" id="liveSceneSyriaNews"></div></section>
+      <section class="live-scene-panel"><h3><span class="live-scene-panel-mark world-mark" aria-hidden="true"></span>${esc(T.liveWorld)}</h3><div class="live-scene-list" id="liveSceneWorldNews"></div></section>
       <section class="live-scene-panel"><h3><span class="live-scene-panel-mark osint-mark" aria-hidden="true"></span>${esc(T.liveOsint)}</h3><div class="live-scene-list" id="liveSceneOsint"></div></section>
       <section class="live-scene-panel live-scene-markets"><h3><span class="live-scene-panel-mark market-mark" aria-hidden="true"></span>${esc(T.liveMarkets)}</h3><div class="live-scene-market-grid" id="liveSceneMarkets"></div><p class="live-scene-note">${esc(T.liveMarketsNote)}</p></section>
     </main>
@@ -912,6 +938,7 @@ function showLiveScene(onClose) {
     modal.classList.remove('live-scene-shell');
     onClose?.();
   });
+  setupLiveSceneTicker(controller);
   const refresh = $('#liveSceneRefresh');
   refresh.addEventListener('click', () => loadLiveScene(controller), { signal: controller.signal });
   loadLiveScene(controller);
@@ -927,9 +954,10 @@ async function loadLiveScene(controller) {
     const response = await fetch('/api/live-scene', { headers: { Accept: 'application/json' }, cache: 'no-store', signal: controller.signal });
     if (!response.ok) throw new Error('Live scene unavailable');
     const payload = normalizeLiveScenePayload(await response.json(), LANG);
-    if (controller.signal.aborted || !$('#liveSceneNews')) return;
+    if (controller.signal.aborted || !$('#liveSceneSyriaNews')) return;
     renderLiveSceneTicker($('#liveSceneTicker'), payload.news);
-    appendLiveSceneFeed($('#liveSceneNews'), payload.news.slice(0, 12), T.liveEmptyNews);
+    appendLiveSceneFeed($('#liveSceneSyriaNews'), payload.syriaNews.slice(0, 12), T.liveEmptySyria);
+    appendLiveSceneFeed($('#liveSceneWorldNews'), payload.worldNews.slice(0, 12), T.liveEmptyWorld);
     appendLiveSceneFeed($('#liveSceneOsint'), payload.osint.slice(0, 12), T.liveEmptyOsint);
     appendLiveSceneFeed($('#liveSceneMarkets'), payload.markets.slice(0, 8), T.liveEmptyMarkets, 'market');
     $('#liveSceneUpdated').textContent = payload.updatedAt ? `${T.liveLastUpdated}: ${formatLiveSceneTime(payload.updatedAt, LANG, TZ)}` : '';

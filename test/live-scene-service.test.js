@@ -4,7 +4,7 @@ import {
   createLiveSceneService, parseBbcRss, parseEcbCsv, parseGdeltResponse, parseWorldBankResponse,
 } from '../server/live-scene.js';
 
-const bbcFeed = `<?xml version="1.0"?><rss><channel><item><title><![CDATA[سوريا &amp; العالم]]></title><link>https://www.bbc.co.uk/arabic/news-123</link><pubDate>Mon, 16 Nov 2026 17:00:00 GMT</pubDate><description>Full article text should not appear</description></item><item><title>Bad link</title><link>javascript:alert(1)</link></item></channel></rss>`;
+const bbcFeed = `<?xml version="1.0"?><rss><channel><item><title><![CDATA[سوريا &amp; العالم]]></title><link>https://www.bbc.co.uk/arabic/news-123</link><pubDate>Mon, 16 Nov 2026 17:00:00 GMT</pubDate><description>Full article text should not appear</description></item><item><title>أسواق العالم تتحرك</title><link>https://www.bbc.co.uk/arabic/news-124</link><pubDate>Mon, 16 Nov 2026 16:00:00 GMT</pubDate></item><item><title>Bad link</title><link>javascript:alert(1)</link></item></channel></rss>`;
 const ecbCsv = [
   'KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE,OBS_STATUS',
   'D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2026-11-14,1.0891,A',
@@ -23,11 +23,12 @@ const wbPayload = [
 
 test('BBC RSS parser keeps only attributed title/link/time metadata', () => {
   const items = parseBbcRss(bbcFeed);
-  assert.equal(items.length, 1);
+  assert.equal(items.length, 2);
   assert.equal(items[0].title, 'سوريا & العالم');
   assert.equal(items[0].source, 'BBC News عربي');
   assert.equal(items[0].url, 'https://www.bbc.co.uk/arabic/news-123');
   assert.equal(items[0].publishedAt, '2026-11-16T17:00:00.000Z');
+  assert.equal(items[1].title, 'أسواق العالم تتحرك');
   assert.equal(Object.hasOwn(items[0], 'description'), false);
   assert.equal(parseBbcRss('<rss><item>no tags</item></rss>').length, 0);
 });
@@ -87,7 +88,9 @@ test('service caches successful source data, then falls back to cached data on u
   };
   const service = createLiveSceneService({ fetchImpl: fakeFetch, now: () => current, cacheTtlMs: 1_000, maxStaleMs: 60_000 });
   const first = await service.getLiveScene();
-  assert.equal(first.news.length, 2);
+  assert.equal(first.news.length, 3);
+  assert.equal(first.news.filter((item) => item.region === 'syria').length, 2);
+  assert.equal(first.news.filter((item) => item.region === 'world').length, 1);
   assert.equal(first.markets.length, 4);
   assert.equal(first.degraded, false);
   assert.equal(requests, 4);
@@ -98,7 +101,7 @@ test('service caches successful source data, then falls back to cached data on u
   shouldFail = true;
   const fallback = await service.getLiveScene();
   assert.equal(fallback.degraded, true);
-  assert.equal(fallback.news.length, 2);
+  assert.equal(fallback.news.length, 3);
   assert.equal(fallback.updatedAt, first.updatedAt);
   assert.equal(Object.values(fallback.sourceStatus).every((status) => status === 'cached'), true);
   assert.equal(requests, 8);
@@ -120,18 +123,18 @@ test('cached source data expires independently while other sources keep succeedi
   };
   const service = createLiveSceneService({ fetchImpl: fakeFetch, now: () => current, cacheTtlMs: 1_000, maxStaleMs: 5_000 });
   const first = await service.getLiveScene();
-  assert.equal(first.news.length, 2);
+  assert.equal(first.news.length, 3);
 
   current += 2_000;
   gdeltFails = true;
   const fallback = await service.getLiveScene();
   assert.equal(fallback.sourceStatus.gdelt, 'cached');
-  assert.equal(fallback.news.length, 2);
+  assert.equal(fallback.news.length, 3);
 
   current += 6_000;
   const expired = await service.getLiveScene();
   assert.equal(expired.sourceStatus.gdelt, 'unavailable');
-  assert.equal(expired.news.length, 1, 'expired GDELT headlines are no longer retained');
+  assert.equal(expired.news.length, 2, 'expired GDELT headlines are no longer retained');
   assert.equal(expired.degraded, true);
 });
 
@@ -155,6 +158,7 @@ test('oversized upstream bodies are cancelled and only that source degrades', as
   assert.equal(bbcCancelled, true);
   assert.equal(data.sourceStatus.bbc, 'unavailable');
   assert.equal(data.news.length, 1, 'the valid GDELT headline remains available');
+  assert.equal(data.news[0].region, 'syria');
 });
 
 test('service fails closed with no cached records when every source is unavailable', async () => {
@@ -174,6 +178,6 @@ test('an invalid 200 response degrades only that source rather than masking its 
   const data = await createLiveSceneService({ fetchImpl: fakeFetch }).getLiveScene();
   assert.equal(data.degraded, true);
   assert.equal(data.sourceStatus.gdelt, 'unavailable');
-  assert.equal(data.news.length, 1, 'the valid BBC feed remains available');
+  assert.equal(data.news.length, 2, 'the valid BBC feed remains available');
   assert.equal(data.markets.length, 4, 'valid market APIs remain available');
 });

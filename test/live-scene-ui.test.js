@@ -28,9 +28,19 @@ test('live-scene has both language labels and accessible refresh/status affordan
   assert.match(app, /aria-label="\$\{esc\(T\.liveRefresh\)\}"/);
 });
 
-test('ticker animation pauses on interaction and respects reduced-motion settings', () => {
-  assert.match(styles, /@keyframes live-scene-marquee/);
-  assert.match(styles, /live-scene-ticker:hover[^\{]*live-scene-ticker-track[^\{]*\{[^}]*animation-play-state: paused/s);
+test('live-scene ticker runs by default, provides pause/play, and honors reduced motion', () => {
+  assert.match(styles, /\.live-scene-ticker-track\s*\{[^}]*animation:\s*live-scene-marquee[^}]*infinite/s);
+  assert.doesNotMatch(styles, /\.live-scene-ticker:hover[^}]*animation-play-state:\s*paused/s);
+  assert.match(app, /id="liveSceneTickerToggle"[^>]*aria-pressed="false"/);
+  assert.match(app, /let paused = Boolean\(reducedMotion\?\.matches\)/);
+  assert.match(app, /toggle\.addEventListener\('click',\s*\(\)\s*=>\s*\{\s*paused = !paused; syncMotion\(\);/);
+  assert.match(app, /reducedMotion\?\.addEventListener\?\.\('change',[^\n]*paused = event\.matches/);
   assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.live-scene-ticker-track\s*\{\s*animation:\s*none/s);
+  assert.match(styles, /\.live-scene-ticker\.is-motion-enabled \.live-scene-ticker-track\s*\{\s*animation:\s*live-scene-marquee/s);
+  assert.match(styles, /@media\s*\(max-width:\s*767px\)[\s\S]*?\.live-scene-ticker-wrap\s*\{[^}]*margin:\s*10px 10px 0/);
+  assert.match(styles, /@media\s*\(max-width:\s*767px\)[\s\S]*?\.live-scene-ticker-item\s*\{[^}]*max-width:\s*74vw/);
+  const tickerMarkup = app.match(/<section class="live-scene-ticker-wrap"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.ok(tickerMarkup, 'live-scene ticker markup should exist');
+  assert.doesNotMatch(tickerMarkup, /aria-live\s*=/, 'ticker content must not be announced as a live region');
   assert.match(styles, /\.modal\.live-scene-shell\s*\{[^}]*width:\s*min\(1080px/);
 });

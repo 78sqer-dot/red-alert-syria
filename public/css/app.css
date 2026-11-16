@@ -463,25 +463,34 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 .fly-svg .amb-siren { animation: siren .9s steps(1) infinite; }
 @keyframes squadFly { 0% { transform: translateY(110px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-110px); opacity: 0; } }
 @keyframes squadFlyCompact { 0% { transform: translateY(12px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-12px); opacity: 0; } }
-/* Helicopters use one recognizable top-down airframe, orbiting the alert area with animated rotors. */
+/* Helicopters use a slim side-profile airframe and a short, static directional route. */
 .mk-helicopter .mk-s { transform: none; }
 .maplibregl-map .mk-helicopter { visibility: visible; }
-.heli-orbit { --heli-orb: calc(var(--orb, 14px) + 4px); position: absolute; left: calc(0px - var(--heli-orb)); top: calc(0px - var(--heli-orb)); width: calc(var(--heli-orb) + var(--heli-orb)); height: calc(var(--heli-orb) + var(--heli-orb)); pointer-events: none; animation: heliOrbit 9s linear infinite; }
-.maplibregl-map:not(.zoom-detail) .mk-helicopter .heli-orbit { visibility: hidden; }
-.maplibregl-map.zoom-detail .mk-helicopter .heli-orbit { visibility: visible; }
-.heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%) rotate(90deg); transform-origin: center; pointer-events: auto; filter: drop-shadow(0 0 1px rgba(15,23,42,.84)) drop-shadow(0 1px 1.5px rgba(255,255,255,.42)); }
-.heli-craft-second { top: 100%; transform: translate(-50%, -50%) rotate(270deg); }
-.helicopter-svg { display: block; width: 24px; height: 24px; overflow: visible; fill: #17212d; filter: drop-shadow(0 0 1px rgba(3,7,18,.9)) drop-shadow(0 0 3px rgba(59,142,255,.78)); }
-.helicopter-svg .heli-main-rotor { fill: #0b1220; opacity: .96; transform-box: fill-box; transform-origin: center; animation: heliRotor .32s linear infinite; }
-.helicopter-svg .heli-tail-rotor { fill: #ef4444; opacity: 1; transform-box: fill-box; transform-origin: center; animation: heliRotor .22s linear infinite reverse; }
-.helicopter-svg .heli-cockpit { fill: #e11d48; }
-.helicopter-svg .heli-window { fill: #17212d; }
-.helicopter-svg .heli-hub { fill: #ef4444; stroke: #0b1220; stroke-width: 8; }
-.mk-helicopter .helicopter-svg, .mk-helicopter.sel .helicopter-svg { fill: #17212d; }
+.heli-route { --heli-route-len: clamp(38px, var(--orb, 42px), 58px); position: absolute; left: 0; top: 0; width: var(--heli-route-len); height: 24px; transform: translate(-50%, -50%) rotate(-8deg); pointer-events: none; }
+.heli-route.heli-intensive { --heli-route-len: clamp(54px, var(--orb, 54px), 72px); }
+.heli-route-line { position: absolute; left: 0; top: 50%; width: 100%; border-top: 2px dashed rgba(59,142,255,.62); pointer-events: none; }
+.heli-route-line::after { content: ''; position: absolute; right: -2px; top: -5px; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 9px solid #3b8eff; }
+.maplibregl-map:not(.zoom-detail) .mk-helicopter .heli-route { visibility: hidden; }
+.maplibregl-map.zoom-detail .mk-helicopter .heli-route { visibility: visible; }
+.heli-craft { position: absolute; left: 50%; top: 50%; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%); transform-origin: center; pointer-events: auto; filter: drop-shadow(0 0 1px rgba(15,23,42,.84)) drop-shadow(0 1px 1.5px rgba(255,255,255,.42)); }
+.heli-craft-second { left: 70%; top: 50%; transform: translate(-50%, -50%); }
+.heli-intensive .heli-craft:not(.heli-craft-second) { left: 30%; }
+.helicopter-svg { display: block; width: 24px; height: 24px; overflow: visible; fill: #315f92; filter: drop-shadow(0 0 1px rgba(3,7,18,.9)) drop-shadow(0 0 3px rgba(59,142,255,.78)); }
+.helicopter-svg .heli-body { fill: #315f92; stroke: #163c63; stroke-width: 7; stroke-linejoin: round; }
+.helicopter-svg .heli-body-highlight { fill: #3b8eff; }
+.helicopter-svg .heli-glass { fill: #17324d; stroke: #8db9e8; stroke-width: 4; }
+.helicopter-svg .heli-main-rotor { fill: #3b8eff; opacity: .96; transform-box: fill-box; transform-origin: center; animation: heliRotor .32s linear infinite; }
+.helicopter-svg .heli-tail-rotor { fill: #3b8eff; opacity: 1; transform-box: fill-box; transform-origin: center; animation: heliRotor .22s linear infinite reverse; }
+.helicopter-svg .heli-tail-boom, .helicopter-svg .heli-tail-fin { fill: #315f92; stroke: #163c63; stroke-width: 5; stroke-linejoin: round; }
+.helicopter-svg .heli-skids { fill: none; stroke: #244f7f; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.helicopter-svg .heli-mast { fill: none; stroke: #315f92; stroke-width: 3; }
+.helicopter-svg .heli-cockpit { fill: #17324d; }
+.helicopter-svg .heli-window { fill: #0f2842; }
+.helicopter-svg .heli-hub { fill: #1d4ed8; stroke: #102f52; stroke-width: 8; }
+.mk-helicopter .helicopter-svg, .mk-helicopter.sel .helicopter-svg { fill: #315f92; }
 html.dark .heli-craft { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.92)) drop-shadow(0 0 3px rgba(59,142,255,.94)); }
-@keyframes heliOrbit { to { transform: rotate(1turn); } }
 @keyframes heliRotor { to { transform: rotate(1turn); } }
-.mk.inactive .heli-orbit, .mk.inactive .helicopter-svg .heli-main-rotor, .mk.inactive .helicopter-svg .heli-tail-rotor { animation: none !important; }
+.mk.inactive .heli-route, .mk.inactive .helicopter-svg .heli-main-rotor, .mk.inactive .helicopter-svg .heli-tail-rotor { animation: none !important; }
 .mk.inactive { filter: grayscale(1); opacity: .55; }
 .mk.inactive .uav, .mk.inactive .sq, .mk.inactive .squad { animation: none !important; }
 .mk.inactive .squad { transform: none; opacity: 1; }
@@ -886,7 +895,7 @@ html.dark .wa-btn svg { color: #2fe079; }
   .zp.zp-aircraft .zp-fill { animation: none; opacity: .20; }
   .zp.zp-aircraft::before { animation: none; opacity: .55; transform: scale(1.25); }
   .zp.zp-selected::before { animation: none; opacity: .85; transform: scale(1.12); }
-  .heli-orbit, .helicopter-svg .heli-main-rotor, .helicopter-svg .heli-tail-rotor { animation: none !important; }
+  .heli-route, .helicopter-svg .heli-main-rotor, .helicopter-svg .heli-tail-rotor { animation: none !important; }
 }
 .pp-areas { display: block; overflow: visible; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; line-height: 1.55; margin: 3px 0 0; }
 
@@ -1432,24 +1441,30 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .live-scene-icon-btn:disabled { opacity: .55; cursor: wait; }
 .live-scene-icon-btn:disabled svg { animation: live-scene-spin 1s linear infinite; }
 @keyframes live-scene-spin { to { transform: rotate(360deg); } }
-.live-scene-ticker-wrap { flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; margin: 14px 20px 0; min-height: 46px; padding: 0 12px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--red) 24%, var(--border)); border-radius: 11px; background: color-mix(in srgb, var(--red) 4%, var(--bg-card)); }
-.live-scene-ticker-label { color: var(--red); font-size: 11px; font-weight: 900; white-space: nowrap; }
+.live-scene-ticker-wrap { flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr) 34px; align-items: center; gap: 10px; margin: 14px 20px 0; min-height: 46px; padding: 0 10px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--red) 30%, var(--border)); border-radius: 12px; background: linear-gradient(90deg, color-mix(in srgb, var(--red) 8%, var(--bg-card)), var(--bg-card) 44%, color-mix(in srgb, var(--red) 5%, var(--bg-card))); box-shadow: inset 0 1px color-mix(in srgb, white 8%, transparent), 0 3px 14px color-mix(in srgb, var(--red) 7%, transparent); }
+.live-scene-ticker-label { display: inline-flex; align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid color-mix(in srgb, var(--red) 30%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--red) 10%, var(--bg-card)); color: var(--red); font-size: 11px; font-weight: 900; white-space: nowrap; }
+.live-scene-ticker-label::before { content: ''; width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 15%, transparent); }
 .live-scene-ticker { min-width: 0; height: 44px; overflow: hidden; display: flex; align-items: center; }
-.live-scene-ticker-track { display: flex; width: max-content; animation: live-scene-marquee 42s linear infinite; }
-.live-scene-ticker:hover .live-scene-ticker-track, .live-scene-ticker:focus-within .live-scene-ticker-track { animation-play-state: paused; }
+.live-scene-ticker-track { display: flex; width: max-content; direction: ltr; animation: live-scene-marquee var(--live-scene-ticker-duration, 36s) linear infinite; }
+.live-scene-ticker:focus-within .live-scene-ticker-track, .live-scene-ticker.is-paused .live-scene-ticker-track { animation-play-state: paused; }
 .live-scene-ticker-group { display: flex; flex: none; align-items: center; direction: rtl; }
 html[dir='ltr'] .live-scene-ticker-group { direction: ltr; }
 .live-scene-ticker-item { display: inline-flex; align-items: center; gap: 8px; max-width: min(520px, 72vw); min-height: 34px; padding-inline: 14px; border-inline-end: 1px solid var(--border-subtle); color: var(--text-primary); font-size: 12px; white-space: nowrap; }
 .live-scene-ticker-item:hover { color: var(--red); }
 .live-scene-ticker-item b { color: var(--text-muted); font-size: 10px; }
+.live-scene-ticker-item .live-scene-ticker-region { padding: 3px 6px; border-radius: 6px; background: color-mix(in srgb, var(--red) 10%, var(--bg-card)); color: var(--red); font-size: 9px; }
+.live-scene-ticker-item .live-scene-ticker-source { font-size: 9px; }
 .live-scene-ticker-item span { max-width: 430px; overflow: hidden; text-overflow: ellipsis; }
 .live-scene-ticker-empty { padding-inline: 8px; color: var(--text-muted); font-size: 12px; }
-@keyframes live-scene-marquee { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+.live-scene-ticker-toggle { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-elevated); color: var(--text-primary); font: 800 12px/1 system-ui, sans-serif; cursor: pointer; }
+.live-scene-ticker-toggle:hover, .live-scene-ticker-toggle:focus-visible { border-color: color-mix(in srgb, var(--red) 55%, var(--border)); color: var(--red); outline: none; }
+@keyframes live-scene-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 .live-scene-status { flex: none; padding: 12px 20px 0; color: var(--text-muted); font-size: 12px; }
-.live-scene-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-content: start; gap: 12px; padding: 14px 20px 16px; }
+.live-scene-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 12px; padding: 14px 20px 16px; }
 .live-scene-panel { min-width: 0; padding: 13px; border: 1px solid var(--border-subtle); border-radius: 13px; background: var(--bg-card); box-shadow: var(--shadow-sm); }
 .live-scene-panel h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 900; }
 .live-scene-panel-mark { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--red); }
+.live-scene-panel-mark.world-mark { background: var(--orange); }
 .live-scene-panel-mark.osint-mark { background: var(--blue); }
 .live-scene-panel-mark.market-mark { background: var(--online); }
 .live-scene-list { display: grid; gap: 7px; }
@@ -1493,5 +1508,6 @@ html[dir='rtl'] .live-scene-footer time { direction: rtl; }
 }
 @media (prefers-reduced-motion: reduce) {
   .live-scene-ticker-track { animation: none; }
+  .live-scene-ticker.is-motion-enabled .live-scene-ticker-track { animation: live-scene-marquee var(--live-scene-ticker-duration, 36s) linear infinite; }
   .live-scene-icon-btn:disabled svg { animation: none; }
 }

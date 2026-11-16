@@ -23,11 +23,11 @@ const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
-import { setSourceNames, cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
+import { setSourceNames, cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
-const NEWS_GROUP_PRIORITY = ['aerial', 'incursion', 'strikes', 'civil', 'smuggling', 'political', 'nature', 'other'];
+const NEWS_GROUP_PRIORITY = ['aerial', 'incursion', 'strikes', 'protests', 'civil', 'smuggling', 'political', 'nature', 'other'];
 const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', patrol: '🚓', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
-const newsGroupForType = (type) => type === 'military_incursion' ? 'incursion' : ALERT_TYPES[type]?.group || 'other';
+const newsGroupForType = (type) => type === 'military_incursion' ? 'incursion' : ['protest', 'protest_action'].includes(type) ? 'protests' : ALERT_TYPES[type]?.group || 'other';
 const NEWS_TYPE_GROUPS = Object.freeze(Object.fromEntries(
   [...new Set(NEWS_TYPES.map(newsGroupForType))]
     .map((group) => [group, Object.freeze(NEWS_TYPES.filter((type) => newsGroupForType(type) === group))]),
@@ -99,7 +99,7 @@ export function isRoadStatusOnlyPost(text) {
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
 // bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
 // that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
-export const FILTER_VER = 10;
+export const FILTER_VER = 11;
 const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
@@ -367,11 +367,28 @@ const editorialHas = (text, phrase) => {
   return Boolean(needle && haystack.includes(` ${needle} `));
 };
 const editorialHasAny = (text, phrases) => phrases.some((phrase) => editorialHas(text, phrase) || editorialHas(text, `و${phrase}`));
-const publicDraftCopyIssue = (d) => [d?.headline, d?.body, d?.details, d?.text, d?.description, d?.title, d?.title_en, d?.description_en].some(isPrivateEditorialCopy)
+const publicDraftCopyIssue = (d, allowedCopy = null) => [d?.headline, d?.body, d?.details, d?.text, d?.description, d?.title, d?.title_en, d?.description_en]
+  .some((value) => isPrivateEditorialCopy(value) && !(allowedCopy && value === allowedCopy))
   ? 'private-editorial-copy-not-public' : null;
 function privateEditorialModeApplicable(d) {
   if (!d || !NEWS_TYPES.includes(d.type) || !ALERT_TYPES[d.type]) return false;
   return rewriteSourceReviewReason(String(d.sourceText || d.headline || d.body || '')) === null;
+}
+function approvedOwnerEditorialCopy(d, ownerId) {
+  const preview = d?.aiRewritePreview;
+  const mode = preview?.mode;
+  if (!['opinion', 'satire'].includes(mode) || preview.applied !== true || !ownerIdsU().includes(Number(ownerId))) return null;
+  const sourceText = String(d.sourceText || d.headline || '').trim();
+  if (preview.sourceText !== sourceText || preview.baseHeadline !== d.headline
+    || (preview.baseType !== undefined && preview.baseType !== d.type)
+    || !privateEditorialModeApplicable(d) || rewriteSourceReviewReason(sourceText)) return null;
+  const stored = d.privateEditorial?.[mode];
+  if (typeof stored !== 'string' || !stored.trim() || stored !== preview.text) return null;
+  if (privateEditorialOutputReviewReason(sourceText, stored)) return null;
+  let finalized;
+  try { finalized = finalizeRewriteOutput(stored, mode, d.srcs?.[0]?.name || ''); } catch { return null; }
+  if (finalized !== stored || !isPublicEditorialCopy(finalized, mode)) return null;
+  return { mode, text: finalized };
 }
 /** A no-AI, fail-closed check: uncertain edits stay pending for the owner instead of reaching either public surface. */
 function editorialGate(d) {
@@ -579,7 +596,7 @@ function cardText(d, lang = 'ar') {
     lines.push(`📍 <b>${tr(lang, `المناطق (${locs.length})`, `Areas (${locs.length})`)}:</b>`);
     for (const l of locs) lines.push(`• ${esc(fmtLoc(l))}`);
   } else lines.push(`📍 <b>${tr(lang, 'المكان', 'Place')}:</b> ${esc(locs[0] ? fmtLoc(locs[0]) : d.type === 'political' ? tr(lang, 'غير محدد داخل سوريا', 'Unspecified within Syria') : tr(lang, 'سوريا', 'Syria'))}`);
-  lines.push(`📝 ${esc(d.headline)}`);
+  lines.push(`📝 ${esc(d.publishedHeadline || d.headline)}`);
   if (d.type === 'helicopter') lines.push(d.intense === true
     ? tr(lang, '🚁🚁 <b>تحليق مكثف — مروحيتان</b>', '🚁🚁 <b>Intensive flight — two helicopters</b>')
     : tr(lang, '🚁 <b>مروحية واحدة</b>', '🚁 <b>One helicopter</b>'));
@@ -607,7 +624,7 @@ function cardText(d, lang = 'ar') {
       : d.editorialHoldReason === 'owner-private-editorial-note'
         ? tr(lang, 'المسودة موقوفة للمراجعة اليدوية؛ لم يُنشر شيء تلقائياً.', 'The draft is held for human review; nothing was auto-published.')
       : d.editorialHoldReason === 'opinion-analysis-requires-explicit-owner-publish'
-        ? tr(lang, 'الرأي/التحليل محفوظ للمالك فقط ولا يدخل النشر الآلي أو العام.', 'Opinion/analysis is saved for the owner only and cannot enter automatic or public publishing.')
+        ? tr(lang, 'النقد/السخرية لا يدخلان النشر الآلي؛ لا يُنشر النص المختار إلا إذا ضغط المالك صراحةً «نشر».', 'Opinion/satire never enters automatic publishing; the selected copy is public only if the owner explicitly taps Publish.')
         : tr(lang, 'تعذّر التحقق الآلي المحافظ من حفظ الوقائع والإسناد والمكان والأرقام والسياق؛ راجع المصدر قبل القرار.', 'The conservative check could not confirm that facts, attribution, place, numbers, and context were preserved; review the source before deciding.');
     lines.push('', tr(lang, '⚖️ <b>موقوفة للمراجعة التحريرية:</b>', '⚖️ <b>Held for editorial review:</b>'), esc(reason));
   }
@@ -641,9 +658,9 @@ function rewritePreviewText(d, lang = 'ar') {
   const original = String(preview.originalHeadline || d.originalHeadline || d.headline || '');
   const render = (excerpt) => [
     preview.mode === 'opinion'
-      ? tr(lang, preview.applied ? '🧭 <b>رأي/تحليل محفوظ لك خاصاً — لا يُنشر</b>' : '🧭 <b>معاينة نقد/تحليل خاصة — لم تُعتمد ولم تُنشر</b>', preview.applied ? '🧭 <b>Opinion/analysis saved privately for you — never published</b>' : '🧭 <b>Private critical-analysis preview — not applied or published</b>')
+      ? tr(lang, preview.applied ? '🧭 <b>نقد/تحليل اختاره المالك — النشر يتطلب ضغط «نشر»</b>' : '🧭 <b>معاينة نقد/تحليل خاصة — لم تُعتمد ولم تُنشر</b>', preview.applied ? '🧭 <b>Owner-selected critique/analysis — publishing still requires Publish</b>' : '🧭 <b>Private critical-analysis preview — not applied or published</b>')
       : preview.mode === 'satire'
-        ? tr(lang, preview.applied ? '🎭 <b>محاكاة ساخرة خيالية محفوظة لك خاصاً — لا تُنشر</b>' : '🎭 <b>معاينة محاكاة ساخرة خيالية خاصة — ليست خبراً</b>', preview.applied ? '🎭 <b>Fictional satire saved privately for you — never published</b>' : '🎭 <b>Private fictional-satire preview — not news</b>')
+        ? tr(lang, preview.applied ? '🎭 <b>محاكاة ساخرة اختارها المالك — النشر يتطلب ضغط «نشر»</b>' : '🎭 <b>معاينة محاكاة ساخرة خيالية خاصة — ليست خبراً</b>', preview.applied ? '🎭 <b>Owner-selected satire — publishing still requires Publish</b>' : '🎭 <b>Private fictional-satire preview — not news</b>')
       : tr(lang, '🪄 <b>معاينة صياغة صحفية محايدة — لم تُعتمد ولم تُنشر</b>', '🪄 <b>Neutral news rewrite preview — not applied or published</b>'),
     '',
     `📝 <b>${tr(lang, 'عنوان المسودة الحالي', 'Current draft headline')}:</b> ${esc(original)}`,
@@ -652,9 +669,9 @@ function rewritePreviewText(d, lang = 'ar') {
     preview.manuallyEdited ? tr(lang, '🖊 عُدلت الصياغة يدوياً في هذه المعاينة الخاصة.', '🖊 Wording manually edited in this private preview.') : null,
     '',
     preview.mode === 'opinion'
-      ? tr(lang, 'هذه ملاحظة خاصة بالمالك وليست خبراً؛ يجب أن يستند النقد إلى الوقائع المذكورة، ولن تظهر على القناة أو الخريطة أو الموقع.', 'Private owner-only commentary, not news; criticism must be grounded in the stated facts and will not appear on the channel, map, or site.')
+      ? tr(lang, 'هذه ليست صياغة خبرية محايدة ولا تدخل النشر الآلي. يمكن نشرها فقط بعد اعتماد المالك ثم ضغطه صراحةً «نشر».', 'This is not neutral news copy and is never auto-published. It can be published only after the owner applies it and explicitly taps Publish.')
       : preview.mode === 'satire'
-        ? tr(lang, 'هذه محاكاة خيالية موسومة بوضوح، وليست خبراً. تبقى خاصة بالمالك ولا تظهر على القناة أو الخريطة أو الموقع.', 'Clearly labeled fictional satire, not news. It remains private to the owner and will not appear on the channel, map, or site.')
+        ? tr(lang, 'هذه محاكاة خيالية موسومة بوضوح وليست خبراً، ولا تدخل النشر الآلي. يمكن نشرها فقط بعد اعتماد المالك ثم ضغطه صراحةً «نشر».', 'This is clearly labeled fictional satire, not news, and is never auto-published. It can be published only after the owner applies it and explicitly taps Publish.')
         : tr(lang, 'راجع الوقائع والمصدر بنفسك. هذه صياغة خبرية محايدة؛ لن يتغير نص المسودة إلا بعد اختيار اعتماد الصياغة.', 'Verify the facts and source yourself. This is neutral news wording; the draft changes only if you choose to apply it.'),
   ].join('\n');
   let text = render(source);
@@ -829,7 +846,7 @@ function publishedLinksKb(d, alert, lang = 'ar', includeWhatsApp = false) {
   if (map) kb.url(tr(lang, '🗺 على الخريطة', '🗺 On the map'), map);
   if (post) kb.url(tr(lang, '📣 المنشور', '📣 Post'), post);
   if (includeWhatsApp && map) {
-    const shareText = [d.headline || d.title || '', d.body || d.details || '', map].filter(Boolean).join('\n\n');
+    const shareText = [d.publishedHeadline || d.headline || d.title || '', d.body || d.details || '', map].filter(Boolean).join('\n\n');
     kb.row().url(tr(lang, '🟢 فتح واتساب للمشاركة اليدوية', '🟢 Open WhatsApp to share manually'), `https://wa.me/?text=${encodeURIComponent(shareText)}`);
   }
   return kb;
@@ -926,10 +943,19 @@ async function nightPublish(d) {
   }
   const duplicate = knownDuplicateDraft(d);
   if (duplicate) { await suppressDuplicateDraft(d, duplicate); return false; }
+  let publicationDraft;
+  try { publicationDraft = await automaticPublicDraft(d); }
+  catch (e) {
+    d.status = 'pending';
+    if (mode === 'day') d.dayAutoAt = Date.now() + DAY_AUTO_DELAY_MS;
+    save();
+    console.error(`[news] ${mode} auto-publish draft preparation failed`, e.description || e.message);
+    return false;
+  }
   d.status = 'publishing'; save();
   let alert;
   try {
-    alert = await R.H.publishDraft(a, toBotDraft(d), { id: 0, name: 'رصد تلقائي', via: mode === 'day' ? 'news-day-fallback' : 'news-night' });
+    alert = await R.H.publishDraft(a, publicationDraft, { id: 0, name: 'رصد تلقائي', via: mode === 'day' ? 'news-day-fallback' : 'news-night' });
   } catch (e) {
     d.status = 'pending';
     if (mode === 'day') d.dayAutoAt = Date.now() + DAY_AUTO_DELAY_MS;
@@ -937,7 +963,7 @@ async function nightPublish(d) {
     console.error(`[news] ${mode} auto-publish failed`, e.description || e.message);
     return false;
   }
-  d.status = 'published'; d.auto = true; d.autoMode = mode; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null;
+  d.status = 'published'; d.auto = true; d.autoMode = mode; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.publishedHeadline = publicationDraft.headline || d.headline;
   n.stats.published++; n.stats.auto = (n.stats.auto || 0) + 1;
   save();
   await closeCards(d, null, true); await unlinkCapturedMedia(d.sourceMedia); // a draft that was waiting (single local source, then confirmed) leaves the chat
@@ -996,21 +1022,31 @@ async function nightSummaryTick() {
 }
 
 /** the bot's normal draft (same as a hand-made alert) from a news draft */
-export function toBotDraft(d) {
+export function toBotDraft(d, options = {}) {
   newsState();
-  if (publicDraftCopyIssue(d)) throw new Error('Private editorial or internal review text cannot be converted to a public alert');
-  const body = d.headline;
-  const patrolText = N(`${d.headline || ''} ${d.body || ''}`);
+  const editorialSelection = options.editorialMode ? approvedOwnerEditorialCopy(d, options.ownerId) : null;
+  if (options.editorialMode && (!editorialSelection || editorialSelection.mode !== options.editorialMode)) {
+    throw new Error('The owner-selected editorial preview is stale or not approved for publication');
+  }
+  const headline = editorialSelection?.text || d.headline;
+  const safeDraft = {
+    ...d, headline,
+    ...(editorialSelection ? { body: '', details: '', text: '', description: '', description_en: '' } : {}),
+  };
+  if (publicDraftCopyIssue(safeDraft, editorialSelection?.text)) throw new Error('Private editorial or internal review text cannot be converted to a public alert');
+  const body = headline;
+  const patrolText = N(`${headline || ''} ${editorialSelection ? '' : d.body || ''}`);
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
-    type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin,
+    type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin, headline,
+    ...(editorialSelection ? { publicEditorialTone: editorialSelection.mode, publicEditorialText: editorialSelection.text } : {}),
     location: d.loc || locationFrom({}), extra: d.extra || [],
-    details: d.type === 'breaking' ? '' : (d.body || body), text: d.type === 'breaking' ? body : '',
+    details: d.type === 'breaking' ? '' : (editorialSelection ? headline : d.body || body), text: d.type === 'breaking' ? (editorialSelection ? '' : body) : '',
     created: Date.now(), source: 'news',
     srcs: (d.srcs || []).map((s) => ({ u: s.u, name: s.name, url: s.url, ts: s.ts, local: !!s.local })),
     ...(d.type === 'military_incursion' && ['soldiers', 'vehicles', 'barrier'].includes(d.incursionKind) ? { incursionKind: d.incursionKind } : {}),
     ...(patrolForm ? { patrolForm } : {}),
-    ...((d.type === 'weather' && d.hazard) || d.dronePresence === true ? { meta: { ...(d.type === 'weather' && d.hazard ? { hazard: d.hazard } : {}), ...(d.dronePresence === true ? { dronePresence: true } : {}) } } : {}),
+    ...((d.type === 'weather' && d.hazard) || d.dronePresence === true || editorialSelection ? { meta: { ...(d.type === 'weather' && d.hazard ? { hazard: d.hazard } : {}), ...(d.dronePresence === true ? { dronePresence: true } : {}), ...(editorialSelection ? { publicEditorialTone: editorialSelection.mode } : {}) } } : {}),
     ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
     ...(d.type === 'political' ? {
       politicalCategory: POLITICAL_CATEGORIES[d.politicalCategory] ? d.politicalCategory : null,
@@ -1018,6 +1054,34 @@ export function toBotDraft(d) {
       politicalSourceTimestamp: Number.isFinite(d.ts) ? new Date(d.ts).toISOString() : null,
     } : {}),
   };
+}
+
+/** Automatic posts use neutral newsroom wording only; failures preserve the already-classified factual copy. */
+async function automaticPublicDraft(d) {
+  const preview = d.aiRewritePreview;
+  if (preview?.mode === 'news' && preview.applied === true && preview.text === d.headline) return toBotDraft(d);
+  const sourceText = String(d.sourceText || d.headline || '').trim();
+  if (!sourceText || (!R.rewriteImpl && !process.env.NEWS_REWRITE_GEMINI_API_KEY)) return toBotDraft(d);
+  let stage = 'rewrite';
+  try {
+    const raw = R.rewriteImpl
+      ? await R.rewriteImpl(sourceText, { mode: 'news' })
+      : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '', mode: 'news' });
+    stage = 'finalize';
+    const headline = finalizeRewriteOutput(String(raw || ''), 'news', d.srcs?.[0]?.name || '');
+    const candidate = { ...d, headline, body: '' };
+    stage = 'editorial-gate';
+    const gate = editorialGate(candidate);
+    if (publicDraftCopyIssue(candidate) || !gate.ok) {
+      console.warn(`[news] neutral auto rewrite failed conservative gate (${gate.reason || 'private-copy'}); keeping classified copy for ${d.id}`);
+      return toBotDraft(d);
+    }
+    stage = 'draft-validation';
+    return toBotDraft(candidate);
+  } catch {
+    console.warn(`[news] neutral auto rewrite unavailable at ${stage}; keeping classified copy for ${d.id}`);
+    return toBotDraft(d);
+  }
 }
 
 // ---------------------------------------------------------------- pipeline
@@ -1824,7 +1888,12 @@ export function registerNewsTools(bot, h) {
       forgetCurrentCard(d, ctx); save();
       return;
     }
-    if (act === 'p' && d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode) && !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, t(ctx, 'نشر مادة الرأي/السخرية يحتاج موافقتك كمالك', 'Only the owner may publish opinion/satire'), true);
+    let ownerEditorialSelection = null;
+    if (act === 'p' && d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) {
+      if (!h.owner(ctx) || !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, t(ctx, 'نشر مادة الرأي/السخرية يحتاج موافقتك كمالك', 'Only the owner may publish opinion/satire'), true);
+      ownerEditorialSelection = approvedOwnerEditorialCopy(d, ctx.from.id);
+      if (!ownerEditorialSelection) return toast(ctx, t(ctx, 'المعاينة الخاصة قديمة أو غير مطابقة للاختيار؛ لم يُنشر شيء. أعد معاينتها قبل القرار.', 'The private preview is stale or no longer matches the selection; nothing was published. Create a fresh preview before deciding.'), true);
+    }
     if (d.type === 'political' && !POLITICAL_CATEGORIES[d.politicalCategory] && (act === 'p' || act === 'e')) {
       return toast(ctx, t(ctx, 'اختر فئة سياسية صالحة قبل النشر أو التعديل', 'Choose a valid political category before publishing or editing'), true);
     }
@@ -1842,20 +1911,28 @@ export function registerNewsTools(bot, h) {
       await suppressDuplicateDraft(d, duplicate, ctx.from.id);
       return toast(ctx, t(ctx, '✔️ مُنع النشر: هذا الحدث مسجل مسبقاً. لم يُحذف أي منشور.', '✔️ Publishing blocked: this event is already recorded. No post was deleted.'));
     }
+    let publicationDraft;
+    try {
+      publicationDraft = toBotDraft(d, ownerEditorialSelection
+        ? { editorialMode: ownerEditorialSelection.mode, ownerId: ctx.from.id }
+        : {});
+    } catch {
+      return toast(ctx, t(ctx, 'تعذّر اعتماد نص النشر الحالي بأمان؛ لم يُنشر شيء.', 'The current publication copy could not be safely validated; nothing was published.'), true);
+    }
     // publish: claimed once, so a second tap / a second reviewer can't publish it twice
     d.status = 'publishing'; save();
     await toast(ctx, t(ctx, '⏳ جاري النشر…', '⏳ Publishing…'));
     try { await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(t(ctx, '⏳ جاري النشر…', '⏳ Publishing…'), 'noop') }); } catch { /* ignore */ }
     let alert;
     try {
-      alert = await h.publishDraft(ctx.api, toBotDraft(d), { id: ctx.from.id, name: ctx.from.first_name, via: 'news' });
+      alert = await h.publishDraft(ctx.api, publicationDraft, { id: ctx.from.id, name: ctx.from.first_name, via: 'news' });
     } catch (e) {
       d.status = 'pending'; save();
       console.error('[news] publish failed', e.description || e.message);
       try { await ctx.editMessageText(cardText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id), link_preview_options: { is_disabled: true } }); } catch { /* ignore */ }
       return toast(ctx, t(ctx, '⚠️ تعذّر النشر — اضغط «نشر» مرة ثانية.', '⚠️ Publishing failed — tap Publish again.'), true);
     }
-    d.status = 'published'; d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.by = ctx.from.id;
+    d.status = 'published'; d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.by = ctx.from.id; d.publishedHeadline = publicationDraft.headline || d.headline;
     await unlinkCapturedMedia(d.sourceMedia);
     d.approvedBy = { id: ctx.from.id, name: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' '), username: ctx.from.username || null };
     d.approvedAt = new Date().toISOString(); n.stats.published++;
@@ -1864,7 +1941,7 @@ export function registerNewsTools(bot, h) {
     for (const ownerId of ownerIdsU()) {
       if (Number(ownerId) === Number(ctx.from.id)) continue;
       const ownerLang = langOfId(ownerId);
-      const ownerText = tr(ownerLang, `<b>✅ نُشر تنبيه جديد على الخريطة</b>\n${esc(d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nالمشرف: ${esc(reviewer || String(ctx.from.id))}\nالوقت: ${esc(new Date(d.approvedAt).toLocaleString('ar-SY', { timeZone: 'Asia/Damascus' }))}`, `<b>✅ New alert published to the map</b>\n${esc(d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nApproved by: ${esc(reviewer || String(ctx.from.id))}\n${esc(new Date(d.approvedAt).toLocaleString('en-GB', { timeZone: 'Asia/Damascus' }))}`);
+      const ownerText = tr(ownerLang, `<b>✅ نُشر تنبيه جديد على الخريطة</b>\n${esc(d.publishedHeadline || d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nالمشرف: ${esc(reviewer || String(ctx.from.id))}\nالوقت: ${esc(new Date(d.approvedAt).toLocaleString('ar-SY', { timeZone: 'Asia/Damascus' }))}`, `<b>✅ New alert published to the map</b>\n${esc(d.publishedHeadline || d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nApproved by: ${esc(reviewer || String(ctx.from.id))}\n${esc(new Date(d.approvedAt).toLocaleString('en-GB', { timeZone: 'Asia/Damascus' }))}`);
       try { await ctx.api.sendMessage(ownerId, ownerText, { parse_mode: 'HTML', reply_markup: publishedLinksKb(d, alert, ownerLang, true), link_preview_options: { is_disabled: true }, _keep: 'c' }); } catch (e) { console.warn('[news] owner approval notification failed', e.message); }
     }
     await closeCards(d, cur(ctx), true);
@@ -2283,4 +2360,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult };
+export const _test = { nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

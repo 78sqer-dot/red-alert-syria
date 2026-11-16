@@ -6,7 +6,7 @@
 import { ALERT_TYPES, POLITICAL_CATEGORIES } from '../shared/types.js';
 import { governorates, districts, searchPlaces, normalizeArabic, getGov, getDist, places } from './places.js';
 import { cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
-export const NEWS_TYPES = ['breaking', 'political', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'uav', 'uav_strike', 'warplane', 'helicopter', 'patrol', 'airstrike', 'missile', 'attack', 'military_incursion', 'clashes', 'assassination', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'fire', 'civil_plane', 'arrest', 'kidnapping', 'death', 'martyrdom', 'brawl', 'shooting', 'weather'];
+export const NEWS_TYPES = ['breaking', 'political', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'uav', 'uav_strike', 'warplane', 'helicopter', 'patrol', 'airstrike', 'missile', 'attack', 'military_incursion', 'clashes', 'assassination', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'protest_action', 'fire', 'civil_plane', 'arrest', 'kidnapping', 'death', 'martyrdom', 'brawl', 'shooting', 'weather'];
 const N = normalizeArabic;
 const stripAl = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w);
 
@@ -28,7 +28,8 @@ const KW = {
   artillery: ['قصف', 'مدفعي', 'مدفعيه', 'قذائف', 'قذيفه', 'هاون'],
   accident: ['حادث سير', 'حوادث سير', 'حادث السير', 'حوادث السير', 'حادث', 'حوادث', 'حادث مرور', 'دراجه ناريه', 'انقلاب', 'تصادم', 'اصطدام', 'دهس', 'حادث مروري', 'تدهور سياره', 'تدهور شاحنه'],
   fire: ['حريق', 'حرائق', 'اندلاع', 'النيران', 'اشتعال', 'اخماد'],
-  protest: ['مظاهره', 'مظاهرات', 'وقفه احتجاجيه', 'احتجاج', 'احتجاجات', 'اعتصام', 'تظاهر', 'يتظاهرون', 'تخرج تضامنا', 'مسيره شعبيه', 'مسيرات شعبيه', 'مسيره احتجاجيه', 'مسيرات احتجاجيه', 'مسيره غضب', 'مسيرات غضب', 'مسيره تضامنيه', 'مسيرات تضامنيه'],
+  protest: ['مظاهره', 'مظاهرات', 'demonstration', 'demonstrations', 'march', 'marches'],
+  protest_action: ['احتجاج', 'احتجاجات', 'اعتصام', 'اعتصامات', 'وقفه احتجاجيه', 'تظاهر', 'يتظاهرون', 'protest', 'protests', 'sit-in', 'sit in'],
   civil_plane: ['طائره مدنيه', 'هبوط اضطراري', 'طائره ركاب', 'رحله جويه', 'هبوط في مطار'],
   arrest: ['اعتقال', 'اعتقالات', 'اعتقل', 'اعتقلت', 'اعتقاله', 'توقيف', 'توقيفات', 'احتجاز', 'احتجز', 'داهمت قوات الامن'],
   martyrdom: ['استشهاد', 'استشهد', 'استشهدت', 'شهيد', 'شهيده', 'شهداء'],
@@ -70,8 +71,10 @@ export function keywordTypes(text) {
   const nt = ' ' + N(text) + ' ';
   // words split by a space to dodge filters ("انفج ار", "لغ م"): long keywords are also looked for without spaces
   const tight = nt.replace(/\s+/g, '');
-  const protestMarch = /(?:مسيره|مسيرات) (?:شعبيه|احتجاجيه|تضامنيه|سلميه|حاشده|غضب)/.test(nt);
+  const protestMarch = /(?:مسيره|مسيرات)(?:\s|$)/.test(nt)
+    && !['مسيره استطلاع', 'مسيره استطلاعيه', 'مسيره انتحاريه', 'مسيرات استطلاع', 'تحليق مسيره', 'تحليق مسيرات', 'طائره مسيره', 'طائرات مسيره', 'بدون طيار', 'drone', 'uav'].some((w) => nt.includes(N(w)));
   const found = Object.keys(KW_N).filter((k) => !(k === 'uav' && protestMarch) && KW_N[k].some((w) => has(nt, w) || (w.replace(/\s+/g, '').length >= 5 && tight.includes(w.replace(/\s+/g, '')))));
+  if (protestMarch && !found.includes('protest')) found.push('protest');
   const smuggling = detectedSmugglingType(text);
   return smuggling && !found.includes(smuggling) ? [...found, smuggling] : found;
 }
@@ -289,7 +292,8 @@ const TYPE_HELP = `- uav: drone (مسيّرة) flight, sighting or surveillance 
 - smuggling_explosives: a specific, recent attempted or completed illicit transfer/interception of explosives inside Syria; require an explicit smuggling/trafficking cue and a named Syrian place. Do not confuse a smuggling report with an explosion event
 - accident: traffic accident (حادث سير، انقلاب، تصادم، دهس)
 - fire: fire (حريق) of a building, forest, crops, market…
-- protest: demonstration, protest, sit-in or a public/solidarity march (مظاهرة، وقفة احتجاجية، مسيرة شعبية/احتجاجية); never confuse a public march (مسيرة) with a drone (مسيّرة)
+- protest: an explicitly named demonstration or march (مظاهرة، مسيرة; demonstration/march); never confuse a public march (مسيرة) with a drone (مسيّرة)
+- protest_action: a protest or sit-in explicitly reported without a demonstration/march (احتجاج، اعتصام، وقفة احتجاجية)
 - civil_plane: civil aircraft incident (emergency landing, crash)
 - arrest: a newly reported, concrete arrest/detention/raid of a named person or group at a named Syrian place; NOT an arrest of perpetrators as follow-up to an earlier attack, routine court proceedings, or generic security claims
 - death: a recent confirmed death or body found when the cause is natural, accidental or unknown; when the cause is a specific incident, choose that incident type instead
@@ -310,7 +314,7 @@ For EACH post return one object. Rules:
 3. type: the most specific of:
 ${TYPE_HELP}
 Use type=political ONLY for a concrete, recent Syrian public-affairs development. Choose exactly one source-supported category: agreement, signing, treaty, circular, support, military_cooperation, statement, position, decision, appointment, official_announcement, government_announcement, official_entity, negotiation, meeting, visit, or election. Use signing only when the source reports an act of signing; use treaty for an agreement/document called an اتفاقية or معاهدة without a signing event. Distinguish appointment from decision, meeting from visit, and a direct statement from an official position. These categories are not a catch-all for routine public-service notices: weather warnings remain weather, and service complaints are not political. If no category is clearly supported by the source, set type=political and political_category="none" so it is held for human review. For every non-political type set political_category="none". Never infer or invent a place for political news; places may be empty or contain only a place explicitly stated. Do not promote generic speeches, commentary, analysis, rumours, or foreign politics to political events.
-Pick the type of the core incident; it must be the most specific one. An explosion of any kind = explosion (never civil or attack), even when it hurts civilians. Any fire = fire (never civil), a road/vehicle crash = accident, a demonstration or public march = protest, a civil aircraft incident = civil_plane. Use civil only when none of these fits and use breaking only when no specific type fits. Do not classify a protest march as a drone. A standalone sound/report of gunfire with no target or victim = shooting; gunfire against a person, place or checkpoint = attack (or assassination when explicitly targeted killing). A non-armed physical quarrel = brawl. A new specific detention can be arrest; arrest of earlier incident perpetrators is a follow-up, not a new event. Use death/martyrdom only when no specific incident cause is reported. For the three smuggling types, require an explicit current smuggling/trafficking report, not mere possession, arrest, a weapons cache, or an explosion. Israeli army shelling = artillery; a completed air strike = airstrike; report only the presence or overflight of a military aircraft as warplane.
+Pick the type of the core incident; it must be the most specific one. An explosion of any kind = explosion (never civil or attack), even when it hurts civilians. Any fire = fire (never civil), a road/vehicle crash = accident, an explicitly named demonstration or public march = protest; a protest/sit-in without that wording = protest_action, a civil aircraft incident = civil_plane. Use civil only when none of these fits and use breaking only when no specific type fits. Do not classify a protest march as a drone. A standalone sound/report of gunfire with no target or victim = shooting; gunfire against a person, place or checkpoint = attack (or assassination when explicitly targeted killing). A non-armed physical quarrel = brawl. A new specific detention can be arrest; arrest of earlier incident perpetrators is a follow-up, not a new event. Use death/martyrdom only when no specific incident cause is reported. For the three smuggling types, require an explicit current smuggling/trafficking report, not mere possession, arrest, a weapons cache, or an explosion. Israeli army shelling = artillery; a completed air strike = airstrike; report only the presence or overflight of a military aircraft as warplane.
 4. places: where it happened, most specific first, max 4 — list every named village/town of the incident in the post (e.g. both villages of a road "طريق عين البيضة - جباتا الخشب"). name = the Arabic place name exactly as a Syrian would write it (town/village/neighbourhood; without words like "بلدة/مدينة/قرية/ريف/حي"), gov = its Syrian governorate in Arabic (one of: دمشق، ريف دمشق، حلب، حمص، حماة، اللاذقية، طرطوس، إدلب، درعا، السويداء، القنيطرة، دير الزور، الرقة، الحسكة). For a road between two cities ("أوتوستراد دمشق درعا") give the nearest named place in the post (e.g. "خبب") or the governorate. If only the governorate is known, give name = the governorate.
 5. headline: write ONE concise, calm, factual, neutral Arabic news sentence (max 240 characters) saying what happened and where. Preserve material facts, dates/times, locations, uncertainty, and relevant response/context stated in the story; keep every allegation attributed to the actual public speaker or institution named in the story, and never turn claims into facts. The POSTS line source/channel label is PRIVATE routing metadata: never reveal it. Use restrained, plain verbs; do not add political criticism, praise, condemnation, sarcasm, slogans, rhetorical hooks, loaded labels, or a sharply critical angle in straight news. If the source itself contains a sharp political judgment, do not reproduce its rhetoric as the news desk's voice: either summarize the attributable claim neutrally and briefly or set event=false when the item is only opinion/commentary. Report criticism only when it is a material, source-attributed statement about a concrete development, in neutral wording; apply the same standard to every side. Include a supplied response/context when material, but never invent a denial or counterclaim for false balance. General commentary and analysis are not news events. Do not turn public-safety information into political advocacy. Do not include links, @usernames, hashtags, emojis, promotional calls, greetings, or unsupported opinions.
 Return a JSON array, one object per post, same order.`;
@@ -452,7 +456,7 @@ export async function rewriteArabicNews(source, { key, sourceName = '', mode = '
 }
 
 // ---------------------------------------------------------------- rule-based fallback (AI unavailable)
-const RULE_ORDER = ['uav_strike', 'airstrike', 'missile', 'artillery', 'explosion', 'kidnapping', 'smuggling_explosives', 'smuggling_weapons', 'smuggling_drugs', 'assassination', 'clashes', 'accident', 'fire', 'protest', 'civil_plane', 'arrest', 'brawl', 'shooting', 'martyrdom', 'death', 'helicopter', 'uav', 'warplane', 'attack', 'patrol', 'political', 'civil'];
+const RULE_ORDER = ['uav_strike', 'airstrike', 'missile', 'artillery', 'explosion', 'kidnapping', 'smuggling_explosives', 'smuggling_weapons', 'smuggling_drugs', 'assassination', 'clashes', 'accident', 'fire', 'protest', 'protest_action', 'civil_plane', 'arrest', 'brawl', 'shooting', 'martyrdom', 'death', 'helicopter', 'uav', 'warplane', 'attack', 'patrol', 'political', 'civil'];
 const FOLLOW_UP = ['ارتفاع حصيله', 'ارتفاع عدد', 'القبض على منفذي', 'اعتقال منفذي', 'اعتقال مرتكبي', 'القبض علي مرتكبي', 'قبضنا علي منفذي', 'القت القبض علي منفذي', 'منفذي الهجوم', 'تفاصيل الحادث', 'ينقل', 'نتابع وصول', 'وصول اكثر من', 'وصول جثث'].map(N);
 const ISRAELI_FORCE_WORDS = ['قوات الاحتلال', 'جيش الاحتلال', 'الجيش الاسرائيلي', 'القوات الاسرائيليه', 'دوريه اسرائيليه', 'آليات اسرائيليه', 'الاحتلال الاسرائيلي'].map(N);
 const ISRAELI_GROUND_WORDS = ['توغل', 'توغلت', 'توغلات', 'اقتحام', 'اقتحمت', 'جرافات', 'جرافه', 'اعمال حفر', 'حفر خندق', 'تجريف', 'تحصينات', 'نقطه عسكريه', 'قاعده عسكريه', 'تمركز', 'نصب حاجز', 'ساتر ترابي', 'سواتر', 'رتل', 'تعزيزات عسكريه', 'انتشار عسكري'].map(N);
@@ -540,7 +544,8 @@ const GUN_W = RX(['اطلاق نار', 'اطلاق النار', 'اطلاق ال
 const CLASH_W = RX(['اشتباك', 'اشتباكات', 'اشتباك مسلح', 'اشتباكات مسلحه', 'مواجهات مسلحه', 'مواجهه مسلحه', 'تبادل اطلاق النار', 'تبادل اطلاق نار', 'armed clashes', 'armed clash', 'clashes', 'clash', 'exchange of fire']);
 const FIRE_W = RX(['حريق', 'حرائق', 'احتراق', 'اشتعال', 'اشتعلت', 'التهمت النيران', 'النيران']);
 const ACC_W = RX(['حادث سير', 'حوادث سير', 'حادث مروري', 'انقلاب سياره', 'انقلاب حافله', 'تصادم', 'دهس']);
-const PROT_W = RX(['مظاهره', 'مظاهرات', 'وقفه احتجاجيه', 'اعتصام', 'احتجاج', 'مسيره شعبيه', 'مسيرات شعبيه', 'مسيره احتجاجيه', 'مسيرات احتجاجيه', 'مسيره غضب', 'مسيرات غضب', 'مسيره تضامنيه', 'مسيرات تضامنيه']);
+const PROT_W = RX(['مظاهره', 'مظاهرات', 'مسيره', 'مسيرات', 'demonstration', 'demonstrations', 'march', 'marches']);
+const PROTEST_ACTION_W = RX(['احتجاج', 'احتجاجات', 'اعتصام', 'اعتصامات', 'وقفه احتجاجيه', 'تظاهر', 'يتظاهرون', 'protest', 'protests', 'sit-in', 'sit in']);
 const ARREST_W = RX(['اعتقال', 'اعتقالات', 'اعتقل', 'اعتقلت', 'توقيف', 'احتجاز', 'احتجز']);
 const BRAWL_W = RX(['مشاجره', 'مشاجرات', 'شجار', 'شجارات', 'عراك', 'عراك بالايدي', 'تضارب', 'تبادل الضرب']);
 const SHOOT_W = RX(['اطلاق نار', 'اطلاق النار', 'اطلاق رصاص', 'اصوات اطلاق نار', 'سماع اطلاق نار', 'طلقات ناريه']);
@@ -580,6 +585,7 @@ export function refineType(type, text) {
   }
   if (nonviolentIsraeliGroundActivity(evidenceText) && ['attack', 'civil', 'breaking'].includes(type)) return 'breaking';
   const weather = weatherWarningInfo(evidenceText);
+  if (keywordTypes(evidenceText).includes('uav') && type === 'warplane') return 'uav';
   if (weather && !hasNonWeatherSignal(evidenceText)) return 'weather';
   // Recover explicit specific event types when Gemini has fallen back to civil/breaking/attack.
   if (['civil', 'breaking', 'attack', 'uav', 'warplane', 'weather', 'none'].includes(type)) {
@@ -588,6 +594,7 @@ export function refineType(type, text) {
       ['civil_plane', RX(['هبوط اضطراري', 'طائره مدنيه', 'طائره ركاب', 'تحطم طائره مدنيه'])],
       ['accident', ACC_W],
       ['protest', PROT_W],
+      ['protest_action', PROTEST_ACTION_W],
       ['uav_strike', UAV_STRIKE_W],
       ['airstrike', AIRSTRIKE_W],
       ['assassination', RX(['اغتيال', 'اغتيالات', 'اغتيل', 'اغتالت', 'محاوله اغتيال', 'عمليه اغتيال', 'assassination', 'assassinated'])],

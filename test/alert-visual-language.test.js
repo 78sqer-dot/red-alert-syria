@@ -165,7 +165,7 @@ test('urgent marker core, red pulse and glow follow the shared map zoom scale', 
   assert.match(map, /const mks = Math\.max\(0\.42, Math\.min\(0\.56,/);
 });
 
-test('map SVGs use category colors while the helicopter keeps its dark body, red accents, and blue glow', () => {
+test('map SVGs use category colors while the helicopter keeps its slim military-blue palette', () => {
   assert.match(map, /const fg = visual\.color;/, 'static discs use the category color');
   assert.match(map, /const iconColor = visual\.color/);
   assert.match(map, /style="--ic:\$\{iconColor\}/);
@@ -174,8 +174,14 @@ test('map SVGs use category colors while the helicopter keeps its dark body, red
   assert.match(css, /\.sai\.map-event-disc svg \{ fill: var\(--c\) !important; color: var\(--c\) !important; \}/);
   assert.match(css, /\.ic-pistol \.ic-svg, \.ic-rifle \.ic-svg \{[^}]*fill: var\(--ic\)/);
   assert.match(css, /\.uav-svg \{[^}]*fill: var\(--c, #6b7280\)/);
-  assert.match(css, /\.helicopter-svg \{[^}]*fill: #17212d[^}]*rgba\(59,142,255,\.78\)/);
-  assert.match(css, /\.helicopter-svg \.heli-cockpit \{ fill: #e11d48; \}/);
+  assert.match(css, /\.helicopter-svg \{[^}]*width: 24px; height: 24px;[^}]*fill: #315f92[^}]*rgba\(59,142,255,\.78\)/);
+  assert.match(css, /\.helicopter-svg \.heli-body \{ fill: #315f92; stroke: #163c63;/);
+  assert.match(css, /\.helicopter-svg \.heli-body-highlight \{ fill: #3b8eff; \}/);
+  assert.match(css, /\.helicopter-svg \.heli-cockpit \{ fill: #17324d; \}/);
+  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{ fill: #3b8eff; opacity: 1;/);
+  assert.equal(typeof EXTRA_SVG.helicopter_side, 'string');
+  assert.match(EXTRA_SVG.helicopter_side, /class="heli-body"/);
+  assert.doesNotMatch(EXTRA_SVG.helicopter_side, /#(?:ef4444|e11d48)/i);
   assert.match(css, /html\.dark \.mk\.sel \.uav-svg \{ fill: color-mix\(in srgb, var\(--c, #6b7280\) 72%, #fff\); \}/);
-  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #17212d; \}/);
+  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #315f92; \}/);
 });

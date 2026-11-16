@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { NEWS_TYPES } from '../server/news-ai.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,7 +17,7 @@ process.env.NEWS_AI_MIN_GAP_MS = '0';
 
 const { store } = await import('../server/store.js');
 await store.init(null);
-const { newsState, nightEligible, daytimeAutoEligible, _test } = await import('../server/news-monitor.js');
+const { newsState, nightEligible, daytimeAutoEligible, FILTER_VER, _test } = await import('../server/news-monitor.js');
 const originalFetch = globalThis.fetch;
 const originalGeminiKey = process.env.GEMINI_API_KEY;
 const originalModels = process.env.NEWS_AI_MODELS;
@@ -51,6 +52,15 @@ test.after(async () => {
   else process.env.NEWS_AI_MIN_GAP_MS = originalGap;
   await new Promise((resolve) => setTimeout(resolve, 350));
   await fs.promises.rm(dataDir, { recursive: true, force: true });
+});
+
+
+test('protest types are monitored in their own group and filter version is bumped', () => {
+  assert.equal(FILTER_VER, 11);
+  assert.ok(NEWS_TYPES.includes('protest_action'));
+  assert.deepEqual(_test.newsTypeGroups.protests, ['protest', 'protest_action']);
+  assert.equal(_test.newsTypeGroups.civil.includes('protest'), false);
+  assert.equal(_test.newsTypeGroups.civil.includes('protest_action'), false);
 });
 
 test('a cross-source repeat of an already-published monitored event is suppressed even beyond 40 newer records', async () => {

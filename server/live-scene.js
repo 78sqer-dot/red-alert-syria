@@ -202,7 +202,10 @@ function uniqueByUrl(items) {
 }
 
 function makePayload(sections, updatedAt, sourceStatus) {
-  const news = uniqueByUrl([...sections.bbc, ...sections.gdelt]);
+  const news = uniqueByUrl([...sections.bbc, ...sections.gdelt].map((item) => ({
+    ...item,
+    region: HEADLINE_RELEVANCE.test(item.title) ? 'syria' : 'world',
+  })));
   const osint = sections.gdelt.filter((item) => OSINT_RELEVANCE.test(item.title)).slice(0, 24);
   const markets = [...sections.ecb, ...sections.worldBank].slice(0, 12);
   return { updatedAt, news, osint, markets, degraded: Object.values(sourceStatus).some((status) => status !== 'ok'), sourceStatus };

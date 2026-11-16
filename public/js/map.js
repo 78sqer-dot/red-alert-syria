@@ -2,7 +2,7 @@
 import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=41';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=20';
+import { EXTRA_SVG } from './target-svgs.js?v=21';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=7';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
@@ -957,9 +957,10 @@ export class AlertMap {
       const svg = signalDrone ? svgTag(glyph, 36, `class="${svgClass}"`) : svgTag(glyph, 24, `class="${svgClass}"`);
       el.innerHTML = `<div class="uav-box"><div class="uav">${svg}</div></div>`;
     } else if (marker === 'helicopter') {
-      const craft = `<span class="heli-craft">${svgTag(t.glyph, 24, `fill="${visual.color}" class="helicopter-svg"`)}</span>`;
-      const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${svgTag(t.glyph, 24, `fill="${visual.color}" class="helicopter-svg"`)}</span>` : '';
-      el.innerHTML = `<div class="heli-orbit${second ? ' heli-intensive' : ''}">${craft}${second}</div>`;
+      const helicopterSvg = () => svgTag('helicopter_side', 24, 'class="helicopter-svg"');
+      const craft = `<span class="heli-craft">${helicopterSvg()}</span>`;
+      const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${helicopterSvg()}</span>` : '';
+      el.innerHTML = `<div class="heli-route${second ? ' heli-intensive' : ''}"><span class="heli-route-line" aria-hidden="true"></span>${craft}${second}</div>`;
     } else if (marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(36, -12, 1)}${pl(20, 8, 0.85)}${pl(52, 8, 0.85)}</div>`;
@@ -1114,7 +1115,7 @@ export class AlertMap {
     for (const [k, m] of this._pulses) if (!keep.has(k)) { m.remove(); this._pulses.delete(k); }
     if (!this.map.isZooming()) this.el.classList.remove('is-zooming');
   }
-  // Scale drone/helicopter orbit radii while keeping supplemental drone copies near their area anchors.
+  // Scale drone orbits and the helicopter's short route while keeping supplemental drone copies at their area anchors.
   _orbitPx() {
     if (!this._orb || !this.map) return;
     const z = this.map.getZoom();
@@ -1124,7 +1125,7 @@ export class AlertMap {
       const mpp = (40075016.686 * Math.cos((o.lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
       const el = m.getElement();
       if (o.helicopter) {
-        // Keep the single helicopter on the actual visible perimeter of its alert circle.
+        // Reuse the display-scaled alert radius for a short illustrative line; the helicopter stays anchored to the report.
         const px = Math.max(10, Math.round((o.km * 1000) / mpp));
         if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
         continue;

@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
 import { alertZones, selectedAlertZones, regionFix } from './places.js';
-import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
+import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
 import { expireAlnabaPhotos, sanitizeAlnabaState, sanitizeAlnabaBatchQueue, mergeAlnabaBatchQueues } from './alnaba.js';
 
@@ -801,6 +801,8 @@ function publicSourceInfo(a) {
 /** Strip private fields before sending an alert to browsers. */
 export function publicAlert(a) {
   const p = a.place || {};
+  const editorialMode = a.source === 'news' && ['opinion', 'satire'].includes(a.meta?.publicEditorialTone)
+    && isPublicEditorialCopy(a.description, a.meta.publicEditorialTone) ? a.meta.publicEditorialTone : null;
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : a.media;
   const mediaItems = sanitizeAlertMediaItems(rawMediaItems).map((media) => ({
     type: media.type,
@@ -814,10 +816,11 @@ export function publicAlert(a) {
   ];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
   const publicText = (value) => {
-    if (isPrivateEditorialCopy(value)) return '';
+    const selectedEditorialCopy = Boolean(editorialMode && value === a.description && isPublicEditorialCopy(value, editorialMode));
+    if (isPrivateEditorialCopy(value) && !selectedEditorialCopy) return '';
     const cleaned = a.source === 'news' || ['political', 'breaking'].includes(a.type)
       ? cleanAttributedNewsText(value, privateSourceNames) : cleanAlertText(value);
-    return isPrivateEditorialCopy(cleaned) ? '' : cleaned;
+    return isPrivateEditorialCopy(cleaned) && !(selectedEditorialCopy && isPublicEditorialCopy(cleaned, editorialMode)) ? '' : cleaned;
   };
   const rawFlightTarget = a.type === 'air_movement' ? a.meta?.flightTarget : null;
   const targetScope = ['country', 'governorate'].includes(rawFlightTarget?.scope) ? rawFlightTarget.scope : null;
@@ -854,6 +857,7 @@ export function publicAlert(a) {
       ? (['soldiers', 'vehicles', 'barrier'].includes(a.meta?.incursionKind) ? a.meta.incursionKind : Number.isInteger(a.meta?.vehicleCount) ? 'vehicles' : undefined)
       : undefined,
     ...(a.type === 'political' && category ? { political_category: category } : {}),
+    ...(editorialMode ? { editorial_tone: editorialMode } : {}),
     title: isPrivateEditorialCopy(a.title) ? '' : a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title) : a.title,
     title_en: isPrivateEditorialCopy(a.title_en) ? '' : a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title_en) : a.title_en,
     description: publicText(a.description) || undefined,

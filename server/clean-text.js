@@ -57,6 +57,18 @@ export function isPrivateEditorialCopy(raw) {
   return Boolean(text && (PRIVATE_EDITORIAL_LABEL.test(text) || EDITORIAL_DIAGNOSTIC.test(text)));
 }
 
+/** Explicit owner-approved editorial copy is public only with its matching leading label and without diagnostics. */
+export function isPublicEditorialCopy(raw, mode) {
+  const text = String(raw || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+  if (!text || EDITORIAL_DIAGNOSTIC.test(text)) return false;
+  const prefix = mode === 'opinion'
+    ? /^(?:رأي\s*\/\s*تحليل|رأي|تحليل|opinion\s*\/\s*analysis)\s*[:：—-]/iu
+    : mode === 'satire'
+      ? /^(?:محاكاة\s+(?:سياسية\s+)?ساخرة\s+خيالية(?:\s*[\[(]\s*(?:ليست\s+خبراً|not\s+news)\s*[\])])?|fictional\s+political\s+satire)\s*[:：—-]/iu
+      : null;
+  return Boolean(prefix?.test(text));
+}
+
 /** Sanitize public news copy while preserving story attribution and removing private feed identities. */
 export function cleanAttributedNewsText(raw, privateNames = []) {
   if (!raw) return raw;
