@@ -9,9 +9,9 @@ const markerSvgs = await readFile(new URL('../public/js/marker-svgs.js', import.
 const types = await readFile(new URL('../shared/types.js', import.meta.url), 'utf8');
 const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.meta.url), 'utf8');
 
-test('restored 24px helicopter visual is served under fresh module cache keys', () => {
-  assert.match(appJs, /from '\.\/map\.js\?v=89'/);
-  assert.match(mapJs, /from '\.\/target-svgs\.js\?v=24'/);
+test('approved helicopter visual is served under fresh module cache keys', () => {
+  assert.match(appJs, /from '\.\/map\.js\?v=90'/);
+  assert.match(mapJs, /from '\.\/target-svgs\.js\?v=25'/);
 });
 
 test('drone keeps its top-down 24px silhouette and perimeter orbit', () => {
@@ -37,19 +37,19 @@ test('drone is hidden with impact circles alone at country zoom and orbits at de
   assert.match(mapJs, /if \(z >= 10\.5 && this\.sats\)/);
 });
 
-test('helicopter uses a slim military side profile and a circular illustrative orbit at detail zoom', () => {
+test('helicopter uses the approved slim top-down military silhouette and circular illustrative orbit at detail zoom', () => {
   assert.match(css, /\.mk-helicopter \.mk-s\s*\{\s*transform:\s*none;\s*\}/);
   assert.match(css, /\.heli-craft\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*translateX\(var\(--heli-orbit-radius\)\);[^}]*animation:\s*heliOrbit 9s linear infinite/);
   assert.match(css, /\.heli-craft-second \{ animation-delay: -4\.5s; \}/);
   assert.match(css, /\.heli-route\s*\{[^}]*--heli-orbit-radius: max\(18px, var\(--orb, 24px\)\)/);
   assert.match(css, /\.heli-orbit-guide \{[^}]*border: 1px dashed rgba\(59,142,255,\.4\);[^}]*border-radius: 50%/);
   assert.match(css, /@keyframes heliOrbit \{ from:?.*?translateX\(var\(--heli-orbit-radius\)\).*?rotate\(-360deg\)/s);
-  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*fill:\s*#315f92;[^}]*rgba\(59,142,255,\.78\)/);
-  assert.match(css, /\.helicopter-svg \.heli-body \{ fill: #315f92; stroke: #163c63;/);
-  assert.match(css, /\.helicopter-svg \.heli-body-highlight \{ fill: #3b8eff; \}/);
-  assert.match(css, /\.helicopter-svg \.heli-main-rotor \{ fill: #3b8eff; opacity: \.96;/);
-  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{ fill: #3b8eff; opacity: 1;/);
-  assert.match(css, /\.helicopter-svg \.heli-cockpit \{ fill: #17324d; \}/);
+  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*fill:\s*#263f5a;[^}]*rgba\(170,191,210,\.32\)/);
+  assert.match(css, /\.helicopter-svg \.heli-body \{ fill: #263f5a; stroke: #0d1e30;/);
+  assert.match(css, /\.helicopter-svg \.heli-body-highlight \{ fill: #3c5875; \}/);
+  assert.match(css, /\.helicopter-svg \.heli-main-rotor \{ fill: #304d6c; stroke: #132a40;[^}]*opacity: \.96;/);
+  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{ fill: #304d6c; stroke: #132a40;[^}]*opacity: 1;/);
+  assert.match(css, /\.helicopter-svg \.heli-cockpit \{ fill: #0e2438; \}/);
   assert.match(css, /\.heli-craft\s*\{[^}]*drop-shadow\(0 0 1px rgba\(15,23,42,\.84\)\)[^}]*drop-shadow\(0 1px 1\.5px rgba\(255,255,255,\.42\)\)/);
   assert.match(css, /\.helicopter-svg \.heli-main-rotor \{[^}]*animation: heliRotor 1s linear infinite;/);
   assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{[^}]*animation: heliRotor \.72s linear infinite reverse;/);
@@ -72,9 +72,13 @@ test('helicopter uses a slim military side profile and a circular illustrative o
   assert.doesNotMatch(mapJs, /helicopterScale|--heli-scale/);
   assert.match(mapJs, /svgTag\('helicopter_mobile',\s*24,\s*'class="helicopter-svg"'\)/);
   const mobile = targetSvgs.match(/helicopter_mobile:\s*'([^']+)'/)?.[1] || '';
-  assert.match(mobile, /class="heli-body"[\s\S]*?class="heli-tail-boom"[\s\S]*?class="heli-main-rotor"[\s\S]*?class="heli-tail-rotor"/);
-  assert.match(mobile, /transform="translate\(0 69\) scale\(2\.844 4\.8\)"/);
-  assert.match(mobile, /class="heli-mast" d="M89 19V31"/);
+  assert.match(mobile, /class="heli-main-rotor"[^>]*><path d="M63 154/);
+  assert.match(mobile, /class="heli-body" d="M256 70/);
+  assert.match(mobile, /class="heli-tail-boom" d="M250 334h12v110h-12z"/);
+  assert.match(mobile, /class="heli-tail-rotor"><rect x="218" y="430"/);
+  assert.match(mobile, /class="heli-cockpit"[\s\S]*?class="heli-window"/);
+  assert.doesNotMatch(mobile, /transform="translate\(0 69\) scale\(2\.844 4\.8\)"/);
+  assert.match(mobile, /class="heli-mast" d="M256 145v42"/);
   assert.match(mapJs, /const second = a\.helicopters > 1 \?/);
   assert.match(mapJs, /classList\.toggle\('zoom-detail', z >= 10\.5\)/);
   assert.match(css, /\.uav\s*\{[^}]*animation:\s*uavOrbit 9s linear infinite/);

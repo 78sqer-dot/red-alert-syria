@@ -110,9 +110,9 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=89'/);
-  assert.match(html, /app\.css\?v=86/);
-  assert.match(html, /app\.js\?v=100/);
+  assert.match(app, /from '\.\/map\.js\?v=90'/);
+  assert.match(html, /app\.css\?v=87/);
+  assert.match(html, /app\.js\?v=101/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
@@ -122,7 +122,7 @@ test('changed type and icon modules use fresh cache keys', () => {
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);
   assert.match(map, /from '\/shared\/types\.js\?v=41'/);
-  assert.match(map, /from '\.\/target-svgs\.js\?v=24'/);
+  assert.match(map, /from '\.\/target-svgs\.js\?v=25'/);
   assert.match(map, /from '\.\/type-icons\.js\?v=7'/);
   assert.match(map, /from '\.\/marker-layout\.js\?v=3'/);
   assert.match(map, /from '\/shared\/zone-visuals\.js\?v=3'/);

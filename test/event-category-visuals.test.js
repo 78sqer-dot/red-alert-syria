@@ -57,9 +57,9 @@ test('category recoloring preserves readable light/dark markers and approved siz
   assert.match(css, /html\.dark \.ic-svg \{[^}]*drop-shadow/);
   assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: visible; \}/);
   assert.match(css, /\.news-off \.mk-helicopter \{ display: block !important; visibility: visible !important; \}/);
-  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #315f92; \}/);
-  assert.match(css, /\.helicopter-svg \.heli-main-rotor \{[^}]*fill: #3b8eff; opacity: \.96;[^}]*animation: heliRotor/);
-  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{[^}]*fill: #3b8eff; opacity: 1;[^}]*animation: heliRotor/);
+  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #263f5a; \}/);
+  assert.match(css, /\.helicopter-svg \.heli-main-rotor \{[^}]*fill: #304d6c; stroke: #132a40; stroke-width: 8; opacity: \.96;[^}]*animation: heliRotor/);
+  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{[^}]*fill: #304d6c; stroke: #132a40; stroke-width: 8; opacity: 1;[^}]*animation: heliRotor/);
   assert.match(css, /\.heli-orbit-guide \{[^}]*border: 1px dashed rgba\(59,142,255,\.4\);[^}]*border-radius: 50%/);
   assert.match(css, /\.news-marker-category \{ display: block; width: 15px; height: 15px;/);
   assert.match(css, /\.mk-breaking-news \.news-pulse-ring \{ width: 34px; height: 34px; border-color: #ef233c/);
