@@ -20,10 +20,10 @@ test('security alert emojis are present and semantically distinct', () => {
   assert.equal(ALERT_TYPES.death.emoji, '🪦');
 });
 
-test('requested event emojis map onto their own map alert types', () => {
-  assert.equal(alertEmoji({ type: 'airstrike' }), '💥');
+test('event emojis map onto their own map alert types, one symbol per type', () => {
+  assert.equal(alertEmoji({ type: 'airstrike' }), '☄️', 'an incoming aerial strike, distinct from a ground explosion');
   assert.equal(alertEmoji({ type: 'explosion' }), '💥');
-  assert.equal(alertEmoji({ type: 'detonation' }), '💥');
+  assert.equal(alertEmoji({ type: 'detonation' }), '🧨', 'a detonated device, distinct from a generic explosion');
   assert.equal(alertEmoji({ type: 'weather' }), '⛈️');
   assert.equal(alertEmoji({ type: 'fire' }), '🔥');
   assert.equal(alertEmoji({ type: 'arrest' }), '🚔');
@@ -58,7 +58,7 @@ test('explosion and detonation have distinct Arabic labels and strike-colored SV
   assert.equal(ALERT_TYPES.detonation.glyph, 'detonation_burst');
   assert.equal(ALERT_TYPES.detonation.size, 24);
   assert.notEqual(ALERT_TYPES.detonation.glyph, ALERT_TYPES.explosion.glyph);
-  assert.equal(TYPE_ICON.detonation, 'bomb');
+  assert.equal(TYPE_ICON.detonation, 'bolt', 'explosion alone keeps the bomb UI icon');
   assert.match(EXTRA_SVG.detonation_burst, /M256 40v144/);
   assert.equal(eventVisual('detonation').category, 'strikes');
   assert.equal(eventVisual('detonation').color, '#c2410c');

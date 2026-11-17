@@ -231,7 +231,7 @@ test('report menus omit route creation while historical movement remains recogni
     if (group === 'aerial') assert.equal(childButtons.some((button) => button.callback_data === 't:air_movement'), false, 'aerial submenu no longer offers the removed direction button');
     if (group === 'strikes') {
       assert.ok(childButtons.some((button) => button.callback_data === 't:explosion' && button.text === '«💥 انفجار»'), 'admin bot keeps the existing «انفجار» option');
-      assert.ok(childButtons.some((button) => button.callback_data === 't:detonation' && button.text === '«💥 تفجير»'), 'admin bot exposes the distinct «تفجير» option');
+      assert.ok(childButtons.some((button) => button.callback_data === 't:detonation' && button.text === '«🧨 تفجير»'), 'admin bot exposes the distinct «تفجير» option');
     }
     if (group === 'protests') assert.deepEqual(childButtons.filter((button) => ['t:protest_action', 't:protest'].includes(button.callback_data)).map((button) => [button.callback_data, button.text]), [['t:protest_action', '«📢 احتجاج»'], ['t:protest', '«👥 مظاهرة»']]);
   }
@@ -280,7 +280,7 @@ test('public report bot exposes both strike types and sends detonation reports o
     assert.deepEqual(children, BOT_ALERT_MENU_GROUPS[group].map((type) => `t:${type}`).sort(), `public ${group} submenu routes every type`);
     if (group === 'strikes') {
       assert.ok(childButtons.some((button) => button.callback_data === 't:explosion' && button.text === '«💥 انفجار»'), 'public bot keeps the «انفجار» option');
-      assert.ok(childButtons.some((button) => button.callback_data === 't:detonation' && button.text === '«💥 تفجير»'), 'public bot exposes the distinct «تفجير» option');
+      assert.ok(childButtons.some((button) => button.callback_data === 't:detonation' && button.text === '«🧨 تفجير»'), 'public bot exposes the distinct «تفجير» option');
     }
     if (group === 'protests') assert.deepEqual(childButtons.filter((button) => ['t:protest_action', 't:protest'].includes(button.callback_data)).map((button) => [button.callback_data, button.text]), [['t:protest_action', '«📢 احتجاج»'], ['t:protest', '«👥 مظاهرة»']]);
   }
@@ -291,7 +291,7 @@ test('public report bot exposes both strike types and sends detonation reports o
   await tap('home', publicReporter, reportBot);
   await tap('ag:strikes', publicReporter, reportBot);
   assert.ok(currentButtons().some((button) => button.callback_data === 't:explosion' && button.text === '«💥 انفجار»'), 'explosion has its own public button');
-  assert.ok(currentButtons().some((button) => button.callback_data === 't:detonation' && button.text === '«💥 تفجير»'), 'detonation has a separate public button');
+  assert.ok(currentButtons().some((button) => button.callback_data === 't:detonation' && button.text === '«🧨 تفجير»'), 'detonation has a separate public button');
   await tap('t:detonation', publicReporter, reportBot);
   const gov = governorates.find((item) => item.ar === 'حلب') || governorates[0];
   await tap(`g:${gov.code}`, publicReporter, reportBot);
@@ -528,7 +528,7 @@ test('news-monitor type editor covers every bot alert type while settings stay m
     }
     if (group === 'strikes') {
       assert.ok(childKeyboard.flat().some((button) => button.callback_data === `nw:s:${id}:explosion` && button.text === '«💥 انفجار»'), 'the monitored-news editor keeps «انفجار»');
-      assert.ok(childKeyboard.flat().some((button) => button.callback_data === `nw:s:${id}:detonation` && button.text === '«💥 تفجير»'), 'the monitored-news editor exposes the separate «تفجير» type');
+      assert.ok(childKeyboard.flat().some((button) => button.callback_data === `nw:s:${id}:detonation` && button.text === '«🧨 تفجير»'), 'the monitored-news editor exposes the separate «تفجير» type');
     }
   }
 
@@ -568,7 +568,7 @@ test('news-monitor type editor covers every bot alert type while settings stay m
   start = calls.length;
   await tap(`nw:tg:${id}:strikes`);
   assert.ok(keyboardAfter(start).flat().some((button) => button.callback_data === `nw:s:${id}:explosion` && button.text === '«💥 انفجار»'), 'the selected story’s strike menu keeps explosion');
-  assert.ok(keyboardAfter(start).flat().some((button) => button.callback_data === `nw:s:${id}:detonation` && button.text === '«💥 تفجير»'), 'the selected story’s strike menu offers detonation');
+  assert.ok(keyboardAfter(start).flat().some((button) => button.callback_data === `nw:s:${id}:detonation` && button.text === '«🧨 تفجير»'), 'the selected story’s strike menu offers detonation');
   await tap(`nw:s:${id}:detonation`);
   const detonationDraft = newsState().drafts[id];
   assert.equal(detonationDraft.type, 'detonation', 'the selected monitored story changes to the distinct detonation type');

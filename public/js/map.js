@@ -1,10 +1,10 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=41';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=42';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=26';
+import { EXTRA_SVG } from './target-svgs.js?v=27';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
-import { typeIcon } from './type-icons.js?v=7';
+import { typeIcon } from './type-icons.js?v=8';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=3';

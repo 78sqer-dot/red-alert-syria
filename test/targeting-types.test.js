@@ -23,7 +23,8 @@ test('map types keep drone targeting distinct and visually on-brand', () => {
   assert.equal(drone.marker, 'orbit');
   assert.equal(drone.glyph, 'uav_strike');
   assert.notEqual(drone.glyph, ALERT_TYPES.uav.glyph);
-  assert.equal(drone.color, ALERT_TYPES.uav.color, 'drone-strike keeps the existing alert red while using a distinct symbol');
+  assert.notEqual(drone.color, ALERT_TYPES.uav.color, 'each type owns its color in the unified symbol system');
+  assert.equal(drone.color, '#f43f5e', 'drone-strike keeps the family alert red, one shade deeper than the drone pink');
   assert.match(EXTRA_SVG.uav_strike, /stroke-dasharray/);
   assert.equal(drone.tag_ar, 'استهداف_بمسيّرة');
 });
@@ -178,10 +179,10 @@ test('kidnapping is a distinct security type with a restraint icon and human rev
   assert.equal(kidnapping.button_ar, 'خطف أو اختطاف');
   assert.equal(kidnapping.button_en, 'Kidnapping');
   assert.equal(alertButtonLabel('kidnapping'), '⛓️ خطف أو اختطاف');
-  assert.equal(kidnapping.glyph, 'handcuffs');
-  assert.equal(typeIcon('kidnapping'), 'handcuffs');
-  assert.ok(ICONS.handcuffs);
-  assert.ok(EXTRA_SVG.handcuffs);
+  assert.equal(kidnapping.glyph, 'chains', 'kidnapping owns the chain-links glyph; handcuffs belong to arrest alone');
+  assert.equal(typeIcon('kidnapping'), 'link');
+  assert.ok(ICONS.link);
+  assert.ok(EXTRA_SVG.chains);
   assert.equal(eventVisual('kidnapping').category, 'security');
   assert.ok(NEWS_TYPES.includes('kidnapping'), 'the automatic news monitor can route drafts to the dedicated kidnapping button');
   const release = 'قوى الأمن الداخلي بمدينة حلب يحرر المختطف فادي بركات صاحب معمل بركات للأدوية ويوقف أحد المشتبه بهم في عملية الخطف التي جرت قبل أيام في بلدة';
@@ -462,8 +463,8 @@ test('explosion and detonation remain distinct across bot, map, and alert-image 
   assert.equal(ALERT_TYPES.detonation.button_ar, 'تفجير');
   assert.equal(ALERT_TYPES.detonation.button_en, 'Detonation');
   assert.equal(alertButtonLabel('explosion', 'ar'), '💥 انفجار');
-  assert.equal(alertButtonLabel('detonation', 'ar'), '💥 تفجير');
-  assert.equal(alertButtonLabel('detonation', 'en'), '💥 Detonation');
+  assert.equal(alertButtonLabel('detonation', 'ar'), '🧨 تفجير', 'detonation owns the dynamite symbol; 💥 belongs to explosion alone');
+  assert.equal(alertButtonLabel('detonation', 'en'), '🧨 Detonation');
   assert.deepEqual(TITLES.explosion, { ar: 'انفجار', en: 'Explosion' });
   assert.deepEqual(TITLES.detonation, { ar: 'تفجير', en: 'Detonation' });
   assert.equal(ALERT_TYPES.detonation.glyph, 'detonation_burst');
