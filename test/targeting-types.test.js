@@ -55,7 +55,7 @@ test('aircraft movement is separate from unchanged hovering markers', () => {
   assert.equal(Array.from(NEWS_TYPES).includes('air_movement'), false, 'manual movement reports are not auto-classified from news');
 });
 
-test('helicopter keeps its dedicated, clearer 30px glyph with a fixed orbit container and shared alert-circle pulses', () => {
+test('helicopter keeps its dedicated 24px military glyph with a fixed circular orbit and shared alert-circle pulses', () => {
   const warplane = ALERT_TYPES.warplane;
   const helicopter = ALERT_TYPES.helicopter;
   assert.ok(TYPE_KEYS.includes('helicopter'));
@@ -64,12 +64,12 @@ test('helicopter keeps its dedicated, clearer 30px glyph with a fixed orbit cont
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
   assert.equal(helicopter.glyph, 'helicopter_simple');
   assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
-  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\('helicopter_mobile', 30,/);
+  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\('helicopter_mobile', 24,/);
   assert.match(mapSource, /a\.helicopters > 1/);
   assert.match(mapSource, /heli-craft-second/);
   assert.match(mapCss, /\.heli-craft-second \{ animation-delay: -4\.5s; \}/);
   assert.doesNotMatch(mapSource, /helicopterScale|--heli-scale/);
-  assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 30px; height: 30px/);
+  assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 24px; height: 24px/);
   assert.match(mapCss, /\.heli-craft \{[^}]*width: 24px; height: 24px;[^}]*animation: heliOrbit 9s linear infinite/);
   assert.match(mapCss, /\.uav \{[^}]*animation: uavOrbit 9s linear infinite/);
   assert.match(mapCss, /\.heli-orbit-guide \{[^}]*border: 1px dashed rgba\(59,142,255,\.4\);[^}]*border-radius: 50%/);

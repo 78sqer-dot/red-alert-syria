@@ -184,6 +184,7 @@ test('helicopter monitoring distinguishes singular reports from an explicitly in
 test('drone presence on a ground-incursion report remains review-only and is never auto-published', () => {
   const eligibleUav = {
     type: 'uav', status: 'pending',
+    created: Date.parse(newsState().mig.dayAutoAllTypes1) + 1,
     loc: { scope: 'place', latitude: 33.0, longitude: 36.0 },
     srcs: [{ u: 'synthetic-source', local: false }],
   };

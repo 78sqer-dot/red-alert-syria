@@ -2,7 +2,7 @@
 import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=41';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=23';
+import { EXTRA_SVG } from './target-svgs.js?v=24';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=7';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
@@ -957,7 +957,7 @@ export class AlertMap {
       const svg = signalDrone ? svgTag(glyph, 36, `class="${svgClass}"`) : svgTag(glyph, 24, `class="${svgClass}"`);
       el.innerHTML = `<div class="uav-box"><div class="uav">${svg}</div></div>`;
     } else if (marker === 'helicopter') {
-      const helicopterSvg = () => svgTag('helicopter_mobile', 30, 'class="helicopter-svg"');
+      const helicopterSvg = () => svgTag('helicopter_mobile', 24, 'class="helicopter-svg"');
       const craft = `<span class="heli-craft">${helicopterSvg()}</span>`;
       const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${helicopterSvg()}</span>` : '';
       el.innerHTML = `<div class="heli-route"><span class="heli-orbit-guide" aria-hidden="true"></span>${craft}${second}</div>`;

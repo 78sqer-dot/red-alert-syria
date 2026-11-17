@@ -8,7 +8,7 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon } from './icons.js?v=9';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=88';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=89';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -772,7 +772,7 @@ function closeDrawer() {
 function dismissInactivePanels(except) {
   closeDropdowns();
   const mapPanel = $('#mapCtrlPanel');
-  if (except !== 'mapTools' && !(except === 'dropdown' && !PHONE.matches)) {
+  if (except !== 'mapTools' && except !== 'dropdown') {
     if (mapPanel) mapPanel.hidden = true;
     $('#mapControlsToggle')?.setAttribute('aria-expanded', 'false');
   }

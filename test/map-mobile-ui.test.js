@@ -39,7 +39,7 @@ test('interactive sheets restore their home and dismiss competing overlays acces
   assert.ok(app.includes("dismissInactivePanels('tour')"));
   assert.ok(app.includes("if (open) dismissInactivePanels('mapTools');"));
   assert.ok(app.includes("if (open) dismissInactivePanels('dropdown');"));
-  assert.ok(app.includes("except === 'dropdown' && !PHONE.matches"));
+  assert.ok(app.includes("if (except !== 'mapTools' && except !== 'dropdown') {"));
   assert.ok(app.includes("$('#mapControlsToggle')?.setAttribute('aria-expanded', 'false')"));
   assert.match(app, /window\.addEventListener\('resize', \(\) => \{[\s\S]{0,260}dismissInactivePanels\(\);/);
   assert.match(css, /\.drawer-backdrop, \.sheet-backdrop \{[^}]*pointer-events: auto;/);
@@ -61,6 +61,7 @@ test('map tools provide a return route from filter, layers, services and Al-Naba
   assert.match(app, /sessionStorage\.setItem\('ras:return-map-tools', '1'\)/);
   assert.match(app, /window\.addEventListener\('pageshow', restoreMapTools\)/);
   assert.match(css, /\.dd-panel\.dd-sheet \{ position: fixed;/);
+  assert.match(css, /#filterPanel\.dd-sheet, #layersPanel\.dd-sheet \{ z-index: 63; \}/, 'the mobile sheet must paint above its backdrop so its controls remain clickable');
 });
 
 test('map attribution keeps a compact information button and readable credits', () => {
@@ -109,8 +110,8 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=88'/);
-  assert.match(html, /app\.css\?v=85/);
+  assert.match(app, /from '\.\/map\.js\?v=89'/);
+  assert.match(html, /app\.css\?v=86/);
   assert.match(html, /app\.js\?v=100/);
 });
 
@@ -121,7 +122,7 @@ test('changed type and icon modules use fresh cache keys', () => {
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);
   assert.match(map, /from '\/shared\/types\.js\?v=41'/);
-  assert.match(map, /from '\.\/target-svgs\.js\?v=23'/);
+  assert.match(map, /from '\.\/target-svgs\.js\?v=24'/);
   assert.match(map, /from '\.\/type-icons\.js\?v=7'/);
   assert.match(map, /from '\.\/marker-layout\.js\?v=3'/);
   assert.match(map, /from '\/shared\/zone-visuals\.js\?v=3'/);

@@ -4,9 +4,15 @@ import { readFile } from 'node:fs/promises';
 
 const css = await readFile(new URL('../public/css/app.css', import.meta.url), 'utf8');
 const mapJs = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf8');
+const appJs = await readFile(new URL('../public/js/app.js', import.meta.url), 'utf8');
 const markerSvgs = await readFile(new URL('../public/js/marker-svgs.js', import.meta.url), 'utf8');
 const types = await readFile(new URL('../shared/types.js', import.meta.url), 'utf8');
 const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.meta.url), 'utf8');
+
+test('restored 24px helicopter visual is served under fresh module cache keys', () => {
+  assert.match(appJs, /from '\.\/map\.js\?v=89'/);
+  assert.match(mapJs, /from '\.\/target-svgs\.js\?v=24'/);
+});
 
 test('drone keeps its top-down 24px silhouette and perimeter orbit', () => {
   assert.match(types, /uav:\s*\{[\s\S]*?glyph: 'uav'/);
@@ -38,13 +44,13 @@ test('helicopter uses a slim military side profile and a circular illustrative o
   assert.match(css, /\.heli-route\s*\{[^}]*--heli-orbit-radius: max\(18px, var\(--orb, 24px\)\)/);
   assert.match(css, /\.heli-orbit-guide \{[^}]*border: 1px dashed rgba\(59,142,255,\.4\);[^}]*border-radius: 50%/);
   assert.match(css, /@keyframes heliOrbit \{ from:?.*?translateX\(var\(--heli-orbit-radius\)\).*?rotate\(-360deg\)/s);
-  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*30px;[^}]*height:\s*30px;[^}]*fill:\s*#315f92;[^}]*drop-shadow\(0 0 1px rgba\(3,7,18,\.95\)\)/);
+  assert.match(css, /\.helicopter-svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*fill:\s*#315f92;[^}]*rgba\(59,142,255,\.78\)/);
   assert.match(css, /\.helicopter-svg \.heli-body \{ fill: #315f92; stroke: #163c63;/);
   assert.match(css, /\.helicopter-svg \.heli-body-highlight \{ fill: #3b8eff; \}/);
   assert.match(css, /\.helicopter-svg \.heli-main-rotor \{ fill: #3b8eff; opacity: \.96;/);
   assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{ fill: #3b8eff; opacity: 1;/);
   assert.match(css, /\.helicopter-svg \.heli-cockpit \{ fill: #17324d; \}/);
-  assert.doesNotMatch(css, /^\.heli-craft \{[^}]*filter:/m, 'the parent craft does not add a second fuzzy glow');
+  assert.match(css, /\.heli-craft\s*\{[^}]*drop-shadow\(0 0 1px rgba\(15,23,42,\.84\)\)[^}]*drop-shadow\(0 1px 1\.5px rgba\(255,255,255,\.42\)\)/);
   assert.match(css, /\.helicopter-svg \.heli-main-rotor \{[^}]*animation: heliRotor 1s linear infinite;/);
   assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{[^}]*animation: heliRotor \.72s linear infinite reverse;/);
   assert.match(css, /\.helicopter-svg \.heli-main-rotor, \.helicopter-svg \.heli-tail-rotor \{ animation: none !important; \}/);
@@ -64,11 +70,11 @@ test('helicopter uses a slim military side profile and a circular illustrative o
   assert.match(mapJs, /<div class="heli-route"><span class="heli-orbit-guide" aria-hidden="true"><\/span>\$\{craft\}\$\{second\}<\/div>/);
   assert.doesNotMatch(css, /\.heli-route-line|heli-route-len/);
   assert.doesNotMatch(mapJs, /helicopterScale|--heli-scale/);
-  assert.match(mapJs, /svgTag\('helicopter_mobile',\s*30,\s*'class="helicopter-svg"'\)/);
+  assert.match(mapJs, /svgTag\('helicopter_mobile',\s*24,\s*'class="helicopter-svg"'\)/);
   const mobile = targetSvgs.match(/helicopter_mobile:\s*'([^']+)'/)?.[1] || '';
   assert.match(mobile, /class="heli-body"[\s\S]*?class="heli-tail-boom"[\s\S]*?class="heli-main-rotor"[\s\S]*?class="heli-tail-rotor"/);
-  assert.match(mobile, /transform="translate\(0 30\) scale\(2\.844 6\.4\)"/);
-  assert.match(mobile, /class="heli-mast" d="M89 19V39"/);
+  assert.match(mobile, /transform="translate\(0 69\) scale\(2\.844 4\.8\)"/);
+  assert.match(mobile, /class="heli-mast" d="M89 19V31"/);
   assert.match(mapJs, /const second = a\.helicopters > 1 \?/);
   assert.match(mapJs, /classList\.toggle\('zoom-detail', z >= 10\.5\)/);
   assert.match(css, /\.uav\s*\{[^}]*animation:\s*uavOrbit 9s linear infinite/);

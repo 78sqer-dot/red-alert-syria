@@ -13,6 +13,7 @@ process.env.CHANNEL_ID = '@mock_news_channel';
 const { store } = await import('../server/store.js');
 await store.init(null);
 const { dayAutoDueAt, dayAutoReady, daytimeAutoEligible, daytimeWindow, nightEligible, newsState, toBotDraft, _test } = await import('../server/news-monitor.js');
+const { NEWS_TYPES } = await import('../server/news-ai.js');
 const { cleanPublicNewsAttribution } = await import('../server/clean-text.js');
 
 test.after(async () => {
@@ -21,11 +22,12 @@ test.after(async () => {
 });
 
 const at = (iso) => Date.parse(iso);
-const daytimeStart = at('2026-10-27T05:00:00Z'); // 08:00 in Damascus
+const daytimeStart = at('2026-11-18T05:00:00Z'); // 08:00 in Damascus, after the current expansion checkpoint
 const qualified = (overrides = {}) => ({
   id: 'news-draft',
   type: 'attack',
   status: 'pending',
+  created: Date.parse(newsState().mig.dayAutoAllTypes1) + 1,
   test: false,
   rule: false,
   loc: { scope: 'place', latitude: 33.5, longitude: 36.3 },
@@ -91,6 +93,23 @@ test('daytime fallback window follows Damascus time and excludes 22:00–08:00',
   assert.equal(daytimeWindow(at('2026-10-27T19:00:00Z')), false); // 22:00
 });
 
+test('every monitored type can enter the two-minute daytime queue when its new draft meets the shared gates', () => {
+  for (const type of NEWS_TYPES) {
+    const draft = qualified({ type, ...(type === 'political' ? { politicalCategory: 'statement' } : {}) });
+    assert.equal(daytimeAutoEligible(draft), true, `${type} should qualify after the expansion checkpoint`);
+    assert.equal(dayAutoDueAt(draft, daytimeStart), daytimeStart + 120_000, `${type} should get the same two-minute delay`);
+    assert.equal(dayAutoReady({ ...draft, dayAutoAt: daytimeStart }, daytimeStart + 120_000), true, `${type} should become ready only at its deadline`);
+  }
+});
+
+test('pending drafts created before the daytime expansion checkpoint remain review-only', () => {
+  const cutoff = Date.parse(newsState().mig.dayAutoAllTypes1);
+  const old = qualified({ created: cutoff - 1, dayAutoAt: daytimeStart });
+  assert.equal(daytimeAutoEligible(old), false);
+  assert.equal(dayAutoDueAt(old, daytimeStart), null);
+  assert.equal(dayAutoReady(old, daytimeStart + 120_000), false);
+});
+
 test('a qualifying pending AI news draft gets exactly one two-minute deadline during the day', () => {
   assert.equal(dayAutoDueAt(qualified(), daytimeStart), daytimeStart + 120_000);
   assert.equal(dayAutoDueAt(qualified({ dayAutoAt: daytimeStart + 30_000 }), daytimeStart), null);
@@ -100,19 +119,29 @@ test('a qualifying pending AI news draft gets exactly one two-minute deadline du
 test('test, rules-only, low-confidence, and already handled drafts never qualify', () => {
   assert.equal(daytimeAutoEligible(qualified({ test: true })), false);
   assert.equal(daytimeAutoEligible(qualified({ rule: true })), false);
+  assert.equal(daytimeAutoEligible(qualified({ dronePresence: true })), false);
   assert.equal(daytimeAutoEligible(qualified({ srcs: [{ u: 'local-only', local: true }] })), false);
+  assert.equal(daytimeAutoEligible(qualified({ type: 'not-monitored' })), false);
   assert.equal(daytimeAutoEligible(qualified({ status: 'ignored' })), false);
   assert.equal(daytimeAutoEligible(qualified({ status: 'published' })), false);
   assert.equal(daytimeAutoEligible(qualified({ status: 'duplicate' })), false);
   assert.equal(daytimeAutoEligible(qualified({ srcs: [{ u: 'local-one', local: true }, { u: 'local-two', local: true }] })), true);
+  const n = newsState();
+  const previous = n.types.attack;
+  n.types.attack = false;
+  try { assert.equal(daytimeAutoEligible(qualified()), false, 'disabled news types do not enter automatic publishing'); }
+  finally { n.types.attack = previous; }
 });
 
-test('high-risk categories and drafts without a verified map point are held for human review', () => {
+test('nighttime category restrictions remain unchanged while daytime needs a verified map point', () => {
   for (const type of ['breaking', 'weather', 'civil']) {
     assert.equal(nightEligible(qualified({ type })), false, `${type} must not auto-publish`);
+    assert.equal(daytimeAutoEligible(qualified({ type })), true, `${type} can use the daytime route when otherwise qualified`);
   }
   assert.equal(nightEligible(qualified({ loc: { scope: 'country', latitude: null, longitude: null } })), false);
   assert.equal(nightEligible(qualified({ loc: { scope: 'place', latitude: null, longitude: null } })), false);
+  assert.equal(daytimeAutoEligible(qualified({ loc: { scope: 'country', latitude: null, longitude: null } })), false);
+  assert.equal(daytimeAutoEligible(qualified({ loc: { scope: 'place', latitude: null, longitude: null } })), false);
 });
 
 test('explosion retains its existing night and daytime auto-publish eligibility when otherwise qualified', () => {
@@ -135,14 +164,15 @@ test('source photo or video keeps a draft in human review instead of automatic p
   }
 });
 
-test('new detonation reports remain outside auto-publishing until explicitly approved', () => {
+test('detonation remains outside the auto queue because it is not a monitored news type', () => {
   const detonation = qualified({ type: 'detonation' });
+  assert.equal(NEWS_TYPES.includes('detonation'), false);
   assert.equal(nightEligible(detonation), false);
   assert.equal(daytimeAutoEligible(detonation), false);
 });
 
-test('qualified political news can auto-publish at night but remains excluded from daytime auto-publishing', () => {
-  const cutoff = Date.parse(newsState().mig.politicalNightAuto1);
+test('qualified political news can auto-publish in either window after its activation checkpoints', () => {
+  const cutoff = Date.parse(newsState().mig.dayAutoAllTypes1);
   const political = qualified({
     type: 'political',
     politicalCategory: 'statement',
@@ -150,16 +180,19 @@ test('qualified political news can auto-publish at night but remains excluded fr
     srcs: [{ u: 'main-a', local: false }],
   });
   assert.equal(nightEligible(political), true, 'real AI political classification with a category, precise Syrian place and trusted source qualifies at night');
-  assert.equal(daytimeAutoEligible(political), false);
-  assert.equal(dayAutoDueAt(political, daytimeStart), null);
-  assert.equal(dayAutoReady({ ...political, dayAutoAt: daytimeStart }, daytimeStart + 1), false);
+  assert.equal(daytimeAutoEligible(political), true);
+  assert.equal(dayAutoDueAt(political, daytimeStart), daytimeStart + 120_000);
+  assert.equal(dayAutoReady({ ...political, dayAutoAt: daytimeStart }, daytimeStart + 120_000), true);
 });
 
-test('political news missing review requirements or predating activation remains held', () => {
-  const cutoff = Date.parse(newsState().mig.politicalNightAuto1);
-  const valid = qualified({ type: 'political', politicalCategory: 'statement', created: cutoff + 1 });
-  assert.equal(nightEligible({ ...valid, created: cutoff - 1 }), false, 'pre-existing pending political drafts do not become auto-publishable');
+test('political news without a category or created before an activation checkpoint remains held', () => {
+  const nightCutoff = Date.parse(newsState().mig.politicalNightAuto1);
+  const dayCutoff = Date.parse(newsState().mig.dayAutoAllTypes1);
+  const valid = qualified({ type: 'political', politicalCategory: 'statement', created: dayCutoff + 1 });
+  assert.equal(nightEligible({ ...valid, created: nightCutoff - 1 }), false, 'pre-existing political drafts remain held overnight');
+  assert.equal(daytimeAutoEligible({ ...valid, created: dayCutoff - 1 }), false, 'pre-existing political drafts remain held in the expanded daytime route');
   assert.equal(nightEligible({ ...valid, politicalCategory: null }), false, 'missing political category remains with a reviewer');
+  assert.equal(daytimeAutoEligible({ ...valid, politicalCategory: null }), false, 'daytime political news needs an explicit category');
   assert.equal(nightEligible({ ...valid, politicalNeedsCategory: true }), false);
   assert.equal(nightEligible({ ...valid, rule: true }), false, 'rules-only classification remains with a reviewer');
   assert.equal(nightEligible({ ...valid, test: true }), false, 'test drafts never qualify');
@@ -341,6 +374,43 @@ test('opinion and satire remain private, while review diagnostics are held befor
   } finally {
     _test.R.H = previousHandler;
     for (const draft of [...privateDrafts, diagnostic]) delete newsState().drafts[draft.id];
+  }
+});
+
+test('daytime publication dispatch accepts a newly qualified type that remains excluded overnight', async () => {
+  const previousHandler = _test.R.H;
+  const previousRewrite = _test.R.rewriteImpl;
+  const state = newsState();
+  const previousPublished = state.stats.published;
+  const previousAuto = state.stats.auto;
+  let publishAttempts = 0;
+  const story = 'رصدت مصادر محلية دورية عسكرية قرب بلدة كودنة في القنيطرة اليوم.';
+  const draft = qualified({
+    id: 'day-auto-patrol-fixture', type: 'patrol', headline: story, sourceText: story,
+    created: Date.parse(state.mig.dayAutoAllTypes1) + 1, ts: Date.now(), autoMode: 'day', dayAutoAt: Date.now() - 1,
+    loc: { scope: 'place', name_ar: 'كودنة', governorate_ar: 'القنيطرة', latitude: 33.0, longitude: 35.9 },
+    srcs: [{ u: 'day-auto-local-test', name: 'قناة اختبار', local: false }], cards: [],
+  });
+  _test.R.H = {
+    apis: () => ({ admin: { sendMessage: async () => ({ message_id: 77 }) } }),
+    publishDraft: async (_api, payload) => { publishAttempts++; return { id: 'synthetic-day-alert', payload }; },
+  };
+  _test.R.rewriteImpl = async (_source, options) => { assert.equal(options.mode, 'news'); return story; };
+  state.drafts[draft.id] = draft;
+  try {
+    assert.equal(nightEligible(draft), false, 'patrol stays excluded from the overnight route');
+    assert.equal(daytimeAutoEligible(draft), true);
+    assert.equal(dayAutoReady(draft, Date.now()), true);
+    assert.equal(await _test.nightPublish(draft), true, 'the day mode must use its expanded daytime eligibility rather than night eligibility');
+    assert.equal(publishAttempts, 1);
+    assert.equal(draft.status, 'published');
+    assert.equal(draft.autoMode, 'day');
+  } finally {
+    _test.R.H = previousHandler;
+    _test.R.rewriteImpl = previousRewrite;
+    state.stats.published = previousPublished;
+    state.stats.auto = previousAuto;
+    delete state.drafts[draft.id];
   }
 });
 

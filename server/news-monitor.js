@@ -203,6 +203,9 @@ export function newsState() {
   if (!n.seen || typeof n.seen !== 'object') n.seen = {};
   if (!n.drafts || typeof n.drafts !== 'object') n.drafts = {};
   if (!Array.isArray(n.alerts)) n.alerts = [];
+  // Expand the two-minute daytime fallback only for drafts discovered after this one-time checkpoint.
+  // Existing pending drafts keep their review status and cannot be swept into the new policy.
+  if (!n.mig.dayAutoAllTypes1) { n.mig.dayAutoAllTypes1 = new Date().toISOString(); save(false); }
   // 🌙 night auto-publish (owner request 27 Oct 2026: «من الساعة 10 المسا للساعة 8 الصبح»), Damascus time
   if (!n.night || typeof n.night !== 'object') n.night = { on: true, from: '22:00', to: '08:00', summary: true, sumDay: null, sumAt: 0 };
   if (!NIGHT_FROM.includes(n.night.from)) n.night.from = '22:00';
@@ -465,8 +468,25 @@ function editorialGate(d) {
   }
   return { ok: true, reason: null };
 }
-/** Daytime uses the same AI and source-confidence gate as overnight auto-publishing. */
-export function daytimeAutoEligible(d) { return Boolean(d && d.type !== 'political' && d.status === 'pending' && nightEligible(d)); }
+/** Daytime includes every monitored event type, but only for new drafts that pass the shared safety gates. */
+export function daytimeAutoEligible(d) {
+  if (!d || d.status !== 'pending' || d.test || d.rule || d.editorialHold
+    || Object.keys(d.privateEditorial || {}).length > 0
+    || (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode))
+    || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+  const n = newsState();
+  if (!NEWS_TYPES.includes(d.type) || !ALERT_TYPES[d.type] || n.types[d.type] === false) return false;
+  const activatedAt = Date.parse(n.mig.dayAutoAllTypes1);
+  if (!Number.isFinite(d.created) || !Number.isFinite(activatedAt) || d.created <= activatedAt) return false;
+  if (d.type === 'political') {
+    const politicalAt = Date.parse(n.mig.politicalNightAuto1);
+    if (!POLITICAL_CATEGORIES[d.politicalCategory] || d.politicalNeedsCategory
+      || !Number.isFinite(politicalAt) || d.created <= politicalAt) return false;
+  }
+  if (!d.loc || d.loc.scope === 'country' || !Number.isFinite(d.loc.latitude) || !Number.isFinite(d.loc.longitude)) return false;
+  const sources = Array.isArray(d.srcs) ? d.srcs : [];
+  return sources.length >= 2 || sources.some((source) => source && !isLocalSrc(source));
+}
 export function dayAutoDueAt(d, now = Date.now()) {
   return daytimeWindow(now) && daytimeAutoEligible(d) && !Number.isFinite(d.dayAutoAt) ? now + DAY_AUTO_DELAY_MS : null;
 }
@@ -924,10 +944,11 @@ async function suppressDuplicateDraft(d, duplicate, by = 0) {
   return true;
 }
 async function nightPublish(d) {
+  const mode = d?.autoMode === 'day' ? 'day' : 'night';
   const a = api();
-  if (!a || !R.H?.publishDraft || d.status !== 'pending' || !nightEligible(d)) return false;
+  const eligible = mode === 'day' ? daytimeAutoEligible(d) : nightEligible(d);
+  if (!a || !R.H?.publishDraft || !d || d.status !== 'pending' || !eligible) return false;
   const n = newsState();
-  const mode = d.autoMode === 'day' ? 'day' : 'night';
   const editorial = editorialGate(d);
   if (!editorial.ok) {
     d.status = 'pending';
