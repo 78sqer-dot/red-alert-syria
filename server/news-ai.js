@@ -230,6 +230,27 @@ export function resolvePlace({ name, gov } = {}) {
 }
 // generic words that are also village names somewhere: never matched from free text
 const GENERIC = new Set(['الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'المدينه', 'البلده', 'القريه', 'الطريق', 'المركز', 'الحاجز', 'السجن', 'السوق', 'المشفي', 'المستشفي', 'الجسر', 'الدوار', 'المنطقه', 'الريف', 'الحدود', 'الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'اليوم', 'مساء', 'صباح', 'عنصر', 'عناصر', 'الامن', 'قوات', 'الجيش', 'الاحتلال', 'مسلحين', 'مدنيين', 'اصابه', 'مقتل', 'حادث', 'سير', 'هجوم', 'قصف', 'انفجار'].map(N));
+// Alt-name scanning rule: a free-text match that succeeds ONLY through an
+// alternative spelling (never the place's canonical name) is accepted only when
+// a place introducer immediately precedes it («في قرية المزرعة»). Without one, a
+// bare alt word is too often something else: the village «سلمان» (Hasakah)
+// carries the alt «سليمان» — a common man's name — and a death report about a
+// man named سليمان was once pinned to that village. Canonical-name matches are
+// unaffected; the trade-off is that a genuine bare alt mention with no
+// introducer («وصل الوفد المزرعة») is missed rather than mis-pinned.
+const PLACE_INTRODUCERS = new Set(['في', 'من', 'الى', 'على', 'عند', 'قرب', 'بلده', 'قريه', 'مدينه', 'حي', 'ريف', 'منطقه', 'ناحيه', 'شمال', 'جنوب', 'شرق', 'غرب', 'وسط', 'داخل', 'باتجاه', 'نحو', 'اطراف', 'ضواحي'].map(N));
+const nameEq = (x, q, qs) => { const n = N(x); return n === q || stripAl(n) === qs || n.replace(/\s/g, '') === q.replace(/\s/g, ''); };
+export function isAltOnlyMatch(cand, hits) {
+  const q = N(cand);
+  if (!q || !hits?.length) return false;
+  const qs = stripAl(q);
+  return !hits.some((p) => nameEq(p.ar, q, qs)) && hits.some((p) => (p.alt || []).some((a) => nameEq(a, q, qs)));
+}
+export function hasPlaceIntroducer(words, i, rawFirst = '') {
+  const prev = i > 0 ? N(words[i - 1]) : '';
+  if (prev && (PLACE_INTRODUCERS.has(prev) || PLACE_INTRODUCERS.has(stripAl(prev)))) return true;
+  return /^[بل](?=\S{3,})/u.test(String(rawFirst || '')); // a joined preposition on the candidate itself («بالمزرعة»)
+}
 /** exact names of villages/towns of one governorate that appear as words in the text (most specific first) */
 export function scanTextPlaces(text, govCode, max = 3) {
   if (!govCode) return [];
@@ -244,6 +265,7 @@ export function scanTextPlaces(text, govCode, max = 3) {
       for (const cand of variants) {
         if (cand.length < 4 || GENERIC.has(cand) || GENERIC.has(stripAl(cand)) || govCodeOf(cand)) continue;
         hits = exactHits(cand, govCode);
+        if (hits.length && isAltOnlyMatch(cand, hits) && !hasPlaceIntroducer(words, i, raw)) hits = [];
         if (hits.length) break;
       }
       if (!hits.length) continue;
@@ -525,6 +547,22 @@ export function sharpToneReason(text) {
   return null;
 }
 /** Factual stand-in headline (type + first place) when the source lead is unusable as public copy. */
+// Headline completeness: an AI headline that is a truncated COPY of the source —
+// a strict prefix of it, cut mid-word or left dangling on a function word
+// («...في», «...القحطا») — is a copy/paste accident, not a headline. A headline
+// that merely LEADS the source and ends on a complete word is legitimate news
+// style and is not flagged.
+const DANGLING_END_WORDS = new Set(['في', 'من', 'الى', 'علي', 'عن', 'ان', 'ما', 'لا', 'لم', 'لن', 'و', 'او', 'ثم', 'بين', 'لدي', 'حتي', 'اذا', 'لكن', 'بل', 'غير', 'ذو', 'ذات', 'كل', 'بعد', 'قبل', 'عند'].map(N));
+export function truncatedPrefixCut(headline, sourceText) {
+  const h = String(headline || '').replace(/\s+/g, ' ').trim().replace(/[.!؟?…]+$/u, '');
+  const s = String(sourceText || '').replace(/\s+/g, ' ').trim();
+  if (!h || !s || s.length <= h.length || !s.startsWith(h)) return null;
+  const next = s[h.length];
+  if (next && !/[\s.,;:!?؟…»"']/u.test(next)) return 'mid-word';
+  const last = h.split(' ').pop();
+  if (last && DANGLING_END_WORDS.has(N(last))) return 'dangling-function-word';
+  return null;
+}
 function factualFallbackHeadline(type, places) {
   const label = ALERT_TYPES[type]?.ar || 'خبر';
   const place = (places || []).find((p) => p?.name);
@@ -569,11 +607,14 @@ export function ruleClassify(text, { breaking = false } = {}) {
   const found = [];
   for (let i = 0; i < words.length && found.length < 3; i++) {
     for (const len of [3, 2, 1]) {
-      const cand = words.slice(i, i + len).join(' ').replace(/^[وبل](?=ال)/, '').replace(/^[وبل](?=[^ا\s].{2,})/u, '');
+      const rawCand = words.slice(i, i + len).join(' ');
+      const cand = rawCand.replace(/^[وبل](?=ال)/, '').replace(/^[وبل](?=[^ا\s].{2,})/u, '');
       if (cand.length < 3) continue;
       // generic words that are also place names («بالسجن المؤبد» is a prison sentence, not the village of Al-Sijn/Al-Mazraah)
       if (GENERIC.has(N(cand)) || GENERIC.has(stripAl(N(cand)))) continue;
       const hits = exactHits(cand, null);
+      // alt-only matches need a place introducer («سليمان» the man vs «سلمان» the village)
+      if (hits.length && isAltOnlyMatch(cand, hits) && !hasPlaceIntroducer(words, i, rawCand)) continue;
       const g = govCodeOf(cand);
       if (g && len <= 2) { found.push({ name: cand, gov: getGov(g).ar }); i += len - 1; break; }
       if (hits.length && new Set(hits.map((p) => p.gov)).size === 1 && hits[0].rank <= 4 && cand.length >= 4) { found.push({ name: cand, gov: getGov(hits[0].gov).ar }); i += len - 1; break; }
