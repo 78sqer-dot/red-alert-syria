@@ -211,7 +211,7 @@ test('Syrian political news without a verified place remains a locationless revi
   n.drafts = {};
   n.types.political = true;
   n.stats.drafts = 0;
-  const ts = at('2026-10-27T05:00:00Z');
+  const ts = Date.now() - 5 * 60_000; // inside the monitor freshness window: the desk drops older source posts (see news-monitor-freshness.test.js)
   const item = {
     i: 1,
     src: { u: 'test-syrian-source', name: 'وكالة اختبار', local: false },
