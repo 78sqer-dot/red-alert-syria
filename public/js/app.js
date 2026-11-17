@@ -8,7 +8,7 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon } from './icons.js?v=9';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=86';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=87';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -553,7 +553,11 @@ function renderLayersPanel() {
 function closeDropdowns(except) {
   for (const [btn, panel] of [['#btnFilter', '#filterPanel'], ['#btnLayers', '#layersPanel']]) {
     if (panel === except) continue;
-    $(panel).hidden = true;
+    const p = $(panel);
+    p.hidden = true;
+    const home = ddHome.get(p);
+    if (home && p.parentElement !== home) home.append(p);
+    p.classList.remove('dd-sheet');
     $(btn).setAttribute('aria-expanded', 'false');
   }
   if (!except) { const b = document.getElementById('ddBack'); if (b) b.hidden = true; }
@@ -581,6 +585,7 @@ function toggleDropdown(btnSel, panelSel, render) {
   const p = $(panelSel);
   const open = p.hidden;
   closeDropdowns(panelSel);
+  if (open) dismissInactivePanels('dropdown');
   if (open) render();
   placeDropdown(p, open);
   p.hidden = !open;
@@ -751,6 +756,7 @@ function renderDrawer() {
 }
 function openDrawer() {
   renderDrawer();
+  dismissInactivePanels('drawer');
   $('#drawerBackdrop').hidden = false;
   const d = $('#drawer');
   d.setAttribute('aria-hidden', 'false');
@@ -760,6 +766,19 @@ function closeDrawer() {
   $('#drawer').classList.remove('open');
   $('#drawer').setAttribute('aria-hidden', 'true');
   $('#drawerBackdrop').hidden = true;
+}
+function dismissInactivePanels(except) {
+  closeDropdowns();
+  const mapPanel = $('#mapCtrlPanel');
+  if (except !== 'mapTools' && !(except === 'dropdown' && !PHONE.matches)) {
+    if (mapPanel) mapPanel.hidden = true;
+    $('#mapControlsToggle')?.setAttribute('aria-expanded', 'false');
+  }
+  if ($('#app').classList.contains('sheet-open')) setSheetOpen(false);
+  if (except !== 'drawer') closeDrawer();
+  if (except !== 'about') closeAbout();
+  if (except !== 'modal' && !$('#modalBackdrop').hidden) closeModal();
+  if (except !== 'tour') $('#tour').hidden = true;
 }
 
 // ------------------------------------------------------------------ about sheet & modals
@@ -783,6 +802,7 @@ function renderAbout() {
 }
 function openAbout() {
   renderAbout();
+  dismissInactivePanels('about');
   $('#aboutBackdrop').hidden = false;
   const s = $('#aboutSheet');
   s.setAttribute('aria-hidden', 'false');
@@ -796,6 +816,7 @@ function closeAbout() {
 function openModal(html, onClose) {
   const b = $('#modalBackdrop');
   $('#modal').innerHTML = html;
+  dismissInactivePanels('modal');
   b.hidden = false;
   b._onClose = onClose;
 }
@@ -945,9 +966,7 @@ function showBreaking(a) {
 const TOUR_TARGETS = [null, '#status', '#btnFilter', '#btnLayers', '#sidebar', () => (isMobile() ? '#btnSettingsM' : '#btnSettings')];
 let tourStep = 0;
 function startTour() {
-  closeDrawer();
-  closeAbout();
-  closeDropdowns();
+  dismissInactivePanels('tour');
   tourStep = 0;
   $('#tour').hidden = false;
   renderTour();
@@ -1122,7 +1141,10 @@ function bindEvents() {
   const mapCtrlToggle = $('#mapControlsToggle');
   const mapCtrlPanel = $('#mapCtrlPanel');
   let returnToToolsAfterService = false;
+  let phoneLayout = PHONE.matches;
   const setMapControlsOpen = (open) => {
+    if (open) dismissInactivePanels('mapTools');
+    else closeDropdowns();
     mapCtrlPanel.hidden = !open;
     mapCtrlToggle.setAttribute('aria-expanded', String(open));
   };
@@ -1153,6 +1175,12 @@ function bindEvents() {
   };
   window.addEventListener('pageshow', restoreMapTools);
   restoreMapTools();
+  window.addEventListener('resize', () => {
+    const nextPhoneLayout = PHONE.matches;
+    if (nextPhoneLayout === phoneLayout) return;
+    phoneLayout = nextPhoneLayout;
+    dismissInactivePanels();
+  });
   $('#alertSearch')?.addEventListener('input', (e) => { state.search = e.target.value.slice(0, 80); renderList(); });
   $('#btnSettings').addEventListener('click', openDrawer);
   $('#btnSettingsM').addEventListener('click', openDrawer);

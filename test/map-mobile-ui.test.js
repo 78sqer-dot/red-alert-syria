@@ -28,6 +28,31 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
   assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: 1 \/ -1; \}/);
 });
 
+test('interactive sheets restore their home and dismiss competing overlays accessibly', () => {
+  assert.ok(app.includes('const home = ddHome.get(p);'));
+  assert.ok(app.includes('if (home && p.parentElement !== home) home.append(p);'));
+  assert.ok(app.includes("p.classList.remove('dd-sheet')"));
+  assert.ok(app.includes("$(btn).setAttribute('aria-expanded', 'false')"));
+  assert.ok(app.includes("dismissInactivePanels('drawer')"));
+  assert.ok(app.includes("dismissInactivePanels('about')"));
+  assert.ok(app.includes("dismissInactivePanels('modal')"));
+  assert.ok(app.includes("dismissInactivePanels('tour')"));
+  assert.ok(app.includes("if (open) dismissInactivePanels('mapTools');"));
+  assert.ok(app.includes("if (open) dismissInactivePanels('dropdown');"));
+  assert.ok(app.includes("except === 'dropdown' && !PHONE.matches"));
+  assert.ok(app.includes("$('#mapControlsToggle')?.setAttribute('aria-expanded', 'false')"));
+  assert.match(app, /window\.addEventListener\('resize', \(\) => \{[\s\S]{0,260}dismissInactivePanels\(\);/);
+  assert.match(css, /\.drawer-backdrop, \.sheet-backdrop \{[^}]*pointer-events: auto;/);
+  assert.match(css, /\.drawer, \.about-sheet \{ pointer-events: auto; \}/);
+  assert.match(css, /\.modal-backdrop \{[^}]*pointer-events: auto;/);
+  assert.match(css, /\.modal \{[^}]*pointer-events: auto;/);
+  assert.match(css, /\.drawer-body \{[^}]*overscroll-behavior: contain;[^}]*-webkit-overflow-scrolling: touch;/);
+  assert.match(css, /\.about-inner \{[^}]*overscroll-behavior: contain;[^}]*-webkit-overflow-scrolling: touch;/);
+  assert.match(css, /\.modal \{[^}]*overscroll-behavior: contain;[^}]*-webkit-overflow-scrolling: touch;/);
+  assert.doesNotMatch(css, /\.drawer-backdrop, \.sheet-backdrop \{[^}]*backdrop-filter:/);
+  assert.doesNotMatch(css, /\.modal-backdrop \{[^}]*backdrop-filter:/);
+});
+
 test('map tools provide a return route from filter, layers, services and Al-Nabaa', () => {
   assert.match(app, /data-dd-close/);
   assert.match(app, /backToTools/);
@@ -84,9 +109,9 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=86'/);
-  assert.match(html, /app\.css\?v=84/);
-  assert.match(html, /app\.js\?v=99/);
+  assert.match(app, /from '\.\/map\.js\?v=87'/);
+  assert.match(html, /app\.css\?v=85/);
+  assert.match(html, /app\.js\?v=100/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
@@ -96,7 +121,7 @@ test('changed type and icon modules use fresh cache keys', () => {
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);
   assert.match(map, /from '\/shared\/types\.js\?v=41'/);
-  assert.match(map, /from '\.\/target-svgs\.js\?v=21'/);
+  assert.match(map, /from '\.\/target-svgs\.js\?v=22'/);
   assert.match(map, /from '\.\/type-icons\.js\?v=7'/);
   assert.match(map, /from '\.\/marker-layout\.js\?v=3'/);
   assert.match(map, /from '\/shared\/zone-visuals\.js\?v=3'/);

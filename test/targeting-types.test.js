@@ -64,7 +64,7 @@ test('helicopter keeps its dedicated marker at fixed 24px with shared alert-circ
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
   assert.equal(helicopter.glyph, 'helicopter_simple');
   assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
-  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\('helicopter_side', 24,/);
+  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\('helicopter_mobile', 24,/);
   assert.match(mapSource, /a\.helicopters > 1/);
   assert.match(mapSource, /heli-craft-second/);
   assert.match(mapCss, /\.heli-craft-second \{ animation-delay: -4\.5s; \}/);
