@@ -73,8 +73,8 @@ test('helicopter keeps its dedicated 24px military glyph with a fixed circular o
   assert.match(mapCss, /\.heli-craft \{[^}]*width: 24px; height: 24px;[^}]*animation: heliOrbit 9s linear infinite/);
   assert.match(mapCss, /\.uav \{[^}]*animation: uavOrbit 9s linear infinite/);
   assert.match(mapCss, /\.heli-orbit-guide \{[^}]*border: 1px dashed rgba\(59,142,255,\.4\);[^}]*border-radius: 50%/);
-  assert.match(mapCss, /\.helicopter-svg \.heli-main-rotor[^\n]*animation: heliRotor/);
-  assert.match(mapCss, /\.helicopter-svg \.heli-tail-rotor[^\n]*animation: heliRotor/);
+  assert.doesNotMatch(mapCss, /\.helicopter-svg \.heli-(?:main-rotor|tail-rotor)[^\n]*animation: heliRotor/,
+    'rotor geometry stays crisp while the full helicopter follows its orbit');
   assert.doesNotMatch(mapCss, /\.heli-orbit::(?:before|after)/, 'do not add decorative orbit rings');
   assert.match(EXTRA_SVG.helicopter_simple, /class="heli-main-rotor"/);
   assert.match(EXTRA_SVG.helicopter_simple, /class="heli-tail-rotor"/);
