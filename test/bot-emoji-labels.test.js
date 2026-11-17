@@ -16,13 +16,15 @@ test('protest action and demonstration keep distinct bot labels and map glyphs',
   assert.equal(ALERT_TYPES.protest_action.glyph, 'megaphone');
   assert.equal(alertButtonLabel('protest', 'ar'), '👥 مظاهرة');
   assert.equal(alertButtonLabel('protest_action', 'ar'), '📢 احتجاج');
-  assert.match(map, /const iconColor = visual\.color/);
+  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin'/);
   assert.equal(eventVisual('protest').dot, '🟢');
   assert.doesNotMatch(map, /mapEmoji|mk-event-emoji/);
 });
 
-test('bot button omits the colored gun emoji while the underlying marker type keeps it', () => {
-  assert.equal(ALERT_TYPES.smuggling_weapons.emoji, '🔫');
+test('smuggling_weapons carries the customs emoji on every surface; the gun emoji is gone', () => {
+  assert.equal(ALERT_TYPES.smuggling_weapons.emoji, '🛃');
+  assert.equal(alertButtonLabel('smuggling_weapons', 'ar'), '🛃 تهريب أسلحة');
+  assert.equal(alertButtonLabel('smuggling_weapons', 'en'), '🛃 Weapons smuggling');
   assert.doesNotMatch(alertButtonLabel('smuggling_weapons', 'ar'), /🔫/);
   assert.doesNotMatch(alertButtonLabel('smuggling_weapons', 'en'), /🔫/);
   assert.match(bot, /alertButtonLabel\(item\.type, lang\)/);

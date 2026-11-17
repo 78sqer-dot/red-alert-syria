@@ -13,10 +13,11 @@ import { ICONS } from '../public/js/icons.js';
 const GLYPHS = { ...SVG, ...EXTRA_SVG };
 // Owner editorial exceptions, pinned in targeting-types / bot-emoji-labels /
 // news-publish-acceptance: a generic gunfire or assassination report must not
-// imply a weapon, so those two types carry no emoji anywhere; and the gun emoji
-// never appears on a bot button (smuggling_weapons keeps 🔫 in running text).
+// imply a weapon, so those two types carry no emoji anywhere. The gun emoji
+// is banned on every surface (owner, 2026-11-17): smuggling_weapons carries
+// the customs emoji 🛃 in text, on buttons, and as the contraband-crate glyph.
 const NO_EMOJI_TYPES = ['shooting', 'assassination'];
-const BUTTON_TEXT_ONLY = [...NO_EMOJI_TYPES, 'smuggling_weapons'];
+const BUTTON_TEXT_ONLY = [...NO_EMOJI_TYPES];
 
 const duplicates = (pick) => {
   const seen = new Map();
@@ -80,4 +81,16 @@ test('previously colliding symbols are split, one owner each', () => {
   assert.equal(ALERT_TYPES.arrest.glyph, 'handcuffs');
   assert.equal(ALERT_TYPES.warplane.glyph, 'plane');
   assert.equal(ALERT_TYPES.air_movement.glyph, 'plane_movement');
+});
+
+test('smuggling_weapons uses the customs symbol and the contraband crate, never a gun', () => {
+  assert.equal(ALERT_TYPES.smuggling_weapons.emoji, '🛃');
+  assert.equal(ALERT_TYPES.smuggling_weapons.glyph, 'contraband_crate');
+  assert.equal(TYPE_ICON.smuggling_weapons, 'crate');
+  assert.ok(EXTRA_SVG.contraband_crate, 'the crate glyph is drawn');
+  assert.match(EXTRA_SVG.contraband_crate, /<circle cx="256" cy="256" r="88"/, 'the crate carries its prohibition mark');
+  assert.equal(EXTRA_SVG.smuggling_weapons, undefined, 'no gun drawing remains under the smuggling key');
+  assert.equal(ICONS.rifle, undefined, 'the UI icon catalogue has no rifle icon');
+  assert.ok(ICONS.crate, 'the crate UI icon exists');
+  for (const key of TYPE_KEYS) assert.notEqual(ALERT_TYPES[key].emoji, '🔫', `${key} must not use the banned gun emoji`);
 });

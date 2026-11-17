@@ -55,12 +55,15 @@ test.after(async () => {
 });
 
 
-test('protest types are monitored in their own group and filter version is bumped', () => {
+test('monitored types are grouped by the canonical menu (protests inside civil)', () => {
+  // FILTER_VER tracks classification-rule changes for the rescan; the panel
+  // regrouping is display-only (same NEWS_TYPES, same per-type toggles), so
+  // the version stays 11.
   assert.equal(FILTER_VER, 11);
   assert.ok(NEWS_TYPES.includes('protest_action'));
-  assert.deepEqual(_test.newsTypeGroups.protests, ['protest', 'protest_action']);
-  assert.equal(_test.newsTypeGroups.civil.includes('protest'), false);
-  assert.equal(_test.newsTypeGroups.civil.includes('protest_action'), false);
+  assert.deepEqual(_test.newsTypeGroups.civil, ['civil', 'accident', 'fire', 'arrest', 'death', 'martyrdom', 'protest', 'protest_action', 'brawl', 'civil_plane']);
+  assert.equal(_test.newsTypeGroups.protests, undefined, 'there is no separate protests group anymore');
+  assert.deepEqual(Object.keys(_test.newsTypeGroups), ['direct', 'air', 'strikes', 'security', 'civil', 'smuggling', 'nature']);
 });
 
 test('a cross-source repeat of an already-published monitored event is suppressed even beyond 40 newer records', async () => {

@@ -14,7 +14,7 @@ export const TYPE_ICON = Object.freeze({
   patrol: 'patrol',
   kidnapping: 'link',
   signal_sweep: 'radar',
-  smuggling_weapons: 'rifle',
+  smuggling_weapons: 'crate',
   smuggling_drugs: 'pills',
   smuggling_explosives: 'packageBomb',
   missile: 'rocket',

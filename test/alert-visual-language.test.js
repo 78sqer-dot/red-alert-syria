@@ -29,15 +29,15 @@ test('event emojis map onto their own map alert types, one symbol per type', () 
   assert.equal(alertEmoji({ type: 'arrest' }), '🚔');
   assert.equal(alertEmoji({ type: 'civil', civil_emoji: 'medical' }), '🚑');
   assert.equal(alertEmoji({ type: 'artillery' }), '💣');
-  assert.match(map, /const eventEmoji = \['airstrike', 'artillery', 'explosion', 'detonation', 'weather', 'fire', 'arrest'\]\.includes\(a\.type\)/);
-  assert.match(map, /a\.type === 'civil' && alertEmoji\(a\) === '🚑'/);
-  assert.match(map, /a\.type === 'weather' \? t\.emoji : alertEmoji\(a\)/);
-  assert.match(map, /else if \(eventEmoji\) \{[\s\S]{0,400}else if \(marker === 'icon'\)/);
-  assert.match(map, /class="sai map-event-disc map-event-emoji"/);
-  assert.match(css, /\.sai\.map-event-emoji \{[^}]*font-size: 21px;/);
+  // Map pins never render an emoji (unified symbols, 2026-11-17): the former
+  // emoji-disc types draw their glyph on the pin like every other type, and a
+  // civil medical report keeps its ambulance glyph.
+  assert.doesNotMatch(map, /eventEmoji|map-event-emoji/);
+  assert.match(map, /const pinGlyph = a\.type === 'civil' && alertEmoji\(a\) === '🚑' \? 'ambulance' : glyph;/);
+  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin'/);
 });
 
-test('explosion and detonation have distinct Arabic labels and strike-colored SVGs at standard map size', () => {
+test('explosion and detonation have distinct Arabic labels and glyphs on the unified pin', () => {
   assert.equal(ALERT_TYPES.explosion.ar, 'انفجار');
   assert.equal(ALERT_TYPES.explosion.button_ar, 'انفجار');
   assert.equal(ALERT_TYPES.explosion.button_en, 'Explosion');
@@ -62,8 +62,8 @@ test('explosion and detonation have distinct Arabic labels and strike-colored SV
   assert.match(EXTRA_SVG.detonation_burst, /M256 40v144/);
   assert.equal(eventVisual('detonation').category, 'strikes');
   assert.equal(eventVisual('detonation').color, '#c2410c');
-  assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
-  assert.match(map, /const iconColor = visual\.color/);
+  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/);
+  assert.match(map, /--ring:\$\{t\.color\}/, 'the pin ring carries the type colour');
 });
 
 test('warplane follows the three-aircraft reference pass while drones keep their orbiting silhouette', () => {
@@ -139,21 +139,19 @@ test('live alert circles use compositor-safe pulse layers and remain clickable t
   assert.match(css, /\.zp-fill[\s\S]*animation: zfillPulse/);
 });
 
-test('map event glyphs are 24px and urgent news shows its warning category symbol in a red pulsing marker', () => {
-  assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
-  assert.match(map, /class="news-marker-category" aria-hidden="true">\$\{visual\.dot\}/);
-  assert.match(css, /\.sai\.map-event-disc\s*\{[^}]*background:\s*#fff !important/);
-  assert.match(css, /\.ic\s*\{[^}]*border-radius:\s*50%;[^}]*background:\s*#fff/);
-  assert.match(css, /\.news-marker-core\s*\{[^}]*width:\s*32px; height:\s*32px;[^}]*border:\s*2px solid #fff;[^}]*background:\s*transparent/);
-  assert.match(css, /\.news-marker-core::after\s*\{[^}]*background:\s*#ef233c/);
-  assert.match(css, /\.mk-breaking-news \.news-marker-core\s*\{[^}]*border-color: #ef233c;[^}]*box-shadow: 0 0 0 1px rgba\(239,35,60,\.34\)/);
-  assert.match(css, /\.mk-breaking-news \.news-marker-core::after\s*\{ border-color: #ef233c; box-shadow: 0 0 0 1px rgba\(239,35,60,\.28\); \}/);
-  assert.match(css, /\.news-marker-category\s*\{[^}]*width:\s*15px; height:\s*15px;[^}]*font:\s*14px\/15px/);
-  assert.match(css, /\.mk-breaking-news \.news-marker-core\s*\{\s*width: 26px; height: 26px; border-width: 1\.7px;/);
-  assert.match(css, /\.mk-breaking-news \.news-pulse-ring\s*\{ width: 34px; height: 34px; border-color: #ef233c/);
+test('static types share one unified pin and breaking news keeps its red pulse', () => {
+  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/);
+  assert.match(map, /el\.innerHTML = glyphDisc\(a\.type, 32, 20, 'pin'\);/, 'breaking renders the same pin (alert_tri glyph, type-colour ring)');
+  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;[^}]*background: #141A24; border: 3px solid var\(--ring/);
+  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; \}/);
+  assert.match(css, /\.maplibregl-map\.zoom-far \.pin \{ width: 20px; height: 20px; border-width: 2px; \}/);
+  assert.match(css, /\.maplibregl-map\.zoom-far \.pin svg \{ width: 13px; height: 13px; \}/);
+  assert.match(css, /\.maplibregl-map\.zoom-detail \.pin \{ width: 38px; height: 38px; \}/);
+  assert.match(css, /\.mk:hover \.pin, \.mk\.sel \.pin \{ box-shadow: 0 0 0 1px rgba\(6,10,16,\.65\), 0 0 0 5px color-mix\(in srgb, var\(--ring/);
+  assert.match(css, /\.mk-breaking-news \.news-pulse-ring \{ width: 34px; height: 34px; border-color: #ef233c/);
   assert.match(css, /@keyframes urgentPulseWave/);
-  assert.match(css, /\.ic-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
-  assert.match(css, /\.mk-event-emoji\s*\{[^}]*background:\s*#fff/);
+  assert.doesNotMatch(css, /\.news-marker-core|\.news-marker-category|\.sai\.map-event-disc|\.civ-dot/);
+  assert.doesNotMatch(map, /civ-dot|news-marker-core/);
 });
 
 test('urgent marker core, red pulse and glow follow the shared map zoom scale', () => {
@@ -165,14 +163,11 @@ test('urgent marker core, red pulse and glow follow the shared map zoom scale', 
   assert.match(map, /const mks = Math\.max\(0\.42, Math\.min\(0\.56,/);
 });
 
-test('map SVGs use category colors while the helicopter keeps its slim military-blue palette', () => {
-  assert.match(map, /const fg = visual\.color;/, 'static discs use the category color');
-  assert.match(map, /const iconColor = visual\.color/);
-  assert.match(map, /style="--ic:\$\{iconColor\}/);
-  assert.match(map, /fill="\$\{iconColor\}"/);
-  assert.match(css, /\.sai\.map-event-disc \{[^}]*color: var\(--c\) !important/);
-  assert.match(css, /\.sai\.map-event-disc svg \{ fill: var\(--c\) !important; color: var\(--c\) !important; \}/);
-  assert.match(css, /\.ic-pistol \.ic-svg, \.ic-rifle \.ic-svg \{[^}]*fill: var\(--ic\)/);
+test('map pins use type colours for the ring while the helicopter keeps its slim military-blue palette', () => {
+  assert.match(map, /--ring:\$\{t\.color\}/, 'the pin ring uses the type colour');
+  assert.match(map, /fill="#ffffff"/, 'pin glyphs render white on the dark roundel');
+  assert.match(css, /\.pin \{[^}]*border: 3px solid var\(--ring/);
+  assert.doesNotMatch(map, /const iconColor = visual\.color/);
   assert.match(css, /\.uav-svg \{[^}]*fill: var\(--c, #6b7280\)/);
   assert.match(css, /\.helicopter-svg \{[^}]*width: 24px; height: 24px;[^}]*fill: #13283d[^}]*drop-shadow\(0 0 1\.4px rgba\(190,207,223,\.55\)\)/);
   assert.match(css, /\.helicopter-svg \.heli-body \{ fill: #13283d; stroke: #091725;/);

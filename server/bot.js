@@ -6,7 +6,7 @@ import { config, isOwner, envDefaults, DEFAULT_PUBLIC_URL } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert, sanitizeAlertMedia, sanitizeAlertMediaItems, mergeAlertMediaItems, ALERT_MEDIA_MAX_BYTES } from './store.js';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, alertButtonLabel, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS, eventVisual } from '../shared/types.js';
+import { ALERT_TYPES, TYPE_KEYS, TYPE_MENU, TYPE_MENU_GROUPS, TYPE_MENU_DIRECT, POLITICAL_CATEGORIES, typeOf, alertEmoji, alertButtonLabel, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS, eventVisual } from '../shared/types.js';
 import { CONDEMNATIONS, CONDEMNATION_KEYS, condemnationKey, condemnationText } from '../shared/condemnations.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
@@ -57,32 +57,29 @@ const VEHICLE_COUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 const VEHICLE_COUNT_MAX = 999;
 const politicalCategory = (key) => Object.hasOwn(POLITICAL_CATEGORIES, key) ? key : null;
 
-// Derive report choices from the current shared groups. Targeting stays separate
-// so drone strikes and assassinations remain distinct alert types. Historical
-// air_movement alerts remain renderable, but new reports are not offered in bot menus.
-export const BOT_ALERT_MENU_GROUPS = Object.freeze({
-  aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => type !== 'uav_strike' && type !== 'air_movement')),
-  targeting: Object.freeze(['targeted_strike', 'uav_strike', 'assassination']),
-  strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination' && type !== 'targeted_strike')),
-  protests: Object.freeze(['protest_action', 'protest']),
-  civil: Object.freeze(ALERT_GROUPS.civil.types.filter((type) => type !== 'protest' && type !== 'protest_action')),
-  smuggling: Object.freeze([...ALERT_GROUPS.smuggling.types]),
-  nature: Object.freeze([...ALERT_GROUPS.nature.types]),
-});
-export const BOT_ALERT_MENU_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'military_incursion', 'patrol', 'kidnapping', 'signal_sweep']);
-const REPORT_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', protests: '📢', civil: '🛡️', smuggling: '🚚', nature: '🌦️' });
+// Report choices come from the ONE canonical type menu (TYPE_MENU in
+// shared/types.js) — the same definition the news monitor's edit menu and
+// filter panel are generated from, so the menus can never disagree again.
+// The canonical menu still lists air_movement in the air group, but the owner
+// keeps its public report flow disabled (reaffirmed 2026-11-17): the t:
+// handler answers «لم يعد متاحاً» and never reaches askFlightAircraft.
+export const BOT_ALERT_MENU_GROUPS = Object.freeze(Object.fromEntries(TYPE_MENU_GROUPS.map((g) => [g.key, g.types])));
+export const BOT_ALERT_MENU_DIRECT_TYPES = TYPE_MENU_DIRECT;
+const TYPE_MENU_BY_KEY = new Map(TYPE_MENU.map((g) => [g.key, g]));
 const quoteButtonLabel = (label, lang) => lang === 'en' ? `“${label}”` : `«${label}»`;
 function reportGroupLabel(group, lang) {
-  const value = group === 'targeting' ? { ar: 'استهداف', en: 'Targeting' } : group === 'protests' ? { ar: 'مظاهرة', en: 'Protest & demonstration' } : ALERT_GROUPS[group];
+  const value = TYPE_MENU_BY_KEY.get(group);
   if (!value) return group;
-  return quoteButtonLabel(`${REPORT_GROUP_EMOJI[group] || '🏷️'} ${lang === 'en' ? value.en : value.ar}`, lang);
+  return quoteButtonLabel(`${value.emoji} ${lang === 'en' ? value.en : value.ar}`, lang);
 }
 function reportGroupKeyboard(group, lang) {
   const types = BOT_ALERT_MENU_GROUPS[group] || [];
   const kb = new InlineKeyboard();
   types.forEach((type, index) => {
     const label = quoteButtonLabel(alertButtonLabel(type, lang), lang);
-    kb.text(label, `t:${type}`);
+    // military_incursion keeps its kind-picker entry point ('mi'), exactly as
+    // on the old top-level keyboard — the kind is chosen before the draft.
+    kb.text(label, type === 'military_incursion' ? 'mi' : `t:${type}`);
     if (index % 2 === 1 && index < types.length - 1) kb.row();
   });
   if (types.length % 2 === 1 || types.length === 0) kb.row();
@@ -511,21 +508,11 @@ function mainKeyboard(ctx) {
   const l = L(ctx);
   const lang = langOf(ctx);
   // This shared keyboard serves both the private publishing bot and the public reporting bot.
+  // Items are generated from the canonical TYPE_MENU: the direct types first,
+  // then one submenu button per group, all opening via the generic ag: handler.
   const menuItems = [
-    { type: 'breaking', callback: 't:breaking' },
-    { type: 'political', callback: 't:political' },
-    { group: 'aerial', callback: 'ag:aerial' },
-    { group: 'targeting', callback: 'target' },
-    { group: 'strikes', callback: 'ag:strikes' },
-    { type: 'military_incursion', callback: 'mi' },
-    { type: 'patrol', callback: 't:patrol' },
-    { type: 'kidnapping', callback: 't:kidnapping' },
-    { type: 'signal_sweep', callback: 't:signal_sweep' },
-    { group: 'protests', callback: 'ag:protests' },
-    { group: 'civil', callback: 'cv' },
-    { group: 'smuggling', callback: 'sm' },
-    { group: 'nature', callback: 'ag:nature' },
-    { type: 'border', callback: 't:border' },
+    ...TYPE_MENU_DIRECT.map((type) => ({ type, callback: `t:${type}` })),
+    ...TYPE_MENU_GROUPS.map((g) => ({ group: g.key, callback: `ag:${g.key}` })),
   ];
   const kb = new InlineKeyboard();
   for (let i = 0; i < menuItems.length; i += 2) {
@@ -2449,29 +2436,19 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     await ctx.replyWithPhoto(new InputFile(png, 'daily-summary-test.png'), { caption: `${head}\n\n${dailyCaption(st)}`, parse_mode: 'HTML', reply_markup: new InlineKeyboard().text(L(ctx).btnHome, 'home') });
   });
 
-  // Targeting sub-menu: drone strike and assassination remain distinct alert types.
-  bot.callbackQuery('target', async (ctx) => {
-    await ctx.answerCallbackQuery();
-    const lang = langOf(ctx);
-    await show(ctx, L(ctx).askTarget, reportGroupKeyboard('targeting', lang));
-  });
-  bot.callbackQuery(/^ag:(aerial|strikes|nature|protests)$/, async (ctx) => {
+  // One generic group sub-menu handler for every canonical TYPE_MENU group.
+  bot.callbackQuery(/^ag:(air|strikes|security|civil|smuggling|nature)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     const group = ctx.match[1];
     const lang = langOf(ctx);
     const prompt = {
-      aerial: { ar: 'اختر نوع النشاط الجوي:', en: 'Choose the aerial activity type:' },
+      air: { ar: 'اختر نوع النشاط الجوي:', en: 'Choose the aerial activity type:' },
       strikes: { ar: 'اختر نوع الهجوم أو القصف:', en: 'Choose the attack or shelling type:' },
+      security: { ar: 'اختر نوع التنبيه الأمني أو الميداني:', en: 'Choose the security or field alert type:' },
+      smuggling: { ar: 'اختر نوع التهريب:', en: 'Choose the smuggling alert type:' },
       nature: { ar: 'اختر نوع تنبيه الزلازل أو الطقس:', en: 'Choose the earthquake or weather alert type:' },
-      protests: { ar: 'اختر بين الاحتجاج والمظاهرة:', en: 'Choose protest or demonstration:' },
     }[group];
-    await show(ctx, lang === 'en' ? prompt.en : prompt.ar, reportGroupKeyboard(group, lang));
-  });
-  // Civil sub-menu: incident, safety and humanitarian reports.
-  bot.callbackQuery('cv', async (ctx) => {
-    await ctx.answerCallbackQuery();
-    const lang = langOf(ctx);
-    await show(ctx, L(ctx).askCivil, reportGroupKeyboard('civil', lang));
+    await show(ctx, group === 'civil' ? L(ctx).askCivil : (lang === 'en' ? prompt.en : prompt.ar), reportGroupKeyboard(group, lang));
   });
   // 🛣 road status: staff publish straight to the map layer, the public report bot sends it to review
   const roadMenu = async (ctx) => {
@@ -2559,11 +2536,6 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   bot.callbackQuery('mi', async (ctx) => {
     await ctx.answerCallbackQuery();
     return askMilitaryIncursionKind(ctx);
-  });
-  bot.callbackQuery('sm', async (ctx) => {
-    await ctx.answerCallbackQuery();
-    const en = langOf(ctx) === 'en';
-    await show(ctx, en ? 'Choose the smuggling alert type:' : 'اختر نوع التهريب:', reportGroupKeyboard('smuggling', en ? 'en' : 'ar'));
   });
   bot.callbackQuery(/^mi:(soldiers|general|vehicles|barrier)$/, async (ctx) => {
     await ctx.answerCallbackQuery();

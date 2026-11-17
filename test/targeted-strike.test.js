@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { ALERT_TYPES, ALERT_GROUPS, alertEmoji, eventVisual } from '../shared/types.js';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_MENU, alertEmoji, eventVisual } from '../shared/types.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
 import { TYPE_ICON } from '../public/js/type-icons.js';
 
@@ -11,15 +11,19 @@ const image = await readFile(new URL('../server/alert-image.js', import.meta.url
 const app = await readFile(new URL('../public/js/app.js', import.meta.url), 'utf8');
 const settings = await readFile(new URL('../public/js/settings.js', import.meta.url), 'utf8');
 
-test('targeted strike is a separate report type under the targeting submenu', () => {
+test('targeted strike is a separate report type in the canonical strikes group', () => {
   assert.equal(ALERT_TYPES.targeted_strike.ar, 'استهداف');
   assert.equal(ALERT_TYPES.targeted_strike.button_ar, 'استهداف');
   assert.equal(ALERT_TYPES.targeted_strike.emoji, '🎯');
   assert.equal(ALERT_TYPES.targeted_strike.glyph, 'target_reticle');
   assert.equal(ALERT_TYPES.targeted_strike.group, 'strikes');
   assert.ok(ALERT_GROUPS.strikes.types.includes('targeted_strike'));
-  assert.match(bot, /targeting: Object\.freeze\(\['targeted_strike', 'uav_strike', 'assassination'\]\)/);
-  assert.match(bot, /type !== 'assassination' && type !== 'targeted_strike'/);
+  // the bot menu is generated from the canonical TYPE_MENU, whose strikes
+  // group carries targeted_strike with assassination last
+  assert.match(bot, /BOT_ALERT_MENU_GROUPS = Object\.freeze\(Object\.fromEntries\(TYPE_MENU_GROUPS\.map/);
+  const strikes = TYPE_MENU.find((g) => g.key === 'strikes');
+  assert.ok(strikes.types.includes('targeted_strike'));
+  assert.equal(strikes.types.at(-1), 'assassination');
 });
 
 test('targeted strike has its own reticle on the map and the channel image', () => {

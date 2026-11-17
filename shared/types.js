@@ -8,8 +8,10 @@
 // emoji on purpose (owner editorial rule): a generic `shooting` or `assassination`
 // report must not imply a weapon, so those types stay text-only in posts/buttons
 // and carry their symbol as the map glyph (sound waves / firearm drawing) instead.
-// `smuggling_weapons` keeps 🔫 in running text, but bot buttons omit the gun
-// emoji (see alertButtonLabel below).
+// `smuggling_weapons` carries the customs emoji 🛃 on every surface (owner rule:
+// the gun emoji is banned everywhere); its map glyph is a contraband crate with
+// a prohibition mark, never a firearm drawing. Map pins always render the drawn
+// glyph, never the emoji.
 
 export const ALERT_TYPES = {
   breaking: {
@@ -90,8 +92,8 @@ export const ALERT_TYPES = {
   },
   smuggling_weapons: {
     ar: 'تهريب أسلحة', en: 'Weapons smuggling', button_ar: 'تهريب أسلحة', button_en: 'Weapons smuggling',
-    emoji: '🔫', color: '#9c4221', ring: '#7c2d12', group: 'smuggling', ttlMin: 360,
-    marker: 'icon', glyph: 'smuggling_weapons', icon: '#9c4221', disc: '#7c2d12', size: 34, zone: false,
+    emoji: '🛃', color: '#9c4221', ring: '#7c2d12', group: 'smuggling', ttlMin: 360,
+    marker: 'icon', glyph: 'contraband_crate', icon: '#9c4221', disc: '#7c2d12', size: 34, zone: false,
     tag_ar: 'تهريب_أسلحة', tag_en: 'Weapons_smuggling',
   },
   smuggling_drugs: {
@@ -262,6 +264,32 @@ export const EVENT_VISUALS = Object.freeze(Object.fromEntries(TYPE_KEYS.map((typ
 })));
 export const eventVisual = (type) => EVENT_VISUALS[type] || EVENT_VISUALS.breaking;
 
+// ── The ONE canonical type menu (owner-approved unified symbols, 2026-11-17) ──
+// Every type picker in the project — the reporting bot's keyboards, the news
+// monitor's edit menu and its filter panel — is generated from this single
+// grouped definition, so the menus can never disagree again. Group order and
+// type order here are the display order everywhere. The `direct` group is
+// shown on the top-level keyboard without a submenu. Text-surface emoji rules
+// still apply (shooting and assassination carry no emoji; assassination sits
+// last in its group). This menu is a picker only: it changes no type id,
+// colour, name, or stored data, and it does not replace ALERT_GROUPS above
+// (the web app's filter categories).
+export const TYPE_MENU = Object.freeze([
+  { key: 'direct', emoji: '🚨', ar: 'عاجل وسياسي', en: 'Breaking & political', types: ['breaking', 'political'] },
+  { key: 'air', emoji: '✈️', ar: 'جوي', en: 'Air', types: ['uav', 'warplane', 'helicopter', 'missile', 'air_movement', 'uav_strike'] },
+  { key: 'strikes', emoji: '💥', ar: 'قصف وهجمات', en: 'Strikes & attacks', types: ['airstrike', 'artillery', 'explosion', 'detonation', 'attack', 'clashes', 'targeted_strike', 'assassination'] },
+  { key: 'security', emoji: '🪖', ar: 'أمني وميداني', en: 'Security & field', types: ['military_incursion', 'patrol', 'border', 'kidnapping', 'shooting', 'signal_sweep'] },
+  { key: 'civil', emoji: '🛡️', ar: 'مدني وسلامة', en: 'Civil & safety', types: ['civil', 'accident', 'fire', 'arrest', 'death', 'martyrdom', 'protest', 'protest_action', 'brawl', 'civil_plane'] },
+  { key: 'smuggling', emoji: '🚚', ar: 'تهريب', en: 'Smuggling', types: ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },
+  { key: 'nature', emoji: '🌦️', ar: 'طبيعة', en: 'Nature', types: ['quake', 'weather'] },
+].map((g) => Object.freeze({ ...g, types: Object.freeze([...g.types]) })));
+
+export const TYPE_MENU_DIRECT = Object.freeze([...TYPE_MENU.find((g) => g.key === 'direct').types]);
+export const TYPE_MENU_GROUPS = Object.freeze(TYPE_MENU.filter((g) => g.key !== 'direct'));
+
+const TYPE_MENU_GROUP_OF = new Map(TYPE_MENU.flatMap((g) => g.types.map((t) => [t, g.key])));
+export const typeMenuGroupOf = (type) => TYPE_MENU_GROUP_OF.get(type) || null;
+
 export const BORDER_REGIONS = {
   iraq: { ar: 'الحدود السورية–العراقية', en: 'Syrian–Iraqi border' },
   jordan: { ar: 'الحدود السورية–الأردنية', en: 'Syrian–Jordanian border' },
@@ -311,8 +339,7 @@ export function alertMarkerKind(alert) {
 export function alertButtonLabel(key, lang = 'ar') {
   const type = typeOf(key);
   const label = lang === 'en' ? type.button_en : type.button_ar;
-  const emoji = key === 'smuggling_weapons' ? '' : type.emoji;
-  return [emoji, label].filter(Boolean).join(' ');
+  return [type.emoji, label].filter(Boolean).join(' ');
 }
 
 // Display-layer helper: many stored headlines repeat the alert's own type label

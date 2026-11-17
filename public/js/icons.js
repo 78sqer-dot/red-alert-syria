@@ -76,7 +76,7 @@ export const ICONS = {
   vibrate: { filled: false, body: "<path d=\"M3 5a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -14\" /><path d=\"M8 4l2 0\" /><path d=\"M9 17l0 .01\" /><path d=\"M21 6l-2 3l2 3l-2 3l2 3\" />" },
   route: { filled: false, body: "<path d=\"M3 19a2 2 0 1 0 4 0a2 2 0 0 0 -4 0\" /><path d=\"M19 7a2 2 0 1 0 0 -4a2 2 0 0 0 0 4\" /><path d=\"M11 19h5.5a3.5 3.5 0 0 0 0 -7h-8a3.5 3.5 0 0 1 0 -7h4.5\" />" },
   shield: { filled: false, body: "<path d=\"M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3\" /><path d=\"M12 3v18\" />" },
-  rifle: { filled: false, body: "<path d=\"M2 10h10l2-2h5l1 2h2v3h-2l-2 2h-4l-2-2H2z\"/><path d=\"M5 13v5m8-4 1 4m2-7h3\"/>" },
+  crate: { filled: false, body: "<path d=\"m3 7 9-4 9 4v10l-9 4-9-4z\"/><path d=\"m3 7 9 4 9-4\"/><circle cx=\"12\" cy=\"15\" r=\"3.5\"/><path d=\"m9.5 12.5 5 5\"/>" },
   pistol: { filled: false, body: "<path d=\"M3 7h15l3 2v4h-6l-2 5h-3l2-5H3z\"/><path d=\"M8 7V5h8v2m-5 6v3\"/>" },
   pills: { filled: false, body: "<path d=\"M5.3 18.7a4.5 4.5 0 0 1 0-6.4l7-7a4.5 4.5 0 0 1 6.4 6.4l-7 7a4.5 4.5 0 0 1-6.4 0z\"/><path d=\"m8.5 9.1 6.4 6.4\"/>" },
   handcuffs: { filled: false, body: "<circle cx=\"7\" cy=\"12\" r=\"4.5\"/><circle cx=\"17\" cy=\"12\" r=\"4.5\"/><path d=\"m11.5 10.5 1.7-1.7m-1.7 4.7 1.7 1.7M4 5V3m16 2V3m-16 16v2m16-2v2\"/>" },
