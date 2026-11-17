@@ -1,26 +1,24 @@
 // «المباشر» (Live) — website-only: a slim moving news ticker under the topbar
 // (Syria headlines first, then world, from major Arabic channels), a «مباشر»
 // button in the map-tools cluster that opens the sheet on the World view, and
-// a popup sheet with three tabs: 📰 news · 🛰 OSINT · 📊 global markets (the
-// news and OSINT lists auto-scroll vertically, Crucix-style). Data comes from
-// GET /api/live (server-cached). Additive like services.js: if it fails, the
-// alert map is untouched.
+// a popup sheet with the news only — Syria section first, then World — whose
+// list auto-scrolls vertically, Crucix-style. (Owner simplification,
+// 2026-11-17: the OSINT and Markets tabs were removed entirely.) Data comes
+// from GET /api/live (server-cached). Additive like services.js: if it
+// fails, the alert map is untouched.
 export function createLive({ LANG, esc }) {
   const L = LANG === 'en' ? {
-    live: 'Live', news: 'News', osint: 'OSINT', markets: 'Markets',
-    syria: 'Syria', world: 'World', sheetSub: 'Headlines from major Arabic channels, open-source intelligence posts, and global markets — updated every few minutes.',
-    empty: 'Nothing available right now; try again shortly.', osintTag: 'OSINT',
-    source: 'Source', openOriginal: 'Original post', dayChange: 'day',
+    live: 'Live', news: 'News',
+    syria: 'Syria', world: 'World', sheetSub: 'Headlines from major Arabic channels — Syria first, then the world — updated every few minutes.',
+    empty: 'Nothing available right now; try again shortly.',
     updated: 'Updated', close: 'Close', agoMin: (n) => `${n}m ago`, agoHr: (n) => `${n}h ago`, now: 'now',
   } : {
-    live: 'المباشر', news: 'الأخبار', osint: 'الاستخبارات المفتوحة', markets: 'الأسواق',
-    syria: 'سوريا', world: 'العالم', sheetSub: 'عناوين من كبرى القنوات العربية، ومنشورات استخبارات مفتوحة المصدر، والأسواق العالمية — تُحدّث كل بضع دقائق.',
-    empty: 'لا شيء متاح حالياً؛ جرّب بعد قليل.', osintTag: 'OSINT',
-    source: 'المصدر', openOriginal: 'المنشور الأصلي', dayChange: 'يومي',
+    live: 'المباشر', news: 'الأخبار',
+    syria: 'سوريا', world: 'العالم', sheetSub: 'عناوين من كبرى القنوات العربية — سوريا أولاً ثم العالم — تُحدّث كل بضع دقائق.',
+    empty: 'لا شيء متاح حالياً؛ جرّب بعد قليل.',
     updated: 'آخر تحديث', close: 'إغلاق', agoMin: (n) => `قبل ${n} د`, agoHr: (n) => `قبل ${n} س`, now: 'الآن',
   };
   let data = null;
-  let tab = 'news';
   let newsFocus = 'syria'; // which news section renders first in the sheet
   let sheet, back, body, strip, refreshTimer = null;
 
@@ -36,8 +34,6 @@ export function createLive({ LANG, esc }) {
     if (min < 60) return L.agoMin(min);
     return L.agoHr(Math.round(min / 60));
   };
-  const fmtPrice = (v) => (v >= 1000 ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : v >= 10 ? v.toFixed(2) : v.toFixed(3));
-
   async function load() {
     try {
       const r = await fetch('/api/live', { headers: { Accept: 'application/json' } });
@@ -46,8 +42,9 @@ export function createLive({ LANG, esc }) {
   }
 
   // ------------------------------------------------------------ ticker strip
-  // The marquee is a pure CSS-keyframes loop (translateX 0 → -50%) over a
-  // track of exactly two identical halves. The track node is REBUILT on every
+  // The marquee is a pure CSS-keyframes loop (translateX -50% → 0, so the
+  // headlines flow rightward — direction reversed at the owner's request,
+  // 2026-11-17) over a track of exactly two identical halves. The track node is REBUILT on every
   // render so the animation restarts cleanly with fresh content — patching
   // innerHTML on the old node could leave a stale/paused animation in
   // webviews, which is how the strip came to look frozen. Each half repeats
@@ -134,8 +131,6 @@ export function createLive({ LANG, esc }) {
     body = sheet.querySelector('#liveBody');
     back.addEventListener('click', close);
     sheet.addEventListener('click', (e) => {
-      const t = e.target.closest('[data-tab]');
-      if (t) { tab = t.dataset.tab; renderSheet(); return; }
       if (e.target.closest('[data-close]')) close();
     });
   }
@@ -153,39 +148,13 @@ export function createLive({ LANG, esc }) {
     const html = newsFocus === 'world' ? worldSec + syriaSec : syriaSec + worldSec;
     return html || `<p class="live-none">${esc(L.empty)}</p>`;
   }
-  function osintHtml() {
-    const items = data?.osint || [];
-    if (!items.length) return `<p class="live-none">${esc(L.empty)}</p>`;
-    return items.map((it) => `
-      <article class="live-card">
-        <div class="live-card-h"><span class="live-badge">${esc(it.source)}</span><span class="live-tag">${esc(L.osintTag)}</span><span class="live-time">${esc(ago(it.ts))}</span></div>
-        <p class="live-text">${esc(it.text)}</p>
-        <a class="live-orig" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(L.openOriginal)} ↗</a>
-      </article>`).join('');
-  }
-  function marketsHtml() {
-    const items = data?.markets || [];
-    if (!items.length) return `<p class="live-none">${esc(L.empty)}</p>`;
-    return `<div class="live-grid">${items.map((m) => {
-      const up = m.changePct >= 0;
-      return `<div class="live-quote">
-        <div class="live-q-name">${esc(LANG === 'en' ? m.en : m.ar)}</div>
-        <div class="live-q-price">${esc(fmtPrice(m.price))}</div>
-        <div class="live-q-chg ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${esc(Math.abs(m.changePct).toFixed(2))}% <span class="live-q-day">${esc(L.dayChange)}</span></div>
-      </div>`;
-    }).join('')}</div>`;
-  }
   function renderSheet() {
     if (!body) return;
-    const tabBtn = (k, label) => `<button type="button" class="live-tab${tab === k ? ' on' : ''}" data-tab="${k}">${esc(label)}</button>`;
-    // news + OSINT panes live inside the vertical auto-scroller; markets stay
-    // a static grid, exactly like the reference layout
-    const pane = tab === 'markets' ? marketsHtml()
-      : `<div class="live-scroll"><div class="live-vtrack"><div class="live-set">${tab === 'news' ? newsHtml() : osintHtml()}</div></div></div>`;
+    // one view only: the news list inside the vertical auto-scroller
+    const pane = `<div class="live-scroll"><div class="live-vtrack"><div class="live-set">${newsHtml()}</div></div></div>`;
     body.innerHTML = `
       <div class="live-head"><h2>📡 ${esc(L.live)}</h2><button type="button" class="live-close" data-close aria-label="${esc(L.close)}">✕</button></div>
       <p class="live-sub">${esc(L.sheetSub)}</p>
-      <div class="live-tabs">${tabBtn('news', '📰 ' + L.news)}${tabBtn('osint', '🛰 ' + L.osint)}${tabBtn('markets', '📊 ' + L.markets)}</div>
       <div class="live-pane">${pane}</div>
       ${data?.server_time ? `<p class="live-foot">${esc(L.updated)}: ${esc(new Date(data.server_time).toLocaleTimeString(LANG === 'en' ? 'en-GB' : 'ar-SY'))}</p>` : ''}`;
     setupScroller();
@@ -220,7 +189,7 @@ export function createLive({ LANG, esc }) {
   }
   function open(view) {
     buildSheet();
-    if (view === 'world') { tab = 'news'; newsFocus = 'world'; }
+    if (view === 'world') { newsFocus = 'world'; }
     back.hidden = false;
     // registered before renderSheet() so the scroller's own rAF (which checks
     // for .open) runs after the class lands

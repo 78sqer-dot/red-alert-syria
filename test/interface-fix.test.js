@@ -45,10 +45,23 @@ test('governorate labels are added on top of the symbol stack so they win collis
   // beforeId null = appended last = first pick in MapLibre collision placement
   assert.match(mapSrc, /id: 'ras-gov-labels'[\s\S]*?\}, null\);/);
   assert.match(mapSrc, /'symbol-avoid-edges': true/);
-  // wider halo keeps a label readable when a DOM marker (always above the
-  // canvas) sits on it; slightly larger at country zoom
-  assert.match(mapSrc, /'text-halo-width': 2/);
-  assert.match(mapSrc, /\['zoom'\], 5, 11, 8, 12\.5, 11, 14\]/);
+  // halo keeps a label readable when a DOM marker (always above the canvas)
+  // sits on it; slimmed 2 -> 1.7 to match the smaller type (see size test)
+  const govLayer = mapSrc.match(/id: 'ras-gov-labels'[\s\S]*?\}, null\);/)[0];
+  assert.match(govLayer, /'text-halo-width': 1\.7/);
+});
+
+test('governorate label size is one uniform zoom expression, ~20% smaller than before', () => {
+  // owner (2026-11-17): the names read "too big and inconsistent" — the size
+  // stops drop 11->9 / 12.5->10 / 14->11, and the expression must stay a pure
+  // zoom function: no data-driven term may size one governorate over another
+  const govLayer = mapSrc.match(/id: 'ras-gov-labels'[\s\S]*?\}, null\);/)[0];
+  assert.match(govLayer, /'text-size': \['interpolate', \['linear'\], \['zoom'\], 5, 9, 8, 10, 11, 11\]/);
+  const sizeExpr = govLayer.match(/'text-size': (\[[\s\S]*?\]), 'text-transform'/)[1];
+  assert.doesNotMatch(sizeExpr, /\['(get|match|case|step)'/, 'text-size must not depend on the feature');
+  // max-width up 12 -> 14em: at the smaller size the one-line budget in px is
+  // unchanged, so long names wrap no more often than before (uniform blocks)
+  assert.match(govLayer, /'text-max-width': 14/);
 });
 
 test('localize() subordinates basemap place labels under our governorate labels', () => {
@@ -75,7 +88,8 @@ test('a «مباشر» button with a pulsing dot lives in the map-tools cluster'
   assert.match(live, /b\.id = 'liveMapBtn';/);
   assert.match(live, /b\.className = 'live-map-btn';/);
   assert.match(live, /live-dot-pulse/);
-  assert.match(css, /\.live-map-btn \{[^}]*height: 42px;/);
+  assert.match(css, /\.live-map-btn \{[^}]*height: 36px;/);
+  assert.match(css, /\.live-map-btn \{[^}]*font-size: 11\.5px;/);
   assert.match(css, /\.live-dot-pulse::after \{[^}]*animation: ping 1\.8s/);
   // built in init() — always present, even when the strip was dismissed
   assert.match(live, /function init\(\) \{\s*buildStrip\(\);\s*buildMapBtn\(\);/);
@@ -83,15 +97,18 @@ test('a «مباشر» button with a pulsing dot lives in the map-tools cluster'
 
 test('the map button opens the Live sheet directly on the World news view', () => {
   assert.match(live, /open\('world'\)/);
-  assert.match(live, /if \(view === 'world'\) \{ tab = 'news'; newsFocus = 'world'; \}/);
+  assert.match(live, /if \(view === 'world'\) \{ newsFocus = 'world'; \}/);
   // world section renders first under world focus, Syria first otherwise
   assert.match(live, /newsFocus === 'world' \? worldSec \+ syriaSec : syriaSec \+ worldSec/);
 });
 
 // ------------------------------------------------- Live: vertical scroll (req. B)
-test('news and OSINT panes render inside the vertical scroller; markets stay static', () => {
-  assert.match(live, /tab === 'markets' \? marketsHtml\(\)/);
-  assert.match(live, /<div class="live-scroll"><div class="live-vtrack"><div class="live-set">/);
+test('the sheet is a single news view inside the vertical scroller (OSINT + markets removed)', () => {
+  // owner simplification (2026-11-17): news only — no tabs, no OSINT pane,
+  // no markets grid, in either the markup or the render code
+  assert.doesNotMatch(live, /osintHtml|marketsHtml|data-tab|live-tabs/);
+  assert.doesNotMatch(live, /data\?\.osint|data\?\.markets/);
+  assert.match(live, /<div class="live-scroll"><div class="live-vtrack"><div class="live-set">\$\{newsHtml\(\)\}/);
   assert.match(live, /function setupScroller\(\)/);
   // duplicated exactly once, only when one set overflows the viewport
   assert.match(live, /setH <= sc\.clientHeight \+ 4/);
@@ -133,4 +150,13 @@ test('marquee rebuilds its track per render, loops two measured halves, pauses o
   assert.match(live, /marquee\.addEventListener\('pointerdown', \(\) => \{ marquee\.classList\.add\('paused'\);/);
   // Syria headlines still lead the run, world follows
   assert.match(live, /\[\.\.\.\(data\?\.news\?\.syria \|\| \[\]\), \.\.\.\(data\?\.news\?\.world \|\| \[\]\)\]/);
+});
+
+test('marquee flows in the reversed direction (owner request, 2026-11-17)', () => {
+  // -50% -> 0 over the two identical halves: headlines move rightward and the
+  // loop point is invisible because half two replaces half one exactly
+  assert.match(css, /@keyframes live-scroll \{ from \{ transform: translateX\(-50%\); \} to \{ transform: translateX\(0\); \} \}/);
+  assert.doesNotMatch(css, /@keyframes live-scroll \{ from \{ transform: translateX\(0\); \} to \{ transform: translateX\(-50%\); \} \}/);
+  // speed is untouched: duration still comes from the measured half width
+  assert.match(live, /Math\.max\(12, half\.scrollWidth \/ 55\)/);
 });
