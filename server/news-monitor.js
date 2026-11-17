@@ -11,6 +11,7 @@ import { InlineKeyboard } from 'grammy';
 import { automaticMonitorRecipientIds, config, isOwner } from './config.js';
 import { store } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji, alertButtonLabel } from '../shared/types.js';
+import { CONDEMNATIONS, CONDEMNATION_KEYS, condemnationKey, condemnationText } from '../shared/condemnations.js';
 import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
@@ -681,6 +682,8 @@ function cardText(d, lang = 'ar') {
         : tr(lang, 'تعذّر التحقق الآلي المحافظ من حفظ الوقائع والإسناد والمكان والأرقام والسياق؛ راجع المصدر قبل القرار.', 'The conservative check could not confirm that facts, attribution, place, numbers, and context were preserved; review the source before deciding.');
     lines.push('', tr(lang, '⚖️ <b>موقوفة للمراجعة التحريرية:</b>', '⚖️ <b>Held for editorial review:</b>'), esc(reason));
   }
+  const condemnLine = condemnationText(d.condemn);
+  if (condemnLine) lines.push('', `⚖️ <b>${tr(lang, 'إدانة', 'Condemnation')}:</b> ${esc(condemnLine)}`);
   lines.push(`🕒 ${tr(lang, 'أول خبر', 'First report')}: ${esc(clock(d.ts || d.created))} ${tr(lang, '(بتوقيت دمشق)', '(Damascus time)')}`);
   if (d.rule) lines.push(tr(lang, '⚙️ <i>تصنيف آلي بسيط (الذكاء الاصطناعي غير متاح حالياً) — راجع النوع والمكان.</i>', '⚙️ <i>Simple automatic classification (AI unavailable) — check type and place.</i>'));
   return lines.join('\n');
@@ -703,7 +706,18 @@ function cardKb(d, lang = 'ar', chatId = null) {
   // Telegram refuses a whole message when one button has an empty text: the extra row only for drones
   if (d.type === 'uav') kb.row().text(intenseLabel(d, lang), 'nw:i:' + d.id);
   if (d.type === 'helicopter') kb.row().text(helicopterLabel(d, lang), 'nw:hi:' + d.id);
+  kb.row().text(tr(lang, condemnationKey(d.condemn) ? '⚖️ إدانة ✓' : '⚖️ إدانة', condemnationKey(d.condemn) ? '⚖️ Condemnation ✓' : '⚖️ Condemnation'), 'nw:cd:' + d.id);
   return kb;
+}
+/** Variant picker for the monitor draft card (nw:cd: / nw:cdv: callbacks). */
+function condemnKb(d, lang = 'ar') {
+  const kb = new InlineKeyboard();
+  for (const key of CONDEMNATION_KEYS) {
+    const c = CONDEMNATIONS[key];
+    kb.text(`${d.condemn === key ? '✓ ' : ''}${tr(lang, c.label_ar, c.label_en)}`, `nw:cdv:${d.id}:${key}`).row();
+  }
+  if (condemnationKey(d.condemn)) kb.text(tr(lang, '🗑 إزالة الإدانة', '🗑 Remove condemnation'), `nw:cdv:${d.id}:off`).row();
+  return kb.text(tr(lang, '↩️ رجوع', '↩️ Back'), 'nw:b:' + d.id);
 }
 function rewritePreviewText(d, lang = 'ar') {
   const preview = d.aiRewritePreview || {};
@@ -1106,6 +1120,9 @@ export function toBotDraft(d, options = {}) {
     ...(editorialSelection ? {} : { body }),
     ...(editorialSelection ? { publicEditorialTone: editorialSelection.mode, publicEditorialText: editorialSelection.text } : {}),
     location: d.loc || locationFrom({}), extra: d.extra || [],
+    // ⚖️ Owner-attached condemnation rides as a variant key only; bot.js
+    // (buildAlertInput) resolves the formula and appends it once at publish.
+    ...(condemnationKey(d.condemn) ? { condemn: d.condemn } : {}),
     details: d.type === 'breaking' ? '' : body || headline, text: d.type === 'breaking' ? (editorialSelection ? '' : headline) : '',
     created: Date.now(), source: 'news',
     srcs: (d.srcs || []).map((s) => ({ u: s.u, name: s.name, url: s.url, ts: s.ts, local: !!s.local })),
@@ -2059,6 +2076,25 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, '');
     try { await ctx.editMessageReplyMarkup({ reply_markup: politicalCategoryKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
   });
+  bot.callbackQuery(/^nw:cd:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const d = await findDraft(ctx.match[1]);
+    if (!d || d.status !== 'pending') return toast(ctx, '');
+    await toast(ctx, '');
+    try { await ctx.editMessageReplyMarkup({ reply_markup: condemnKb(d, h.langOf(ctx)) }); } catch { /* ignore */ }
+  });
+  bot.callbackQuery(/^nw:cdv:(\w+):(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return toast(ctx, '');
+    const [, id, key] = ctx.match;
+    const d = await findDraft(id);
+    if (!d || d.status !== 'pending') return toast(ctx, '');
+    if (key === 'off') delete d.condemn;
+    else if (condemnationKey(key)) d.condemn = key;
+    else return toast(ctx, '');
+    save();
+    await toast(ctx, key === 'off' ? t(ctx, 'أُزيلت الإدانة', 'Condemnation removed') : t(ctx, 'أُرفقت الإدانة بنص النشر', 'Condemnation attached to the published text'));
+    await refreshCards(d);
+  });
   bot.callbackQuery(/^nw:ps:(\w+):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const [, id, category] = ctx.match;
@@ -2459,4 +2495,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
