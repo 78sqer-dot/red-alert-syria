@@ -1,11 +1,12 @@
 // «المباشر» (Live) — website-only: a slim moving news ticker under the topbar
-// (Syria headlines first, then world, from major Arabic channels), a «مباشر»
-// button in the map-tools cluster that opens the sheet on the World view, and
-// a popup sheet with the news only — Syria section first, then World — whose
-// list auto-scrolls vertically, Crucix-style. (Owner simplification,
-// 2026-11-17: the OSINT and Markets tabs were removed entirely.) Data comes
-// from GET /api/live (server-cached). Additive like services.js: if it
-// fails, the alert map is untouched.
+// (Syria headlines first, then world, from major Arabic channels) and a popup
+// sheet with the news only — Syria section first, then World — whose list
+// auto-scrolls vertically, Crucix-style. The ONE «مباشر» control is the topbar
+// status chip (wired in app.js to open('world')); the strip's label is a plain
+// caption, not a button (owner, 2026-11-17: three look-alike controls were
+// unified into one). (Owner simplification, 2026-11-17: the OSINT and Markets
+// tabs were removed entirely.) Data comes from GET /api/live (server-cached).
+// Additive like services.js: if it fails, the alert map is untouched.
 export function createLive({ LANG, esc }) {
   const L = LANG === 'en' ? {
     live: 'Live', news: 'News',
@@ -84,7 +85,7 @@ export function createLive({ LANG, esc }) {
     if (storeGet('ras-live-off') === '1') return;
     strip = document.createElement('div');
     strip.className = 'live-strip';
-    strip.innerHTML = `<button type="button" class="live-chip" data-act="open">📡 ${esc(L.live)}</button>`
+    strip.innerHTML = `<span class="live-chip" aria-hidden="true">📡 ${esc(L.live)}</span>`
       + `<div class="live-marquee"><div class="live-track"></div></div>`
       + `<button type="button" class="live-x" data-act="off" aria-label="${esc(L.close)}">✕</button>`;
     const topbar = document.getElementById('topbar');
@@ -103,22 +104,6 @@ export function createLive({ LANG, esc }) {
     marquee.addEventListener('pointerup', resume);
     marquee.addEventListener('pointercancel', resume);
     renderStrip();
-  }
-
-  // --------------------------------------------- «مباشر» button on the map
-  // Sits in the top map-tools cluster (#mapCtrls): clear of the topbar and of
-  // the crowded bottom row, and always present — even when the strip above
-  // was dismissed. Opens the sheet directly on the World news view.
-  function buildMapBtn() {
-    const ctrls = document.getElementById('mapCtrls');
-    if (!ctrls || document.getElementById('liveMapBtn')) return;
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.id = 'liveMapBtn';
-    b.className = 'live-map-btn';
-    b.innerHTML = `<span class="live-dot-pulse" aria-hidden="true"></span>${esc(L.live)}`;
-    b.addEventListener('click', (e) => { e.stopPropagation(); open('world'); });
-    ctrls.appendChild(b);
   }
 
   // ------------------------------------------------------------ sheet
@@ -141,8 +126,8 @@ export function createLive({ LANG, esc }) {
         <span class="live-title">${esc(it.title)}</span>
         <span class="live-time">${esc(ago(it.ts))}</span>
       </a>`).join('') : '';
-    // opened from the «مباشر» map button, the World section leads; from the
-    // strip chip, Syria leads as before
+    // opened from the topbar «مباشر» chip, the World section leads; from the
+    // ticker strip, Syria leads as before
     const syriaSec = sec(L.syria, data?.news?.syria || []);
     const worldSec = sec(L.world, data?.news?.world || []);
     const html = newsFocus === 'world' ? worldSec + syriaSec : syriaSec + worldSec;
@@ -210,7 +195,6 @@ export function createLive({ LANG, esc }) {
 
   function init() {
     buildStrip();
-    buildMapBtn();
     load();
     setInterval(load, 5 * 60_000);
   }

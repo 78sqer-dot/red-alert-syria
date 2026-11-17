@@ -125,9 +125,14 @@ test('signal-sweep UAV uses the Lebanese four-arc emitter, separate from the gen
   assert.match(css, /\.signal-sweep-uav-svg \{ display: block; fill: #6b7280; color: #1a1a2e;/);
 });
 
-test('signal-sweep map markers are enlarged for phone visibility', () => {
-  assert.match(mapJs, /if \(a\.type === 'signal_sweep'\)[\s\S]{0,180}width:40px;height:40px[\s\S]{0,100}svgTag\(glyph, 34,/);
-  assert.match(css, /\.mk\.t-signal_sweep \.ic-svg \{ width: 34px; height: 34px; \}/);
+test('signal-sweep map markers use the unified pin at the standard size', () => {
+  // the old enlarged 40px/34px special case is gone: a static signal-sweep
+  // marker is the same 32px pin as every other static type (its UAV-platform
+  // orbit variant is untouched)
+  assert.doesNotMatch(mapJs, /if \(a\.type === 'signal_sweep'\)[\s\S]{0,180}width:40px/);
+  assert.doesNotMatch(css, /\.mk\.t-signal_sweep \.ic-svg/);
+  assert.match(mapJs, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/);
+  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;/);
 });
 
 test('opening UAV and helicopter alerts forces detail zoom for governorate-scoped reports', () => {

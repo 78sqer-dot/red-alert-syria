@@ -10,9 +10,9 @@ import { unlinkCapturedMedia } from './news-media.js';
 import { InlineKeyboard } from 'grammy';
 import { automaticMonitorRecipientIds, config, isOwner } from './config.js';
 import { store } from './store.js';
-import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji, alertButtonLabel } from '../shared/types.js';
+import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, TYPE_MENU, TYPE_MENU_GROUPS, TYPE_MENU_DIRECT, typeMenuGroupOf, typeOf, droneAuto, alertEmoji, alertButtonLabel, stripTypeLabelPrefix } from '../shared/types.js';
 import { CONDEMNATIONS, CONDEMNATION_KEYS, condemnationKey, condemnationText } from '../shared/condemnations.js';
-import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
+import { locationFrom, normalizeArabic, governorates, getGov, getPlace } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
 import { onRoadNewsPost, roadMonitorDebug, roadMonitorActivationTime, parseRoadText } from './road-monitor.js';
@@ -22,35 +22,30 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, truncateAtWordBoundary, truncatedPrefixCut } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
-const NEWS_GROUP_PRIORITY = ['aerial', 'incursion', 'strikes', 'protests', 'civil', 'smuggling', 'political', 'nature', 'other'];
-const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', patrol: '🚓', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
-const newsGroupForType = (type) => type === 'military_incursion' ? 'incursion' : ['protest', 'protest_action'].includes(type) ? 'protests' : ALERT_TYPES[type]?.group || 'other';
+// All type pickers in this module — the draft edit menu (EDIT_TYPE_*) and the
+// monitoring filter panel (NEWS_TYPE_GROUPS) — are generated from the ONE
+// canonical TYPE_MENU in shared/types.js, the same definition the reporting
+// bot's keyboards use, so the menus can never disagree again.
+// NEWS_TYPE_GROUPS keeps only the monitorable types (NEWS_TYPES) per group;
+// it controls automatic news monitoring only.
 const NEWS_TYPE_GROUPS = Object.freeze(Object.fromEntries(
-  [...new Set(NEWS_TYPES.map(newsGroupForType))]
-    .map((group) => [group, Object.freeze(NEWS_TYPES.filter((type) => newsGroupForType(type) === group))]),
+  TYPE_MENU.map((g) => [g.key, Object.freeze(g.types.filter((type) => NEWS_TYPES.includes(type)))]),
 ));
-// The owner can reclassify a human-reviewed draft to any bot alert type. Keep this
-// separate from NEWS_TYPE_GROUPS, which controls automatic news monitoring only.
+// The owner can reclassify a human-reviewed draft to any alert type.
 const EDIT_TYPE_GROUPS = Object.freeze({
-  aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => type !== 'uav_strike')),
-  targeting: Object.freeze(['uav_strike', 'assassination']),
-  strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination')),
+  ...Object.fromEntries(TYPE_MENU_GROUPS.map((g) => [g.key, g.types])),
+  // Pseudo-group: picking an incursion KIND, not a type — the security group's
+  // military_incursion button routes here (see typeGroupKb).
   incursion: Object.freeze(['military_incursion']),
-  patrol: Object.freeze(['patrol']),
-  protests: Object.freeze(['protest_action', 'protest']),
-  civil: Object.freeze(ALERT_GROUPS.civil.types.filter((type) => type !== 'protest' && type !== 'protest_action')),
-  smuggling: Object.freeze([...ALERT_GROUPS.smuggling.types]),
-  nature: Object.freeze([...ALERT_GROUPS.nature.types]),
 });
-const EDIT_TYPE_DIRECT_TYPES = Object.freeze(['breaking', 'political', 'border', 'kidnapping', 'signal_sweep']);
+const EDIT_TYPE_DIRECT_TYPES = TYPE_MENU_DIRECT;
 const EDIT_TYPE_MENU = Object.freeze([
-  { type: 'breaking' }, { type: 'political' }, { group: 'aerial' }, { group: 'targeting' },
-  { group: 'strikes' }, { group: 'incursion' }, { group: 'patrol' }, { type: 'kidnapping' }, { group: 'protests' },
-  { group: 'civil' }, { group: 'smuggling' }, { group: 'nature' }, { type: 'border' }, { type: 'signal_sweep' },
+  ...TYPE_MENU_DIRECT.map((type) => Object.freeze({ type })),
+  ...TYPE_MENU_GROUPS.map((g) => Object.freeze({ group: g.key })),
 ]);
 const INCURSION_TYPE_CHOICES = Object.freeze([
   Object.freeze({ kind: 'general', ar: 'توغل عسكري', en: 'Military incursion' }),
@@ -58,23 +53,13 @@ const INCURSION_TYPE_CHOICES = Object.freeze([
   Object.freeze({ kind: 'vehicles', ar: 'توغل آليات عسكرية', en: 'Military vehicle incursion' }),
   Object.freeze({ kind: 'barrier', ar: 'حاجز', en: 'Military checkpoint' }),
 ]);
-const newsTypeGroupKeys = () => [
-  ...NEWS_GROUP_PRIORITY.filter((group) => Object.hasOwn(NEWS_TYPE_GROUPS, group)),
-  ...Object.keys(NEWS_TYPE_GROUPS).filter((group) => !NEWS_GROUP_PRIORITY.includes(group)),
-];
+const newsTypeGroupKeys = () => TYPE_MENU.map((g) => g.key).filter((key) => Object.hasOwn(NEWS_TYPE_GROUPS, key));
+const TYPE_MENU_BY_KEY = new Map(TYPE_MENU.map((g) => [g.key, g]));
 function newsGroupLabel(group, lang = 'ar') {
-  const title = group === 'incursion'
-    ? (lang === 'en' ? 'Military incursion' : 'توغل عسكري')
-    : group === 'targeting'
-      ? (lang === 'en' ? 'Targeting' : 'استهداف')
-      : group === 'protests'
-        ? (lang === 'en' ? 'Protest & demonstration' : 'مظاهرة')
-        : group === 'patrol'
-          ? (lang === 'en' ? 'Patrol' : 'دورية')
-        : group === 'other'
-    ? (lang === 'en' ? 'Urgent alerts' : 'أخبار عاجلة')
-    : (lang === 'en' ? (ALERT_GROUPS[group]?.en || group).replace(/\s*&\s*/g, ' and ') : ALERT_GROUPS[group]?.ar || group);
-  return `${NEWS_GROUP_EMOJI[group] || '🏷️'} ${title}`;
+  if (group === 'incursion') return lang === 'en' ? '🪖 Military incursion' : '🪖 توغل عسكري';
+  const g = TYPE_MENU_BY_KEY.get(group);
+  if (!g) return group;
+  return `${g.emoji} ${lang === 'en' ? g.en : g.ar}`;
 }
 function editableDraftTypeLabel(d, lang = 'ar') {
   if (d?.type === 'military_incursion') {
@@ -533,6 +518,110 @@ function scheduleDayAuto(d, now = Date.now()) {
   d.dayAutoAt = dueAt;
   return true;
 }
+
+// ---------------------------------------------------------------- pre-publish audit (owner request 2026-11-17: «نشر تلقائي … مع تدقيق الخبر وتصحيحه»)
+/** The editorial hold reason used when the pre-publish audit stops an auto-publish.
+ * cardText already renders any editorialHold as a «held for editorial review» status
+ * line, so the reviewer sees the hold on the card with no card changes. mergeInto
+ * clears ONLY this reason, when a genuinely new source joins the draft. */
+export const AUTO_AUDIT_HOLD_REASON = 'auto-audit-failed';
+const auditTidy = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/\s+/g, ' ').trim();
+const auditTidyBody = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).trim();
+const stripAlAudit = (w) => (w.startsWith('ال') ? w.slice(2) : w);
+const auditTokEq = (a, b) => a === b || stripAlAudit(a) === stripAlAudit(b);
+/** Occurrences of a place-name form (token sequence) inside normalized, punctuation-free tokens. */
+function formOccurrences(tokens, formTokens) {
+  const out = [];
+  if (!formTokens.length || formTokens.length > tokens.length) return out;
+  outer: for (let i = 0; i + formTokens.length <= tokens.length; i++) {
+    for (let k = 0; k < formTokens.length; k++) if (!auditTokEq(tokens[i + k], formTokens[k])) continue outer;
+    out.push(i);
+  }
+  return out;
+}
+/** Publish-time place sanity for the draft's primary pin. Returns a failure reason or null.
+ * Re-runs the desk's own defences on the FINAL draft, because a draft can be edited,
+ * merged or restored after classification: the place must still be named in the source,
+ * and a pin that rests only on an alternative spelling is refused when every mention of
+ * that spelling is unintroduced (the free-text alt rule) or framed as a person's name —
+ * the «سلمان» village vs «سليمان كرنوص» failure mode. Canonical mentions are unaffected. */
+function auditPlaceSuspect(d) {
+  const loc = d?.loc;
+  if (!loc || loc.scope !== 'place' || !Number.isFinite(loc.place_id)) return null;
+  const rec = getPlace(loc.place_id);
+  if (!rec) return null;
+  const source = String(d.sourceText || d.body || '');
+  if (!source.trim()) return null;
+  const tokens = N(source).replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+  if (!tokens.length) return null;
+  const canonTokens = N(rec.ar).split(/\s+/).filter(Boolean);
+  const canonHits = formOccurrences(tokens, canonTokens);
+  const altForms = [...new Set((rec.alt || []).map((a) => N(a)).filter((a) => a && a !== N(rec.ar)))];
+  const altHits = [];
+  for (const alt of altForms) {
+    const altTokens = alt.split(/\s+/).filter(Boolean);
+    for (const i of formOccurrences(tokens, altTokens)) altHits.push({ i, alt, single: altTokens.length === 1 ? altTokens[0] : null });
+  }
+  if (!canonHits.length && !altHits.length) return 'place-not-in-source';
+  if (canonHits.length) return null; // the canonical name itself is in the text: the pin stands
+  // the pin rests only on alternative spellings: at least one mention must be framed as a
+  // place — a canonical variant form, or an explicit place introducer right before it —
+  // exactly as the free-text scanners require. A bare alt mention («الزوجين "سليمان كرنوص"»)
+  // is a person's name until proven otherwise, so the draft goes back to manual review.
+  const placeFramed = altHits.some(({ i, single }) => {
+    if (single && !isAltOnlyMatch(single, [rec])) return true; // this form is itself a canonical variant
+    return hasPlaceIntroducer(tokens, i, tokens[i]);
+  });
+  return placeFramed ? null : 'place-person-name-suspect';
+}
+/** The single pre-publish audit every automatic publication must pass (owner request
+ * 2026-11-17). Called by nightPublish for BOTH routes (night immediate + the daytime
+ * 2-minute fallback) after eligibility and before the editorial gate.
+ * VERIFY: source freshness, corroboration as it stands NOW, place sanity on the final text.
+ * CORRECT: the outgoing copy is cleaned in place — duplicated type-label prefix stripped,
+ * sharp-tone headlines replaced by a factual type + place line, truncated-copy headlines
+ * rebuilt from the source lead at a word boundary, headline/body re-cleaned and capped at
+ * word boundaries — so what publishes is the corrected version, never the raw draft text.
+ * A failed audit NEVER publishes: the caller holds the draft for manual review with
+ * d.autoAudit.reason recorded; the hold is lifted only by new corroborating input
+ * (see mergeInto), so a failed draft is never re-audited in a timer loop. */
+export function auditDraftForAutoPublish(d, mode = 'night') {
+  if (!d) return { ok: false, reason: 'missing-draft' };
+  if (!isFreshSourceTs(draftSourceTs(d))) return { ok: false, reason: 'stale-source' };
+  const srcs = Array.isArray(d.srcs) ? d.srcs : [];
+  if (!(srcs.length >= 2 || srcs.some((s) => s && !isLocalSrc(s)))) return { ok: false, reason: 'uncorroborated' };
+  const placeReason = auditPlaceSuspect(d);
+  if (placeReason) return { ok: false, reason: placeReason };
+  const corrected = [];
+  const source = String(d.sourceText || '');
+  let headline = String(d.headline || '').trim();
+  const stripped = stripTypeLabelPrefix(headline, d.type);
+  if (stripped !== headline) { headline = stripped; corrected.push('type-label-prefix'); }
+  const tone = sharpToneReason(headline);
+  if (tone) {
+    const label = ALERT_TYPES[d.type]?.ar || 'خبر';
+    headline = d.loc?.name_ar ? `${label} — ${d.loc.name_ar}` : label;
+    d.toneGuard = tone;
+    corrected.push('tone-neutralized');
+  }
+  const cut = truncatedPrefixCut(headline, source);
+  if (cut) {
+    const rebuilt = truncateAtWordBoundary(auditTidy(source.split('\n')[0] || ''), 240);
+    if (!rebuilt) return { ok: false, reason: 'headline-unusable' };
+    headline = rebuilt;
+    d.headlineRebuilt = cut;
+    corrected.push('headline-rebuilt');
+  }
+  const capped = truncateAtWordBoundary(headline, 240);
+  if (capped !== headline) { headline = capped; corrected.push('headline-truncated'); }
+  if (headline !== String(d.headline || '').trim()) d.headline = headline;
+  if (d.body) {
+    let body = truncateAtWordBoundary(auditTidyBody(d.body), 1200);
+    if (!body || body === d.headline) body = '';
+    if (body !== d.body) { d.body = body; corrected.push('body-cleaned'); }
+  }
+  return { ok: true, corrected };
+}
 const langOfId = (id) => (store.userLang(id) === 'en' ? 'en' : 'ar');
 const tr = (lang, ar, en) => (lang === 'en' ? en : ar);
 
@@ -814,8 +903,7 @@ function typeKb(d, lang = 'ar', namespace = 'nw') {
     } else {
       const types = EDIT_TYPE_GROUPS[item.group] || [];
       const selected = types.includes(d.type) ? '• ' : '';
-      const count = item.group === 'incursion' ? INCURSION_TYPE_CHOICES.length : types.length;
-      kb.text(`${selected}${quoteChoice(`${newsGroupLabel(item.group, lang)} (${count})`, lang)}`, `${cb('tg')}:${item.group}`);
+      kb.text(`${selected}${quoteChoice(`${newsGroupLabel(item.group, lang)} (${types.length})`, lang)}`, `${cb('tg')}:${item.group}`);
     }
     if (i % 2 === 1 && i < EDIT_TYPE_MENU.length - 1) kb.row();
   });
@@ -835,7 +923,10 @@ function typeGroupKb(d, group, lang = 'ar', namespace = 'nw') {
     });
   } else {
     types.forEach((type, i) => {
-      kb.text(`${d.type === type ? '• ' : ''}${quoteChoice(alertButtonLabel(type, lang), lang)}`, `${cb('s')}:${type}`);
+      // military_incursion routes to the incursion kind picker, not a plain
+      // type set — same contract as the reporting bot's 'mi' entry point.
+      const cbk = type === 'military_incursion' ? `${cb('tg')}:incursion` : `${cb('s')}:${type}`;
+      kb.text(`${d.type === type ? '• ' : ''}${quoteChoice(alertButtonLabel(type, lang), lang)}`, cbk);
       if (i % 2 === 1 && i < types.length - 1) kb.row();
     });
   }
@@ -996,6 +1087,29 @@ async function nightPublish(d) {
   const eligible = mode === 'day' ? daytimeAutoEligible(d) : nightEligible(d);
   if (!a || !R.H?.publishDraft || !d || d.status !== 'pending' || !eligible) return false;
   const n = newsState();
+  // pre-publish audit (owner request 2026-11-17): verify + correct the final draft before
+  // anything automatic leaves the server. A failure is terminal for automation — the draft
+  // is held for manual review under the same editorial-hold status line the card already
+  // renders, and only new corroborating input (mergeInto) can earn it one re-audit.
+  const audit = auditDraftForAutoPublish(d, mode);
+  if (!audit.ok) {
+    d.status = 'pending';
+    d.editorialHold = true;
+    d.editorialHoldReason = AUTO_AUDIT_HOLD_REASON;
+    d.editorialHoldAt = Date.now();
+    d.autoAudit = { ok: false, reason: audit.reason, mode, at: Date.now(), srcs: (d.srcs || []).length };
+    d.dayAutoAt = null;
+    delete d.autoMode;
+    save();
+    await refreshCards(d);
+    console.warn(`[news] auto-publish audit failed: ${d.id} (${audit.reason}) — held for manual review`);
+    return false;
+  }
+  if (audit.corrected.length) {
+    d.autoAudit = { ok: true, corrected: audit.corrected, mode, at: Date.now() };
+    save();
+    console.log(`[news] auto-publish audit corrected ${d.id}: ${audit.corrected.join(', ')}`);
+  }
   const editorial = editorialGate(d);
   if (!editorial.ok) {
     d.status = 'pending';
@@ -1050,11 +1164,20 @@ async function nightPublish(d) {
 async function dayAutoTick(now = Date.now()) {
   const n = newsState();
   if (!api() || !R.H?.publishDraft) return;
+  let armedAny = false;
   for (const d of Object.values(n.drafts)) {
+    // (Re)arm the 2-minute timer for eligible pending drafts that never received one:
+    // drafts created overnight (the Damascus day gate was closed at creation, so
+    // scheduleDayAuto could not arm them) or that became eligible only later. Arming is
+    // the only new behaviour — scheduleDayAuto still refuses outside the day window,
+    // for ineligible or held drafts, and never moves an existing deadline; a draft
+    // armed here has by construction already waited since its card was sent.
+    if (d.status === 'pending' && !Number.isFinite(d.dayAutoAt) && scheduleDayAuto(d, now)) armedAny = true;
     if (!dayAutoReady(d, now)) continue;
     d.autoMode = 'day';
     await nightPublish(d);
   }
+  if (armedAny) save();
 }
 async function nightSummaryTick() {
   const n = newsState(); const g = n.night;
@@ -1176,6 +1299,16 @@ function buildLocations(r, it) {
     if (!nameInText(p.name, it.text) && !(p.gov && nameInText(p.gov, it.text))) continue; // invented by the AI
     const x = resolvePlace(p);
     if (!x) continue;
+    // Person-name guard: the proposed name may be in the post only as somebody's
+    // name («وفاة الزوجين "سليمان كرنوص"…») while resolvePlace alt-matches it to
+    // a village («سلمان», Hasakah). That pin comes from the person, not from a
+    // place mention: drop the pin and keep only its governorate as the fallback
+    // level (the draft then lands governorate-level or waits for review).
+    if (x.kind === 'place' && altPinFromPersonName(p.name, it.text, getPlace(x.placeId))) {
+      const pg = getPlace(x.placeId)?.gov;
+      if (pg) govs.add(pg);
+      continue;
+    }
     if (x.govCode) govs.add(x.govCode);
     let loc = locationFrom(x);
     // "بريف القنيطرة" -> the countryside, not the city of the same name
@@ -1223,6 +1356,11 @@ async function mergeInto(d, it, locs = []) {
   if ((d.srcs || []).some((s) => s.u === it.src.u)) return false;
   if (d.droneRuleVersion === 1 && hasExplicitDroneFlight(it.text)) d.dronePresence = true;
   d.srcs.push({ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local });
+  // new corroborating input is the ONE event that earns an audit-held draft a re-audit:
+  // lift the audit hold (only that hold) so the eligibility + audit gates judge it afresh
+  if (d.editorialHold && d.editorialHoldReason === AUTO_AUDIT_HOLD_REASON) {
+    delete d.editorialHold; delete d.editorialHoldReason; delete d.editorialHoldAt;
+  }
   scheduleDayAuto(d);
   // another channel names a more precise nearby place (e.g. "المعكر" next to "مزرعة الحانوت"): add it as an extra area
   const main = d.loc && Number.isFinite(d.loc.latitude) ? { lat: d.loc.latitude, lon: d.loc.longitude } : null;
@@ -2345,7 +2483,7 @@ export function registerNewsTools(bot, h) {
   bot.callbackQuery(/^nws:tt:(\w+)$/, (ctx) => onlyOwner(ctx, async () => {
     const k = ctx.match[1]; const n = newsState();
     if (NEWS_TYPES.includes(k)) { n.types[k] = !n.types[k]; save(); }
-    const group = ALERT_TYPES[k]?.group;
+    const group = typeMenuGroupOf(k);
     await toast(ctx, '✅');
     if (NEWS_TYPE_GROUPS[group]) await h.show(ctx, tyText(ctx, group), tyGroupKb(ctx, group));
     else await h.show(ctx, tyText(ctx), tyKb(ctx));
@@ -2495,4 +2633,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

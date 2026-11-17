@@ -1800,7 +1800,14 @@ async function boot() {
     svc.init();
     document.addEventListener('ras:me', () => { renderList(); if (state.view === 'detail') renderDetail(); });
   } catch (e) { console.error('services init failed', e); }
-  try { createLive({ LANG, esc }).init(); } catch (e) { console.error('live init failed', e); }
+  try {
+    const live = createLive({ LANG, esc });
+    live.init();
+    // The topbar status chip is the ONE «مباشر» control (owner, 2026-11-17):
+    // tapping it opens the Live sheet on the World news view. The clock and
+    // the pulsing connection dot stay exactly as they were.
+    $('#status')?.addEventListener('click', () => live.open('world'));
+  } catch (e) { console.error('live init failed', e); }
   amap.setAlerts(visibleAlerts(), state.selectedId);
   focusFromUrl();
   if (state.selectedId) {

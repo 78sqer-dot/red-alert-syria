@@ -33,13 +33,14 @@ const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 export { typeIcon };
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
-// White disc with a professional category-coloured glyph and edge.
-export function glyphDisc(type, size = 34, iconSize = 24, cls = 'sai', glyphOverride = null) {
+// The one unified pin (owner-approved symbols, 2026-11-17): a dark roundel with
+// a ring in the type's own colour and its white glyph centred. Layout size is
+// set by CSS context (map zoom tiers, legend, toast); the size arguments only
+// seed the intrinsic SVG size for contexts without a CSS rule.
+export function glyphDisc(type, size = 32, iconSize = 20, cls = 'pin', glyphOverride = null) {
   const t = typeOf(type);
-  const visual = eventVisual(type);
-  const bg = '#f8fafc';
-  const fg = visual.color;
-  return `<span class="${cls}" style="width:${size}px;height:${size}px;background:${bg};border-color:${visual.color};color:${fg}">${svgTag(glyphOverride || t.glyph, iconSize, `fill="${fg}"`)}</span>`;
+  const glyph = glyphOverride || t.glyph;
+  return `<span class="${cls} ${cls}-${glyph}" style="--ring:${t.color}">${svgTag(glyph, iconSize, 'fill="#ffffff"')}</span>`;
 }
 
 const styleCache = {};
@@ -145,7 +146,11 @@ async function buildStyle({ dark, layer, lang }) {
     };
   }
   // one DEM source for both hillshade and 3D terrain (was two -> every tile downloaded and decoded twice)
-  style.sources['ras-dem-hs'] = { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 11, attribution: 'Terrain: Mapzen / AWS Open Data' };
+  // maxzoom 15 is the AWS Terrain Tiles service's real cap (verified 2026-11-17:
+  // terrarium/15/... returns a tile, terrarium/16/... is 404); the old cap of 11
+  // upscaled the terrain mesh from z12 up. Tiles are 256px only — the service
+  // offers no 512/@2x variant.
+  style.sources['ras-dem-hs'] = { type: 'raster-dem', tiles: [DEM], encoding: 'terrarium', tileSize: 256, maxzoom: 15, attribution: 'Terrain: Mapzen / AWS Open Data' };
   return localize(style, lang);
 }
 
@@ -360,11 +365,12 @@ export class AlertMap {
     // Size is ONE zoom-only expression for all 14 governorates — deliberately
     // no per-feature term: the old 11→14 ramp read as "too big and uneven" on
     // the owner's phone because longer names wrapped under text-max-width into
-    // two-line blocks while short ones stayed on one line. The stops are now
-    // ~20% smaller (11→9, 12.5→10, 14→11) and max-width is 14em so the one-line
-    // budget in px is unchanged at the smaller size — fewer wrapped outliers,
-    // a more uniform row of names, and more of the 14 fit at country zoom.
-    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 9, 8, 10, 11, 11], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 14, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.7 } }, null);
+    // two-line blocks while short ones stayed on one line. First shrink round
+    // (2026-11-17): ~20% smaller (11→9, 12.5→10, 14→11) with max-width 14em.
+    // Second round (owner, same day — still too big on his phone): another
+    // ~12–15% off every stop (9→8, 10→8.5, 11→9.5) and the halo slimmed
+    // 1.7→1.5 to stay proportionate. Max-width stays 14em.
+    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 8, 8, 8.5, 11, 9.5], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 14, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.5 } }, null);
     add({ id: 'ras-border-glow', type: 'line', source: 'ras-border', paint: { 'line-color': '#ff3b4e', 'line-opacity': 0.22, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 10], 'line-blur': 3 } });
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
     // Geographic impact circles remain accurate; use restrained fills and outlines to preserve base-map detail.
@@ -400,12 +406,15 @@ export class AlertMap {
     vis('ras-gov-line', this.opts.showGov);
     vis('ras-gov-labels', this.opts.showGov);
     vis('ras-mask', this.opts.focusSyria);
-    // 3D kept light so it stays smooth: one shared low-zoom DEM, gentle exaggeration and tilt, and on phones
-    // the canvas is drawn at a lower resolution while terrain is on (the 3D pass costs ~2x per frame)
+    // 3D: one shared DEM (now at the provider's full z15), gentle exaggeration
+    // and tilt. The canvas pixel ratio is deliberately NOT lowered while
+    // terrain is on: an earlier perf tradeoff capped it (1.25 phone / 1.5
+    // desktop vs up to 2 in 2D) and the owner reported the 3D view turning
+    // visibly low-resolution (2026-11-17) — 3D now renders at the same
+    // sharpness as 2D.
     const phone = this.dockMode();
     if (this.opts.map3d) {
       map.setTerrain({ source: 'ras-dem-hs', exaggeration: phone ? 1.0 : 1.2 });
-      if (map.setPixelRatio) map.setPixelRatio(phone ? Math.min(1.25, this._pr || 1) : Math.min(1.5, this._pr || 1));
       map.setMaxPitch(phone ? 50 : 60);
       this.el.classList.add('is-3d');
       if (map.getPitch() < 30) map.easeTo({ pitch: phone ? 40 : 50, duration: 800 });
@@ -861,6 +870,7 @@ export class AlertMap {
         let badge = el.querySelector('.mk-count');
         if (count > 1 && visible) {
           if (!badge) { badge = document.createElement('span'); badge.className = 'mk-count'; badge.setAttribute('aria-hidden', 'true'); el.append(badge); }
+          badge.style.setProperty('--ring', typeOf(a.type).color);
           badge.textContent = String(count);
         } else if (badge) badge.remove();
       }
@@ -975,9 +985,6 @@ export class AlertMap {
     const incursionKind = a.meta?.incursionKind || a.incursion_kind || (Number.isInteger(a.meta?.vehicleCount) || Number.isInteger(a.vehicle_count) ? 'vehicles' : null);
     const signalDrone = a.type === 'signal_sweep' && (a.signal_platform === 'uav' || a.meta?.signalPlatform === 'uav');
     const marker = alertMarkerKind(a);
-    const eventEmoji = ['airstrike', 'artillery', 'explosion', 'detonation', 'weather', 'fire', 'arrest'].includes(a.type)
-      ? (a.type === 'weather' ? t.emoji : alertEmoji(a))
-      : a.type === 'civil' && alertEmoji(a) === '🚑' ? alertEmoji(a) : null;
     const glyph = signalDrone ? 'signal_sweep_uav'
       : a.type === 'assassination' ? assassinationWeaponGlyph(a)
       : a.type === 'shooting' ? shootingWeaponGlyph(a)
@@ -1010,27 +1017,16 @@ export class AlertMap {
       el.innerHTML = `<div class="flight-movement ${movement}"><span class="flight-squad">${plane('is-lead', 24)}${plane('is-left', 24)}${plane('is-right', 24)}</span><span class="flight-arrow" aria-hidden="true">${arrow}</span></div>`;
     } else if (a.type === 'breaking') {
       el.classList.add('mk-breaking-news');
-      el.innerHTML = `<span class="news-marker-core"><span class="news-marker-category" aria-hidden="true">${visual.dot}</span></span>`;
-    } else if (eventEmoji) {
-      el.innerHTML = `<span class="sai map-event-disc map-event-emoji" style="width:34px;height:34px;border-color:${visual.color};--c:${visual.color}" aria-hidden="true">${eventEmoji}</span>`;
-    } else if (marker === 'icon') {
-      const iconColor = visual.color;
-      const sz = 24;
-      if (a.type === 'signal_sweep') {
-        el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:40px;height:40px">${svgTag(glyph, 34, `class="ic-svg" fill="${iconColor}" color="${iconColor}"`)}</div>`;
-      } else {
-        el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, `class="ic-svg" fill="${iconColor}" color="${iconColor}"`)}</div>`;
-      }
+      el.innerHTML = glyphDisc(a.type, 32, 20, 'pin');
     } else {
-      el.innerHTML = glyphDisc(a.type, 34, 24, 'sai map-event-disc', a.marker_glyph);
+      // One unified pin for every static type (icon + static kinds): the glyph
+      // resolution above already covers described firearms and incursion kinds;
+      // civil medical reports keep their ambulance glyph.
+      const pinGlyph = a.type === 'civil' && alertEmoji(a) === '🚑' ? 'ambulance' : glyph;
+      el.innerHTML = glyphDisc(a.type, 32, 20, 'pin', pinGlyph === t.glyph ? (a.marker_glyph || null) : pinGlyph);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
     if (!['squad', 'movement', 'fly'].includes(marker)) el.insertAdjacentHTML('afterbegin', '<span class="news-pulse-ring" aria-hidden="true"></span>');
-    // civil family: pinned to its exact place; a small tidy dot at country view, the icon from zoom 7.5 up
-    if (t.group === 'civil') {
-      el.classList.add('mk-civ');
-      el.insertAdjacentHTML('beforeend', `<span class="civ-dot" style="--ic:${visual.color}"></span>`);
-    }
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();

@@ -31,7 +31,7 @@ test('every alert type receives one shared color-dot category visual', () => {
 });
 
 test('live map icons, markers and impact-zone pulses use the same category color', () => {
-  assert.match(map, /const visual = eventVisual\(type\);[\s\S]{0,100}const fg = visual\.color/);
+  assert.match(map, /--ring:\$\{t\.color\}/, 'the unified pin ring carries the type colour');
   assert.match(map, /const visual = eventVisual\(a\.type\);/);
   assert.match(map, /el\.style\.setProperty\('--c', visual\.color\)/);
   assert.match(map, /color: eventVisual\(a\.type\)\.color, active:/);
@@ -51,10 +51,10 @@ test('server-rendered map markers use category colors and keep urgent black insi
   assert.equal((urgent.match(/fill="#000000"/g) || []).length, 1, 'black is used only for the triangle interior');
 });
 
-test('category recoloring preserves readable light/dark markers and approved sizes', () => {
-  assert.match(css, /\.sai\.map-event-disc \{[^}]*background: #fff !important/);
-  assert.match(css, /\.ic \{[^}]*background: #fff/);
-  assert.match(css, /html\.dark \.ic-svg \{[^}]*drop-shadow/);
+test('category recoloring preserves readable markers and approved sizes', () => {
+  // static markers are the unified pin in both themes: dark roundel, type ring
+  assert.match(css, /\.pin \{[^}]*background: #141A24; border: 3px solid var\(--ring/);
+  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; \}/);
   assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: visible; \}/);
   assert.match(css, /\.news-off \.mk-helicopter \{ display: block !important; visibility: visible !important; \}/);
   assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #13283d; \}/);
@@ -62,9 +62,7 @@ test('category recoloring preserves readable light/dark markers and approved siz
   assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{[^}]*fill: #203851; stroke: #091a29; stroke-width: 8; opacity: 1;/);
   assert.doesNotMatch(css, /\.helicopter-svg \.heli-(?:main-rotor|tail-rotor) \{[^}]*animation:\s*heliRotor/);
   assert.match(css, /\.heli-orbit-guide \{[^}]*border: 1px dashed rgba\(59,142,255,\.4\);[^}]*border-radius: 50%/);
-  assert.match(css, /\.news-marker-category \{ display: block; width: 15px; height: 15px;/);
   assert.match(css, /\.mk-breaking-news \.news-pulse-ring \{ width: 34px; height: 34px; border-color: #ef233c/);
-  assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
-  assert.match(css, /\.ic-svg \{[^}]*width: 24px; height: 24px/);
+  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin'/);
   assert.match(css, /\.helicopter-svg \{[^}]*width: 24px; height: 24px/);
 });
