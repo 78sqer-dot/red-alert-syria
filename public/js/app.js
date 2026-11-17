@@ -299,6 +299,7 @@ function detailHtml(a) {
       ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
       <span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span>
     </div>
+    ${a.body && a.body !== descOf(a) ? `<div class="d-card"><div class="sec-label" style="margin:0 0 2px">${esc(LANG === 'ar' ? 'نص الخبر الكامل' : 'Full report')}</div><p class="card-desc">${esc(a.body)}</p></div>` : ''}
     <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
     <div class="disclaimer" role="note">${esc(political ? (LANG === 'ar' ? 'منسوب للمصدر — لا يعني تحققاً مستقلاً' : 'Attributed to the source — this does not mean independent verification') : T.verificationNotRecorded)}</div>
     ${archivedQuneitraRoute ? `<div class="disclaimer" role="note"><strong>${esc(LANG === 'ar' ? 'مسار أرشيفي توضيحي فقط' : 'Illustrative archive route only')}</strong><br>${esc(LANG === 'ar' ? 'من مرجع تقريبي داخل إسرائيل إلى القنيطرة. يبقى موقع البلاغ الأصلي صيدا، والتنبيه منتهٍ وغير نشط. ليس مسار طيران حقيقيًا أو تتبعًا مباشرًا.' : 'From an approximate reference inside Israel to Quneitra. The original report location remains Sayda (Saida); this alert is expired and inactive. Not a real flight path or live track.')}</div>` : ''}

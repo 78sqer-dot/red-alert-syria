@@ -229,7 +229,7 @@ export function resolvePlace({ name, gov } = {}) {
   return g ? { kind: 'governorate', govCode: g } : null;
 }
 // generic words that are also village names somewhere: never matched from free text
-const GENERIC = new Set(['الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'المدينه', 'البلده', 'القريه', 'الطريق', 'المركز', 'الحاجز', 'السوق', 'المشفي', 'المستشفي', 'الجسر', 'الدوار', 'المنطقه', 'الريف', 'الحدود', 'الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'اليوم', 'مساء', 'صباح', 'عنصر', 'عناصر', 'الامن', 'قوات', 'الجيش', 'الاحتلال', 'مسلحين', 'مدنيين', 'اصابه', 'مقتل', 'حادث', 'سير', 'هجوم', 'قصف', 'انفجار'].map(N));
+const GENERIC = new Set(['الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'المدينه', 'البلده', 'القريه', 'الطريق', 'المركز', 'الحاجز', 'السجن', 'السوق', 'المشفي', 'المستشفي', 'الجسر', 'الدوار', 'المنطقه', 'الريف', 'الحدود', 'الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'اليوم', 'مساء', 'صباح', 'عنصر', 'عناصر', 'الامن', 'قوات', 'الجيش', 'الاحتلال', 'مسلحين', 'مدنيين', 'اصابه', 'مقتل', 'حادث', 'سير', 'هجوم', 'قصف', 'انفجار'].map(N));
 /** exact names of villages/towns of one governorate that appear as words in the text (most specific first) */
 export function scanTextPlaces(text, govCode, max = 3) {
   if (!govCode) return [];
@@ -487,6 +487,49 @@ export function hasExplicitDroneFlight(text) {
     || /\b(?:drones?|uavs?)\s+(?:are\s+|were\s+)?(?:flying|circling|overflying|hovering)\b/.test(en)
     || /\b(?:drone|uav)\s+overflight\b/.test(en);
 }
+/**
+ * Cut a headline to at most `max` characters without splitting a word: a hard
+ * slice() can end the public alert copy mid-word (e.g. «…الهيئة العامة للإذاع»).
+ * Falls back to a hard cut only when the first `max` characters are one word.
+ */
+export function truncateAtWordBoundary(text, max = 240) {
+  const s = String(text || '');
+  if (!Number.isFinite(max) || max <= 0 || s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd();
+}
+// ---------------------------------------------------------------- public-tone guard (rules fallback)
+// The Gemini classifier prompt (rule 5) and the news-mode rewrite both demand calm,
+// neutral, factual copy, and private editorial/satire modes are owner-only previews.
+// The deterministic fallback below has no model to rewrite with: its headline is the
+// raw source evidence line, so a sharp, satirical or opinionated source line could
+// otherwise become the public headline verbatim. This guard detects only CLEAR
+// markers (slogans, collective insults/loaded labels, satire cues, first-person
+// opinion framings) — never bare factual vocabulary — so ruleClassify can replace
+// the headline with a factual type + place line instead of publishing the rhetoric.
+const SHARP_TONE_GROUPS = [
+  ['satirical-tone', ['سخرية', 'استهزاء', 'يستهزئ', 'تهكم', 'كوميديا سوداء', 'مسخرة', 'ضحك هستيري']],
+  ['slogan-tone', ['يسقط', 'فلتسقط', 'الموت ل', 'بالروح بالدم', 'الشعب يريد إسقاط', 'ثورة حتى النصر', 'ارحل يا']],
+  ['loaded-label', ['الطاغية', 'الخائن', 'الخونة', 'العملاء', 'العصابات الحاكمة', 'نظام الإجرام', 'المرتزقة', 'الحثالة', 'الجبناء', 'كلاب السلطة', 'المافيا الحاكمة']],
+  ['opinion-tone', ['برأيي', 'في رأيي', 'من وجهة نظري', 'أرى أن', 'لا شك أن', 'بكل صراحة', 'للأسف الشديد', 'يا للعار', 'من العار', 'إلى متى', 'حتى متى', 'أين أنتم يا']],
+].map(([reason, phrases]) => [reason, phrases.map(N)]);
+export function sharpToneReason(text) {
+  const raw = String(text || '');
+  if (!raw.trim()) return null;
+  if (/😂|🤣/.test(raw) || /هههه/.test(raw)) return 'satirical-tone';
+  const nt = N(raw);
+  for (const [reason, phrases] of SHARP_TONE_GROUPS) {
+    if (phrases.some((phrase) => nt.includes(phrase))) return reason;
+  }
+  return null;
+}
+/** Factual stand-in headline (type + first place) when the source lead is unusable as public copy. */
+function factualFallbackHeadline(type, places) {
+  const label = ALERT_TYPES[type]?.ar || 'خبر';
+  const place = (places || []).find((p) => p?.name);
+  return place ? `${label} — ${place.name}` : label;
+}
 function primaryRuleEvidence(text) {
   const lines = String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   return lines.find((line) => line.length > 15) || lines[0] || '';
@@ -499,7 +542,11 @@ export function ruleClassify(text, { breaking = false } = {}) {
   if (weather && !hasNonWeatherSignal(text)) {
     const found = [];
     for (const g of governorates) if (nt.includes(N(g.ar)) || nt.includes(N(g.en)) || (g.alt || []).some((a) => nt.includes(N(a)))) found.push({ name: g.ar, gov: g.ar });
-    return found.length ? { event: true, type: 'weather', new_incident: true, same_as: null, places: found.slice(0, 4), headline: 'تحذير جوي: ' + String(text).split('\n')[0].slice(0, 120), hazard: weather.hazard, rule: true } : null;
+    if (!found.length) return null;
+    const firstLine = String(text).split('\n')[0];
+    const tone = sharpToneReason(firstLine);
+    const headline = tone ? `تحذير جوي — ${found[0].name}` : 'تحذير جوي: ' + truncateAtWordBoundary(firstLine, 120);
+    return { event: true, type: 'weather', new_incident: true, same_as: null, places: found.slice(0, 4), headline, hazard: weather.hazard, rule: true, ...(tone ? { toneGuard: tone } : {}) };
   }
   if (FOLLOW_UP.some((w) => evidenceNorm.includes(w))) return null;
   if (!mentionsSyria(text)) return null;
@@ -524,6 +571,8 @@ export function ruleClassify(text, { breaking = false } = {}) {
     for (const len of [3, 2, 1]) {
       const cand = words.slice(i, i + len).join(' ').replace(/^[وبل](?=ال)/, '').replace(/^[وبل](?=[^ا\s].{2,})/u, '');
       if (cand.length < 3) continue;
+      // generic words that are also place names («بالسجن المؤبد» is a prison sentence, not the village of Al-Sijn/Al-Mazraah)
+      if (GENERIC.has(N(cand)) || GENERIC.has(stripAl(N(cand)))) continue;
       const hits = exactHits(cand, null);
       const g = govCodeOf(cand);
       if (g && len <= 2) { found.push({ name: cand, gov: getGov(g).ar }); i += len - 1; break; }
@@ -531,7 +580,17 @@ export function ruleClassify(text, { breaking = false } = {}) {
     }
   }
   if (!found.length && type !== 'political') return null;
-  return { event: true, type, new_incident: true, same_as: null, places: found, headline: evidence.replace(/[•:]+\s*$/, '').trim().slice(0, 140), rule: true, ...(hasExplicitDroneFlight(text) ? { dronePresence: true } : {}) };
+  // 240 (not the old 140) aligns the rules fallback with the AI-headline cap in
+  // news-monitor's handleResult; the cut never splits a word.
+  const rawHeadline = truncateAtWordBoundary(evidence.replace(/[•:]+\s*$/, '').trim(), 240);
+  // Public-tone guard: a sharp/satirical/opinionated source lead must not become the
+  // public headline verbatim (the AI path is instructed to neutralize; the rules
+  // path cannot rewrite). Replace it with a factual type + place line and flag the
+  // result so the draft is marked for the reviewer; the full source text is kept
+  // on the draft (sourceText/body) for the human to judge.
+  const tone = sharpToneReason(rawHeadline);
+  const headline = tone ? factualFallbackHeadline(type, found) : rawHeadline;
+  return { event: true, type, new_incident: true, same_as: null, places: found, headline, rule: true, ...(tone ? { toneGuard: tone } : {}), ...(hasExplicitDroneFlight(text) ? { dronePresence: true } : {}) };
 }
 export { getGov, getDist };
 

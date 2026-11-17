@@ -21,7 +21,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, truncateAtWordBoundary } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
@@ -1068,6 +1068,9 @@ export function toBotDraft(d, options = {}) {
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
     type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin, headline,
+    // Full report text rides alongside the concise lead (details/text keep their
+    // existing roles); owner-selected editorial previews never carry a body.
+    ...(editorialSelection ? {} : { body }),
     ...(editorialSelection ? { publicEditorialTone: editorialSelection.mode, publicEditorialText: editorialSelection.text } : {}),
     location: d.loc || locationFrom({}), extra: d.extra || [],
     details: d.type === 'breaking' ? '' : body || headline, text: d.type === 'breaking' ? (editorialSelection ? '' : headline) : '',
@@ -1212,7 +1215,17 @@ async function handleResult(it, r, known, pmap) {
   let rejectedSameAs = false;
   const locs = buildLocations(r, it);
   const tidy = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/\s+/g, ' ').trim();
-  const headline = (tidy(r.headline) || tidy(it.text.split('\n')[0])).slice(0, 240);
+  const headline = truncateAtWordBoundary(tidy(r.headline) || tidy(it.text.split('\n')[0]), 240);
+  // Full public body: the complete cleaned source text (same attribution-safe
+  // cleaning as the headline, line breaks kept), capped like sourceText at 1200
+  // chars and only at a word boundary. The headline stays the concise public lead;
+  // this body is what the map panel and the channel post show in full. A body that
+  // is itself private editorial copy is never attached (toBotDraft would refuse
+  // the whole draft), and a body that merely repeats the headline is dropped.
+  const tidyBody = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).trim();
+  let fullBody = truncateAtWordBoundary(tidyBody(it.text), 1200);
+  if (fullBody && headline && fullBody.startsWith(headline)) fullBody = fullBody.slice(headline.length).replace(/^[\s:：\-–—]+/, '').trim();
+  if (!fullBody || fullBody === headline || isPrivateEditorialCopy(fullBody)) fullBody = '';
   const politicalCategory = r.type === 'political'
     ? (inferPoliticalCategory(it.text) || (POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null))
     : null;
@@ -1236,6 +1249,7 @@ async function handleResult(it, r, known, pmap) {
   const d = {
     id: rid(), type: r.type, ...(r.type === 'helicopter' ? { intense: helicopterAuto(`${headline} ${it.text}`) } : {}), ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
     loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
+    ...(fullBody ? { body: fullBody } : {}), ...(r.toneGuard ? { toneNeutralized: r.toneGuard } : {}),
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
     droneRuleVersion: 1, dronePresence: hasExplicitDroneFlight(it.text),
     sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),

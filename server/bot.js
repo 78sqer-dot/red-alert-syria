@@ -322,6 +322,12 @@ export function channelPost(alert, { ended = false } = {}) {
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (alert.type !== 'breaking' && desc) sections.push(`<blockquote>${esc(desc)}</blockquote>`);
+  // Full report text (monitored news): shown in full after the concise lead.
+  // Deduped against the lead; photo captions drop this section first when trimming.
+  const fullBody = preserveStoryAttribution
+    ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
+    : cleanAlertText(alert.body || '');
+  if (fullBody && fullBody !== desc) sections.push(`<blockquote>${esc(fullBody)}</blockquote>`);
   if (alert.type === 'political') {
     const meta = alert.meta?.political || {};
     const category = POLITICAL_CATEGORIES[meta.category];
@@ -1043,13 +1049,25 @@ export function buildAlertInput(d, author) {
   const baseTitleEn = d.type === 'air_movement'
     ? (aircraft?.en || titles.en)
     : wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
+  const cleanPublicText = (text) => (d.source === 'news' || ['breaking', 'political'].includes(d.type)
+    ? cleanAttributedNewsText(text, privateSourceNames) : cleanAlertText(text));
+  // Monitored-news drafts that carry a full body keep the concise headline as the
+  // public lead (description); the full text travels separately as `body`. Drafts
+  // without a body keep the historic details/text behaviour untouched.
+  const description = d.source === 'news' && d.body && d.headline
+    ? cleanPublicText(d.headline)
+    : cleanPublicText(d.type === 'breaking' ? d.text : d.details);
+  // Full report text (monitored news drafts carry it as `body`): published alongside
+  // the concise description, never instead of it; dropped when it adds nothing.
+  const fullBody = cleanPublicText(String(d.body || ''));
+  const body = fullBody && fullBody !== description ? fullBody : undefined;
   return {
     type: d.type,
     title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}${signalPlatform ? ' — مسيّرة' : ''}`,
     title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
     extra,
-    description: (d.source === 'news' || ['breaking', 'political'].includes(d.type)
-      ? (text) => cleanAttributedNewsText(text, privateSourceNames) : cleanAlertText)(d.type === 'breaking' ? d.text : d.details),
+    description,
+    ...(body ? { body } : {}),
     ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
     location: loc,
     areas,
@@ -1089,12 +1107,18 @@ const visibleLen = (html) => html.replace(/<[^>]+>/g, '').replace(/&(lt|gt|amp|q
 function channelCaption(alert, opts) {
   let s = channelPost(alert, opts);
   if (visibleLen(s) <= CAPTION_MAX) return s;
+  // The full report body is the first thing a photo caption gives up: the map
+  // keeps the complete text even when the caption cannot.
+  if (alert.body) {
+    const withoutBody = channelPost({ ...alert, body: '' }, opts);
+    if (visibleLen(withoutBody) <= CAPTION_MAX) return withoutBody;
+  }
   const desc = String(alert.description || alert.title || '');
   for (let keep = desc.length - (visibleLen(s) - CAPTION_MAX) - 4; keep > 0; keep -= 40) {
-    s = channelPost({ ...alert, description: desc.slice(0, keep).trimEnd() + '…' }, opts);
+    s = channelPost({ ...alert, body: '', description: desc.slice(0, keep).trimEnd() + '…' }, opts);
     if (visibleLen(s) <= CAPTION_MAX) return s;
   }
-  return channelPost({ ...alert, description: '' }, opts).slice(0, CAPTION_MAX);
+  return channelPost({ ...alert, body: '', description: '' }, opts).slice(0, CAPTION_MAX);
 }
 const plainTelegramText = (value) => String(value ?? '')
   .replace(/<[^>]+>/g, '')
