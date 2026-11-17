@@ -7,7 +7,7 @@ const otherConfiguredOwnerId = 9900000001;
 process.env.PRIMARY_OWNER_ID = String(primaryOwnerId);
 process.env.OWNER_IDS = `${backupOwnerId},${otherConfiguredOwnerId}`;
 
-const { config, isOwner, applyProject } = await import('../server/config.js?owner-allowlist-test');
+const { config, isOwner, applyProject, automaticMonitorRecipientIds } = await import('../server/config.js?owner-allowlist-test');
 
 test('configured primary is first and the saved project owner remains a full backup admin', () => {
   // Other IDs in OWNER_IDS are not promoted when a saved project owner currently takes precedence.
@@ -35,6 +35,14 @@ test('the two shared owners remain full admins when a different project owner is
   assert.equal(isOwner(backupOwnerId), true);
   assert.equal(isOwner(otherConfiguredOwnerId), true);
   assert.equal(isOwner(1234567890), false);
+});
+
+test('automatic-monitor notifications go only to 8270709633 while both shared IDs remain admins', () => {
+  applyProject({ ownerId: primaryOwnerId });
+  assert.deepEqual(automaticMonitorRecipientIds(), [8270709633]);
+  assert.equal(isOwner(8270709633), true);
+  assert.equal(isOwner(8808894711), true);
+  assert.deepEqual(config.ownerIds, [primaryOwnerId, backupOwnerId]);
 });
 
 test('an explicit sole-owner handover can still revoke the previous owner list', () => {

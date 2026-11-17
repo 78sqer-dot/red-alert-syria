@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
-import { config } from './config.js';
+import { automaticMonitorRecipientIds, config } from './config.js';
 import { store } from './store.js';
 import { locationFrom, governorates, normalizeArabic } from './places.js';
 import { scanTextPlaces, resolvePlace } from './news-ai.js';
@@ -187,7 +187,7 @@ async function sendReview(ev) {
   const api = adminApi();
   if (!api) return;
   ev.cards ||= [];
-  for (const uid of config.ownerIds) {
+  for (const uid of automaticMonitorRecipientIds()) {
     const old = ev.cards.find(([chat]) => Number(chat) === Number(uid));
     const opts = { parse_mode: 'HTML', reply_markup: reviewKeyboard(ev), link_preview_options: { is_disabled: true }, _keep: 'c' };
     try {
@@ -219,7 +219,7 @@ async function notifyOwner(ev) {
   const api = adminApi();
   if (!api) return;
   let sent = 0;
-  for (const uid of config.ownerIds) {
+  for (const uid of automaticMonitorRecipientIds()) {
     try { await api.sendMessage(uid, noticeText(ev, ev.evidence), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, _keep: 'c' }); sent++; }
     catch (e) { console.warn('[roads] owner notice failed', e.description || e.message); }
   }

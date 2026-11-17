@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
-import { config } from './config.js';
+import { automaticMonitorRecipientIds, config } from './config.js';
 import { store } from './store.js';
 import { fetchChannel } from './news-sources.js';
 import { governorates, places, districtsOf, placesOf, getGov, getDist, getPlace, normalizeArabic } from './places.js';
@@ -393,7 +393,7 @@ async function sendReview(job, { force = false } = {}) {
   const current = j.pending[job?.id];
   if (!current || (!force && current.notifiedAt)) return false;
   const api = adminApi?.();
-  const owner = config.ownerIds?.[0];
+  const owner = current.kind === 'source' ? automaticMonitorRecipientIds()[0] : config.ownerIds?.[0];
   if (!api || !owner) return false;
   const sent = await api.sendMessage(owner, reviewText(current, 'ar'), {
     parse_mode: 'HTML', reply_markup: reviewKeyboard(current, 'ar'),

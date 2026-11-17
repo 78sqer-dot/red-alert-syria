@@ -1,5 +1,5 @@
 // 📡 News monitor: the server (Render, 24/7) reads public Syrian news channels every minute, turns
-// each NEW incident into a ready-made alert draft and sends it to the owner + editors in the private
+// each NEW incident into a ready-made alert draft and sends it to the primary owner in the private
 // publishing bot with ✅ Publish / ❌ Ignore; only qualified AI news has an automatic fallback.
 // No duplicates: an incident reported by several channels arrives once (the card lists the sources);
 // an incident that is already on the map / channel (also from human reports), already waiting as a
@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 import { unlinkCapturedMedia } from './news-media.js';
 import { InlineKeyboard } from 'grammy';
-import { config, isOwner } from './config.js';
+import { automaticMonitorRecipientIds, config, isOwner } from './config.js';
 import { store } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji, alertButtonLabel } from '../shared/types.js';
 import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
@@ -331,7 +331,7 @@ const note = (it, decision) => {
   if (R.log.length > 120) R.log.splice(0, R.log.length - 120);
 };
 const api = () => R.H?.apis().admin || null;
-const reviewerIds = () => [...new Set([...config.ownerIds, ...store.state.editors])];
+const reviewerIds = () => automaticMonitorRecipientIds();
 const ownerIdsU = () => [...new Set(config.ownerIds)];
 
 // ---------------------------------------------------------------- 🌙 night window (Asia/Damascus)
@@ -968,7 +968,7 @@ async function nightPublish(d) {
   save();
   await closeCards(d, null, true); await unlinkCapturedMedia(d.sourceMedia); // a draft that was waiting (single local source, then confirmed) leaves the chat
   d.notices = [];
-  for (const uid of ownerIdsU()) {
+  for (const uid of automaticMonitorRecipientIds()) {
     const lang = langOfId(uid);
     try {
       const m = await a.sendMessage(uid, noticeText(d, lang), { parse_mode: 'HTML', reply_markup: noticeKb(d, lang), link_preview_options: { is_disabled: true }, disable_notification: true, _keep: 'c' });
@@ -1001,7 +1001,7 @@ async function nightSummaryTick() {
   const items = all.filter((d) => d.auto && d.autoMode !== 'day' && d.autoAt > since).sort((x, y) => x.autoAt - y.autoAt);
   const held = all.filter((d) => !d.auto && d.created > since && inNightWindow(g, hhmm(d.created)) && d.status !== 'published').length;
   g.sumAt = Date.now(); save();
-  for (const uid of ownerIdsU()) {
+  for (const uid of automaticMonitorRecipientIds()) {
     const lang = langOfId(uid);
     const win = `${g.from}–${g.to}`;
     const lines = [];

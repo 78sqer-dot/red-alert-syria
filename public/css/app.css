@@ -447,7 +447,13 @@ html.dark .civ-dot { box-shadow: 0 0 0 1.5px rgba(10,14,22,.9), 0 0 7px 1px colo
 .maplibregl-map.zoom-detail .mk-sat.drone-secondary.sel { visibility: visible; }
 /* the airframe circles the target and turns with its heading */
 @keyframes uavOrbit { from { transform: rotate(0deg) translateX(var(--orb, 20px)); } to { transform: rotate(-360deg) translateX(var(--orb, 20px)); } }
-@media (prefers-reduced-motion: reduce) { .maplibregl-map .mk-orbit .uav { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  .maplibregl-map .mk-orbit:not(.inactive) .uav,
+  .maplibregl-map .mk-sat:not(.inactive) .uav {
+    animation: uavOrbit 18s linear infinite !important;
+    animation-delay: var(--delay, 0s) !important;
+  }
+}
 .uav-svg { display: block; width: 24px; height: 24px; fill: var(--c, #6b7280); filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 .5px rgba(0,0,0,.85)); }
 html.dark .uav-svg { fill: color-mix(in srgb, var(--c, #6b7280) 72%, #fff); filter: drop-shadow(0 0 1px rgba(0,0,0,.95)) drop-shadow(0 0 .5px rgba(0,0,0,.95)); }
 .mk.sel .uav-svg { fill: var(--c); }
@@ -898,7 +904,9 @@ html.dark .wa-btn svg { color: #2fe079; }
   .zp.zp-aircraft .zp-fill { animation: none; opacity: .20; }
   .zp.zp-aircraft::before { animation: none; opacity: .55; transform: scale(1.25); }
   .zp.zp-selected::before { animation: none; opacity: .85; transform: scale(1.12); }
-  .heli-craft, .helicopter-svg .heli-main-rotor, .helicopter-svg .heli-tail-rotor { animation: none !important; }
+  .helicopter-svg .heli-main-rotor, .helicopter-svg .heli-tail-rotor { animation: none !important; }
+  .maplibregl-map.zoom-detail .mk-helicopter:not(.inactive) .heli-craft { animation: heliOrbit 18s linear infinite !important; }
+  .maplibregl-map.zoom-detail .mk-helicopter:not(.inactive) .heli-craft-second { animation-delay: -9s !important; }
 }
 .pp-areas { display: block; overflow: visible; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; line-height: 1.55; margin: 3px 0 0; }
 

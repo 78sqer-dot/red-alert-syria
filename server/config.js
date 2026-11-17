@@ -17,6 +17,10 @@ const derivedSecret = token
 const reportToken = process.env.REPORT_BOT_TOKEN || '';
 const reportSecret = reportToken ? crypto.createHash('sha256').update('ras-report-webhook:' + reportToken).digest('hex').slice(0, 48) : '';
 export const SHARED_OWNER_IDS = Object.freeze([8270709633, 8808894711]);
+// Automatic-monitor notifications go only to the primary account. Keep this separate from
+// config.ownerIds so every shared owner retains the same permissions and buttons.
+export const AUTOMATIC_MONITOR_OWNER_ID = 8270709633;
+export const automaticMonitorRecipientIds = () => [AUTOMATIC_MONITOR_OWNER_ID];
 const primaryOwnerId = Number(process.env.PRIMARY_OWNER_ID);
 const hasPrimaryOwnerId = Number.isFinite(primaryOwnerId) && primaryOwnerId > 0;
 const configuredOwnerIds = [...new Set([

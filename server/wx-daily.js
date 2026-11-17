@@ -4,7 +4,7 @@
 //  - Morning bulletin: a branded image + short caption in the channel (default 08:00 Damascus), its own
 //    post (the prices bulletin stays separate). On/off, time, preview and "post now" in the owner menu.
 import { InlineKeyboard, InputFile } from 'grammy';
-import { config } from './config.js';
+import { automaticMonitorRecipientIds, config } from './config.js';
 import { store } from './store.js';
 import { governorates } from './places.js';
 import { damascusParts } from './stats-image.js';
@@ -496,7 +496,7 @@ export async function postWxBulletin(api, { chatId = config.channel, test = fals
   return { ok: true, message_id: m.message_id };
 }
 async function notifyOwners(api, text) {
-  for (const id of config.ownerIds || []) { try { await api.sendMessage(id, text, { parse_mode: 'HTML' }); } catch { /* ignore */ } }
+  for (const id of automaticMonitorRecipientIds()) { try { await api.sendMessage(id, text, { parse_mode: 'HTML' }); } catch { /* ignore */ } }
 }
 let started = false;
 export function startWxBulletin(getApi) {

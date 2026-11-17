@@ -7,7 +7,7 @@
 //    Published items retain a direct source link on the website and in the channel.
 import crypto from 'node:crypto';
 import { InlineKeyboard, InputFile } from 'grammy';
-import { config } from './config.js';
+import { automaticMonitorRecipientIds, config } from './config.js';
 import { store } from './store.js';
 import { governorates, normalizeArabic } from './places.js';
 import { weatherWarningInfo } from './news-ai.js';
@@ -226,7 +226,7 @@ export function mergeServicesFromBackup(o) {
 // ---------------------------------------------------------------- bot: electricity tools (publishing bot)
 const pend = new Map(); // owner id -> { k: 'text'|'edit', gov, id, exp }
 const R = { H: null };
-const reviewerIds = () => [...new Set([...config.ownerIds])];
+const reviewerIds = () => automaticMonitorRecipientIds();
 function powerCardText(p) {
   return `⚡ <b>تحديث كهرباء${p.src ? ' من الرصد' : ''}</b> — ${esc(govName(p.gov))}\n\n${esc(p.text)}\n\n`
     + `${p.src?.url ? `<i>المصدر: <a href="${esc(p.src.url)}">${esc(p.src.name || 'مصدر حكومي رسمي')}</a></i>\n` : ''}<i>${dayClock(p.ts)}</i>`;

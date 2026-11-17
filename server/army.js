@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
-import { config } from './config.js';
+import { automaticMonitorRecipientIds, config } from './config.js';
 import { store } from './store.js';
 import { fetchChannel } from './news-sources.js';
 import { normalizeApplicationDeadline, isApplicationDeadlineExpired } from './application-deadline.js';
@@ -593,7 +593,7 @@ export async function notifyArmyPending(item, { force = false } = {}) {
   const j = armyState();
   const current = j.pending[item?.id];
   if (!current || (!force && current.notifiedAt)) return false;
-  const ids = [...new Set((config.ownerIds || []).map(Number).filter(Number.isFinite))];
+  const ids = automaticMonitorRecipientIds();
   if (!adminApi || !ids.length) return false;
   let success = 0;
   for (const owner of ids) {

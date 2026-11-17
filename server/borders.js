@@ -3,7 +3,7 @@
 // (owner card, never auto-published). Shown on the website (services panel tab + map layer).
 import crypto from 'node:crypto';
 import { InlineKeyboard, InputFile } from 'grammy';
-import { config } from './config.js';
+import { automaticMonitorRecipientIds, config } from './config.js';
 import { store } from './store.js';
 import { normalizeArabic } from './places.js';
 import { renderBorderPng } from './alert-image.js';
@@ -156,7 +156,7 @@ function suggText(sg, en) {
 async function sendSuggestion(sg) {
   const api = R.H?.apis().admin; if (!api) return;
   sg.cards = [];
-  for (const uid of new Set(config.ownerIds)) {
+  for (const uid of automaticMonitorRecipientIds()) {
     const en = store.userLang?.(uid) === 'en';
     try { const m = await api.sendMessage(uid, suggText(sg, en), { parse_mode: 'HTML', reply_markup: suggKb(sg, en), _keep: 'c' }); sg.cards.push([uid, m.message_id]); } catch { /* */ }
   }

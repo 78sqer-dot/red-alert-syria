@@ -6,7 +6,7 @@
 //  - Fuel: SANA's official feed for Ministry of Energy / pricing-committee decisions.
 // Wrong numbers are worse than none: every value is range-checked; with no verified official data, nothing is posted.
 import { InlineKeyboard, InputFile } from 'grammy';
-import { config } from './config.js';
+import { automaticMonitorRecipientIds, config } from './config.js';
 import { store } from './store.js';
 import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge, badgeWidth } from './alert-image.js';
@@ -575,7 +575,7 @@ export async function postBulletin(api, { chatId = config.channel, test = false,
   return { ok: true, message_id: m.message_id, official: r.official };
 }
 async function notifyOwners(api, text) {
-  for (const id of config.ownerIds || []) { try { await api.sendMessage(id, text, { parse_mode: 'HTML' }); } catch { /* ignore */ } }
+  for (const id of automaticMonitorRecipientIds()) { try { await api.sendMessage(id, text, { parse_mode: 'HTML' }); } catch { /* ignore */ } }
 }
 let started = false;
 export function startPrices(getApi) {
