@@ -1161,6 +1161,27 @@ function bindEvents() {
     if (e.target.closest('[data-dd-close]')) { e.preventDefault(); closeDropdowns(); return; }
     if (e.target.closest('.map-control-action')) setMapControlsOpen(false);
   });
+  // map legend: category colours come from the shared event visuals; the cluster
+  // bubble and the civil dot mirror the exact elements the map itself draws.
+  const legendRows = $('#legendRows');
+  if (legendRows) {
+    const catRow = (type, key) => `<div class="legend-row"><span class="lg-dot" style="--c:${eventVisual(type).color}"></span><span>${esc(T[key])}</span></div>`;
+    legendRows.innerHTML =
+      catRow('breaking', 'legendCatBreaking') + catRow('uav', 'legendCatAerial') + catRow('attack', 'legendCatStrikes')
+      + catRow('border', 'legendCatSecurity') + catRow('civil', 'legendCatCivil') + catRow('political', 'legendCatPolitical')
+      + catRow('weather', 'legendCatWeather') + catRow('quake', 'legendCatQuake')
+      + `<div class="legend-row"><span class="lg-cluster">3</span><span>${esc(T.legendCluster)}</span></div>`
+      + `<div class="legend-row"><span class="lg-civdot" style="--c:${eventVisual('civil').color}"></span><span>${esc(T.legendCivilDot)}</span></div>`
+      + `<div class="legend-row"><span class="lg-ring" style="--c:${eventVisual('breaking').color}"></span><span>${esc(T.legendZone)}</span></div>`;
+  }
+  const legendBtn = $('#legendBtn');
+  const legendCard = $('#legendCard');
+  legendBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = legendCard.hidden;
+    legendCard.hidden = !open;
+    legendBtn.setAttribute('aria-expanded', String(open));
+  });
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#mapCtrls, .dd-panel')) setMapControlsOpen(false);
   });
