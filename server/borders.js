@@ -3,7 +3,7 @@
 // (owner card, never auto-published). Shown on the website (services panel tab + map layer).
 import crypto from 'node:crypto';
 import { InlineKeyboard, InputFile } from 'grammy';
-import { automaticMonitorRecipientIds, config } from './config.js';
+import { automaticMonitorRecipientIds, config, DEFAULT_PUBLIC_URL } from './config.js';
 import { store } from './store.js';
 import { normalizeArabic } from './places.js';
 import { renderBorderPng } from './alert-image.js';
@@ -12,7 +12,7 @@ const N = normalizeArabic;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const rid = () => crypto.randomBytes(4).toString('hex');
 const save = () => store.persist({ backupSoon: true });
-const siteUrl = () => (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+const siteUrl = () => (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
 const when = (t) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(t));
 
 export const COUNTRIES = {

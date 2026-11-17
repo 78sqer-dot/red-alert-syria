@@ -7,7 +7,7 @@
 //    Published items retain a direct source link on the website and in the channel.
 import crypto from 'node:crypto';
 import { InlineKeyboard, InputFile } from 'grammy';
-import { automaticMonitorRecipientIds, config } from './config.js';
+import { automaticMonitorRecipientIds, config, DEFAULT_PUBLIC_URL } from './config.js';
 import { store } from './store.js';
 import { governorates, normalizeArabic } from './places.js';
 import { weatherWarningInfo } from './news-ai.js';
@@ -18,7 +18,7 @@ const N = normalizeArabic;
 const rid = () => crypto.randomBytes(5).toString('hex');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const save = (soon = true) => store.persist({ backupSoon: soon });
-const siteUrl = () => (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+const siteUrl = () => (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
 const clock = (t) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(t));
 const dayClock = (t) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(t));
 

@@ -4,6 +4,7 @@
 // Pure SVG -> PNG with resvg; map = raster tiles (CARTO Voyager, OSM fallback), cached in memory.
 // Swap the logo by replacing public/img/logo-wordmark.svg (or set ALERT_IMAGE_LOGO to an .svg/.png).
 import fs from 'node:fs';
+import { DEFAULT_PUBLIC_URL } from './config.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
@@ -130,7 +131,7 @@ const PROVIDERS = [
   (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
   (z, x, y) => `https://${'abc'[(x + y) % 3]}.tile.openstreetmap.fr/hot/${z}/${x}/${y}.png`,
 ];
-const UA = 'RedAlertSyria/1.0 (+https://red-alert-syria.onrender.com)';
+const UA = `RedAlertSyria/1.0 (+${DEFAULT_PUBLIC_URL})`;
 const tileCache = new Map(); // key -> data URI (LRU, ~150 tiles)
 async function fetchTile(z, x, y, timeoutMs) {
   const key = `${z}/${x}/${y}`;
@@ -293,7 +294,7 @@ export async function alertImageSvg(alert, opts = {}) {
   const placeShort = place.length > placeMax ? place.slice(0, placeMax - 1) + '…' : place;
   o.push(`<text x="${sx}" y="118" font-family="${FF}" font-size="30" font-weight="700" text-anchor="${anchor}"${en ? '' : ' direction="rtl"'}><tspan fill="${lvl.color}">${ttx(sub)}</tspan>${placeShort ? `<tspan fill="#cbd5e1" font-weight="500">${ttx(' · ' + placeShort)}</tspan>` : ''}</text>`);
   // logo + domain on the other side
-  const domain = (process.env.PUBLIC_URL || 'https://red-alert-syria.onrender.com').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const domain = (process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   const lh = 50; const lw = LOGO ? Math.min(220, lh * (LOGO.ratio || 2.5)) : 0;
   const lx = en ? W - 36 - lw : 36;
   if (LOGO?.kind === 'svg') o.push(LOGO.body.replace('<svg', `<svg x="${lx}" y="28" width="${lw}" height="${lh}"`));

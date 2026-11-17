@@ -6,7 +6,7 @@
 //  - Fuel: SANA's official feed for Ministry of Energy / pricing-committee decisions.
 // Wrong numbers are worse than none: every value is range-checked; with no verified official data, nothing is posted.
 import { InlineKeyboard, InputFile } from 'grammy';
-import { automaticMonitorRecipientIds, config } from './config.js';
+import { automaticMonitorRecipientIds, config, DEFAULT_PUBLIC_URL } from './config.js';
 import { store } from './store.js';
 import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge, badgeWidth } from './alert-image.js';
@@ -40,7 +40,7 @@ const H_MS = 3600_000;
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const siteUrl = () => (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+const siteUrl = () => (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
 export const PRICE_TIMES = ['08:00', '08:30', '09:00', '09:30', '10:00', '11:00'];
 
 // ---------------------------------------------------------------- state
@@ -515,7 +515,7 @@ export function pricesSvg(st, now = Date.now()) {
   o.push(text(R, fy - 74, 'المصدر: مصرف سورية المركزي وقرارات المحروقات الحكومية المنشورة عبر سانا', { size: 17, weight: 500, fill: '#6b7280' }));
   o.push(text(R, fy - 48, 'لا تُعرض أسعار السوق الموازي أو الأسعار التجارية غير الرسمية · كل 1 ليرة جديدة تعادل 100 ليرة قديمة', { size: 17, weight: 500, fill: '#6b7280' }));
   o.push(`<rect x="${P}" y="${fy - 32}" width="${W - 2 * P}" height="1" fill="#1f2937"/>`);
-  o.push(text(R, fy + 6, 'red-alert-syria.onrender.com', { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
+  o.push(text(R, fy + 6, DEFAULT_PUBLIC_URL.replace(/^https?:\/\//, ''), { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
   const bh = 40; const bw = badgeWidth(bh);
   o.push(channelBadge(P, fy - bh + 14, { h: bh, dark: true }));
   void bw;

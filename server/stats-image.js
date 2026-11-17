@@ -1,5 +1,6 @@
 // Statistics image for the Telegram bots / channel (SVG -> PNG with resvg, Noto Kufi Arabic).
 import fs from 'node:fs';
+import { DEFAULT_PUBLIC_URL } from './config.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { channelBadge, badgeWidth } from './alert-image.js';
@@ -326,7 +327,7 @@ export function statsSvg(st, lang = 'ar') {
   // ---- footer
   const fy = H - 34;
   out.push(`<rect x="${P}" y="${fy - 40}" width="${W - 2 * P}" height="1" fill="#1f2937"/>`);
-  out.push(text(rtl ? R : P, fy, 'red-alert-syria.onrender.com', { size: 22, weight: 700, fill: '#cbd5e1', anchor: A, family: 'Noto Sans' }));
+  out.push(text(rtl ? R : P, fy, DEFAULT_PUBLIC_URL.replace(/^https?:\/\//, ''), { size: 22, weight: 700, fill: '#cbd5e1', anchor: A, family: 'Noto Sans' }));
   const bh = 42; const bw = badgeWidth(bh);
   out.push(channelBadge(rtl ? P : R - bw, fy - bh + 12, { h: bh, dark: true }));
   out.push('</svg>');

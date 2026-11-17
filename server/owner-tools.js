@@ -4,7 +4,7 @@
 //    the changes survive restarts; step-by-step guide for what can only be done by hand.
 // Editors can never reach these screens: every handler checks h.owner(ctx).
 import { Api, InlineKeyboard, Keyboard } from 'grammy';
-import { config, envDefaults, applyProject } from './config.js';
+import { config, envDefaults, applyProject, DEFAULT_PUBLIC_URL } from './config.js';
 import { store } from './store.js';
 import { renderLinked, renderLink, renderSetEnv } from './render-sync.js';
 
@@ -481,7 +481,7 @@ export function registerOwnerTools(bot, h) {
   // ---------------- 📋 guide
   const guide = (e) => {
     const own = config.ownerIds[0];
-    const site = config.publicUrl || 'https://red-alert-syria.onrender.com';
+    const site = config.publicUrl || DEFAULT_PUBLIC_URL;
     const envList = `<code>BOT_TOKEN</code> = ${e ? 'publishing bot token' : 'توكن بوت النشر'}\n<code>REPORT_BOT_TOKEN</code> = ${e ? 'report bot token' : 'توكن بوت التبليغ'}\n<code>OWNER_IDS</code> = ${e ? 'new owner ID' : 'معرّف المالك الجديد'} (${e ? 'now' : 'الآن'}: <code>${own}</code>)\n<code>CHANNEL_ID</code> = <code>${esc(config.channel)}</code>\n<code>CHANNEL_URL</code> = <code>${esc(config.channelUrl)}</code>\n<code>REPORT_BOT_USERNAME</code> = <code>${esc(config.reportBotUsername)}</code>\n<code>NODE_VERSION</code> = <code>22</code>`;
     return e ? [
       `📋 <b>Hand-over guide (1/2)</b>\n\n<b>0) Before you start</b> — on both accounts turn on Two-Step Verification (Settings → Privacy and Security → Two-Step Verification). Telegram only allows moving a channel or a bot after 2-step verification has been on for about 7 days. The new owner opens @${esc(adminName())} and presses Start.\n\n<b>1) Control panel (instant, here)</b> — 🔁 Project hand-over → 👤 Hand over to a new owner. The site, channel and bots keep running.\n\n<b>2) Channel ${esc(config.channel)}</b> — in Telegram: channel → ✏️ Edit → Administrators → Add Admin → the new owner (all rights) → open their admin entry → <b>Transfer Channel Ownership</b> → enter your 2-step password. Keep @${esc(adminName())} as admin with post/edit/delete rights.\n\n<b>3) Both bots</b> — in @BotFather: /mybots → @${esc(adminName())} → <b>Transfer Ownership</b> → Choose recipient → confirm. Repeat for @${esc(h.botInfo.report || config.reportBotUsername)}. Tokens stay the same, so nothing breaks. If the new owner later presses Revoke in BotFather, he must immediately paste the new token in 🔁 → 🤖/📨 (if the publishing bot's token was revoked, send <code>/setadmintoken NEW_TOKEN</code> to the report bot instead).`,

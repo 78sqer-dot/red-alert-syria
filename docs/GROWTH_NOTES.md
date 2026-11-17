@@ -1,5 +1,7 @@
 # Growth: watermark, SEO pages, sharing, channel profile
 
+> **Correction (2026-11-17):** the live site is **https://red-alert-syria-eiqz.onrender.com** — the old `red-alert-syria.onrender.com` service named below is suspended (503) and must not be used in links, bios, or Search Console. The historical entries below are kept as written.
+
 ## Telegram channel profile (changed 2026-10-25 via the publishing bot)
 
 Old title: `( Red Alert Syria 🇸🇾)`

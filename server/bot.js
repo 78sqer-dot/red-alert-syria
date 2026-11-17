@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
 import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
-import { config, isOwner, envDefaults } from './config.js';
+import { config, isOwner, envDefaults, DEFAULT_PUBLIC_URL } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert, sanitizeAlertMedia, sanitizeAlertMediaItems, mergeAlertMediaItems, ALERT_MEDIA_MAX_BYTES } from './store.js';
@@ -520,9 +520,9 @@ function mainKeyboard(ctx) {
   }
   kb.text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd');
   if (staff(ctx)) kb.text(lang === 'en' ? '🛂 Border crossings' : '🛂 المعابر', 'bd').row();
-  else kb.url(lang === 'en' ? '🛂 Border crossings' : '🛂 حالة المعابر', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/${lang === 'en' ? 'en' : 'ar'}/#borders`).row();
+  else kb.url(lang === 'en' ? '🛂 Border crossings' : '🛂 حالة المعابر', `${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '')}/${lang === 'en' ? 'en' : 'ar'}/#borders`).row();
   if (roleOf(ctx) === 'report' && !staff(ctx)) {
-    const site = (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+    const site = (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
     kb.url(lang === 'en' ? '🔎 Find a job' : '🔎 أبحث عن عمل', `${site}/${lang === 'en' ? 'en' : 'ar'}/#jobs`)
       .text(lang === 'en' ? '💼 Post a vacancy' : '💼 مطلوب موظف', 'j:new').row();
   }
@@ -1568,7 +1568,7 @@ function dailyCaption(st) {
     + `📊 إجمالي التنبيهات خلال 24 ساعة: <b>${st.total}</b>\n`
     + (types ? `🔺 الأكثر: ${types}\n` : '')
     + (top ? `📍 أكثر المحافظات: <b>${esc(top.ar)}</b> (${top.n})\n` : '')
-    + `\n🗺 الخريطة الحية: ${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`;
+    + `\n🗺 الخريطة الحية: ${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '')}/ar/`;
 }
 function weeklyCaption(st) {
   const a = damascusParts(st.from + 3600_000); const b = damascusParts(st.to);
@@ -1579,7 +1579,7 @@ function weeklyCaption(st) {
   const diff = st.total - st.prev;
   const cmp = st.prev ? ` (${diff > 0 ? '▲' : diff < 0 ? '▼' : '='} ${Math.abs(Math.round((diff / st.prev) * 100))}% عن الأسبوع السابق)` : '';
   const bd = st.busiestDay; const bh = st.busiestHour;
-  const url = (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+  const url = (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
   return `📅 <b>التقرير الأسبوعي — ${range}</b>\n\n`
     + `📊 إجمالي التنبيهات: <b>${st.total}</b>${cmp}\n`
     + (types ? `🔺 الأكثر: ${types}\n` : '')
@@ -1607,7 +1607,7 @@ export function startDailySummary(api0) {
       const st = collectStats('day');
       if (!st.total) { console.log(`[daily] ${p.date}: no alerts, nothing posted`); return; }
       const kb = new InlineKeyboard();
-      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`);
+      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '')}/ar/`);
       if (config.reportBotUsername) kb.url('📝 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
       await apiNow().sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-${p.date}.png`), { caption: dailyCaption(st), parse_mode: 'HTML', reply_markup: kb });
       console.log(`[daily] ${p.date}: summary posted (${st.total} alerts)`);
@@ -1630,7 +1630,7 @@ export function startDailySummary(api0) {
       const st = collectStats('week');
       if (!st.total) { console.log(`[weekly] ${p.date}: no alerts this week, nothing posted`); return; }
       const kb = new InlineKeyboard();
-      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`);
+      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '')}/ar/`);
       if (config.reportBotUsername) kb.url('📝 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
       await apiNow().sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-week-${p.date}.png`), { caption: weeklyCaption(st), parse_mode: 'HTML', reply_markup: kb });
       console.log(`[weekly] ${p.date}: report posted (${st.total} alerts)`);
@@ -1834,7 +1834,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
   // Owner commands
   const ownerOnly = (fn) => async (ctx) => (owner(ctx) ? fn(ctx) : ctx.reply(L(ctx).onlyOwner));
-  const alnabaSite = (section = '') => `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/+$/, '')}/alnaba/${section ? `${section}/` : ''}`;
+  const alnabaSite = (section = '') => `${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/+$/, '')}/alnaba/${section ? `${section}/` : ''}`;
   const alnabaHomeKeyboard = (ctx) => new InlineKeyboard().text(langOf(ctx) === 'en' ? '↩️ Main menu' : '↩️ رجوع للقائمة', 'nb:home');
   const withAlnabaHomeButton = (keyboard, ctx) => keyboard
     .row()
