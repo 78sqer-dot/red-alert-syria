@@ -305,6 +305,29 @@ export function alertButtonLabel(key, lang = 'ar') {
   return [emoji, label].filter(Boolean).join(' ');
 }
 
+// Display-layer helper: many stored headlines repeat the alert's own type label
+// («خبر عاجل — …», "Breaking news — …"). Where the UI already shows that label as
+// a chip/tag next to the headline (alert ticker, breaking banner), the repeated
+// prefix is noise, so strip it for display only — the stored title is untouched.
+// A separator (—, -, :, |, …) is required, so a headline that merely starts with
+// the label word as part of its sentence is never altered, and a headline that
+// is only the label is kept as-is.
+const TYPE_LABEL_SEPARATOR = /^\s*[—–\-:|·•/：]\s*/;
+export function stripTypeLabelPrefix(title, typeKey) {
+  const s = String(title ?? '').trim();
+  if (!s || !ALERT_TYPES[typeKey]) return s;
+  const t = ALERT_TYPES[typeKey];
+  const labels = [...new Set([t.ar, t.en, t.button_ar, t.button_en, t.tag_ar, t.tag_en].filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  for (const label of labels) {
+    if (!s.startsWith(label)) continue;
+    const rest = s.slice(label.length);
+    const m = rest.match(TYPE_LABEL_SEPARATOR);
+    if (m && rest.length > m[0].length) return rest.slice(m[0].length).trim();
+  }
+  return s;
+}
+
 // Return a weapon silhouette only when the report explicitly identifies a firearm.
 function describedFirearmGlyph(alert) {
   const text = [alert.title, alert.title_en, alert.description, alert.description_en, alert.details, alert.text]

@@ -1,7 +1,7 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=38';
 import { createLive } from './live.js?v=1';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=41';
 import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
@@ -477,7 +477,7 @@ function renderTicker() {
     const el = document.createElement('div');
     el.className = 'tick';
     el.dataset.id = a.id;
-    el.innerHTML = `${badge(a)}<span class="t-title">${esc(titleOf(a))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
+    el.innerHTML = `${badge(a)}<span class="t-title">${esc(stripTypeLabelPrefix(titleOf(a), a.type))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
     box.appendChild(el);
     if (document.hidden) {
       olds.forEach((o) => o.remove());
@@ -956,7 +956,7 @@ function alertToast(a) {
 let breakingTimer = null;
 function showBreaking(a) {
   const b = $('#breaking');
-  $('#breakingText').textContent = descOf(a) || titleOf(a);
+  $('#breakingText').textContent = stripTypeLabelPrefix(descOf(a) || titleOf(a), a.type);
   $('#breakingText').dataset.id = a.id;
   b.hidden = false;
   b.style.animation = 'none';
