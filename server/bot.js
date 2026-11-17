@@ -7,6 +7,7 @@ import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from '.
 export { runtimeHooks };
 import { store, publicAlert, sanitizeAlertMedia, sanitizeAlertMediaItems, mergeAlertMediaItems, ALERT_MEDIA_MAX_BYTES } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, alertButtonLabel, droneAuto, BORDER_REGIONS, BORDER_MARKERS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, CIVIL_EMOJIS, eventVisual } from '../shared/types.js';
+import { CONDEMNATIONS, CONDEMNATION_KEYS, condemnationKey, condemnationText } from '../shared/condemnations.js';
 import { T, TITLES, fmtDur } from './bot-texts.js';
 import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
@@ -425,18 +426,34 @@ function draftSummary(d, lang) {
   if (['breaking', 'political'].includes(d.type)) lines.push(lang === 'en'
     ? '⚖️ Attribute claims to the speaker/institution stated in the story; preserve uncertainty and supplied context. Opinion is separate and clearly labeled; do not invent replies or balance.'
     : '⚖️ انسب الادعاء إلى المتحدث أو المؤسسة المذكورة في الخبر، واحفظ الشك والسياق المتاح. الرأي منفصل وموسوم بوضوح؛ لا تخترع ردوداً أو توازناً.');
+  const condemnLine = condemnationText(d.condemn);
+  if (condemnLine) lines.push(`⚖️ <b>${lang === 'en' ? 'Condemnation' : 'إدانة'}:</b> ${esc(condemnLine)}`);
   lines.push(`⏱ <b>${l.durLabel}:</b> ${fmtDur(d.ttlMin, lang)}`);
   return lines.join('\n');
 }
 
-function reportReviewKeyboard(lang, rid) {
+export function reportReviewKeyboard(lang, rid, draft = null) {
   const l = T[lang] || T.ar;
   const en = lang === 'en';
+  const hasCondemn = !!condemnationKey(draft?.condemn);
   return new InlineKeyboard()
     .text(l.btnApprove, 'rap:' + rid).row()
     .text(en ? '🔎 Verify from sources' : '🔎 تحقق من المصادر', 'rv:' + rid).row()
+    .text(en ? `⚖️ Condemnation${hasCondemn ? ' ✓' : ''}` : `⚖️ إدانة${hasCondemn ? ' ✓' : ''}`, 'rcd:' + rid).row()
     .text(l.btnEditPublish, 'red:' + rid).row()
     .text(l.btnReject, 'rrj:' + rid).text(l.btnBan, 'rbn:' + rid);
+}
+
+/** Variant picker for the report review card (rcd:/rcdv:/rcb: callbacks). */
+export function reportCondemnKeyboard(lang, rid, draft = null) {
+  const en = lang === 'en';
+  const kb = new InlineKeyboard();
+  for (const key of CONDEMNATION_KEYS) {
+    const c = CONDEMNATIONS[key];
+    kb.text(`${draft?.condemn === key ? '✓ ' : ''}${en ? c.label_en : c.label_ar}`, `rcdv:${rid}:${key}`).row();
+  }
+  if (condemnationKey(draft?.condemn)) kb.text(en ? '🗑 Remove condemnation' : '🗑 إزالة الإدانة', `rcdv:${rid}:off`).row();
+  return kb.text(en ? '↩️ Back' : '↩️ رجوع', 'rcb:' + rid);
 }
 
 function reportVerificationBlock(v, lang) {
@@ -663,6 +680,9 @@ function previewKeyboard(ctx, d) {
   kb.text(mediaItems.length ? l.btnReplaceMedia : l.btnAddMedia, 'attachmedia').row();
   if (mediaItems.length) kb.text(l.btnRemoveMedia, 'removemedia').row();
   kb.text(l.btnDuration(d.ttlMin), 'dur').row();
+  // publishing flow only (never the public report form): attach a condemnation
+  // formula that buildAlertInput appends once to the published text.
+  if (d.mode === 'publish') kb.text(enx ? `⚖️ Condemnation${condemnationKey(d.condemn) ? ' ✓' : ''}` : `⚖️ إدانة${condemnationKey(d.condemn) ? ' ✓' : ''}`, 'condemn').row();
   // drones: "تحليق مكثف" = 2-3 drones over every circle on the map instead of one
   if (d.type === 'uav' && d.mode !== 'report') {
     const on = typeof d.intense === 'boolean' ? d.intense : droneAuto(d.details) > 1;
@@ -1054,13 +1074,23 @@ export function buildAlertInput(d, author) {
   // Monitored-news drafts that carry a full body keep the concise headline as the
   // public lead (description); the full text travels separately as `body`. Drafts
   // without a body keep the historic details/text behaviour untouched.
-  const description = d.source === 'news' && d.body && d.headline
+  let description = d.source === 'news' && d.body && d.headline
     ? cleanPublicText(d.headline)
     : cleanPublicText(d.type === 'breaking' ? d.text : d.details);
   // Full report text (monitored news drafts carry it as `body`): published alongside
   // the concise description, never instead of it; dropped when it adds nothing.
   const fullBody = cleanPublicText(String(d.body || ''));
-  const body = fullBody && fullBody !== description ? fullBody : undefined;
+  let body = fullBody && fullBody !== description ? fullBody : undefined;
+  // ⚖️ Owner-attached condemnation (review cards of both bots): appended exactly
+  // once, at the end of the published body — when there is no separate body the
+  // description IS the published text, so the line closes it instead. It never
+  // enters the title/headline, and re-running this builder cannot stack it.
+  const condemnLine = condemnationText(d.condemn);
+  if (condemnLine) {
+    if (body) { if (!body.includes(condemnLine)) body = `${body}\n\n${condemnLine}`; }
+    else if (description) { if (!description.includes(condemnLine)) description = `${description}\n\n${condemnLine}`; }
+    else body = condemnLine;
+  }
   return {
     type: d.type,
     title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}${signalPlatform ? ' — مسيّرة' : ''}`,
@@ -2842,6 +2872,25 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if ((d.type === 'road' ? ROAD_DURATIONS : DURATIONS).includes(m)) d.ttlMin = m;
     await showPreview(ctx, d);
   }));
+  bot.callbackQuery('condemn', needDraft(async (ctx, d) => {
+    if (!staff(ctx) || d.mode !== 'publish') return;
+    const en = langOf(ctx) === 'en';
+    const kb = new InlineKeyboard();
+    for (const key of CONDEMNATION_KEYS) {
+      const c = CONDEMNATIONS[key];
+      kb.text(`${d.condemn === key ? '✓ ' : ''}${en ? c.label_en : c.label_ar}`, 'setcondemn:' + key).row();
+    }
+    if (condemnationKey(d.condemn)) kb.text(en ? '🗑 Remove condemnation' : '🗑 إزالة الإدانة', 'setcondemn:off').row();
+    kb.text(L(ctx).btnBack, 'preview');
+    await show(ctx, en ? '⚖️ Choose the condemnation formula to append to the published text:' : '⚖️ اختر صيغة الإدانة التي ستُرفق بنص النشر:', kb);
+  }));
+  bot.callbackQuery(/^setcondemn:(\w+)$/, needDraft(async (ctx, d) => {
+    if (!staff(ctx) || d.mode !== 'publish') return;
+    const key = ctx.match[1];
+    if (key === 'off') delete d.condemn;
+    else if (condemnationKey(key)) d.condemn = key;
+    return showPreview(ctx, d);
+  }));
   bot.callbackQuery('preview', needDraft((ctx, d) => showPreview(ctx, d)));
 
   bot.callbackQuery('save_edit', needDraft(async (ctx, d) => {
@@ -2926,7 +2975,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
             }
           } catch (e) { console.warn('[report] media preview to reviewer failed:', e.description || e.message); }
         }
-        const m = await api.sendMessage(uid, reportCardText(rep, lang), { parse_mode: 'HTML', reply_markup: reportReviewKeyboard(lang, rid), _keep: 'c' }); // stays until handled
+        const m = await api.sendMessage(uid, reportCardText(rep, lang), { parse_mode: 'HTML', reply_markup: reportReviewKeyboard(lang, rid, rep.draft), _keep: 'c' }); // stays until handled
         rep.messages.push([uid, m.message_id]);
         store.reportPut(rid, rep); // saved with every card, so a decision always finds it
         store.relayPut(`a:${uid}:${m.message_id}`, ctx.from.id);
@@ -2962,7 +3011,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         const lang = store.userLang(chat) === 'en' ? 'en' : 'ar';
         try {
           await reviewerApi.editMessageText(chat, mid, reportCardText(current, lang), {
-            parse_mode: 'HTML', reply_markup: reportReviewKeyboard(lang, rid),
+            parse_mode: 'HTML', reply_markup: reportReviewKeyboard(lang, rid, current.draft),
             link_preview_options: { is_disabled: true },
           });
         } catch { /* card may have been deleted or already updated */ }
@@ -2982,6 +3031,54 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     latest.verification = { ...result, status: 'done', by: ctx.from.id };
     store.reportPut(rid, latest);
     await refresh(latest);
+  });
+
+  // ⚖️ Condemnation picker on the report review card: the choice is stored as a
+  // variant key on rep.draft (never as pasted text), so switching replaces and
+  // removing is clean; buildAlertInput resolves and appends it once at publish.
+  const loadPendingReport = async (rid) => {
+    if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
+    return store.reportGet(rid);
+  };
+  const reportGone = async (ctx) => {
+    const en = langOf(ctx) === 'en';
+    try { await ctx.answerCallbackQuery({ text: en ? 'This report is no longer available.' : 'هذا البلاغ لم يعد متاحاً.', show_alert: true }); } catch { /* ignore */ }
+  };
+  bot.callbackQuery(/^rcd:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const rep = await loadPendingReport(ctx.match[1]);
+    if (!rep) return reportGone(ctx);
+    await ctx.answerCallbackQuery().catch(() => {});
+    try { await ctx.editMessageReplyMarkup({ reply_markup: reportCondemnKeyboard(langOf(ctx), ctx.match[1], rep.draft) }); } catch { /* ignore */ }
+  });
+  bot.callbackQuery(/^rcb:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const rep = await loadPendingReport(ctx.match[1]);
+    if (!rep) return reportGone(ctx);
+    await ctx.answerCallbackQuery().catch(() => {});
+    try { await ctx.editMessageReplyMarkup({ reply_markup: reportReviewKeyboard(langOf(ctx), ctx.match[1], rep.draft) }); } catch { /* ignore */ }
+  });
+  bot.callbackQuery(/^rcdv:(\w+):(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const [, rid, key] = ctx.match;
+    const rep = await loadPendingReport(rid);
+    if (!rep) return reportGone(ctx);
+    if (key === 'off') delete rep.draft.condemn;
+    else if (condemnationKey(key)) rep.draft.condemn = key;
+    else return ctx.answerCallbackQuery();
+    store.reportPut(rid, rep);
+    const en = langOf(ctx) === 'en';
+    await ctx.answerCallbackQuery({ text: key === 'off' ? (en ? 'Condemnation removed' : 'أُزيلت الإدانة') : (en ? 'Condemnation attached to the published text' : 'أُرفقت الإدانة بنص النشر') }).catch(() => {});
+    const reviewerApi = APIS.admin || reviewApi || ctx.api;
+    for (const [chat, mid] of rep.messages || []) {
+      const lang = store.userLang(chat) === 'en' ? 'en' : 'ar';
+      try {
+        await reviewerApi.editMessageText(chat, mid, reportCardText(rep, lang), {
+          parse_mode: 'HTML', reply_markup: reportReviewKeyboard(lang, rid, rep.draft),
+          link_preview_options: { is_disabled: true },
+        });
+      } catch { /* card may have been deleted or already updated */ }
+    }
   });
 
   // Remove the report from every reviewer's chat (optionally keeping the current one).
