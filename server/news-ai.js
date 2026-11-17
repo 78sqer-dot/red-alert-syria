@@ -251,10 +251,91 @@ export function hasPlaceIntroducer(words, i, rawFirst = '') {
   if (prev && (PLACE_INTRODUCERS.has(prev) || PLACE_INTRODUCERS.has(stripAl(prev)))) return true;
   return /^[بل](?=\S{3,})/u.test(String(rawFirst || '')); // a joined preposition on the candidate itself («بالمزرعة»)
 }
+// Person-name guard (companion to the alt-name rule): a token that occurs in
+// the text ONLY as somebody's name — inside quotation marks, or right after a
+// person introducer («الزوجين سليمان كرنوص», «السيد …», «الشهيد …») — is a
+// person, not a place, even when it is the alternative spelling of a real
+// village. The free-text scanners rarely meet it (a person introducer is not a
+// place introducer), but the AI path copies place names out of the post: a
+// death notice «وفاة الزوجين "سليمان كرنوص" وزوجته "سلطانة حسن" اختناقاً…»
+// proposed «سليمان» as its place, nameInText passed (the word IS in the post —
+// as a name), and resolvePlace alt-matched it to the Hasakah village «سلمان»
+// (id 420874), pinning the notice to a village the post never mentions. The
+// guard only ever applies to alt-only matches; canonical names are unaffected.
+const PERSON_INTRODUCERS = new Set(['الزوجين', 'الزوج', 'الزوجه', 'السيد', 'السيده', 'المدعو', 'المدعوه', 'الشهيد', 'الشهيده', 'المرحوم', 'المرحومه', 'الفقيد', 'الفقده', 'المتوفي', 'المتوفيه', 'القتيل', 'القتيله', 'المواطن', 'المواطنه', 'الشاب', 'الشابه', 'الطفل', 'الطفله'].map(N));
+/** the text's normalized words (same stream as N(text).split(' ')) with a
+ * per-word flag: quoted (inside «…» / "…" in the raw text) */
+function wordStream(text) {
+  const words = [];
+  const quoted = [];
+  let inQ = false;
+  for (const raw of String(text || '').split(/\s+/)) {
+    if (!raw) continue;
+    let q = inQ;
+    for (const ch of raw) {
+      if (ch === '"' || ch === '“' || ch === '”') { q = true; inQ = !inQ; }
+      else if (ch === '«' || ch === '‘') { q = true; inQ = true; }
+      else if (ch === '»' || ch === '’') { q = true; inQ = false; }
+    }
+    for (const part of N(raw).split(' ')) if (part) { words.push(part); quoted.push(q); }
+  }
+  return { words, quoted };
+}
+const personBoundAt = (words, quoted, i) => Boolean(quoted[i])
+  || (i > 0 && PERSON_INTRODUCERS.has(words[i - 1]))
+  || (i > 1 && PERSON_INTRODUCERS.has(words[i - 2]));
+/** indexes into the N(text) word stream whose word is spoken as a person's name */
+export function personBoundWordIndexes(text) {
+  const { words, quoted } = wordStream(text);
+  const out = new Set();
+  for (let i = 0; i < words.length; i++) if (personBoundAt(words, quoted, i)) out.add(i);
+  return out;
+}
+const occurrenceVariants = (word, first) => {
+  const out = new Set([word, stripAl(word)]);
+  if (first) {
+    const unprefixed = word.replace(/^(وال|بال|لل|فال|كال|و|ف|ب|ل|ك)/, '');
+    out.add(unprefixed); out.add(stripAl(unprefixed));
+  }
+  return out;
+};
+/** one flag per occurrence of `name` in the text: was that occurrence spoken
+ * as a person's name (quoted, or right after a person introducer)? */
+export function nameOccurrencePersonFlags(text, name) {
+  const n = N(String(name || '')).replace(PREFIX, '').trim();
+  if (!n) return [];
+  const wanted = n.split(/\s+/).filter(Boolean);
+  const { words, quoted } = wordStream(text);
+  const flags = [];
+  for (let s = 0; s + wanted.length <= words.length; s++) {
+    const hit = wanted.every((part, off) => {
+      const variants = occurrenceVariants(words[s + off], off === 0);
+      return variants.has(part) || variants.has(stripAl(part));
+    });
+    if (hit) flags.push(personBoundAt(words, quoted, s));
+  }
+  return flags;
+}
+/** the name occurs in the text, and EVERY occurrence is a person's name */
+export function isPersonNameOnly(text, name) {
+  const flags = nameOccurrencePersonFlags(text, name);
+  return flags.length > 0 && flags.every(Boolean);
+}
+/** an AI-proposed name that resolves to `place` only through an alternative
+ * spelling, while the name itself occurs in the post only as a person's name:
+ * the pin came from the person, not from a place mention — reject it */
+export function altPinFromPersonName(name, text, place) {
+  if (!place) return false;
+  const tries = [String(name || '')];
+  let s = N(tries[0]);
+  for (let i = 0; i < 3 && PREFIX.test(s); i++) { s = s.replace(PREFIX, ''); tries.push(s); }
+  return tries.some((t) => t && isAltOnlyMatch(t, [place]) && isPersonNameOnly(text, t));
+}
 /** exact names of villages/towns of one governorate that appear as words in the text (most specific first) */
 export function scanTextPlaces(text, govCode, max = 3) {
   if (!govCode) return [];
   const words = N(text).split(' ');
+  const pBound = personBoundWordIndexes(text);
   const out = [];
   for (let i = 0; i < words.length && out.length < max; i++) {
     for (const len of [3, 2, 1]) {
@@ -265,7 +346,9 @@ export function scanTextPlaces(text, govCode, max = 3) {
       for (const cand of variants) {
         if (cand.length < 4 || GENERIC.has(cand) || GENERIC.has(stripAl(cand)) || govCodeOf(cand)) continue;
         hits = exactHits(cand, govCode);
-        if (hits.length && isAltOnlyMatch(cand, hits) && !hasPlaceIntroducer(words, i, raw)) hits = [];
+        // alt-only: needs a place introducer, and never when the word is spoken
+        // as a person's name («الزوجين "سليمان كرنوص"» is not the village سلمان)
+        if (hits.length && isAltOnlyMatch(cand, hits) && (!hasPlaceIntroducer(words, i, raw) || pBound.has(i))) hits = [];
         if (hits.length) break;
       }
       if (!hits.length) continue;
@@ -604,6 +687,7 @@ export function ruleClassify(text, { breaking = false } = {}) {
   if (!type) return null;
   // places: governorate / district / place names that appear as words in the text
   const words = nt.split(' ');
+  const pBound = personBoundWordIndexes(text);
   const found = [];
   for (let i = 0; i < words.length && found.length < 3; i++) {
     for (const len of [3, 2, 1]) {
@@ -613,8 +697,9 @@ export function ruleClassify(text, { breaking = false } = {}) {
       // generic words that are also place names («بالسجن المؤبد» is a prison sentence, not the village of Al-Sijn/Al-Mazraah)
       if (GENERIC.has(N(cand)) || GENERIC.has(stripAl(N(cand)))) continue;
       const hits = exactHits(cand, null);
-      // alt-only matches need a place introducer («سليمان» the man vs «سلمان» the village)
-      if (hits.length && isAltOnlyMatch(cand, hits) && !hasPlaceIntroducer(words, i, rawCand)) continue;
+      // alt-only matches need a place introducer, and never a person's name
+      // («سليمان» the man vs «سلمان» the village)
+      if (hits.length && isAltOnlyMatch(cand, hits) && (!hasPlaceIntroducer(words, i, rawCand) || pBound.has(i))) continue;
       const g = govCodeOf(cand);
       if (g && len <= 2) { found.push({ name: cand, gov: getGov(g).ar }); i += len - 1; break; }
       if (hits.length && new Set(hits.map((p) => p.gov)).size === 1 && hits[0].rank <= 4 && cand.length >= 4) { found.push({ name: cand, gov: getGov(hits[0].gov).ar }); i += len - 1; break; }

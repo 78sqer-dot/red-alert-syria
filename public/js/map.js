@@ -106,6 +106,14 @@ function localize(style, lang) {
   for (const l of style.layers) {
     if (l.id === 'place_state' || l.id === 'label_state') l.layout = { ...(l.layout || {}), visibility: 'none' };
   }
+  // Subordinate the basemap's own place labels (cities, towns, the country name
+  // and neighbouring-country places like Mosul/Kirkuk): our governorate labels
+  // sit on top of the symbol stack at full strength, so the basemap's recede.
+  for (const l of style.layers) {
+    if (l.type === 'symbol' && l['source-layer'] === 'place' && l.layout?.visibility !== 'none') {
+      l.paint = { ...(l.paint || {}), 'text-opacity': 0.78 };
+    }
+  }
   return style;
 }
 
@@ -341,7 +349,15 @@ export class AlertMap {
     // hidden in localize()): brighter for readability, and the edge governorates are
     // anchored so their names grow inland instead of clipping at the map edge —
     // Tartous/Latakia on the west coast extend east, Hasakah/Deir ez-Zor extend west.
-    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 8, 12, 11, 14], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 12 }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)', 'text-halo-width': 1.3 } });
+    // Added LAST (beforeId null = top of the layer stack): symbol placement gives
+    // the topmost layer first pick of the collision index, so all 14 governorate
+    // names win their space against basemap labels (previously this layer sat
+    // below every basemap symbol and its labels were silently dropped wherever a
+    // basemap city label wanted the same spot — Aleppo/Homs/Daraa vanished while
+    // uncontested neighbour labels like Mosul/Kirkuk rendered). DOM markers still
+    // paint above the canvas, so the halo is widened to keep a label readable
+    // when a marker sits on it.
+    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 11, 8, 12.5, 11, 14], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 12, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 2 } }, null);
     add({ id: 'ras-border-glow', type: 'line', source: 'ras-border', paint: { 'line-color': '#ff3b4e', 'line-opacity': 0.22, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 10], 'line-blur': 3 } });
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
     // Geographic impact circles remain accurate; use restrained fills and outlines to preserve base-map detail.

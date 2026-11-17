@@ -101,6 +101,11 @@ html.dark .report-btn { color: #fff; }
    squeezing, so neither edge of the strip can clip mid-text on narrow phones */
 .tick .badge { flex: none; }
 .tick .t-time { flex: none; white-space: nowrap; }
+/* the tick clips its content to its own box and the chip is width-capped, so
+   chip + time always fit beside the ellipsised title: the time element can
+   never be painted half off the strip's edge on narrow webview widths */
+.tick { box-sizing: border-box; overflow: hidden; }
+.tick .badge { max-width: 44%; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .tick.empty { color: var(--text-muted); font-weight: 500; cursor: default; }
 .mobile-ticker { display: none; }
 
@@ -340,6 +345,8 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 .map-legend { position: absolute; bottom: 40px; inset-inline-start: 12px; z-index: 11; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .legend-btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; border-radius: 9px; background: var(--bg-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 12.5px; font-weight: 700; color: var(--text-secondary); cursor: pointer; }
 .legend-btn:hover { color: var(--text-primary); }
+/* the legend label never truncates: it stays on one line at any width */
+.legend-btn, .legend-btn > span { white-space: nowrap; }
 .legend-btn svg { width: 16px; height: 16px; }
 .legend-card { width: 232px; max-height: min(46vh, 350px); overflow-y: auto; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 8px 12px; scrollbar-width: thin; }
 .legend-row { display: flex; align-items: center; gap: 9px; padding: 4px 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
@@ -804,7 +811,10 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
   .map-ctrls { top: 12px; bottom: auto; inset-inline-start: 10px; }
   .ctrl-btn { width: 36px; height: 36px; }
   .map-bottom-controls { bottom: calc(23px + env(safe-area-inset-bottom, 0px)); left: auto; inset-inline-end: 10px; gap: 6px; transform: none; }
-  .map-legend { bottom: calc(23px + env(safe-area-inset-bottom, 0px)); inset-inline-start: 10px; }
+  /* raised one row above the bottom bar: the legend pill no longer shares the
+     bottom row with the brand pill + globe button, which crowded at ~390px
+     and clipped the legend label («مفتاح الخر…») */
+  .map-legend { bottom: calc(67px + env(safe-area-inset-bottom, 0px)); inset-inline-start: 10px; }
   .legend-card { width: min(232px, calc(100vw - 130px)); }
   .about-pill { height: 36px; padding: 0 12px; max-width: calc(100% - 48px); overflow: hidden; text-overflow: ellipsis; }
   .reset-view-btn { width: 38px; height: 38px; }
@@ -1468,6 +1478,33 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .live-empty { color: var(--text-muted); font-weight: 500; }
 @keyframes live-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .live-track { animation: none; } .live-marquee { overflow-x: auto; } }
+/* Marquee halves: the track is exactly two identical halves, so the -50%
+   keyframe loop is seamless at any content width. A still track (empty feed)
+   never animates; a touch holds the scroll. */
+.live-half { display: flex; align-items: center; }
+.live-track { will-change: transform; }
+.live-track.still { animation: none; }
+.live-marquee.paused .live-track { animation-play-state: paused; }
+
+/* «مباشر» map button: lives in the top map-tools cluster (#mapCtrls), clear of
+   the topbar and of the bottom row; always present even when the live strip
+   was dismissed; opens the Live window on the World news view. */
+.live-map-btn { display: inline-flex; align-items: center; gap: 7px; height: 42px; padding: 0 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--red) 55%, var(--border)); background: var(--bg-elevated); color: var(--red); font: inherit; font-weight: 800; font-size: 13.5px; box-shadow: var(--shadow); cursor: pointer; flex: none; }
+.live-map-btn:hover { background: var(--bg-card-hover); }
+.live-dot-pulse { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex: none; }
+.live-dot-pulse::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--red); opacity: 0; animation: ping 1.8s cubic-bezier(0, 0, .2, 1) infinite; }
+
+/* Vertical auto-scroll for the Live window's news + OSINT lists (Crucix-style):
+   the list is duplicated once for a seamless upward loop at ~30px/s; it pauses
+   on hover or while touched/dragged, never runs while the sheet is closed,
+   and reduced-motion users get a plain scrollable list instead. */
+.live-scroll { position: relative; overflow: hidden; max-height: min(46vh, 460px); }
+.live-vtrack { display: flex; flex-direction: column; will-change: transform; }
+.live-vtrack.anim { animation: live-vscroll linear infinite; }
+.live-scroll:hover .live-vtrack.anim, .live-scroll.paused .live-vtrack.anim { animation-play-state: paused; }
+.live-sheet:not(.open) .live-vtrack.anim { animation: none; }
+@keyframes live-vscroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@media (prefers-reduced-motion: reduce) { .live-vtrack.anim { animation: none; } .live-scroll { overflow-y: auto; } }
 .live-head { display: flex; align-items: center; justify-content: space-between; }
 .live-head h2 { margin: 0; }
 .live-close { border: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: var(--text-secondary); }
