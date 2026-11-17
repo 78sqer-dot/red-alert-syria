@@ -73,9 +73,12 @@ test('legend markup is collapsed by default and clear of the other map controls'
   assert.match(html, /<div class="map-legend" id="mapLegend">/);
   assert.match(html, /<div class="legend-card" id="legendCard" role="group" hidden>/);
   assert.match(html, /id="legendBtn"[^>]*aria-expanded="false"[^>]*aria-controls="legendCard"/);
-  // bottom-inline-start corner, above the scale control; nothing else lives there
+  // bottom-inline-start corner, above the scale control; nothing else lives there.
+  // Mobile: raised one row (67px) above the bottom bar since the interface-fix
+  // round — at ~390px the legend pill shared the bottom row with the brand pill
+  // + globe button and its label clipped to «مفتاح الخر…».
   assert.match(css, /\.map-legend \{ position: absolute; bottom: 40px; inset-inline-start: 12px; z-index: 11;/);
-  assert.match(css, /\.map-legend \{ bottom: calc\(23px \+ env\(safe-area-inset-bottom, 0px\)\); inset-inline-start: 10px; \}/);
+  assert.match(css, /\.map-legend \{ bottom: calc\(67px \+ env\(safe-area-inset-bottom, 0px\)\); inset-inline-start: 10px; \}/);
 });
 
 test('legend rows are built from the shared event visuals and explain cluster + civil dot', () => {

@@ -11,7 +11,7 @@ import { InlineKeyboard } from 'grammy';
 import { automaticMonitorRecipientIds, config, isOwner } from './config.js';
 import { store } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji, alertButtonLabel } from '../shared/types.js';
-import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
+import { locationFrom, normalizeArabic, governorates, getGov, getPlace } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
 import { onRoadNewsPost, roadMonitorDebug, roadMonitorActivationTime, parseRoadText } from './road-monitor.js';
@@ -21,7 +21,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, truncateAtWordBoundary, truncatedPrefixCut } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
@@ -1141,6 +1141,16 @@ function buildLocations(r, it) {
     if (!nameInText(p.name, it.text) && !(p.gov && nameInText(p.gov, it.text))) continue; // invented by the AI
     const x = resolvePlace(p);
     if (!x) continue;
+    // Person-name guard: the proposed name may be in the post only as somebody's
+    // name («وفاة الزوجين "سليمان كرنوص"…») while resolvePlace alt-matches it to
+    // a village («سلمان», Hasakah). That pin comes from the person, not from a
+    // place mention: drop the pin and keep only its governorate as the fallback
+    // level (the draft then lands governorate-level or waits for review).
+    if (x.kind === 'place' && altPinFromPersonName(p.name, it.text, getPlace(x.placeId))) {
+      const pg = getPlace(x.placeId)?.gov;
+      if (pg) govs.add(pg);
+      continue;
+    }
     if (x.govCode) govs.add(x.govCode);
     let loc = locationFrom(x);
     // "بريف القنيطرة" -> the countryside, not the city of the same name
