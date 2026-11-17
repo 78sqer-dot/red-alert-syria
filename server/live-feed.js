@@ -9,8 +9,14 @@
 //    Arabic, RT Arabic. (Al Arabiya's feed answers 403 to this server and
 //    Stooq is behind a JavaScript bot wall, so neither is used.)
 //  - OSINT: Telegram public previews (t.me/s/) via news-sources.js machinery.
-//  - Markets: Yahoo Finance chart API (keyless, per-symbol), with strict
-//    numeric sanity checks — a quote that fails them is omitted, never shown.
+//  - Markets: a fallback chain, because Yahoo's chart API rate-limits some
+//    datacenter egress (on Render only ~4/12 symbols came through). Primary:
+//    Yahoo query1 per-symbol; then Yahoo query2 per-symbol (different host);
+//    then one batched TradingView scanner POST (independent provider, all 12
+//    tickers verified live 2026-11-17); finally CoinGecko (BTC/ETH only) as a
+//    last resort. Strict numeric sanity checks apply per source — a quote
+//    that fails them is omitted, never shown. Binance is geo-blocked from
+//    this network and Stooq answers 404 pages, so neither is used.
 import { fetchChannel } from './news-sources.js';
 import { mentionsSyria } from './news-ai.js';
 
@@ -39,21 +45,24 @@ export const OSINT_CHANNELS = [
   { u: 'milinfolive', name: 'Military Summary' },
 ];
 
-// symbol = Yahoo chart symbol; maxMove = largest plausible |day change %| —
-// beyond it the quote is treated as bad data and omitted.
+// symbol = Yahoo chart symbol; tv = TradingView scanner ticker; cg = CoinGecko
+// id (crypto only); maxMove = largest plausible |day change %| — beyond it the
+// quote is treated as bad data and omitted. All tv/cg mappings were verified
+// live on 2026-11-17 (TV spot/continuous-future tickers track the same
+// instruments the Yahoo futures/index symbols name).
 export const MARKET_SYMBOLS = [
-  { symbol: '^GSPC', ar: 'إس آند بي 500', en: 'S&P 500', maxMove: 15 },
-  { symbol: '^IXIC', ar: 'ناسداك', en: 'Nasdaq', maxMove: 15 },
-  { symbol: '^DJI', ar: 'داو جونز', en: 'Dow Jones', maxMove: 15 },
-  { symbol: '^RUT', ar: 'راسل 2000', en: 'Russell 2000', maxMove: 15 },
-  { symbol: '^VIX', ar: 'مؤشر التقلب VIX', en: 'VIX', maxMove: 120 },
-  { symbol: 'BTC-USD', ar: 'بيتكوين', en: 'Bitcoin', maxMove: 40 },
-  { symbol: 'ETH-USD', ar: 'إيثريوم', en: 'Ethereum', maxMove: 40 },
-  { symbol: 'GC=F', ar: 'الذهب', en: 'Gold', maxMove: 12 },
-  { symbol: 'SI=F', ar: 'الفضة', en: 'Silver', maxMove: 15 },
-  { symbol: 'CL=F', ar: 'النفط الخام', en: 'WTI crude', maxMove: 25 },
-  { symbol: 'BZ=F', ar: 'خام برنت', en: 'Brent crude', maxMove: 25 },
-  { symbol: 'NG=F', ar: 'الغاز الطبيعي', en: 'Natural gas', maxMove: 35 },
+  { symbol: '^GSPC', tv: 'SP:SPX', ar: 'إس آند بي 500', en: 'S&P 500', maxMove: 15 },
+  { symbol: '^IXIC', tv: 'NASDAQ:IXIC', ar: 'ناسداك', en: 'Nasdaq', maxMove: 15 },
+  { symbol: '^DJI', tv: 'DJ:DJI', ar: 'داو جونز', en: 'Dow Jones', maxMove: 15 },
+  { symbol: '^RUT', tv: 'TVC:RUT', ar: 'راسل 2000', en: 'Russell 2000', maxMove: 15 },
+  { symbol: '^VIX', tv: 'CBOE:VIX', ar: 'مؤشر التقلب VIX', en: 'VIX', maxMove: 120 },
+  { symbol: 'BTC-USD', tv: 'BINANCE:BTCUSDT', cg: 'bitcoin', ar: 'بيتكوين', en: 'Bitcoin', maxMove: 40 },
+  { symbol: 'ETH-USD', tv: 'BINANCE:ETHUSDT', cg: 'ethereum', ar: 'إيثريوم', en: 'Ethereum', maxMove: 40 },
+  { symbol: 'GC=F', tv: 'TVC:GOLD', ar: 'الذهب', en: 'Gold', maxMove: 12 },
+  { symbol: 'SI=F', tv: 'TVC:SILVER', ar: 'الفضة', en: 'Silver', maxMove: 15 },
+  { symbol: 'CL=F', tv: 'NYMEX:CL1!', ar: 'النفط الخام', en: 'WTI crude', maxMove: 25 },
+  { symbol: 'BZ=F', tv: 'NYMEX:BZ1!', ar: 'خام برنت', en: 'Brent crude', maxMove: 25 },
+  { symbol: 'NG=F', tv: 'NYMEX:NG1!', ar: 'الغاز الطبيعي', en: 'Natural gas', maxMove: 35 },
 ];
 
 // ------------------------------------------------------------ RSS parsing (dependency-free)
@@ -110,6 +119,42 @@ export function parseYahooChart(json, def) {
   } catch { return null; }
 }
 
+// ------------------------------------------------------------ fallback quote sources
+/** One TradingView /global/scan response -> Map(tv ticker -> { price, changePct }).
+ * Columns are [close, change] with change already in percent; the same
+ * per-symbol sanity caps as Yahoo apply. */
+export function parseTradingViewScan(json, defs = MARKET_SYMBOLS) {
+  const out = new Map();
+  try {
+    const byTv = new Map(defs.filter((d) => d.tv).map((d) => [d.tv, d]));
+    for (const row of json?.data || []) {
+      const def = byTv.get(row?.s);
+      if (!def || out.has(def.tv)) continue;
+      const [close, change] = Array.isArray(row?.d) ? row.d : [];
+      const price = Number(close);
+      const changePct = Number(change);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      if (!Number.isFinite(changePct) || Math.abs(changePct) > (def.maxMove ?? 25)) continue;
+      out.set(def.tv, { price, changePct: Math.round(changePct * 100) / 100 });
+    }
+  } catch { /* unusable payload -> empty map */ }
+  return out;
+}
+
+/** One CoinGecko simple/price entry -> { price, changePct } or null. Its
+ * change is a 24h change, which for 24/7 crypto is the panel's day change. */
+export function parseCoinGeckoQuote(json, def) {
+  try {
+    const entry = json?.[def?.cg];
+    if (!entry) return null;
+    const price = Number(entry.usd);
+    const changePct = Number(entry.usd_24h_change);
+    if (!Number.isFinite(price) || price <= 0) return null;
+    if (!Number.isFinite(changePct) || Math.abs(changePct) > (def?.maxMove ?? 25)) return null;
+    return { price, changePct: Math.round(changePct * 100) / 100 };
+  } catch { return null; }
+}
+
 // ------------------------------------------------------------ fetching + cache
 const fetchText = async (url, timeoutMs = 12_000) => {
   const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: '*/*' }, signal: AbortSignal.timeout(timeoutMs), redirect: 'follow' });
@@ -150,19 +195,91 @@ async function fetchOsint() {
   return out.sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, MAX_OSINT);
 }
 
-async function fetchMarkets() {
-  const out = [];
-  const quotes = await Promise.allSettled(MARKET_SYMBOLS.map(async (def) => {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(def.symbol)}?range=5d&interval=1d`;
-    const text = await fetchText(url, 10_000);
-    return { def, quote: parseYahooChart(JSON.parse(text), def) };
+// Per-source negative cache: when a source fails at the network level (every
+// request threw), it is skipped for a while instead of being hammered on
+// every refresh — that is exactly the situation on egress Yahoo rate-limits.
+const SOURCE_DOWN_MS = 10 * 60_000;
+const sourceDownUntil = { yahoo1: 0, yahoo2: 0, tradingview: 0, coingecko: 0 };
+const sourceDown = (name) => Date.now() < sourceDownUntil[name];
+function noteSourceResult(name, attempted, answered) {
+  if (attempted > 0 && answered === 0) sourceDownUntil[name] = Date.now() + SOURCE_DOWN_MS;
+  else if (answered > 0) sourceDownUntil[name] = 0;
+}
+
+const fetchJson = async (url, timeoutMs = 10_000, init = {}) => {
+  const r = await fetch(url, { ...init, headers: { 'User-Agent': UA, Accept: 'application/json', ...(init.headers || {}) }, signal: AbortSignal.timeout(timeoutMs), redirect: 'follow' });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+};
+
+/** One Yahoo host, per-symbol. Returns how many requests the host answered at
+ * all (for the negative cache) and fills `found` with sane quotes. */
+async function fetchYahooHost(host, sourceName, defs, found) {
+  if (!defs.length || sourceDown(sourceName)) return 0;
+  let answered = 0;
+  await Promise.allSettled(defs.map(async (def) => {
+    const url = `https://${host}/v8/finance/chart/${encodeURIComponent(def.symbol)}?range=5d&interval=1d`;
+    const json = await fetchJson(url, 10_000);
+    answered += 1;
+    const quote = parseYahooChart(json, def);
+    if (quote) found.set(def.symbol, quote);
   }));
-  for (const q of quotes) {
-    if (q.status !== 'fulfilled' || !q.value.quote) continue;
-    const { def, quote } = q.value;
-    out.push({ symbol: def.symbol, ar: def.ar, en: def.en, price: quote.price, changePct: quote.changePct });
+  noteSourceResult(sourceName, defs.length, answered);
+  return answered;
+}
+
+async function fetchMarkets() {
+  const found = new Map();
+  const servedBy = { yahoo1: 0, yahoo2: 0, tradingview: 0, coingecko: 0 };
+  const missing = () => MARKET_SYMBOLS.filter((d) => !found.has(d.symbol));
+
+  // 1) Yahoo query1 (primary), then 2) Yahoo query2 for whatever is missing.
+  await fetchYahooHost('query1.finance.yahoo.com', 'yahoo1', missing(), found);
+  servedBy.yahoo1 = found.size;
+  await fetchYahooHost('query2.finance.yahoo.com', 'yahoo2', missing(), found);
+  servedBy.yahoo2 = found.size - servedBy.yahoo1;
+
+  // 3) TradingView scanner: ONE batched POST for everything still missing.
+  const rest = missing();
+  if (rest.length && !sourceDown('tradingview')) {
+    try {
+      const json = await fetchJson('https://scanner.tradingview.com/global/scan', 12_000, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbols: { tickers: rest.map((d) => d.tv), query: { types: [] } }, columns: ['close', 'change'], range: [0, rest.length] }),
+      });
+      noteSourceResult('tradingview', 1, 1);
+      const byTv = parseTradingViewScan(json, rest);
+      for (const def of rest) {
+        const quote = byTv.get(def.tv);
+        if (quote) { found.set(def.symbol, quote); servedBy.tradingview += 1; }
+      }
+    } catch { noteSourceResult('tradingview', 1, 0); }
   }
-  return out;
+
+  // 4) CoinGecko: last resort for the two crypto symbols only (one call).
+  const crypto = missing().filter((d) => d.cg);
+  if (crypto.length && !sourceDown('coingecko')) {
+    try {
+      const ids = [...new Set(crypto.map((d) => d.cg))].join(',');
+      const json = await fetchJson(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`, 10_000);
+      noteSourceResult('coingecko', 1, 1);
+      for (const def of crypto) {
+        const quote = parseCoinGeckoQuote(json, def);
+        if (quote) { found.set(def.symbol, quote); servedBy.coingecko += 1; }
+      }
+    } catch { noteSourceResult('coingecko', 1, 0); }
+  }
+
+  // One diagnostic line per refresh: on the live server this is the only
+  // window into which source its network lets through.
+  const miss = missing().map((d) => d.symbol);
+  console.log(`[live] markets refresh: yahoo1=${servedBy.yahoo1} yahoo2=${servedBy.yahoo2} tradingview=${servedBy.tradingview} coingecko=${servedBy.coingecko} total=${found.size}/${MARKET_SYMBOLS.length}${miss.length ? ` missing=${miss.join(',')}` : ''}`);
+
+  return MARKET_SYMBOLS.filter((d) => found.has(d.symbol)).map((d) => {
+    const quote = found.get(d.symbol);
+    return { symbol: d.symbol, ar: d.ar, en: d.en, price: quote.price, changePct: quote.changePct };
+  });
 }
 
 const cache = { news: null, newsAt: 0, osint: null, osintAt: 0, markets: null, marketsAt: 0, busy: null };
@@ -199,4 +316,8 @@ export function startLiveFeed() {
   timer = setInterval(() => { refresh().catch(() => {}); }, NEWS_TTL_MS);
   timer.unref?.();
 }
-export const _test = { parseRssItems, parseYahooChart, isSyriaItem, NEWS_FEEDS, OSINT_CHANNELS, MARKET_SYMBOLS, cache };
+export const _test = {
+  parseRssItems, parseYahooChart, parseTradingViewScan, parseCoinGeckoQuote, isSyriaItem,
+  NEWS_FEEDS, OSINT_CHANNELS, MARKET_SYMBOLS, cache, sourceDownUntil, fetchMarkets,
+  resetMarketState() { for (const k of Object.keys(sourceDownUntil)) sourceDownUntil[k] = 0; cache.markets = null; cache.marketsAt = 0; },
+};
