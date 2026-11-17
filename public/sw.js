@@ -1,8 +1,8 @@
 // Version the cache with the deployed app build so changed modules cannot be served stale.
 const BUILD = new URL(self.location.href).searchParams.get('v') || 'dev';
 const CACHE = `ras-static-${BUILD}`;
-// Pages and API responses stay network-fresh. Build-versioned JS/CSS/shared code and vendor/fonts
-// are cache-first for fast repeat visits; images and data remain network-first with offline fallback.
+// Pages and API responses stay network-fresh. JS/CSS/shared refresh from network first, with a
+// cached response available offline. Vendor/fonts retain their existing cache-first behavior.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -12,7 +12,14 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   const m = url.pathname.match(/^\/(vendor|fonts|img|data|js|css|shared)\//);
   if (!m) return;
-  if (['vendor', 'fonts', 'js', 'css', 'shared'].includes(m[1])) {
+  if (['js', 'css', 'shared'].includes(m[1])) {
+    e.respondWith(fetch(e.request).then(async (r) => {
+      if (r.ok) await caches.open(CACHE).then((c) => c.put(e.request, r.clone()));
+      return r;
+    }).catch(() => caches.match(e.request).then((hit) => hit || Response.error())));
+    return;
+  }
+  if (['vendor', 'fonts'].includes(m[1])) {
     e.respondWith(caches.open(CACHE).then(async (c) => {
       const hit = await c.match(e.request);
       if (hit) return hit;

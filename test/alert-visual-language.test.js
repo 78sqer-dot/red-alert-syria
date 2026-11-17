@@ -174,7 +174,7 @@ test('map SVGs use category colors while the helicopter keeps its slim military-
   assert.match(css, /\.sai\.map-event-disc svg \{ fill: var\(--c\) !important; color: var\(--c\) !important; \}/);
   assert.match(css, /\.ic-pistol \.ic-svg, \.ic-rifle \.ic-svg \{[^}]*fill: var\(--ic\)/);
   assert.match(css, /\.uav-svg \{[^}]*fill: var\(--c, #6b7280\)/);
-  assert.match(css, /\.helicopter-svg \{[^}]*width: 24px; height: 24px;[^}]*fill: #315f92[^}]*rgba\(59,142,255,\.78\)/);
+  assert.match(css, /\.helicopter-svg \{[^}]*width: 30px; height: 30px;[^}]*fill: #315f92[^}]*drop-shadow\(0 0 1px rgba\(3,7,18,\.95\)\)/);
   assert.match(css, /\.helicopter-svg \.heli-body \{ fill: #315f92; stroke: #163c63;/);
   assert.match(css, /\.helicopter-svg \.heli-body-highlight \{ fill: #3b8eff; \}/);
   assert.match(css, /\.helicopter-svg \.heli-cockpit \{ fill: #17324d; \}/);

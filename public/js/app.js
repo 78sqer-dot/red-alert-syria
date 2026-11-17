@@ -8,10 +8,11 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon } from './icons.js?v=9';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=87';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=88';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
+import { shouldReloadForBuild, reloadOnceForBuild } from './build-guard.js';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
@@ -61,6 +62,7 @@ const state = {
   view: 'list',
   conn: 'connecting',
   firstSnapshot: true,
+  build: new URL(import.meta.url).searchParams.get('v') || null,
   contacts: {},
   support: null,
   search: '',
@@ -1597,6 +1599,7 @@ async function poll() {
   try {
     const r = await fetch('/api/alerts?include=inactive', { cache: 'no-store' });
     const j = await r.json();
+    if (shouldReloadForBuild(state.build, j.build) && reloadOnceForBuild(j.build)) return;
     state.lastBeat = Date.now();
     setHistoryHours(j.history_hours);
     setSupport(j.support);
@@ -1632,10 +1635,7 @@ function connect() {
   es.addEventListener('snapshot', (e) => {
     const j = JSON.parse(e.data);
     // a new version of the site was deployed while this page was open: reload to get it
-    if (j.build) {
-      if (state.build && state.build !== j.build) { location.reload(); return; }
-      state.build = j.build;
-    }
+    if (shouldReloadForBuild(state.build, j.build) && reloadOnceForBuild(j.build)) return;
     setHistoryHours(j.history_hours);
     if (j.contacts) setContacts(j.contacts);
     setSupport(j.support);

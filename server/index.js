@@ -125,7 +125,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(pro
 app.get('/api/alerts', apiLimiter, (req, res) => {
   const includeInactive = req.query.include === 'inactive' || req.query.all === '1';
   const list = (includeInactive ? store.recentAlerts() : store.activeAlerts()).map(publicAlert);
-  res.json({ alerts: list, history_hours: store.historyWindow, server_time: new Date().toISOString(), support: store.publicSupport });
+  res.json({ alerts: list, history_hours: store.historyWindow, server_time: new Date().toISOString(), support: store.publicSupport, build: BUILD });
 });
 
 app.get('/api/alerts/:id', apiLimiter, (req, res) => {
