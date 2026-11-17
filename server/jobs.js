@@ -393,8 +393,33 @@ async function sendReview(job, { force = false } = {}) {
   const current = j.pending[job?.id];
   if (!current || (!force && current.notifiedAt)) return false;
   const api = adminApi?.();
-  const owner = current.kind === 'source' ? automaticMonitorRecipientIds()[0] : config.ownerIds?.[0];
-  if (!api || !owner) return false;
+  if (!api) return false;
+  if (current.kind === 'source') {
+    const owners = automaticMonitorRecipientIds();
+    if (!owners.length) return false;
+    current.cards ||= [];
+    const delivered = new Set(force ? [] : current.cards.map(([chat]) => Number(chat)));
+    for (const owner of owners) {
+      if (delivered.has(Number(owner))) continue;
+      try {
+        const sent = await api.sendMessage(owner, reviewText(current, 'ar'), {
+          parse_mode: 'HTML', reply_markup: reviewKeyboard(current, 'ar'),
+          link_preview_options: { is_disabled: true },
+        });
+        if (!sent?.message_id) continue;
+        if (!current.cards.some(([chat, mid]) => Number(chat) === Number(owner) && Number(mid) === Number(sent.message_id))) current.cards.push([Number(owner), Number(sent.message_id)]);
+        delivered.add(Number(owner));
+      } catch (e) {
+        console.warn('[jobs] source review message failed', e.description || e.message);
+      }
+    }
+    const complete = owners.every((owner) => delivered.has(Number(owner)));
+    current.notifiedAt = complete ? Date.now() : 0;
+    saveJobs();
+    return complete;
+  }
+  const owner = config.ownerIds?.[0];
+  if (!owner) return false;
   const sent = await api.sendMessage(owner, reviewText(current, 'ar'), {
     parse_mode: 'HTML', reply_markup: reviewKeyboard(current, 'ar'),
     link_preview_options: { is_disabled: true },

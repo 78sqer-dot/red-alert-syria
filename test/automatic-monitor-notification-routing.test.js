@@ -9,16 +9,18 @@ const [news, army, roads, borders, jobs, services, prices, weather] = await Prom
 
 const occurrences = (text, pattern) => (text.match(pattern) || []).length;
 
-test('automatic-monitor notification dispatches use the dedicated single-owner recipient', () => {
+test('automatic-monitor notification dispatches use both shared-owner recipients', () => {
   assert.match(news, /const reviewerIds = \(\) => automaticMonitorRecipientIds\(\);/);
   assert.equal(occurrences(news, /for \(const uid of automaticMonitorRecipientIds\(\)\)/g), 2,
-    'automatically reviewed news cards and night notices/summaries go to the primary account');
+    'automatically reviewed news cards and night notices/summaries go to both shared accounts');
   assert.match(army, /const ids = automaticMonitorRecipientIds\(\);/);
   assert.equal(occurrences(roads, /for \(const uid of automaticMonitorRecipientIds\(\)\)/g), 2,
-    'road-monitor review and automatic-publication notices use the primary account');
+    'road-monitor review and automatic-publication notices use both shared accounts');
   assert.match(borders, /for \(const uid of automaticMonitorRecipientIds\(\)\)/);
-  assert.match(jobs, /current\.kind === 'source' \? automaticMonitorRecipientIds\(\)\[0\] : config\.ownerIds\?\.\[0\]/,
-    'source-monitor jobs use the primary account; employer submissions retain the configured owner path');
+  assert.match(jobs, /if \(current\.kind === 'source'\) \{\s*const owners = automaticMonitorRecipientIds\(\);[\s\S]{0,900}for \(const owner of owners\)/,
+    'monitored job announcements are sent to both shared accounts');
+  assert.match(jobs, /const owner = config\.ownerIds\?\.\[0\];/,
+    'employer submissions retain the configured owner path');
   assert.match(services, /const reviewerIds = \(\) => automaticMonitorRecipientIds\(\);/);
   assert.match(prices, /for \(const id of automaticMonitorRecipientIds\(\)\)/);
   assert.match(weather, /for \(const id of automaticMonitorRecipientIds\(\)\)/);

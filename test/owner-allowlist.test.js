@@ -37,9 +37,9 @@ test('the two shared owners remain full admins when a different project owner is
   assert.equal(isOwner(1234567890), false);
 });
 
-test('automatic-monitor notifications go only to 8270709633 while both shared IDs remain admins', () => {
+test('automatic-monitor notifications go to both shared IDs while both remain admins', () => {
   applyProject({ ownerId: primaryOwnerId });
-  assert.deepEqual(automaticMonitorRecipientIds(), [8270709633]);
+  assert.deepEqual(automaticMonitorRecipientIds(), [8270709633, 8808894711]);
   assert.equal(isOwner(8270709633), true);
   assert.equal(isOwner(8808894711), true);
   assert.deepEqual(config.ownerIds, [primaryOwnerId, backupOwnerId]);
