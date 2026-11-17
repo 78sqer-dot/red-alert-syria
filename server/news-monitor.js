@@ -11,7 +11,7 @@ import { InlineKeyboard } from 'grammy';
 import { automaticMonitorRecipientIds, config, isOwner } from './config.js';
 import { store } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji, alertButtonLabel } from '../shared/types.js';
-import { locationFrom, normalizeArabic, governorates, getGov, getPlace } from './places.js';
+import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
 import { onRoadNewsPost, roadMonitorDebug, roadMonitorActivationTime, parseRoadText } from './road-monitor.js';
@@ -21,7 +21,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, truncateAtWordBoundary, truncatedPrefixCut } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
@@ -97,10 +97,10 @@ export function isRoadStatusOnlyPost(text) {
 }
 
 const env = (k, d) => (process.env[k] != null && process.env[k] !== '' ? Number(process.env[k]) : d);
-// bump when the pre-filter / AI rules change: on the next start the posts of the last RESCAN_MIN minutes
-// that the old filter skipped are looked at again (once), so nothing recent is lost by a rule fix
+// bump when the pre-filter / AI rules change: on the next start the posts inside the freshness
+// window (NEWS_CFG.maxAgeMin) that the old filter skipped are looked at again (once), so nothing
+// recent is lost by a rule fix — and nothing older than the window can resurface through the rescan
 export const FILTER_VER = 11;
-const RESCAN_MIN = 120;
 export const NEWS_CFG = {
   pollSec: env('NEWS_POLL_SEC', 60),
   maxAgeMin: env('NEWS_MAX_AGE_MIN', 45), // older posts are history, not alerts
@@ -113,6 +113,22 @@ export const NEWS_CFG = {
   aiKey: () => process.env.GEMINI_API_KEY || '',
   maxSources: 40, // raised from 25 with the 2026-11-17 expansion batch (32 defaults + owner headroom)
 };
+/** The one freshness rule for source posts, enforced at every gate (poll, rescan, queue,
+ * desk, auto-publish eligibility): a post only counts as news while its SOURCE timestamp is
+ * inside the window. Older posts are history — a restart, a rolled-back checkpoint or a
+ * restored backup can never make them new again. Missing/invalid timestamps are never fresh. */
+export function isFreshSourceTs(ts, now = Date.now()) {
+  return Number.isFinite(ts) && ts > 0 && now - ts <= NEWS_CFG.maxAgeMin * 60_000;
+}
+/** Newest source timestamp behind a draft: its first post or any corroborating source.
+ * Drafts that carry no source timestamp at all fall back to their creation time. */
+export function draftSourceTs(d) {
+  let newest = 0;
+  const consider = (t) => { if (Number.isFinite(t) && t > newest) newest = t; };
+  consider(d?.ts);
+  if (Array.isArray(d?.srcs)) for (const s of d.srcs) consider(s?.ts);
+  return newest || (Number.isFinite(d?.created) ? d.created : 0);
+}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rid = () => crypto.randomBytes(5).toString('hex');
@@ -364,6 +380,7 @@ const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
   if (!d || d.test || d.rule || d.editorialHold || Object.keys(d.privateEditorial || {}).length > 0 || (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+  if (!isFreshSourceTs(draftSourceTs(d))) return false; // stale reporting is never auto-published, however the draft got here (e.g. restored from an old backup)
   if (['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'military_incursion', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
   if (d.type === 'political') {
     const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
@@ -489,6 +506,7 @@ export function daytimeAutoEligible(d) {
     || Object.keys(d.privateEditorial || {}).length > 0
     || (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode))
     || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+  if (!isFreshSourceTs(draftSourceTs(d))) return false; // stale reporting is never auto-published, however the draft got here (e.g. restored from an old backup)
   const n = newsState();
   if (!NEWS_TYPES.includes(d.type) || !ALERT_TYPES[d.type] || n.types[d.type] === false) return false;
   const activatedAt = Date.parse(n.mig.dayAutoAllTypes1);
@@ -1141,16 +1159,6 @@ function buildLocations(r, it) {
     if (!nameInText(p.name, it.text) && !(p.gov && nameInText(p.gov, it.text))) continue; // invented by the AI
     const x = resolvePlace(p);
     if (!x) continue;
-    // Person-name guard: the proposed name may be in the post only as somebody's
-    // name («وفاة الزوجين "سليمان كرنوص"…») while resolvePlace alt-matches it to
-    // a village («سلمان», Hasakah). That pin comes from the person, not from a
-    // place mention: drop the pin and keep only its governorate as the fallback
-    // level (the draft then lands governorate-level or waits for review).
-    if (x.kind === 'place' && altPinFromPersonName(p.name, it.text, getPlace(x.placeId))) {
-      const pg = getPlace(x.placeId)?.gov;
-      if (pg) govs.add(pg);
-      continue;
-    }
     if (x.govCode) govs.add(x.govCode);
     let loc = locationFrom(x);
     // "بريف القنيطرة" -> the countryside, not the city of the same name
@@ -1227,6 +1235,10 @@ function explicitWeatherResult(it) {
 }
 async function handleResult(it, r, known, pmap) {
   const n = newsState();
+  // the desk re-checks the source timestamp itself: whatever path queued the item
+  // (live poll, filter rescan, a queue surviving a restart), a post older than the
+  // freshness window is dropped here and can never be drafted as new
+  if (!isFreshSourceTs(it.ts)) { note(it, 'too old'); return; }
   if (!r || !r.event || !NEWS_TYPES.includes(r.type)) { note(it, 'not an event'); return; }
   // ruleClassify already chooses from the primary headline; scanning the whole body
   // again here could let an unrelated secondary mention override that decision.
@@ -1316,7 +1328,9 @@ async function processQueue() {
   if (R.busy || !R.queue.length) return;
   R.busy = true;
   try {
-    R.queue = R.queue.filter((x) => Date.now() - x.ts < ((x.rescan ? RESCAN_MIN : NEWS_CFG.maxAgeMin) + 30) * 60_000);
+    // the +30 min is only AI-processing slack for items ingested inside the window;
+    // the hard freshness window itself is re-checked at the desk (handleResult)
+    R.queue = R.queue.filter((x) => Date.now() - x.ts < (NEWS_CFG.maxAgeMin + 30) * 60_000);
     R.queue.sort((a, b) => a.ts - b.ts);
     const batch = R.queue.splice(0, 20);
     if (!batch.length) return;
@@ -1373,7 +1387,7 @@ async function rescanIfFilterChanged() {
       const last = n.last[src.u];
       for (const p of r.posts) {
         if (last == null || p.id > last) continue; // newer posts: the normal poll handles them
-        if (!p.ts || Date.now() - p.ts > RESCAN_MIN * 60_000) continue;
+        if (!isFreshSourceTs(p.ts)) continue; // the rescan obeys the same freshness window as the live poll: older posts stay history, even after a rule fix
         const key = `${src.u}/${p.id}`;
         if (n.handled[key] || drafted.has(p.url)) continue;
         const c = cleanPostText(p.text);
@@ -1429,11 +1443,16 @@ async function pollOnce() {
     }
     await sleep(700);
   }
-  save(false);
+  // the per-source checkpoints were just advanced in the durable store: push them to the
+  // remote backup promptly (backupSoon, not the lazy path), so a deploy/restart can only
+  // ever roll the watermark back by seconds — and the freshness gate covers even that
+  save();
   for (const { src, p } of fresh) {
     n.stats.posts++;
     const it = { src: { u: src.u, name: src.name, local: !!src.local, roadOnly: !!src.roadOnly }, url: p.url, ts: p.ts || Date.now(), qAt: Date.now(), media: p.media };
-    if (!p.ts || Date.now() - p.ts > NEWS_CFG.maxAgeMin * 60_000) { it.text = p.text; note(it, 'too old'); continue; }
+    // dropped as history — and marked handled in the durable state, so a rolled-back
+    // checkpoint or a filter rescan can never reconsider it as new
+    if (!isFreshSourceTs(p.ts)) { it.text = p.text; (n.handled ||= {})[`${src.u}/${p.id}`] = Date.now(); note(it, 'too old'); continue; }
     const c = cleanPostText(p.text);
     it.text = c.text; it.breaking = c.breaking;
     const h = textHash(c.text);
