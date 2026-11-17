@@ -119,7 +119,6 @@ test('a qualifying pending AI news draft gets exactly one two-minute deadline du
 test('test, rules-only, low-confidence, and already handled drafts never qualify', () => {
   assert.equal(daytimeAutoEligible(qualified({ test: true })), false);
   assert.equal(daytimeAutoEligible(qualified({ rule: true })), false);
-  assert.equal(daytimeAutoEligible(qualified({ dronePresence: true })), false);
   assert.equal(daytimeAutoEligible(qualified({ srcs: [{ u: 'local-only', local: true }] })), false);
   assert.equal(daytimeAutoEligible(qualified({ type: 'not-monitored' })), false);
   assert.equal(daytimeAutoEligible(qualified({ status: 'ignored' })), false);
@@ -131,6 +130,13 @@ test('test, rules-only, low-confidence, and already handled drafts never qualify
   n.types.attack = false;
   try { assert.equal(daytimeAutoEligible(qualified()), false, 'disabled news types do not enter automatic publishing'); }
   finally { n.types.attack = previous; }
+});
+
+test('a qualifying ground-incursion draft remains day-eligible when a drone is mentioned', () => {
+  const withDrone = qualified({ type: 'military_incursion', dronePresence: true });
+  assert.equal(withDrone.type, 'military_incursion', 'drone presence does not replace the ground-incursion classification');
+  assert.equal(daytimeAutoEligible(withDrone), true, 'drone mention alone is not an extra daytime hold');
+  assert.equal(nightEligible(withDrone), false, 'the daytime expansion does not change existing night eligibility');
 });
 
 test('nighttime category restrictions remain unchanged while daytime needs a verified map point', () => {

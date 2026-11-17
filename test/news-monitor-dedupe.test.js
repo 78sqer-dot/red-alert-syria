@@ -181,7 +181,7 @@ test('helicopter monitoring distinguishes singular reports from an explicitly in
   assert.ok(_test.cardKb(intensive, 'ar').inline_keyboard.flat().some((button) => button.callback_data === `nw:hi:${intensive.id}`));
 });
 
-test('drone presence on a ground-incursion report remains review-only and is never auto-published', () => {
+test('ground-incursion news with drone presence keeps its type and daytime eligibility', () => {
   const eligibleUav = {
     type: 'uav', status: 'pending',
     created: Date.parse(newsState().mig.dayAutoAllTypes1) + 1,
@@ -191,6 +191,7 @@ test('drone presence on a ground-incursion report remains review-only and is nev
   assert.equal(nightEligible(eligibleUav), true, 'the synthetic control is otherwise eligible for the auto-publication gate');
   assert.equal(daytimeAutoEligible(eligibleUav), true);
   const withDrone = { ...eligibleUav, type: 'military_incursion', dronePresence: true };
+  assert.equal(withDrone.type, 'military_incursion', 'drone presence does not replace the primary ground-incursion classification');
   assert.equal(nightEligible(withDrone), false, 'a drone-presence report stays out of the night queue');
-  assert.equal(daytimeAutoEligible(withDrone), false, 'a drone-presence report stays out of the daytime queue');
+  assert.equal(daytimeAutoEligible(withDrone), true, 'drone presence alone does not block a qualifying daytime draft');
 });

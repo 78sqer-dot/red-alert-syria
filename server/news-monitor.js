@@ -473,7 +473,7 @@ export function daytimeAutoEligible(d) {
   if (!d || d.status !== 'pending' || d.test || d.rule || d.editorialHold
     || Object.keys(d.privateEditorial || {}).length > 0
     || (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode))
-    || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+    || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
   const n = newsState();
   if (!NEWS_TYPES.includes(d.type) || !ALERT_TYPES[d.type] || n.types[d.type] === false) return false;
   const activatedAt = Date.parse(n.mig.dayAutoAllTypes1);
