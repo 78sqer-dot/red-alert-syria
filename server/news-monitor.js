@@ -111,7 +111,7 @@ export const NEWS_CFG = {
   aiMinGapMs: env('NEWS_AI_MIN_GAP_MS', 12_000),
   models: () => (process.env.NEWS_AI_MODELS || 'gemini-flash-lite-latest,gemini-3.5-flash-lite,gemini-flash-latest').split(',').map((s) => s.trim()).filter(Boolean),
   aiKey: () => process.env.GEMINI_API_KEY || '',
-  maxSources: 25,
+  maxSources: 40, // raised from 25 with the 2026-11-17 expansion batch (32 defaults + owner headroom)
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -179,7 +179,7 @@ export function newsState() {
     n.mig.sanaOfficial1 = new Date().toISOString();
   }
   // Add three independently verified Syrian news feeds once. New feeds are baselined at their newest
-  // post on the first poll; existing paused choices stay paused, and the 25-source cap remains in force.
+  // post on the first poll; existing paused choices stay paused, and the source cap remains in force.
   if (!n.mig.verifiedFeeds1) {
     const verified = new Set(['hawarnews', 'zamanalwslnews', 'qasiounar1']);
     for (const s of DEFAULT_SOURCES.filter((x) => verified.has(x.u.toLowerCase()))) {
@@ -191,6 +191,21 @@ export function newsState() {
       } else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
     }
     n.mig.verifiedFeeds1 = new Date().toISOString();
+  }
+  // Expansion batch (2026-11-17, owner request): seven more verified Syrian channels.
+  // Same one-time pattern: new feeds baseline at their newest post on first poll, an
+  // already-added source keeps the owner's enabled/paused choice, cap respected.
+  if (!n.mig.expandedFeeds1) {
+    const expanded = new Set(['shaamnetwork', 'souriapost', 'orientnewsar', 'homs_news', 'golantimes', 'idlibplus', 'furatpost']);
+    for (const s of DEFAULT_SOURCES.filter((x) => expanded.has(x.u.toLowerCase()))) {
+      const cur = n.sources.find((x) => x.u.toLowerCase() === s.u.toLowerCase());
+      if (cur) {
+        cur.name = s.name;
+        cur.general = true;
+        if (s.local) cur.local = true;
+      } else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
+    }
+    n.mig.expandedFeeds1 = new Date().toISOString();
   }
   // Existing political drafts must remain human-reviewed when night eligibility is enabled.
   // Only drafts created after this one-time activation checkpoint can qualify.

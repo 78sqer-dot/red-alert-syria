@@ -33,6 +33,15 @@ export const DEFAULT_SOURCES = [
   { u: 'alkhabour', name: 'الخابور', general: true, local: true },
   { u: 'syriancoast24', name: 'الساحل السوري 24', general: true, local: true },
   { u: 'SweidaGov1', name: 'محافظة السويداء', general: true, local: true },
+  // Expansion batch (verified 2026-11-17: public t.me/s/ preview on, real posts present).
+  // Channels without a public preview cannot be read by the monitor and are NOT listed.
+  { u: 'ShaamNetwork', name: 'شبكة شام الإخبارية', general: true },
+  { u: 'SouriaPost', name: 'سوريا بوست', general: true },
+  { u: 'OrientNewsAR', name: 'أورينت نيوز', general: true },
+  { u: 'Homs_News', name: 'حمص نيوز', general: true, local: true },
+  { u: 'golantimes', name: 'جولان تايمز', general: true, local: true },
+  { u: 'idlibplus', name: 'إدلب بلس', general: true, local: true },
+  { u: 'FuratPost', name: 'فرات بوست', general: true, local: true },
 ];
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
