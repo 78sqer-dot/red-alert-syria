@@ -1,5 +1,6 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=38';
+import { createLive } from './live.js?v=1';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
 import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
@@ -1778,6 +1779,7 @@ async function boot() {
     svc.init();
     document.addEventListener('ras:me', () => { renderList(); if (state.view === 'detail') renderDetail(); });
   } catch (e) { console.error('services init failed', e); }
+  try { createLive({ LANG, esc }).init(); } catch (e) { console.error('live init failed', e); }
   amap.setAlerts(visibleAlerts(), state.selectedId);
   focusFromUrl();
   if (state.selectedId) {
