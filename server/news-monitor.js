@@ -23,7 +23,7 @@ const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
-import { setSourceNames, cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
+import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
 const NEWS_GROUP_PRIORITY = ['aerial', 'incursion', 'strikes', 'protests', 'civil', 'smuggling', 'political', 'nature', 'other'];
 const NEWS_GROUP_EMOJI = Object.freeze({ aerial: '✈️', targeting: '🎯', strikes: '💥', incursion: '🪖', patrol: '🚓', protests: '📢', civil: '🛡️', smuggling: '🚚', political: '🏛️', nature: '🌦️', other: '🚨' });
@@ -1028,20 +1028,28 @@ export function toBotDraft(d, options = {}) {
   if (options.editorialMode && (!editorialSelection || editorialSelection.mode !== options.editorialMode)) {
     throw new Error('The owner-selected editorial preview is stale or not approved for publication');
   }
-  const headline = editorialSelection?.text || d.headline;
+  const rawHeadline = editorialSelection?.text || d.headline;
+  const rawBody = editorialSelection ? rawHeadline : d.body || rawHeadline;
   const safeDraft = {
-    ...d, headline,
+    ...d, headline: rawHeadline,
     ...(editorialSelection ? { body: '', details: '', text: '', description: '', description_en: '' } : {}),
   };
   if (publicDraftCopyIssue(safeDraft, editorialSelection?.text)) throw new Error('Private editorial or internal review text cannot be converted to a public alert');
-  const body = headline;
+  const privateSourceNames = (d.srcs || []).map((source) => source?.name || '').filter(Boolean);
+  const headline = options.preservePublishedCopy
+    ? rawHeadline
+    : cleanPublicNewsAttribution(rawHeadline, privateSourceNames);
+  const body = options.preservePublishedCopy
+    ? rawBody
+    : cleanPublicNewsAttribution(rawBody, privateSourceNames);
+  if (!headline) throw new Error('No public news copy remains after removing media attribution');
   const patrolText = N(`${headline || ''} ${editorialSelection ? '' : d.body || ''}`);
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
     type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin, headline,
     ...(editorialSelection ? { publicEditorialTone: editorialSelection.mode, publicEditorialText: editorialSelection.text } : {}),
     location: d.loc || locationFrom({}), extra: d.extra || [],
-    details: d.type === 'breaking' ? '' : (editorialSelection ? headline : d.body || body), text: d.type === 'breaking' ? (editorialSelection ? '' : body) : '',
+    details: d.type === 'breaking' ? '' : body || headline, text: d.type === 'breaking' ? (editorialSelection ? '' : headline) : '',
     created: Date.now(), source: 'news',
     srcs: (d.srcs || []).map((s) => ({ u: s.u, name: s.name, url: s.url, ts: s.ts, local: !!s.local })),
     ...(d.type === 'military_incursion' && ['soldiers', 'vehicles', 'barrier'].includes(d.incursionKind) ? { incursionKind: d.incursionKind } : {}),
@@ -1846,7 +1854,7 @@ export function registerNewsTools(bot, h) {
       ? { ...d, body: current.description || d.body, ...(d.type === 'breaking' ? { headline: current.description || d.headline } : {}) }
       : d;
     await toast(ctx, '');
-    return h.loadPublishedDraft(ctx, toBotDraft(latest), d.alertId);
+    return h.loadPublishedDraft(ctx, toBotDraft(latest, { preservePublishedCopy: true }), d.alertId);
   });
   bot.callbackQuery(/^nw:(p|x|t|b|e):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');

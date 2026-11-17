@@ -93,6 +93,7 @@ test('service caches successful source data, then falls back to cached data on u
   assert.equal(first.news.filter((item) => item.region === 'world').length, 1);
   assert.equal(first.markets.length, 4);
   assert.equal(first.degraded, false);
+  assert.equal(first.news.every((item) => item.current), true, 'fresh items from successful source checks are marked current');
   assert.equal(requests, 4);
   await service.getLiveScene();
   assert.equal(requests, 4);
@@ -104,7 +105,38 @@ test('service caches successful source data, then falls back to cached data on u
   assert.equal(fallback.news.length, 3);
   assert.equal(fallback.updatedAt, first.updatedAt);
   assert.equal(Object.values(fallback.sourceStatus).every((status) => status === 'cached'), true);
+  assert.equal(fallback.news.some((item) => item.current), false, 'cached items are explicitly not current');
   assert.equal(requests, 8);
+});
+
+test('a current duplicate replaces the same headline retained from a cached source', async () => {
+  let current = Date.parse('2026-11-16T18:00:00Z');
+  let bbcFails = false;
+  const duplicateUrl = 'https://www.bbc.co.uk/arabic/news-123';
+  const fakeFetch = async (input) => {
+    const url = String(input);
+    if (url.includes('feeds.bbci.co.uk')) {
+      if (bbcFails) throw new Error('simulated BBC outage');
+      return new Response(bbcFeed, { status: 200 });
+    }
+    if (url.includes('api.gdeltproject.org')) return new Response(JSON.stringify({ articles: [
+      { language: 'Arabic', title: 'تطور ميداني في سوريا', domain: 'example.com', url: duplicateUrl, seendate: '20261116T175500Z' },
+    ] }), { status: 200 });
+    if (url.includes('data-api.ecb.europa.eu')) return new Response(ecbCsv, { status: 200 });
+    if (url.includes('api.worldbank.org')) return new Response(JSON.stringify(wbPayload), { status: 200 });
+    throw new Error(`unexpected source: ${url}`);
+  };
+  const service = createLiveSceneService({ fetchImpl: fakeFetch, now: () => current, cacheTtlMs: 1_000, maxStaleMs: 60_000 });
+  await service.getLiveScene();
+
+  current += 2_000;
+  bbcFails = true;
+  const mixed = await service.getLiveScene();
+  const duplicate = mixed.news.find((item) => item.url === duplicateUrl);
+  assert.equal(mixed.sourceStatus.bbc, 'cached');
+  assert.equal(mixed.sourceStatus.gdelt, 'ok');
+  assert.equal(duplicate?.current, true, 'the live GDELT version must beat the earlier cached BBC duplicate');
+  assert.equal(duplicate?.title, 'تطور ميداني في سوريا');
 });
 
 test('cached source data expires independently while other sources keep succeeding', async () => {
@@ -130,6 +162,8 @@ test('cached source data expires independently while other sources keep succeedi
   const fallback = await service.getLiveScene();
   assert.equal(fallback.sourceStatus.gdelt, 'cached');
   assert.equal(fallback.news.length, 3);
+  assert.equal(fallback.news.filter((item) => item.current).length, 2, 'only the still-successful BBC items remain current');
+  assert.equal(fallback.news.find((item) => item.url.endsWith('/news/2')).current, false, 'cached GDELT content is never current');
 
   current += 6_000;
   const expired = await service.getLiveScene();

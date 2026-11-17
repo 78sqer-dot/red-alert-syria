@@ -67,12 +67,12 @@ test('helicopter keeps its dedicated marker at fixed 24px with shared alert-circ
   assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\('helicopter_side', 24,/);
   assert.match(mapSource, /a\.helicopters > 1/);
   assert.match(mapSource, /heli-craft-second/);
-  assert.match(mapCss, /\.heli-craft-second \{ left: 70%; top: 50%; transform: translate\(-50%, -50%\); \}/);
+  assert.match(mapCss, /\.heli-craft-second \{ animation-delay: -4\.5s; \}/);
   assert.doesNotMatch(mapSource, /helicopterScale|--heli-scale/);
   assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 24px; height: 24px/);
-  assert.match(mapCss, /\.heli-craft \{[^}]*width: 24px; height: 24px;[^}]*transform: translate\(-50%, -50%\);/);
+  assert.match(mapCss, /\.heli-craft \{[^}]*width: 24px; height: 24px;[^}]*animation: heliOrbit 9s linear infinite/);
   assert.match(mapCss, /\.uav \{[^}]*animation: uavOrbit 9s linear infinite/);
-  assert.match(mapCss, /\.heli-route-line \{[^}]*border-top: 2px dashed rgba\(59,142,255,\.62\)/);
+  assert.match(mapCss, /\.heli-orbit-guide \{[^}]*border: 1px dashed rgba\(59,142,255,\.4\);[^}]*border-radius: 50%/);
   assert.match(mapCss, /\.helicopter-svg \.heli-main-rotor[^\n]*animation: heliRotor/);
   assert.match(mapCss, /\.helicopter-svg \.heli-tail-rotor[^\n]*animation: heliRotor/);
   assert.doesNotMatch(mapCss, /\.heli-orbit::(?:before|after)/, 'do not add decorative orbit rings');

@@ -16,7 +16,7 @@ test('normalizes feed and market records while dropping malformed entries', () =
   });
   assert.equal(result.updatedAt, '2026-11-16T18:00:00Z');
   assert.deepEqual(result.news[0], {
-    title: 'News headline', source: 'Source A', url: 'https://example.com/news', publishedAt: '2026-11-16T17:55:00Z', region: 'syria',
+    title: 'News headline', source: 'Source A', url: 'https://example.com/news', publishedAt: '2026-11-16T17:55:00Z', current: false, region: 'syria',
   });
   assert.equal(result.news.length, 2);
   assert.equal(result.syriaNews.length, 1);

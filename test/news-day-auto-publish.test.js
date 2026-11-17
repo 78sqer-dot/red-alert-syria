@@ -13,6 +13,7 @@ process.env.CHANNEL_ID = '@mock_news_channel';
 const { store } = await import('../server/store.js');
 await store.init(null);
 const { dayAutoDueAt, dayAutoReady, daytimeAutoEligible, daytimeWindow, nightEligible, newsState, toBotDraft, _test } = await import('../server/news-monitor.js');
+const { cleanPublicNewsAttribution } = await import('../server/clean-text.js');
 
 test.after(async () => {
   await new Promise((resolve) => setTimeout(resolve, 350));
@@ -30,6 +31,57 @@ const qualified = (overrides = {}) => ({
   loc: { scope: 'place', latitude: 33.5, longitude: 36.3 },
   srcs: [{ u: 'test-main-source', local: false }],
   ...overrides,
+});
+
+test('public news copy drops outlet/reporting credits but keeps speaker attribution and private source records', () => {
+  const examples = [
+    {
+      raw: 'أفاد مراسل الجزيرة بأن القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
+      clean: 'القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
+    },
+    {
+      raw: 'مصادر العربية: طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
+      clean: 'طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
+    },
+    {
+      raw: 'توغل وإطلاق نار يطال منازل وأراضي قرية كويا بريف درعا.. رئيس البلدية يروي لـ سوريا الآن ما جرى',
+      clean: 'توغل وإطلاق نار يطال منازل وأراضي قرية كويا بريف درعا.. رئيس البلدية يروي ما جرى',
+    },
+  ];
+  for (const example of examples) assert.equal(cleanPublicNewsAttribution(example.raw), example.clean);
+  assert.equal(cleanPublicNewsAttribution('قال رئيس البلدية إن التوغل طال منازل قرية كويا'), 'قال رئيس البلدية إن التوغل طال منازل قرية كويا');
+  const institutionAttribution = 'مصادر الدفاع المدني السوري: وقع انفجار وأصيب 3 أشخاص.';
+  assert.equal(cleanPublicNewsAttribution(institutionAttribution, ['الدفاع المدني السوري']), institutionAttribution,
+    'a monitored institution is a speaker, not a media-outlet identity to strip');
+  assert.equal(cleanPublicNewsAttribution(institutionAttribution, ['مصادر الدفاع المدني السوري']), institutionAttribution,
+    'a complete monitored institution source name remains attributed');
+  assert.equal(cleanPublicNewsAttribution('مصادر قناة الرصد: وقع انفجار وأصيب 3 أشخاص.', ['مصادر قناة الرصد']),
+    'وقع انفجار وأصيب 3 أشخاص.', 'a monitoring channel does not leak as a speaker attribution');
+  assert.equal(cleanPublicNewsAttribution('مصادر قناة الدفاع المدني: وقع انفجار.', ['مصادر قناة الدفاع المدني']),
+    'وقع انفجار.', 'a monitoring channel named after an institution is still a channel');
+
+  const sourceText = examples[0].raw;
+  const draft = qualified({
+    id: 'private-source-attribution-cleanup', type: 'explosion',
+    headline: examples[0].raw,
+    sourceText,
+    body: examples[1].raw,
+    loc: { scope: 'place', name_ar: 'درعا', governorate_ar: 'درعا', latitude: 32.6, longitude: 36.1 },
+    srcs: [{ u: 'private-monitor-feed', name: 'قناة الرصد الداخلية', url: 'https://t.me/private-monitor-feed/55', ts: Date.now(), local: false }],
+  });
+  const originalHeadline = draft.headline;
+  const publicDraft = toBotDraft(draft);
+  assert.equal(publicDraft.headline, examples[0].clean);
+  assert.equal(publicDraft.details, examples[1].clean);
+  assert.doesNotMatch(`${publicDraft.headline} ${publicDraft.details}`, /الجزيرة|العربية|سوريا الآن|قناة الرصد الداخلية/);
+  assert.deepEqual(publicDraft.srcs, [{ u: 'private-monitor-feed', name: 'قناة الرصد الداخلية', url: 'https://t.me/private-monitor-feed/55', ts: draft.srcs[0].ts, local: false }]);
+  assert.equal(draft.sourceText, sourceText, 'raw source text remains on the internal draft');
+  assert.equal(draft.headline, originalHeadline, 'pre-existing draft text is not rewritten in place');
+  const publishedCopy = toBotDraft({ ...draft, status: 'published' }, { preservePublishedCopy: true });
+  assert.equal(publishedCopy.headline, examples[0].raw, 'published editor retains the exact published headline');
+  assert.equal(publishedCopy.details, examples[1].raw, 'published editor retains the exact published details');
+  assert.equal(nightEligible(draft), true);
+  assert.equal(daytimeAutoEligible(draft), true, 'cleaning outlet credits does not change automatic-publish eligibility');
 });
 
 test('daytime fallback window follows Damascus time and excludes 22:00–08:00', () => {

@@ -99,6 +99,18 @@ html.dark .report-btn { color: #fff; }
 .tick .t-time { color: var(--text-muted); font-size: 11px; }
 .tick.empty { color: var(--text-muted); font-weight: 500; cursor: default; }
 .mobile-ticker { display: none; }
+.home-headlines { flex: none; display: grid; grid-template-columns: minmax(150px, auto) minmax(0, 1fr) 38px 38px; align-items: center; gap: 8px; min-height: 54px; margin: 8px 12px 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-glass); box-shadow: var(--shadow-sm); }
+.home-headlines-label { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.home-headlines-label b { color: var(--text-primary); font-size: 12px; font-weight: 900; line-height: 1.3; white-space: nowrap; }
+.home-headlines-label small { min-width: 0; overflow: hidden; color: var(--text-muted); font-size: 9px; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
+.home-headline-ticker { min-width: 0; height: 40px; }
+.home-headline-ticker .live-scene-ticker-item { max-width: min(560px, 48vw); }
+.home-headline-ticker .live-scene-ticker-item > span { max-width: min(430px, 38vw); }
+.home-headlines .live-scene-ticker-toggle, .home-headlines-open { width: 36px; height: 36px; border-radius: 10px; }
+.home-headlines-open { display: grid; place-items: center; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--red); transition: background .15s, border-color .15s, transform .1s; }
+.home-headlines-open:hover { background: var(--bg-card-hover); border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
+.home-headlines-open:active { transform: translateY(1px); }
+.home-headlines-open svg { width: 18px; height: 18px; }
 
 /* ---------------------------------------------------------------- layout */
 .layout { flex: 1; min-height: 0; display: flex; position: relative; }
@@ -318,7 +330,10 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 @keyframes flightTrackPlaneEnterFromEast { 0% { transform: translateX(150px); opacity: 0; } 15% { opacity: 1; } 85% { transform: translateX(76px); opacity: 1; } 100% { transform: translateX(76px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .map-flight-track-squad { animation: none !important; transform: none; opacity: 1; } }
 .is-moving .map-flight-track-squad, .is-zooming .map-flight-track-squad { animation-play-state: paused !important; }
-.about-pill { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 12; height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; background: var(--bg-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 12.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+.map-bottom-controls { position: absolute; left: 50%; bottom: 14px; z-index: 12; display: flex; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 20px); transform: translateX(-50%); }
+.reset-view-btn { width: 40px; height: 40px; flex: none; border: 1px solid var(--border); border-radius: 50%; background: var(--bg-glass); color: var(--text-secondary); box-shadow: var(--shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.reset-view-btn:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+.about-pill { position: static; z-index: auto; height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; background: var(--bg-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 12.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
 .about-pill b { color: var(--text-primary); font-weight: 800; }
 .about-pill .sep { width: 1px; height: 16px; background: var(--border); }
 .about-pill .chev { color: var(--text-muted); }
@@ -463,18 +478,15 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 .fly-svg .amb-siren { animation: siren .9s steps(1) infinite; }
 @keyframes squadFly { 0% { transform: translateY(110px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-110px); opacity: 0; } }
 @keyframes squadFlyCompact { 0% { transform: translateY(12px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(-12px); opacity: 0; } }
-/* Helicopters use a slim side-profile airframe and a short, static directional route. */
+/* Helicopters orbit the report as an illustration only; neither the alert nor its coordinates move. */
 .mk-helicopter .mk-s { transform: none; }
 .maplibregl-map .mk-helicopter { visibility: visible; }
-.heli-route { --heli-route-len: clamp(38px, var(--orb, 42px), 58px); position: absolute; left: 0; top: 0; width: var(--heli-route-len); height: 24px; transform: translate(-50%, -50%) rotate(-8deg); pointer-events: none; }
-.heli-route.heli-intensive { --heli-route-len: clamp(54px, var(--orb, 54px), 72px); }
-.heli-route-line { position: absolute; left: 0; top: 50%; width: 100%; border-top: 2px dashed rgba(59,142,255,.62); pointer-events: none; }
-.heli-route-line::after { content: ''; position: absolute; right: -2px; top: -5px; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 9px solid #3b8eff; }
+.heli-route { --heli-orbit-radius: max(18px, var(--orb, 24px)); position: absolute; left: 0; top: 0; width: calc(var(--heli-orbit-radius) + var(--heli-orbit-radius)); height: calc(var(--heli-orbit-radius) + var(--heli-orbit-radius)); transform: translate(-50%, -50%); pointer-events: none; }
+.heli-orbit-guide { position: absolute; inset: 1px; border: 1px dashed rgba(59,142,255,.4); border-radius: 50%; pointer-events: none; }
 .maplibregl-map:not(.zoom-detail) .mk-helicopter .heli-route { visibility: hidden; }
 .maplibregl-map.zoom-detail .mk-helicopter .heli-route { visibility: visible; }
-.heli-craft { position: absolute; left: 50%; top: 50%; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%); transform-origin: center; pointer-events: auto; filter: drop-shadow(0 0 1px rgba(15,23,42,.84)) drop-shadow(0 1px 1.5px rgba(255,255,255,.42)); }
-.heli-craft-second { left: 70%; top: 50%; transform: translate(-50%, -50%); }
-.heli-intensive .heli-craft:not(.heli-craft-second) { left: 30%; }
+.heli-craft { position: absolute; left: 50%; top: 50%; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%) rotate(0deg) translateX(var(--heli-orbit-radius)); transform-origin: center; animation: heliOrbit 9s linear infinite; pointer-events: auto; filter: drop-shadow(0 0 1px rgba(15,23,42,.84)) drop-shadow(0 1px 1.5px rgba(255,255,255,.42)); }
+.heli-craft-second { animation-delay: -4.5s; }
 .helicopter-svg { display: block; width: 24px; height: 24px; overflow: visible; fill: #315f92; filter: drop-shadow(0 0 1px rgba(3,7,18,.9)) drop-shadow(0 0 3px rgba(59,142,255,.78)); }
 .helicopter-svg .heli-body { fill: #315f92; stroke: #163c63; stroke-width: 7; stroke-linejoin: round; }
 .helicopter-svg .heli-body-highlight { fill: #3b8eff; }
@@ -490,7 +502,9 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 .mk-helicopter .helicopter-svg, .mk-helicopter.sel .helicopter-svg { fill: #315f92; }
 html.dark .heli-craft { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.92)) drop-shadow(0 0 3px rgba(59,142,255,.94)); }
 @keyframes heliRotor { to { transform: rotate(1turn); } }
-.mk.inactive .heli-route, .mk.inactive .helicopter-svg .heli-main-rotor, .mk.inactive .helicopter-svg .heli-tail-rotor { animation: none !important; }
+@keyframes heliOrbit { from { transform: translate(-50%, -50%) rotate(0deg) translateX(var(--heli-orbit-radius)); } to { transform: translate(-50%, -50%) rotate(-360deg) translateX(var(--heli-orbit-radius)); } }
+.mk.inactive .heli-craft, .mk.inactive .helicopter-svg .heli-main-rotor, .mk.inactive .helicopter-svg .heli-tail-rotor { animation: none !important; }
+.is-moving .heli-craft, .is-zooming .heli-craft { animation-play-state: paused !important; }
 .mk.inactive { filter: grayscale(1); opacity: .55; }
 .mk.inactive .uav, .mk.inactive .sq, .mk.inactive .squad { animation: none !important; }
 .mk.inactive .squad { transform: none; opacity: 1; }
@@ -775,9 +789,9 @@ input[type='range'].range { width: 100%; accent-color: var(--red); }
   .map-btn { height: 36px; padding: 0 11px; font-size: 12.5px; }
   .map-ctrls { top: 12px; bottom: auto; inset-inline-start: 10px; }
   .ctrl-btn { width: 36px; height: 36px; }
-  .about-pill { bottom: 100px; inset-inline-end: 10px; left: auto; transform: none; height: 36px; padding: 0 12px; }
-  html[dir='rtl'] .about-pill { left: 10px; right: auto; }
-  html[dir='ltr'] .about-pill { right: 10px; left: auto; }
+  .map-bottom-controls { bottom: calc(23px + env(safe-area-inset-bottom, 0px)); left: auto; inset-inline-end: 10px; gap: 6px; transform: none; }
+  .about-pill { height: 36px; padding: 0 12px; max-width: calc(100% - 48px); overflow: hidden; text-overflow: ellipsis; }
+  .reset-view-btn { width: 38px; height: 38px; }
   .about-pill > span[data-t='aboutMap'], .about-pill .sep { display: none; }
   .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: 140px; }
   .maplibregl-ctrl-scale { display: none; }
@@ -895,7 +909,7 @@ html.dark .wa-btn svg { color: #2fe079; }
   .zp.zp-aircraft .zp-fill { animation: none; opacity: .20; }
   .zp.zp-aircraft::before { animation: none; opacity: .55; transform: scale(1.25); }
   .zp.zp-selected::before { animation: none; opacity: .85; transform: scale(1.12); }
-  .heli-route, .helicopter-svg .heli-main-rotor, .helicopter-svg .heli-tail-rotor { animation: none !important; }
+  .heli-craft, .helicopter-svg .heli-main-rotor, .helicopter-svg .heli-tail-rotor { animation: none !important; }
 }
 .pp-areas { display: block; overflow: visible; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; line-height: 1.55; margin: 3px 0 0; }
 
@@ -1230,13 +1244,9 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
     inset-inline-start: 12px;
   }
   .ctrl-btn { width: 40px; height: 40px; }
-  .about-pill {
-    bottom: calc(23px + env(safe-area-inset-bottom, 0px));
-    height: 38px;
-    min-height: 38px;
-    max-width: calc(100% - 88px);
-    padding-inline: 12px;
-  }
+  .map-bottom-controls { bottom: calc(23px + env(safe-area-inset-bottom, 0px)); left: auto; inset-inline-end: 10px; transform: none; }
+  .reset-view-btn { width: 38px; height: 38px; }
+  .about-pill { height: 38px; min-height: 38px; max-width: calc(100% - 48px); padding-inline: 12px; }
   .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right {
     bottom: calc(140px + env(safe-area-inset-bottom, 0px));
   }
@@ -1292,7 +1302,7 @@ html[data-theme="dark"] .px-fuel .px-warn, .dark .px-fuel .px-warn { color: #fbb
 
 @media (max-width: 380px) {
   .map-btn { gap: 5px; padding-inline: 4px; font-size: 11.5px; }
-  .about-pill { max-width: calc(100% - 76px); }
+  .about-pill { max-width: calc(100% - 48px); }
 }
 
 /* Drones keep a light outline; warplanes match the clean blue silhouette used by the reference map. */
@@ -1454,6 +1464,7 @@ html[dir='ltr'] .live-scene-ticker-group { direction: ltr; }
 .live-scene-ticker-item b { color: var(--text-muted); font-size: 10px; }
 .live-scene-ticker-item .live-scene-ticker-region { padding: 3px 6px; border-radius: 6px; background: color-mix(in srgb, var(--red) 10%, var(--bg-card)); color: var(--red); font-size: 9px; }
 .live-scene-ticker-item .live-scene-ticker-source { font-size: 9px; }
+.live-scene-ticker-item .live-scene-ticker-time { flex: none; color: var(--text-muted); font-size: 9px; font-variant-numeric: tabular-nums; }
 .live-scene-ticker-item span { max-width: 430px; overflow: hidden; text-overflow: ellipsis; }
 .live-scene-ticker-empty { padding-inline: 8px; color: var(--text-muted); font-size: 12px; }
 .live-scene-ticker-toggle { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-elevated); color: var(--text-primary); font: 800 12px/1 system-ui, sans-serif; cursor: pointer; }
@@ -1510,4 +1521,16 @@ html[dir='rtl'] .live-scene-footer time { direction: rtl; }
   .live-scene-ticker-track { animation: none; }
   .live-scene-ticker.is-motion-enabled .live-scene-ticker-track { animation: live-scene-marquee var(--live-scene-ticker-duration, 36s) linear infinite; }
   .live-scene-icon-btn:disabled svg { animation: none; }
+}
+
+@media (max-width: 767px) {
+  .home-headlines { grid-template-columns: minmax(0, 1fr) 32px 32px; grid-template-rows: 20px 30px; gap: 2px 5px; min-height: 56px; height: 56px; margin: 5px 6px 0; padding: 3px 5px; border-radius: 10px; }
+  .home-headlines-label { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
+  .home-headlines-label b { font-size: 10px; }
+  .home-headlines-label small { max-width: 68%; font-size: 8px; text-align: end; }
+  .home-headline-ticker { grid-column: 1; grid-row: 2; height: 29px; }
+  .home-headline-ticker .live-scene-ticker-item { max-width: calc(100vw - 112px); min-height: 27px; gap: 5px; padding-inline: 7px; font-size: 10px; }
+  .home-headline-ticker .live-scene-ticker-item > span { max-width: 48vw; }
+  .home-headlines .live-scene-ticker-toggle { grid-column: 2; grid-row: 2; width: 30px; height: 29px; border-radius: 8px; }
+  .home-headlines-open { grid-column: 3; grid-row: 2; width: 30px; height: 29px; border-radius: 8px; }
 }

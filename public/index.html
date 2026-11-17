@@ -35,9 +35,9 @@
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/noto-kufi-arabic-arabic-700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/vendor/maplibre-gl.css?v=6.16.0" />
-  <link rel="stylesheet" href="/css/app.css?v=82" />
+  <link rel="stylesheet" href="/css/app.css?v=83" />
   <script src="/js/boot.js"></script>
-  <script type="module" src="/js/app.js?v=97"></script>
+  <script type="module" src="/js/app.js?v=98"></script>
 </head>
 <body>
   <noscript><div class="noscript">يتطلب الموقع تفعيل JavaScript — This site requires JavaScript.</div></noscript>
@@ -61,6 +61,13 @@
 
     <div class="mobile-ticker" id="mTicker"></div>
 
+    <section class="home-headlines" id="homeHeadlines" aria-labelledby="homeHeadlineLabel">
+      <div class="home-headlines-label"><b id="homeHeadlineLabel" data-t="liveTicker"></b><small id="homeHeadlinesStatus" role="status" aria-live="polite"></small></div>
+      <div class="live-scene-ticker home-headline-ticker" id="homeHeadlineTicker"></div>
+      <button class="live-scene-ticker-toggle" id="homeHeadlinesToggle" type="button" aria-pressed="false"><span data-ticker-motion-icon aria-hidden="true">Ⅱ</span></button>
+      <button class="home-headlines-open" id="homeHeadlinesOpen" type="button"><span data-icon="news" aria-hidden="true"></span></button>
+    </section>
+
     <main class="layout">
       <section class="map-wrap" id="mapWrap">
         <div id="map" class="map" role="region" aria-label="map"></div>
@@ -73,7 +80,7 @@
 
         <div class="map-ctrls" id="mapCtrls">
           <button class="ctrl-btn" id="mapControlsToggle" type="button" aria-expanded="false" aria-controls="mapCtrlPanel" aria-label="Map tools">
-            <span class="map-tools-icon" data-icon="apps" aria-hidden="true"></span>
+            <span class="map-tools-icon" data-icon="panelStack" aria-hidden="true"></span>
             <span class="map-tools-close-icon" data-icon="x" aria-hidden="true"></span>
           </button>
           <div class="map-ctrl-panel" id="mapCtrlPanel" role="group" aria-label="Map tools" hidden>
@@ -99,13 +106,15 @@
               <button class="ctrl-btn map-control-action share-ctrl" id="shareSite" type="button" aria-label="Share map"><span data-icon="share" aria-hidden="true"></span></button>
             </div>
           </div>
-          <button class="ctrl-btn" id="resetView" type="button"><span data-icon="world" aria-hidden="true"></span></button>
         </div>
         <div class="site-share" id="siteShare" hidden></div>
 
-        <button class="about-pill" id="aboutPill" type="button">
-          <span data-icon="info"></span><span data-t="aboutMap"></span><span class="sep"></span><b data-t="siteName"></b><span data-icon="chevUp" class="chev"></span>
-        </button>
+        <div class="map-bottom-controls">
+          <button class="ctrl-btn reset-view-btn" id="resetView" type="button"><span data-icon="world" aria-hidden="true"></span></button>
+          <button class="about-pill" id="aboutPill" type="button">
+            <span data-icon="info"></span><span data-t="aboutMap"></span><span class="sep"></span><b data-t="siteName"></b><span data-icon="chevUp" class="chev"></span>
+          </button>
+        </div>
 
         <button class="list-fab" id="listFab" type="button" aria-controls="sidebar" aria-expanded="false" hidden><span data-icon="list"></span><span class="lbl" data-t="listToggle"></span><span class="fab-count" id="fabCount">0</span></button>
       </section>

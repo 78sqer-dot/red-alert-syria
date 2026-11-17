@@ -1,4 +1,6 @@
 const MAX_TEXT = 320;
+export const LIVE_HEADLINE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export const LIVE_SOURCE_MAX_AGE_MS = 20 * 60 * 1000;
 const cleanText = (value, max = MAX_TEXT) => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max) : '';
 const firstText = (...values) => values.find((value) => typeof value === 'string' && value.trim()) || '';
 const asList = (value) => Array.isArray(value) ? value.slice(0, 24) : [];
@@ -22,6 +24,7 @@ function normalizeFeedItem(item) {
     source: cleanText(firstText(item.source, item.source_name, item.publisher), 120),
     url: safeLiveSceneUrl(item.url || item.link),
     publishedAt: cleanText(firstText(item.publishedAt, item.published_at, item.observedAt, item.observed_at, item.time, item.date), 64),
+    current: item.current === true,
     region: item.region === 'syria' ? 'syria' : 'world',
   };
 }
@@ -48,6 +51,11 @@ export function normalizeLiveScenePayload(payload, locale = 'en') {
     return { news: [], syriaNews: [], worldNews: [], osint: [], markets: [], updatedAt: '', degraded: false };
   }
   const news = asList(payload.news ?? payload.ticker).map(normalizeFeedItem).filter(Boolean);
+  const sourceStatus = {};
+  for (const key of ['bbc', 'gdelt', 'ecb', 'worldBank']) {
+    const status = payload.sourceStatus?.[key];
+    if (['ok', 'cached', 'unavailable'].includes(status)) sourceStatus[key] = status;
+  }
   return {
     news,
     syriaNews: news.filter((item) => item.region === 'syria'),
@@ -56,7 +64,26 @@ export function normalizeLiveScenePayload(payload, locale = 'en') {
     markets: asList(payload.markets ?? payload.market).map((item) => normalizeMarketItem(item, locale)).filter(Boolean),
     updatedAt: cleanText(firstText(payload.updatedAt, payload.updated_at), 64),
     degraded: payload.degraded === true,
+    sourceStatus,
   };
+}
+
+/** Only return source-confirmed headlines with a valid link and fresh publication/source timestamps. */
+export function selectCurrentLiveHeadlines(payload, now = Date.now()) {
+  if (!payload || !Array.isArray(payload.news)) return [];
+  if (!Object.values(payload.sourceStatus || {}).includes('ok')) return [];
+  const sourceUpdatedAt = Date.parse(payload.updatedAt || '');
+  if (!Number.isFinite(sourceUpdatedAt) || sourceUpdatedAt > now + 5 * 60_000 || now - sourceUpdatedAt > LIVE_SOURCE_MAX_AGE_MS) return [];
+  const seen = new Set();
+  return payload.news.filter((item) => {
+    if (item.current !== true || !item.title?.trim() || !item.source?.trim() || !safeLiveSceneUrl(item.url)) return false;
+    const publishedAt = Date.parse(item.publishedAt || '');
+    if (!Number.isFinite(publishedAt) || publishedAt > now + 5 * 60_000 || now - publishedAt > LIVE_HEADLINE_MAX_AGE_MS) return false;
+    const key = item.url.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)).slice(0, 12);
 }
 
 export function formatLiveSceneTime(value, locale = 'en', timeZone = 'UTC') {

@@ -8,7 +8,7 @@ const MEDIA = [
   'تلفزيون سوريا', 'سوريا تلفزيون', 'تلفزيون سوريا مباشر',
   'الإخبارية السورية', 'قناة الإخبارية', 'الإخبارية', 'الاخبارية السورية', 'الاخبارية',
   'وكالة سانا', 'سانا', 'وكالة الأنباء السورية',
-  'حلب اليوم', 'شبكة المحرر', 'المحرر', 'عنب بلدي', 'السورية نت', 'الحدث سوريا',
+  'حلب اليوم', 'شبكة المحرر', 'المحرر', 'عنب بلدي', 'السورية نت', 'الحدث سوريا', 'سوريا الآن', 'سوريا الان', 'Syria Now',
   'Al Jazeera', 'Al Arabiya', 'Al Araby', 'Syria TV', 'SANA', 'Halab Today',
 ];
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -48,6 +48,12 @@ export function cleanAlertText(raw) {
   return s.trim();
 }
 
+const SPEAKER_INSTITUTION = /(?:الدفاع المدني|وزارة|رئاسة|الشرطة|البلدية|محافظة|مجلس|مديرية|قيادة|الجيش|إدارة|مكتب|المركز|المستشفى|الهلال الأحمر|الأمن|الحكومة|civil defense|ministry|police|municipal|municipality|government|presidency|army|council|directorate|hospital|red crescent)/iu;
+const MEDIA_IDENTITY_TERMS = /(?:قناة|مراسل|مصادر?|شبكة|وكالة|صحيفة|منصة|التلفزيون|تلفزيون|الإخبارية|الاخبارية|الرصد|أخبار|الاخبار|news|media|agency|press|channel|reporter|journal|\btv\b)/iu;
+const isInstitutionSpeakerName = (name) => {
+  const speaker = String(name).replace(/^مصادر\s+/iu, '');
+  return SPEAKER_INSTITUTION.test(speaker) && !MEDIA_IDENTITY_TERMS.test(speaker);
+};
 const PRIVATE_EDITORIAL_LABEL = /(?:رأي\s*\/\s*تحليل|رأي|تحليل|opinion\s*\/\s*analysis|محاكاة\s+(?:سياسية\s+)?ساخرة(?:\s+خيالية)?(?:\s*[\[(]\s*(?:ليست\s+خبراً|not\s+news)\s*[\])])?|fictional\s+political\s+satire)\s*[:：—-]/iu;
 const EDITORIAL_DIAGNOSTIC = /EDITORIAL_REVIEW_REQUIRED|REVIEW_REQUIRED|لا\s+تقدم\s+المادة\s+وقائع\s+موثقة\s+كافية|insufficient\s+(?:verified\s+)?facts\s+for\s+(?:a\s+)?policy\s+criticism/iu;
 
@@ -69,6 +75,44 @@ export function isPublicEditorialCopy(raw, mode) {
   return Boolean(prefix?.test(text));
 }
 
+/** Remove media-outlet/reporting credits from public copy without stripping attributed speakers or institutions. */
+export function cleanPublicNewsAttribution(raw, privateNames = []) {
+  if (!raw) return raw;
+  let text = String(raw);
+  const tidyNames = (values) => [...new Set(values.map((value) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter((name) => name.length >= 3 && name.length <= 80))].sort((a, b) => b.length - a.length);
+  const mediaNames = tidyNames(MEDIA);
+  const privateSourceNames = tidyNames([...extraNames, ...(Array.isArray(privateNames) ? privateNames : [])]);
+  const role = '(?:مراسل(?:ة)?|مصادر?|مصدر|وسائل(?:\\s+الإعلام)?|قناة|موقع|شبكة|وكالة|صحيفة|منصة)';
+  const verb = '(?:أفاد(?:ت)?|قال(?:ت)?|ذكر(?:ت)?|نقل(?:ت)?|أوضح(?:ت)?|كشف(?:ت)?|أكد(?:ت)?|أشار(?:ت)?)';
+  if (mediaNames.length) {
+    const outlet = `(?:${mediaNames.map(esc).join('|')})`;
+    const attributedLead = new RegExp(`(^|[\\s،,;|•—–])(?:(?:${verb})\\s+)?(?:${role}\\s+)?(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}\\s*(?:بأن|أن|[:：|]|—|–)\\s*`, 'gimu');
+    text = text.replace(attributedLead, '$1');
+    const mediaRole = new RegExp(`(^|[\\s،,;|•—–])${role}\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s|$|[:：،,])`, 'gimu');
+    text = text.replace(mediaRole, '$1');
+    const outletLink = new RegExp(`\\s+(?:لـ?|إلى|عن|من|عبر|على|في)\\s*(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s|$|[،,.;:؛!?؟])`, 'giu');
+    text = text.replace(outletLink, ' ');
+    text = text.replace(new RegExp(`(^|\\n)\\s*${outlet}\\s*(?=\\n|$)`, 'giu'), '$1');
+  }
+  const removablePrivateSourceNames = privateSourceNames.filter((name) => !isInstitutionSpeakerName(name));
+  if (removablePrivateSourceNames.length) {
+    const outlet = `(?:${removablePrivateSourceNames.map(esc).join('|')})`;
+    const sourceLead = new RegExp(`(^|[\\s،,;|•—–(])(?:(?:${verb})\\s+)?${role}\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=$|[\\s:：،,.;])`, 'gimu');
+    text = text.replace(sourceLead, '$1');
+    text = text.replace(new RegExp(`(^|\\n)\\s*${outlet}\\s*[:：|—–-]\\s*`, 'gimu'), '$1');
+    const sourceLink = new RegExp(`\\s+(?:لـ?|إلى|عن|من|عبر|على|في)\\s*(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s|$|[،,.;:؛!?؟])`, 'giu');
+    text = text.replace(sourceLink, ' ');
+    const sourceAttribution = new RegExp(`(^|[\\s،,;|•—–(])${verb}\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s*(?:بأن|أن|إن|[:：|]))`, 'gimu');
+    text = text.replace(sourceAttribution, '$1');
+  }
+  text = cleanAttributedNewsText(text, [...(Array.isArray(privateNames) ? privateNames : []), ...MEDIA]);
+  if (privateSourceNames.some((name) => !isInstitutionSpeakerName(name) && String(raw).includes(name))) {
+    text = text.replace(new RegExp(`(^|\\n)([\\s•\\-–—]*)${verb}\\s*[:：]\\s*`, 'gimu'), '$1$2');
+  }
+  return String(text || '').replace(/^[\s،,;|•—–:-]+|[\s،,;|•—–:-]+$/g, '').replace(/\s+/g, ' ').trim();
+}
+
 /** Sanitize public news copy while preserving story attribution and removing private feed identities. */
 export function cleanAttributedNewsText(raw, privateNames = []) {
   if (!raw) return raw;
@@ -86,7 +130,16 @@ export function cleanAttributedNewsText(raw, privateNames = []) {
     .filter((name) => name.length >= 3 && name.length <= 80))].sort((a, b) => b.length - a.length);
   for (const name of names) {
     const privateName = new RegExp(`(?<![\\p{L}\\p{N}_])${esc(name)}(?![\\p{L}\\p{N}_])`, 'giu');
-    s = s.replace(privateName, ' ');
+    const speech = '(?:قال(?:ت)?|أفاد(?:ت)?|ذكر(?:ت)?|أوضح(?:ت)?|أكد(?:ت)?|صرح(?:ت)?|أعلن(?:ت)?|نقل(?:ت)?)';
+    const attribution = new RegExp(`(?:${speech}|مصادر?|المصدر)\\s+$`, 'iu');
+    s = s.replace(privateName, (match, offset, fullText) => {
+      const before = fullText.slice(0, offset);
+      const after = fullText.slice(offset + match.length);
+      const completeInstitutionSource = /^مصادر\s+/iu.test(name) && !before.trim();
+      return isInstitutionSpeakerName(name)
+        && (completeInstitutionSource || attribution.test(before))
+        && /^\s*(?:[:：،;]|بأن|أن|إن)/iu.test(after) ? match : ' ';
+    });
   }
   s = s.replace(/(^|\n)\s*(?:المصدر|مصدر|source)\s*[:：]\s*(?=\n|$)/giu, '$1')
     .replace(/(^|\n)\s*[:：|•\-–—]+\s*/gmu, '$1');

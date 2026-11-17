@@ -960,7 +960,7 @@ export class AlertMap {
       const helicopterSvg = () => svgTag('helicopter_side', 24, 'class="helicopter-svg"');
       const craft = `<span class="heli-craft">${helicopterSvg()}</span>`;
       const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${helicopterSvg()}</span>` : '';
-      el.innerHTML = `<div class="heli-route${second ? ' heli-intensive' : ''}"><span class="heli-route-line" aria-hidden="true"></span>${craft}${second}</div>`;
+      el.innerHTML = `<div class="heli-route"><span class="heli-orbit-guide" aria-hidden="true"></span>${craft}${second}</div>`;
     } else if (marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(36, -12, 1)}${pl(20, 8, 0.85)}${pl(52, 8, 0.85)}</div>`;
@@ -1115,7 +1115,7 @@ export class AlertMap {
     for (const [k, m] of this._pulses) if (!keep.has(k)) { m.remove(); this._pulses.delete(k); }
     if (!this.map.isZooming()) this.el.classList.remove('is-zooming');
   }
-  // Scale drone orbits and the helicopter's short route while keeping supplemental drone copies at their area anchors.
+  // Scale schematic aircraft orbits while keeping the alert marker, impact circle and supplemental copies anchored.
   _orbitPx() {
     if (!this._orb || !this.map) return;
     const z = this.map.getZoom();
@@ -1125,12 +1125,12 @@ export class AlertMap {
       const mpp = (40075016.686 * Math.cos((o.lat * Math.PI) / 180)) / (512 * Math.pow(2, z));
       const el = m.getElement();
       if (o.helicopter) {
-        // Reuse the display-scaled alert radius for a short illustrative line; the helicopter stays anchored to the report.
+        // Keep the illustrative helicopter orbit legible without moving the alert marker.
         const px = Math.max(10, Math.round((o.km * 1000) / mpp));
         if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
         continue;
       }
-      // Keep the orbit legible at country scale while following the real display circle when zoomed in.
+      // Keep the illustrative orbit tied to the display-scaled impact circle at each zoom.
       const px = Math.max(5, Math.round((o.km * 1000) / mpp));
       if (el._orb !== px) { el._orb = px; el.style.setProperty('--orb', px + 'px'); }
     }

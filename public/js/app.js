@@ -1,18 +1,18 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=38';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
-import { DICT } from './i18n.js?v=9';
+import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { matchesFollowArea } from '/shared/area-follow.js?v=1';
-import { icon } from './icons.js?v=7';
+import { icon } from './icons.js?v=8';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=85';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=86';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
-import { normalizeLiveScenePayload, formatLiveSceneTime } from './live-scene.js?v=2';
+import { normalizeLiveScenePayload, formatLiveSceneTime, selectCurrentLiveHeadlines } from './live-scene.js?v=3';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
@@ -845,6 +845,11 @@ function appendLiveSceneFeed(target, items, emptyMessage, kind = 'feed') {
         change.textContent = item.change;
         entry.append(change);
       }
+    } else if (item.current !== true) {
+      const cached = document.createElement('small');
+      cached.className = 'live-scene-item-meta live-scene-market-stale';
+      cached.textContent = T.liveNotRealtime;
+      entry.append(cached);
     }
     const metaParts = [item.source, formatLiveSceneTime(item.publishedAt || item.observedAt, LANG, TZ)].filter(Boolean);
     if (metaParts.length) {
@@ -884,7 +889,11 @@ function renderLiveSceneTicker(target, items) {
       source.textContent = item.source || T.liveNews;
       const title = document.createElement('span');
       title.textContent = item.title;
-      entry.append(region, source, title);
+      const published = document.createElement('time');
+      published.className = 'live-scene-ticker-time';
+      published.dateTime = item.publishedAt || '';
+      published.textContent = formatLiveSceneTime(item.publishedAt, LANG, TZ);
+      entry.append(region, source, title, published);
       group.append(entry);
     }
     track.append(group);
@@ -894,9 +903,7 @@ function renderLiveSceneTicker(target, items) {
   const duration = Math.max(28, Math.min(100, groupWidth / 62));
   track.style.setProperty('--live-scene-ticker-duration', `${duration}s`);
 }
-function setupLiveSceneTicker(controller) {
-  const ticker = $('#liveSceneTicker');
-  const toggle = $('#liveSceneTickerToggle');
+function setupTickerMotion(ticker, toggle, signal) {
   if (!ticker || !toggle) return;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   let paused = Boolean(reducedMotion?.matches);
@@ -908,9 +915,13 @@ function setupLiveSceneTicker(controller) {
     toggle.title = paused ? T.liveTickerPlay : T.liveTickerPause;
     toggle.querySelector('[data-ticker-motion-icon]').textContent = paused ? '▶' : 'Ⅱ';
   };
-  toggle.addEventListener('click', () => { paused = !paused; syncMotion(); }, { signal: controller.signal });
-  reducedMotion?.addEventListener?.('change', (event) => { paused = event.matches; syncMotion(); }, { signal: controller.signal });
+  const options = signal ? { signal } : undefined;
+  toggle.addEventListener('click', () => { paused = !paused; syncMotion(); }, options);
+  reducedMotion?.addEventListener?.('change', (event) => { paused = event.matches; syncMotion(); }, options);
   syncMotion();
+}
+function setupLiveSceneTicker(controller) {
+  setupTickerMotion($('#liveSceneTicker'), $('#liveSceneTickerToggle'), controller.signal);
 }
 function showLiveScene(onClose) {
   const modal = $('#modal');
@@ -955,7 +966,7 @@ async function loadLiveScene(controller) {
     if (!response.ok) throw new Error('Live scene unavailable');
     const payload = normalizeLiveScenePayload(await response.json(), LANG);
     if (controller.signal.aborted || !$('#liveSceneSyriaNews')) return;
-    renderLiveSceneTicker($('#liveSceneTicker'), payload.news);
+    renderLiveSceneTicker($('#liveSceneTicker'), selectCurrentLiveHeadlines(payload));
     appendLiveSceneFeed($('#liveSceneSyriaNews'), payload.syriaNews.slice(0, 12), T.liveEmptySyria);
     appendLiveSceneFeed($('#liveSceneWorldNews'), payload.worldNews.slice(0, 12), T.liveEmptyWorld);
     appendLiveSceneFeed($('#liveSceneOsint'), payload.osint.slice(0, 12), T.liveEmptyOsint);
@@ -971,6 +982,65 @@ async function loadLiveScene(controller) {
   } finally {
     if (!controller.signal.aborted && refresh.isConnected) refresh.disabled = false;
   }
+}
+let homeHeadlinePayload = null;
+let homeHeadlineController = null;
+function renderHomeHeadlines() {
+  const ticker = $('#homeHeadlineTicker');
+  const status = $('#homeHeadlinesStatus');
+  if (!ticker || !status) return;
+  const items = selectCurrentLiveHeadlines(homeHeadlinePayload);
+  renderLiveSceneTicker(ticker, items);
+  if (!homeHeadlinePayload) return;
+  const label = items.length
+    ? (homeHeadlinePayload.degraded ? T.liveTickerPartial : T.liveTickerFresh)
+    : (homeHeadlinePayload.degraded ? T.liveTickerUnavailable : T.liveTickerNoRecent);
+  const updated = formatLiveSceneTime(homeHeadlinePayload.updatedAt, LANG, TZ);
+  status.textContent = label;
+  status.title = updated ? `${T.liveLastUpdated}: ${updated}` : label;
+}
+async function loadHomeHeadlines() {
+  if (document.hidden) return;
+  const status = $('#homeHeadlinesStatus');
+  if (!status) return;
+  homeHeadlineController?.abort();
+  const controller = new AbortController();
+  homeHeadlineController = controller;
+  if (!homeHeadlinePayload) status.textContent = T.liveLoading;
+  else renderHomeHeadlines();
+  try {
+    const response = await fetch('/api/live-scene', {
+      headers: { Accept: 'application/json' }, cache: 'no-store', signal: controller.signal,
+    });
+    if (!response.ok) throw new Error('Headline sources unavailable');
+    const payload = normalizeLiveScenePayload(await response.json(), LANG);
+    if (controller.signal.aborted) return;
+    homeHeadlinePayload = payload;
+    renderHomeHeadlines();
+  } catch (error) {
+    if (error?.name === 'AbortError' || controller.signal.aborted) return;
+    homeHeadlinePayload = null;
+    renderLiveSceneTicker($('#homeHeadlineTicker'), []);
+    status.textContent = T.liveTickerUnavailable;
+    status.title = T.liveTickerUnavailable;
+  } finally {
+    if (homeHeadlineController === controller) homeHeadlineController = null;
+  }
+}
+function startHomeHeadlines() {
+  const ticker = $('#homeHeadlineTicker');
+  const toggle = $('#homeHeadlinesToggle');
+  const open = $('#homeHeadlinesOpen');
+  if (!ticker || !toggle || !open) return;
+  ticker.setAttribute('aria-label', T.liveTicker);
+  open.setAttribute('aria-label', T.liveTickerOpen);
+  open.title = T.liveTickerOpen;
+  setupTickerMotion(ticker, toggle);
+  void loadHomeHeadlines();
+  setInterval(() => { if (!document.hidden) void loadHomeHeadlines(); }, 5 * 60_000);
+  setInterval(renderHomeHeadlines, 60_000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) void loadHomeHeadlines(); });
+  window.addEventListener('online', () => { void loadHomeHeadlines(); });
 }
 function showWelcome() {
   const f = (ic, t, d) => `<div class="feat"><span class="fi">${icon(ic, 20)}</span><div><b>${esc(t)}</b><span>${esc(d)}</span></div></div>`;
@@ -1323,6 +1393,10 @@ function bindEvents() {
   $('#drawerBackdrop').addEventListener('click', closeDrawer);
   $('#aboutPill').addEventListener('click', openAbout);
   $('#aboutBackdrop').addEventListener('click', closeAbout);
+  $('#homeHeadlinesOpen').addEventListener('click', (e) => {
+    e.stopPropagation();
+    showLiveScene();
+  });
   $('#btnTheme').addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark')));
   $('#btnFilter').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1866,6 +1940,7 @@ async function boot() {
   }
   placeListFab();
   bindEvents();
+  startHomeHeadlines();
   setupSheet();
   renderList();
   startTicker();

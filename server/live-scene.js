@@ -192,17 +192,23 @@ export function parseWorldBankResponse(payload) {
 }
 
 function uniqueByUrl(items) {
-  const seen = new Set();
-  return items.filter((item) => {
+  const byUrl = new Map();
+  for (const item of items) {
     const key = (item.url || item.title).toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).sort((a, b) => (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0)).slice(0, 30);
+    const previous = byUrl.get(key);
+    const itemTime = Date.parse(item.publishedAt) || 0;
+    const previousTime = Date.parse(previous?.publishedAt) || 0;
+    if (!previous || (item.current === true && previous.current !== true)
+      || (item.current === previous.current && itemTime > previousTime)) byUrl.set(key, item);
+  }
+  return [...byUrl.values()].sort((a, b) => (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0)).slice(0, 30);
 }
 
 function makePayload(sections, updatedAt, sourceStatus) {
-  const news = uniqueByUrl([...sections.bbc, ...sections.gdelt].map((item) => ({
+  const news = uniqueByUrl([
+    ...sections.bbc.map((item) => ({ ...item, current: sourceStatus.bbc === 'ok' })),
+    ...sections.gdelt.map((item) => ({ ...item, current: sourceStatus.gdelt === 'ok' })),
+  ].map((item) => ({
     ...item,
     region: HEADLINE_RELEVANCE.test(item.title) ? 'syria' : 'world',
   })));
