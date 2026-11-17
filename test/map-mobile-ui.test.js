@@ -16,7 +16,7 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
   const panelEnd = html.indexOf('\n          </div>\n        </div>', panelStart);
   const panel = panelStart >= 0 && panelEnd > panelStart ? html.slice(panelStart, panelEnd) : '';
   assert.ok(panel, 'a collapsed map-tools panel must exist');
-  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNabaa', 'btnLiveScene', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
+  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNabaa', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
     assert.match(panel, new RegExp(`id="${id}"`));
   }
   assert.doesNotMatch(panel, /id="resetView"/);
@@ -85,13 +85,13 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=86'/);
-  assert.match(html, /app\.css\?v=83/);
-  assert.match(html, /app\.js\?v=98/);
+  assert.match(html, /app\.css\?v=84/);
+  assert.match(html, /app\.js\?v=99/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
   assert.match(app, /from '\.\/services\.js\?v=38'/);
-  assert.match(app, /from '\.\/icons\.js\?v=8'/);
+  assert.match(app, /from '\.\/icons\.js\?v=9'/);
   assert.match(app, /from '\.\/i18n\.js\?v=10'/);
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);

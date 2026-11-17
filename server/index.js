@@ -26,13 +26,11 @@ import { startServices, publicRoads, publicPower } from './services.js';
 import { pushConfigured, pushPublicKey, saveSubscription, removeSubscription, sendPush } from './push.js';
 import { createAlnabaRouter } from './alnaba.js';
 import { fetchAlnabaMediaForWeb } from './bot.js';
-import { createLiveSceneService } from './live-scene.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
 const SHARED = path.join(ROOT, 'shared');
 const startupMaintenanceEnabled = process.env.RUN_STARTUP_MAINTENANCE === 'true';
-const liveSceneService = createLiveSceneService();
 
 const ADMIN_DESC = '🔒 بوت النشر الخاص بإدارة Red Alert Syria (للمشرفين فقط).';
 const ADMIN_SHORT = 'بوت النشر الخاص — Red Alert Syria';
@@ -248,15 +246,6 @@ app.get('/api/newstest', apiLimiter, async (req, res) => {
   const owner = config.ownerIds[0];
   if (!owner) return res.status(400).json({ error: 'no owner' });
   try { res.json(await sendTestDraft(owner)); } catch (e) { res.status(500).json({ error: e.message }); }
-});
-app.get('/api/live-scene', apiLimiter, async (req, res) => {
-  try {
-    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    res.json(await liveSceneService.getLiveScene());
-  } catch {
-    res.set('Cache-Control', 'no-store');
-    res.status(503).json({ error: 'live scene temporarily unavailable' });
-  }
 });
 // 💱 prices / 🛣 roads / ⚡ electricity for the website
 app.get('/api/weather', apiLimiter, async (req, res) => {

@@ -25,7 +25,8 @@ test('top map-tools button opens one accessible panel with all requested tools',
   assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: 1 \/ -1; \}/);
   assert.match(css, /\.map-tool-grid > \.dd > \.map-btn, \.map-tool-grid > \.map-btn \{[^}]*min-height: 44px/);
   assert.match(html, /class="map-tools-icon" data-icon="panelStack"/);
-  assert.match(icons, /panelStack: \{ filled: false, body: "<path[^\n]*<rect x=\\"4\\" y=\\"9\\" width=\\"15\\" height=\\"12\\" rx=\\"3\\"/);
+  assert.match(icons, /panelStack: \{ filled: false, body: "<path[^\n]*<rect x=\\"3\\" y=\\"8\.5\\" width=\\"18\\" height=\\"12\.5\\" rx=\\"3\\"/);
+  assert.match(icons, /panelStack:[^\n]*m8\.5 13 3\.5 3\.5 3\.5-3\.5/, 'the stack contains a downward disclosure chevron');
   assert.match(css, /\.map-ctrls > \.ctrl-btn, \.map-ctrl-panel \.ctrl-btn \{ width: 42px; height: 42px;/);
   assert.match(css, /\.map-ctrls > \.ctrl-btn:hover, \.map-ctrl-panel \.ctrl-btn:hover \{ transform: translateY\(-2px\)/);
   assert.doesNotMatch(css, /\.map-tools\s*\{/);

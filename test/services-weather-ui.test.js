@@ -77,7 +77,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   const tabOrder = [...services.matchAll(/tabBtn\('([^']+)'/g)].map((match) => match[1]);
   assert.deepEqual(tabOrder.slice(0, 2), ['jobs', 'prices']);
   assert.match(app, /services\.js\?v=38/);
-  assert.match(app, /icons\.js\?v=8/);
+  assert.match(app, /icons\.js\?v=9/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
   assert.match(services, /findWorker: 'مطلوب موظف'/);
@@ -140,7 +140,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
-  assert.match(html, /app\.css\?v=83/);
+  assert.match(html, /app\.css\?v=84/);
   assert.match(css, /\.job-deadline, \.army-deadline/);
 });
 
