@@ -355,9 +355,16 @@ export class AlertMap {
     // below every basemap symbol and its labels were silently dropped wherever a
     // basemap city label wanted the same spot — Aleppo/Homs/Daraa vanished while
     // uncontested neighbour labels like Mosul/Kirkuk rendered). DOM markers still
-    // paint above the canvas, so the halo is widened to keep a label readable
-    // when a marker sits on it.
-    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 11, 8, 12.5, 11, 14], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 12, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 2 } }, null);
+    // paint above the canvas, so the halo keeps a label readable when a marker
+    // sits on it.
+    // Size is ONE zoom-only expression for all 14 governorates — deliberately
+    // no per-feature term: the old 11→14 ramp read as "too big and uneven" on
+    // the owner's phone because longer names wrapped under text-max-width into
+    // two-line blocks while short ones stayed on one line. The stops are now
+    // ~20% smaller (11→9, 12.5→10, 14→11) and max-width is 14em so the one-line
+    // budget in px is unchanged at the smaller size — fewer wrapped outliers,
+    // a more uniform row of names, and more of the 14 fit at country zoom.
+    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 9, 8, 10, 11, 11], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 14, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.7 } }, null);
     add({ id: 'ras-border-glow', type: 'line', source: 'ras-border', paint: { 'line-color': '#ff3b4e', 'line-opacity': 0.22, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 10], 'line-blur': 3 } });
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
     // Geographic impact circles remain accurate; use restrained fills and outlines to preserve base-map detail.

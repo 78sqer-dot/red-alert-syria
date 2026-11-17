@@ -1476,11 +1476,14 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .live-tick .live-src { color: var(--red); font-weight: 800; margin-inline-end: 6px; }
 .live-dot { color: var(--text-muted); padding: 0 6px; }
 .live-empty { color: var(--text-muted); font-weight: 500; }
-@keyframes live-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes live-scroll { from { transform: translateX(-50%); } to { transform: translateX(0); } }
 @media (prefers-reduced-motion: reduce) { .live-track { animation: none; } .live-marquee { overflow-x: auto; } }
-/* Marquee halves: the track is exactly two identical halves, so the -50%
-   keyframe loop is seamless at any content width. A still track (empty feed)
-   never animates; a touch holds the scroll. */
+/* Marquee halves: the track is exactly two identical halves, so the 50%
+   keyframe loop is seamless at any content width. Direction reversed at the
+   owner's request (2026-11-17): the track runs -50% -> 0, so headlines flow
+   rightward across the RTL page; at the loop point the second half sits
+   exactly where the first half started, so the wrap is invisible. A still
+   track (empty feed) never animates; a touch holds the scroll. */
 .live-half { display: flex; align-items: center; }
 .live-track { will-change: transform; }
 .live-track.still { animation: none; }
@@ -1489,12 +1492,12 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 /* «مباشر» map button: lives in the top map-tools cluster (#mapCtrls), clear of
    the topbar and of the bottom row; always present even when the live strip
    was dismissed; opens the Live window on the World news view. */
-.live-map-btn { display: inline-flex; align-items: center; gap: 7px; height: 42px; padding: 0 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--red) 55%, var(--border)); background: var(--bg-elevated); color: var(--red); font: inherit; font-weight: 800; font-size: 13.5px; box-shadow: var(--shadow); cursor: pointer; flex: none; }
+.live-map-btn { display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--red) 55%, var(--border)); background: var(--bg-elevated); color: var(--red); font: inherit; font-weight: 800; font-size: 11.5px; box-shadow: var(--shadow); cursor: pointer; flex: none; }
 .live-map-btn:hover { background: var(--bg-card-hover); }
-.live-dot-pulse { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex: none; }
-.live-dot-pulse::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--red); opacity: 0; animation: ping 1.8s cubic-bezier(0, 0, .2, 1) infinite; }
+.live-dot-pulse { position: relative; width: 6px; height: 6px; border-radius: 50%; background: var(--red); flex: none; }
+.live-dot-pulse::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--red); opacity: 0; animation: ping 1.8s cubic-bezier(0, 0, .2, 1) infinite; }
 
-/* Vertical auto-scroll for the Live window's news + OSINT lists (Crucix-style):
+/* Vertical auto-scroll for the Live window's news list (Crucix-style):
    the list is duplicated once for a seamless upward loop at ~30px/s; it pauses
    on hover or while touched/dragged, never runs while the sheet is closed,
    and reduced-motion users get a plain scrollable list instead. */
@@ -1509,26 +1512,10 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .live-head h2 { margin: 0; }
 .live-close { border: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: var(--text-secondary); }
 .live-sub { color: var(--text-secondary); font-size: 13px; line-height: 1.8; margin: 6px 0 4px; }
-.live-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 12px 0; position: sticky; top: -6px; background: var(--bg-primary); padding: 6px 0; z-index: 2; }
-.live-tab { padding: 9px 4px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-card); font-weight: 800; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
-.live-tab.on { background: var(--red); border-color: var(--red); color: #fff; }
 .live-sec { margin: 14px 0 8px; font-size: 15px; font-weight: 900; }
 .live-item { display: flex; align-items: baseline; gap: 8px; padding: 9px 10px; border: 1px solid var(--border-subtle); background: var(--bg-card); border-radius: 10px; margin-bottom: 7px; text-decoration: none; color: var(--text-primary); }
 .live-badge { flex: none; font-size: 11px; font-weight: 800; color: var(--red); border: 1px solid var(--red); border-radius: 999px; padding: 1px 8px; }
 .live-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; line-height: 1.6; }
 .live-time { flex: none; font-size: 11px; color: var(--text-muted); }
-.live-card { border: 1px solid var(--border-subtle); background: var(--bg-card); border-radius: 12px; padding: 11px 12px; margin-bottom: 9px; }
-.live-card-h { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
-.live-tag { font-size: 10.5px; font-weight: 800; letter-spacing: .4px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
-.live-card-h .live-time { margin-inline-start: auto; }
-.live-text { margin: 0 0 7px; font-size: 13.5px; line-height: 1.75; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; }
-.live-orig { font-size: 12px; font-weight: 700; color: var(--red); text-decoration: none; }
-.live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-.live-quote { border: 1px solid var(--border-subtle); background: var(--bg-card); border-radius: 12px; padding: 10px 12px; }
-.live-q-name { font-size: 12px; font-weight: 800; color: var(--text-secondary); }
-.live-q-price { font-size: 19px; font-weight: 900; margin: 3px 0 2px; direction: ltr; text-align: end; }
-.live-q-chg { font-size: 12.5px; font-weight: 800; direction: ltr; text-align: end; }
-.live-q-chg.up { color: #16a34a; } .live-q-chg.down { color: #dc2626; }
-.live-q-day { color: var(--text-muted); font-weight: 600; font-size: 11px; }
 .live-none { color: var(--text-muted); padding: 14px 0; }
 .live-foot { color: var(--text-muted); font-size: 11.5px; margin-top: 12px; }
