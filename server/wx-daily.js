@@ -4,7 +4,7 @@
 //  - Morning bulletin: a branded image + short caption in the channel (default 08:00 Damascus), its own
 //    post (the prices bulletin stays separate). On/off, time, preview and "post now" in the owner menu.
 import { InlineKeyboard, InputFile } from 'grammy';
-import { automaticMonitorRecipientIds, config } from './config.js';
+import { automaticMonitorRecipientIds, config, DEFAULT_PUBLIC_URL } from './config.js';
 import { store } from './store.js';
 import { governorates } from './places.js';
 import { damascusParts } from './stats-image.js';
@@ -24,7 +24,7 @@ const LOGO = (() => {
   } catch { return ''; }
 })();
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const siteUrl = () => (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+const siteUrl = () => (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const TTL = 30 * 60_000;
@@ -451,7 +451,7 @@ export function wxBulletinSvg(pts, warns, now = Date.now()) {
   const fy = H - 40;
   o.push(text(RX, fy - 52, 'المصدر: المركز الوطني للأرصاد الجوية · موجز التحذيرات الحكومي الرسمي', { size: 17, weight: 500, fill: '#6b7280' }));
   o.push(`<rect x="${P}" y="${fy - 32}" width="${W - 2 * P}" height="1" fill="#1f2937"/>`);
-  o.push(text(RX, fy + 6, 'red-alert-syria.onrender.com', { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
+  o.push(text(RX, fy + 6, DEFAULT_PUBLIC_URL.replace(/^https?:\/\//, ''), { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
   o.push(channelBadge(P, fy - 40 + 14, { h: 40, dark: true }));
   o.push('</svg>');
   return o.join('\n').replaceAll('__H__', String(H));

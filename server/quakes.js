@@ -1,10 +1,10 @@
 // Earthquake alerts: polls EMSC + USGS for quakes felt in Syria, posts each one once (auto, no review)
 // to the channel and the map as a normal alert (type "quake"), deduplicated across the two sources.
 import { store } from './store.js';
-import { config } from './config.js';
+import { config, DEFAULT_PUBLIC_URL } from './config.js';
 import { places, locationFrom } from './places.js';
 
-const UA = 'RedAlertSyria/1.0 (+https://red-alert-syria.onrender.com)';
+const UA = `RedAlertSyria/1.0 (+${DEFAULT_PUBLIC_URL})`;
 const BOX = { minlat: 28.5, maxlat: 40.5, minlon: 31, maxlon: 46 };
 const POLL_MS = 2 * 60_000;
 const MAX_AGE_MS = 90 * 60_000; // never post a quake older than this (first boot, outages)

@@ -7,13 +7,13 @@
 //   /sitemap.xml, /robots.txt, optional Google/Bing verification (env GOOGLE_SITE_VERIFICATION, ...)
 // All times in Damascus time.
 import { store } from './store.js';
-import { config } from './config.js';
+import { config, DEFAULT_PUBLIC_URL } from './config.js';
 import { governorates, places, getGov, getDist } from './places.js';
 import { ALERT_TYPES } from '../shared/types.js';
 import { svgToPng, renderAlertPng, channelBadge, badgeWidth, logoAt } from './alert-image.js';
 
 const TZ = 'Asia/Damascus';
-const SITE = () => (config.publicUrl || process.env.PUBLIC_URL || 'https://red-alert-syria.onrender.com').replace(/\/+$/, '');
+const SITE = () => (config.publicUrl || process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL).replace(/\/+$/, '');
 const CHANNEL_URL = 'https://t.me/Red_Alert_Syria';
 const REPORT_URL = 'https://t.me/Rad_Alert_Syria1_bot?start=report';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

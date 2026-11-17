@@ -26,7 +26,7 @@ test('targeted strike has its own reticle on the map and the channel image', () 
   assert.equal(eventVisual('targeted_strike').category, 'strikes');
   assert.equal(eventVisual('targeted_strike').color, '#c2410c');
   assert.equal(alertEmoji({ type: 'targeted_strike' }), '🎯');
-  assert.equal(TYPE_ICON.targeted_strike, 'target');
+  assert.equal(TYPE_ICON.targeted_strike, 'locate', 'the crosshair UI icon is targeted strike alone; uav_strike keeps target');
   assert.match(EXTRA_SVG.target_reticle, /circle cx="256" cy="256" r="160"/);
   assert.match(map, /a\.type === 'assassination' \? assassinationWeaponGlyph\(a\)[\s\S]{0,260}: t\.glyph/);
   assert.match(image, /targeted_strike: 'استهداف'/);
@@ -36,11 +36,11 @@ test('targeted strike has its own reticle on the map and the channel image', () 
 });
 
 test('browser cache keys refresh every client module that consumes the alert type registry', () => {
-  assert.match(app, /shared\/types\.js\?v=41/);
+  assert.match(app, /shared\/types\.js\?v=42/);
   assert.match(app, /settings\.js\?v=14/);
-  assert.match(app, /map\.js\?v=91/);
-  assert.match(map, /shared\/types\.js\?v=41/);
-  assert.match(map, /target-svgs\.js\?v=26/);
-  assert.match(map, /type-icons\.js\?v=7/);
-  assert.match(settings, /shared\/types\.js\?v=41/);
+  assert.match(app, /map\.js\?v=92/);
+  assert.match(map, /shared\/types\.js\?v=42/);
+  assert.match(map, /target-svgs\.js\?v=27/);
+  assert.match(map, /type-icons\.js\?v=8/);
+  assert.match(settings, /shared\/types\.js\?v=42/);
 });

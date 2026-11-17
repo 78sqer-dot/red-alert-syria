@@ -284,6 +284,7 @@ class Store extends EventEmitter {
       title: input.title,
       title_en: input.title_en,
       description: input.description || '',
+      ...(input.body ? { body: String(input.body) } : {}),
       ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
       location: input.location?.latitude != null ? { latitude: input.location.latitude, longitude: input.location.longitude } : null,
       place: input.location || null,
@@ -862,6 +863,7 @@ export function publicAlert(a) {
     title_en: isPrivateEditorialCopy(a.title_en) ? '' : a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title_en) : a.title_en,
     description: publicText(a.description) || undefined,
     description_en: publicText(a.description_en) || undefined,
+    ...(a.body ? { body: publicText(a.body) || undefined } : {}),
     ...(media ? { media, media_items: mediaItems } : {}),
     location: a.location,
     place: {

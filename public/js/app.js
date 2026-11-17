@@ -1,6 +1,7 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=38';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
+import { createLive } from './live.js?v=1';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=42';
 import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
@@ -8,7 +9,7 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon } from './icons.js?v=9';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=91';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=92';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -299,6 +300,7 @@ function detailHtml(a) {
       ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
       <span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span>
     </div>
+    ${a.body && a.body !== descOf(a) ? `<div class="d-card"><div class="sec-label" style="margin:0 0 2px">${esc(LANG === 'ar' ? 'نص الخبر الكامل' : 'Full report')}</div><p class="card-desc">${esc(a.body)}</p></div>` : ''}
     <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
     <div class="disclaimer" role="note">${esc(political ? (LANG === 'ar' ? 'منسوب للمصدر — لا يعني تحققاً مستقلاً' : 'Attributed to the source — this does not mean independent verification') : T.verificationNotRecorded)}</div>
     ${archivedQuneitraRoute ? `<div class="disclaimer" role="note"><strong>${esc(LANG === 'ar' ? 'مسار أرشيفي توضيحي فقط' : 'Illustrative archive route only')}</strong><br>${esc(LANG === 'ar' ? 'من مرجع تقريبي داخل إسرائيل إلى القنيطرة. يبقى موقع البلاغ الأصلي صيدا، والتنبيه منتهٍ وغير نشط. ليس مسار طيران حقيقيًا أو تتبعًا مباشرًا.' : 'From an approximate reference inside Israel to Quneitra. The original report location remains Sayda (Saida); this alert is expired and inactive. Not a real flight path or live track.')}</div>` : ''}
@@ -475,7 +477,7 @@ function renderTicker() {
     const el = document.createElement('div');
     el.className = 'tick';
     el.dataset.id = a.id;
-    el.innerHTML = `${badge(a)}<span class="t-title">${esc(titleOf(a))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
+    el.innerHTML = `${badge(a)}<span class="t-title">${esc(stripTypeLabelPrefix(titleOf(a), a.type))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
     box.appendChild(el);
     if (document.hidden) {
       olds.forEach((o) => o.remove());
@@ -954,7 +956,7 @@ function alertToast(a) {
 let breakingTimer = null;
 function showBreaking(a) {
   const b = $('#breaking');
-  $('#breakingText').textContent = descOf(a) || titleOf(a);
+  $('#breakingText').textContent = stripTypeLabelPrefix(descOf(a) || titleOf(a), a.type);
   $('#breakingText').dataset.id = a.id;
   b.hidden = false;
   b.style.animation = 'none';
@@ -1158,6 +1160,27 @@ function bindEvents() {
   mapCtrlPanel.addEventListener('click', (e) => {
     if (e.target.closest('[data-dd-close]')) { e.preventDefault(); closeDropdowns(); return; }
     if (e.target.closest('.map-control-action')) setMapControlsOpen(false);
+  });
+  // map legend: category colours come from the shared event visuals; the cluster
+  // bubble and the civil dot mirror the exact elements the map itself draws.
+  const legendRows = $('#legendRows');
+  if (legendRows) {
+    const catRow = (type, key) => `<div class="legend-row"><span class="lg-dot" style="--c:${eventVisual(type).color}"></span><span>${esc(T[key])}</span></div>`;
+    legendRows.innerHTML =
+      catRow('breaking', 'legendCatBreaking') + catRow('uav', 'legendCatAerial') + catRow('attack', 'legendCatStrikes')
+      + catRow('border', 'legendCatSecurity') + catRow('civil', 'legendCatCivil') + catRow('political', 'legendCatPolitical')
+      + catRow('weather', 'legendCatWeather') + catRow('quake', 'legendCatQuake')
+      + `<div class="legend-row"><span class="lg-cluster">3</span><span>${esc(T.legendCluster)}</span></div>`
+      + `<div class="legend-row"><span class="lg-civdot" style="--c:${eventVisual('civil').color}"></span><span>${esc(T.legendCivilDot)}</span></div>`
+      + `<div class="legend-row"><span class="lg-ring" style="--c:${eventVisual('breaking').color}"></span><span>${esc(T.legendZone)}</span></div>`;
+  }
+  const legendBtn = $('#legendBtn');
+  const legendCard = $('#legendCard');
+  legendBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = legendCard.hidden;
+    legendCard.hidden = !open;
+    legendBtn.setAttribute('aria-expanded', String(open));
   });
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#mapCtrls, .dd-panel')) setMapControlsOpen(false);
@@ -1777,6 +1800,7 @@ async function boot() {
     svc.init();
     document.addEventListener('ras:me', () => { renderList(); if (state.view === 'detail') renderDetail(); });
   } catch (e) { console.error('services init failed', e); }
+  try { createLive({ LANG, esc }).init(); } catch (e) { console.error('live init failed', e); }
   amap.setAlerts(visibleAlerts(), state.selectedId);
   focusFromUrl();
   if (state.selectedId) {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
 import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
-import { config, isOwner, envDefaults } from './config.js';
+import { config, isOwner, envDefaults, DEFAULT_PUBLIC_URL } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
 import { store, publicAlert, sanitizeAlertMedia, sanitizeAlertMediaItems, mergeAlertMediaItems, ALERT_MEDIA_MAX_BYTES } from './store.js';
@@ -322,6 +322,12 @@ export function channelPost(alert, { ended = false } = {}) {
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (alert.type !== 'breaking' && desc) sections.push(`<blockquote>${esc(desc)}</blockquote>`);
+  // Full report text (monitored news): shown in full after the concise lead.
+  // Deduped against the lead; photo captions drop this section first when trimming.
+  const fullBody = preserveStoryAttribution
+    ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
+    : cleanAlertText(alert.body || '');
+  if (fullBody && fullBody !== desc) sections.push(`<blockquote>${esc(fullBody)}</blockquote>`);
   if (alert.type === 'political') {
     const meta = alert.meta?.political || {};
     const category = POLITICAL_CATEGORIES[meta.category];
@@ -514,9 +520,9 @@ function mainKeyboard(ctx) {
   }
   kb.text(lang === 'en' ? '🛣 Road status' : '🛣 حالة طريق', 'rd');
   if (staff(ctx)) kb.text(lang === 'en' ? '🛂 Border crossings' : '🛂 المعابر', 'bd').row();
-  else kb.url(lang === 'en' ? '🛂 Border crossings' : '🛂 حالة المعابر', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/${lang === 'en' ? 'en' : 'ar'}/#borders`).row();
+  else kb.url(lang === 'en' ? '🛂 Border crossings' : '🛂 حالة المعابر', `${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '')}/${lang === 'en' ? 'en' : 'ar'}/#borders`).row();
   if (roleOf(ctx) === 'report' && !staff(ctx)) {
-    const site = (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+    const site = (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
     kb.url(lang === 'en' ? '🔎 Find a job' : '🔎 أبحث عن عمل', `${site}/${lang === 'en' ? 'en' : 'ar'}/#jobs`)
       .text(lang === 'en' ? '💼 Post a vacancy' : '💼 مطلوب موظف', 'j:new').row();
   }
@@ -1043,13 +1049,25 @@ export function buildAlertInput(d, author) {
   const baseTitleEn = d.type === 'air_movement'
     ? (aircraft?.en || titles.en)
     : wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
+  const cleanPublicText = (text) => (d.source === 'news' || ['breaking', 'political'].includes(d.type)
+    ? cleanAttributedNewsText(text, privateSourceNames) : cleanAlertText(text));
+  // Monitored-news drafts that carry a full body keep the concise headline as the
+  // public lead (description); the full text travels separately as `body`. Drafts
+  // without a body keep the historic details/text behaviour untouched.
+  const description = d.source === 'news' && d.body && d.headline
+    ? cleanPublicText(d.headline)
+    : cleanPublicText(d.type === 'breaking' ? d.text : d.details);
+  // Full report text (monitored news drafts carry it as `body`): published alongside
+  // the concise description, never instead of it; dropped when it adds nothing.
+  const fullBody = cleanPublicText(String(d.body || ''));
+  const body = fullBody && fullBody !== description ? fullBody : undefined;
   return {
     type: d.type,
     title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}${signalPlatform ? ' — مسيّرة' : ''}`,
     title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
     extra,
-    description: (d.source === 'news' || ['breaking', 'political'].includes(d.type)
-      ? (text) => cleanAttributedNewsText(text, privateSourceNames) : cleanAlertText)(d.type === 'breaking' ? d.text : d.details),
+    description,
+    ...(body ? { body } : {}),
     ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
     location: loc,
     areas,
@@ -1089,12 +1107,18 @@ const visibleLen = (html) => html.replace(/<[^>]+>/g, '').replace(/&(lt|gt|amp|q
 function channelCaption(alert, opts) {
   let s = channelPost(alert, opts);
   if (visibleLen(s) <= CAPTION_MAX) return s;
+  // The full report body is the first thing a photo caption gives up: the map
+  // keeps the complete text even when the caption cannot.
+  if (alert.body) {
+    const withoutBody = channelPost({ ...alert, body: '' }, opts);
+    if (visibleLen(withoutBody) <= CAPTION_MAX) return withoutBody;
+  }
   const desc = String(alert.description || alert.title || '');
   for (let keep = desc.length - (visibleLen(s) - CAPTION_MAX) - 4; keep > 0; keep -= 40) {
-    s = channelPost({ ...alert, description: desc.slice(0, keep).trimEnd() + '…' }, opts);
+    s = channelPost({ ...alert, body: '', description: desc.slice(0, keep).trimEnd() + '…' }, opts);
     if (visibleLen(s) <= CAPTION_MAX) return s;
   }
-  return channelPost({ ...alert, description: '' }, opts).slice(0, CAPTION_MAX);
+  return channelPost({ ...alert, body: '', description: '' }, opts).slice(0, CAPTION_MAX);
 }
 const plainTelegramText = (value) => String(value ?? '')
   .replace(/<[^>]+>/g, '')
@@ -1544,7 +1568,7 @@ function dailyCaption(st) {
     + `📊 إجمالي التنبيهات خلال 24 ساعة: <b>${st.total}</b>\n`
     + (types ? `🔺 الأكثر: ${types}\n` : '')
     + (top ? `📍 أكثر المحافظات: <b>${esc(top.ar)}</b> (${top.n})\n` : '')
-    + `\n🗺 الخريطة الحية: ${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`;
+    + `\n🗺 الخريطة الحية: ${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '')}/ar/`;
 }
 function weeklyCaption(st) {
   const a = damascusParts(st.from + 3600_000); const b = damascusParts(st.to);
@@ -1555,7 +1579,7 @@ function weeklyCaption(st) {
   const diff = st.total - st.prev;
   const cmp = st.prev ? ` (${diff > 0 ? '▲' : diff < 0 ? '▼' : '='} ${Math.abs(Math.round((diff / st.prev) * 100))}% عن الأسبوع السابق)` : '';
   const bd = st.busiestDay; const bh = st.busiestHour;
-  const url = (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+  const url = (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
   return `📅 <b>التقرير الأسبوعي — ${range}</b>\n\n`
     + `📊 إجمالي التنبيهات: <b>${st.total}</b>${cmp}\n`
     + (types ? `🔺 الأكثر: ${types}\n` : '')
@@ -1583,7 +1607,7 @@ export function startDailySummary(api0) {
       const st = collectStats('day');
       if (!st.total) { console.log(`[daily] ${p.date}: no alerts, nothing posted`); return; }
       const kb = new InlineKeyboard();
-      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`);
+      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '')}/ar/`);
       if (config.reportBotUsername) kb.url('📝 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
       await apiNow().sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-${p.date}.png`), { caption: dailyCaption(st), parse_mode: 'HTML', reply_markup: kb });
       console.log(`[daily] ${p.date}: summary posted (${st.total} alerts)`);
@@ -1606,7 +1630,7 @@ export function startDailySummary(api0) {
       const st = collectStats('week');
       if (!st.total) { console.log(`[weekly] ${p.date}: no alerts this week, nothing posted`); return; }
       const kb = new InlineKeyboard();
-      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/`);
+      kb.url('🗺 الخريطة الحية', `${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '')}/ar/`);
       if (config.reportBotUsername) kb.url('📝 أرسل بلاغاً', `https://t.me/${config.reportBotUsername}?start=report`);
       await apiNow().sendPhoto(config.channel, new InputFile(renderStatsPng(st, 'ar'), `red-alert-syria-week-${p.date}.png`), { caption: weeklyCaption(st), parse_mode: 'HTML', reply_markup: kb });
       console.log(`[weekly] ${p.date}: report posted (${st.total} alerts)`);
@@ -1810,7 +1834,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
   // Owner commands
   const ownerOnly = (fn) => async (ctx) => (owner(ctx) ? fn(ctx) : ctx.reply(L(ctx).onlyOwner));
-  const alnabaSite = (section = '') => `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/+$/, '')}/alnaba/${section ? `${section}/` : ''}`;
+  const alnabaSite = (section = '') => `${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/+$/, '')}/alnaba/${section ? `${section}/` : ''}`;
   const alnabaHomeKeyboard = (ctx) => new InlineKeyboard().text(langOf(ctx) === 'en' ? '↩️ Main menu' : '↩️ رجوع للقائمة', 'nb:home');
   const withAlnabaHomeButton = (keyboard, ctx) => keyboard
     .row()

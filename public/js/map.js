@@ -1,10 +1,10 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=41';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=42';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=26';
+import { EXTRA_SVG } from './target-svgs.js?v=27';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
-import { typeIcon } from './type-icons.js?v=7';
+import { typeIcon } from './type-icons.js?v=8';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=3';
@@ -98,6 +98,13 @@ function localize(style, lang) {
     const s = JSON.stringify(l.layout['text-field']);
     if (!s.includes('name') || s.includes('ref') || s.includes('housenumber')) continue;
     l.layout['text-field'] = labelExpr(lang);
+  }
+  // Governorate names are drawn by our own ras-gov-labels layer (same GeoJSON as
+  // the governorate borders): brighter than the basemap's low-contrast grey and
+  // anchored inland for the edge governorates, whose basemap labels clip at the
+  // map edge. Hide the basemap's state labels so names never appear twice.
+  for (const l of style.layers) {
+    if (l.id === 'place_state' || l.id === 'label_state') l.layout = { ...(l.layout || {}), visibility: 'none' };
   }
   return style;
 }
@@ -330,6 +337,11 @@ export class AlertMap {
     }
     add({ id: 'ras-mask', type: 'fill', source: 'ras-mask', paint: { 'fill-color': dark ? '#000000' : '#1a1a2e', 'fill-opacity': dark ? 0.42 : 0.14 } });
     add({ id: 'ras-gov-line', type: 'line', source: 'ras-govs', paint: { 'line-color': dark ? 'rgba(240,240,245,0.35)' : 'rgba(26,26,46,0.35)', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.6, 10, 1.4], 'line-dasharray': [3, 2] } });
+    // Governorate labels from our own GeoJSON (replaces the basemap's state labels,
+    // hidden in localize()): brighter for readability, and the edge governorates are
+    // anchored so their names grow inland instead of clipping at the map edge —
+    // Tartous/Latakia on the west coast extend east, Hasakah/Deir ez-Zor extend west.
+    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 8, 12, 11, 14], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 12 }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)', 'text-halo-width': 1.3 } });
     add({ id: 'ras-border-glow', type: 'line', source: 'ras-border', paint: { 'line-color': '#ff3b4e', 'line-opacity': 0.22, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 10], 'line-blur': 3 } });
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
     // Geographic impact circles remain accurate; use restrained fills and outlines to preserve base-map detail.
@@ -363,6 +375,7 @@ export class AlertMap {
     const vis = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
     for (const id of ['ras-zones-fill', 'ras-zones-line', 'ras-zones-dash', 'ras-flight-path-line', 'ras-flight-direction-arrow', 'ras-flight-reference-point', 'ras-flight-reference-label']) vis(id, !this.newsHidden);
     vis('ras-gov-line', this.opts.showGov);
+    vis('ras-gov-labels', this.opts.showGov);
     vis('ras-mask', this.opts.focusSyria);
     // 3D kept light so it stays smooth: one shared low-zoom DEM, gentle exaggeration and tilt, and on phones
     // the canvas is drawn at a lower resolution while terrain is on (the 3D pass costs ~2x per frame)

@@ -41,7 +41,7 @@ test('MET Norway fills the forecast layer when Open-Meteo is rate-limited and is
       counts.activeMet += 1;
       counts.maxActiveMet = Math.max(counts.maxActiveMet, counts.activeMet);
       const ua = options.headers?.['User-Agent'] || options.headers?.get?.('User-Agent') || '';
-      assert.match(ua, /red-alert-syria\.onrender\.com/, 'MET Norway requests carry an identifying application URL');
+      assert.match(ua, /red-alert-syria-eiqz\.onrender\.com/, 'MET Norway requests carry an identifying application URL');
       assert.match(url.searchParams.get('lat') || '', /^-?\d+\.\d{4}$/);
       assert.match(url.searchParams.get('lon') || '', /^-?\d+\.\d{4}$/);
       await new Promise((resolve) => setTimeout(resolve, 3));

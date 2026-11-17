@@ -10,8 +10,8 @@ const types = await readFile(new URL('../shared/types.js', import.meta.url), 'ut
 const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.meta.url), 'utf8');
 
 test('approved helicopter visual is served under fresh module cache keys', () => {
-  assert.match(appJs, /from '\.\/map\.js\?v=91'/);
-  assert.match(mapJs, /from '\.\/target-svgs\.js\?v=26'/);
+  assert.match(appJs, /from '\.\/map\.js\?v=92'/);
+  assert.match(mapJs, /from '\.\/target-svgs\.js\?v=27'/);
 });
 
 test('drone keeps its top-down 24px silhouette and perimeter orbit', () => {

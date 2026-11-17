@@ -8,7 +8,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ras-source-migrati
 process.env.TELEGRAM_BACKUP = 'false';
 process.env.BOT_MODE = 'webhook';
 
-const { DEFAULT_SOURCES, fetchChannel, parseUsername } = await import('../server/news-sources.js');
+const { DEFAULT_SOURCES, fetchChannel, parseUsername, parseChannelPage } = await import('../server/news-sources.js');
 const { store } = await import('../server/store.js');
 const { checkpointSourcePosts, newsState } = await import('../server/news-monitor.js');
 
@@ -36,11 +36,11 @@ test('official Syrian News Agency is added as a Syria-gated default source', () 
   assert.equal(parseUsername('@sana_gov'), sana.u);
 });
 
-test('three verified Syrian publishers fit within the existing 25-source cap', () => {
+test('verified Syrian publishers fit within the source cap', () => {
   const hawar = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'hawarnews');
   const zaman = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'zamanalwslnews');
   const qasioun = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'qasiounar1');
-  assert.equal(DEFAULT_SOURCES.length, 25);
+  assert.equal(DEFAULT_SOURCES.length, 32);
   assert.deepEqual([hawar?.general, hawar?.local], [true, true]);
   assert.equal(zaman?.general, true);
   assert.equal(qasioun?.general, true);
@@ -77,7 +77,7 @@ test('one-time migration adds new feeds to saved configurations and preserves an
   assert.ok(zaman?.on && zaman.general);
   assert.ok(qasioun?.on && qasioun.general);
   assert.ok(migrated.mig.verifiedFeeds1, 'the verified-feed migration is recorded once');
-  assert.ok(migrated.sources.length <= 25, 'the migration respects the cap');
+  assert.ok(migrated.sources.length <= 40, 'the migration respects the cap');
 
   enab.on = false;
   delete migrated.mig.northNews1;
@@ -109,4 +109,70 @@ test('fetchChannel paginates back to the last seen Telegram post', async () => {
   assert.equal(result.pages, 2);
   assert.deepEqual(result.posts.map((post) => post.id), [199, 200, 201, 202]);
   assert.ok(calls[1].includes('before=201'));
+});
+
+test('the 2026-11-17 expansion batch is present with the verified flags', () => {
+  const byUser = (u) => DEFAULT_SOURCES.find((s) => s.u.toLowerCase() === u.toLowerCase());
+  for (const u of ['ShaamNetwork', 'SouriaPost', 'OrientNewsAR']) {
+    assert.ok(byUser(u)?.general && !byUser(u)?.local, `${u}: general, not local`);
+  }
+  for (const u of ['Homs_News', 'golantimes', 'idlibplus', 'FuratPost']) {
+    assert.ok(byUser(u)?.general && byUser(u)?.local, `${u}: general + local`);
+  }
+  assert.equal(byUser('ShaamNetwork').name, 'شبكة شام الإخبارية');
+  assert.equal(byUser('golantimes').name, 'جولان تايمز');
+  // channels without a public t.me/s/ preview must NOT be added (monitor cannot read them)
+  for (const u of ['OrientNews', 'baladi_news', 'EuphratesPost', 'jesrpress', 'Step_Agency', 'NorthPress', 'SMARTNewsAgency', 'all4syria', 'Motawasset', 'alnateq', 'SyriaNowNews', 'syriahr', 'DamascusNow', 'Suwayda24', 'Raqqa24', 'EyeEuphrates']) {
+    assert.ok(!byUser(u), `${u} has no public preview and stays out`);
+  }
+  const users = DEFAULT_SOURCES.map((s) => s.u.toLowerCase());
+  assert.equal(new Set(users).size, users.length, 'no duplicate usernames');
+});
+
+test('the expansion migration adds the seven channels once and respects paused choices', () => {
+  const migrated = newsState();
+  for (const u of ['shaamnetwork', 'souriapost', 'orientnewsar', 'homs_news', 'golantimes', 'idlibplus', 'furatpost']) {
+    const s = migrated.sources.find((x) => x.u.toLowerCase() === u);
+    assert.ok(s?.on, `${u} enabled by the migration`);
+    assert.ok(s.general, `${u} general flag carried`);
+  }
+  assert.ok(migrated.mig.expandedFeeds1, 'the expansion migration is recorded once');
+  const homs = migrated.sources.find((x) => x.u.toLowerCase() === 'homs_news');
+  assert.ok(homs.local, 'Homs_News local flag carried');
+  homs.on = false;
+  delete migrated.mig.expandedFeeds1;
+  store.state.news = migrated;
+  const rerun = newsState();
+  assert.equal(rerun.sources.find((x) => x.u.toLowerCase() === 'homs_news').on, false, 'the migration never re-enables a paused source');
+});
+
+test('a sample expansion-channel page parses into posts', () => {
+  const html = `<meta property="og:title" content="شبكة شام الإخبارية">${[101, 102].map((id) => `<div class="tgme_widget_message_wrap"><div data-post="ShaamNetwork/${id}"></div><time datetime="2026-11-17T10:0${id - 100}:00Z"></time><div class="tgme_widget_message_text js-message_text">خبر سوري رقم ${id}</div></div>`).join('')}`;
+  const page = parseChannelPage(html, 'ShaamNetwork');
+  assert.equal(page.posts.length, 2);
+  assert.equal(page.posts[0].url, 'https://t.me/ShaamNetwork/101');
+  assert.match(page.posts[1].text, /خبر سوري/);
+});
+
+test('expansion sources keep the verify-before-publish gate: new local channels alone never auto-publish', async () => {
+  const { daytimeAutoEligible, nightEligible } = await import('../server/news-monitor.js');
+  newsState(); // run migrations so the day-auto activation checkpoint exists
+  const base = {
+    status: 'pending', type: 'explosion', rule: false, test: false, editorialHold: false,
+    loc: { scope: 'place', latitude: 35.93, longitude: 36.63 }, created: Date.now() + 60_000,
+  };
+  const srcOf = (u) => {
+    const s = DEFAULT_SOURCES.find((x) => x.u.toLowerCase() === u.toLowerCase());
+    return { u: s.u, name: s.name, local: !!s.local };
+  };
+  for (const u of ['Homs_News', 'golantimes', 'idlibplus', 'FuratPost']) {
+    const d = { ...base, srcs: [srcOf(u)] };
+    assert.equal(daytimeAutoEligible(d), false, `${u} alone (local) is held for review in the day window`);
+    assert.equal(nightEligible(d), false, `${u} alone (local) is held at night`);
+    const corroborated = { ...base, srcs: [srcOf(u), srcOf('ShaamNetwork')] };
+    assert.equal(daytimeAutoEligible(corroborated), true, `${u} + a second source qualifies`);
+  }
+  const wire = { ...base, srcs: [srcOf('ShaamNetwork')] };
+  assert.equal(daytimeAutoEligible(wire), true, 'one established general channel qualifies, as designed');
+  assert.equal(nightEligible(wire), true);
 });

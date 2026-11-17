@@ -37,7 +37,7 @@
   <link rel="stylesheet" href="/vendor/maplibre-gl.css?v=6.16.0" />
   <link rel="stylesheet" href="/css/app.css?v=88" />
   <script src="/js/boot.js"></script>
-  <script type="module" src="/js/app.js?v=102"></script>
+  <script type="module" src="/js/app.js?v=103"></script>
 </head>
 <body>
   <noscript><div class="noscript">يتطلب الموقع تفعيل JavaScript — This site requires JavaScript.</div></noscript>
@@ -107,6 +107,13 @@
           <button class="about-pill" id="aboutPill" type="button">
             <span data-icon="info"></span><span data-t="aboutMap"></span><span class="sep"></span><b data-t="siteName"></b><span data-icon="chevUp" class="chev"></span>
           </button>
+        </div>
+
+        <div class="map-legend" id="mapLegend">
+          <div class="legend-card" id="legendCard" role="group" hidden>
+            <div class="legend-rows" id="legendRows"></div>
+          </div>
+          <button class="legend-btn" id="legendBtn" type="button" aria-expanded="false" aria-controls="legendCard"><span data-icon="list"></span><span data-t="legend"></span></button>
         </div>
 
         <button class="list-fab" id="listFab" type="button" aria-controls="sidebar" aria-expanded="false" hidden><span data-icon="list"></span><span class="lbl" data-t="listToggle"></span><span class="fab-count" id="fabCount">0</span></button>

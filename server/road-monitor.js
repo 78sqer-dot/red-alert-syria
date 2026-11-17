@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
-import { automaticMonitorRecipientIds, config } from './config.js';
+import { automaticMonitorRecipientIds, config, DEFAULT_PUBLIC_URL } from './config.js';
 import { store } from './store.js';
 import { locationFrom, governorates, normalizeArabic } from './places.js';
 import { scanTextPlaces, resolvePlace } from './news-ai.js';
@@ -367,7 +367,7 @@ export function registerRoadMonitorTools(bot, h) {
     const ok = await publishCandidate(ev, 'owner-review', { automatic: false, keep });
     if (!ok) return ctx.reply('ℹ️ لم يُضف تحديث جديد: يوجد بلاغ معلّق أو حالة منشورة/متجاهلة للموقع نفسه.');
     try {
-      const url = `${(config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '')}/ar/#roads`;
+      const url = `${(config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '')}/ar/#roads`;
       await ctx.editMessageText(`✅ أُضيفت حالة الطريق إلى الخريطة فقط — ${esc(routeName(ev))}. لم يُنشر شيء في القناة.`,
         { parse_mode: 'HTML', reply_markup: new InlineKeyboard().url('🗺 الخريطة', url) });
     } catch { /* message may have been removed */ }

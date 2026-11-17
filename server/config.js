@@ -20,6 +20,10 @@ export const SHARED_OWNER_IDS = Object.freeze([8270709633, 8808894711]);
 // Automatic-monitor notifications go to both shared accounts. Keep this separate from
 // config.ownerIds so recipient routing does not alter owner permissions or buttons.
 export const automaticMonitorRecipientIds = () => [...SHARED_OWNER_IDS];
+// The one live public origin. Used ONLY as a display/link fallback when neither
+// PUBLIC_URL nor RENDER_EXTERNAL_URL is configured; config.publicUrl itself stays
+// env-driven because webhook setup and keep-alive are gated on it being set.
+export const DEFAULT_PUBLIC_URL = 'https://red-alert-syria-eiqz.onrender.com';
 const primaryOwnerId = Number(process.env.PRIMARY_OWNER_ID);
 const hasPrimaryOwnerId = Number.isFinite(primaryOwnerId) && primaryOwnerId > 0;
 const configuredOwnerIds = [...new Set([

@@ -21,7 +21,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, truncateAtWordBoundary, truncatedPrefixCut } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
@@ -111,7 +111,7 @@ export const NEWS_CFG = {
   aiMinGapMs: env('NEWS_AI_MIN_GAP_MS', 12_000),
   models: () => (process.env.NEWS_AI_MODELS || 'gemini-flash-lite-latest,gemini-3.5-flash-lite,gemini-flash-latest').split(',').map((s) => s.trim()).filter(Boolean),
   aiKey: () => process.env.GEMINI_API_KEY || '',
-  maxSources: 25,
+  maxSources: 40, // raised from 25 with the 2026-11-17 expansion batch (32 defaults + owner headroom)
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -179,7 +179,7 @@ export function newsState() {
     n.mig.sanaOfficial1 = new Date().toISOString();
   }
   // Add three independently verified Syrian news feeds once. New feeds are baselined at their newest
-  // post on the first poll; existing paused choices stay paused, and the 25-source cap remains in force.
+  // post on the first poll; existing paused choices stay paused, and the source cap remains in force.
   if (!n.mig.verifiedFeeds1) {
     const verified = new Set(['hawarnews', 'zamanalwslnews', 'qasiounar1']);
     for (const s of DEFAULT_SOURCES.filter((x) => verified.has(x.u.toLowerCase()))) {
@@ -191,6 +191,21 @@ export function newsState() {
       } else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
     }
     n.mig.verifiedFeeds1 = new Date().toISOString();
+  }
+  // Expansion batch (2026-11-17, owner request): seven more verified Syrian channels.
+  // Same one-time pattern: new feeds baseline at their newest post on first poll, an
+  // already-added source keeps the owner's enabled/paused choice, cap respected.
+  if (!n.mig.expandedFeeds1) {
+    const expanded = new Set(['shaamnetwork', 'souriapost', 'orientnewsar', 'homs_news', 'golantimes', 'idlibplus', 'furatpost']);
+    for (const s of DEFAULT_SOURCES.filter((x) => expanded.has(x.u.toLowerCase()))) {
+      const cur = n.sources.find((x) => x.u.toLowerCase() === s.u.toLowerCase());
+      if (cur) {
+        cur.name = s.name;
+        cur.general = true;
+        if (s.local) cur.local = true;
+      } else if (n.sources.length < NEWS_CFG.maxSources) n.sources.push({ ...s, on: true });
+    }
+    n.mig.expandedFeeds1 = new Date().toISOString();
   }
   // Existing political drafts must remain human-reviewed when night eligibility is enabled.
   // Only drafts created after this one-time activation checkpoint can qualify.
@@ -1068,6 +1083,9 @@ export function toBotDraft(d, options = {}) {
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
     type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin, headline,
+    // Full report text rides alongside the concise lead (details/text keep their
+    // existing roles); owner-selected editorial previews never carry a body.
+    ...(editorialSelection ? {} : { body }),
     ...(editorialSelection ? { publicEditorialTone: editorialSelection.mode, publicEditorialText: editorialSelection.text } : {}),
     location: d.loc || locationFrom({}), extra: d.extra || [],
     details: d.type === 'breaking' ? '' : body || headline, text: d.type === 'breaking' ? (editorialSelection ? '' : headline) : '',
@@ -1212,7 +1230,29 @@ async function handleResult(it, r, known, pmap) {
   let rejectedSameAs = false;
   const locs = buildLocations(r, it);
   const tidy = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/\s+/g, ' ').trim();
-  const headline = (tidy(r.headline) || tidy(it.text.split('\n')[0])).slice(0, 240);
+  let headline = truncateAtWordBoundary(tidy(r.headline) || tidy(it.text.split('\n')[0]), 240);
+  // Headline completeness guard: an AI headline that is a truncated copy of the
+  // source (strict prefix, cut mid-word or dangling on a function word) is
+  // rebuilt from the source's first line at a word boundary — the same cut the
+  // rules path uses. The rules path is exempt (its headline is that cut already).
+  let headlineRebuilt = null;
+  if (!r.rule && headline) {
+    const cut = truncatedPrefixCut(headline, tidy(it.text));
+    if (cut) {
+      const rebuilt = truncateAtWordBoundary(tidy(it.text.split('\n')[0]), 240);
+      if (rebuilt && rebuilt !== headline) { headline = rebuilt; headlineRebuilt = cut; }
+    }
+  }
+  // Full public body: the complete cleaned source text (same attribution-safe
+  // cleaning as the headline, line breaks kept), capped like sourceText at 1200
+  // chars and only at a word boundary. The headline stays the concise public lead;
+  // this body is what the map panel and the channel post show in full. A body that
+  // is itself private editorial copy is never attached (toBotDraft would refuse
+  // the whole draft), and a body that merely repeats the headline is dropped.
+  const tidyBody = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).trim();
+  let fullBody = truncateAtWordBoundary(tidyBody(it.text), 1200);
+  if (fullBody && headline && fullBody.startsWith(headline)) fullBody = fullBody.slice(headline.length).replace(/^[\s:：\-–—]+/, '').trim();
+  if (!fullBody || fullBody === headline || isPrivateEditorialCopy(fullBody)) fullBody = '';
   const politicalCategory = r.type === 'political'
     ? (inferPoliticalCategory(it.text) || (POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null))
     : null;
@@ -1236,6 +1276,7 @@ async function handleResult(it, r, known, pmap) {
   const d = {
     id: rid(), type: r.type, ...(r.type === 'helicopter' ? { intense: helicopterAuto(`${headline} ${it.text}`) } : {}), ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
     loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
+    ...(fullBody ? { body: fullBody } : {}), ...(r.toneGuard ? { toneNeutralized: r.toneGuard } : {}), ...(headlineRebuilt ? { headlineRebuilt } : {}),
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
     droneRuleVersion: 1, dronePresence: hasExplicitDroneFlight(it.text),
     sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
