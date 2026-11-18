@@ -147,7 +147,10 @@ const SIGNATURE = /(اشترك|تابعونا|انضموا|لمتابعة|للم
 const PROMO_START = /^[\s\p{Extended_Pictographic}\uFE0F🔻🔺•▪️*_~-]*(لمتابعة|للمتابعة|تابعونا|تابعوا|تابع قناة|تابع صفحة|تابعو|اشترك|اشتركوا|للاشتراك|انضم|انضموا|للانضمام|للتواصل|للإعلان|للاعلان|لإعلاناتكم|رابط القناة|رابط اليوتيوب|رابط الفيسبوك|رابط الصفحة|قناتنا|صفحتنا|أخبار أكثر|اخبار اكثر|أخــبـــار|ادعم|لدعم القناة|شاركونا|راسلونا)/u;
 const PROMO_LINE = /(اضغط|الرابط|على الرابط|فيسبوك|فيس بوك|يوتيوب|انستغرام|انستقرام|واتساب|تيك توك|Facebook|YouTube|Instagram|WhatsApp|TikTok|تفاصيل أكثر حال ورودها|التفاصيل تباعاً|بالسلامة للجميع|تابعونا)/iu;
 export function cleanPostText(raw) {
-  const lines = String(raw || '').split('\n').map((l) => l.replace(/https?:\/\/\S+/g, '').trim());
+  // Telegram/source text can include its "show more" control followed by the outlet's
+  // site/social footer on the same line. It is not part of the reported story.
+  const sourceText = String(raw || '').replace(/(?:^|\s)عرض المزيد(?=\s|$)[\s\S]*$/iu, '').trim();
+  const lines = sourceText.split('\n').map((l) => l.replace(/https?:\/\/\S+/g, '').trim());
   const keep = [];
   for (const l of lines) {
     if (!l) { keep.push(''); continue; }

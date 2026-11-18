@@ -1,9 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseChannelPage } from '../server/news-sources.js';
+import { cleanPostText, parseChannelPage } from '../server/news-sources.js';
 
 const block = (channel, id, text = 'خبر عاجل من المصدر') =>
   `<div class="tgme_widget_message_wrap"><div class="tgme_widget_message" data-post="${channel}/${id}"><div class="tgme_widget_message_text js-message_text">${text}</div></div></div>`;
+
+test('news cleanup removes a same-line Telegram show-more and outlet social footer', () => {
+  const report = 'سماع دوي انفجارات متتالية في المناطق المحاذية للجولان جنوب غرب سوريا';
+  const raw = `${report} عرض المزيد وكالة أنباء هاوار ANHA موقعنا على بلوسكاي موقعنا على X لحظة بلحظة عبر الواتس اب`;
+  assert.equal(cleanPostText(raw).text, report);
+});
 
 test('Telegram channel parsing ignores embedded posts from other channels', () => {
   const html = block('targetFeed', 31) + block('otherFeed', 99, 'محتوى من قناة أخرى');
