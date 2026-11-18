@@ -703,8 +703,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   });
   assert.match(channelText, /تحليق طيران حربي/);
   assert.match(channelText, /📍<b>صمدانية شرقية/);
-  assert.match(channelText, /📍<b>صمدانية شرقية[\s\S]*?<\/b>\n\nتاريخ :/);
-  assert.match(channelText, /تاريخ :  [^\n]+\n\nالساعة :/);
+  assert.doesNotMatch(channelText, /تاريخ :|الساعة :/, 'channel posts carry no date/time lines — Telegram stamps every post');
   assert.doesNotMatch(channelText, /الخريطة المباشرة|Red Alert Syria/);
   const monitoredInput = buildAlertInput({
     type: 'attack', source: 'news', srcs: [{ name: 'مصادر محلية', url: 'https://news.example/story' }],
@@ -720,7 +719,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     place: { scope: 'place', name_ar: 'صمدانية شرقية', name_en: 'Samdaniyah Sharqiyah', governorate_ar: 'القنيطرة', governorate_en: 'Quneitra' }, extra: [],
   }, { ended: true });
   assert.match(endedText, /✅ انتهى/);
-  assert.match(endedText, /الساعة :  [^\n]+\n\nانتهى :/);
+  assert.doesNotMatch(endedText, /انتهى :|الساعة :|تاريخ :/, 'an ended post keeps only the header marker, no clock lines');
   assert.ok(channelKeyboard({ id: 'test-channel-footer' }).inline_keyboard.flat().some((button) => button.text?.includes('عرض على الخريطة')));
 
   const simulatedPosts = [];
@@ -776,9 +775,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   addedAlertIds.push(politicalAlert.id);
   const politicalPost = channelPost(politicalAlert);
   assert.match(politicalPost, /📍 <b>الموقع:<\/b> غير محدد — دون دبوس/);
-  assert.match(politicalPost, /الفئة:<\/b> 🤝 «مفاوضات»/);
-  assert.match(politicalPost, /📅 <b>التاريخ:<\/b>/);
-  assert.match(politicalPost, /🕒 <b>الوقت:<\/b>/);
+  assert.doesNotMatch(politicalPost, /الفئة:<\/b>|📅|🕒/, 'political posts carry no category/date/time tail — the header and Telegram carry them');
   const decisionAlert = store.addAlert(buildAlertInput({
     type: 'political', politicalCategory: 'decision',
     location: { scope: 'country', latitude: null, longitude: null },
@@ -786,7 +783,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   }, { id: ownerId, name: 'test' }));
   addedAlertIds.push(decisionAlert.id);
   const decisionPost = channelPost(decisionAlert);
-  assert.match(decisionPost, /الفئة:<\/b> 📜 «قرار»\n/);
+  assert.doesNotMatch(decisionPost, /الفئة:<\/b>/, 'the public post has no category tail line');
   assert.doesNotMatch(decisionPost, /قرار أو تعيين/, 'the public category uses the event-specific label, not the broad bot button label');
   assert.doesNotMatch(politicalPost, /🔎 <b>المصدر:<\/b>|&lt;Official source&gt;|تاريخ المصدر/, 'political source names and citations stay out of public channel posts');
   assert.doesNotMatch(politicalPost, /<a\b|href=/, 'political source is plain text with no clickable link');

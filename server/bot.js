@@ -223,8 +223,7 @@ function locName(loc, lang) {
 const fmtTime = (iso, lang) =>
   new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-SY', { timeZone: config.timezone, hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' }).format(new Date(iso));
 
-const fmtClock = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
-const fmtDate = (iso) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, day: 'numeric', month: 'long' }).format(new Date(iso));
+
 const MEETING_COUNTRIES = [
   { code: 'LB', flag: '🇱🇧', names: ['لبنان', 'lebanon'] },
   { code: 'JO', flag: '🇯🇴', names: ['الاردن', 'jordan'] },
@@ -276,13 +275,24 @@ function channelEventSymbol(alert) {
   if (category === 'meeting') return explicitMeetingCountryFlag(alert) || POLITICAL_CATEGORIES.meeting.emoji;
   return POLITICAL_CATEGORIES[category]?.emoji || alertEmoji(alert);
 }
-// Channel post (format requested by the owner):
-//   تنبيه مدني - 🚑
-//   📍كويرس شرقي، الباب، حلب
-//   تاريخ :  ٢٣ تشرين الأول
-//   الساعة :  ١٠:٣١ م
-//
-//   (no footer; map and channel links remain on the inline buttons)
+// Channel post format (owner, revised 2026-11-18): header, place, one telling
+// of the story — nothing else. No category line (the header carries it), no
+// date/time lines (Telegram stamps every post), no repeated full text when
+// it merely rephrases the lead, and no raw source links (the inline buttons
+// carry the map and channel links).
+const storyTokens = (s) => new Set(String(s || '').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 1));
+function bodyRepeatsLead(desc, body) {
+  if (!desc || !body) return false;
+  const leadTokens = storyTokens(desc);
+  const sentences = String(body).split(/[.!؟?؛\n]+/).map((x) => x.trim()).filter(Boolean);
+  if (!sentences.length) return true;
+  return sentences.every((sentence) => {
+    const t = storyTokens(sentence);
+    if (t.size < 4) return true; // a fragment adds nothing on its own
+    let hit = 0; for (const w of t) if (leadTokens.has(w)) hit++;
+    return hit / t.size >= 0.8;
+  });
+}
 export function channelPost(alert, { ended = false } = {}) {
   const editorialMode = alert?.source === 'news' && ['opinion', 'satire'].includes(alert?.meta?.publicEditorialTone) ? alert.meta.publicEditorialTone : null;
   const editorialCopy = editorialMode && isPublicEditorialCopy(alert?.description, editorialMode) ? alert.description : null;
@@ -320,27 +330,15 @@ export function channelPost(alert, { ended = false } = {}) {
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (alert.type !== 'breaking' && desc) sections.push(`<blockquote>${esc(desc)}</blockquote>`);
-  // Full report text (monitored news): shown in full after the concise lead.
-  // Deduped against the lead; photo captions drop this section first when trimming.
+  // Full report text (monitored news): shown after the concise lead ONLY when
+  // it adds story the lead does not already tell. Wire copy usually rephrases
+  // the same sentence — printing both read as a stutter, so a body whose every
+  // sentence is already covered by the lead is dropped (the full text remains
+  // on the map). Photo captions drop this section first when trimming.
   const fullBody = preserveStoryAttribution
     ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
     : cleanAlertText(alert.body || '');
-  if (fullBody && fullBody !== desc) sections.push(`<blockquote>${esc(fullBody)}</blockquote>`);
-  if (alert.type === 'political') {
-    const meta = alert.meta?.political || {};
-    const category = POLITICAL_CATEGORIES[meta.category];
-    if (category) {
-      sections.push(`🏛 <b>الفئة:</b> ${esc(category.emoji)} «${esc(category.ar)}»`);
-    }
-  }
-  if (alert.type === 'political') {
-    sections.push(`📅 <b>التاريخ:</b> ${esc(fmtDate(alert.timestamp))}`);
-    sections.push(`🕒 <b>الوقت:</b> ${esc(fmtClock(alert.timestamp))}`);
-  } else {
-    sections.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
-    sections.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
-  }
-  if (ended) sections.push(`انتهى :  ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
+  if (fullBody && fullBody !== desc && !bodyRepeatsLead(desc, fullBody)) sections.push(`<blockquote>${esc(fullBody)}</blockquote>`);
   return sections.join('\n\n');
 }
 export function channelKeyboard(alert) {

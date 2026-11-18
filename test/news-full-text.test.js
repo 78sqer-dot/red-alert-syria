@@ -69,6 +69,47 @@ test('channel post does not duplicate the text when body equals the lead', () =>
   assert.equal(post.split('انفجار في إدلب').length - 1, 1, 'identical body is not repeated');
 });
 
+test('channel post prints a rephrased wire body only once and strips its bare source link', () => {
+  // The owner's 2026-11-18 examples: SANA copy where the body merely rephrases
+  // the lead and drags a bare sana.sy link that used to surface as ".sy/…".
+  const alert = {
+    type: 'political', source: 'news', title: 'تطور سياسي',
+    description: 'أُجريت في دمشق مباحثات سورية أوروبية تناولت الإصلاحات المالية وآفاق التعاون الاقتصادي بين الجانبين.',
+    body: 'مباحثات سورية أوروبية بدمشق حول الإصلاحات المالية وآفاق التعاون الاقتصادي sana.sy/syria-and-the-world/2638232',
+    meta: { political: { category: 'negotiation' } },
+    place: { scope: 'country' }, timestamp: new Date().toISOString(), is_active: true,
+  };
+  const post = bot.channelPost(alert);
+  assert.equal(post.split('مباحثات سورية أوروبية').length - 1, 1, 'the story is told once, not twice');
+  assert.doesNotMatch(post, /syria-and-the-world|\.sy\//, 'no bare link or mangled link remnant survives');
+  assert.doesNotMatch(post, /الفئة:<\/b>|التاريخ:<\/b>|الوقت:<\/b>/, 'no category/date/time tail');
+});
+
+test('channel post drops a same-story body on the plain-text path too', () => {
+  const alert = {
+    type: 'fire', source: 'telegram', title: 'حريق — الحسكة',
+    description: 'انقلب صهريج لنقل النفط على طريق أبيض جنوبي الحسكة.',
+    body: 'انقلاب صهريج لنقل النفط على طريق أبيض جنوبي الحسكة',
+    place: { scope: 'place', name_ar: 'الحسكة' }, timestamp: new Date().toISOString(), is_active: true,
+  };
+  const post = bot.channelPost(alert);
+  assert.equal(post.split('صهريج').length - 1, 1, 'the tanker story is told once');
+  assert.doesNotMatch(post, /تاريخ :|الساعة :/, 'no date/time lines');
+});
+
+test('channel post keeps a body that adds new story and cleans a pre-mangled link remnant', () => {
+  const alert = {
+    type: 'political', source: 'news', title: 'تطور سياسي',
+    description: 'أُجريت في دمشق مباحثات سورية أوروبية.',
+    body: 'وقال الجانبان إن اللجان الفنية ستجتمع مجدداً الشهر المقبل لمتابعة ملفات الطاقة والمصارف.sy/syria-and-the-world/2638232',
+    meta: { political: { category: 'negotiation' } },
+    place: { scope: 'country' }, timestamp: new Date().toISOString(), is_active: true,
+  };
+  const post = bot.channelPost(alert);
+  assert.match(post, /اللجان الفنية/, 'genuinely new body content is kept');
+  assert.doesNotMatch(post, /\.sy\/|syria-and-the-world/, 'the orphaned link remnant is removed, not glued to the last word');
+});
+
 test('public payload never exposes a private-editorial body', () => {
   const pub = publicAlert({
     id: 'editorial-body', type: 'attack', source: 'news', title: 'هجوم — حلب', description: 'هجوم في حلب',

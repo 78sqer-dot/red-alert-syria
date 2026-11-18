@@ -12,6 +12,16 @@ const MEDIA = [
   'Al Jazeera', 'Al Arabiya', 'Al Araby', 'Syria TV', 'SANA', 'Halab Today',
 ];
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Raw links never belong in public copy: full URLs, bare domains with or
+// without a path (sana.sy/…), and the orphaned ".tld/path" remnant left when
+// an outlet name is stripped from inside a bare URL — that remnant used to
+// stay glued to the previous word (e.g. "الاقتصادي.sy/syria-and-the-world/…").
+export function stripRawUrls(s) {
+  return String(s)
+    .replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' ')
+    .replace(/(^|[\s(])[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.(?:sy|com|net|org|info|news|tv|me|io|co|gov|edu)(?:\/\S*)?/giu, '$1 ')
+    .replace(/\.(?:sy|com|net|org|info|news|tv|me|io)\/\S+/gi, '');
+}
 let extraNames = [];
 /** Monitored source names (from the news monitor) are treated as media names too. */
 export function setSourceNames(names) {
@@ -27,7 +37,7 @@ export function cleanAlertText(raw) {
   if (!raw) return raw;
   let s = String(raw);
   const M = mediaRe();
-  s = s.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' ');
+  s = stripRawUrls(s);
   s = s.replace(/(^|[\s(])@[A-Za-z0-9_]{4,}/g, '$1');
   s = s.replace(/#(?:متداول|عاجل|خاص|حصري|سوريا_الآن|سوريا_الان)(?![\p{L}\p{N}_])/gu, ' ');
   s = s.replace(/(^|\s)(?:متداول|عاجل)\s*[|:：]\s*/gu, '$1');
@@ -78,7 +88,7 @@ export function isPublicEditorialCopy(raw, mode) {
 /** Remove media-outlet/reporting credits from public copy without stripping attributed speakers or institutions. */
 export function cleanPublicNewsAttribution(raw, privateNames = []) {
   if (!raw) return raw;
-  let text = String(raw);
+  let text = stripRawUrls(String(raw));
   const tidyNames = (values) => [...new Set(values.map((value) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim())
     .filter((name) => name.length >= 3 && name.length <= 80))].sort((a, b) => b.length - a.length);
   const mediaNames = tidyNames(MEDIA);
@@ -121,7 +131,7 @@ export function cleanAttributedNewsText(raw, privateNames = []) {
     .replace(/<[^>]*>/g, ' ')
     .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '')
     .replace(/#([\p{L}\p{N}_]+)/gu, (_, word) => word.replace(/_/g, ' '));
-  s = s.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' ')
+  s = stripRawUrls(s)
     .replace(/(^|[\s(])@[A-Za-z0-9_]{4,}/g, '$1');
   const names = [...new Set([
     ...extraNames,
