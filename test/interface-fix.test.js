@@ -49,19 +49,19 @@ test('governorate labels are added on top of the symbol stack so they win collis
   assert.match(mapSrc, /id: 'ras-gov-labels'[\s\S]*?\}, null\);/);
   assert.match(mapSrc, /'symbol-avoid-edges': true/);
   // halo keeps a label readable when a DOM marker (always above the canvas)
-  // sits on it; slimmed 2 -> 1.7 -> 1.5 to match the shrinking type (see size test)
+  // sits on it; the latest size pass trims 1.5 to 1.3 (see size test)
   const govLayer = mapSrc.match(/id: 'ras-gov-labels'[\s\S]*?\}, null\);/)[0];
-  assert.match(govLayer, /'text-halo-width': 1\.5/);
+  assert.match(govLayer, /'text-halo-width': 1\.3/);
 });
 
-test('governorate label size is one uniform zoom expression, shrunk twice at the owner\u2019s request', () => {
+test('governorate label size is one uniform zoom expression, shrunk again at the owner\u2019s latest request', () => {
   // owner (2026-11-17): the names read "too big and inconsistent" — first round
-  // 11->9 / 12.5->10 / 14->11; still too big on his phone, so a second round
-  // takes another ~12-15% off every stop (9->8 / 10->8.5 / 11->9.5). The
-  // expression must stay a pure zoom function: no data-driven term may size
-  // one governorate over another
+  // 11->9 / 12.5->10 / 14->11; then 9->8 / 10->8.5 / 11->9.5. On 2026-11-18,
+  // the owner asked for another reduction to 7.5 / 8 / 9. The expression must
+  // stay a pure zoom function: no data-driven term may size one governorate
+  // over another
   const govLayer = mapSrc.match(/id: 'ras-gov-labels'[\s\S]*?\}, null\);/)[0];
-  assert.match(govLayer, /'text-size': \['interpolate', \['linear'\], \['zoom'\], 5, 8, 8, 8\.5, 11, 9\.5\]/);
+  assert.match(govLayer, /'text-size': \['interpolate', \['linear'\], \['zoom'\], 5, 7\.5, 8, 8, 11, 9\]/);
   const sizeExpr = govLayer.match(/'text-size': (\[[\s\S]*?\]), 'text-transform'/)[1];
   assert.doesNotMatch(sizeExpr, /\['(get|match|case|step)'/, 'text-size must not depend on the feature');
   // max-width up 12 -> 14em: at the smaller size the one-line budget in px is
