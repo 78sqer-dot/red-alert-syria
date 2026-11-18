@@ -64,6 +64,10 @@ const isInstitutionSpeakerName = (name) => {
   const speaker = String(name).replace(/^مصادر\s+/iu, '');
   return SPEAKER_INSTITUTION.test(speaker) && !MEDIA_IDENTITY_TERMS.test(speaker);
 };
+const REPORTER_PROMO = /(^|\r?\n)[ \t]*(?:التفاصيل|تفاصيل(?:\s+أكثر)?)\s+(?:مع|لدى|من)\s+(?:مراسل(?:نا|تنا|ة)?|(?:ال)?مراسل(?:ة)?|مراسلي(?:نا)?|مراسلاتنا)(?![\p{L}\p{N}_])[^\r\n]*|(?<=[.!؟؛])[ \t]+(?:التفاصيل|تفاصيل(?:\s+أكثر)?)\s+(?:مع|لدى|من)\s+(?:مراسل(?:نا|تنا|ة)?|(?:ال)?مراسل(?:ة)?|مراسلي(?:نا)?|مراسلاتنا)(?![\p{L}\p{N}_])[^\r\n]*/giu;
+function stripReporterPromo(text) {
+  return String(text || '').replace(REPORTER_PROMO, (_match, lineBreak) => lineBreak || '');
+}
 const PRIVATE_EDITORIAL_LABEL = /(?:رأي\s*\/\s*تحليل|رأي|تحليل|opinion\s*\/\s*analysis|محاكاة\s+(?:سياسية\s+)?ساخرة(?:\s+خيالية)?(?:\s*[\[(]\s*(?:ليست\s+خبراً|not\s+news)\s*[\])])?|fictional\s+political\s+satire)\s*[:：—-]/iu;
 const EDITORIAL_DIAGNOSTIC = /EDITORIAL_REVIEW_REQUIRED|REVIEW_REQUIRED|لا\s+تقدم\s+المادة\s+وقائع\s+موثقة\s+كافية|insufficient\s+(?:verified\s+)?facts\s+for\s+(?:a\s+)?policy\s+criticism/iu;
 
@@ -120,6 +124,7 @@ export function cleanPublicNewsAttribution(raw, privateNames = []) {
   if (privateSourceNames.some((name) => !isInstitutionSpeakerName(name) && String(raw).includes(name))) {
     text = text.replace(new RegExp(`(^|\\n)([\\s•\\-–—]*)${verb}\\s*[:：]\\s*`, 'gimu'), '$1$2');
   }
+  text = stripReporterPromo(text);
   return String(text || '').replace(/^[\s،,;|•—–:-]+|[\s،,;|•—–:-]+$/g, '').replace(/\s+/g, ' ').trim();
 }
 
