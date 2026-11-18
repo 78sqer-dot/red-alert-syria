@@ -724,8 +724,8 @@ async function sendTransient(api, chatId, text, extra = {}) {
 }
 function clearTransientFor() { /* retained intentionally */ }
 
-async function vanish(ctx, text) {
-  try { await ctx.answerCallbackQuery(text ? { text: String(text).replace(/<[^>]+>/g, '').slice(0, 190) } : undefined); } catch { /* already answered */ }
+async function vanish(ctx, text, answerCallback = true) {
+  if (answerCallback) try { await ctx.answerCallbackQuery(text ? { text: String(text).replace(/<[^>]+>/g, '').slice(0, 190) } : undefined); } catch { /* already answered */ }
   try { await ctx.deleteMessage(); } catch {
     try { await ctx.editMessageText(text || '✔️', { parse_mode: 'HTML' }); } catch { /* ignore */ }
   }
@@ -3145,16 +3145,27 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     }
     const notify = APIS[rep.via] || APIS.report || ctx.api;
     if (action === 'ap') {
+      try { await ctx.answerCallbackQuery({ text: en ? '⏳ Publishing…' : '⏳ جارٍ النشر…' }); } catch (e) { console.warn('[bot] report acceptance acknowledgement failed', e.description || e.message); }
+      let published;
       try {
-        await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
+        published = await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
       } catch (e) {
         store.reportRestore(rid, rep); // nothing lost: the reviewer can tap again
         console.error('[bot] report publish failed', e.description || e.message);
-        try { await ctx.answerCallbackQuery({ text: en ? '⚠️ Publishing failed — tap Approve again.' : '⚠️ تعذّر النشر — اضغط «موافقة» مرة ثانية.', show_alert: true }); } catch { /* ignore */ }
+        await sendTransient(ctx.api, ctx.callbackQuery.message.chat.id, en
+          ? '⚠️ Publishing failed — the report is back in the queue. Tap Approve on the original card to retry.'
+          : '⚠️ تعذّر النشر — أُعيد البلاغ إلى قائمة المراجعة. اضغط «موافقة» على البطاقة الأصلية لإعادة المحاولة.');
         return;
       }
+      const channelPostFailed = Boolean(published?.channel_post_failed);
+      const cardChatId = ctx.callbackQuery.message.chat.id;
+      const approvedBy = L(ctx).reportApproved(ctx.from.first_name || '');
+      const channelWarning = en
+        ? '⚠️ The report is live on the map only; the channel post failed and will not be retried automatically. It needs manual follow-up. Do not approve again to avoid a duplicate map alert.'
+        : '⚠️ نُشر البلاغ على الخريطة فقط؛ تعذّر إرساله إلى القناة ولن تُعاد المحاولة تلقائيًا. يحتاج متابعة يدوية. لا توافق مرة أخرى لتجنّب تكراره على الخريطة.';
       await closeReport(ctx, rep, true);
-      await vanish(ctx, L(ctx).reportApproved(ctx.from.first_name || ''));
+      await vanish(ctx, approvedBy, false);
+      if (channelPostFailed) await sendTransient(ctx.api, cardChatId, channelWarning);
       await sendTransient(notify, rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser);
     } else if (action === 'ed') {
       // Load the report into this editor's publishing session so it can be adjusted first.
