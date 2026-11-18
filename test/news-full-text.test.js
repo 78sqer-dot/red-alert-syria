@@ -40,6 +40,28 @@ test('handleResult stores the full cleaned text as the draft body', async () => 
   assert.ok(draft.body.length > draft.headline.length, 'the body is the fuller text');
 });
 
+test('a secondary incident in the article body cannot move the draft to another type button', async () => {
+  const lead = 'إغلاق الطريق العام في محافظة دير الزور السورية اليوم';
+  const item = {
+    i: 2,
+    src: { u: 'secondary-mention-src', name: 'مصدر تجريبي', local: false },
+    url: 'https://t.me/secondary-mention-src/2',
+    ts: Date.now(),
+    text: `${lead}.\nوفي سياق آخر، رُصد تحليق مروحية عسكرية فوق مدينة حمص أمس.`,
+    breaking: false,
+  };
+  const result = {
+    i: 2, event: true, type: 'breaking', new_incident: true, same_as: null,
+    places: [{ name: 'دير الزور', gov: 'دير الزور' }], headline: lead,
+  };
+
+  await mon._test.handleResult(item, result, [], new Map());
+  const draft = Object.values(mon.newsState().drafts).find((d) => (d.srcs || []).some((s) => s.u === 'secondary-mention-src'));
+  assert.ok(draft, 'the story remains a monitored draft');
+  assert.equal(mon._test.refinePrimaryType('breaking', item.text), 'breaking');
+  assert.equal(draft.type, 'breaking', 'the unrelated helicopter mention does not replace the story’s breaking-news button');
+});
+
 test('toBotDraft and buildAlertInput keep headline as lead and full text as body', async () => {
   const draft = Object.values(mon.newsState().drafts).find((d) => (d.srcs || []).some((s) => s.u === 'full-text-src'));
   const botDraft = mon.toBotDraft(draft);

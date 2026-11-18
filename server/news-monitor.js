@@ -1410,6 +1410,10 @@ async function mergeInto(d, it, locs = []) {
   if (d.status === 'pending' && nightActive() && nightEligible(d)) await nightPublish(d); // confirmed by a 2nd source at night
   return true;
 }
+function refinePrimaryType(type, text) {
+  const lead = String(text || '').split(/\r?\n/).find((line) => line.trim()) || '';
+  return refineType(type, lead);
+}
 function explicitWeatherResult(it) {
   const info = weatherWarningInfo(it.text);
   if (!info || hasNonWeatherSignal(it.text)) return null;
@@ -1426,9 +1430,9 @@ async function handleResult(it, r, known, pmap) {
   // freshness window is dropped here and can never be drafted as new
   if (!isFreshSourceTs(it.ts)) { note(it, 'too old'); return; }
   if (!r || !r.event || !NEWS_TYPES.includes(r.type)) { note(it, 'not an event'); return; }
-  // ruleClassify already chooses from the primary headline; scanning the whole body
-  // again here could let an unrelated secondary mention override that decision.
-  if (!r.rule) { const t2 = refineType(r.type, `${r.headline || ''}\n${it.text}`); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
+  // Only the primary headline can correct Gemini's type. A secondary incident
+  // mentioned later in the article must not route this story to a different button.
+  if (!r.rule) { const t2 = refinePrimaryType(r.type, r.headline || it.text); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
   if (r.type === 'weather' && !weatherWarningInfo(it.text)) { note(it, 'not an explicit actionable weather warning'); return; }
   // the AI linked it to a known incident / an earlier post of this batch
   let target = null;
@@ -1757,7 +1761,7 @@ export function startNewsMonitor() {
     for (const d of Object.values(n.drafts)) {
       if (d.status !== 'pending' || d.test) continue;
       const text = d.sourceText || d.body || d.headline || '';
-      const t2 = refineType(d.type, text);
+      const t2 = refinePrimaryType(d.type, d.headline || text);
       if (t2 === d.type) continue;
       console.log(`[news] draft ${d.id} re-tagged ${d.type} -> ${t2}`);
       d.type = t2;
@@ -2681,4 +2685,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
