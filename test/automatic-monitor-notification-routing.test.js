@@ -26,6 +26,14 @@ test('automatic-monitor notification dispatches use both shared-owner recipients
   assert.match(weather, /for \(const id of automaticMonitorRecipientIds\(\)\)/);
 });
 
+test('monitored channel-post failures require manual retry and do not promise automatic retry', () => {
+  assert.match(news, /لا توجد إعادة تلقائية؛ أعد محاولة منشور القناة يدوياً/);
+  assert.match(news, /Automatic retry is disabled; manually retry the channel post/);
+  assert.match(news, /Channel-post auto-retry: STOPPED by the owner/);
+  assert.doesNotMatch(news, /ستُعاد المحاولة تلقائياً كل بضع دقائق/);
+  assert.doesNotMatch(news, /It will be retried automatically every few minutes/);
+});
+
 test('manual news-owner approvals keep their existing shared-owner notification path', () => {
   assert.match(news, /for \(const ownerId of ownerIdsU\(\)\) \{\s*if \(Number\(ownerId\) === Number\(ctx\.from\.id\)\) continue;/);
 });

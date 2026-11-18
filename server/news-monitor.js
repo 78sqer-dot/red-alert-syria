@@ -2238,12 +2238,12 @@ export function registerNewsTools(bot, h) {
       try { await ctx.api.sendMessage(ownerId, ownerText, { parse_mode: 'HTML', reply_markup: publishedLinksKb(d, alert, ownerLang, true), link_preview_options: { is_disabled: true }, _keep: 'c' }); } catch (e) { console.warn('[news] owner approval notification failed', e.message); }
     }
     // A map-only publish is a FAILURE, never a silent success: warn every owner
-    // with the reason. The sweep retries the channel post automatically.
+    // with the reason and require a manual retry; no automatic retry is scheduled.
     if (alert && !alert.channel_message_id) {
       const why = alert.channel_post_failed?.why || 'unknown error';
       for (const ownerId of ownerIdsU()) {
         const ol = langOfId(ownerId);
-        try { await ctx.api.sendMessage(ownerId, tr(ol, `⚠️ <b>تنبيه نُشر على الخريطة فقط — تعذّر نشره في القناة</b>\n${esc(d.publishedHeadline || d.headline || '')}\nالسبب: ${esc(why)}\nستُعاد المحاولة تلقائياً كل بضع دقائق حتى ينجح. إن استمر الفشل، تأكد أن بوت النشر مشرف في القناة بصلاحية «نشر الرسائل».`, `⚠️ <b>Alert published to the map only — the channel post failed</b>\n${esc(d.publishedHeadline || d.headline || '')}\nReason: ${esc(why)}\nIt will be retried automatically every few minutes. If it keeps failing, make sure the publishing bot is a channel admin with post permission.`), { parse_mode: 'HTML', _keep: 'c' }); } catch { /* ignore */ }
+        try { await ctx.api.sendMessage(ownerId, tr(ol, `⚠️ <b>تنبيه نُشر على الخريطة فقط — تعذّر نشره في القناة</b>\n${esc(d.publishedHeadline || d.headline || '')}\nالسبب: ${esc(why)}\nلا توجد إعادة تلقائية؛ أعد محاولة منشور القناة يدوياً بعد التأكد من أن بوت النشر مشرف ولديه صلاحية نشر الرسائل. لا تُعِد إنشاء تنبيه الخريطة.`, `⚠️ <b>Alert published to the map only — the channel post failed</b>\n${esc(d.publishedHeadline || d.headline || '')}\nReason: ${esc(why)}\nAutomatic retry is disabled; manually retry the channel post after confirming the publishing bot is a channel admin with post permission. Do not recreate the map alert.`), { parse_mode: 'HTML', _keep: 'c' }); } catch { /* ignore */ }
       }
     }
     await closeCards(d, cur(ctx), true);
