@@ -1693,26 +1693,8 @@ async function sweep() {
   for (const [h, t] of Object.entries(n.seen)) if (now - t > 48 * H_MS) { delete n.seen[h]; changed = true; }
   for (const [k, t] of Object.entries(n.handled || {})) if (now - t > 48 * H_MS) { delete n.handled[k]; changed = true; }
   if (changed || before !== n.alerts.length || echoBefore !== (n.echoLog || []).length) save(false);
-  // Channel-post recovery: every store alert was intended for the channel
-  // (map-only publishing exists only for road drafts, which are not alerts),
-  // so an alert with no channel post is a failed post — retry it with
-  // backoff until it lands (e.g. once the bot's channel admin rights return).
-  try {
-    const a = api();
-    if (a && R.H?.retryChannelPost) {
-      const stuck = store.state.alerts.filter((x) => !x.channel_message_id
-        && now - Date.parse(x.timestamp) < 12 * H_MS
-        && (!x.channel_post_failed || (now - (x.channel_post_failed.at || 0) > 10 * 60_000 && (x.channel_post_failed.tries || 1) < 20)));
-      for (const x of stuck.slice(0, 3)) {
-        if (!await R.H.retryChannelPost(a, x.id)) continue;
-        const fresh = store.getAlert(x.id);
-        const link = fresh?.channel_message_id ? postUrl(fresh.channel_message_id) : '';
-        for (const ownerId of ownerIdsU()) {
-          try { await a.sendMessage(ownerId, `✅ أُعيد نشر تنبيه في القناة بعد تأخره: ${esc(fresh?.title || x.title || '')}${link ? `\n${link}` : ''}`, { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, _keep: 'c' }); } catch { /* ignore */ }
-        }
-      }
-    }
-  } catch (e) { console.error('[news] channel retry sweep failed', e.message); }
+  // Channel-post auto-retry: STOPPED by the owner (2026-11-18) — failed
+  // posts are still flagged and warned about, but never re-posted on their own.
 }
 
 // ---------------------------------------------------------------- start / stop / hand-off
