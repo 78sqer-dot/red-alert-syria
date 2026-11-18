@@ -110,6 +110,23 @@ test('channel post keeps a body that adds new story and cleans a pre-mangled lin
   assert.doesNotMatch(post, /\.sy\/|syria-and-the-world/, 'the orphaned link remnant is removed, not glued to the last word');
 });
 
+test('channel post collapses a same-story lead/body pair to the fuller text, told once', () => {
+  // The owner's 2026-11-18 Aleppo example: the body retells the lead with two
+  // small facts woven in (قذائف متنوعة، مخلفات داعش) and the time in digits.
+  // Neither text may print alongside the other — the fuller one wins, once.
+  const alert = {
+    type: 'explosion', source: 'news', title: 'انفجار — حلب',
+    description: 'قيادة الأمن الداخلي في حلب تعلن عن تفجير مخلفات من ألغام وعبوات ناسفة في منطقة الكاستيلو عند الساعة الواحدة ظهراً',
+    body: 'قيادة الأمن الداخلي في حلب: سيتم تفجير عبوات ناسفة وألغام وقذائف متنوعة من مخلفات تنظيم داعش في منطقة الكاستيلو عند الساعة 01.00 بعد الظهر',
+    place: { scope: 'place', name_ar: 'حلب', governorate_ar: 'حلب' }, timestamp: new Date().toISOString(), is_active: true,
+  };
+  const post = bot.channelPost(alert);
+  assert.equal(post.split('الكاستيلو').length - 1, 1, 'the story is told once');
+  assert.match(post, /قذائف متنوعة/, 'the fuller text wins, keeping its extra facts');
+  assert.doesNotMatch(post, /تعلن عن تفجير/, 'the shorter lead phrasing is not printed alongside');
+  assert.doesNotMatch(post, /تاريخ :|الساعة :/, 'no date/time lines');
+});
+
 test('public payload never exposes a private-editorial body', () => {
   const pub = publicAlert({
     id: 'editorial-body', type: 'attack', source: 'news', title: 'هجوم — حلب', description: 'هجوم في حلب',

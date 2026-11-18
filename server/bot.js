@@ -280,18 +280,47 @@ function channelEventSymbol(alert) {
 // date/time lines (Telegram stamps every post), no repeated full text when
 // it merely rephrases the lead, and no raw source links (the inline buttons
 // carry the map and channel links).
-const storyTokens = (s) => new Set(String(s || '').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 1));
-function bodyRepeatsLead(desc, body) {
-  if (!desc || !body) return false;
-  const leadTokens = storyTokens(desc);
-  const sentences = String(body).split(/[.!؟?؛\n]+/).map((x) => x.trim()).filter(Boolean);
-  if (!sentences.length) return true;
-  return sentences.every((sentence) => {
+const storyTokens = (s) => new Set(String(s || '').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 1 && !/^\p{N}+$/u.test(w)));
+const stripStoryPrefix = (w) => ((w.length > 3 && w.startsWith('و')) || (w.length > 4 && /^[بلفك]/.test(w)) ? w.slice(1) : w);
+const storySet = (s) => { const set = storyTokens(s); for (const w of [...set]) { const alt = stripStoryPrefix(w); if (alt !== w) set.add(alt); } return set; };
+const storyCoverage = (tokens, set) => { if (!tokens.size) return 1; let hit = 0; for (const w of tokens) if (set.has(w) || set.has(stripStoryPrefix(w))) hit++; return hit / tokens.size; };
+// Sentences keep their own terminator (a decimal point inside a number —
+// «الساعة 01.00» — is not a sentence break). Newline breaks are dropped;
+// kept sentences are re-joined with a space.
+const splitStorySentences = (s) => {
+  const parts = String(s || '').split(/((?<!\p{N})[.!؟?؛]+(?!\p{N})|\n+)/u);
+  const out = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const text = (parts[i] || '').trim();
+    if (!text) continue;
+    const term = parts[i + 1] || '';
+    out.push(text + (/^[.!؟?؛]+$/.test(term) ? term : ''));
+  }
+  return out;
+};
+// One story, one telling: returns { lead, extra } — the text that headlines
+// the post and the body sentences that genuinely add story. A one-sentence
+// body whose words are ≥65% covered by the lead is the same telling; when it
+// also covers the lead back and is longer, the fuller body wins and prints
+// once instead of the lead. Pure numbers never count as story tokens
+// (الواحدة ظهراً and 01.00 are the same fact in two notations), and tokens
+// match across Arabic conjunction/preposition prefixes (وعبوات = عبوات).
+function collapseStory(desc, body) {
+  if (!body || body === desc) return { lead: desc, extra: '' };
+  if (!desc) return { lead: '', extra: body };
+  const leadSet = storySet(desc);
+  const sentences = splitStorySentences(body);
+  if (sentences.length <= 1) {
+    if (storyCoverage(storyTokens(body), leadSet) < 0.65) return { lead: desc, extra: body };
+    if (storyCoverage(storyTokens(desc), storySet(body)) >= 0.65 && body.length > desc.length) return { lead: body, extra: '' };
+    return { lead: desc, extra: '' };
+  }
+  const kept = sentences.filter((sentence) => {
     const t = storyTokens(sentence);
-    if (t.size < 4) return true; // a fragment adds nothing on its own
-    let hit = 0; for (const w of t) if (leadTokens.has(w)) hit++;
-    return hit / t.size >= 0.8;
+    if (t.size < 4) return false; // a fragment adds nothing on its own
+    return storyCoverage(t, leadSet) < 0.65;
   });
+  return { lead: desc, extra: kept.join(' ') };
 }
 export function channelPost(alert, { ended = false } = {}) {
   const editorialMode = alert?.source === 'news' && ['opinion', 'satire'].includes(alert?.meta?.publicEditorialTone) ? alert.meta.publicEditorialTone : null;
@@ -326,19 +355,18 @@ export function channelPost(alert, { ended = false } = {}) {
   const desc = preserveStoryAttribution
     ? cleanAttributedNewsText(alert.description || '', privateSourceNames)
     : cleanAlertText(alert.description || '');
-  if (alert.type === 'breaking') sections.push(`<b>${esc(desc || alert.title)}</b>`);
-  if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
-  else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
-  if (alert.type !== 'breaking' && desc) sections.push(`<blockquote>${esc(desc)}</blockquote>`);
-  // Full report text (monitored news): shown after the concise lead ONLY when
-  // it adds story the lead does not already tell. Wire copy usually rephrases
-  // the same sentence — printing both read as a stutter, so a body whose every
-  // sentence is already covered by the lead is dropped (the full text remains
-  // on the map). Photo captions drop this section first when trimming.
   const fullBody = preserveStoryAttribution
     ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
     : cleanAlertText(alert.body || '');
-  if (fullBody && fullBody !== desc && !bodyRepeatsLead(desc, fullBody)) sections.push(`<blockquote>${esc(fullBody)}</blockquote>`);
+  // Lead and full text collapse into one telling (see collapseStory); the
+  // full text remains on the map regardless. Photo captions drop the extra
+  // section first when trimming.
+  const { lead, extra } = collapseStory(desc, fullBody);
+  if (alert.type === 'breaking') sections.push(`<b>${esc(lead || alert.title)}</b>`);
+  if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
+  else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
+  if (alert.type !== 'breaking' && lead) sections.push(`<blockquote>${esc(lead)}</blockquote>`);
+  if (extra) sections.push(`<blockquote>${esc(extra)}</blockquote>`);
   return sections.join('\n\n');
 }
 export function channelKeyboard(alert) {
