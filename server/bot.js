@@ -322,6 +322,7 @@ function collapseStory(desc, body) {
   });
   return { lead: desc, extra: kept.join(' ') };
 }
+const isNewNewsChannelFormat = (alert) => alert?.source === 'news' && Number(alert.channel_format) === 3;
 export function channelPost(alert, { ended = false } = {}) {
   const editorialMode = alert?.source === 'news' && ['opinion', 'satire'].includes(alert?.meta?.publicEditorialTone) ? alert.meta.publicEditorialTone : null;
   const editorialCopy = editorialMode && isPublicEditorialCopy(alert?.description, editorialMode) ? alert.description : null;
@@ -344,7 +345,8 @@ export function channelPost(alert, { ended = false } = {}) {
   if (alert.type === 'signal_sweep' && alert.meta?.signalPlatform === 'uav') title += ' — مسيّرة';
   const p = alert.place || {};
   const hasPlace = p.scope && p.scope !== 'country';
-  const versioned = alert.channel_format === 2;
+  const newNewsLayout = isNewNewsChannelFormat(alert);
+  const versioned = Number(alert.channel_format) >= 2;
   const emoji = versioned ? channelEventSymbol(alert) : alertEmoji(alert);
   const dot = versioned ? `${eventVisual(alert.type).dot} ` : '';
   const preserveStoryAttribution = alert.source === 'news' || ['political', 'breaking'].includes(alert.type);
@@ -362,11 +364,19 @@ export function channelPost(alert, { ended = false } = {}) {
   // full text remains on the map regardless. Photo captions drop the extra
   // section first when trimming.
   const { lead, extra } = collapseStory(desc, fullBody);
-  if (alert.type === 'breaking') sections.push(`<b>${esc(lead || alert.title)}</b>`);
-  if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
+  if (alert.type === 'breaking' && !newNewsLayout) sections.push(`<b>${esc(lead || alert.title)}</b>`);
+  if (hasPlace) {
+    const locations = newNewsLayout ? [p] : [p, ...(alert.extra || [])];
+    sections.push(locations.map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
+  }
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
-  if (alert.type !== 'breaking' && lead) sections.push(`<blockquote>${esc(lead)}</blockquote>`);
-  if (extra) sections.push(`<blockquote>${esc(extra)}</blockquote>`);
+  if (newNewsLayout) {
+    const newsBody = [lead, extra].filter(Boolean).join(' ') || (alert.type === 'breaking' ? alert.title || '' : '');
+    if (newsBody) sections.push(`<blockquote>${esc(newsBody)}</blockquote>`);
+  } else {
+    if (alert.type !== 'breaking' && lead) sections.push(`<blockquote>${esc(lead)}</blockquote>`);
+    if (extra) sections.push(`<blockquote>${esc(extra)}</blockquote>`);
+  }
   return sections.join('\n\n');
 }
 export function channelKeyboard(alert) {
@@ -1195,10 +1205,11 @@ function channelEditPatch(alert, message) {
   const edited = channelEditParts(content);
   const stripIcon = (headline) => {
     let value = headline.trim();
-    const symbol = alert.channel_format === 2 ? channelEventSymbol(alert) : alertEmoji(alert);
+    const versioned = Number(alert.channel_format) >= 2;
+    const symbol = versioned ? channelEventSymbol(alert) : alertEmoji(alert);
     const suffix = ` - ${symbol}`;
     if (symbol && value.endsWith(suffix)) value = value.slice(0, -suffix.length).trim();
-    if (alert.channel_format === 2) {
+    if (versioned) {
       const prefix = `${eventVisual(alert.type).dot} `;
       if (value.startsWith(prefix)) value = value.slice(prefix.length).trim();
     }
@@ -1377,8 +1388,8 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
   const alert = store.addAlert(input);
   if (input.meta) alert.meta = input.meta;
   if (!toChannel || !config.channel) return alert;
-  // Persist the new public template version; alerts already present in storage keep their legacy headers.
-  alert.channel_format = 2;
+  // Version 3 is limited to future monitored-news posts; existing posts keep their saved layout.
+  alert.channel_format = input.source === 'news' ? 3 : 2;
   store.persist();
   const posted = await postAlertToChannel(api, alert, { renderSnapshot });
   if (posted.messageId) {
@@ -1398,16 +1409,17 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
  * or { failure } with the reason. */
 async function postAlertToChannel(api, alert, { renderSnapshot = null, ended = false } = {}) {
   const text = channelPost(alert, { ended });
+  const photoCaption = isNewNewsChannelFormat(alert) ? channelCaption(alert, { ended }) : text;
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
   let m = null; let media = 'text'; let uncertainMediaSend = false; let failure = '';
   // Attached source media stays on the public map; channel posts use the rendered map snapshot only.
   const snapshotRenderer = typeof renderSnapshot === 'function' ? renderSnapshot : null;
-  if ((snapshotRenderer || config.alertImages) && visibleLen(text) <= CAPTION_MAX) {
+  if ((snapshotRenderer || config.alertImages) && visibleLen(photoCaption) <= CAPTION_MAX) {
     const t0 = Date.now();
     try {
       const png = await withDeadline((snapshotRenderer || alertImage)(alert, 'ar'), IMAGE_DEADLINE_MS);
       try {
-        m = await api.sendPhoto(config.channel, new InputFile(png, `red-alert-syria-${alert.id.slice(0, 8)}.png`), { caption: text, ...extra });
+        m = await api.sendPhoto(config.channel, new InputFile(png, `red-alert-syria-${alert.id.slice(0, 8)}.png`), { caption: photoCaption, ...extra });
         media = 'photo';
         console.log(`[img] channel image sent in ${Date.now() - t0} ms (${Math.round(png.length / 1024)} KB)`);
       } catch (e) {
