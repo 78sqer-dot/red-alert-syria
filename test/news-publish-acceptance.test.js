@@ -39,6 +39,7 @@ const reportBot = createBot({ role: 'report', token: '654321:LOCAL_REPORT_TEST' 
 reportBot.botInfo = { id: 2, is_bot: true, first_name: 'Local report test', username: 'LocalReportTestBot' };
 const calls = [];
 let messageId = 1000;
+let failNextChannelPost = false;
 const snapshotPayload = (payload) => {
   const copy = { ...(payload || {}) };
   for (const key of ['photo', 'video']) if (copy[key] && typeof copy[key] !== 'string') copy[key] = '[media]';
@@ -57,6 +58,10 @@ bot.api.config.use(async (_previous, method, payload) => {
   if (method === 'sendVideo') return mockMediaMessage(payload, 'video');
   if (method === 'editMessageMedia') return { ok: true, result: { message_id: payload.message_id, chat: { id: payload.chat_id, type: 'channel' }, date: 0, ...(payload.media?.type === 'video' ? { video: { file_id: 'edited-video', file_unique_id: 'edited-video-unique', mime_type: 'video/mp4' } } : { photo: [{ file_id: 'edited-photo', file_unique_id: 'edited-photo-unique', width: 10, height: 10 }] }) } };
   if (method === 'sendMessage') {
+    if (payload.chat_id === '@mock_news_channel' && failNextChannelPost) {
+      failNextChannelPost = false;
+      throw new Error('synthetic channel post failure');
+    }
     return { ok: true, result: { message_id: ++messageId, chat: { id: payload.chat_id, type: [ownerId, reporter.id].includes(payload.chat_id) ? 'private' : 'channel' }, date: 0, text: payload.text || '' } };
   }
   if (method === 'editMessageText') {
@@ -1760,6 +1765,7 @@ test('public reporters can attach a photo and video to one pending report before
   };
   let rid = null;
   t.after(async () => {
+    failNextChannelPost = false;
     globalThis.fetch = originalFetch;
     if (rid && store.reportGet(rid)) store.reportTake(rid);
     await new Promise((resolve) => setTimeout(resolve, 350));
@@ -1800,14 +1806,44 @@ test('public reporters can attach a photo and video to one pending report before
   assert.equal(calls.slice(start).some(({ chatId }) => chatId === '@mock_news_channel'), false, 'the synthetic report remains pending and is never published');
   assert.equal(store.reportDone(rid), false, 'the report is still awaiting an editor decision');
 
+  const approvalStart = calls.length;
+  failNextChannelPost = true;
   await tap(`rap:${rid}`, owner, bot);
+  failNextChannelPost = false;
+  const approvalCalls = calls.slice(approvalStart);
+  const callbackAckIndex = approvalCalls.findIndex(({ method }) => method === 'answerCallbackQuery');
+  const channelPostIndex = approvalCalls.findIndex(({ method, chatId }) => chatId === '@mock_news_channel' && ['sendMessage', 'sendPhoto'].includes(method));
+  assert.ok(callbackAckIndex >= 0 && channelPostIndex >= 0 && callbackAckIndex < channelPostIndex, 'the approval callback is acknowledged before any channel publication request');
+  assert.equal(approvalCalls.filter(({ method }) => method === 'answerCallbackQuery').length, 1, 'approval does not answer the callback a second time after publication');
   assert.equal(store.reportDone(rid), true, 'the owner approval handles the report exactly once');
   const published = store.state.alerts.find((alert) => !alertIdsBefore.has(alert.id));
   assert.ok(published, 'the alert is created only after the owner approves');
+  assert.ok(published.channel_post_failed, 'a failed channel delivery is flagged on the map alert, not treated as a failed approval');
+  assert.equal(store.reportGet(rid), null, 'the accepted report is not restored, preventing a duplicate map alert');
+  assert.ok(approvalCalls.some(({ method, chatId, payload }) => method === 'sendMessage' && chatId === ownerId && /متابعة يدوية|manual follow-up/.test(payload.text || '')), 'the reviewer is told that channel delivery needs manual follow-up');
   const projectedPublished = publicAlert(published);
   assert.deepEqual(projectedPublished.media_items.map((item) => item.type), ['photo', 'video'], 'both report attachments remain available to the alert popup');
   assert.equal(projectedPublished.media_items.some((item) => Object.hasOwn(item, 'file_id')), false, 'the approved popup projection does not expose Telegram file identifiers');
   assert.equal(calls.slice(start).some(({ method, chatId }) => ['sendPhoto', 'sendVideo'].includes(method) && chatId === '@mock_news_channel'), false, 'report media is kept on the website map, not uploaded as source media to the channel');
+});
+
+test('a failed report approval is acknowledged early and restores a clear retry path', async (t) => {
+  const rid = 'approval_retry_regression';
+  const rep = { draft: null, from: { id: reporter.id, first_name: reporter.first_name }, messages: [], created: Date.now(), via: 'report' };
+  store.reportPut(rid, rep);
+  t.after(() => { if (store.reportGet(rid)) store.reportTake(rid); });
+  const start = calls.length;
+
+  await tap(`rap:${rid}`, owner, bot);
+
+  const attempted = calls.slice(start);
+  const ackIndex = attempted.findIndex(({ method }) => method === 'answerCallbackQuery');
+  const retryNoticeIndex = attempted.findIndex(({ method, chatId, payload }) => method === 'sendMessage' && chatId === ownerId && /(?:أُعيد البلاغ إلى قائمة المراجعة|the report is back in the queue)/.test(payload.text || ''));
+  assert.ok(ackIndex >= 0 && retryNoticeIndex > ackIndex, 'the reviewer receives a callback acknowledgement before the retry notice');
+  assert.equal(attempted.filter(({ method }) => method === 'answerCallbackQuery').length, 1, 'the failure path does not answer the already-acknowledged callback again');
+  assert.ok(store.reportGet(rid), 'the report is restored so the reviewer can retry from the original card');
+  assert.equal(store.reportDone(rid), false, 'a failed publish does not mark the report handled');
+  assert.equal(attempted.some(({ chatId }) => chatId === '@mock_news_channel'), false, 'a failure before publication creates no channel post');
 });
 
 test('news text and details accept short and long input without a custom character limit', async () => {
