@@ -220,6 +220,7 @@ export function newsState() {
   if (!n.seen || typeof n.seen !== 'object') n.seen = {};
   if (!n.drafts || typeof n.drafts !== 'object') n.drafts = {};
   if (!Array.isArray(n.alerts)) n.alerts = [];
+  if (!Array.isArray(n.echoLog)) n.echoLog = [];
   // Expand the two-minute daytime fallback only for drafts discovered after this one-time checkpoint.
   // Existing pending drafts keep their review status and cannot be swept into the new policy.
   if (!n.mig.dayAutoAllTypes1) { n.mig.dayAutoAllTypes1 = new Date().toISOString(); save(false); }
@@ -722,6 +723,10 @@ function rememberAlert(pa) {
   const geo = geoOf(locs);
   for (const z of pa.zones || []) geo.pts.push({ lat: z.lat, lon: z.lon });
   n.alerts.push({ id: pa.id, type: pa.type, politicalCategory: pa.political_category || pa.meta?.political?.category, ts: Date.parse(pa.timestamp) || Date.now(), headline: [pa.title, pa.description || ''].join(' ').trim(), where: whereOf(locs), geo });
+  // Echo log (see selfEchoOf): the full published text, kept 96h, so a story
+  // other channels repost tomorrow is recognised as our own, not as news.
+  const echoText = [pa.title, pa.description || '', pa.body || ''].join(' ').replace(/\s+/g, ' ').trim().slice(0, 1200);
+  if (echoText) (n.echoLog ||= []).push({ id: pa.id, type: pa.type, politicalCategory: pa.political_category || pa.meta?.political?.category, ts: Date.parse(pa.timestamp) || Date.now(), text: echoText, geo });
   save(false);
 }
 
@@ -1069,6 +1074,32 @@ function knownDuplicateDraft(d) {
     headline: d.headline, geo: geoOf(locsOf(d.loc, d.extra)),
   };
   return knownEvents(12).find((known) => known.draftId !== d.id && sameIncident(candidate, known)) || null;
+}
+// ------------------------------------------------------------ self-echo guard
+// Other channels routinely repost OUR OWN channel posts (or the same wire
+// copy we already published) many hours — often a full day — later. By then
+// the incident matcher above has forgotten the story (knownEvents covers
+// 12h; the per-type windows are ≤6h), so the echo arrives looking brand new
+// and gets drafted and published a second time. The echo log keeps the full
+// text of everything we published for 96h and matches by content instead:
+// same type family (political: same category), compatible geography, and
+// ≥0.5 token overlap with the published text.
+const ECHO_HOURS = 96;
+function selfEchoOf(cand, texts) {
+  const log = newsState().echoLog;
+  if (!Array.isArray(log) || !log.length) return null;
+  const since = Date.now() - ECHO_HOURS * H_MS;
+  let best = null;
+  for (const e of log) {
+    if (!e || e.ts < since || !e.text) continue;
+    if (cand.type === 'political' || e.type === 'political') {
+      if (cand.type !== 'political' || e.type !== 'political' || !cand.politicalCategory || cand.politicalCategory !== e.politicalCategory) continue;
+    } else if (!sameFamily(cand.type, e.type)) continue;
+    if (!cand.geo.none && !e.geo.none && !near(cand.geo, e.geo)) continue;
+    const sim = Math.max(textSim(texts, e.text), textSim(cand.headline, e.text));
+    if (sim >= 0.5 && (!best || sim > best.sim)) best = { id: e.id, sim };
+  }
+  return best;
 }
 async function suppressDuplicateDraft(d, duplicate, by = 0) {
   if (!d || d.status !== 'pending' || !duplicate) return false;
@@ -1447,6 +1478,10 @@ async function handleResult(it, r, known, pmap) {
     if (d && d.status === 'pending') { const added = await mergeInto(d, it, locs); note(it, added ? `merged into draft ${d.id}` : `same source, already in draft ${d.id}`); return; }
     n.stats.dupes++; note(it, `duplicate of ${target.kind} (${target.status})`); return;
   }
+  // Self-echo: the story is already OURS — published earlier and reposted by
+  // another channel after the incident windows forgot it. Never draft it again.
+  const echo = selfEchoOf(cand, `${headline}\n${fullBody || ''}\n${String(it.text || '')}`);
+  if (echo) { pmap.set(it.i, null); n.stats.dupes++; note(it, `self-echo of published alert ${echo.id} (sim ${echo.sim.toFixed(2)}) — dropped`); return; }
   if (!n.types[r.type]) { note(it, 'type switched off'); return; }
   if (!locs.length && r.type !== 'political') { note(it, 'no verified Syrian place found'); return; }
   if (capReached()) { note(it, 'hourly cap reached'); return; }
@@ -1653,9 +1688,11 @@ async function sweep() {
   }
   const before = n.alerts.length;
   n.alerts = n.alerts.filter((a) => now - a.ts < 26 * H_MS);
+  const echoBefore = (n.echoLog || []).length;
+  if (Array.isArray(n.echoLog)) n.echoLog = n.echoLog.filter((e) => now - e.ts < ECHO_HOURS * H_MS);
   for (const [h, t] of Object.entries(n.seen)) if (now - t > 48 * H_MS) { delete n.seen[h]; changed = true; }
   for (const [k, t] of Object.entries(n.handled || {})) if (now - t > 48 * H_MS) { delete n.handled[k]; changed = true; }
-  if (changed || before !== n.alerts.length) save(false);
+  if (changed || before !== n.alerts.length || echoBefore !== (n.echoLog || []).length) save(false);
 }
 
 // ---------------------------------------------------------------- start / stop / hand-off
@@ -2633,4 +2670,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
