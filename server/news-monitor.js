@@ -1693,6 +1693,26 @@ async function sweep() {
   for (const [h, t] of Object.entries(n.seen)) if (now - t > 48 * H_MS) { delete n.seen[h]; changed = true; }
   for (const [k, t] of Object.entries(n.handled || {})) if (now - t > 48 * H_MS) { delete n.handled[k]; changed = true; }
   if (changed || before !== n.alerts.length || echoBefore !== (n.echoLog || []).length) save(false);
+  // Channel-post recovery: every store alert was intended for the channel
+  // (map-only publishing exists only for road drafts, which are not alerts),
+  // so an alert with no channel post is a failed post — retry it with
+  // backoff until it lands (e.g. once the bot's channel admin rights return).
+  try {
+    const a = api();
+    if (a && R.H?.retryChannelPost) {
+      const stuck = store.state.alerts.filter((x) => !x.channel_message_id
+        && now - Date.parse(x.timestamp) < 12 * H_MS
+        && (!x.channel_post_failed || (now - (x.channel_post_failed.at || 0) > 10 * 60_000 && (x.channel_post_failed.tries || 1) < 20)));
+      for (const x of stuck.slice(0, 3)) {
+        if (!await R.H.retryChannelPost(a, x.id)) continue;
+        const fresh = store.getAlert(x.id);
+        const link = fresh?.channel_message_id ? postUrl(fresh.channel_message_id) : '';
+        for (const ownerId of ownerIdsU()) {
+          try { await a.sendMessage(ownerId, `✅ أُعيد نشر تنبيه في القناة بعد تأخره: ${esc(fresh?.title || x.title || '')}${link ? `\n${link}` : ''}`, { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, _keep: 'c' }); } catch { /* ignore */ }
+        }
+      }
+    }
+  } catch (e) { console.error('[news] channel retry sweep failed', e.message); }
 }
 
 // ---------------------------------------------------------------- start / stop / hand-off
@@ -2234,6 +2254,15 @@ export function registerNewsTools(bot, h) {
       const ownerLang = langOfId(ownerId);
       const ownerText = tr(ownerLang, `<b>✅ نُشر تنبيه جديد على الخريطة</b>\n${esc(d.publishedHeadline || d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nالمشرف: ${esc(reviewer || String(ctx.from.id))}\nالوقت: ${esc(new Date(d.approvedAt).toLocaleString('ar-SY', { timeZone: 'Asia/Damascus' }))}`, `<b>✅ New alert published to the map</b>\n${esc(d.publishedHeadline || d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nApproved by: ${esc(reviewer || String(ctx.from.id))}\n${esc(new Date(d.approvedAt).toLocaleString('en-GB', { timeZone: 'Asia/Damascus' }))}`);
       try { await ctx.api.sendMessage(ownerId, ownerText, { parse_mode: 'HTML', reply_markup: publishedLinksKb(d, alert, ownerLang, true), link_preview_options: { is_disabled: true }, _keep: 'c' }); } catch (e) { console.warn('[news] owner approval notification failed', e.message); }
+    }
+    // A map-only publish is a FAILURE, never a silent success: warn every owner
+    // with the reason. The sweep retries the channel post automatically.
+    if (alert && !alert.channel_message_id) {
+      const why = alert.channel_post_failed?.why || 'unknown error';
+      for (const ownerId of ownerIdsU()) {
+        const ol = langOfId(ownerId);
+        try { await ctx.api.sendMessage(ownerId, tr(ol, `⚠️ <b>تنبيه نُشر على الخريطة فقط — تعذّر نشره في القناة</b>\n${esc(d.publishedHeadline || d.headline || '')}\nالسبب: ${esc(why)}\nستُعاد المحاولة تلقائياً كل بضع دقائق حتى ينجح. إن استمر الفشل، تأكد أن بوت النشر مشرف في القناة بصلاحية «نشر الرسائل».`, `⚠️ <b>Alert published to the map only — the channel post failed</b>\n${esc(d.publishedHeadline || d.headline || '')}\nReason: ${esc(why)}\nIt will be retried automatically every few minutes. If it keeps failing, make sure the publishing bot is a channel admin with post permission.`), { parse_mode: 'HTML', _keep: 'c' }); } catch { /* ignore */ }
+      }
     }
     await closeCards(d, cur(ctx), true);
     await unlinkCapturedMedia(d.sourceMedia);
