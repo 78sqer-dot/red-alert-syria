@@ -200,11 +200,7 @@ export class AlertMap {
 
   async init() {
     const M = ml();
-    try {
-      if (M.getRTLTextPluginStatus && M.getRTLTextPluginStatus() === 'unavailable') {
-        M.setRTLTextPlugin('/vendor/mapbox-gl-rtl-text.js', true)?.catch?.((e) => console.warn('[map] RTL plugin unavailable', e?.message || e));
-      }
-    } catch { /* already set */ }
+    // MapLibre 6.16 shapes Arabic and bidirectional text natively; its deprecated RTL plugin is blocked by strict CSP.
     // Start with a local style so a slow/broken third-party style endpoint (common in
     // Telegram's in-app Chrome) cannot block the map controls and incident overlays.
     const stylePromise = buildStyle(this.opts);
@@ -369,8 +365,10 @@ export class AlertMap {
     // (2026-11-17): ~20% smaller (11→9, 12.5→10, 14→11) with max-width 14em.
     // Second round (owner, same day — still too big on his phone): another
     // ~12–15% off every stop (9→8, 10→8.5, 11→9.5) and the halo slimmed
-    // 1.7→1.5 to stay proportionate. Max-width stays 14em.
-    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 8, 8, 8.5, 11, 9.5], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 14, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.5 } }, null);
+    // 1.7→1.5 to stay proportionate. Final owner-requested trim (2026-11-18)
+    // keeps one compact, orderly line at every zoom: 7.5→8→9px, halo 1.3px.
+    // Max-width stays 14em.
+    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 7.5, 8, 8, 11, 9], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 14, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.3 } }, null);
     add({ id: 'ras-border-glow', type: 'line', source: 'ras-border', paint: { 'line-color': '#ff3b4e', 'line-opacity': 0.22, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 10], 'line-blur': 3 } });
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
     // Geographic impact circles remain accurate; use restrained fills and outlines to preserve base-map detail.

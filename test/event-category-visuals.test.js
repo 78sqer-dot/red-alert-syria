@@ -40,6 +40,10 @@ test('live map icons, markers and impact-zone pulses use the same category color
   assert.match(alertImage, /const col = eventVisual\(type\)\.color/);
 });
 
+test('map relies on built-in RTL shaping instead of the deprecated CSP-incompatible plugin', () => {
+  assert.doesNotMatch(map, /getRTLTextPluginStatus|setRTLTextPlugin/);
+});
+
 test('server-rendered map markers use category colors and keep urgent black inside a red triangle', () => {
   const aerial = markerSvg('uav', 100, 100);
   assert.ok(aerial.includes(`fill="${eventVisual('uav').color}"`));
@@ -49,6 +53,14 @@ test('server-rendered map markers use category colors and keep urgent black insi
   assert.ok(urgent.includes('d="M12 1.3 23.2 21H.8Z" fill="#ef233c"'));
   assert.ok(urgent.includes('d="m12 6.1-7.2 12.7h14.4Z" fill="#000000"'));
   assert.equal((urgent.match(/fill="#000000"/g) || []).length, 1, 'black is used only for the triangle interior');
+});
+
+test('governorate labels stay small, uniform, one-line, and localized', () => {
+  assert.match(map, /id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs'/);
+  assert.ok(map.includes("'text-size': ['interpolate', ['linear'], ['zoom'], 5, 7.5, 8, 8, 11, 9]"));
+  assert.ok(map.includes("'text-max-width': 14"), 'the label width preserves a consistent, tidy line');
+  assert.ok(map.includes("'text-halo-width': 1.3"), 'the smaller text keeps a slim readable halo');
+  assert.ok(map.includes("this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']]"));
 });
 
 test('category recoloring preserves readable markers and approved sizes', () => {
