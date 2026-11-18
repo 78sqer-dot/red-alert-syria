@@ -21,8 +21,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isPrivate = (chat) => (typeof chat === 'number' ? chat > 0 : /^\d+$/.test(String(chat ?? '')));
 const TRANSIENT = new Set([500, 502, 503, 504]);
 
-// Only a 400 response proves Telegram rejected sendPhoto; network/5xx failures may have delivered it.
-export const isDefinitiveTelegramRejection = (error) => error?.error_code === 400;
+// An explicit Telegram refusal (400/401/403) proves Telegram rejected the
+// sendPhoto — it answered and nothing was delivered (e.g. the bot lost its
+// channel admin rights: 403). Only network/5xx/429 failures stay ambiguous:
+// those may have delivered the photo, so no text fallback is allowed there.
+export const isDefinitiveTelegramRejection = (error) => [400, 401, 403].includes(error?.error_code);
 
 // callMs/uploadMs: deadline of one attempt when a retry is safe. oneShotMs: calls that are never re-sent
 // after an ambiguous failure (channel posts, backup upload) keep a long deadline, so a slow-but-successful
