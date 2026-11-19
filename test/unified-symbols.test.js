@@ -86,7 +86,7 @@ test('map pins: one dark roundel at every zoom, mini pin with glyph at country v
   // far zoom no longer hides civil markers
   assert.doesNotMatch(css, /zoom-far \.mk-civ/);
   // cluster badge speaks the same language: dark disc, ring in the first type colour
-  assert.match(css, /\.mk-count \{[^}]*border: 2px solid var\(--ring[^}]*background: #141A24;/);
+  assert.match(css, /\.mk-count \{[^}]*border: 2px solid var\(--ring[^}]*background: rgba\(255, 255, 255, \.58\)[^}]*backdrop-filter: blur\(3px\)[^}]*color: #101623;/); // owner 2026-11-19: glass badges, not black
   assert.match(map, /badge\.style\.setProperty\('--ring', typeOf\(a\.type\)\.color\)/);
 });
 

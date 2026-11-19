@@ -366,7 +366,7 @@ html.dark .lg-civdot { box-shadow: 0 0 0 1.5px rgba(10, 14, 22, .9), 0 0 7px 1px
 
 /* ---------------------------------------------------------------- markers */
 .mk { position: absolute; top: 0; left: 0; width: 0; height: 0; cursor: pointer; --c: #ff3b4e; }
-.mk-count { position: absolute; z-index: 3; left: -15px; top: -15px; min-width: 19px; height: 19px; padding: 0 4px; box-sizing: border-box; border: 2px solid var(--ring, var(--c)); border-radius: 50%; background: #141A24; color: #fff; font: 800 11px/15px system-ui, sans-serif; text-align: center; cursor: pointer; pointer-events: auto; }
+.mk-count { position: absolute; z-index: 3; left: -15px; top: -15px; min-width: 19px; height: 19px; padding: 0 4px; box-sizing: border-box; border: 2px solid var(--ring, var(--c)); border-radius: 50%; background: rgba(255, 255, 255, .58); -webkit-backdrop-filter: blur(3px) saturate(1.3); backdrop-filter: blur(3px) saturate(1.3); box-shadow: 0 1px 4px rgba(10, 15, 25, .35); color: #101623; font: 800 11px/15px system-ui, sans-serif; text-align: center; cursor: pointer; pointer-events: auto; }
 /* scale wrapper: icons shrink as the map zooms in (--mks set by map.js) */
 .mk-s { position: absolute; left: 0; top: 0; width: 0; height: 0; transform: scale(var(--mks, 0.5)); transform-origin: 0 0; transition: transform .2s ease; }
 /* aircraft / vehicles have no disc, so they get a little more size to stay readable */
