@@ -14,7 +14,7 @@ services:
       - key: BOT_TOKEN
         sync: false
       - key: OWNER_IDS
-        value: "8270709633,8808894711"
+        sync: false
       - key: CHANNEL_ID
         value: "@Red_Alert_Syria"
       - key: VAPID_PUBLIC_KEY
