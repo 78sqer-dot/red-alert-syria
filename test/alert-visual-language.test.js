@@ -142,12 +142,12 @@ test('live alert circles use compositor-safe pulse layers and remain clickable t
 test('static types share one unified pin and breaking news keeps its red pulse', () => {
   assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/);
   assert.match(map, /el\.innerHTML = glyphDisc\(a\.type, 32, 20, 'pin'\);/, 'breaking renders the same pin (alert_tri glyph, type-colour ring)');
-  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;[^}]*background: color-mix\(in srgb, #141A24 45%, transparent\); border: 3px solid var\(--ring/);
-  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; \}/);
+  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;[^}]*background: rgba\(255, 255, 255, \.62\); border: 3px solid var\(--ring/);
+  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; fill: #101623; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-far \.pin \{ width: 20px; height: 20px; border-width: 2px; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-far \.pin svg \{ width: 13px; height: 13px; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-detail \.pin \{ width: 38px; height: 38px; \}/);
-  assert.match(css, /\.mk:hover \.pin, \.mk\.sel \.pin \{ box-shadow: 0 0 0 1px rgba\(6,10,16,\.45\), 0 0 0 5px color-mix\(in srgb, var\(--ring/);
+  assert.match(css, /\.mk:hover \.pin, \.mk\.sel \.pin \{ box-shadow: 0 0 0 2px rgba\(255,255,255,\.75\), 0 0 0 5px color-mix\(in srgb, var\(--ring/);
   assert.match(css, /\.mk-breaking-news \.news-pulse-ring \{ width: 34px; height: 34px; border-color: #ef233c/);
   assert.match(css, /@keyframes urgentPulseWave/);
   assert.doesNotMatch(css, /\.news-marker-core|\.news-marker-category|\.sai\.map-event-disc|\.civ-dot/);
