@@ -70,6 +70,14 @@ function fallbackStyle(kind) {
     ],
   };
 }
+// The basemap source whose tiles prove the remote basemap is actually
+// rendering. The raster fallback style has no such source (null): its tiles
+// come from the OSM host, the very thing the fallback exists to reach.
+function basemapWatchSourceId(style, layer) {
+  if (!style || typeof style !== 'object' || !style.sources) return null;
+  if (layer === 'satellite') return 'esri' in style.sources ? 'esri' : null;
+  return 'openmaptiles' in style.sources ? 'openmaptiles' : null;
+}
 function fetchWithTimeout(url, ms) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
@@ -220,6 +228,82 @@ export class AlertMap {
     this.popupHtml = opts.popupHtml || (() => '');
     this.ready = false;
     this._styleEpoch = 0;
+    this._basemapFallback = false;
+    this._basemapTimer = null;
+    this._basemapDisarm = null;
+    this._baseStyleApplied = false;
+  }
+
+  // Switch once to the OSM raster basemap (served from a different host than
+  // the vector tiles). Used when the vector basemap cannot render from the
+  // visitor's network: without this the map sat forever on the plain initial
+  // background + hillshade + border — Syria a blank white shape with no
+  // cities, roads or names (owner's phone, 2026-11-19).
+  _applyRasterFallback(why) {
+    if (!this.map || this._basemapFallback) return;
+    this._basemapFallback = true;
+    this._baseStyleApplied = true;
+    this._basemapDisarm?.();
+    clearTimeout(this._basemapTimer);
+    console.warn(`[map] ${why}; switching to OSM raster fallback`);
+    this._styleEpoch++;
+    this.map.setStyle(fallbackStyle(this.opts.dark ? 'dark' : 'light'), { diff: false });
+  }
+
+  // A style JSON can load fine (directly or from the bundled copy) while its
+  // tile host is blocked or unreachable — the JSON-level fallbacks in
+  // fetchStyle never notice. Watch for the first real basemap tile. The
+  // detailed vector look is the product (owner's reference screenshot,
+  // 2026-11-19), so a silent stall first earns ONE fresh reload of the same
+  // vector style (re-requesting every tile); only if the second window also
+  // passes with no tile at all do we settle for the raster fallback.
+  // The failure path must not feel slow (owner, 2026-11-19): windows are 8s,
+  // and three tile errors from the basemap host — the signature of a blocked
+  // or refused host, which surfaces within a second or two — advance the
+  // stage immediately instead of waiting out the timer.
+  _armBasemapWatchdog(style, retried = false) {
+    this._basemapDisarm?.();
+    clearTimeout(this._basemapTimer);
+    if (!this.map || this._basemapFallback) return;
+    const watched = basemapWatchSourceId(style, this.opts.layer);
+    if (!watched) return;
+    const map = this.map;
+    const host = watched === 'esri' ? 'arcgisonline.com' : 'tiles.openfreemap.org';
+    let errors = 0;
+    const cleanup = () => {
+      clearTimeout(this._basemapTimer);
+      map.off('data', onData);
+      map.off('error', onError);
+      if (this._basemapDisarm === cleanup) this._basemapDisarm = null;
+    };
+    const advance = () => {
+      cleanup();
+      if (!retried && this.map) {
+        console.warn('[map] basemap tiles slow; reloading vector style once before raster fallback');
+        this._styleEpoch++;
+        this.map.setStyle(style, { diff: false });
+        this._armBasemapWatchdog(style, true);
+        return;
+      }
+      this._applyRasterFallback('basemap tiles did not arrive');
+    };
+    const onData = (e) => {
+      // Only a real tile object counts as proof of life: a source can still
+      // report isSourceLoaded after every tile request has failed (verified
+      // live 2026-11-19 — the map read as "loaded" with zero rendered
+      // basemap features), so that flag must never disarm the watchdog.
+      if (e.dataType === 'source' && e.sourceId === watched && e.tile && !e.error) cleanup();
+    };
+    const onError = (e) => {
+      const msg = String(e?.error?.message || e?.error || '');
+      if (!msg.includes(host)) return;
+      errors++;
+      if (errors >= 3) advance();
+    };
+    this._basemapDisarm = cleanup;
+    map.on('data', onData);
+    map.on('error', onError);
+    this._basemapTimer = setTimeout(advance, 8000);
   }
 
   async init() {
@@ -229,8 +313,11 @@ export class AlertMap {
     // Telegram's in-app Chrome) cannot block the map controls and incident overlays.
     const stylePromise = buildStyle(this.opts);
     this.map = new M.Map({
-      // phone "desktop site": the page is zoomed, so render the map canvas at the real screen resolution
-      pixelRatio: (this._pr = Math.min(3, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1))),
+      // phone "desktop site": the page is zoomed, so render the map canvas at the real screen resolution.
+      // Phones cap at 2x (owner, 2026-11-19: clarity must not cost responsiveness — a 3x
+      // canvas paints 2.25x the pixels of a 2x one and stalls pan/zoom on weak GPUs);
+      // desktops keep up to 3x.
+      pixelRatio: (this._pr = Math.min(this.dockMode() ? 2 : 3, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1))),
       container: this.el,
       style: initialStyle(this.opts.dark ? 'dark' : 'light'),
       bounds: SYRIA_BOUNDS,
@@ -249,8 +336,21 @@ export class AlertMap {
     window.__rasMap = this.map;
     this.map.on('style.load', () => this.addOverlays().catch((e) => console.warn('[map] overlays unavailable', e?.message || e)));
     stylePromise.then((style) => {
-      if (this.map) { this._styleEpoch++; this.map.setStyle(style, { diff: false }); }
-    }).catch((e) => console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e));
+      if (!this.map || this._baseStyleApplied) return;
+      this._baseStyleApplied = true;
+      this._styleEpoch++;
+      this.map.setStyle(style, { diff: false });
+      this._armBasemapWatchdog(style);
+    }).catch((e) => {
+      console.warn('[map] basemap style unavailable', e?.message || e);
+      this._applyRasterFallback('basemap style failed to build');
+    });
+    // Bound the blank-map window: if no basemap style has been applied after
+    // 20s (fetchStyle's own worst case is ~21s of retries before it settles
+    // on a style, and a hang would leave the plain background indefinitely),
+    // show the raster map instead. A late vector style is then ignored — no
+    // mid-session swap.
+    setTimeout(() => { if (!this._baseStyleApplied) this._applyRasterFallback('basemap style timed out'); }, 20000);
     let lastOrbitUpdate = 0;
     const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
@@ -339,8 +439,14 @@ export class AlertMap {
     const styleChanged = ['dark', 'layer', 'lang'].some((k) => k in patch && patch[k] !== prev[k]);
     if (styleChanged) {
       const style = await buildStyle(this.opts);
+      // A theme/layer/language switch earns the vector basemap one fresh
+      // chance (its host may be reachable now); the watchdog re-applies the
+      // raster fallback if its tiles still do not arrive.
+      this._basemapFallback = false;
+      this._baseStyleApplied = true;
       this._styleEpoch++;
       this.map.setStyle(style, { diff: false });
+      this._armBasemapWatchdog(style);
     } else {
       this.applyToggles();
     }
