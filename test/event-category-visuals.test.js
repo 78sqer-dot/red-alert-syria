@@ -65,8 +65,8 @@ test('governorate labels stay small, uniform, one-line, and localized', () => {
 
 test('category recoloring preserves readable markers and approved sizes', () => {
   // static markers are the unified pin in both themes: dark roundel, type ring
-  assert.match(css, /\.pin \{[^}]*background: color-mix\(in srgb, #141A24 45%, transparent\); border: 3px solid var\(--ring/);
-  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; \}/);
+  assert.match(css, /\.pin \{[^}]*background: rgba\(255, 255, 255, \.62\); border: 3px solid var\(--ring/);
+  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; fill: #101623; \}/);
   assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: visible; \}/);
   assert.match(css, /\.news-off \.mk-helicopter \{ display: block !important; visibility: visible !important; \}/);
   assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #13283d; \}/);
