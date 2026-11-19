@@ -250,9 +250,12 @@ export class AlertMap {
 
   // A style JSON can load fine (directly or from the bundled copy) while its
   // tile host is blocked or unreachable — the JSON-level fallbacks in
-  // fetchStyle never notice. Watch for the first real basemap tile: if none
-  // arrives within 12s of the style being applied, fall back to raster.
-  _armBasemapWatchdog(style) {
+  // fetchStyle never notice. Watch for the first real basemap tile. The
+  // detailed vector look is the product (owner's reference screenshot,
+  // 2026-11-19), so a silent stall first earns ONE fresh reload of the same
+  // vector style (re-requesting every tile); only if another 12s passes with
+  // no tile at all do we settle for the raster fallback.
+  _armBasemapWatchdog(style, retried = false) {
     clearTimeout(this._basemapTimer);
     if (!this.map || this._basemapFallback) return;
     const watched = basemapWatchSourceId(style, this.opts.layer);
@@ -267,6 +270,13 @@ export class AlertMap {
     map.on('data', onData);
     this._basemapTimer = setTimeout(() => {
       map.off('data', onData);
+      if (!retried && this.map) {
+        console.warn('[map] basemap tiles slow; reloading vector style once before raster fallback');
+        this._styleEpoch++;
+        this.map.setStyle(style, { diff: false });
+        this._armBasemapWatchdog(style, true);
+        return;
+      }
       this._applyRasterFallback('basemap tiles did not arrive');
     }, 12000);
   }
@@ -308,10 +318,11 @@ export class AlertMap {
       this._applyRasterFallback('basemap style failed to build');
     });
     // Bound the blank-map window: if no basemap style has been applied after
-    // 15s (a slow/blocked style endpoint can otherwise take ~21s of retries,
-    // and a hang leaves the plain background indefinitely), show the raster
-    // map instead. A late vector style is then ignored — no mid-session swap.
-    setTimeout(() => { if (!this._baseStyleApplied) this._applyRasterFallback('basemap style timed out'); }, 15000);
+    // 20s (fetchStyle's own worst case is ~21s of retries before it settles
+    // on a style, and a hang would leave the plain background indefinitely),
+    // show the raster map instead. A late vector style is then ignored — no
+    // mid-session swap.
+    setTimeout(() => { if (!this._baseStyleApplied) this._applyRasterFallback('basemap style timed out'); }, 20000);
     let lastOrbitUpdate = 0;
     const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
