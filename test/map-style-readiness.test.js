@@ -124,5 +124,6 @@ test('basemap watchdog watches the vector tile source (and Esri for satellite)',
 test('map switches to the OSM raster fallback when basemap tiles never arrive', () => {
   assert.match(source, /_armBasemapWatchdog\(style\)/);
   assert.match(source, /_applyRasterFallback\('basemap tiles did not arrive'\)/);
+  assert.match(source, /_armBasemapWatchdog\(style, true\)/); // one vector reload is tried before the raster fallback
   assert.match(source, /map\.setStyle\(fallbackStyle\(this\.opts\.dark \? 'dark' : 'light'\), \{ diff: false \}\)/);
 });
