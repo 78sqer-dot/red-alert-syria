@@ -66,7 +66,7 @@ test('map tools provide a return route from filter, layers, services and Al-Naba
 
 test('map attribution keeps a compact information button and readable credits', () => {
   assert.match(map, /new M\.AttributionControl\(\{ compact: true, customAttribution:/);
-  assert.match(map, /OpenFreeMap<\/a> © <a href="https:\/\/www\.openstreetmap\.org\/copyright"/);
+  assert.match(map, /OpenFreeMap<\/a> · © <a href="https:\/\/www\.openstreetmap\.org\/copyright" target="_blank" rel="noopener">OpenStreetMap<\/a> contributors/);
   assert.match(map, /classList\.remove\('maplibregl-compact-show'\)/);
   assert.match(css, /\.maplibregl-ctrl-attrib \.maplibregl-ctrl-attrib-inner \{[^}]*white-space: normal/);
   assert.match(css, /\.maplibregl-ctrl-attrib\.maplibregl-compact:not\(\.maplibregl-compact-show\) \{[^}]*width: 24px;[^}]*height: 24px/);
@@ -110,7 +110,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=94'/);
+  assert.match(app, /from '\.\/map\.js\?v=95'/);
   assert.match(html, /app\.css\?v=91/);
   assert.match(html, /app\.js\?v=103/);
 });

@@ -4,8 +4,15 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf8');
+const serverSource = await readFile(new URL('../server/index.js', import.meta.url), 'utf8');
 const firstSymbolSource = source.match(/function firstSymbolId\(map\) \{[\s\S]*?\n\}/)[0];
 const firstSymbolId = vm.runInNewContext(`(${firstSymbolSource})`);
+const fallbackSource = source.match(/function fallbackStyle\(kind\) \{[\s\S]*?\n\}/)[0];
+const glyphsUrl = source.match(/const GLYPHS = '([^']+)';/)[1];
+const osmTilesUrl = source.match(/const OSM_TILES = '([^']+)';/)[1];
+const fallbackStyle = vm.runInNewContext(`(${fallbackSource})`, { GLYPHS: glyphsUrl, OSM_TILES: osmTilesUrl });
+const governorateLabelSource = source.match(/function governorateLabelExpr\(lang\) \{[\s\S]*?\n\}/)[0];
+const governorateLabelExpr = vm.runInNewContext(`(${governorateLabelSource})`);
 const overlaysBody = source.match(/  async addOverlays\(\) \{([\s\S]*?)\n  \}\n\n  \/\*\* services/)[1];
 const overlaysWith = (loadData) => vm.runInNewContext(`(async function () {${overlaysBody}\n})`, { loadData });
 
@@ -13,6 +20,26 @@ test('symbol lookup safely handles a style that is not yet available', () => {
   assert.equal(firstSymbolId({ getStyle: () => undefined }), undefined);
   assert.equal(firstSymbolId({ getStyle: () => ({ layers: [] }) }), undefined);
   assert.equal(firstSymbolId({ getStyle: () => ({ layers: [{ id: 'bg', type: 'background' }, { id: 'labels', type: 'symbol' }] }) }), 'labels');
+});
+
+test('fallback style uses readable OSM raster tiles with visible attribution', () => {
+  const style = fallbackStyle('light');
+  assert.equal(style.sources.osmFallback.type, 'raster');
+  assert.equal(style.sources.osmFallback.tiles[0], 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
+  assert.match(style.sources.osmFallback.attribution, /OpenStreetMap<\/a> contributors/);
+  assert.ok(style.layers.some((layer) => layer.id === 'osm-fallback' && layer.source === 'osmFallback'));
+});
+
+test('governorate display uses plain Arabic name and preserves the English label', () => {
+  assert.equal(JSON.stringify(governorateLabelExpr('ar')), '["get","ar"]');
+  assert.equal(JSON.stringify(governorateLabelExpr('en')), '["concat",["get","en"]," Governorate"]');
+});
+
+test('CSP allows the OSM fallback tile host for images and tile requests', () => {
+  const imgSrc = serverSource.match(/'img-src': \[([^\]]+)\]/)?.[1] || '';
+  const connectSrc = serverSource.match(/'connect-src': \[([^\]]+)\]/)?.[1] || '';
+  assert.ok(imgSrc.includes("'https://tile.openstreetmap.org'"));
+  assert.ok(connectSrc.includes("'https://tile.openstreetmap.org'"));
 });
 
 test('overlays do not touch a missing style after asynchronous data loading', async () => {

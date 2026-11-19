@@ -116,8 +116,8 @@ test('own governorate label layer: brighter text, inland anchors for edge govern
   assert.match(mapSrc, /'text-anchor': \['match', \['get', 'code'\], \['14', '02'\], 'left', \['01', '07'\], 'right', 'center'\]/);
   assert.match(mapSrc, /dark \? '#c6ccd6' : '#3f4753'/);
   assert.match(mapSrc, /vis\('ras-gov-labels', this\.opts\.showGov\);/);
-  // names keep the familiar «محافظة …» / "… Governorate" form
-  assert.match(mapSrc, /\['concat', 'محافظة ', \['get', 'ar'\]\]/);
+  // Arabic governorate names stay data-identical; English keeps its existing suffix.
+  assert.match(mapSrc, /return lang === 'en' \? \['concat', \['get', 'en'\], ' Governorate'\] : \['get', 'ar'\];/);
   assert.match(mapSrc, /\['concat', \['get', 'en'\], ' Governorate'\]/);
 });
 

@@ -45,14 +45,28 @@ export function glyphDisc(type, size = 32, iconSize = 20, cls = 'pin', glyphOver
 
 const styleCache = {};
 const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
-function fallbackStyle(kind) {
-  // Minimal offline-safe style: used when the basemap server is slow or unreachable,
-  // so the Syria overlays and alert markers always render.
+const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+function initialStyle(kind) {
   return {
     version: 8,
     glyphs: GLYPHS,
     sources: {},
     layers: [{ id: 'bg', type: 'background', paint: { 'background-color': kind === 'dark' ? '#14161b' : '#eceef1' } }],
+  };
+}
+function fallbackStyle(kind) {
+  // A readable road map when the primary vector style is unavailable. Only
+  // visible viewport tiles are requested; the tile source supplies its attribution.
+  return {
+    version: 8,
+    glyphs: GLYPHS,
+    sources: {
+      osmFallback: { type: 'raster', tiles: [OSM_TILES], tileSize: 256, maxzoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' },
+    },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': kind === 'dark' ? '#14161b' : '#eceef1' } },
+      { id: 'osm-fallback', type: 'raster', source: 'osmFallback' },
+    ],
   };
 }
 function fetchWithTimeout(url, ms) {
@@ -92,6 +106,9 @@ function labelExpr(lang) {
   return lang === 'ar'
     ? ['coalesce', ['get', 'name:ar'], ['get', 'name'], ['get', 'name:latin']]
     : ['coalesce', ['get', 'name:en'], ['get', 'name:latin'], ['get', 'name']];
+}
+function governorateLabelExpr(lang) {
+  return lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['get', 'ar'];
 }
 function localize(style, lang) {
   for (const l of style.layers) {
@@ -208,7 +225,7 @@ export class AlertMap {
       // phone "desktop site": the page is zoomed, so render the map canvas at the real screen resolution
       pixelRatio: (this._pr = Math.min(2, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1))),
       container: this.el,
-      style: fallbackStyle(this.opts.dark ? 'dark' : 'light'),
+      style: initialStyle(this.opts.dark ? 'dark' : 'light'),
       bounds: SYRIA_BOUNDS,
       fitBoundsOptions: { padding: this.padding() },
       maxBounds: [[25, 25], [52, 45]],
@@ -220,7 +237,7 @@ export class AlertMap {
       cooperativeGestures: false,
       locale: this.opts.lang === 'ar' ? { 'NavigationControl.ZoomIn': 'تكبير', 'NavigationControl.ZoomOut': 'تصغير' } : undefined,
     });
-    this.map.addControl(new M.AttributionControl({ compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · GeoNames · geoBoundaries' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
+    this.map.addControl(new M.AttributionControl({ compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · GeoNames · geoBoundaries' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
     this.map.addControl(new M.ScaleControl({ maxWidth: 110, unit: 'metric' }), this.opts.lang === 'ar' ? 'bottom-right' : 'bottom-left');
     window.__rasMap = this.map;
     this.map.on('style.load', () => this.addOverlays().catch((e) => console.warn('[map] overlays unavailable', e?.message || e)));
@@ -368,7 +385,7 @@ export class AlertMap {
     // 1.7→1.5 to stay proportionate. Final owner-requested trim (2026-11-18)
     // keeps one compact, orderly line at every zoom: 7.5→8→9px, halo 1.3px.
     // Max-width stays 14em.
-    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']], 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 7.5, 8, 8, 11, 9], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [-0.7, 0]], ['literal', [0, 0]]], 'text-max-width': 14, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.3 } }, null);
+    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': governorateLabelExpr(this.opts.lang), 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 7.5, 8, 8, 11, 9], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [0, 0]]], 'text-max-width': 14, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.3 } }, null);
     add({ id: 'ras-border-glow', type: 'line', source: 'ras-border', paint: { 'line-color': '#ff3b4e', 'line-opacity': 0.22, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 10], 'line-blur': 3 } });
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
     // Geographic impact circles remain accurate; use restrained fills and outlines to preserve base-map detail.

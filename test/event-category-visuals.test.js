@@ -60,7 +60,7 @@ test('governorate labels stay small, uniform, one-line, and localized', () => {
   assert.ok(map.includes("'text-size': ['interpolate', ['linear'], ['zoom'], 5, 7.5, 8, 8, 11, 9]"));
   assert.ok(map.includes("'text-max-width': 14"), 'the label width preserves a consistent, tidy line');
   assert.ok(map.includes("'text-halo-width': 1.3"), 'the smaller text keeps a slim readable halo');
-  assert.ok(map.includes("this.opts.lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['concat', 'محافظة ', ['get', 'ar']]"));
+  assert.ok(map.includes("return lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['get', 'ar'];"));
 });
 
 test('category recoloring preserves readable markers and approved sizes', () => {
