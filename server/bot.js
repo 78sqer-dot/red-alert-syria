@@ -568,7 +568,6 @@ function mainKeyboard(ctx) {
   }
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
-  if (alnabaOwner(ctx)) kb.text(lang === 'en' ? '📰 Al-Nabaa publishing' : '📰 إدارة النبأ', 'nb:open').row();
   if (owner(ctx)) {
     kb.text(l.btnEditors, 'editors').text(l.btnStats, 'stats').row()
       .text(l.btnAuto(store.autoDeleteHours), 'auto').text(lang === 'en' ? '🔁 Project hand-over' : '🔁 نقل المشروع', 'xf').row()

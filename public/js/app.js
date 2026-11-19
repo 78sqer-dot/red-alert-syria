@@ -1437,10 +1437,6 @@ function bindEvents() {
       }, 0);
     }
   });
-  $('#btnNabaa').addEventListener('click', () => {
-    try { sessionStorage.setItem('ras:return-map-tools', '1'); } catch { /* storage can be disabled */ }
-    setMapControlsOpen(false);
-  });
   $('#btnNotifications').addEventListener('click', async (e) => {
     e.stopPropagation();
     setMapControlsOpen(false);

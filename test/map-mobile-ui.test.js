@@ -16,9 +16,11 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
   const panelEnd = html.indexOf('\n          </div>\n        </div>', panelStart);
   const panel = panelStart >= 0 && panelEnd > panelStart ? html.slice(panelStart, panelEnd) : '';
   assert.ok(panel, 'a collapsed map-tools panel must exist');
-  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNabaa', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
+  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
     assert.match(panel, new RegExp(`id="${id}"`));
   }
+  assert.doesNotMatch(html, /id="btnNabaa"/);
+  assert.doesNotMatch(app, /\$\(['"]#?btnNabaa['"]\)/, 'the removed Al-Nabaa button has no click handler');
   assert.doesNotMatch(panel, /id="resetView"/);
   assert.match(html, /id="resetView"[^>]*type="button"/);
   assert.match(app, /setAttribute\('aria-expanded', String\(open\)\)/);
@@ -53,12 +55,12 @@ test('interactive sheets restore their home and dismiss competing overlays acces
   assert.doesNotMatch(css, /\.modal-backdrop \{[^}]*backdrop-filter:/);
 });
 
-test('map tools provide a return route from filter, layers, services and Al-Nabaa', () => {
+test('map tools provide a return route from filter, layers and services without an Al-Nabaa button', () => {
   assert.match(app, /data-dd-close/);
   assert.match(app, /backToTools/);
   assert.match(app, /returnToToolsAfterService = true/);
   assert.match(app, /if \(!svc\?\.mode\?\.\(\)\) \{ setMapControlsOpen\(true\)/);
-  assert.match(app, /sessionStorage\.setItem\('ras:return-map-tools', '1'\)/);
+  assert.doesNotMatch(app, /sessionStorage\.setItem\('ras:return-map-tools', '1'\)/, 'there is no removed Al-Nabaa navigation handler');
   assert.match(app, /window\.addEventListener\('pageshow', restoreMapTools\)/);
   assert.match(css, /\.dd-panel\.dd-sheet \{ position: fixed;/);
   assert.match(css, /#filterPanel\.dd-sheet, #layersPanel\.dd-sheet \{ z-index: 63; \}/, 'the mobile sheet must paint above its backdrop so its controls remain clickable');

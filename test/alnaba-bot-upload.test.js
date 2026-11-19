@@ -301,6 +301,11 @@ test('both shared owners get the same Al-Nabaa controls and uploads publish to t
   const coOwnerId = 8808894711;
   const deniedId = 8808894712;
 
+  await sendText(authorizedId, '/start');
+  const mainMenu = lastUiFor(authorizedId);
+  assert.equal(buttonsOf(mainMenu).some((button) => /إدارة النبأ|Al-Nabaa publishing/.test(button.text)), false,
+    'the Al-Nabaa admin entry is absent from the main bot menu');
+
   await sendText(deniedId, '/alnaba');
   assert.match(lastUiFor(deniedId)?.payload?.text || '', /المشرفين/);
   assert.equal(buttonsOf(lastUiFor(deniedId)).some((button) => button.callback_data === 'nb:photos'), false);
@@ -345,7 +350,8 @@ test('both shared owners get the same Al-Nabaa controls and uploads publish to t
   const returnedMainMenu = lastEditFor(authorizedId);
   assert.ok(returnedMainMenu);
   assert.doesNotMatch(returnedMainMenu.payload.text, /نشر محتوى النبأ/);
-  assert.ok(buttonsOf(returnedMainMenu).some((button) => button.callback_data === 'nb:open'));
+  assert.equal(buttonsOf(returnedMainMenu).some((button) => button.callback_data === 'nb:open'), false,
+    'returning from Al-Nabaa no longer restores a removed main-menu entry');
   assert.equal(buttonsOf(returnedMainMenu).some((button) => button.callback_data === 'nb:home' || button.callback_data === 'nb:photos'), false);
   await sendText(authorizedId, '/alnaba');
   await tap(authorizedId, 'nb:photos');

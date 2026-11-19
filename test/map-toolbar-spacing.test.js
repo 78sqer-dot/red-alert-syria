@@ -16,9 +16,11 @@ test('top map-tools button opens one accessible panel with all requested tools',
   assert.match(css, /\.map-ctrls \{ position: absolute; top: 12px; bottom: auto; inset-inline-start: 12px;/);
   assert.match(css, /\.map-ctrl-panel \{ position: absolute; top: calc\(100% \+ 9px\); bottom: auto;/);
   assert.ok(panel, 'the full map-tools panel should be present');
-  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNabaa', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
+  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
     assert.match(panel, new RegExp(`id="${id}"`), `${id} belongs in the tools panel`);
   }
+  assert.doesNotMatch(html, /id="btnNabaa"/);
+  assert.doesNotMatch(app, /\$\(['"]#?btnNabaa['"]\)/);
   assert.doesNotMatch(panel, /id="resetView"/);
   assert.match(html, /id="resetView"[^>]*type="button"/);
   assert.match(css, /\.map-tool-grid \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
@@ -40,14 +42,14 @@ test('Syria overview is a bottom-row action beside the Red Alert Syria map label
   assert.match(css, /\.reset-view-btn \{ width: 40px; height: 40px; flex: none;/);
 });
 
-test('filter and layer panels, services, and Al-Nabaa return to the map tools reliably', () => {
+test('filter and layer panels and services return to the map tools reliably', () => {
   assert.match(app, /data-dd-close/);
   assert.match(app, /T\.backToTools/);
   assert.ok(i18n.includes("backToTools: 'العودة إلى أدوات الخريطة'"));
   assert.ok(i18n.includes("backToTools: 'Back to map tools'"));
   assert.match(app, /returnToToolsAfterService = true/);
   assert.match(app, /if \(!svc\?\.mode\?\.\(\)\) \{ setMapControlsOpen\(true\)/);
-  assert.match(app, /sessionStorage\.setItem\('ras:return-map-tools', '1'\)/);
+  assert.doesNotMatch(app, /sessionStorage\.setItem\('ras:return-map-tools', '1'\)/);
   assert.match(app, /window\.addEventListener\('pageshow', restoreMapTools\)/);
   assert.match(css, /\.dd-panel\.dd-sheet \{ position: fixed;/);
   assert.match(css, /@media \(max-width: 767px\)[\s\S]*?\.map-ctrl-panel \{ width: min\(370px, calc\(100vw - 20px\)\); max-height: min\(70dvh, calc\(100dvh - 105px\)\)/);

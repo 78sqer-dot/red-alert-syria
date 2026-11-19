@@ -12,7 +12,7 @@ const frontend = fs.readFileSync(path.join(ROOT, 'public/js/alnaba.js'), 'utf8')
 const bot = fs.readFileSync(path.join(ROOT, 'server/bot.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'public/css/alnaba.css'), 'utf8');
 
-test('Al-Nabaa exposes only the requested public section links while preserving private nasheed management', () => {
+test('the Al-Nabaa source content remains while its public routes and bot-menu entry are detached', () => {
   const nav = page.match(/<nav class="an-nav"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
   assert.ok(nav, 'the public Al-Nabaa navigation exists');
   assert.doesNotMatch(nav, /data-nav="quran"|href="\/alnaba\/quran\//, 'Quran is no longer a top-navigation item');
@@ -25,7 +25,11 @@ test('Al-Nabaa exposes only the requested public section links while preserving 
   assert.equal((home.match(/class="an-section-card\b/g) || []).length, 3, 'the homepage presents exactly three section cards');
   assert.doesNotMatch(home, /href="\/alnaba\/nasheed\/"|an-nasheed-card|أناشيد/, 'the homepage does not publicly link or advertise nasheeds');
   assert.match(page, /<section class="an-view" data-view="nasheed"/, 'the existing nasheed page content remains in the template');
-  assert.match(routes, /\/alnaba\/nasheed/, 'the existing nasheed page route remains available by direct URL');
+  assert.doesNotMatch(routes, /app\.get\(\[['"]\/alnaba(?:\/|['"])/, 'Al-Nabaa public page routes are not registered');
+  assert.doesNotMatch(routes, /createAlnabaRouter|fetchAlnabaMediaForWeb|app\.use\(['"]\/api\/alnaba/, 'the public Al-Nabaa API is not imported or mounted');
+  assert.doesNotMatch(bot, /📰 إدارة النبأ|📰 Al-Nabaa publishing/, 'the main bot menu no longer exposes Al-Nabaa management');
+  assert.ok(fs.existsSync(path.join(ROOT, 'server/alnaba-page.html')), 'the existing Al-Nabaa page content file is preserved');
+  assert.ok(fs.existsSync(path.join(ROOT, 'server/alnaba.js')), 'the existing Al-Nabaa content/data module is preserved');
 
   for (const [section, href] of [
     ['home', '/alnaba/'],
@@ -46,4 +50,15 @@ test('Al-Nabaa exposes only the requested public section links while preserving 
   assert.match(bot, /\.text\(en \? '📖 Quran' : '📖 القرآن الكريم', 'nb:quran'\)/, 'the owner bot upload control for Quran remains unchanged');
   assert.match(bot, /nb:manage:\(photos\|weekly\|quran\|nasheed\|archive\)/, 'private Quran content management remains available');
   assert.match(bot, /\.text\(en \? '🎵 Nasheeds' : '🎵 أناشيد', 'nb:nasheed'\)/, 'the owner bot upload control for nasheeds remains unchanged');
+});
+
+test('robots and sitemap publish the three requested public pages', () => {
+  const robots = fs.readFileSync(path.join(ROOT, 'public/robots.txt'), 'utf8');
+  const sitemap = fs.readFileSync(path.join(ROOT, 'public/sitemap.xml'), 'utf8');
+  assert.match(robots, /User-agent:\s*\*\s*\nAllow:\s*\/\s*\nSitemap:\s*https:\/\/red-alert-syria-eiqz\.onrender\.com\/sitemap\.xml/);
+  assert.deepEqual([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]), [
+    'https://red-alert-syria-eiqz.onrender.com/',
+    'https://red-alert-syria-eiqz.onrender.com/ar/',
+    'https://red-alert-syria-eiqz.onrender.com/en/',
+  ]);
 });
