@@ -108,3 +108,21 @@ test('an overlay load cannot modify a replacement map instance', async () => {
   release({ border: {}, govs: {} });
   await pending;
 });
+
+const watchSource = source.match(/function basemapWatchSourceId\(style, layer\) \{[\s\S]*?\n\}/)[0];
+const basemapWatchSourceId = vm.runInNewContext(`(${watchSource})`);
+
+test('basemap watchdog watches the vector tile source (and Esri for satellite)', () => {
+  assert.equal(basemapWatchSourceId({ sources: { openmaptiles: { type: 'vector' } } }, 'standard'), 'openmaptiles');
+  assert.equal(basemapWatchSourceId({ sources: { openmaptiles: {}, esri: { type: 'raster' } } }, 'satellite'), 'esri');
+  assert.equal(basemapWatchSourceId({ sources: { esri: {} } }, 'standard'), null);
+  assert.equal(basemapWatchSourceId(fallbackStyle('light'), 'standard'), null);
+  assert.equal(basemapWatchSourceId(null, 'standard'), null);
+  assert.equal(basemapWatchSourceId(undefined, 'satellite'), null);
+});
+
+test('map switches to the OSM raster fallback when basemap tiles never arrive', () => {
+  assert.match(source, /_armBasemapWatchdog\(style\)/);
+  assert.match(source, /_applyRasterFallback\('basemap tiles did not arrive'\)/);
+  assert.match(source, /map\.setStyle\(fallbackStyle\(this\.opts\.dark \? 'dark' : 'light'\), \{ diff: false \}\)/);
+});
