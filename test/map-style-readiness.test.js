@@ -125,5 +125,10 @@ test('map switches to the OSM raster fallback when basemap tiles never arrive', 
   assert.match(source, /_armBasemapWatchdog\(style\)/);
   assert.match(source, /_applyRasterFallback\('basemap tiles did not arrive'\)/);
   assert.match(source, /_armBasemapWatchdog\(style, true\)/); // one vector reload is tried before the raster fallback
+  // a source reporting isSourceLoaded after total tile failure must not disarm the watchdog
+  assert.match(source, /e\.sourceId === watched && e\.tile && !e\.error/);
+  // the failure path advances at once on repeated basemap-host errors, not only on the timer
+  assert.match(source, /errors >= 3/);
+  assert.match(source, /setTimeout\(advance, 8000\)/);
   assert.match(source, /map\.setStyle\(fallbackStyle\(this\.opts\.dark \? 'dark' : 'light'\), \{ diff: false \}\)/);
 });
