@@ -230,6 +230,7 @@ export class AlertMap {
     this._styleEpoch = 0;
     this._basemapFallback = false;
     this._basemapTimer = null;
+    this._basemapDisarm = null;
     this._baseStyleApplied = false;
   }
 
@@ -242,6 +243,7 @@ export class AlertMap {
     if (!this.map || this._basemapFallback) return;
     this._basemapFallback = true;
     this._baseStyleApplied = true;
+    this._basemapDisarm?.();
     clearTimeout(this._basemapTimer);
     console.warn(`[map] ${why}; switching to OSM raster fallback`);
     this._styleEpoch++;
@@ -253,23 +255,29 @@ export class AlertMap {
   // fetchStyle never notice. Watch for the first real basemap tile. The
   // detailed vector look is the product (owner's reference screenshot,
   // 2026-11-19), so a silent stall first earns ONE fresh reload of the same
-  // vector style (re-requesting every tile); only if another 12s passes with
-  // no tile at all do we settle for the raster fallback.
+  // vector style (re-requesting every tile); only if the second window also
+  // passes with no tile at all do we settle for the raster fallback.
+  // The failure path must not feel slow (owner, 2026-11-19): windows are 8s,
+  // and three tile errors from the basemap host — the signature of a blocked
+  // or refused host, which surfaces within a second or two — advance the
+  // stage immediately instead of waiting out the timer.
   _armBasemapWatchdog(style, retried = false) {
+    this._basemapDisarm?.();
     clearTimeout(this._basemapTimer);
     if (!this.map || this._basemapFallback) return;
     const watched = basemapWatchSourceId(style, this.opts.layer);
     if (!watched) return;
     const map = this.map;
-    const onData = (e) => {
-      if (e.dataType === 'source' && e.sourceId === watched && (e.tile || e.isSourceLoaded)) {
-        clearTimeout(this._basemapTimer);
-        map.off('data', onData);
-      }
-    };
-    map.on('data', onData);
-    this._basemapTimer = setTimeout(() => {
+    const host = watched === 'esri' ? 'arcgisonline.com' : 'tiles.openfreemap.org';
+    let errors = 0;
+    const cleanup = () => {
+      clearTimeout(this._basemapTimer);
       map.off('data', onData);
+      map.off('error', onError);
+      if (this._basemapDisarm === cleanup) this._basemapDisarm = null;
+    };
+    const advance = () => {
+      cleanup();
       if (!retried && this.map) {
         console.warn('[map] basemap tiles slow; reloading vector style once before raster fallback');
         this._styleEpoch++;
@@ -278,7 +286,24 @@ export class AlertMap {
         return;
       }
       this._applyRasterFallback('basemap tiles did not arrive');
-    }, 12000);
+    };
+    const onData = (e) => {
+      // Only a real tile object counts as proof of life: a source can still
+      // report isSourceLoaded after every tile request has failed (verified
+      // live 2026-11-19 — the map read as "loaded" with zero rendered
+      // basemap features), so that flag must never disarm the watchdog.
+      if (e.dataType === 'source' && e.sourceId === watched && e.tile && !e.error) cleanup();
+    };
+    const onError = (e) => {
+      const msg = String(e?.error?.message || e?.error || '');
+      if (!msg.includes(host)) return;
+      errors++;
+      if (errors >= 3) advance();
+    };
+    this._basemapDisarm = cleanup;
+    map.on('data', onData);
+    map.on('error', onError);
+    this._basemapTimer = setTimeout(advance, 8000);
   }
 
   async init() {
@@ -288,8 +313,11 @@ export class AlertMap {
     // Telegram's in-app Chrome) cannot block the map controls and incident overlays.
     const stylePromise = buildStyle(this.opts);
     this.map = new M.Map({
-      // phone "desktop site": the page is zoomed, so render the map canvas at the real screen resolution
-      pixelRatio: (this._pr = Math.min(3, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1))),
+      // phone "desktop site": the page is zoomed, so render the map canvas at the real screen resolution.
+      // Phones cap at 2x (owner, 2026-11-19: clarity must not cost responsiveness — a 3x
+      // canvas paints 2.25x the pixels of a 2x one and stalls pan/zoom on weak GPUs);
+      // desktops keep up to 3x.
+      pixelRatio: (this._pr = Math.min(this.dockMode() ? 2 : 3, (window.devicePixelRatio || 1) * ((window.__uiz || 1) > 1 ? window.__uiz : 1))),
       container: this.el,
       style: initialStyle(this.opts.dark ? 'dark' : 'light'),
       bounds: SYRIA_BOUNDS,
