@@ -506,8 +506,8 @@ export class AlertMap {
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
     // Geographic impact circles remain accurate; use restrained fills and outlines to preserve base-map detail.
     const A = (on, off) => ['case', ['get', 'active'], on, off];
-    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.11 : 0.08, 0.025) } });
-    add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.58, 0.22), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1.3] } });
+    add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.07 : 0.05, 0.018) } });
+    add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.40, 0.16), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.7, 11, 1.1] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['get', 'planeArea'], true], 1.5, 1.8], 'line-opacity': ['case', ['==', ['get', 'planeArea'], true], 0.7, A(0.85, 0.3)], 'line-dasharray': [3, 4] } });
     add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'referenceRoute'], 0.92, ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'referenceRoute'], 2.4, ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'referenceRoute'], 3.2, ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'referenceRoute'], ['literal', [4, 2]], ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
     add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', filter: ['any', ['==', ['get', 'referenceRoute'], true], ['!=', ['get', 'planeRoute'], true]], layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
@@ -1213,7 +1213,12 @@ export class AlertMap {
       zs.forEach((z) => {
         // Aircraft areas keep the reference's geographic radius at every zoom; this does not
         // change the saved z.km, circle centers or locality count. Other categories retain their cap.
-        const km = planeArea ? z.km : this._screenKm(z.km, z.lat, marker === 'squad' ? 0.28 : 0.18);
+        // Display cap softened 0.18 → 0.11 (owner review 2026-11-19): the
+        // largest impact circles (e.g. city-level political reports) read
+        // as dominating discs at 0.18 of the viewport; 0.11 keeps them a
+        // quiet area tint under the pin. True radii below the cap and all
+        // aircraft areas are untouched.
+        const km = planeArea ? z.km : this._screenKm(z.km, z.lat, marker === 'squad' ? 0.28 : 0.11);
         const mpp = (40075016.686 * Math.cos((z.lat * Math.PI) / 180)) / (512 * Math.pow(2, this.map.getZoom()));
         const radiusPx = Math.max(5, (km * 1000) / mpp);
         hits.push({ id: a.id, lon: z.lon, lat: z.lat, km, radiusPx, ts: Date.parse(a.timestamp) || 0, live: !!a.is_active });

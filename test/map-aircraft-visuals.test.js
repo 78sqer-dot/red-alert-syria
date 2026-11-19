@@ -159,7 +159,7 @@ test('warplane formation keeps the reference pass with bounded medium-sized, bri
 });
 
 test('only the warplane area receives a larger display cap, without inflating reported radius', () => {
-  assert.match(mapJs, /planeArea \? z\.km : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\)/);
+  assert.match(mapJs, /planeArea \? z\.km : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.11\)/);
   const method = mapJs.match(/  _screenKm\(([^)]*)\) \{([\s\S]*?)\n  \}/);
   assert.ok(method, 'display-radius conversion remains independently testable');
   const screenKm = new Function(method[1], method[2]);
