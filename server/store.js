@@ -70,11 +70,13 @@ class Store extends EventEmitter {
     this.backup = null; // { save(jsonString), load() -> jsonString|null }
     this._saveTimer = null;
     this._backupTimer = null;
+    this._backupFlight = null; // in-flight backup save promise (serializes flushBackup)
+    this._sweepsStarted = false;
     this._backupWritesPaused = false;
     this.lastBackupAt = null;
   }
 
-  async init(backupAdapter) {
+  async init(backupAdapter, { deferSweep = false } = {}) {
     this.backup = backupAdapter || null;
     fs.mkdirSync(config.dataDir, { recursive: true });
     let loaded = false;
@@ -122,7 +124,11 @@ class Store extends EventEmitter {
     }
     if (historyMigrated) this.persist({ backupSoon: false });
     if (!Array.isArray(this.state.log)) this.state.log = this.state.alerts.map((a) => this._logEntry(a)).reverse();
-    this.expireSweep();
+    // With a remote backup, the caller may defer the first sweep until after the deploy
+    // hand-off merge + first confirmed save (beginSweeps): sweeping during restore would
+    // silently shrink the restored state before the merge ever sees it, and the deletions
+    // are tombstoned, so the merged backup could never bring those alerts back.
+    if (!deferSweep) this.beginSweeps();
     const expiredPhotos = expireAlnabaPhotos(this);
     if (expiredPhotos) {
       clearTimeout(this._saveTimer);
@@ -130,7 +136,6 @@ class Store extends EventEmitter {
       await this.flushBackup();
       console.log(`[alnaba] removed ${expiredPhotos} expired photo-news item(s) on restore`);
     }
-    setInterval(() => this.expireSweep(), 30_000).unref();
     setInterval(() => {
       const expired = expireAlnabaPhotos(this);
       if (!expired) return;
@@ -253,15 +258,29 @@ class Store extends EventEmitter {
     clearTimeout(this._backupTimer);
     if (this._backupWritesPaused) return false;
     if (!this.backup || !(this._backupPending || (force && this._backupLazy && config.telegramBackup))) return false;
+    if (this._backupFlight) {
+      // A save is already in flight with an older snapshot of the state. Queue behind it
+      // and re-run with the latest state: saves must land in snapshot order, otherwise a
+      // slow save can finish last and silently roll the pinned backup back.
+      this._backupPending = true;
+      try { await this._backupFlight; } catch { /* the in-flight pass logs its own failure */ }
+      return this.flushBackup(force);
+    }
     this._backupPending = false; this._backupLazy = false;
-    try {
+    const flight = (async () => {
       await this.backup.save(JSON.stringify(this.state));
       this.lastBackupAt = new Date().toISOString();
       return true;
+    })();
+    this._backupFlight = flight;
+    try {
+      return await flight;
     } catch (e) {
       this._backupPending = true;
       console.error('[store] remote backup failed', e.message);
       return false;
+    } finally {
+      if (this._backupFlight === flight) this._backupFlight = null;
     }
   }
 
@@ -621,6 +640,14 @@ class Store extends EventEmitter {
   recentAlerts(hours = this.historyWindow) {
     const since = Date.now() - hours * 3600_000;
     return this.state.alerts.filter((a) => a.is_active || Date.parse(a.timestamp) >= since);
+  }
+
+  /** Run the first expiry sweep and start the periodic one (idempotent). */
+  beginSweeps() {
+    if (this._sweepsStarted) return;
+    this._sweepsStarted = true;
+    this.expireSweep();
+    setInterval(() => this.expireSweep(), 30_000).unref();
   }
 
   expireSweep() {

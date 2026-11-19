@@ -497,7 +497,7 @@ async function start() {
     store._backupWritesPaused = true;
     pauseAlnabaBatchIntake();
   }
-  await store.init(backup);
+  await store.init(backup, { deferSweep: !!(backup && config.telegramBackup) });
   // 2) apply hand-over overrides saved from the bot (owner / tokens / channel)
   applyProject(store.project);
   // One-time clean start requested by the owner: remove every alert (active and ended) from the map,
@@ -531,6 +531,8 @@ async function start() {
         store.persist();
         const backupSaved = await store.flushBackup(true);
         if (!backupSaved || store._backupPending) throw new Error('merged durable backup save was not confirmed');
+        // The merged state is durably saved; only now may the expiry sweep shrink it.
+        store.beginSweeps();
         await runtimeHooks.resumeAlnabaBatches();
         recovered = true;
       } catch (error) {
@@ -543,6 +545,9 @@ async function start() {
       }
     };
     setTimeout(recoverHandoff, 20_000).unref();
+    // Safety net: if hand-off recovery is still stuck after 5 minutes, start the sweeps
+    // anyway so expired alerts do not linger on the map indefinitely.
+    setTimeout(() => store.beginSweeps(), 300_000).unref();
   }
 
   if (!config.botToken) {
