@@ -67,7 +67,7 @@ test('the gun emoji appears nowhere in shipped code', () => {
   assert.ok(!typeIcons.includes("'rifle'"), 'no UI icon named rifle is referenced');
 });
 
-test('map pins: one glass roundel at every zoom, mini pin with glyph at country view', () => {
+test('map pins: one dark roundel at every zoom, mini pin with glyph at country view', () => {
   const map = readFileSync(new URL('../public/js/map.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
   // one builder, one construction for static types and breaking alike
@@ -76,7 +76,7 @@ test('map pins: one glass roundel at every zoom, mini pin with glyph at country 
   assert.doesNotMatch(map, /civ-dot|map-event-emoji|news-marker-core/);
   assert.doesNotMatch(css, /civ-dot|map-event-emoji|news-marker-core/);
   // the pin itself: dark disc, type ring, white glyph, outline + shadow
-  assert.match(css, /\.pin \{[^}]*background: color-mix\(in srgb, #141A24 45%, transparent\); border: 3px solid var\(--ring[^}]*box-shadow: 0 0 0 1px rgba\(6,10,16,\.45\), 0 2px 6px rgba\(2,6,12,\.35\)/);
+  assert.match(css, /\.pin \{[^}]*background: rgba\(255, 255, 255, \.62\); border: 3px solid var\(--ring[^}]*box-shadow: 0 1px 4px rgba\(10, 15, 25, \.35\)/);
   // sizes: 20px mini WITH glyph at far zoom (replacing the plain civil dot),
   // 32px standard, 38px near
   assert.match(css, /\.maplibregl-map\.zoom-far \.pin \{ width: 20px; height: 20px; border-width: 2px; \}/);
@@ -86,7 +86,7 @@ test('map pins: one glass roundel at every zoom, mini pin with glyph at country 
   // far zoom no longer hides civil markers
   assert.doesNotMatch(css, /zoom-far \.mk-civ/);
   // cluster badge speaks the same language: dark disc, ring in the first type colour
-  assert.match(css, /\.mk-count \{[^}]*border: 2px solid var\(--ring[^}]*background: rgba\(255, 255, 255, \.58\)[^}]*backdrop-filter: blur\(3px\)[^}]*color: #101623;/); // owner 2026-11-19: glass badges, not black
+  assert.match(css, /\.mk-count \{[^}]*border: 2px solid var\(--ring[^}]*background: rgba\(255, 255, 255, \.62\)[^}]*backdrop-filter: blur\(3px\)[^}]*color: #101623;/); // owner 2026-11-19: glass badges, not black
   assert.match(map, /badge\.style\.setProperty\('--ring', typeOf\(a\.type\)\.color\)/);
 });
 
