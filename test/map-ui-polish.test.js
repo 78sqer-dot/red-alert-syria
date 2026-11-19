@@ -114,6 +114,7 @@ test('own governorate label layer: brighter text, inland anchors for edge govern
   assert.match(mapSrc, /id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs'/);
   // west-coast governorates anchored left (names grow east/inland), eastern ones right
   assert.match(mapSrc, /'text-anchor': \['match', \['get', 'code'\], \['14', '02'\], 'left', \['01', '07'\], 'right', 'center'\]/);
+  assert.match(mapSrc, /'text-offset': \['match', \['get', 'code'\], \['14', '02'\], \['literal', \[0\.7, 0\]\], \['01', '07'\], \['literal', \[0, 0\]\], \['literal', \[0, 0\]\]\]/);
   assert.match(mapSrc, /dark \? '#c6ccd6' : '#3f4753'/);
   assert.match(mapSrc, /vis\('ras-gov-labels', this\.opts\.showGov\);/);
   // Arabic governorate names stay data-identical; English keeps its existing suffix.

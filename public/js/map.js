@@ -46,6 +46,7 @@ export function glyphDisc(type, size = 32, iconSize = 20, cls = 'pin', glyphOver
 const styleCache = {};
 const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
 const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const BUNDLED_STYLE_URL = { light: '/map-styles/liberty.json?v=1', dark: '/map-styles/dark.json?v=1' };
 function initialStyle(kind) {
   return {
     version: 8,
@@ -55,8 +56,8 @@ function initialStyle(kind) {
   };
 }
 function fallbackStyle(kind) {
-  // A readable road map when the primary vector style is unavailable. Only
-  // visible viewport tiles are requested; the tile source supplies its attribution.
+  // Last-resort road map when both remote and bundled vector styles are unavailable.
+  // Only visible viewport tiles are requested; the tile source supplies its attribution.
   return {
     version: 8,
     glyphs: GLYPHS,
@@ -83,6 +84,12 @@ async function fetchStyle(kind) {
           if (r.ok) return await r.json();
         } catch { /* retry */ }
       }
+      // Keep vector sharpness if the remote style JSON endpoint is temporarily down.
+      // The app-bundled copy uses the same key-free OpenFreeMap vector tile sources.
+      try {
+        const r = await fetchWithTimeout(BUNDLED_STYLE_URL[kind], 7000);
+        if (r.ok) return await r.json();
+      } catch { /* the OSM raster map remains the final fallback */ }
       throw new Error('style unavailable');
     })().catch((e) => { delete styleCache[kind]; throw e; });
   }
@@ -385,7 +392,7 @@ export class AlertMap {
     // 1.7→1.5 to stay proportionate. Final owner-requested trim (2026-11-18)
     // keeps one compact, orderly line at every zoom: 7.5→8→9px, halo 1.3px.
     // Max-width stays 14em.
-    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': governorateLabelExpr(this.opts.lang), 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 7.5, 8, 8, 11, 9], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [0, 0]]], 'text-max-width': 14, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.3 } }, null);
+    add({ id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs', minzoom: 4, maxzoom: 11.5, layout: { 'text-field': governorateLabelExpr(this.opts.lang), 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 7.5, 8, 8, 11, 9], 'text-transform': 'uppercase', 'text-anchor': ['match', ['get', 'code'], ['14', '02'], 'left', ['01', '07'], 'right', 'center'], 'text-offset': ['match', ['get', 'code'], ['14', '02'], ['literal', [0.7, 0]], ['01', '07'], ['literal', [0, 0]], ['literal', [0, 0]]], 'text-max-width': 14, 'symbol-avoid-edges': true }, paint: { 'text-color': this.opts.layer === 'satellite' ? '#ffffff' : dark ? '#c6ccd6' : '#3f4753', 'text-halo-color': dark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.3 } }, null);
     add({ id: 'ras-border-glow', type: 'line', source: 'ras-border', paint: { 'line-color': '#ff3b4e', 'line-opacity': 0.22, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 10], 'line-blur': 3 } });
     add({ id: 'ras-border', type: 'line', source: 'ras-border', paint: { 'line-color': dark ? '#f0f0f5' : '#1a1a2e', 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.4] } });
     // Geographic impact circles remain accurate; use restrained fills and outlines to preserve base-map detail.

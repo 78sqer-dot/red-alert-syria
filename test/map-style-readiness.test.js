@@ -11,6 +11,13 @@ const fallbackSource = source.match(/function fallbackStyle\(kind\) \{[\s\S]*?\n
 const glyphsUrl = source.match(/const GLYPHS = '([^']+)';/)[1];
 const osmTilesUrl = source.match(/const OSM_TILES = '([^']+)';/)[1];
 const fallbackStyle = vm.runInNewContext(`(${fallbackSource})`, { GLYPHS: glyphsUrl, OSM_TILES: osmTilesUrl });
+const fetchStyleSource = source.match(/async function fetchStyle\(kind\) \{[\s\S]*?\n\}/)[0];
+const bundledStyleUrls = vm.runInNewContext(`${source.match(/const BUNDLED_STYLE_URL = \{[^;]+\};/)[0]}\nBUNDLED_STYLE_URL`);
+const styleUrls = vm.runInNewContext(`${source.match(/const STYLE_URL = \{[^;]+\};/)[0]}\nSTYLE_URL`);
+const makeFetchStyle = (fetchWithTimeout) => vm.runInNewContext(
+  `(() => { const styleCache = {}; ${fetchStyleSource}; return fetchStyle; })()`,
+  { fetchWithTimeout, fallbackStyle, BUNDLED_STYLE_URL: bundledStyleUrls, STYLE_URL: styleUrls },
+);
 const governorateLabelSource = source.match(/function governorateLabelExpr\(lang\) \{[\s\S]*?\n\}/)[0];
 const governorateLabelExpr = vm.runInNewContext(`(${governorateLabelSource})`);
 const overlaysBody = source.match(/  async addOverlays\(\) \{([\s\S]*?)\n  \}\n\n  \/\*\* services/)[1];
@@ -22,12 +29,46 @@ test('symbol lookup safely handles a style that is not yet available', () => {
   assert.equal(firstSymbolId({ getStyle: () => ({ layers: [{ id: 'bg', type: 'background' }, { id: 'labels', type: 'symbol' }] }) }), 'labels');
 });
 
-test('fallback style uses readable OSM raster tiles with visible attribution', () => {
+test('last-resort fallback retains OSM raster tiles with visible attribution', () => {
   const style = fallbackStyle('light');
   assert.equal(style.sources.osmFallback.type, 'raster');
   assert.equal(style.sources.osmFallback.tiles[0], 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
   assert.match(style.sources.osmFallback.attribution, /OpenStreetMap<\/a> contributors/);
   assert.ok(style.layers.some((layer) => layer.id === 'osm-fallback' && layer.source === 'osmFallback'));
+});
+
+test('bundled light and dark styles retain key-free OpenFreeMap vector sources', async () => {
+  for (const name of ['liberty', 'dark']) {
+    const style = JSON.parse(await readFile(new URL(`../public/map-styles/${name}.json`, import.meta.url), 'utf8'));
+    assert.equal(style.version, 8);
+    assert.equal(style.sources.openmaptiles.type, 'vector');
+    assert.equal(style.sources.openmaptiles.url, 'https://tiles.openfreemap.org/planet');
+    assert.equal(style.glyphs, glyphsUrl);
+    assert.match(style.sprite, /^https:\/\/tiles\.openfreemap\.org\//);
+    assert.doesNotMatch(JSON.stringify(style), /[?&]key=/i);
+  }
+});
+
+test('bundled OpenFreeMap vector style is used when the remote style endpoint fails', async () => {
+  const calls = [];
+  const bundled = { version: 8, name: 'bundled vector' };
+  const fetchWithTimeout = async (url) => {
+    calls.push(url);
+    if (url === styleUrls.light) throw new Error('remote style unavailable');
+    if (url === bundledStyleUrls.light) return { ok: true, json: async () => bundled };
+    throw new Error(`unexpected URL: ${url}`);
+  };
+  const style = await makeFetchStyle(fetchWithTimeout)('light');
+  assert.deepEqual(JSON.parse(JSON.stringify(style)), bundled);
+  assert.deepEqual(calls, [styleUrls.light, styleUrls.light, bundledStyleUrls.light]);
+});
+
+test('OSM raster is retained only when both remote and bundled vector styles fail', async () => {
+  const calls = [];
+  const fetchWithTimeout = async (url) => { calls.push(url); return { ok: false }; };
+  const style = await makeFetchStyle(fetchWithTimeout)('dark');
+  assert.equal(style.sources.osmFallback.type, 'raster');
+  assert.deepEqual(calls, [styleUrls.dark, styleUrls.dark, bundledStyleUrls.dark]);
 });
 
 test('governorate display uses plain Arabic name and preserves the English label', () => {
