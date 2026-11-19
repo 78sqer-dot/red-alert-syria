@@ -366,7 +366,7 @@ html.dark .lg-civdot { box-shadow: 0 0 0 1.5px rgba(10, 14, 22, .9), 0 0 7px 1px
 
 /* ---------------------------------------------------------------- markers */
 .mk { position: absolute; top: 0; left: 0; width: 0; height: 0; cursor: pointer; --c: #ff3b4e; }
-.mk-count { position: absolute; z-index: 3; left: -15px; top: -15px; min-width: 19px; height: 19px; padding: 0 4px; box-sizing: border-box; border: 2px solid var(--ring, var(--c)); border-radius: 50%; background: rgba(255, 255, 255, .58); -webkit-backdrop-filter: blur(3px) saturate(1.3); backdrop-filter: blur(3px) saturate(1.3); box-shadow: 0 1px 4px rgba(10, 15, 25, .35); color: #101623; font: 800 11px/15px system-ui, sans-serif; text-align: center; cursor: pointer; pointer-events: auto; }
+.mk-count { position: absolute; z-index: 3; left: 0; top: 0; transform: translate(-50%, -50%); min-width: 19px; height: 19px; padding: 0 4px; box-sizing: border-box; border: 1.5px solid var(--ring, var(--c)); border-radius: 50%; background: color-mix(in srgb, #141A24 55%, transparent); box-shadow: 0 1px 4px rgba(10, 15, 25, .35); color: #fff; font: 800 10px/15px system-ui, sans-serif; text-align: center; text-shadow: 0 1px 2px rgba(0,0,0,.45); cursor: pointer; pointer-events: auto; }
 /* scale wrapper: icons shrink as the map zooms in (--mks set by map.js) */
 .mk-s { position: absolute; left: 0; top: 0; width: 0; height: 0; transform: scale(var(--mks, 0.5)); transform-origin: 0 0; transition: transform .2s ease; }
 /* aircraft / vehicles have no disc, so they get a little more size to stay readable */
@@ -402,15 +402,16 @@ html.dark .lg-civdot { box-shadow: 0 0 0 1.5px rgba(10, 14, 22, .9), 0 0 7px 1px
 /* The regular drone glyph is 24px; its center follows the alert perimeter at detail zoom. */
 .mk-orbit .mk-s { transform: none; }
 /* The one unified pin (owner-approved symbols, 2026-11-17; glass fill per
-   owner order 2026-11-19: transparent circles instead of solid black): translucent disc,
+   owner order 2026-11-19: transparent circles instead of solid black;
+   refined same day to owner-approved style 4: smoked dark glass, thin ring): translucent disc,
    a ring in the type's own colour (--ring), and the type's white glyph centred.
    One construction at every zoom: 20px mini with glyph at country view,
    32px standard, 38px near; selected/hover adds a halo in the ring colour. */
-.pin { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, #141A24 45%, transparent); border: 3px solid var(--ring, #64748b); box-shadow: 0 0 0 1px rgba(6,10,16,.45), 0 2px 6px rgba(2,6,12,.35); display: flex; align-items: center; justify-content: center; color: #fff; transition: box-shadow .18s ease; }
+.pin { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, #141A24 55%, transparent); border: 2px solid var(--ring, #64748b); box-shadow: 0 0 0 1px rgba(6,10,16,.45), 0 2px 6px rgba(2,6,12,.35); display: flex; align-items: center; justify-content: center; color: #fff; transition: box-shadow .18s ease; }
 .pin svg { display: block; width: 20px; height: 20px; }
-.maplibregl-map.zoom-far .pin { width: 20px; height: 20px; border-width: 2px; }
+.maplibregl-map.zoom-far .pin { width: 20px; height: 20px; border-width: 1.5px; }
 .maplibregl-map.zoom-far .pin svg { width: 13px; height: 13px; }
-.maplibregl-map.zoom-detail .pin { width: 38px; height: 38px; }
+.maplibregl-map.zoom-detail .pin { width: 38px; height: 38px; border-width: 2.5px; }
 .maplibregl-map.zoom-detail .pin svg { width: 24px; height: 24px; }
 .mk:hover .pin, .mk.sel .pin { box-shadow: 0 0 0 1px rgba(6,10,16,.45), 0 0 0 5px color-mix(in srgb, var(--ring, #64748b) 35%, transparent), 0 0 18px color-mix(in srgb, var(--ring, #64748b) 55%, transparent), 0 2px 6px rgba(2,6,12,.45); }
 .mk.inactive .pin { opacity: .55; }

@@ -76,17 +76,17 @@ test('map pins: one glass roundel at every zoom, mini pin with glyph at country 
   assert.doesNotMatch(map, /civ-dot|map-event-emoji|news-marker-core/);
   assert.doesNotMatch(css, /civ-dot|map-event-emoji|news-marker-core/);
   // the pin itself: dark disc, type ring, white glyph, outline + shadow
-  assert.match(css, /\.pin \{[^}]*background: color-mix\(in srgb, #141A24 45%, transparent\); border: 3px solid var\(--ring[^}]*box-shadow: 0 0 0 1px rgba\(6,10,16,\.45\), 0 2px 6px rgba\(2,6,12,\.35\)/);
+  assert.match(css, /\.pin \{[^}]*background: color-mix\(in srgb, #141A24 55%, transparent\); border: 2px solid var\(--ring[^}]*box-shadow: 0 0 0 1px rgba\(6,10,16,\.45\), 0 2px 6px rgba\(2,6,12,\.35\)/);
   // sizes: 20px mini WITH glyph at far zoom (replacing the plain civil dot),
   // 32px standard, 38px near
-  assert.match(css, /\.maplibregl-map\.zoom-far \.pin \{ width: 20px; height: 20px; border-width: 2px; \}/);
+  assert.match(css, /\.maplibregl-map\.zoom-far \.pin \{ width: 20px; height: 20px; border-width: 1.5px; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-far \.pin svg \{ width: 13px; height: 13px; \}/);
   assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;/);
-  assert.match(css, /\.maplibregl-map\.zoom-detail \.pin \{ width: 38px; height: 38px; \}/);
+  assert.match(css, /\.maplibregl-map\.zoom-detail \.pin \{ width: 38px; height: 38px; border-width: 2.5px; \}/);
   // far zoom no longer hides civil markers
   assert.doesNotMatch(css, /zoom-far \.mk-civ/);
   // cluster badge speaks the same language: dark disc, ring in the first type colour
-  assert.match(css, /\.mk-count \{[^}]*border: 2px solid var\(--ring[^}]*background: rgba\(255, 255, 255, \.58\)[^}]*backdrop-filter: blur\(3px\)[^}]*color: #101623;/); // owner 2026-11-19: glass badges, not black
+  assert.match(css, /\.mk-count \{[^}]*border: 1.5px solid var\(--ring[^}]*background: color-mix\(in srgb, #141A24 55%, transparent\)[^}]*color: #fff;[^}]*font: 800 10px\/15px/); // owner 2026-11-19: style 4 — smoked glass, thin ring, smaller number
   assert.match(map, /badge\.style\.setProperty\('--ring', typeOf\(a\.type\)\.color\)/);
 });
 

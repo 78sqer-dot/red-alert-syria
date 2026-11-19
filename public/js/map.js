@@ -334,6 +334,9 @@ export class AlertMap {
     this.map.addControl(new M.AttributionControl({ compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · GeoNames · geoBoundaries' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
     this.map.addControl(new M.ScaleControl({ maxWidth: 110, unit: 'metric' }), this.opts.lang === 'ar' ? 'bottom-right' : 'bottom-left');
     window.__rasMap = this.map;
+    // Fixed opening view (owner, 2026-11-19): the NEAR framing of Syria —
+    // the country fills the screen — not the far regional fit.
+    this.map.jumpTo(this.nearCamera());
     this.map.on('style.load', () => this.addOverlays().catch((e) => console.warn('[map] overlays unavailable', e?.message || e)));
     stylePromise.then((style) => {
       if (!this.map || this._baseStyleApplied) return;
@@ -1650,9 +1653,19 @@ export class AlertMap {
     }
   }
 
+  // The map's fixed home framing (owner, 2026-11-19: «المستوى القريب يكون
+  // ثابت للخريطة»): the fit-bounds camera pushed ~0.85 zoom levels closer,
+  // so Syria fills the screen on open and on reset. Users can still zoom
+  // and pan freely from there.
+  nearCamera() {
+    const cam = this.map.cameraForBounds(SYRIA_BOUNDS, { padding: this.padding() });
+    return { center: cam.center, zoom: Math.min(cam.zoom + 0.85, 11) };
+  }
+
   fitSyria() {
     if (!this.map) return;
-    this.map.fitBounds(SYRIA_BOUNDS, { padding: this.padding(), duration: 900, pitch: this.opts.map3d ? (this.dockMode() ? 40 : 50) : 0, bearing: 0 });
+    const cam = this.nearCamera();
+    this.map.easeTo({ center: cam.center, zoom: cam.zoom, duration: 900, pitch: this.opts.map3d ? (this.dockMode() ? 40 : 50) : 0, bearing: 0 });
   }
   zoomIn() { this.map && this.map.zoomIn(); }
   zoomOut() { this.map && this.map.zoomOut(); }
