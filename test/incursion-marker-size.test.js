@@ -12,7 +12,7 @@ test('military incursion markers are the unified pin at the standard size, halo 
   assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; \}/, 'pin glyphs keep the standard 20px size');
   assert.doesNotMatch(css, /\.mk:hover \.pin[^}]*scale\(/, 'no pin grows on hover — emphasis is the ring halo');
   assert.doesNotMatch(css, /\.mk\.sel \.pin[^}]*scale\(/, 'no pin grows when selected either');
-  assert.match(css, /\.mk:hover \.pin, \.mk\.sel \.pin \{ box-shadow: 0 0 0 1px rgba\(6,10,16,\.65\), 0 0 0 5px color-mix\(in srgb, var\(--ring/, 'selected/hover emphasis is the halo in the type colour');
+  assert.match(css, /\.mk:hover \.pin, \.mk\.sel \.pin \{ box-shadow: 0 0 0 1px rgba\(6,10,16,\.45\), 0 0 0 5px color-mix\(in srgb, var\(--ring/, 'selected/hover emphasis is the halo in the type colour');
   assert.match(map, /el\.style\.setProperty\('--c', visual\.color\)/, 'category color remains data-driven');
   assert.match(map, /if \(!\['squad', 'movement', 'fly'\]\.includes\(marker\)\) el\.insertAdjacentHTML\('afterbegin', '<span class="news-pulse-ring"/, 'the established pulse ring remains enabled');
 });

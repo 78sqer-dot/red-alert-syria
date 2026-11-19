@@ -401,17 +401,18 @@ html.dark .lg-civdot { box-shadow: 0 0 0 1.5px rgba(10, 14, 22, .9), 0 0 7px 1px
 @media (prefers-reduced-motion: reduce) { .news-pulse-ring, .news-pulse-ring::after { animation: none !important; } .news-pulse-ring { box-shadow: 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 24%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 10%, transparent); } }
 /* The regular drone glyph is 24px; its center follows the alert perimeter at detail zoom. */
 .mk-orbit .mk-s { transform: none; }
-/* The one unified pin (owner-approved symbols, 2026-11-17): dark roundel disc,
+/* The one unified pin (owner-approved symbols, 2026-11-17; glass fill per
+   owner order 2026-11-19: transparent circles instead of solid black): translucent disc,
    a ring in the type's own colour (--ring), and the type's white glyph centred.
    One construction at every zoom: 20px mini with glyph at country view,
    32px standard, 38px near; selected/hover adds a halo in the ring colour. */
-.pin { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; width: 32px; height: 32px; border-radius: 50%; background: #141A24; border: 3px solid var(--ring, #64748b); box-shadow: 0 0 0 1px rgba(6,10,16,.65), 0 2px 6px rgba(2,6,12,.45); display: flex; align-items: center; justify-content: center; color: #fff; transition: box-shadow .18s ease; }
+.pin { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); box-sizing: border-box; width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, #141A24 45%, transparent); border: 3px solid var(--ring, #64748b); box-shadow: 0 0 0 1px rgba(6,10,16,.45), 0 2px 6px rgba(2,6,12,.35); display: flex; align-items: center; justify-content: center; color: #fff; transition: box-shadow .18s ease; }
 .pin svg { display: block; width: 20px; height: 20px; }
 .maplibregl-map.zoom-far .pin { width: 20px; height: 20px; border-width: 2px; }
 .maplibregl-map.zoom-far .pin svg { width: 13px; height: 13px; }
 .maplibregl-map.zoom-detail .pin { width: 38px; height: 38px; }
 .maplibregl-map.zoom-detail .pin svg { width: 24px; height: 24px; }
-.mk:hover .pin, .mk.sel .pin { box-shadow: 0 0 0 1px rgba(6,10,16,.65), 0 0 0 5px color-mix(in srgb, var(--ring, #64748b) 35%, transparent), 0 0 18px color-mix(in srgb, var(--ring, #64748b) 55%, transparent), 0 2px 6px rgba(2,6,12,.45); }
+.mk:hover .pin, .mk.sel .pin { box-shadow: 0 0 0 1px rgba(6,10,16,.45), 0 0 0 5px color-mix(in srgb, var(--ring, #64748b) 35%, transparent), 0 0 18px color-mix(in srgb, var(--ring, #64748b) 55%, transparent), 0 2px 6px rgba(2,6,12,.45); }
 .mk.inactive .pin { opacity: .55; }
 .mk.focus-arrival::after { content: ''; position: absolute; left: 0; top: 0; width: 34px; height: 34px; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, var(--c) 82%, white); border-radius: 50%; box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 18%, transparent); transform: translate(-50%, -50%) scale(.55); opacity: 0; pointer-events: none; animation: mapArrivalRipple 1.15s cubic-bezier(.18,.72,.28,1) 2; }
 @keyframes mapArrivalRipple { 0% { transform: translate(-50%, -50%) scale(.55); opacity: 0; } 18% { opacity: .78; } 100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; } }
