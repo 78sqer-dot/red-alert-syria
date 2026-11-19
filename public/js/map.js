@@ -1653,13 +1653,25 @@ export class AlertMap {
     }
   }
 
-  // The map's fixed home framing (owner, 2026-11-19: «المستوى القريب يكون
-  // ثابت للخريطة»): the fit-bounds camera pushed ~0.85 zoom levels closer,
-  // so Syria fills the screen on open and on reset. Users can still zoom
-  // and pan freely from there.
+  // The map's fixed home framing (owner, 2026-11-19): Syria COMPLETE and
+  // as large as the screen allows. The first near version pushed a flat
+  // +0.85 past the fit, which cropped the eastern/western borders on
+  // portrait phones («الخريطة غير كاملة»), so the boost is now capped by
+  // the zoom at which Syria's bounds would start to leave the padded
+  // frame: closer only while every border stays visible. Users can still
+  // zoom and pan freely from there.
   nearCamera() {
-    const cam = this.map.cameraForBounds(SYRIA_BOUNDS, { padding: this.padding() });
-    return { center: cam.center, zoom: Math.min(cam.zoom + 0.85, 11) };
+    const el = this.map.getContainer();
+    const W = el.clientWidth || 390, H = el.clientHeight || 600;
+    const pad = { top: 76, bottom: 64, left: 20, right: 20 };
+    const cam = this.map.cameraForBounds(SYRIA_BOUNDS, { padding: pad });
+    const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2));
+    const latFrac = (merc(SYRIA_BOUNDS[1][1]) - merc(SYRIA_BOUNDS[0][1])) / (2 * Math.PI);
+    const lngSpan = SYRIA_BOUNDS[1][0] - SYRIA_BOUNDS[0][0];
+    const capX = Math.log2((0.99 * Math.max(W - pad.left - pad.right, 50)) / (lngSpan / 360 * 512));
+    const capY = Math.log2((0.96 * Math.max(H - pad.top - pad.bottom, 50)) / (latFrac * 512));
+    const zoom = Math.max(cam.zoom, Math.min(cam.zoom + 0.85, capX, capY, 11));
+    return { center: cam.center, zoom };
   }
 
   fitSyria() {
