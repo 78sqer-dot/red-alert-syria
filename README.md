@@ -4,7 +4,7 @@
 
 ## الروابط الرسمية
 
-- **الموقع والخريطة المباشرة:** https://red-alert-syria-eiqz.onrender.com/ar (English: https://red-alert-syria-eiqz.onrender.com/en/)
+- **الموقع والخريطة المباشرة:** https://red-alert-syria-q6k8.onrender.com/ar (English: https://red-alert-syria-q6k8.onrender.com/en/)
 - **قناة تيليغرام:** https://t.me/Red_Alert_Syria
 - **قناة واتساب:** https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k
 - **بوت التبليغ:** [@Rad_Alert_Syria1_bot](https://t.me/Rad_Alert_Syria1_bot)
