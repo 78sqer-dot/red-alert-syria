@@ -647,7 +647,7 @@ function geoOf(locs) {
   }
   return { pts, dists, govs, coarse, none: !locs.length };
 }
-const whereOf = (locs) => (locs.length ? locs.map((l) => [l.name_ar, l.scope !== 'governorate' ? l.governorate_ar : ''].filter(Boolean).join('، ')).join(' + ') : 'سوريا');
+const whereOf = (locs) => (locs.length ? locs.map((l) => [l.name_ar, l.scope !== 'governorate' && l.governorate_ar !== l.name_ar ? l.governorate_ar : ''].filter(Boolean).join('، ')).join(' + ') : 'سوريا');
 const AIR = new Set(['uav', 'warplane', 'helicopter', 'missile']);
 const STRIKE = new Set(['attack', 'artillery', 'airstrike', 'explosion']);
 const CIVIL = new Set(['civil', 'accident', 'fire', 'civil_plane', 'explosion']);
@@ -734,7 +734,7 @@ function rememberAlert(pa) {
 }
 
 // ---------------------------------------------------------------- drafts & cards
-const fmtLoc = (l) => (l.scope === 'governorate' ? `محافظة ${l.name_ar}` : l.scope === 'district' ? `منطقة ${l.name_ar}، ${l.governorate_ar}` : [l.name_ar, l.district_ar && l.district_ar !== l.name_ar ? l.district_ar : '', l.governorate_ar].filter(Boolean).join('، '));
+const fmtLoc = (l) => (l.scope === 'governorate' ? `محافظة ${l.name_ar}` : l.scope === 'district' ? `منطقة ${l.name_ar}${l.governorate_ar && l.governorate_ar !== l.name_ar ? `، ${l.governorate_ar}` : ''}` : [l.name_ar, l.district_ar && l.district_ar !== l.name_ar ? l.district_ar : '', l.governorate_ar && l.governorate_ar !== l.name_ar && l.governorate_ar !== l.district_ar ? l.governorate_ar : ''].filter(Boolean).join('، '));
 function cardText(d, lang = 'ar') {
   const locs = locsOf(d.loc, d.extra);
   const lines = [];

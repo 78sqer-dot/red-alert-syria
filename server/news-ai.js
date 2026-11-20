@@ -97,11 +97,19 @@ const POLITICAL_CATEGORY_CUES = [
   ['statement', ['صرح', 'تصريح', 'قال الرئيس', 'قال الوزير', 'أفاد الوزير']],
   ['position', ['موقف رسمي', 'موقف الحكومة', 'أكدت الحكومة موقف', 'رفضت الحكومة']],
 ];
+/** Word-bounded cue match on normalized text: «قرار» must not hit «تقرير», «تعيين» must not hit «تعييني». */
+const cueMatch = (source, cue) => {
+  const body = N(cue).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  return new RegExp(`(?:^|\\s)${body}(?:\\s|$)`).test(source);
+};
+/** Appointment as past context («عقب صدور مرسوم تعيينه محافظاً») is not appointment news. */
+const APPOINTMENT_CONTEXT = /(?:عقب|بعد|اثر|عقيب)\s+(?:صدور\s+)?(?:مرسوم|قرار)?\s*تعيين/;
 /** Infer a narrow political category from source wording; null leaves the supplied category for review. */
 export function inferPoliticalCategory(text) {
   const source = N(String(text || ''));
   for (const [category, cues] of POLITICAL_CATEGORY_CUES) {
-    if (cues.some((cue) => source.includes(N(cue)))) return category;
+    if (category === 'appointment' && APPOINTMENT_CONTEXT.test(source)) continue;
+    if (cues.some((cue) => cueMatch(source, cue))) return category;
   }
   return null;
 }
