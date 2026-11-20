@@ -1390,6 +1390,29 @@ export async function editPublishedAlert(api, id, d, author) {
   return updated;
 }
 /** add an alert to the map and (unless toChannel=false) post it to the channel */
+// Instant alert email push (Brevo transactional) — same canonical text as the
+// channel post, sent to the owner's relay inbox so WhatsApp gets it in seconds.
+async function emailAlertPush(alert) {
+  const key = process.env.BREVO_API_KEY || '';
+  if (!key) return;
+  const to = process.env.ALERT_EMAIL_TO || 'c2yqj2@mail.instinct.com';
+  try {
+    const text = plainTelegramText(channelPost(alert));
+    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': key, 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        sender: { name: 'Red Alert Syria', email: '88sqer@gmail.com' },
+        to: [{ email: to }],
+        subject: `🔴 ${alert.title || 'تنبيه عاجل'}`,
+        textContent: text,
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!r.ok) console.warn('[email-push] brevo rejected', r.status, (await r.text().catch(() => '')).slice(0, 200));
+    else console.log('[email-push] alert email sent for', alert.id);
+  } catch (e) { console.warn('[email-push] failed', e.message); }
+}
 export async function publishInput(api, input, { toChannel = true, renderSnapshot = null } = {}) {
   const editorialMode = input?.source === 'news' && ['opinion', 'satire'].includes(input?.meta?.publicEditorialTone) ? input.meta.publicEditorialTone : null;
   const editorialCopy = editorialMode && isPublicEditorialCopy(input?.description, editorialMode) ? input.description : null;
@@ -1403,6 +1426,7 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
   const posted = await postAlertToChannel(api, alert, { renderSnapshot });
   if (posted.messageId) {
     store.updateAlert(alert.id, { channel_message_id: posted.messageId, channel_media: posted.media });
+    emailAlertPush(store.getAlert(alert.id) || alert).catch(() => {});
   } else {
     // Never silent: the alert is live on the map but missing from the channel.
     // The flag drives the publisher's warning and the automatic retry sweep.
