@@ -27,7 +27,7 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
   assert.ok(app.includes("if (!$('#filterPanel').hidden || !$('#layersPanel').hidden) { closeDropdowns(); return; }"));
   assert.ok(app.includes("if (!mapCtrlPanel.hidden) { setMapControlsOpen(false); return; }"));
   assert.match(css, /\.map-tool-grid \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: 1 \/ -1; \}/);
+  assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: auto; \}/);
 });
 
 test('interactive sheets restore their home and dismiss competing overlays accessibly', () => {
@@ -113,7 +113,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=97'/);
-  assert.match(html, /app\.css\?v=93/);
+  assert.match(html, /app\.css\?v=95/);
   assert.match(html, /app\.js\?v=103/);
 });
 

@@ -69,16 +69,11 @@ test('legend strings exist in both languages', () => {
   assert.equal(DICT.en.legend, 'Map legend');
 });
 
-test('legend markup is collapsed by default and clear of the other map controls', () => {
-  assert.match(html, /<div class="map-legend" id="mapLegend">/);
-  assert.match(html, /<div class="legend-card" id="legendCard" role="group" hidden>/);
-  assert.match(html, /id="legendBtn"[^>]*aria-expanded="false"[^>]*aria-controls="legendCard"/);
-  // bottom-inline-start corner, above the scale control; nothing else lives there.
-  // Mobile: raised one row (67px) above the bottom bar since the interface-fix
-  // round — at ~390px the legend pill shared the bottom row with the brand pill
-  // + globe button and its label clipped to «مفتاح الخر…».
-  assert.match(css, /\.map-legend \{ position: absolute; bottom: 40px; inset-inline-start: 12px; z-index: 11;/);
-  assert.match(css, /\.map-legend \{ bottom: calc\(67px \+ env\(safe-area-inset-bottom, 0px\)\); inset-inline-start: 10px; \}/);
+test('the standalone map legend is merged into the about pill next to the globe', () => {
+  assert.doesNotMatch(html, /id="mapLegend"/);
+  assert.doesNotMatch(html, /id="legendBtn"/);
+  assert.match(html, /id="aboutPill"/);
+  assert.match(html, /<button class="ctrl-btn reset-view-btn" id="resetView"[\s\S]{0,200}id="aboutPill"/);
 });
 
 test('legend rows are built from the shared event visuals and explain cluster + civil dot', () => {
@@ -89,7 +84,7 @@ test('legend rows are built from the shared event visuals and explain cluster + 
   assert.ok(app.includes('T.legendCluster'));
   assert.ok(app.includes('T.legendCivilDot'));
   assert.ok(app.includes('T.legendZone'));
-  assert.match(app, /legendCard\.hidden = !open;\s*legendBtn\.setAttribute\('aria-expanded', String\(open\)\);/);
+  assert.ok(app.includes('legendCats'), 'category legend is rendered inside the about sheet');
 });
 
 // ---------------------------------------------------------- governorate labels

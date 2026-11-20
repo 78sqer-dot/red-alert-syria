@@ -218,6 +218,16 @@ function locName(loc, lang) {
   for (const x of cand) { const k = nameKey(x); if (!x || seen.has(k)) continue; seen.add(k); parts.push(x); }
   return parts.join(lang === 'en' ? ', ' : '، ');
 }
+// Channel pin shows only the first name of the location chain (owner 2026-11-20):
+// «حلب» not «حلب - جبل سمعان». Full chain stays on the map.
+function locFirstName(loc, lang) {
+  if (!loc) return '—';
+  const n = lang === 'en' ? loc.name_en : loc.name_ar;
+  const d = lang === 'en' ? loc.district_en : loc.district_ar;
+  const g = lang === 'en' ? loc.governorate_en : loc.governorate_ar;
+  const cand = (loc.scope === 'place' || loc.scope === 'point') ? [n, d, g] : loc.scope === 'district' ? [n, g] : [n];
+  return cand.find((x) => x && String(x).trim()) || '—';
+}
 // ---------------------------------------------------------------- formatting
 
 const fmtTime = (iso, lang) =>
@@ -367,7 +377,7 @@ export function channelPost(alert, { ended = false } = {}) {
   if (alert.type === 'breaking' && !newNewsLayout) sections.push(`<b>${esc(lead || alert.title)}</b>`);
   if (hasPlace) {
     const locations = newNewsLayout ? [p] : [p, ...(alert.extra || [])];
-    sections.push(locations.map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
+    sections.push(locations.map((x) => `📍<b>${esc(locFirstName(x, 'ar'))}</b>`).join('\n'));
   }
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (newNewsLayout) {

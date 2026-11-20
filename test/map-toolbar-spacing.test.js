@@ -24,7 +24,7 @@ test('top map-tools button opens one accessible panel with all requested tools',
   assert.doesNotMatch(panel, /id="resetView"/);
   assert.match(html, /id="resetView"[^>]*type="button"/);
   assert.match(css, /\.map-tool-grid \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: 1 \/ -1; \}/);
+  assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: auto; \}/);
   assert.match(css, /\.map-tool-grid > \.dd > \.map-btn, \.map-tool-grid > \.map-btn \{[^}]*min-height: 44px/);
   assert.match(html, /class="map-tools-icon" data-icon="panelStack"/);
   assert.match(icons, /panelStack: \{ filled: false, body: "<path[^\n]*<rect x=\\"3\\" y=\\"8\.5\\" width=\\"18\\" height=\\"12\.5\\" rx=\\"3\\"/);

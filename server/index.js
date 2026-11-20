@@ -12,7 +12,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -258,6 +258,29 @@ app.post('/api/admin/alerts/:id/delete', apiLimiter, async (req, res) => {
     if (!removed) return res.status(404).json({ ok: false, error: 'alert not found' });
     return res.json({ ok: true, id: removed.id, channelPost: removed.channel_message_id || null });
   } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
+});
+// Manual publish: map + channel in one shot (owner-driven stories the radar missed).
+app.post('/api/admin/alerts/publish', apiLimiter, express.json({ limit: '64kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
+  try {
+    const b = req.body || {};
+    if (!b.type || !b.title) return res.status(400).json({ ok: false, error: 'type and title required' });
+    const alert = await publishInput(bots.admin.api, {
+      type: b.type, title: b.title, title_en: b.title_en,
+      description: b.description || '', body: b.body || undefined,
+      location: b.location || null, areas: b.areas || [], extra: b.extra || [],
+      meta: b.meta || null, source: b.source || 'telegram', author: b.author || { id: 0, name: 'manual', via: 'admin-api' },
+    });
+    return res.json({ ok: true, id: alert.id, channelPost: alert.channel_message_id || null, url: publicAlert(alert) ? `${(config.publicUrl || '').replace(/\/$/, '')}/ar/a/${alert.id}` : null });
+  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
+});
+// Re-render every channel post with the current formatting (e.g. pin first-name rule).
+app.post('/api/admin/alerts/resync', apiLimiter, async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
+  try { const n = await resyncChannelPosts(bots.admin.api); return res.json({ ok: true, resynced: n }); }
+  catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
 });
 // 💱 prices / 🛣 roads / ⚡ electricity for the website
 app.get('/api/weather', apiLimiter, async (req, res) => {
