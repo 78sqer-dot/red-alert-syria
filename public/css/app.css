@@ -93,14 +93,7 @@ html.dark .report-btn { color: #fff; }
 
 /* ticker */
 .ticker { flex: 0 1 420px; min-width: 160px; height: 36px; border-radius: 7px; background: var(--bg-elevated); border: 1px solid var(--border); overflow: hidden; position: relative; }
-.ticker-inner { height: 100%; position: relative; display: flex; width: max-content; align-items: stretch; animation: tickerScroll linear infinite; }
-/* TV-style crawl: the duplicated track slides rightward (RTL) at a slow,
-   readable pace; duration is set from the real track width in JS */
-@keyframes tickerScroll { from { transform: translateX(0); } to { transform: translateX(50%); } }
-.ticker:hover .ticker-inner, .ticker:focus-within .ticker-inner, .mobile-ticker:hover .ticker-inner, .mobile-ticker:active .ticker-inner { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) { .ticker-inner { animation: none; } }
-.tick.flow { position: static; flex: none; inset: auto; opacity: 1; transform: none; transition: none; height: 100%; padding: 0 16px; border-inline-end: 1px solid var(--border); }
-.tick.flow .t-title { flex: none; overflow: visible; text-overflow: unset; white-space: nowrap; }
+.ticker-inner { height: 100%; position: relative; }
 .tick { position: absolute; inset: 0; display: flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 12.5px; cursor: pointer; opacity: 0; transform: translateY(100%); transition: transform .45s cubic-bezier(.2, .8, .2, 1), opacity .45s; }
 .tick.on { opacity: 1; transform: none; }
 .tick.out { opacity: 0; transform: translateY(-100%); }
