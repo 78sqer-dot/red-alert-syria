@@ -445,10 +445,12 @@ html.dark .lg-civdot { box-shadow: 0 0 0 1.5px rgba(10, 14, 22, .9), 0 0 7px 1px
 @keyframes exBurst { 0%, 100% { transform: scale(.88) rotate(0deg); } 45% { transform: scale(1.1) rotate(8deg); } }
 /* Drone — fixed-size type-colored airframe; its existing orbit behavior is unchanged. */
 .uav-box { position: absolute; width: 88px; height: 88px; left: -44px; top: -44px; }
+/* Dashed orbit guide under the drone, same visual language as the helicopter's .heli-orbit-guide (owner 2026-11-20). Sized by --orb so the guide line is exactly the circle the drone flies. */
+.uav-box::before { content: ''; position: absolute; left: 50%; top: 50%; width: calc(2 * var(--orb, 20px)); height: calc(2 * var(--orb, 20px)); transform: translate(-50%, -50%); border: 1px dashed color-mix(in srgb, var(--c, #6b7280) 45%, transparent); border-radius: 50%; pointer-events: none; }
 .uav { position: absolute; width: 44px; height: 44px; left: 50%; top: 50%; margin: -22px 0 0 -22px; display: flex; align-items: center; justify-content: center; will-change: transform; }
 /* Country and mid zoom rely on the impact circle alone; reveal the orbiting drone only at detail zoom. */
 .maplibregl-map .mk-orbit:not(.mk-sat) .uav { animation: uavOrbit 9s linear infinite; }
-.maplibregl-map:not(.zoom-detail) .mk-orbit:not(.mk-sat) .uav { visibility: hidden; }
+.maplibregl-map:not(.zoom-detail) .mk-orbit:not(.mk-sat) .uav, .maplibregl-map:not(.zoom-detail) .mk-orbit:not(.mk-sat) .uav-box::before { visibility: hidden; }
 .maplibregl-map.zoom-detail .mk-orbit:not(.mk-sat) .uav { visibility: visible; }
 .maplibregl-map:not(.zoom-detail) .mk-orbit.mk-sat { visibility: hidden; }
 .maplibregl-map.zoom-detail .mk-sat .uav { animation: uavOrbit 9s linear infinite; animation-delay: var(--delay, 0s); }
