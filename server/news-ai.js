@@ -763,6 +763,8 @@ export function refineType(type, text) {
   if (kt.includes('kidnapping') && !any(EXPL_W) && ['attack', 'arrest', 'breaking', 'civil', 'explosion', 'none'].includes(type)) return 'kidnapping';
   const politicalOnly = kt.includes('political') && !kt.some((k) => !['political', 'breaking', 'civil', 'weather'].includes(k));
   if (politicalOnly && ['breaking', 'civil', 'attack', 'weather', 'none'].includes(type)) return 'political';
+  // Drone overflight is never a protest/march: tashkeel stripping makes مسيّرة (drone) look like مسيرة (march)
+  if (hasExplicitDroneFlight(evidenceText) && ['protest', 'protest_action', 'uav', 'warplane', 'helicopter', 'civil', 'breaking', 'attack', 'weather', 'none'].includes(type)) return 'uav';
   if (any(AIRSTRIKE_W) && ['warplane', 'helicopter', 'civil', 'breaking', 'weather', 'none', 'attack'].includes(type)) return 'airstrike';
   if (any(HELI_W)) {
     if (any(HELI_ATTACK_W) && ['warplane', 'helicopter', 'uav', 'civil', 'breaking', 'weather', 'none'].includes(type)) return 'attack';

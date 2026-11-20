@@ -533,3 +533,12 @@ test('clear ground entry routes to military incursion, while armed clashes use t
   const clash = 'توغلت قوات الاحتلال الإسرائيلي في ريف القنيطرة جنوب سوريا واندلع اشتباك مع الأهالي اليوم.';
   assert.equal(ruleClassify(clash)?.type, 'clashes');
 });
+
+test('drone overflight never classifies as protest (مسيّرة vs مسيرة ambiguity)', () => {
+  const droneStory = 'تحليق مسيّرة تركية فوق مدينة المالكية بريف الحسكة بالتزامن مع إخلاء نقاط في المنطقة';
+  assert.equal(refineType('protest', droneStory), 'uav', 'a protest mislabel on a drone overflight is corrected');
+  assert.equal(refineType('protest_action', droneStory), 'uav', 'a protest_action mislabel on a drone overflight is corrected');
+  assert.equal(refineType('uav', droneStory), 'uav', 'a correct uav label is not flipped to protest');
+  const marchStory = 'خرجت مسيرة في ساحة سعد الله الجابري بحلب مطالبة بالعدالة الانتقالية';
+  assert.equal(refineType('protest', marchStory), 'protest', 'a real protest march keeps the protest label');
+});
