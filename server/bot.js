@@ -1570,6 +1570,16 @@ export async function refreshChannelInfo() {
   }
   return { ok: true, results };
 }
+// Rebuild a prices-bulletin post's inline keyboard with the current host (the
+// bulletin isn't a store alert, so the resync sweep can't reach it).
+export async function fixPostMarkup(messageId) {
+  const api = APIS.admin;
+  if (!api) return { ok: false, error: 'admin bot not up' };
+  const cur = (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
+  const reply_markup = { inline_keyboard: [[{ text: '📊 الأسعار على الموقع', url: `${cur}/ar/#prices` }, { text: '🗺 الخريطة الحية', url: `${cur}/ar/` }]] };
+  await api.editMessageReplyMarkup(config.channel, messageId, { reply_markup });
+  return { ok: true };
+}
 // ---------------------------------------------------------------- owner <-> reporter relay
 // The owner/editors simply use Telegram's "Reply" on a report card or on a relayed message in the
 // publishing bot; the reporter gets it in the report bot signed as the team (staff identity hidden).
