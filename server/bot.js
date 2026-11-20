@@ -1531,6 +1531,45 @@ export async function resyncChannelPosts(api) {
   }
   return list.length;
 }
+// Rewrite any legacy site host (old Render service) to the current publicUrl in
+// channel description, pinned message, and bot bios. Owner asked that no old
+// links remain anywhere (19:01).
+export async function refreshChannelInfo() {
+  const api = APIS.admin;
+  if (!api) return { ok: false, error: 'admin bot not up' };
+  const cur = (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
+  const swap = (s) => String(s || '').replace(/https?:\/\/red-alert-syria-[a-z0-9-]+\.onrender\.com/gi, cur);
+  const dirty = (s) => typeof s === 'string' && s.includes('.onrender.com') && !s.includes(cur);
+  const chat = await api.getChat(config.channel);
+  const results = {};
+  const desc = chat?.description || '';
+  if (dirty(desc)) {
+    await api.setChatDescription(config.channel, swap(desc)).then(() => { results.description = 'updated'; }).catch((e) => { results.description = `failed: ${e.description || e.message}`; });
+  } else results.description = 'ok';
+  const pin = chat?.pinned_message;
+  if (pin) {
+    try {
+      const kb = pin.reply_markup;
+      const newKb = kb ? { inline_keyboard: kb.inline_keyboard.map((row) => row.map((b) => (b.url ? { ...b, url: swap(b.url) } : b))) } : undefined;
+      const kbChanged = newKb && JSON.stringify(newKb) !== JSON.stringify(kb);
+      if (dirty(pin.text)) await api.editMessageText(config.channel, pin.message_id, swap(pin.text), { entities: pin.entities, reply_markup: kb, link_preview_options: { is_disabled: true } });
+      else if (dirty(pin.caption)) await api.editMessageCaption(config.channel, pin.message_id, { caption: swap(pin.caption), caption_entities: pin.caption_entities, reply_markup: kb });
+      if (kbChanged) await api.editMessageReplyMarkup(config.channel, pin.message_id, { reply_markup: newKb });
+      results.pinned = (dirty(pin.text) || dirty(pin.caption) || kbChanged) ? 'updated' : 'ok';
+    } catch (e) { results.pinned = `failed: ${e.description || e.message}`; }
+  } else results.pinned = 'none';
+  for (const name of ['admin', 'report']) {
+    const a = APIS[name];
+    if (!a) continue;
+    try {
+      const d = await a.getMyDescription();
+      const txt = d?.description || '';
+      if (dirty(txt)) { await a.setMyDescription({ description: swap(txt) }); results[`bio_${name}`] = 'updated'; }
+      else results[`bio_${name}`] = 'ok';
+    } catch (e) { results[`bio_${name}`] = `failed: ${e.description || e.message}`; }
+  }
+  return { ok: true, results };
+}
 // ---------------------------------------------------------------- owner <-> reporter relay
 // The owner/editors simply use Telegram's "Reply" on a report card or on a relayed message in the
 // publishing bot; the reporter gets it in the report bot signed as the team (staff identity hidden).

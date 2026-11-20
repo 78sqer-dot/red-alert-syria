@@ -12,7 +12,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -280,6 +280,12 @@ app.post('/api/admin/alerts/resync', apiLimiter, async (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
   try { const n = await resyncChannelPosts(bots.admin.api); return res.json({ ok: true, resynced: n }); }
+  catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/admin/channel/refresh-info', apiLimiter, async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
+  try { return res.json(await refreshChannelInfo()); }
   catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
 });
 // 💱 prices / 🛣 roads / ⚡ electricity for the website
