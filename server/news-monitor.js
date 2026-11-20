@@ -2249,6 +2249,10 @@ export function registerNewsTools(bot, h) {
       if (preview.applied && d.headline === preview.text) return toast(ctx, t(ctx, 'الصياغة مطبقة بالفعل؛ لم يُنشر شيء', 'Wording already applied; nothing was published'));
       d.originalHeadline ||= d.headline;
       d.headline = preview.text;
+      // The channel post renders the body, not the headline: the approved rewrite must replace
+      // both, otherwise the post goes out with the original text under a restyled lead.
+      d.originalBody ||= d.body;
+      d.body = preview.text;
     } else if (['opinion', 'satire'].includes(preview.mode)) {
       d.privateEditorial ||= {};
       d.privateEditorial[preview.mode] = preview.text;
@@ -2261,6 +2265,9 @@ export function registerNewsTools(bot, h) {
     preview.applied = true;
     preview.appliedAt = Date.now();
     save();
+    // An applied preview gates publishing (and blocks auto-publish for opinion/satire): flush the
+    // backup NOW so a restart in the next seconds cannot resurrect the original text as publishable.
+    try { await store.flushBackup(true); } catch { /* the 15s debounced flush retries */ }
     await refreshCards(d);
     await toast(ctx, ['opinion', 'satire'].includes(preview.mode)
       ? t(ctx, 'حُفظت الملاحظة لك في البوت فقط؛ لم يتغير الخبر ولم يُرسل شيء إلى الخريطة أو الموقع أو القناة.', 'Saved privately for you in the bot; the factual story is unchanged and nothing was sent to the map, site, or channel.')
@@ -2293,6 +2300,7 @@ export function registerNewsTools(bot, h) {
     if (!d.originalHeadline || d.headline === d.originalHeadline) return toast(ctx, t(ctx, 'النص الحالي هو الصياغة الأصلية', 'The current wording is already the original'));
     d.headline = d.originalHeadline;
     d.originalHeadline = null;
+    if ('originalBody' in d) { d.body = d.originalBody; delete d.originalBody; }
     if (d.aiRewritePreview) d.aiRewritePreview.applied = false;
     save();
     await refreshCards(d);

@@ -575,7 +575,17 @@ export async function postBulletin(api, { chatId = config.channel, test = false,
   return { ok: true, message_id: m.message_id, official: r.official };
 }
 async function notifyOwners(api, text) {
-  for (const id of automaticMonitorRecipientIds()) { try { await api.sendMessage(id, text, { parse_mode: 'HTML' }); } catch { /* ignore */ } }
+  // bound each send: a stalled connection here must never wedge the scheduler's busy flag
+  for (const id of automaticMonitorRecipientIds()) {
+    try {
+      let cap;
+      await Promise.race([
+        api.sendMessage(id, text, { parse_mode: 'HTML' }),
+        new Promise((_, rej) => { cap = setTimeout(() => rej(new Error('notify timeout')), 15_000); cap.unref?.(); }),
+      ]);
+      clearTimeout(cap);
+    } catch { /* ignore */ }
+  }
 }
 let started = false;
 export function startPrices(getApi) {
@@ -597,7 +607,14 @@ export function startPrices(getApi) {
     busy = true;
     c.last = p.date; save(); // mark first: never twice the same day
     try {
-      const r = await postBulletin(api);
+      // Hard cap on the whole post: a stalled upload/fetch must never wedge `busy` and silently
+      // kill every later tick (same failure shape as the missed 2026-11-19/20 weather bulletins).
+      let cap;
+      const r = await Promise.race([
+        postBulletin(api),
+        new Promise((_, rej) => { cap = setTimeout(() => rej(new Error('post timed out after 3 minutes')), 180_000); cap.unref?.(); }),
+      ]);
+      clearTimeout(cap);
       if (!r.ok) {
         console.warn(`[prices] ${p.date}: not posted — ${r.why}`);
         await notifyOwners(api, `⚠️ <b>نشرة الأسعار لم تُنشر اليوم</b>\n\nالسبب: ${esc(r.why)}\nما نشرنا أرقام غير مؤكدة. تقدر تجرب لاحقاً من القائمة ← 💱 نشرة الأسعار ← «انشر الآن».`);

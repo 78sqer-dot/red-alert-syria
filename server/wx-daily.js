@@ -373,6 +373,20 @@ function text(x, y, s, { size = 24, weight = 400, fill = '#e5e7eb', anchor = 'en
   return `<text x="${x}" y="${y}" font-family="${family}, Noto Sans" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}"${opacity < 1 ? ` opacity="${opacity}"` : ''}>${esc(s)}</text>`;
 }
 const HZ_KIND = { rain: 'rain', snow: 'snow', wind: 'wind', storm: 'storm', heat: 'sun', frost: 'snow', dust: 'dust', fog: 'fog' };
+// banner text fitting: emoji show as tofu in the SVG fonts, and Arabic glyphs average ~0.6em advance
+const WX_BANNER_EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{FE0F}\u{200D}]/gu;
+const WX_BANNER_MAXW = 800; // px available for the warning line inside the banner
+function wrapBannerText(s, size) {
+  const fits = (t) => t.length * size * 0.6 <= WX_BANNER_MAXW;
+  const lines = []; let cur = '';
+  for (const word of s.split(/\s+/).filter(Boolean)) {
+    const t = cur ? `${cur} ${word}` : word;
+    if (fits(t) || !cur) cur = t;
+    else { lines.push(cur); cur = word; }
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
 export function wxBulletinSvg(pts, warns, now = Date.now()) {
   const date = damascusParts(now).date;
   const W = 1080; const P = 48; const RX = W - P;
@@ -396,16 +410,26 @@ export function wxBulletinSvg(pts, warns, now = Date.now()) {
   o.push(text(RX, y, 'النشرة الرسمية للطقس', { size: 44, weight: 800, fill: '#ffffff' }));
   o.push(text(P, y, 'المركز الوطني للأرصاد الجوية', { size: 20, weight: 600, fill: '#7dd3fc', anchor: 'start' }));
   y += 30;
-  // active warnings: one line each (max 2)
+  // active warnings (max 2): the full text must always fit — wrap it onto up to 4 lines,
+  // shrinking the font before adding lines, and grow the banner height; never clip mid-word.
   const wl = warns.slice(0, 2);
   for (const w of wl) {
     const lv2 = w.level === 2; const col = lv2 ? '#f87171' : '#fbbf24';
     const names = w.govs.map((c) => govOf(c)?.ar).filter(Boolean);
     const line = `${w.ar}${names.length ? ` — ${names.slice(0, 4).join('، ')}${names.length > 4 ? ` و${names.length - 4} غيرها` : ''}` : ''}`;
-    o.push(`<rect x="${P}" y="${y}" width="${W - 2 * P}" height="72" rx="18" fill="${lv2 ? '#3b0d0d' : '#2d2006'}" stroke="${col}" stroke-opacity="0.6"/>`);
-    o.push(wxIconSvg(HZ_KIND[w.hazard] || 'storm', RX - 24 - 40, y + 16, 40, col));
-    o.push(text(RX - 80, y + 47, line.length > 58 ? line.slice(0, 57) + '…' : line, { size: 26, weight: 700, fill: '#ffffff' }));
-    y += 86;
+    const clean = line.replace(WX_BANNER_EMOJI, '').replace(/\s+/g, ' ').trim(); // the drawn icon carries the symbol; emoji glyphs render as tofu
+    let size = 26;
+    let lines = wrapBannerText(clean, size);
+    if (lines.length > 2) { size = 22; lines = wrapBannerText(clean, size); }
+    if (lines.length > 3) { size = 19; lines = wrapBannerText(clean, size); }
+    lines = lines.slice(0, 4); // 4 lines at 19px fits ~280 chars — beyond any real CAP warning
+    const lh = size + 10;
+    const bh = 28 + lines.length * lh;
+    o.push(`<rect x="${P}" y="${y}" width="${W - 2 * P}" height="${bh}" rx="18" fill="${lv2 ? '#3b0d0d' : '#2d2006'}" stroke="${col}" stroke-opacity="0.6"/>`);
+    o.push(wxIconSvg(HZ_KIND[w.hazard] || 'storm', RX - 24 - 40, y + (bh - 40) / 2, 40, col));
+    const y0 = y + (bh - lines.length * lh) / 2 + size;
+    lines.forEach((ln, i) => o.push(text(RX - 80, y0 + i * lh, ln, { size, weight: 700, fill: '#ffffff' })));
+    y += bh + 14;
   }
   if (!wl.length) {
     o.push(`<rect x="${P}" y="${y}" width="${W - 2 * P}" height="72" rx="18" fill="#111827" stroke="#334155"/>`);
@@ -496,7 +520,17 @@ export async function postWxBulletin(api, { chatId = config.channel, test = fals
   return { ok: true, message_id: m.message_id };
 }
 async function notifyOwners(api, text) {
-  for (const id of automaticMonitorRecipientIds()) { try { await api.sendMessage(id, text, { parse_mode: 'HTML' }); } catch { /* ignore */ } }
+  // bound each send: a stalled connection here must never wedge the scheduler's busy flag
+  for (const id of automaticMonitorRecipientIds()) {
+    try {
+      let cap;
+      await Promise.race([
+        api.sendMessage(id, text, { parse_mode: 'HTML' }),
+        new Promise((_, rej) => { cap = setTimeout(() => rej(new Error('notify timeout')), 15_000); cap.unref?.(); }),
+      ]);
+      clearTimeout(cap);
+    } catch { /* ignore */ }
+  }
 }
 let started = false;
 export function startWxBulletin(getApi) {
@@ -518,7 +552,14 @@ export function startWxBulletin(getApi) {
     busy = true;
     c.last = p.date; save(); // mark first: never twice the same day
     try {
-      const r = await postWxBulletin(api);
+      // Hard cap on the whole post: a stalled upload/render used to leave `busy` wedged forever,
+      // silently killing every later tick (the missed 2026-11-19/20 bulletins) with no log and no owner DM.
+      let cap;
+      const r = await Promise.race([
+        postWxBulletin(api),
+        new Promise((_, rej) => { cap = setTimeout(() => rej(new Error('post timed out after 3 minutes')), 180_000); cap.unref?.(); }),
+      ]);
+      clearTimeout(cap);
       if (!r.ok) {
         console.warn(`[wxb] ${p.date}: not posted — ${r.why}`);
         await notifyOwners(api, `⚠️ <b>نشرة الطقس ما نُشرت اليوم</b>\n\nالسبب: ${esc(r.why)}\nتقدر تجرب لاحقاً من القائمة ← 🌤 نشرة الطقس ← «انشرها الآن».`);
