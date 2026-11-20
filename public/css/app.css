@@ -1100,6 +1100,11 @@ body.svc-on .breaking-banner { display: none; }
 .pp-dock .pp-dock-x { position: absolute; top: 6px; inset-inline-end: 6px; z-index: 2; width: 30px; height: 30px; border-radius: 8px; border: 0; background: var(--bg-subtle); color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer; }
 
 body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp-docked .maplibregl-ctrl-bottom-right { visibility: hidden; }
+/* while a bottom-docked card (weather / alert details) is open, the whole floating bottom
+   bar floats on top of the card: its glass container paints as an empty white pill (the
+   about-pill inside is already hidden) and the reset-view globe covers the card's last
+   lines. Hide the bar entirely; it returns when the card closes. */
+body.pp-docked .map-bottom-controls { display: none; }
 .pp-dock .pp-dock-body.maplibregl-popup-content { width: auto; max-width: none; box-shadow: none; }
 .pp-dock { background: var(--bg-elevated); border: 1px solid var(--border); }
 .pp-dock .pp-dock-body.maplibregl-popup-content { border: 0; }

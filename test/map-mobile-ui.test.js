@@ -88,6 +88,10 @@ test('phone map tools stay at the top while the reset view button sits in the bo
   assert.match(css, /\.map-ctrl-panel \{ position: absolute; top: calc\(100% \+ 9px\); bottom: auto;/);
 });
 
+test('the floating bottom bar hides while a docked card (weather / alert) is open so it never covers the card', () => {
+  assert.match(css, /body\.pp-docked \.map-bottom-controls \{ display: none; \}/);
+});
+
 test('alert details stay centered on the map and their popup tip points to the event on every screen', () => {
   assert.doesNotMatch(map, /cls: 'alert-dock'/);
   assert.match(map, /new M\.Popup\(\{ className: 'pp-alert-popup', anchor: 'bottom'/);
