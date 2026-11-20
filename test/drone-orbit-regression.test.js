@@ -20,7 +20,7 @@ test('political, normal drone and warplane alerts keep distinct map markers', ()
   assert.equal(alertMarkerKind({ type: 'signal_sweep', signal_platform: 'uav' }), 'orbit');
   assert.deepEqual(political, { type: 'political' }, 'choosing a visual never mutates alert data');
   assert.match(mapSource, /const marker = alertMarkerKind\(a\);/);
-  assert.match(mapSource, /\$\{pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)\}/);
+  assert.match(mapSource, /\$\{pl\(22, -8, 1\)\}\$\{pl\(6, 12, 0\.85\)\}\$\{pl\(38, 12, 0\.85\)\}/);
   assert.match(css, /\.maplibregl-map \.mk-squad\.t-warplane \.squad \{ visibility: visible; \}/);
 });
 

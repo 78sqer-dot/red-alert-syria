@@ -77,7 +77,7 @@ test('map pins: one glass roundel at every zoom, mini pin with glyph at country 
   assert.doesNotMatch(map, /civ-dot|map-event-emoji|news-marker-core/);
   assert.doesNotMatch(css, /civ-dot|map-event-emoji|news-marker-core/);
   // the pin itself: dark disc, type ring, white glyph, outline + shadow
-  assert.match(css, /\.pin \{[^}]*background: color-mix\(in srgb, #141A24 55%, transparent\); border: 2px solid var\(--ring[^}]*box-shadow: 0 0 0 1px rgba\(6,10,16,\.45\), 0 2px 6px rgba\(2,6,12,\.35\)/);
+  assert.match(css, /\.pin \{[^}]*background: rgba\(255,255,255,\.96\); border: 2px solid var\(--ring[^}]*box-shadow: 0 0 0 1px rgba\(6,10,16,\.35\), 0 2px 6px rgba\(2,6,12,\.3\)/);
   // sizes: 20px mini WITH glyph at far zoom (replacing the plain civil dot),
   // 32px standard, 38px near
   assert.match(css, /\.maplibregl-map\.zoom-far \.pin \{ width: 20px; height: 20px; border-width: 1.5px; \}/);

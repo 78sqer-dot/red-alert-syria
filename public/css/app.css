@@ -1105,14 +1105,23 @@ body.pp-docked .about-pill, body.pp-docked .maplibregl-ctrl-bottom-left, body.pp
 /* Reference-style pass with medium, bright-blue airframes that stay readable at detail zoom. */
 .mk-squad .mk-s { transform: none; transition: none; }
 .mk-squad .squad {
-  position: absolute; width: 84px; height: 200px; left: -42px; top: -100px;
+  position: absolute; width: 60px; height: 200px; left: -30px; top: -100px;
 }
-.mk-squad .squad .sq { width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite; }
-.mk-squad .squad .sq:first-child { left: 30px !important; top: calc(50% - 12px) !important; }
-.mk-squad .squad .sq:first-child .sq-svg { width: 24px; height: 24px; }
-.mk-squad .squad .sq:nth-child(2) { left: 8px !important; top: calc(50% + 16px) !important; width: 22px; height: 22px; }
-.mk-squad .squad .sq:nth-child(3) { left: 54px !important; top: calc(50% + 16px) !important; width: 22px; height: 22px; }
-.mk-squad .squad .sq:nth-child(2) .sq-svg, .mk-squad .squad .sq:nth-child(3) .sq-svg { width: 22px; height: 22px; }
+/* Plain warplane: three-jet delta pass, redalert.com.lb squad geometry (owner 20:38, «بنفس الرسم ودقته»). */
+.mk-squad .squad:not(.squad-directed) .sq { width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite; }
+.mk-squad .squad:not(.squad-directed) .sq .sq-svg { width: 16px; height: 16px; }
+.mk-squad .squad:not(.squad-directed) .sq:nth-child(2), .mk-squad .squad:not(.squad-directed) .sq:nth-child(3) { width: 14px; height: 14px; }
+.mk-squad .squad:not(.squad-directed) .sq:nth-child(2) .sq-svg, .mk-squad .squad:not(.squad-directed) .sq:nth-child(3) .sq-svg { width: 14px; height: 14px; }
+/* Directed warplane (حربي بإتجاه): dashed flight trail under two chasing jets (owner 20:35). */
+.mk-squad .squad-trail { position: absolute; left: calc(50% - .75px); top: calc(50% + 15px); width: 0; height: 135px; border-left: 1.5px dashed #8b5cf6; opacity: .45; pointer-events: none; }
+.mk-squad .squad-directed .sq { left: 50% !important; top: 50% !important; width: 18px; height: 18px; animation: squadTrailLead 5s linear infinite; }
+.mk-squad .squad-directed .sq .sq-svg { width: 18px; height: 18px; }
+.mk-squad .squad-directed .sq-chase { animation: squadTrailChase 5s linear infinite; }
+.mk-squad .squad-directed .sq-chase .sq-svg { width: 16px; height: 16px; }
+.mk-squad .squad-directed .sq-svg, html.dark .mk-squad .squad-directed .sq-svg { fill: #8b5cf6; filter: drop-shadow(0 0 1px rgba(0,0,0,.55)) drop-shadow(0 1px 2px rgba(255,255,255,.55)); }
+html.dark .mk-squad .squad-directed .sq-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.4)) drop-shadow(0 1px 2px rgba(0,0,0,.85)); }
+@keyframes squadTrailLead { 0% { transform: translate(-50%, 150px); opacity: 0; } 15% { opacity: 1; } 85% { transform: translate(-50%, 76px); opacity: 1; } 100% { transform: translate(-50%, 76px); opacity: 0; } }
+@keyframes squadTrailChase { 0% { transform: translate(calc(-50% + 10px), 162px); opacity: 0; } 15% { opacity: .85; } 85% { transform: translate(calc(-50% + 10px), 88px); opacity: .85; } 100% { transform: translate(calc(-50% + 10px), 88px); opacity: 0; } }
 /* Match the reference blue, without the dark drop-shadow muddying the small silhouettes. */
 .mk-squad .sq-svg, html.dark .mk-squad .sq-svg { fill: #3b8eff; filter: none; }
 .mk-squad .mk-s { transform: none; }

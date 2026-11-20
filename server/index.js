@@ -260,12 +260,21 @@ app.post('/api/admin/alerts/:id/delete', apiLimiter, async (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
 });
 // Manual publish: map + channel in one shot (owner-driven stories the radar missed).
+// Syria bounding box sanity check (owner 2026-11-20): a transposed latitude once
+// plotted المالكية abroad; raw coordinates must stay inside the country.
+const SYRIA_BBOX = { latMin: 32.3, latMax: 37.4, lonMin: 35.6, lonMax: 42.45 };
+const insideSyria = (lat, lon) => Number.isFinite(lat) && Number.isFinite(lon)
+  && lat >= SYRIA_BBOX.latMin && lat <= SYRIA_BBOX.latMax && lon >= SYRIA_BBOX.lonMin && lon <= SYRIA_BBOX.lonMax;
+
 app.post('/api/admin/alerts/publish', apiLimiter, express.json({ limit: '64kb' }), async (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
   try {
     const b = req.body || {};
     if (!b.type || !b.title) return res.status(400).json({ ok: false, error: 'type and title required' });
+    if (b.location && Number.isFinite(b.location.latitude) && !insideSyria(Number(b.location.latitude), Number(b.location.longitude))) {
+      return res.status(400).json({ ok: false, error: 'location outside Syria bounds' });
+    }
     const alert = await publishInput(bots.admin.api, {
       type: b.type, title: b.title, title_en: b.title_en,
       description: b.description || '', body: b.body || undefined,
@@ -275,6 +284,19 @@ app.post('/api/admin/alerts/publish', apiLimiter, express.json({ limit: '64kb' }
     return res.json({ ok: true, id: alert.id, channelPost: alert.channel_message_id || null, url: publicAlert(alert) ? `${(config.publicUrl || '').replace(/\/$/, '')}/ar/a/${alert.id}` : null });
   } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
 });
+// Move a published alert's pin to corrected coordinates (map + alert page update live;
+// the channel post text carries no coordinates, so it stays untouched).
+app.post('/api/admin/alerts/:id/location', apiLimiter, express.json({ limit: '8kb' }), (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  const lat = Number(req.body?.latitude); const lon = Number(req.body?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(400).json({ ok: false, error: 'latitude/longitude required' });
+  if (!insideSyria(lat, lon)) return res.status(400).json({ ok: false, error: 'outside Syria bounds' });
+  const a = store.getAlert(req.params.id);
+  if (!a) return res.status(404).json({ ok: false, error: 'unknown alert' });
+  store.updateAlert(a.id, { location: { ...(a.location || {}), latitude: lat, longitude: lon } });
+  return res.json({ ok: true, id: a.id });
+});
+
 // Re-render every channel post with the current formatting (e.g. pin first-name rule).
 app.post('/api/admin/alerts/resync', apiLimiter, async (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();

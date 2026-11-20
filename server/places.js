@@ -171,6 +171,9 @@ export function locationFrom({ placeId, distCode, govCode, lat, lon, label }) {
     return { scope: 'governorate', name_ar: g.ar, name_en: g.en, governorate: g.code, governorate_ar: g.ar, governorate_en: g.en, latitude: g.lat, longitude: g.lon };
   }
   if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    if (lat < 32.3 || lat > 37.4 || lon < 35.6 || lon > 42.45) {
+      console.warn('[places] raw coordinates outside Syria bounds:', lat, lon, label || '');
+    }
     // nearest known place for naming
     let best = null; let bd = Infinity;
     for (const p of places) {

@@ -513,6 +513,9 @@ function renderFilterBadge() {
   b.hidden = activeFilters === 0;
   b.textContent = activeFilters;
 }
+// Hidden from the map filter UI (owner 2026-11-20): حركة طيران and طائرة مدنية get no
+// checkbox; posted alerts of those types still render normally.
+const FILTER_UI_HIDDEN = new Set(['air_movement', 'civil_plane']);
 function renderFilterPanel() {
   const s = settings.get();
   const selectedGov = GOV_C[s.governorate] ? s.governorate : 'all';
@@ -531,9 +534,11 @@ function renderFilterPanel() {
   html += `<div class="dd-head"><b>${esc(T.showOnly)}</b><button class="link-btn" data-f="clear" ${clearNeeded ? '' : 'disabled'}>${esc(T.clear)}</button></div>`;
   html += `<label class="filter-governorate" for="alertGovFilter"><span>${esc(T.filterGovernorate)}</span><select id="alertGovFilter" class="sel" data-region-filter aria-label="${esc(T.filterGovernorate)}"><option value="all" ${selectedGov === 'all' ? 'selected' : ''}>${esc(T.allGovs)}</option>${govOptions}</select></label>`;
   for (const [g, def] of Object.entries(ALERT_GROUPS)) {
-    const on = def.types.filter((t) => s.filter.includes(t)).length;
-    html += `<div class="grp"><label class="chk grp-h"><input type="checkbox" data-g="${g}" ${on === def.types.length ? 'checked' : ''} ${on > 0 && on < def.types.length ? 'data-ind="1"' : ''}/><span class="name">${esc(def[LANG])}</span></label>`;
-    for (const t of def.types) {
+    const visibleTypes = def.types.filter((t) => !FILTER_UI_HIDDEN.has(t));
+    if (!visibleTypes.length) continue;
+    const on = visibleTypes.filter((t) => s.filter.includes(t)).length;
+    html += `<div class="grp"><label class="chk grp-h"><input type="checkbox" data-g="${g}" ${on === visibleTypes.length ? 'checked' : ''} ${on > 0 && on < visibleTypes.length ? 'data-ind="1"' : ''}/><span class="name">${esc(def[LANG])}</span></label>`;
+    for (const t of visibleTypes) {
       html += `<label class="chk sub"><input type="checkbox" data-t="${t}" ${s.filter.includes(t) ? 'checked' : ''}/><span class="sw" style="--c:${ALERT_TYPES[t].color}"></span><span class="type-ico" style="color:${eventVisual(t).color}">${icon(typeIcon(t), 14)}</span><span class="name">${esc(typeName(t))}</span><span class="cnt">${counts[t] || 0}</span></label>`;
     }
     html += '</div>';
@@ -1250,7 +1255,7 @@ function bindEvents() {
     }
     let f = new Set(s.filter);
     if (i.dataset.g) {
-      const types = ALERT_GROUPS[i.dataset.g].types;
+      const types = ALERT_GROUPS[i.dataset.g].types.filter((t) => !FILTER_UI_HIDDEN.has(t));
       types.forEach((t) => (i.checked ? f.add(t) : f.delete(t)));
     } else if (i.dataset.t) {
       i.checked ? f.add(i.dataset.t) : f.delete(i.dataset.t);

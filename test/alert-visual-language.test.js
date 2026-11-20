@@ -66,17 +66,22 @@ test('explosion and detonation have distinct Arabic labels and glyphs on the uni
   assert.match(map, /--ring:\$\{t\.color\}/, 'the pin ring carries the type colour');
 });
 
-test('warplane follows the three-aircraft reference pass while drones keep their orbiting silhouette', () => {
+test('warplane follows the climbing-jets flight-trail reference (redalert.com.lb design) while drones keep their orbiting silhouette', () => {
   assert.match(map, /marker === 'orbit'/);
   assert.match(map, /t\.marker === 'squad'/);
-  assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(36, -12, 1\).*pl\(20, 8, 0\.85\).*pl\(52, 8, 0\.85\)/);
+  assert.match(map, /a\.flight_direction \|\| a\.meta\?\.flightDirection/);
+  assert.match(map, /<div class="squad squad-directed"><span class="squad-trail" aria-hidden="true"><\/span>\$\{pl\('sq-lead'\)\}\$\{pl\('sq-chase'\)\}<\/div>/);
+  assert.match(map, /<div class="squad">\$\{pl\(22, -8, 1\)\}\$\{pl\(6, 12, 0\.85\)\}\$\{pl\(38, 12, 0\.85\)\}<\/div>/);
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 84px; height: 200px; left: -42px; top: -100px;/);
-  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(2\)\s*\{ left: 8px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
-  assert.match(css, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
+  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
+  assert.match(css, /\.mk-squad \.squad-trail \{[^}]*border-left: 1\.5px dashed #8b5cf6; opacity: \.45;/);
+  assert.match(css, /\.mk-squad \.squad-directed \.sq \{[^}]*width: 18px; height: 18px;[^}]*animation: squadTrailLead 5s linear infinite;/);
+  assert.match(css, /\.mk-squad \.squad-directed \.sq-chase \{ animation: squadTrailChase 5s linear infinite; \}/);
+  assert.match(css, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq \{ width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite; \}/);
+  assert.match(css, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq:nth-child\(2\), [^}]*width: 14px; height: 14px; \}/);
+  assert.match(css, /@keyframes squadTrailLead \{ 0% \{ transform: translate\(-50%, 150px\); opacity: 0; \}/);
+  assert.match(css, /@keyframes squadTrailChase \{ 0% \{ transform: translate\(calc\(-50% \+ 10px\), 162px\); opacity: 0; \}/);
   assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad:not\(\.t-warplane\) \.squad \{ visibility: hidden; \}/);
-  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*animation: squadFly 7s linear infinite;/);
   assert.doesNotMatch(css, /warplaneOrbit|squadFlyZ/);
   assert.match(svgs, /"uav":/);
   assert.match(svgs, /"plane":/);
@@ -142,8 +147,8 @@ test('live alert circles use compositor-safe pulse layers and remain clickable t
 test('static types share one unified pin and breaking news keeps its red pulse', () => {
   assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/);
   assert.match(map, /el\.innerHTML = glyphDisc\(a\.type, 32, 20, 'pin'\);/, 'breaking renders the same pin (alert_tri glyph, type-colour ring)');
-  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;[^}]*background: color-mix\(in srgb, #141A24 55%, transparent\); border: 2px solid var\(--ring/);
-  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; \}/);
+  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;[^}]*background: rgba\(255,255,255,\.96\); border: 2px solid var\(--ring/);
+  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; fill: var\(--ring, #64748b\); \}/);
   assert.match(css, /\.maplibregl-map\.zoom-far \.pin \{ width: 20px; height: 20px; border-width: 1.5px; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-far \.pin svg \{ width: 13px; height: 13px; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-detail \.pin \{ width: 38px; height: 38px; border-width: 2.5px; \}/);

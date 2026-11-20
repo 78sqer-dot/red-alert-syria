@@ -141,13 +141,11 @@ test('opening UAV and helicopter alerts forces detail zoom for governorate-scope
 });
 
 test('warplane formation keeps the reference pass with bounded medium-sized, bright-blue airframes', () => {
-  assert.match(mapJs, /\$\{pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)\}/, 'the three-plane group is centered on its orbit');
+  assert.match(mapJs, /\$\{pl\(22, -8, 1\)\}\$\{pl\(6, 12, 0\.85\)\}\$\{pl\(38, 12, 0\.85\)\}/, 'the three-plane group is centered on its orbit');
   assert.doesNotMatch(mapJs, /warplaneEastOffset|updateWarplaneVectors|--flight-east-[xy]|--flight-angle/, 'the group is not given a fabricated geographic flight vector');
-  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 84px; height: 200px; left: -42px; top: -100px;/);
-  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad \.sq:first-child\s*\{ left: 30px !important; top: calc\(50% - 12px\) !important; \}/);
-  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(2\)\s*\{ left: 8px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
-  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(3\)\s*\{ left: 54px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
+  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
+  assert.match(css, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq \{ width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite; \}/);
+  assert.match(css, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq:nth-child\(2\), [^}]*width: 14px; height: 14px; \}/);
   assert.match(css, /\.mk-squad \.sq-svg, html\.dark \.mk-squad \.sq-svg \{ fill: #3b8eff; filter: none; \}/);
   assert.match(css, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.doesNotMatch(css, /warplaneOrbit/);

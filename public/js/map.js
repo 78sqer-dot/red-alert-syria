@@ -1136,8 +1136,16 @@ export class AlertMap {
       const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${helicopterSvg()}</span>` : '';
       el.innerHTML = `<div class="heli-route"><span class="heli-orbit-guide" aria-hidden="true"></span>${craft}${second}</div>`;
     } else if (marker === 'squad') {
-      const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
-      el.innerHTML = `<div class="squad">${pl(36, -12, 1)}${pl(20, 8, 0.85)}${pl(52, 8, 0.85)}</div>`;
+      // redalert.com.lb warplane language (owner 20:35, both anchors): a warplane with a
+      // flight direction climbs a dashed trail (two chasing jets, purple); a plain
+      // warplane holds the three-jet delta pass.
+      if (a.flight_direction || a.meta?.flightDirection) {
+        const pl = (cls) => `<div class="sq ${cls}">${svgTag(t.glyph, 24, `fill="#8b5cf6" class="sq-svg"`)}</div>`;
+        el.innerHTML = `<div class="squad squad-directed"><span class="squad-trail" aria-hidden="true"></span>${pl('sq-lead')}${pl('sq-chase')}</div>`;
+      } else {
+        const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
+        el.innerHTML = `<div class="squad">${pl(22, -8, 1)}${pl(6, 12, 0.85)}${pl(38, 12, 0.85)}</div>`;
+      }
     } else if (marker === 'fly') {
       el.innerHTML = `<div class="squad solo"><div class="sq" style="top:50%">${svgTag(t.glyph, 24, `fill="${visual.color}" class="fly-svg"`)}</div></div>`;
     } else if (marker === 'movement') {

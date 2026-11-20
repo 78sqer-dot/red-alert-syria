@@ -95,11 +95,11 @@ test('warplane keeps its three-plane reference pass and independent alert-zone c
   assert.doesNotMatch(mapSource, /t\.marker === 'movement' \|\| t\.marker === 'squad'/, 'warplane zone circles remain enabled');
   assert.match(mapSource, /marker === 'orbit' \|\| marker === 'helicopter'/, 'drone orbit is independent of geographical alert radii');
   assert.match(mapSource, /const classicAircraft = t\.marker === 'squad';/, 'only warplanes retain specialized aircraft pulses; helicopters use the drone/signal pulse size');
-  assert.match(mapSource, /pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)/, 'one alert contains only a lead plane and two wing planes');
+  assert.match(mapSource, /pl\(22, -8, 1\)\}\$\{pl\(6, 12, 0\.85\)\}\$\{pl\(38, 12, 0\.85\)/, 'one alert contains only a lead plane and two wing planes');
   assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
-  assert.match(mapCss, /\.mk-squad \.squad\s*\{[^}]*width: 84px; height: 200px; left: -42px; top: -100px;/);
-  assert.match(mapCss, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite;/);
-  assert.match(mapCss, /\.mk-squad \.squad \.sq:nth-child\(3\)\s*\{ left: 54px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
+  assert.match(mapCss, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
+  assert.match(mapCss, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq \{ width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite; \}/);
+  assert.match(mapCss, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq:nth-child\(2\), [^}]*width: 14px; height: 14px; \}/);
   assert.match(mapCss, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.doesNotMatch(mapCss, /warplaneOrbit/);
   assert.doesNotMatch(mapSource, /warplaneEastOffset|updateWarplaneVectors/, 'the pass remains schematic rather than a fabricated geographic track');
