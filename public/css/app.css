@@ -1502,3 +1502,6 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .live-time { flex: none; font-size: 11px; color: var(--text-muted); }
 .live-none { color: var(--text-muted); padding: 14px 0; }
 .live-foot { color: var(--text-muted); font-size: 11.5px; margin-top: 12px; }
+
+.legend-extra { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.legend-extra .legend-row { padding: 3px 0; }

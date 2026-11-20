@@ -788,6 +788,16 @@ function dismissInactivePanels(except) {
 // ------------------------------------------------------------------ about sheet & modals
 function renderAbout() {
   const legend = TYPE_KEYS.map((t) => `<div class="lg-item"><span class="lg-dot">${glyphDisc(t, 26, 14)}</span>${esc(typeName(t))}</div>`).join('');
+  // Category legend (moved from the old on-map legend card): category colours
+  // plus the cluster badge, civil dot and zone ring the map itself draws.
+  const catRow = (type, key) => `<div class="legend-row"><span class="lg-dot" style="--c:${eventVisual(type).color}"></span><span>${esc(T[key])}</span></div>`;
+  const legendCats =
+    catRow('breaking', 'legendCatBreaking') + catRow('uav', 'legendCatAerial') + catRow('attack', 'legendCatStrikes')
+    + catRow('border', 'legendCatSecurity') + catRow('civil', 'legendCatCivil') + catRow('political', 'legendCatPolitical')
+    + catRow('weather', 'legendCatWeather') + catRow('quake', 'legendCatQuake')
+    + `<div class="legend-row"><span class="lg-cluster">3</span><span>${esc(T.legendCluster)}</span></div>`
+    + `<div class="legend-row"><span class="lg-civdot" style="--c:${eventVisual('civil').color}"></span><span>${esc(T.legendCivilDot)}</span></div>`
+    + `<div class="legend-row"><span class="lg-ring" style="--c:${eventVisual('breaking').color}"></span><span>${esc(T.legendZone)}</span></div>`;
   $('#aboutBody').innerHTML = `<div class="sheet-grab"></div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-top:10px">
       <div><div class="eyebrow"><span class="line"></span>${esc(T.siteName)}</div><h2>${esc(T.aboutTitle)}</h2></div>
@@ -797,6 +807,7 @@ function renderAbout() {
     <div class="disclaimer" role="note">${esc(T.verificationPolicy)}</div>
     <div class="sec-label">${esc(T.legend)}</div>
     <div class="legend">${legend}</div>
+    <div class="legend-extra">${legendCats}</div>
     <div class="disclaimer">${esc(T.disclaimer)}</div>
     ${state.support ? `<section class="support-card"><div class="support-card-head"><span class="support-icon">${icon('heart', 18)}</span><div><h3>${esc(T.supportTitle)}</h3><p>${esc(T.supportTransfer)}</p></div></div><button class="btn-red" data-a="support">${icon('heart', 16)}${esc(T.supportButton)}</button></section>` : ''}
     <div class="about-links" style="margin-bottom:14px"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm wa-channel-btn" href="${WHATSAPP_CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.followWhatsAppChannel)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a><button class="btn-sm" data-a="terms">${esc(T.terms)}</button><button class="btn-sm" data-a="privacy">${esc(T.privacy)}</button></div>
@@ -1163,26 +1174,7 @@ function bindEvents() {
   });
   // map legend: category colours come from the shared event visuals; the cluster
   // bubble and the civil dot mirror the exact elements the map itself draws.
-  const legendRows = $('#legendRows');
-  if (legendRows) {
-    const catRow = (type, key) => `<div class="legend-row"><span class="lg-dot" style="--c:${eventVisual(type).color}"></span><span>${esc(T[key])}</span></div>`;
-    legendRows.innerHTML =
-      catRow('breaking', 'legendCatBreaking') + catRow('uav', 'legendCatAerial') + catRow('attack', 'legendCatStrikes')
-      + catRow('border', 'legendCatSecurity') + catRow('civil', 'legendCatCivil') + catRow('political', 'legendCatPolitical')
-      + catRow('weather', 'legendCatWeather') + catRow('quake', 'legendCatQuake')
-      + `<div class="legend-row"><span class="lg-cluster">3</span><span>${esc(T.legendCluster)}</span></div>`
-      + `<div class="legend-row"><span class="lg-civdot" style="--c:${eventVisual('civil').color}"></span><span>${esc(T.legendCivilDot)}</span></div>`
-      + `<div class="legend-row"><span class="lg-ring" style="--c:${eventVisual('breaking').color}"></span><span>${esc(T.legendZone)}</span></div>`;
-  }
-  const legendBtn = $('#legendBtn');
-  const legendCard = $('#legendCard');
-  legendBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const open = legendCard.hidden;
-    legendCard.hidden = !open;
-    legendBtn.setAttribute('aria-expanded', String(open));
-  });
-  document.addEventListener('click', (e) => {
+  // The on-map legend card was merged into the about sheet (see renderAbout).  document.addEventListener('click', (e) => {
     if (!e.target.closest('#mapCtrls, .dd-panel')) setMapControlsOpen(false);
   });
   document.addEventListener('click', (e) => {
