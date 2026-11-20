@@ -165,7 +165,7 @@ test('marquee rebuilds its track per render, loops two measured halves, pauses o
   assert.match(live, /while \(half\.scrollWidth < marquee\.clientWidth && guard\+\+ < 5\)/);
   assert.match(live, /half2\.setAttribute\('aria-hidden', 'true'\);/);
   // duration from measured width (constant px/s), not a per-item guess
-  assert.match(live, /Math\.max\(12, half\.scrollWidth \/ 55\)/);
+  assert.match(live, /Math\.max\(12, half\.scrollWidth \/ 45\)/);
   // empty feed renders a still, non-animated track
   assert.match(live, /track\.classList\.add\('still'\);/);
   assert.match(css, /\.live-track\.still \{ animation: none; \}/);
@@ -181,7 +181,7 @@ test('marquee flows in the reversed direction (owner request, 2026-11-17)', () =
   assert.match(css, /@keyframes live-scroll \{ from \{ transform: translateX\(-50%\); \} to \{ transform: translateX\(0\); \} \}/);
   assert.doesNotMatch(css, /@keyframes live-scroll \{ from \{ transform: translateX\(0\); \} to \{ transform: translateX\(-50%\); \} \}/);
   // speed is untouched: duration still comes from the measured half width
-  assert.match(live, /Math\.max\(12, half\.scrollWidth \/ 55\)/);
+  assert.match(live, /Math\.max\(12, half\.scrollWidth \/ 45\)/);
 });
 
 // ------------------------------------------------- 3D terrain sharpness

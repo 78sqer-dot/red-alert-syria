@@ -235,9 +235,10 @@ test('group alert popup has accessible previous and next buttons and opens on th
   assert.match(css, /\.pp-group-nav button:active:not\(:disabled\) \{ transform: scale\(\.94\); \}/);
 });
 
-test('general alert pulses are gentler while the legacy blue aircraft pulse remains specialized', () => {
-  assert.match(css, /\.zp-fill \{ animation: none; opacity: \.035/);
-  assert.match(css, /@keyframes zpulse \{ 0% \{ transform: scale\(1\); opacity: \.27; \} 100% \{ transform: scale\(1\.65\); opacity: 0; \} \}/);
+test('general alert pulses stay strong and animated (owner: circles must pulse) while the legacy blue aircraft pulse remains specialized', () => {
+  assert.match(css, /\.zp-fill \{[^}]*animation: zfillPulse 3\.2s ease-in-out infinite/);
+  assert.match(css, /@keyframes zpulse \{\s*0% \{ transform: scale\(1\); opacity: \.4; \}\s*100% \{ transform: scale\(1\.85\); opacity: 0; \}\s*\}/);
+  assert.doesNotMatch(css, /\.zp-fill \{ animation: none; opacity: \.035/); // the b3ab0f4 'gentler' override that killed pulsing must stay gone (the reduced-motion block is fine)
   assert.match(css, /\.zp\.zp-aircraft::before, \.zp\.zp-aircraft::after[\s\S]{0,230}animation: zpulseAircraft 2\.6s/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
 });

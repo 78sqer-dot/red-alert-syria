@@ -21,7 +21,7 @@ test('alert pulse ring stays small and red regardless of event category', () => 
 
 test('alert counter remains smoked-glass translucent and uses Western digits', () => {
   const count = css.match(/\.mk-count\s*\{[^}]*\}/)?.[0] || '';
-  assert.match(count, /background: rgba\(255,255,255,\.96\)/);
+  assert.match(count, /background: color-mix\(in srgb, #141A24 55%, transparent\)/);
   assert.match(map, /badge\.textContent = String\(count\);/);
 });
 

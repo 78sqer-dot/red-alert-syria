@@ -12,7 +12,7 @@ import { automaticMonitorRecipientIds, config, isOwner } from './config.js';
 import { store } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, TYPE_MENU, TYPE_MENU_GROUPS, TYPE_MENU_DIRECT, typeMenuGroupOf, typeOf, droneAuto, alertEmoji, alertButtonLabel, stripTypeLabelPrefix } from '../shared/types.js';
 import { CONDEMNATIONS, CONDEMNATION_KEYS, condemnationKey, condemnationText } from '../shared/condemnations.js';
-import { locationFrom, normalizeArabic, governorates, getGov, getPlace } from './places.js';
+import { locationFrom, normalizeArabic, governorates, districts, subdistricts, places, getGov, getPlace } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
 import { onRoadNewsPost, roadMonitorDebug, roadMonitorActivationTime, parseRoadText } from './road-monitor.js';
@@ -683,6 +683,7 @@ export function sameIncident(c, k) {
     return (bothKnownAndNear && sim >= 0.2) || (locationMissing && sim >= 0.85);
   }
   if (!sameFamily(c.type, k.type)) return false;
+  if (distinctPersons(c.headline, k.headline)) return false; // same kind/place, different named people
   // Similar wording alone is not evidence of the same event: two incidents in distant
   // governorates must remain separate. Unknown locations need near-identical headlines.
   return (bothKnownAndNear && sim >= 0.2) || (locationMissing && sim >= 0.85);
@@ -1076,18 +1077,9 @@ function channelCheckKeyboard(d, duplicate, lang = 'ar') {
 // geography and gets drafted twice. Person-name runs survive rewording — match them
 // against pending drafts with a compatible type.
 function entityDuplicateDraft(candType, text) {
-  // Generic words ("وفاة الشاب…") would false-match any story of the same kind —
-  // strip them from the name runs so only distinctive tokens (person/place names) match.
-  const GENERIC = new Set(['وفاه', 'شاب', 'شابه', 'اعلان', 'مصرع', 'مقتل', 'مستشفي', 'مشفي']);
-  const runs = [];
-  for (const run of nameRuns(text)) {
-    let cur = [];
-    for (const w of run) {
-      if (GENERIC.has(w)) { if (cur.length >= 2) runs.push(cur); cur = []; }
-      else cur.push(w);
-    }
-    if (cur.length >= 2) runs.push(cur);
-  }
+  // Only PERSON-name runs may entity-match (owner 2026-11-20): place/event runs
+  // like «عبوة ناسفة درعا» false-merge two different incidents in one town.
+  const runs = personNameRuns(text).filter((r) => r.length >= 2);
   const DEATH_PAIR = new Set(['death', 'martyrdom']);
   const n = newsState();
   return knownEvents(12).find((k) => {
@@ -1095,7 +1087,9 @@ function entityDuplicateDraft(candType, text) {
     const d2 = n.drafts[k.draftId];
     if (!d2 || d2.status !== 'pending') return false;
     if (d2.type !== candType && !(DEATH_PAIR.has(d2.type) && DEATH_PAIR.has(candType))) return false;
-    const hay = normTokens(`${d2.headline || ''}\n${d2.body || ''}\n${d2.sourceText || ''}`);
+    const other = `${d2.headline || ''}\n${d2.body || ''}\n${d2.sourceText || ''}`;
+    if (distinctPersons(text, other)) return false;
+    const hay = normTokens(other);
     return runs.some((run) => runHit(run, hay, 2));
   }) || null;
 }
@@ -1173,6 +1167,63 @@ function runHit(run, eTokens, need) {
       if (hay.includes(' ' + run.slice(i, i + L).join(' ') + ' ')) return run.slice(i, i + L).join(' ');
   return null;
 }
+// Person-name extraction (owner 2026-11-20, رسلان/زيدان): two arrests in the same
+// town and the same case are DIFFERENT stories when the named people differ. Names
+// follow report verbs («القبض على أحمد…», «مقتل أنور…»); generic roles and news
+// vocabulary are skipped, and a verb followed directly by event words («مقتل شاب
+// جراء انفجار…») yields no name at all.
+// NEWS_WORDS was written with Arabic spelling (قوى); normalizeArabic folds ى→ي, so
+// the stoplist must be compared in normalized form or every ى-word leaks through.
+const NEWS_WORDS_N = new Set([...NEWS_WORDS].map((w) => N(w)));
+// Known Syrian place names are never person names («اعتقال — حلب» is type + city).
+// Two tiers, single-token names only (every token of «تل أحمد» would brand the very
+// common first name أحمد a place and gut extraction):
+//  - strong (governorates + cities rank<=2, districts/subdistricts): skipped even at
+//    the start of a name window — nobody in these alerts is named حلب;
+//  - weak (other rank<=4 towns only): only ends a run already collecting, never
+//    blocks a name from starting. Rank-5 villages and alt names are skipped: their
+//    arbitrary tokens collide with first names (طلال is an alt of اسكوران).
+const STRONG_PLACE_N = new Set();
+const WEAK_PLACE_N = new Set();
+{
+  const add = (name, strong) => {
+    const w = normTokens(name);
+    if (w.length !== 1 || NEWS_WORDS_N.has(w[0])) return;
+    (strong ? STRONG_PLACE_N : WEAK_PLACE_N).add(w[0]);
+  };
+  for (const pl of places) { if (pl.rank > 4) continue; const strong = pl.rank <= 2; add(pl.ar, strong); add(pl.en, strong); }
+  for (const g of governorates) { add(g.ar, true); add(g.en, true); }
+  for (const d of districts) { add(d.ar, true); add(d.en, true); }
+  for (const sd of subdistricts) { add(sd.ar, true); add(sd.en, true); }
+}
+const PERSON_LEADS = new Set(['قبض', 'اعتقال', 'اعتقل', 'اعتقلت', 'توقيف', 'اوقفت', 'مقتل', 'اغتيال', 'اغتيل', 'وفاه', 'مصرع', 'استشهاد']);
+const PERSON_SKIP = new Set(['مجرم', 'مجرمه', 'شاب', 'شابه', 'شخص', 'مواطن', 'مواطنه', 'مدعو', 'مدعوه', 'جراء', 'بسبب', 'علي']);
+function personNameRuns(text) {
+  const toks = normTokens(text);
+  const runs = [];
+  for (let i = 0; i < toks.length; i++) {
+    if (!PERSON_LEADS.has(toks[i])) continue;
+    const names = [];
+    for (let j = i + 1; j < toks.length && names.length < 3; j++) {
+      const w = toks[j];
+      if (PERSON_SKIP.has(w)) continue;
+      if (NEWS_WORDS_N.has(w) || /^\d+$/.test(w)) break;
+      if (STRONG_PLACE_N.has(w) || (WEAK_PLACE_N.has(w) && names.length)) { if (names.length) break; continue; }
+      names.push(w);
+    }
+    if (names.length) runs.push(names);
+  }
+  return runs;
+}
+// Both texts name people after report verbs and the names share no token: distinct
+// stories, no matter how similar the wording or how close the geography.
+function distinctPersons(aText, bText) {
+  const a = new Set(personNameRuns(aText).flat());
+  const b = new Set(personNameRuns(bText).flat());
+  if (!a.size || !b.size) return false;
+  for (const w of a) if (b.has(w)) return false;
+  return true;
+}
 const ENTITY_DUP_HOURS = 48;
 function finalPublishDuplicate(d, pub) {
   const log = newsState().echoLog;
@@ -1192,6 +1243,7 @@ function finalPublishDuplicate(d, pub) {
     } else if (!sameFamily(cand.type, e.type)) continue;
     const geoKnown = !cand.geo.none && !e.geo.none;
     if (geoKnown && !near(cand.geo, e.geo)) continue;
+    if (distinctPersons(text, e.text)) continue; // same case/town, different named people (رسلان vs زيدان)
     const sim = Math.max(textSim(text, e.text), textSim(cand.headline, e.text));
     if (sim >= 0.45) { if (!best || sim > best.sim) best = { id: e.id, sim, via: 'text' }; continue; }
     if (e.ts < entitySince) continue;
@@ -2825,4 +2877,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, entityDuplicateDraft, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

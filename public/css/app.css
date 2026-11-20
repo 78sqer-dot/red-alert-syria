@@ -1369,11 +1369,6 @@ html.dark .uav-svg {
 .mk-event-emoji { display: grid; place-items: center; box-sizing: border-box; border: 2px solid var(--ic, #7c3aed); border-radius: 50%; background: #fff; color: #111827; font: 20px/1 "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; box-shadow: 0 2px 7px rgba(15, 23, 42, .3); }
 html.dark .mk-event-emoji { background: #f8fafc; }
 
-/* Softer, slower general-purpose alert pulse; aircraft retain their legacy blue cadence and glow. */
-.zp-fill { animation: none; opacity: .035; will-change: auto; }
-.zp::before, .zp::after { border-width: 1.25px; background: radial-gradient(circle, transparent 72%, color-mix(in srgb, var(--c, #ef233c) 8%, transparent) 100%); animation-duration: 3.6s; }
-@keyframes zpulse { 0% { transform: scale(1); opacity: .27; } 100% { transform: scale(1.65); opacity: 0; } }
-
 /* Alert cards stay near the visual center, while the MapLibre tip remains attached to the exact event point. */
 .maplibregl-popup.pp-alert-popup { z-index: 60; }
 .pp-alert-popup .maplibregl-popup-content { max-height: min(62dvh, 600px); }

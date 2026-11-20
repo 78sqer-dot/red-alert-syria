@@ -218,3 +218,42 @@ test('entity fallback: a retold story with a different place emphasis merges int
     delete n.drafts[d.id];
   }
 });
+
+test('same town and same case but different named people never dedup (رسلان vs زيدان, 2026-11-20)', () => {
+  const zidan = 'هنأ وزير الداخلية أنس خطاب أهالي بلدة العتيبة بريف دمشق بإلقاء القبض على رواد زيدان، المخطط لمجزرة كمين العتيبة عام 2014.';
+  const raslan = 'قوى الأمن الداخلي: إلقاء القبض على المجرم أحمد طلال رسلان، وهو ملازم سابق بقوات النظام البائد وأحد المتورطين في مجزرة «كمين العتيبة» في غوطة دمشق، والتي راح ضحيتها أكثر من 150 شهيداً.';
+  assert.deepEqual(_test.personNameRuns(raslan)[0], ['احمد', 'طلال', 'رسلان']);
+  assert.equal(_test.distinctPersons(raslan, zidan), true, 'different arrested persons are distinct stories');
+  assert.equal(_test.distinctPersons(raslan, 'إلقاء القبض على أحمد طلال رسلان خلال مداهمة في العتيبة'), false, 'the same person still matches');
+  // the publish-time guards must refuse to call Raslan a duplicate of Zidan
+  const n = newsState();
+  n.echoLog = n.echoLog || [];
+  n.echoLog.push({ id: 'alert-zidan', type: 'political', politicalCategory: 'support', ts: Date.now(), text: zidan, geo: { none: false, pts: [{ lat: 33.48506, lon: 36.6086 }], dists: ['170590'], govs: ['08'], coarse: false } });
+  try {
+    const dup = _test.finalPublishDuplicate(
+      { type: 'political', politicalCategory: 'support', ts: Date.now(), headline: 'تطور سياسي — العتيبة', loc: { scope: 'place', latitude: 33.48506, longitude: 36.6086 }, extra: [] },
+      { headline: 'تطور سياسي — العتيبة', body: raslan },
+    );
+    assert.equal(dup, null, 'the Raslan arrest is not a duplicate of the Zidan arrest');
+  } finally {
+    n.echoLog = n.echoLog.filter((e) => e.id !== 'alert-zidan');
+  }
+});
+
+test('entity fallback ignores place/event runs (Daraa explosion regression, 2026-11-20)', () => {
+  const n = newsState();
+  const d = {
+    id: 'draft-entity-daraa', type: 'explosion', status: 'pending', ts: Date.now(), created: Date.now(),
+    headline: 'مقتل شاب جراء انفجار عبوة ناسفة في مدينة درعا البلد أثناء مروره على الطريق الرئيسي',
+    body: '', sourceText: '', loc: null, extra: [], srcs: [],
+  };
+  n.drafts[d.id] = d;
+  try {
+    const other = _test.entityDuplicateDraft('explosion', 'انفجار عبوة ناسفة في درعا وإصابة مدنيين\nانفجار عبوة ناسفة في مدينة درعا البلد أدى إلى إصابة مدنيين اثنين بجروح متفاوتة');
+    assert.equal(other, null, 'shared place/event words (عبوة ناسفة درعا) do not merge two different incidents');
+    const samePerson = _test.entityDuplicateDraft('explosion', 'مقتل أحمد الخطيب جراء انفجار عبوة ناسفة في درعا');
+    assert.equal(samePerson, null, 'a named victim absent from the draft does not match');
+  } finally {
+    delete n.drafts[d.id];
+  }
+});
