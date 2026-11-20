@@ -1172,6 +1172,29 @@ function finalPublishDuplicate(d, pub) {
   }
   return best;
 }
+// ------------------------------------------------ post-publish landed-dup sweep
+// The pre-publish guard compares against the echo log BEFORE this draft publishes;
+// two drafts of one story published seconds apart can both pass it (neither is in
+// the log yet). Owner rule (2026-11-20): a duplicate that still lands must be
+// deleted immediately and automatically. This runs right AFTER a news publish: if
+// the log now holds an OLDER copy of the same story, this new alert is the dup —
+// delete it everywhere (map + channel post) and mark the draft duplicate.
+async function autoDeleteLandedDuplicate(d, publicationDraft, alertId) {
+  if (!d || !alertId) return null;
+  const landed = finalPublishDuplicate({ ...d, alertId }, publicationDraft);
+  if (!landed || landed.id === alertId) return null;
+  try {
+    const { deleteAlertEverywhere } = await import('./bot.js');
+    await deleteAlertEverywhere(api(), alertId);
+  } catch (e) {
+    console.error('[news] landed-dup delete failed', e.description || e.message);
+  }
+  d.status = 'duplicate'; d.duplicateOf = landed.id; d.duplicateMarkedAt = Date.now();
+  newsState().stats.dupes++; save();
+  await closeCards(d);
+  console.log(`[news] auto-deleted landed duplicate alert ${alertId}: same story as published alert ${landed.id} (${landed.via})`);
+  return landed;
+}
 async function nightPublish(d) {
   const mode = d?.autoMode === 'day' ? 'day' : 'night';
   const a = api();
@@ -1242,6 +1265,9 @@ async function nightPublish(d) {
     console.error(`[news] ${mode} auto-publish failed`, e.description || e.message);
     return false;
   }
+  // A same-story alert that slipped through the pre-publish guard in a race is
+  // deleted right away (map + channel post) — a duplicate never stays up.
+  if (await autoDeleteLandedDuplicate(d, publicationDraft, alert?.id)) return false;
   d.status = 'published'; d.auto = true; d.autoMode = mode; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.publishedHeadline = publicationDraft.headline || d.headline;
   n.stats.published++; n.stats.auto = (n.stats.auto || 0) + 1;
   save();
@@ -2302,6 +2328,11 @@ export function registerNewsTools(bot, h) {
       try { await ctx.editMessageText(cardText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id), link_preview_options: { is_disabled: true } }); } catch { /* ignore */ }
       return toast(ctx, t(ctx, '⚠️ تعذّر النشر — اضغط «نشر» مرة ثانية.', '⚠️ Publishing failed — tap Publish again.'), true);
     }
+    // Same landed-dup sweep as the auto path: a story another draft posted moments
+    // earlier is removed at once instead of staying up as a second copy.
+    if (await autoDeleteLandedDuplicate(d, publicationDraft, alert?.id)) {
+      return toast(ctx, t(ctx, '✔️ حُذف مكرر فوراً: هذه القصة منشورة مسبقاً على القناة.', '✔️ Duplicate deleted immediately: this story is already posted on the channel.'), true);
+    }
     d.status = 'published'; d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.by = ctx.from.id; d.publishedHeadline = publicationDraft.headline || d.headline;
     await unlinkCapturedMedia(d.sourceMedia);
     d.approvedBy = { id: ctx.from.id, name: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' '), username: ctx.from.username || null };
@@ -2758,4 +2789,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

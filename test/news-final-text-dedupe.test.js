@@ -80,3 +80,19 @@ test('political stories only match within the same category', () => {
   const hit = mon._test.finalPublishDuplicate(d, { headline: d.headline, body: d.body });
   assert.equal(hit, null);
 });
+
+test('a duplicate that still lands in a race is auto-deleted (map + draft marked)', async () => {
+  const d = draft('إدارة مكافحة الإرهاب تلقي القبض على أسامة محمد بدور في حلب',
+    'ألقت إدارة مكافحة الإرهاب القبض على أسامة محمد بدور في مدينة حلب، وفق مصدر أمني، بتهمة ارتكاب انتهاكات بحق المتظاهرين خلال عهد النظام البائد.');
+  // Simulate the raced publish: the same story lands as a SECOND alert after the
+  // pre-publish guard passed (its copy was not in the echo log yet).
+  const landedAlert = store.addAlert({
+    type: 'civil', confirm: 'preliminary', location: haleb(),
+    title: 'اعتقال — حلب', description: d.body, body: '', source_name: 'مرصد',
+  });
+  mon._test.rememberAlert(publicAlert(store.state.alerts.find((a) => a.id === landedAlert.id)));
+  const dup = await mon._test.autoDeleteLandedDuplicate(d, { headline: d.headline, body: d.body }, landedAlert.id);
+  assert.ok(dup, 'expected the landed alert to be detected as a duplicate');
+  assert.equal(store.getAlert(landedAlert.id), undefined, 'landed duplicate alert should be deleted from the store');
+  assert.equal(d.status, 'duplicate');
+});
