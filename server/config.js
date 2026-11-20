@@ -24,6 +24,11 @@ export const automaticMonitorRecipientIds = () => [...SHARED_OWNER_IDS];
 // PUBLIC_URL nor RENDER_EXTERNAL_URL is configured; config.publicUrl itself stays
 // env-driven because webhook setup and keep-alive are gated on it being set.
 export const DEFAULT_PUBLIC_URL = 'https://red-alert-syria-q6k8.onrender.com';
+// The old eiqz service is permanently suspended; never trust an env var still pointing at it.
+const saneUrl = (v) => {
+  const u = (v || '').replace(/\/+$/, '');
+  return u && !u.includes('red-alert-syria-eiqz') ? u : '';
+};
 const primaryOwnerId = Number(process.env.PRIMARY_OWNER_ID);
 const hasPrimaryOwnerId = Number.isFinite(primaryOwnerId) && primaryOwnerId > 0;
 const configuredOwnerIds = [...new Set([
@@ -35,7 +40,7 @@ export const config = {
   reportBotToken: reportToken,
   reportWebhookSecret: process.env.REPORT_WEBHOOK_SECRET || reportSecret,
   port: Number(process.env.PORT || 3000),
-  publicUrl: (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, ''),
+  publicUrl: saneUrl(process.env.PUBLIC_URL) || saneUrl(process.env.RENDER_EXTERNAL_URL),
   botToken: token,
   botMode: (process.env.BOT_MODE || (process.env.RENDER ? 'webhook' : 'polling')).toLowerCase(),
   webhookSecret: process.env.WEBHOOK_SECRET || derivedSecret,
