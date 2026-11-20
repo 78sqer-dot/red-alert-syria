@@ -1,3 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://red-alert-syria-eiqz.onrender.com/sitemap.xml
+Sitemap: https://red-alert-syria-q6k8.onrender.com/sitemap.xml

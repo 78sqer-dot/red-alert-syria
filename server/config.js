@@ -23,7 +23,7 @@ export const automaticMonitorRecipientIds = () => [...SHARED_OWNER_IDS];
 // The one live public origin. Used ONLY as a display/link fallback when neither
 // PUBLIC_URL nor RENDER_EXTERNAL_URL is configured; config.publicUrl itself stays
 // env-driven because webhook setup and keep-alive are gated on it being set.
-export const DEFAULT_PUBLIC_URL = 'https://red-alert-syria-eiqz.onrender.com';
+export const DEFAULT_PUBLIC_URL = 'https://red-alert-syria-q6k8.onrender.com';
 const primaryOwnerId = Number(process.env.PRIMARY_OWNER_ID);
 const hasPrimaryOwnerId = Number.isFinite(primaryOwnerId) && primaryOwnerId > 0;
 const configuredOwnerIds = [...new Set([
