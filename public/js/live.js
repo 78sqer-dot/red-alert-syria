@@ -79,7 +79,7 @@ export function createLive({ LANG, esc }) {
     const half2 = half.cloneNode(true);
     half2.setAttribute('aria-hidden', 'true');
     track.appendChild(half2);
-    track.style.animationDuration = `${Math.max(12, half.scrollWidth / 55)}s`;
+    track.style.animationDuration = `${Math.max(12, half.scrollWidth / 45)}s`; // owner 20:10: calm readable pace
   }
   function buildStrip() {
     if (storeGet('ras-live-off') === '1') return;
