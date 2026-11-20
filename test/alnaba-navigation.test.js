@@ -55,10 +55,10 @@ test('the Al-Nabaa source content remains while its public routes and bot-menu e
 test('robots and sitemap publish the three requested public pages', () => {
   const robots = fs.readFileSync(path.join(ROOT, 'public/robots.txt'), 'utf8');
   const sitemap = fs.readFileSync(path.join(ROOT, 'public/sitemap.xml'), 'utf8');
-  assert.match(robots, /User-agent:\s*\*\s*\nAllow:\s*\/\s*\nSitemap:\s*https:\/\/red-alert-syria-eiqz\.onrender\.com\/sitemap\.xml/);
+  assert.match(robots, /User-agent:\s*\*\s*\nAllow:\s*\/\s*\nSitemap:\s*https:\/\/red-alert-syria-q6k8\.onrender\.com\/sitemap\.xml/);
   assert.deepEqual([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]), [
-    'https://red-alert-syria-eiqz.onrender.com/',
-    'https://red-alert-syria-eiqz.onrender.com/ar/',
-    'https://red-alert-syria-eiqz.onrender.com/en/',
+    'https://red-alert-syria-q6k8.onrender.com/',
+    'https://red-alert-syria-q6k8.onrender.com/ar/',
+    'https://red-alert-syria-q6k8.onrender.com/en/',
   ]);
 });
