@@ -1174,7 +1174,8 @@ function bindEvents() {
   });
   // map legend: category colours come from the shared event visuals; the cluster
   // bubble and the civil dot mirror the exact elements the map itself draws.
-  // The on-map legend card was merged into the about sheet (see renderAbout).  document.addEventListener('click', (e) => {
+  // The on-map legend card was merged into the about sheet (see renderAbout).
+  document.addEventListener('click', (e) => {
     if (!e.target.closest('#mapCtrls, .dd-panel')) setMapControlsOpen(false);
   });
   document.addEventListener('click', (e) => {
