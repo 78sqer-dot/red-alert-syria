@@ -1512,3 +1512,46 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 
 .legend-extra { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
 .legend-extra .legend-row { padding: 3px 0; }
+
+/* ---- bottom dock restyle (owner-approved 2026-11-20): floating glass dock, red brand pill, theme-adaptive ---- */
+.map-bottom-controls {
+  background: var(--bg-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 9px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+html.dark .map-bottom-controls { box-shadow: 0 10px 30px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .06); }
+.reset-view-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
+}
+.about-pill {
+  background: linear-gradient(135deg, #e33540, #b71f2b);
+  border: none;
+  color: #fff;
+  padding: 0 16px 0 12px;
+  box-shadow: 0 4px 14px rgba(227, 53, 64, .35);
+  gap: 9px;
+}
+.about-pill::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px #fff;
+  animation: aboutPillPulse 2s infinite;
+  flex: none;
+}
+@keyframes aboutPillPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.about-pill b { color: #fff; font-weight: 800; }
+.about-pill .sep, .about-pill [data-t="aboutMap"] { display: none; }
+.about-pill [data-icon="info"] { color: #fff; opacity: .9; display: inline-flex; }
+.about-pill:hover { color: #fff; }
+@media (max-width: 720px) {
+  .map-bottom-controls { left: 50%; inset-inline-end: auto; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+}
