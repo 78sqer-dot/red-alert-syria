@@ -20,7 +20,7 @@ import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } f
 import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug } from './wx-daily.js';
 import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
 import { weatherDebug, checkWeather } from './weather.js';
-import { publicBorders } from './borders.js';
+import { publicBorders, setBorder, CROSSINGS } from './borders.js';
 import { renderNewsIllustrationPng } from './alert-image.js';
 import { startServices, publicRoads, publicPower } from './services.js';
 import { getLiveFeed, startLiveFeed } from './live-feed.js';
@@ -296,6 +296,16 @@ app.get('/api/weather', apiLimiter, async (req, res) => {
   try { res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60'); res.json(await publicWeather()); } catch { res.set('Cache-Control', 'no-store'); res.status(503).json({ ok: false, error: 'weather unavailable' }); }
 });
 app.get('/api/weathernow', apiLimiter, (req, res) => res.json(weatherNowDebug()));
+app.post('/api/admin/borders/set-all', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  const st = String(req.body?.status || 'open');
+  const note = String(req.body?.note || '').slice(0, 300);
+  try {
+    let n = 0;
+    for (const c of CROSSINGS) if (setBorder(c.id, st, note, 'owner')) n++;
+    return res.json({ ok: true, updated: n });
+  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
+});
 app.get('/api/services', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=60');
   res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), borders: publicBorders(), jobs: publicJobs(), army: publicArmy(), server_time: new Date().toISOString() });
