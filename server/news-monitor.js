@@ -1112,6 +1112,66 @@ async function suppressDuplicateDraft(d, duplicate, by = 0) {
   await closeCards(d);
   return true;
 }
+// ------------------------------------------------ final-text duplicate guard
+// A draft-level check compares WORKING headlines, which diverge when two sources
+// word the same incident differently — so two drafts of one story can both pass it
+// and both reach the channel seconds apart. This guard runs on the FINAL cleaned
+// publication text (after toBotDraft) against everything the bot actually published
+// in the last 96h (echo log). Two matchers:
+// 1) text: token similarity of the final copy — catches the same story with light edits;
+// 2) entity: a contiguous run of name-like tokens (person/place names survive
+//    rewording; news vocabulary is stoplisted so institutions alone never match),
+//    with compatible geography — catches the same story retold by another agency.
+const NEWS_WORDS = new Set(('قوى قوات سلطات امن الامن امني امنيه داخلي داخليه خارجيه مصدر مصادر محليه رسمي رسميه افاد افادت بحسب وفق وفقا خلال بحق بتهمه بتهمة مدينه محافظه ريف بلده اهالي شمال جنوب شرق غرب وسط امس اليوم عام اعلن اعلنت اكد اكدت نظام عهد سابق بائد عناصر مسلحه مسلحين جامعه متظاهرين متظاهري انتهاكات مساعده مذكره هيئه عداله انتقاليه اعتقال اعتقل اعتقلت تعتقل اوقفت توقيف القاء القبض قبض يلقي وزير وزاره رئيس حكومه مجلس لجنه بيان اصابه اصابات قتلى جرحى انفجار سياره مفخخه ساحه حريق اضرار ماديه مدنيين مخدرات تجاره مطلوب مطلوبين احد اخر عثر حمله دهم مداهمه اداره مكافحه ارهاب القت هنأ مخطط مجزره كمين').split(' '));
+const normTokens = (text) => N(String(text || '')).split(' ').map((w) => (w.startsWith('ال') && w.length > 4 ? w.slice(2) : w)).filter((w) => w.length >= 3);
+function nameRuns(text) {
+  const runs = [];
+  let cur = [];
+  for (const w of normTokens(text)) {
+    if (NEWS_WORDS.has(w) || /^\d+$/.test(w)) { if (cur.length) runs.push(cur); cur = []; }
+    else cur.push(w);
+  }
+  if (cur.length) runs.push(cur);
+  return runs;
+}
+function runHit(run, eTokens, need) {
+  const hay = ' ' + eTokens.join(' ') + ' ';
+  for (let L = Math.min(run.length, 5); L >= need; L--)
+    for (let i = 0; i + L <= run.length; i++)
+      if (hay.includes(' ' + run.slice(i, i + L).join(' ') + ' ')) return run.slice(i, i + L).join(' ');
+  return null;
+}
+const ENTITY_DUP_HOURS = 48;
+function finalPublishDuplicate(d, pub) {
+  const log = newsState().echoLog;
+  if (!Array.isArray(log) || !log.length) return null;
+  const cand = { type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: pub?.headline || d.headline, geo: geoOf(locsOf(d.loc, d.extra)) };
+  const text = `${pub?.headline || ''}\n${pub?.body || ''}`.trim();
+  if (!text) return null;
+  const candRuns = nameRuns(text);
+  const since = Date.now() - ECHO_HOURS * H_MS;
+  const entitySince = Date.now() - ENTITY_DUP_HOURS * H_MS;
+  let best = null;
+  for (const e of log) {
+    if (!e || e.ts < since || !e.text) continue;
+    if (d.alertId && e.id === d.alertId) continue; // our own already-published copy of THIS draft
+    if (cand.type === 'political' || e.type === 'political') {
+      if (cand.type !== 'political' || e.type !== 'political' || !cand.politicalCategory || cand.politicalCategory !== e.politicalCategory) continue;
+    } else if (!sameFamily(cand.type, e.type)) continue;
+    const geoKnown = !cand.geo.none && !e.geo.none;
+    if (geoKnown && !near(cand.geo, e.geo)) continue;
+    const sim = Math.max(textSim(text, e.text), textSim(cand.headline, e.text));
+    if (sim >= 0.45) { if (!best || sim > best.sim) best = { id: e.id, sim, via: 'text' }; continue; }
+    if (e.ts < entitySince) continue;
+    const eTok = normTokens(e.text);
+    const need = geoKnown ? 2 : 3; // without location support the bar is a full name
+    for (const run of candRuns) {
+      const hit = run.length >= need && runHit(run, eTok, need);
+      if (hit) { best = { id: e.id, sim, via: 'entity', run: hit }; break; }
+    }
+  }
+  return best;
+}
 async function nightPublish(d) {
   const mode = d?.autoMode === 'day' ? 'day' : 'night';
   const a = api();
@@ -1163,6 +1223,12 @@ async function nightPublish(d) {
     if (mode === 'day') d.dayAutoAt = Date.now() + DAY_AUTO_DELAY_MS;
     save();
     console.error(`[news] ${mode} auto-publish draft preparation failed`, e.description || e.message);
+    return false;
+  }
+  const finalDup = finalPublishDuplicate(d, publicationDraft);
+  if (finalDup) {
+    await suppressDuplicateDraft(d, { alertId: finalDup.id, kind: 'final-text' });
+    console.log(`[news] ${mode} auto-publish blocked: final text matches published alert ${finalDup.id} (${finalDup.via})`);
     return false;
   }
   d.status = 'publishing'; save();
@@ -2216,6 +2282,13 @@ export function registerNewsTools(bot, h) {
     } catch {
       return toast(ctx, t(ctx, 'تعذّر اعتماد نص النشر الحالي بأمان؛ لم يُنشر شيء.', 'The current publication copy could not be safely validated; nothing was published.'), true);
     }
+    // Final-copy duplicate guard: the draft-level check above compares working headlines;
+    // this one compares the actual text about to be posted against what the channel already carries.
+    const finalDup = finalPublishDuplicate(d, publicationDraft);
+    if (finalDup) {
+      await suppressDuplicateDraft(d, { alertId: finalDup.id, kind: 'final-text' }, ctx.from.id);
+      return toast(ctx, t(ctx, '✔️ مُنع النشر: هذه القصة منشورة مسبقاً على القناة. لم يُحذف أي منشور.', '✔️ Publishing blocked: this story is already posted on the channel. No post was deleted.'));
+    }
     // publish: claimed once, so a second tap / a second reviewer can't publish it twice
     d.status = 'publishing'; save();
     await toast(ctx, t(ctx, '⏳ جاري النشر…', '⏳ Publishing…'));
@@ -2685,4 +2758,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

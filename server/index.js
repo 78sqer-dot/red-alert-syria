@@ -12,7 +12,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -242,6 +242,22 @@ app.get('/api/newstest', apiLimiter, async (req, res) => {
   const owner = config.ownerIds[0];
   if (!owner) return res.status(400).json({ error: 'no owner' });
   try { res.json(await sendTestDraft(owner)); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Operator alert removal (e.g. duplicated stories): same delete path as the admin
+// bot's 🗑 — removes the map alert AND its channel post. Disabled unless an
+// ADMIN_API_KEY env var is set on the service; 404 either way when the key is wrong.
+const adminKeyOk = (req) => {
+  const want = process.env.ADMIN_API_KEY || '';
+  const key = String(req.headers['x-admin-key'] || '');
+  return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
+};
+app.post('/api/admin/alerts/:id/delete', apiLimiter, async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  try {
+    const removed = await deleteAlertEverywhere(bots.admin?.api, req.params.id);
+    if (!removed) return res.status(404).json({ ok: false, error: 'alert not found' });
+    return res.json({ ok: true, id: removed.id, channelPost: removed.channel_message_id || null });
+  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
 });
 // 💱 prices / 🛣 roads / ⚡ electricity for the website
 app.get('/api/weather', apiLimiter, async (req, res) => {
