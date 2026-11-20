@@ -282,6 +282,14 @@ app.post('/api/admin/alerts/resync', apiLimiter, async (req, res) => {
   try { const n = await resyncChannelPosts(bots.admin.api); return res.json({ ok: true, resynced: n }); }
   catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
 });
+app.post('/api/admin/channel/delete-message', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
+  const mid = Number(req.body?.message_id);
+  if (!Number.isInteger(mid) || mid <= 0) return res.status(400).json({ ok: false, error: 'message_id required' });
+  try { await bots.admin.api.deleteMessage(config.channel, mid); return res.json({ ok: true, deleted: mid }); }
+  catch (e) { return res.status(500).json({ ok: false, error: e.description || e.message }); }
+});
 app.post('/api/admin/channel/refresh-info', apiLimiter, express.json({ limit: '16kb' }), async (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
