@@ -1070,6 +1070,36 @@ function channelCheckKeyboard(d, duplicate, lang = 'ar') {
   }
   return kb;
 }
+// Entity fallback for draft dedup (owner 2026-11-20, الحمادي duplicate): the same
+// story retold by another source with a different place emphasis (a death announced
+// at a Damascus hospital vs the accident site in al-Tayyana) fails sameIncident on
+// geography and gets drafted twice. Person-name runs survive rewording — match them
+// against pending drafts with a compatible type.
+function entityDuplicateDraft(candType, text) {
+  // Generic words ("وفاة الشاب…") would false-match any story of the same kind —
+  // strip them from the name runs so only distinctive tokens (person/place names) match.
+  const GENERIC = new Set(['وفاه', 'شاب', 'شابه', 'اعلان', 'مصرع', 'مقتل', 'مستشفي', 'مشفي']);
+  const runs = [];
+  for (const run of nameRuns(text)) {
+    let cur = [];
+    for (const w of run) {
+      if (GENERIC.has(w)) { if (cur.length >= 2) runs.push(cur); cur = []; }
+      else cur.push(w);
+    }
+    if (cur.length >= 2) runs.push(cur);
+  }
+  const DEATH_PAIR = new Set(['death', 'martyrdom']);
+  const n = newsState();
+  return knownEvents(12).find((k) => {
+    if (k.kind !== 'draft' || !k.draftId) return false;
+    const d2 = n.drafts[k.draftId];
+    if (!d2 || d2.status !== 'pending') return false;
+    if (d2.type !== candType && !(DEATH_PAIR.has(d2.type) && DEATH_PAIR.has(candType))) return false;
+    const hay = normTokens(`${d2.headline || ''}\n${d2.body || ''}\n${d2.sourceText || ''}`);
+    return runs.some((run) => runHit(run, hay, 2));
+  }) || null;
+}
+
 function knownDuplicateDraft(d) {
   const candidate = {
     type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created,
@@ -1569,6 +1599,10 @@ async function handleResult(it, r, known, pmap) {
     rejectedSameAs = true;
   }
   if (!target) target = known.find((k) => sameIncident(cand, k)) || null;
+  if (!target) {
+    target = entityDuplicateDraft(r.type, `${headline}\n${fullBody || ''}\n${String(it.text || '')}`);
+    if (target) note(it, `entity-matched into pending draft ${target.draftId} (same story, different wording)`);
+  }
   if (!target && r.new_incident === false && !rejectedSameAs && !(r.type === 'political' && (!politicalCategory || r.political_category === 'none'))) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
   if (target) {
     pmap.set(it.i, target);
@@ -2791,4 +2825,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { nightPublish, entityDuplicateDraft, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

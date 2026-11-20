@@ -198,3 +198,23 @@ test('ground-incursion news with drone presence keeps its type and daytime eligi
   assert.equal(nightEligible(withDrone), false, 'a drone-presence report stays out of the night queue');
   assert.equal(daytimeAutoEligible(withDrone), true, 'drone presence alone does not block a qualifying daytime draft');
 });
+
+test('entity fallback: a retold story with a different place emphasis merges into the pending draft', () => {
+  const n = newsState();
+  const d = {
+    id: 'draft-entity-hamadi', type: 'death', status: 'pending', ts: Date.now(), created: Date.now(),
+    headline: 'وفاة الشاب أنور الحمادي اللجة متأثراً بحروقه إثر انفجار خزان محروقات في بلدة الطيانة',
+    body: '', sourceText: '', loc: null, extra: [], srcs: [],
+  };
+  n.drafts[d.id] = d;
+  try {
+    const retold = _test.entityDuplicateDraft('death', 'وفاة الشاب أنور الحمادي اللجة في مستشفى بدمشق متأثراً بحروقه');
+    assert.ok(retold && retold.draftId === d.id, 'same person name across different places matches the pending draft');
+    const unrelated = _test.entityDuplicateDraft('death', 'وفاة الشاب سامر العلي في حادث سير على طريق حمص');
+    assert.equal(unrelated, null, 'a different person does not match');
+    const wrongType = _test.entityDuplicateDraft('airstrike', 'وفاة الشاب أنور الحمادي اللجة في مستشفى بدمشق');
+    assert.equal(wrongType, null, 'an incompatible type does not match');
+  } finally {
+    delete n.drafts[d.id];
+  }
+});
