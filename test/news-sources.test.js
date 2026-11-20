@@ -40,7 +40,7 @@ test('verified Syrian publishers fit within the source cap', () => {
   const hawar = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'hawarnews');
   const zaman = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'zamanalwslnews');
   const qasioun = DEFAULT_SOURCES.find((source) => source.u.toLowerCase() === 'qasiounar1');
-  assert.equal(DEFAULT_SOURCES.length, 32);
+  assert.equal(DEFAULT_SOURCES.length, 35);
   assert.deepEqual([hawar?.general, hawar?.local], [true, true]);
   assert.equal(zaman?.general, true);
   assert.equal(qasioun?.general, true);

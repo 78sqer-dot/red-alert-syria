@@ -42,6 +42,10 @@ export const DEFAULT_SOURCES = [
   { u: 'golantimes', name: 'جولان تايمز', general: true, local: true },
   { u: 'idlibplus', name: 'إدلب بلس', general: true, local: true },
   { u: 'FuratPost', name: 'فرات بوست', general: true, local: true },
+  // 2026-11-20 expansion batch (verified public previews with fresh posts today).
+  { u: 'SN4HR', name: 'الشبكة السورية لحقوق الإنسان' },
+  { u: 'AlHadath', name: 'الحدث', general: true },
+  { u: 'aleppocitycouncil', name: 'مجلس مدينة حلب', local: true },
 ];
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
