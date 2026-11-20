@@ -469,11 +469,8 @@ function renderTicker() {
   const boxes = [$('#tickerInner'), $('#mTicker')];
   for (const box of boxes) {
     box.innerHTML = '';
-    // mobile strip has no inner track in the markup; create one so the crawl animation applies
-    const track = box.id === 'mTicker' ? Object.assign(document.createElement('div'), { className: 'ticker-inner' }) : box;
-    if (track !== box) box.appendChild(track);
     if (!items.length) {
-      track.innerHTML = `<div class="tick on empty">${icon('radar', 15)}<span class="t-title">${esc(T.noAlerts)}</span></div>`;
+      box.innerHTML = `<div class="tick on empty">${icon('radar', 15)}<span class="t-title">${esc(T.noAlerts)}</span></div>`;
       continue;
     }
     // TV-style crawl: the strip holds every recent headline twice so the
@@ -485,13 +482,13 @@ function renderTicker() {
         el.dataset.id = a.id;
         if (copy) el.setAttribute('aria-hidden', 'true');
         el.innerHTML = `${badge(a)}<span class="t-title">${esc(stripTypeLabelPrefix(titleOf(a), a.type))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
-        track.appendChild(el);
+        box.appendChild(el);
       }
     }
     // readable pace: ~95 px/s derived from the real track width after layout
     requestAnimationFrame(() => {
-      const half = track.scrollWidth / 2;
-      if (half > 0) track.style.animationDuration = `${Math.max(18, Math.round(half / 95))}s`;
+      const half = box.scrollWidth / 2;
+      if (half > 0) box.style.animationDuration = `${Math.max(18, Math.round(half / 95))}s`;
     });
   }
 }
