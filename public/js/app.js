@@ -462,46 +462,40 @@ function step(dir) {
 let tickIdx = 0;
 let tickTimer = null;
 function tickerItems() {
-  return [...state.alerts.values()].filter(isLive).sort((x, y) => Date.parse(y.timestamp) - Date.parse(x.timestamp)).slice(0, 6);
+  return [...state.alerts.values()].filter(isLive).sort((x, y) => Date.parse(y.timestamp) - Date.parse(x.timestamp)).slice(0, 12);
 }
 function renderTicker() {
   const items = tickerItems();
   const boxes = [$('#tickerInner'), $('#mTicker')];
   for (const box of boxes) {
+    box.innerHTML = '';
     if (!items.length) {
       box.innerHTML = `<div class="tick on empty">${icon('radar', 15)}<span class="t-title">${esc(T.noAlerts)}</span></div>`;
       continue;
     }
-    const a = items[tickIdx % items.length];
-    const olds = [...box.querySelectorAll('.tick')];
-    const el = document.createElement('div');
-    el.className = 'tick';
-    el.dataset.id = a.id;
-    el.innerHTML = `${badge(a)}<span class="t-title">${esc(stripTypeLabelPrefix(titleOf(a), a.type))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
-    box.appendChild(el);
-    if (document.hidden) {
-      olds.forEach((o) => o.remove());
-      el.classList.add('on');
-    } else {
-      void el.offsetWidth; // commit start state, then slide in
-      el.classList.add('on');
-      olds.forEach((o, k) => {
-        if (k < olds.length - 1) return o.remove();
-        o.classList.remove('on');
-        o.classList.add('out');
-        setTimeout(() => o.remove(), 500);
-      });
+    // TV-style crawl: the strip holds every recent headline twice so the
+    // loop is seamless; CSS moves the track slowly (see tickerScroll)
+    for (let copy = 0; copy < 2; copy++) {
+      for (const a of items) {
+        const el = document.createElement('div');
+        el.className = 'tick flow';
+        el.dataset.id = a.id;
+        if (copy) el.setAttribute('aria-hidden', 'true');
+        el.innerHTML = `${badge(a)}<span class="t-title">${esc(stripTypeLabelPrefix(titleOf(a), a.type))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
+        box.appendChild(el);
+      }
     }
-    $$('.tick.empty', box).forEach((e) => e.remove());
+    // readable pace: ~55 px/s derived from the real track width after layout
+    requestAnimationFrame(() => {
+      const half = box.scrollWidth / 2;
+      if (half > 0) box.style.animationDuration = `${Math.max(30, Math.round(half / 55))}s`;
+    });
   }
 }
 function startTicker() {
   clearInterval(tickTimer);
   renderTicker();
-  tickTimer = setInterval(() => {
-    tickIdx++;
-    renderTicker();
-  }, 5000);
+  tickTimer = setInterval(renderTicker, 120000); // refresh relative times; data pushes re-render too
 }
 
 // ------------------------------------------------------------------ filter & layers panels
