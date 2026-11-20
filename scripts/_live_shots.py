@@ -1,6 +1,6 @@
 import asyncio, json, sys
 from playwright.async_api import async_playwright
-BASE = 'https://red-alert-syria.onrender.com'
+BASE = 'https://red-alert-syria-q6k8.onrender.com'
 OUT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/live-qa'
 import os; os.makedirs(OUT, exist_ok=True)
 SEEN = "try{localStorage.setItem('ras-settings', JSON.stringify({hasSeenWelcome:true,hasSeenTour:true,darkMode:%s}));localStorage.setItem('ras-install', JSON.stringify({dismissedAt:Date.now()}));}catch(e){}"
