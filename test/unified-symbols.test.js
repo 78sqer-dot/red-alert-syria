@@ -13,17 +13,18 @@ import { NEWS_TYPES } from '../server/news-ai.js';
 
 test('TYPE_MENU covers every alert type exactly once, in the approved groups', () => {
   assert.deepEqual(TYPE_MENU.map((g) => g.key), ['direct', 'air', 'strikes', 'security', 'civil', 'smuggling', 'nature']);
-  assert.deepEqual(TYPE_MENU.map((g) => g.types.length), [2, 6, 8, 6, 10, 3, 2]);
+  assert.deepEqual(TYPE_MENU.map((g) => g.types.length), [2, 6, 8, 6, 9, 3, 2]);
   const all = TYPE_MENU.flatMap((g) => g.types);
   assert.equal(new Set(all).size, all.length, 'no type appears twice');
-  assert.deepEqual([...all].sort(), [...TYPE_KEYS].sort(), 'the menu covers the whole registry');
+  assert.deepEqual([...all].sort(), [...TYPE_KEYS].filter((t) => t !== 'civil_plane').sort(), 'the menu covers the registry except civil_plane (removed per owner 2026-11-20)');
   assert.deepEqual([...TYPE_MENU_DIRECT], ['breaking', 'political']);
   assert.equal(TYPE_MENU_GROUPS.length, 6);
   const strikes = TYPE_MENU.find((g) => g.key === 'strikes');
   assert.equal(strikes.types.at(-1), 'assassination', 'assassination sits last in its group');
   assert.equal(ALERT_TYPES.shooting.emoji, '', 'shooting stays emoji-less on text surfaces');
   assert.equal(ALERT_TYPES.assassination.emoji, '', 'assassination stays emoji-less on text surfaces');
-  for (const key of TYPE_KEYS) assert.equal(typeMenuGroupOf(key), TYPE_MENU.find((g) => g.types.includes(key)).key, `${key} resolves to its canonical group`);
+  for (const key of TYPE_KEYS.filter((k) => k !== 'civil_plane')) assert.equal(typeMenuGroupOf(key), TYPE_MENU.find((g) => g.types.includes(key)).key, `${key} resolves to its canonical group`);
+  assert.equal(typeMenuGroupOf('civil_plane'), null, 'civil_plane removed from all menus (owner 2026-11-20); its legacy data type stays');
   assert.equal(typeMenuGroupOf('not-a-type'), null);
 });
 

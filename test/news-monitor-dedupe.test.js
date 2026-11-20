@@ -61,7 +61,7 @@ test('monitored types are grouped by the canonical menu (protests inside civil)'
   // the version stays 11.
   assert.equal(FILTER_VER, 11);
   assert.ok(NEWS_TYPES.includes('protest_action'));
-  assert.deepEqual(_test.newsTypeGroups.civil, ['civil', 'accident', 'fire', 'arrest', 'death', 'martyrdom', 'protest', 'protest_action', 'brawl', 'civil_plane']);
+  assert.deepEqual(_test.newsTypeGroups.civil, ['civil', 'accident', 'fire', 'arrest', 'death', 'martyrdom', 'protest', 'protest_action', 'brawl']);
   assert.equal(_test.newsTypeGroups.protests, undefined, 'there is no separate protests group anymore');
   assert.deepEqual(Object.keys(_test.newsTypeGroups), ['direct', 'air', 'strikes', 'security', 'civil', 'smuggling', 'nature']);
 });

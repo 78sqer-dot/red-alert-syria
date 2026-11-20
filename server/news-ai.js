@@ -6,7 +6,7 @@
 import { ALERT_TYPES, POLITICAL_CATEGORIES } from '../shared/types.js';
 import { governorates, districts, searchPlaces, normalizeArabic, getGov, getDist, places } from './places.js';
 import { cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
-export const NEWS_TYPES = ['breaking', 'political', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'uav', 'uav_strike', 'warplane', 'helicopter', 'patrol', 'airstrike', 'missile', 'attack', 'military_incursion', 'clashes', 'assassination', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'protest_action', 'fire', 'civil_plane', 'arrest', 'kidnapping', 'death', 'martyrdom', 'brawl', 'shooting', 'weather'];
+export const NEWS_TYPES = ['breaking', 'political', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'uav', 'uav_strike', 'warplane', 'helicopter', 'patrol', 'airstrike', 'missile', 'attack', 'military_incursion', 'clashes', 'assassination', 'artillery', 'explosion', 'civil', 'accident', 'protest', 'protest_action', 'fire', 'arrest', 'kidnapping', 'death', 'martyrdom', 'brawl', 'shooting', 'weather'];
 const N = normalizeArabic;
 const stripAl = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w);
 

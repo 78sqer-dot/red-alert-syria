@@ -279,7 +279,7 @@ export const TYPE_MENU = Object.freeze([
   { key: 'air', emoji: '✈️', ar: 'جوي', en: 'Air', types: ['uav', 'warplane', 'helicopter', 'missile', 'air_movement', 'uav_strike'] },
   { key: 'strikes', emoji: '💥', ar: 'قصف وهجمات', en: 'Strikes & attacks', types: ['airstrike', 'artillery', 'explosion', 'detonation', 'attack', 'clashes', 'targeted_strike', 'assassination'] },
   { key: 'security', emoji: '🪖', ar: 'أمني وميداني', en: 'Security & field', types: ['military_incursion', 'patrol', 'border', 'kidnapping', 'shooting', 'signal_sweep'] },
-  { key: 'civil', emoji: '🛡️', ar: 'مدني وسلامة', en: 'Civil & safety', types: ['civil', 'accident', 'fire', 'arrest', 'death', 'martyrdom', 'protest', 'protest_action', 'brawl', 'civil_plane'] },
+  { key: 'civil', emoji: '🛡️', ar: 'مدني وسلامة', en: 'Civil & safety', types: ['civil', 'accident', 'fire', 'arrest', 'death', 'martyrdom', 'protest', 'protest_action', 'brawl'] },
   { key: 'smuggling', emoji: '🚚', ar: 'تهريب', en: 'Smuggling', types: ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },
   { key: 'nature', emoji: '🌦️', ar: 'طبيعة', en: 'Nature', types: ['quake', 'weather'] },
 ].map((g) => Object.freeze({ ...g, types: Object.freeze([...g.types]) })));

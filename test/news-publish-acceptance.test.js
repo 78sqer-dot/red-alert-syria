@@ -189,7 +189,7 @@ test('home menu clears tracked private relay messages for this bot and chat only
 test('report menus route every type exactly once through the canonical menu', async () => {
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
   assert.equal(new Set(routedTypes).size, routedTypes.length, 'each alert type has exactly one report-menu route');
-  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).filter((t) => t !== 'air_movement').sort(), 'every alert type except air_movement has a menu route (owner removed its button 2026-11-20)');
+  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).filter((t) => !['air_movement', 'civil_plane'].includes(t)).sort(), 'every alert type except air_movement and civil_plane has a menu route (owner removed both buttons 2026-11-20)');
   assert.ok(ALERT_TYPES.air_movement, 'movement alerts remain a recognized data type');
 
   let start = calls.length;
@@ -249,7 +249,7 @@ test('public report bot exposes both strike types and sends detonation reports o
   const currentUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const currentButtons = () => currentUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
-  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).filter((t) => t !== 'air_movement').sort(), 'the public menu routes every type except air_movement');
+  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).filter((t) => !['air_movement', 'civil_plane'].includes(t)).sort(), 'the public menu routes every type except air_movement and civil_plane');
   assert.ok(ALERT_TYPES.air_movement, 'movement alerts remain recognized');
 
   let start = calls.length;
@@ -525,7 +525,7 @@ test('news-monitor type editor covers every bot alert type while settings stay m
   assert.deepEqual(newsMonitorTest.editableTypeGroups.incursion, ['military_incursion'], 'the incursion pseudo-group is the kind-picker alias, not a second type route');
   const routedTypes = [...newsMonitorTest.editableTypeDirectTypes, ...Object.entries(newsMonitorTest.editableTypeGroups).filter(([g]) => g !== 'incursion').flatMap(([, types]) => types)];
   assert.equal(new Set(routedTypes).size, routedTypes.length, 'the type editor has no duplicate category routes');
-  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).sort(), 'the editor covers the complete shared alert registry, not just automatic news types');
+  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).filter((t) => !['air_movement', 'civil_plane'].includes(t)).sort(), 'the editor covers the bot alert registry (air_movement and civil_plane removed per owner 2026-11-20)');
   for (const group of groups) {
     start = calls.length;
     await tap(`nw:tg:${id}:${group}`);
@@ -846,7 +846,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('home', reporter, reportBot);
   await tap('ag:air', reporter, reportBot);
   for (const type of ['t:warplane', 't:uav', 't:helicopter']) assert.ok(buttons().some((button) => button.callback_data === type), `air submenu contains ${type}`);
-  assert.ok(buttons().some((button) => button.callback_data === 't:air_movement'), 'public air submenu offers aircraft movement (approved unified menu)');
+    assert.ok(!buttons().some((button) => button.callback_data === 't:air_movement'), 'public air submenu hides aircraft movement (owner 2026-11-20)');
   await tap('t:helicopter', reporter, reportBot);
   assert.match(lastUi()?.payload?.text || '', /حدّد عدد المروحيات/, 'helicopter asks for the observed count');
   assert.ok(buttons().some((button) => button.callback_data === 'heli:intensity:high' && button.text.includes('مروحيتان')));
@@ -932,7 +932,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   await tap('home', reporter, reportBot);
   await tap('home');
   await tap('ag:civil');
-  for (const callback of ['t:accident', 't:fire', 't:civil_plane', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:civil']) {
+  for (const callback of ['t:accident', 't:fire', 't:arrest', 't:death', 't:martyrdom', 't:brawl', 't:civil']) {
     assert.ok(buttons().some((button) => button.callback_data === callback), `civil submenu includes ${callback}`);
   }
   assert.ok(buttons().some((button) => button.callback_data === 't:protest_action' && button.text?.includes('احتجاج')), 'protests live inside the civil submenu (canonical menu)');
@@ -969,7 +969,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
 
   await tap('home');
   await tap('ag:air');
-  assert.ok(buttons().some((button) => button.callback_data === 't:air_movement'), 'the air menu offers aircraft movement (approved unified menu)');
+  assert.ok(!buttons().some((button) => button.callback_data === 't:air_movement'), 'the air menu hides aircraft movement (owner 2026-11-20)');
   let movementStart = calls.length;
   await tap('t:air_movement');
   assert.equal(calls.slice(movementStart).filter(({ method }) => method === 'sendMessage' || method === 'editMessageText').length, 0, 'the movement button cannot start a new report (owner keeps the flow disabled)');
@@ -979,7 +979,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(idlib, 'the report review uses a known governorate');
   await tap('home', reporter, reportBot);
   await tap('ag:air', reporter, reportBot);
-  assert.ok(buttons().some((button) => button.callback_data === 't:air_movement'), 'the reporter bot offers the movement button too');
+  assert.ok(!buttons().some((button) => button.callback_data === 't:air_movement'), 'the reporter bot hides the movement button too');
   movementStart = calls.length;
   await tap('t:air_movement', reporter, reportBot);
   assert.equal(calls.slice(movementStart).filter(({ method }) => method === 'sendMessage' || method === 'editMessageText').length, 0, 'the reporter bot rejects the movement callback too');
@@ -1723,11 +1723,7 @@ test('bot menus list aircraft movement in the air group but its report flow stay
   for (const [user, targetBot] of [[owner, bot], [freshReporter, reportBot]]) {
     await tap('home', user, targetBot);
     await tap('ag:air', user, targetBot);
-    assert.ok(buttons().some((button) => button.callback_data === 't:air_movement'), 'both bots offer aircraft movement in the air group (approved unified menu)');
-    const movementStart = calls.length;
-    await tap('t:air_movement', user, targetBot);
-    assert.equal(calls.slice(movementStart).filter(({ method }) => method === 'sendMessage' || method === 'editMessageText').length, 0, 'movement buttons cannot create new reports (owner keeps the flow disabled)');
-    assert.ok(calls.slice(movementStart).some(({ method }) => method === 'answerCallbackQuery'), 'the movement button receives a callback response');
+    assert.ok(!buttons().some((button) => button.callback_data === 't:air_movement'), 'both bots hide aircraft movement in the air group (owner removed the button 2026-11-20)');
 
     await tap('home', user, targetBot);
     await tap('ag:air', user, targetBot);
