@@ -1463,7 +1463,8 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .live-dot { color: var(--text-muted); padding: 0 6px; }
 .live-empty { color: var(--text-muted); font-weight: 500; }
 @keyframes live-scroll { from { transform: translateX(-50%); } to { transform: translateX(0); } }
-@media (prefers-reduced-motion: reduce) { .live-track { animation: none; } .live-marquee { overflow-x: auto; } }
+/* owner 2026-11-20: the live strip must always move, even with OS reduce-motion on */
+@media (prefers-reduced-motion: reduce) { .live-marquee { overflow-x: auto; } }
 /* Marquee halves: the track is exactly two identical halves, so the 50%
    keyframe loop is seamless at any content width. Direction reversed at the
    owner's request (2026-11-17): the track runs -50% -> 0, so headlines flow
