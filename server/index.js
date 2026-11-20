@@ -115,7 +115,23 @@ app.get('/api/places/search', apiLimiter, (req, res) => {
   res.json({ places: searchFollowPlaces(req.query.q, req.query.gov) });
 });
 
-app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size }));
+// Lightweight public page counters (map + shared alert pages) for the owner's growth
+// report. In-memory: resets on redeploy, no cookies, no personal data, static
+// assets and API calls never count. /api/health reports the live numbers.
+const pageStats = { since: new Date().toISOString(), day: new Date().toISOString().slice(0, 10), map: 0, alertPages: 0 };
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
+  const p = req.path;
+  const isMap = p === '/' || p === '/ar' || p === '/en' || p === '/ar/' || p === '/en/';
+  const isAlertPage = /^\/(?:ar|en)\/a\//.test(p);
+  if (!isMap && !isAlertPage) return next();
+  const today = new Date().toISOString().slice(0, 10);
+  if (pageStats.day !== today) { pageStats.day = today; pageStats.map = 0; pageStats.alertPages = 0; }
+  if (isMap) pageStats.map++; else pageStats.alertPages++;
+  next();
+});
+
+app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size, pageviews: { ...pageStats } }));
 
 app.get('/api/alerts', apiLimiter, (req, res) => {
   const includeInactive = req.query.include === 'inactive' || req.query.all === '1';
