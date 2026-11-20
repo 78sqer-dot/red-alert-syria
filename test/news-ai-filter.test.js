@@ -145,7 +145,7 @@ test('explicit opinion rewrite is labeled, sharp toward government targets, and 
   });
   assert.match(result, /^رأي\/تحليل:/, 'opinion text is labeled even if the provider omits the label');
   const system = JSON.parse(request.options.body).systemInstruction.parts[0].text;
-  assert.match(system, /صاحب عمود نقدي عربي من مدرسة التعليق السياسي الرصين/);
+  assert.match(system, /بصيغة تقرير استخباري بارد/);
   assert.match(system, /يجوز ذكر الجهة الحكومية أو المسؤول الذي يسميه المصدر فقط/);
   assert.match(system, /لا تشترط وجود صلة سببية/);
   assert.match(system, /لا تنسب مسؤولية أو سبباً أو فعلاً أو قراراً محدداً إلى جهة/);
