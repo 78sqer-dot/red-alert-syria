@@ -17,7 +17,7 @@ import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
 import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
-import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug } from './wx-daily.js';
+import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug, postWxBulletin } from './wx-daily.js';
 import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
 import { weatherDebug, checkWeather } from './weather.js';
 import { publicBorders, setBorder, CROSSINGS } from './borders.js';
@@ -296,6 +296,16 @@ app.get('/api/weather', apiLimiter, async (req, res) => {
   try { res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60'); res.json(await publicWeather()); } catch { res.set('Cache-Control', 'no-store'); res.status(503).json({ ok: false, error: 'weather unavailable' }); }
 });
 app.get('/api/weathernow', apiLimiter, (req, res) => res.json(weatherNowDebug()));
+app.get('/api/admin/weather/status', apiLimiter, async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  res.json({ bulletin: wxBulletinDebug(), now: weatherNowDebug() });
+});
+app.post('/api/admin/weather/publish', apiLimiter, async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
+  try { const r = await postWxBulletin(bots.admin.api, {}); return res.json({ ok: true, result: r || null }); }
+  catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
+});
 app.post('/api/admin/borders/set-all', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   const st = String(req.body?.status || 'open');
