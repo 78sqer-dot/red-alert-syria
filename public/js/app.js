@@ -791,7 +791,7 @@ function dismissInactivePanels(except) {
 
 // ------------------------------------------------------------------ about sheet & modals
 function renderAbout() {
-  const legend = TYPE_KEYS.map((t) => `<div class="lg-item"><span class="lg-dot">${glyphDisc(t, 26, 14)}</span>${esc(typeName(t))}</div>`).join('');
+  const legend = TYPE_KEYS.filter((t) => !FILTER_UI_HIDDEN.has(t)).map((t) => `<div class="lg-item"><span class="lg-dot">${glyphDisc(t, 26, 14)}</span>${esc(typeName(t))}</div>`).join('');
   // Category legend (moved from the old on-map legend card): category colours
   // plus the cluster badge, civil dot and zone ring the map itself draws.
   const catRow = (type, key) => `<div class="legend-row"><span class="lg-dot" style="--c:${eventVisual(type).color}"></span><span>${esc(T[key])}</span></div>`;

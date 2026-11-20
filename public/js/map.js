@@ -46,7 +46,7 @@ export function glyphDisc(type, size = 32, iconSize = 20, cls = 'pin', glyphOver
 const styleCache = {};
 const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
 const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const BUNDLED_STYLE_URL = { light: '/map-styles/liberty.json?v=1', dark: '/map-styles/dark.json?v=1' };
+const BUNDLED_STYLE_URL = { light: '/map-styles/liberty.json?v=2', dark: '/map-styles/dark.json?v=2' };
 function initialStyle(kind) {
   return {
     version: 8,
