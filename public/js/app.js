@@ -485,10 +485,10 @@ function renderTicker() {
         box.appendChild(el);
       }
     }
-    // readable pace: ~95 px/s derived from the real track width after layout
+    // readable pace: ~55 px/s derived from the real track width after layout
     requestAnimationFrame(() => {
       const half = box.scrollWidth / 2;
-      if (half > 0) box.style.animationDuration = `${Math.max(18, Math.round(half / 95))}s`;
+      if (half > 0) box.style.animationDuration = `${Math.max(30, Math.round(half / 55))}s`;
     });
   }
 }
