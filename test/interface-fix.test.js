@@ -14,7 +14,6 @@ import vm from 'node:vm';
 const root = new URL('../', import.meta.url);
 const read = (file) => readFileSync(new URL(file, root), 'utf8');
 const css = read('public/css/app.css');
-const live = read('public/js/live.js');
 const appJs = read('public/js/app.js');
 const indexHtml = read('public/index.html');
 const mapSrc = read('public/js/map.js');
@@ -90,101 +89,6 @@ test('localize() subordinates basemap place labels under our governorate labels'
 // Owner (2026-11-17): three tappable-looking «مباشر» elements (topbar chip,
 // red #mapCtrls button, button-styled marquee pill) are unified into exactly
 // one — the topbar status chip is the real button.
-test('the topbar status chip is a real button and the only «مباشر» control', () => {
-  // the chip itself is a <button> keeping its dot, label and clock spans
-  assert.match(indexHtml, /<button class="status" id="status"[^>]*type="button"><span class="dot"/);
-  assert.match(indexHtml, /<span class="status-age"/);
-  // app.js wires its click to open the Live sheet on the World view
-  assert.match(appJs, /\$\('#status'\)\?\.addEventListener\('click', \(\) => live\.open\('world'\)\);/);
-  // button affordance in CSS: pointer cursor + hover + focus ring
-  assert.match(css, /\.status \{[^}]*cursor: pointer;/);
-  assert.match(css, /\.status:hover \{ background: var\(--bg-card-hover\); \}/);
-  assert.match(css, /\.status:focus-visible \{/);
-  // the pulsing connection dot is untouched
-  assert.match(css, /\.status\[data-state='live'\] \.dot::after \{ animation: ping 2s/);
-});
-
-test('the red map-cluster «مباشر» button is gone entirely', () => {
-  assert.doesNotMatch(live, /buildMapBtn|liveMapBtn|live-map-btn|live-dot-pulse/);
-  assert.doesNotMatch(css, /\.live-map-btn|\.live-dot-pulse/);
-  assert.match(live, /function init\(\) \{\s*buildStrip\(\);\s*load\(\);/);
-});
-
-test('the marquee strip label is a plain caption, not a button', () => {
-  assert.match(live, /<span class="live-chip" aria-hidden="true">/);
-  assert.doesNotMatch(live, /<button[^>]*live-chip/);
-  // no pill border, no pointer cursor in its CSS
-  assert.match(css, /\.live-chip \{ flex: none; color: var\(--red\);/);
-  assert.doesNotMatch(css, /\.live-chip \{[^}]*border: 1px solid var\(--red\)/);
-  assert.doesNotMatch(css, /\.live-chip \{[^}]*cursor: pointer/);
-});
-
-test('the topbar chip opens the Live sheet directly on the World news view', () => {
-  assert.match(live, /if \(view === 'world'\) \{ newsFocus = 'world'; \}/);
-  // world section renders first under world focus, Syria first otherwise
-  assert.match(live, /newsFocus === 'world' \? worldSec \+ syriaSec : syriaSec \+ worldSec/);
-});
-
-// ------------------------------------------------- Live: vertical scroll (req. B)
-test('the sheet is a single news view inside the vertical scroller (OSINT + markets removed)', () => {
-  // owner simplification (2026-11-17): news only — no tabs, no OSINT pane,
-  // no markets grid, in either the markup or the render code
-  assert.doesNotMatch(live, /osintHtml|marketsHtml|data-tab|live-tabs/);
-  assert.doesNotMatch(live, /data\?\.osint|data\?\.markets/);
-  assert.match(live, /<div class="live-scroll"><div class="live-vtrack"><div class="live-set">\$\{newsHtml\(\)\}/);
-  assert.match(live, /function setupScroller\(\)/);
-  // duplicated exactly once, only when one set overflows the viewport
-  assert.match(live, /setH <= sc\.clientHeight \+ 4/);
-  assert.match(live, /const copy = set\.cloneNode\(true\);/);
-  assert.match(live, /copy\.setAttribute\('aria-hidden', 'true'\);/);
-  // ~30px/s ≈ one news row every ~2s, clamped
-  assert.match(live, /Math\.min\(240, Math\.max\(12, setH \/ 30\)\)/);
-});
-
-test('vertical scroll CSS: seamless loop, pauses, stops closed, honours reduced motion', () => {
-  assert.match(css, /@keyframes live-vscroll \{ from \{ transform: translateY\(0\); \} to \{ transform: translateY\(-50%\); \} \}/);
-  assert.match(css, /\.live-vtrack\.anim \{ animation: live-vscroll linear infinite; \}/);
-  assert.match(css, /\.live-scroll:hover \.live-vtrack\.anim, \.live-scroll\.paused \.live-vtrack\.anim \{ animation-play-state: paused; \}/);
-  assert.match(css, /\.live-sheet:not\(\.open\) \.live-vtrack\.anim \{ animation: none; \}/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.live-vtrack\.anim \{ animation: none; \} \.live-scroll \{ overflow-y: auto; \} \}/);
-  // touch/drag pauses from JS and resumes after release
-  assert.match(live, /sc\.addEventListener\('pointerdown', \(\) => \{ sc\.classList\.add\('paused'\);/);
-});
-
-// ------------------------------------------------- Live: marquee robustness (req. C)
-test('strip storage access is webview-safe (a throwing localStorage cannot kill init)', () => {
-  assert.match(live, /const storeGet = \(k\) => \{ try \{ return localStorage\.getItem\(k\); \} catch \{ return null; \} \};/);
-  assert.match(live, /if \(storeGet\('ras-live-off'\) === '1'\) return;/);
-  assert.doesNotMatch(live, /localStorage\.setItem\('ras-live-off'/);
-});
-
-test('marquee rebuilds its track per render, loops two measured halves, pauses on touch', () => {
-  // fresh track node each render -> the CSS animation restarts with new content
-  assert.match(live, /old\.replaceWith\(track\); else marquee\.appendChild\(track\);/);
-  // halves: the run repeats until one half is at least as wide as the marquee
-  assert.match(live, /while \(half\.scrollWidth < marquee\.clientWidth && guard\+\+ < 5\)/);
-  assert.match(live, /half2\.setAttribute\('aria-hidden', 'true'\);/);
-  // duration from measured width (constant px/s), not a per-item guess
-  assert.match(live, /Math\.max\(12, half\.scrollWidth \/ 45\)/);
-  // empty feed renders a still, non-animated track
-  assert.match(live, /track\.classList\.add\('still'\);/);
-  assert.match(css, /\.live-track\.still \{ animation: none; \}/);
-  assert.match(css, /\.live-marquee\.paused \.live-track \{ animation-play-state: paused; \}/);
-  assert.match(live, /marquee\.addEventListener\('pointerdown', \(\) => \{ marquee\.classList\.add\('paused'\);/);
-  // Syria headlines still lead the run, world follows
-  assert.match(live, /\[\.\.\.\(data\?\.news\?\.syria \|\| \[\]\), \.\.\.\(data\?\.news\?\.world \|\| \[\]\)\]/);
-});
-
-test('marquee flows in the reversed direction (owner request, 2026-11-17)', () => {
-  // -50% -> 0 over the two identical halves: headlines move rightward and the
-  // loop point is invisible because half two replaces half one exactly
-  assert.match(css, /@keyframes live-scroll \{ from \{ transform: translateX\(-50%\); \} to \{ transform: translateX\(0\); \} \}/);
-  assert.doesNotMatch(css, /@keyframes live-scroll \{ from \{ transform: translateX\(0\); \} to \{ transform: translateX\(-50%\); \} \}/);
-  // speed is untouched: duration still comes from the measured half width
-  assert.match(live, /Math\.max\(12, half\.scrollWidth \/ 45\)/);
-});
-
-// ------------------------------------------------- 3D terrain sharpness
 test('3D terrain renders at full sharpness: no pixel-ratio downgrade, DEM at the provider cap', () => {
   // owner (2026-11-17): «الخريطة عند ضغط على ثلاثية الابعاد دقتها تنخفض» — the
   // old applyToggles capped the canvas pixel ratio in 3D (1.25 phone / 1.5

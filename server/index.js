@@ -23,7 +23,6 @@ import { weatherDebug, checkWeather } from './weather.js';
 import { publicBorders, setBorder, CROSSINGS } from './borders.js';
 import { renderNewsIllustrationPng } from './alert-image.js';
 import { startServices, publicRoads, publicPower } from './services.js';
-import { getLiveFeed, startLiveFeed } from './live-feed.js';
 import { pushConfigured, pushPublicKey, saveSubscription, removeSubscription, sendPush } from './push.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -350,11 +349,6 @@ app.get('/api/services', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=60');
   res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), borders: publicBorders(), jobs: publicJobs(), army: publicArmy(), server_time: new Date().toISOString() });
 });
-// 📡 «المباشر»: live news ticker + OSINT + global markets for the website (website-only, cached server-side)
-app.get('/api/live', apiLimiter, async (req, res) => {
-  try { res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120'); res.json(await getLiveFeed()); }
-  catch { res.set('Cache-Control', 'no-store'); res.status(503).json({ ok: false, error: 'live feed unavailable' }); }
-});
 // Token-protected prices tools: status JSON, and a clearly marked preview of the bulletin sent to the
 // owner's private chat only (never the channel). key = sha256(BOT_TOKEN + ':prices').
 const pricesKeyOk = (req) => {
@@ -638,7 +632,6 @@ async function start() {
     startWxBulletin(() => bots.admin?.api); // 🌤 morning weather bulletin (separate post, default 08:00)
     startPrices(() => bots.admin?.api); // 💱 morning prices bulletin (in-app scheduler, Damascus time)
     startServices(); // 🛣 road statuses expiry
-    startLiveFeed(); // 📡 «المباشر» ticker/OSINT/markets cache warmer (website-only)
     startQuakes(() => bots.admin?.api); // 🌍 earthquake alerts (EMSC + USGS, auto-posted)
     if (startupMaintenanceEnabled) {
     // one-time owner request (2026-10-25): 3 explosions published as "civil" -> "explosion" (edit posts in place)

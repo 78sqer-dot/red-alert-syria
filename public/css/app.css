@@ -1456,59 +1456,7 @@ html.dark .mk-event-emoji { background: #f8fafc; }
 .follow-area-selected span { color: var(--text-muted); font-size: 12px; }
 .follow-area-note { margin: 7px 0 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.6; }
 
-/* ---------------------------------------------------------------- «المباشر» live strip + sheet */
-.live-strip { display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-subtle); min-height: 30px; }
-.live-chip { flex: none; color: var(--red); padding: 2px 2px; font-weight: 800; font-size: 12px; }
-.live-x { flex: none; border: 0; background: transparent; color: var(--text-muted); font-size: 13px; cursor: pointer; padding: 2px 4px; }
-.live-marquee { flex: 1; min-width: 0; overflow: hidden; cursor: pointer; mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent); }
-.live-track { display: flex; width: max-content; direction: ltr; animation: live-scroll 60s linear infinite; }
-.live-marquee:hover .live-track, .live-marquee:active .live-track { animation-play-state: paused; }
-.live-run { display: flex; align-items: center; }
-.live-tick { direction: rtl; unicode-bidi: plaintext; white-space: nowrap; font-size: 12.5px; font-weight: 600; color: var(--text-primary); padding: 0 4px; }
-.live-tick .live-src { color: var(--red); font-weight: 800; margin-inline-end: 6px; }
-.live-dot { color: var(--text-muted); padding: 0 6px; }
-.live-empty { color: var(--text-muted); font-weight: 500; }
-@keyframes live-scroll { from { transform: translateX(-50%); } to { transform: translateX(0); } }
-/* owner 2026-11-20: the live strip must always move, even with OS reduce-motion on */
-@media (prefers-reduced-motion: reduce) { .live-marquee { overflow-x: auto; } }
-/* Marquee halves: the track is exactly two identical halves, so the 50%
-   keyframe loop is seamless at any content width. Direction reversed at the
-   owner's request (2026-11-17): the track runs -50% -> 0, so headlines flow
-   rightward across the RTL page; at the loop point the second half sits
-   exactly where the first half started, so the wrap is invisible. A still
-   track (empty feed) never animates; a touch holds the scroll. */
-.live-half { display: flex; align-items: center; }
-.live-track { will-change: transform; }
-.live-track.still { animation: none; }
-.live-marquee.paused .live-track { animation-play-state: paused; }
 
-/* «مباشر» map button: lives in the top map-tools cluster (#mapCtrls), clear of
-   the topbar and of the bottom row; always present even when the live strip
-   was dismissed; opens the Live window on the World news view. */
-
-
-/* Vertical auto-scroll for the Live window's news list (Crucix-style):
-   the list is duplicated once for a seamless upward loop at ~30px/s; it pauses
-   on hover or while touched/dragged, never runs while the sheet is closed,
-   and reduced-motion users get a plain scrollable list instead. */
-.live-scroll { position: relative; overflow: hidden; max-height: min(46vh, 460px); }
-.live-vtrack { display: flex; flex-direction: column; will-change: transform; }
-.live-vtrack.anim { animation: live-vscroll linear infinite; }
-.live-scroll:hover .live-vtrack.anim, .live-scroll.paused .live-vtrack.anim { animation-play-state: paused; }
-.live-sheet:not(.open) .live-vtrack.anim { animation: none; }
-@keyframes live-vscroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
-@media (prefers-reduced-motion: reduce) { .live-vtrack.anim { animation: none; } .live-scroll { overflow-y: auto; } }
-.live-head { display: flex; align-items: center; justify-content: space-between; }
-.live-head h2 { margin: 0; }
-.live-close { border: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: var(--text-secondary); }
-.live-sub { color: var(--text-secondary); font-size: 13px; line-height: 1.8; margin: 6px 0 4px; }
-.live-sec { margin: 14px 0 8px; font-size: 15px; font-weight: 900; }
-.live-item { display: flex; align-items: baseline; gap: 8px; padding: 9px 10px; border: 1px solid var(--border-subtle); background: var(--bg-card); border-radius: 10px; margin-bottom: 7px; text-decoration: none; color: var(--text-primary); }
-.live-badge { flex: none; font-size: 11px; font-weight: 800; color: var(--red); border: 1px solid var(--red); border-radius: 999px; padding: 1px 8px; }
-.live-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; line-height: 1.6; }
-.live-time { flex: none; font-size: 11px; color: var(--text-muted); }
-.live-none { color: var(--text-muted); padding: 14px 0; }
-.live-foot { color: var(--text-muted); font-size: 11.5px; margin-top: 12px; }
 
 .legend-extra { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
 .legend-extra .legend-row { padding: 3px 0; }

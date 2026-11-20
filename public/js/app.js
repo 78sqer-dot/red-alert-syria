@@ -1,6 +1,5 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=38';
-import { createLive } from './live.js?v=4';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=42';
 import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
@@ -1794,14 +1793,6 @@ async function boot() {
     svc.init();
     document.addEventListener('ras:me', () => { renderList(); if (state.view === 'detail') renderDetail(); });
   } catch (e) { console.error('services init failed', e); }
-  try {
-    const live = createLive({ LANG, esc });
-    live.init();
-    // The topbar status chip is the ONE «مباشر» control (owner, 2026-11-17):
-    // tapping it opens the Live sheet on the World news view. The clock and
-    // the pulsing connection dot stay exactly as they were.
-    $('#status')?.addEventListener('click', () => live.open('world'));
-  } catch (e) { console.error('live init failed', e); }
   amap.setAlerts(visibleAlerts(), state.selectedId);
   focusFromUrl();
   if (state.selectedId) {
