@@ -77,6 +77,27 @@ test('a reported ground incursion stays primary when the same report explicitly 
   assert.equal(refineType('uav_strike', strike), 'uav_strike', 'a separately reported drone strike remains a specific violent event');
 });
 
+test('an incident with a follow-up detention is the incident, never an arrest (owner report 2026-11-20)', () => {
+  // the exact misclassified post: a brawl/shooting in karm al-zaytoun drafted as اعتقال
+  const brawlShooting = 'إصابة 6 أشخاص بمشاجرة عائلية تطورت لإطلاق نار في حي كرم الزيتون بحمص والأمن الداخلي يوقف عددًا من المتورطين';
+  assert.equal(refineType('arrest', brawlShooting), 'attack', 'violence told before the detention owns the type');
+  assert.equal(refineType('arrest', 'مقتل شخص وإصابة آخرين بإطلاق نار في حلب والأمن يعتقل الفاعل'), 'attack');
+  // a genuine arrest story that only references an older crime stays an arrest
+  assert.equal(refineType('arrest', 'قيادة الأمن الداخلي في اللاذقية تعلن إلقاء القبض على سبعة أشخاص على خلفية جريمة قتل وقعت إثر مشاجرة'), 'arrest');
+  assert.equal(refineType('arrest', 'الأمن السوري يعتقل العميد رواد زيدان المتهم بالتخطيط لمجزرة كمين العتيبة بريف دمشق'), 'arrest');
+});
+
+test('a state-attributed or aerial مسيّرة is a drone, never a protest march (owner report 2026-11-20)', () => {
+  assert.equal(hasExplicitDroneFlight('مسيرة تركية تحوم فوق ريف الحسكة'), true);
+  assert.equal(hasExplicitDroneFlight('مسيرات تركية تجوب أجواء القامشلي'), true);
+  assert.equal(refineType('protest', 'مسيرة تركية تحوم فوق ريف الحسكة'), 'uav');
+  assert.equal(refineType('protest', 'مسيرات تركية تجوب أجواء القامشلي'), 'uav');
+  assert.equal(refineType('civil', 'تحليق مسيّرة إسرائيلية في أجواء الجنوب السوري'), 'uav');
+  // a real peaceful march stays a protest
+  assert.equal(hasExplicitDroneFlight('خروج مسيرة سلمية في ساحة الأمويين بدمشق'), false);
+  assert.equal(refineType('protest', 'خروج مسيرة سلمية في ساحة الأمويين بدمشق'), 'protest');
+});
+
 test('specific Syrian political developments pass only when political keywords are present', () => {
   const post = 'أعلنت الرئاسة السورية بدء مفاوضات رسمية جديدة مع ممثلي القوى الوطنية حول المرحلة المقبلة';
   const result = prefilter(post, { general: true });

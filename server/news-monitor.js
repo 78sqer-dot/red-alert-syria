@@ -1606,9 +1606,12 @@ async function handleResult(it, r, known, pmap) {
   // freshness window is dropped here and can never be drafted as new
   if (!isFreshSourceTs(it.ts)) { note(it, 'too old'); return; }
   if (!r || !r.event || !NEWS_TYPES.includes(r.type)) { note(it, 'not an event'); return; }
-  // Only the primary headline can correct Gemini's type. A secondary incident
-  // mentioned later in the article must not route this story to a different button.
-  if (!r.rule) { const t2 = refinePrimaryType(r.type, r.headline || it.text); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
+  // Only the primary lead can correct Gemini's type. A secondary incident mentioned
+  // later in the article must not route this story to a different button. Validate
+  // against the SOURCE post's lead, not Gemini's headline: when Gemini picks the wrong
+  // type it often also writes a generic headline without the cue words, so validating
+  // its own output would hide the mistake from the safety net.
+  if (!r.rule) { const t2 = refinePrimaryType(r.type, it.text || r.headline); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
   if (r.type === 'weather' && !weatherWarningInfo(it.text)) { note(it, 'not an explicit actionable weather warning'); return; }
   // the AI linked it to a known incident / an earlier post of this batch
   let target = null;
