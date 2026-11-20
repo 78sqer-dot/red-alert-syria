@@ -1343,7 +1343,8 @@ html.dark .uav-svg {
 .map-tool-grid > .dd, .map-tool-grid > .map-btn { min-width: 0; }
 .map-tool-grid > .dd > .map-btn, .map-tool-grid > .map-btn { width: 100%; min-height: 44px; height: auto; justify-content: flex-start; padding: 7px 10px; border-radius: 10px; box-shadow: none; }
 .map-tool-grid > .dd > .map-btn > span:not(.badge-count), .map-tool-grid > .map-btn > span:not(.badge-count) { min-width: 0; }
-.map-tool-grid > #btnNotifications { grid-column: 1 / -1; }
+/* Uniform 2x2 grid: all four tool buttons share the same size (owner ask 2026-11-20). */
+.map-tool-grid > #btnNotifications { grid-column: auto; }
 .map-tool-grid .badge-count { margin-inline-start: auto; }
 .map-control-actions { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
 .map-ctrl-panel .map-control-actions .ctrl-btn { width: 42px; height: 42px; flex: none; }
