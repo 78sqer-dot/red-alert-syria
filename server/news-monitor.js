@@ -37,7 +37,9 @@ const NEWS_TYPE_GROUPS = Object.freeze(Object.fromEntries(
 ));
 // The owner can reclassify a human-reviewed draft to any alert type.
 const EDIT_TYPE_GROUPS = Object.freeze({
-  ...Object.fromEntries(TYPE_MENU_GROUPS.map((g) => [g.key, g.types])),
+  // air_movement stays monitorable/auto-published but is not a hand-picked type
+  // in any bot (owner 2026-11-20), mirroring BOT_ALERT_MENU_GROUPS.
+  ...Object.fromEntries(TYPE_MENU_GROUPS.map((g) => [g.key, g.types.filter((type) => type !== 'air_movement')])),
   // Pseudo-group: picking an incursion KIND, not a type — the security group's
   // military_incursion button routes here (see typeGroupKb).
   incursion: Object.freeze(['military_incursion']),

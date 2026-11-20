@@ -60,10 +60,10 @@ const politicalCategory = (key) => Object.hasOwn(POLITICAL_CATEGORIES, key) ? ke
 // Report choices come from the ONE canonical type menu (TYPE_MENU in
 // shared/types.js) — the same definition the news monitor's edit menu and
 // filter panel are generated from, so the menus can never disagree again.
-// The canonical menu still lists air_movement in the air group, but the owner
-// keeps its public report flow disabled (reaffirmed 2026-11-17): the t:
-// handler answers «لم يعد متاحاً» and never reaches askFlightAircraft.
-export const BOT_ALERT_MENU_GROUPS = Object.freeze(Object.fromEntries(TYPE_MENU_GROUPS.map((g) => [g.key, g.types])));
+// The canonical menu still lists air_movement in the air group (map, ticker and
+// news monitor keep using it), but the owner removed its button from both bots
+// (2026-11-20): the t: handler still rejects stray taps with «لم يعد متاحاً».
+export const BOT_ALERT_MENU_GROUPS = Object.freeze(Object.fromEntries(TYPE_MENU_GROUPS.map((g) => [g.key, g.types.filter((t) => t !== 'air_movement')])));
 export const BOT_ALERT_MENU_DIRECT_TYPES = TYPE_MENU_DIRECT;
 const TYPE_MENU_BY_KEY = new Map(TYPE_MENU.map((g) => [g.key, g]));
 const quoteButtonLabel = (label, lang) => lang === 'en' ? `“${label}”` : `«${label}»`;

@@ -30,11 +30,11 @@ test('TYPE_MENU covers every alert type exactly once, in the approved groups', (
 test('both bots and the monitor filter panel are generated from the one menu', () => {
   // reporting bot
   assert.deepEqual(BOT_ALERT_MENU_DIRECT_TYPES, TYPE_MENU_DIRECT);
-  assert.deepEqual(BOT_ALERT_MENU_GROUPS, Object.fromEntries(TYPE_MENU_GROUPS.map((g) => [g.key, g.types])));
+  assert.deepEqual(BOT_ALERT_MENU_GROUPS, Object.fromEntries(TYPE_MENU_GROUPS.map((g) => [g.key, g.types.filter((t) => t !== 'air_movement')])), 'bot menus hide air_movement (owner 2026-11-20)');
   // monitor edit menu (the incursion entry is the kind-picker pseudo-group)
   const { editableTypeGroups, editableTypeDirectTypes, editTypeMenu, newsTypeGroups } = monitorTest;
   assert.deepEqual(editableTypeDirectTypes, TYPE_MENU_DIRECT);
-  for (const g of TYPE_MENU_GROUPS) assert.deepEqual(editableTypeGroups[g.key], g.types, `edit menu group ${g.key} matches the canonical menu`);
+  for (const g of TYPE_MENU_GROUPS) assert.deepEqual(editableTypeGroups[g.key], g.types.filter((t) => t !== 'air_movement'), `edit menu group ${g.key} matches the bot menus`);
   assert.deepEqual(editableTypeGroups.incursion, ['military_incursion']);
   assert.deepEqual(editTypeMenu, [
     ...TYPE_MENU_DIRECT.map((type) => ({ type })),

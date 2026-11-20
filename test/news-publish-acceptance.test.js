@@ -189,7 +189,7 @@ test('home menu clears tracked private relay messages for this bot and chat only
 test('report menus route every type exactly once through the canonical menu', async () => {
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
   assert.equal(new Set(routedTypes).size, routedTypes.length, 'each alert type has exactly one report-menu route');
-  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).sort(), 'every alert type — air_movement included, per the approved unified menu — has a menu route');
+  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).filter((t) => t !== 'air_movement').sort(), 'every alert type except air_movement has a menu route (owner removed its button 2026-11-20)');
   assert.ok(ALERT_TYPES.air_movement, 'movement alerts remain a recognized data type');
 
   let start = calls.length;
@@ -235,7 +235,7 @@ test('report menus route every type exactly once through the canonical menu', as
     const expected = BOT_ALERT_MENU_GROUPS[group].filter((type) => type !== 'military_incursion').map((type) => `t:${type}`).sort();
     assert.deepEqual(children, expected, `${group} buttons route to their own alert types`);
     if (group === 'security') assert.ok(childButtons.some((button) => button.callback_data === 'mi' && button.text?.includes('توغل عسكري')), 'security submenu keeps the incursion kind-picker entry');
-    if (group === 'air') assert.ok(childButtons.some((button) => button.callback_data === 't:air_movement'), 'air submenu offers aircraft movement (approved unified menu)');
+    if (group === 'air') assert.ok(!childButtons.some((button) => button.callback_data === 't:air_movement'), 'air submenu hides aircraft movement (owner 2026-11-20)');
     if (group === 'strikes') {
       assert.ok(childButtons.some((button) => button.callback_data === 't:explosion' && button.text === '«💥 انفجار»'), 'admin bot keeps the existing «انفجار» option');
       assert.ok(childButtons.some((button) => button.callback_data === 't:detonation' && button.text === '«🧨 تفجير»'), 'admin bot exposes the distinct «تفجير» option');
@@ -249,7 +249,7 @@ test('public report bot exposes both strike types and sends detonation reports o
   const currentUi = () => [...calls].reverse().find(({ method }) => method === 'sendMessage' || method === 'editMessageText');
   const currentButtons = () => currentUi()?.payload?.reply_markup?.inline_keyboard?.flat() || [];
   const routedTypes = [...BOT_ALERT_MENU_DIRECT_TYPES, ...Object.values(BOT_ALERT_MENU_GROUPS).flat()];
-  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).sort(), 'the public menu routes every type, air_movement included');
+  assert.deepEqual([...routedTypes].sort(), Object.keys(ALERT_TYPES).filter((t) => t !== 'air_movement').sort(), 'the public menu routes every type except air_movement');
   assert.ok(ALERT_TYPES.air_movement, 'movement alerts remain recognized');
 
   let start = calls.length;
