@@ -66,6 +66,19 @@ function detectedSmugglingType(text) {
   const matches = SMUGGLING_GOODS.filter(([, words]) => words.some((w) => nt.includes(w))).map(([type]) => type);
   return matches.length === 1 ? matches[0] : null; // do not guess when a report names several contraband classes
 }
+/** Direction/destination an air report states («باتجاه…», «متجهاً نحو…»); null when the source does not say. */
+export function extractFlightDirection(text) {
+  const raw = String(text || '');
+  const m = raw.match(/(?:باتجاه|بإتجاه|بوجهة|متجهاً?\s+نحو|متجهة\s+نحو)\s+([^،.!؟:؛\n•⭕\-–—(){}[\]"«»]{2,70})/u);
+  if (!m) return null;
+  let dir = m[1].replace(/\s+/g, ' ').trim();
+  dir = dir.replace(/\s+(?:الآن|الان|حالياً|حاليا|في هذه الأثناء|حتى اللحظة)$/u, '').trim();
+  if (dir.length < 2 || /^(?:واحد|واحدة|ثابت|ثابتة)(?:\s|$)/u.test(dir)) return null; // borders-style «باتجاه واحد», not a flight heading
+  const words = dir.split(' ');
+  if (words.length > 8) dir = words.slice(0, 8).join(' ');
+  return dir.slice(0, 70);
+}
+
 /** which types' keywords appear in the (normalized) text */
 export function keywordTypes(text) {
   const nt = ' ' + N(text) + ' ';

@@ -872,6 +872,7 @@ export function publicAlert(a) {
     hazard: a.type === 'weather' ? a.meta?.hazard || undefined : undefined,
     border: BORDER_REGIONS[a.meta?.border] ? a.meta.border : undefined,
     flight_direction: FLIGHT_DIRECTIONS[a.meta?.flightDirection] ? a.meta.flightDirection : undefined,
+    flight_heading: ['uav', 'uav_strike', 'warplane', 'helicopter'].includes(a.type) && a.meta?.flightHeading ? String(a.meta.flightHeading).slice(0, 80) : undefined,
     aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
     ...(a.type === 'air_movement' && a.meta?.flightRouteOrigin === 'israel_approx_reference'
       && flightTarget?.scope === 'governorate' && targetHasCoordinates ? { flight_route_origin: 'israel_approx_reference' } : {}),

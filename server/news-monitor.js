@@ -22,7 +22,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
@@ -747,6 +747,7 @@ function cardText(d, lang = 'ar') {
     lines.push(`📍 <b>${tr(lang, `المناطق (${locs.length})`, `Areas (${locs.length})`)}:</b>`);
     for (const l of locs) lines.push(`• ${esc(fmtLoc(l))}`);
   } else lines.push(`📍 <b>${tr(lang, 'المكان', 'Place')}:</b> ${esc(locs[0] ? fmtLoc(locs[0]) : d.type === 'political' ? tr(lang, 'غير محدد داخل سوريا', 'Unspecified within Syria') : tr(lang, 'سوريا', 'Syria'))}`);
+  if (d.flightHeading) lines.push(`🧭 <b>${tr(lang, 'الاتجاه', 'Heading')}:</b> ${esc(d.flightHeading)}`);
   lines.push(`📝 ${esc(d.publishedHeadline || d.headline)}`);
   if (d.type === 'helicopter') lines.push(d.intense === true
     ? tr(lang, '🚁🚁 <b>تحليق مكثف — مروحيتان</b>', '🚁🚁 <b>Intensive flight — two helicopters</b>')
@@ -1458,6 +1459,7 @@ export function toBotDraft(d, options = {}) {
     srcs: (d.srcs || []).map((s) => ({ u: s.u, name: s.name, url: s.url, ts: s.ts, local: !!s.local })),
     ...(d.type === 'military_incursion' && ['soldiers', 'vehicles', 'barrier'].includes(d.incursionKind) ? { incursionKind: d.incursionKind } : {}),
     ...(patrolForm ? { patrolForm } : {}),
+    ...(d.flightHeading ? { flightHeading: d.flightHeading } : {}),
     ...((d.type === 'weather' && d.hazard) || d.dronePresence === true || editorialSelection ? { meta: { ...(d.type === 'weather' && d.hazard ? { hazard: d.hazard } : {}), ...(d.dronePresence === true ? { dronePresence: true } : {}), ...(editorialSelection ? { publicEditorialTone: editorialSelection.mode } : {}) } } : {}),
     ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
     ...(d.type === 'political' ? {
@@ -1678,6 +1680,7 @@ async function handleResult(it, r, known, pmap) {
     ...(fullBody ? { body: fullBody } : {}), ...(r.toneGuard ? { toneNeutralized: r.toneGuard } : {}), ...(headlineRebuilt ? { headlineRebuilt } : {}),
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
     droneRuleVersion: 1, dronePresence: hasExplicitDroneFlight(it.text),
+    ...(['uav', 'uav_strike', 'warplane', 'helicopter'].includes(r.type) && extractFlightDirection(it.text) ? { flightHeading: extractFlightDirection(it.text) } : {}),
     sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
   };
   scheduleDayAuto(d, d.created);
