@@ -117,8 +117,8 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=101'/);
-  assert.match(html, /app\.css\?v=98/);
-  assert.match(html, /app\.js\?v=108/);
+  assert.match(html, /app\.css\?v=99/);
+  assert.match(html, /app\.js\?v=109/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {

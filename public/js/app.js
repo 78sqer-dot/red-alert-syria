@@ -393,9 +393,7 @@ function popupHtml(a) {
     return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}" data-pp-media-mime="${esc(item?.mime_type || '')}" data-pp-illustration="${item?.illustration === true}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
   }).join('')}</div>` : '';
   const titleRow = `<div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p></div>`;
-  const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}><div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
-    ${distChip(a)}
-    ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">${icon('locate', 13)} ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
+  const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}><div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span>${distChip(a)}${Array.isArray(a.more) && a.more.length ? `<span class="pp-areas">${icon('locate', 13)}${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</span>` : ''}</div>
     ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}</section>` : '';
   const activeMedia = displayMediaItems.find((item) => item.type === initialMode);
   const mediaViewer = displayMediaItems.length ? `<section class="pp-media-panel" data-pp-media-panel role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"${initialMode === 'news' ? ' hidden' : ''}><div class="pp-media-content" data-pp-media-content>${activeMedia ? alertMediaFrameHtml(activeMedia, a.id) : ''}</div></section>` : '';
