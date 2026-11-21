@@ -648,10 +648,32 @@ export class AlertMap {
   movementTrackAlerts() {
     if (this.newsHidden) return [];
     return this.alerts
-      .filter((a) => a.type === 'air_movement' && a.is_active && FLIGHT_DIRECTIONS[a.flight_direction]
+      .filter((a) => ((a.type === 'air_movement' && FLIGHT_DIRECTIONS[a.flight_direction]) || a.type === 'helicopter')
+        && a.is_active
         && Number.isFinite(a.location?.latitude) && Number.isFinite(a.location?.longitude))
       .sort((a, b) => (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0))
       .slice(0, 3);
+  }
+
+  // Helicopter sightings fly the warplane track language (owner 2026-11-21): spawn at one edge
+  // of the impact circle, cross the reported area, disappear at the far edge. Helicopter reports
+  // carry no flight target, so the path is an illustrative diameter of the impact circle along a
+  // stable heading (the alert's numeric heading when present, else a hash of the alert id so it
+  // never changes between renders). Illustrative only; the saved report location never changes.
+  heliTrackPath(alert) {
+    const lat = alert.location.latitude;
+    const lon = alert.location.longitude;
+    const z = Array.isArray(alert.zones) && alert.zones.length ? alert.zones[0] : null;
+    const km = z && Number(z.km) > 0 ? Number(z.km) : (ZONE_KM[alert.scope] || ZONE_KM.place || 8);
+    const rLat = km / 111.32;
+    const rLon = km / ((111.32 * Math.cos((lat * Math.PI) / 180)) || 1);
+    const heading = Number.isFinite(alert.heading)
+      ? alert.heading
+      : ([...String(alert.id)].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360);
+    const rad = ((90 - heading) * Math.PI) / 180;
+    const dx = Math.cos(rad) * rLon;
+    const dy = Math.sin(rad) * rLat;
+    return [[lon - dx, lat - dy], [lon + dx, lat + dy]];
   }
 
   // Warplane icons may travel along the selected illustrative route; this is not live tracking and
@@ -668,20 +690,25 @@ export class AlertMap {
     let includesReferenceRoute = false;
     active.forEach((alert) => {
       const position = [alert.location.longitude, alert.location.latitude];
-      const isReferenceRoute = hasIsraelReferenceRoute(alert);
-      const route = isReferenceRoute
-        ? referenceFlightPath(alert.flight_direction, alert.flight_target)
-        : directFlightPath(alert.location, alert.flight_target);
-      const savedBearing = directFlightBearing(alert.location, alert.flight_target);
+      const isHelicopter = alert.type === 'helicopter';
+      const isReferenceRoute = !isHelicopter && hasIsraelReferenceRoute(alert);
+      const route = isHelicopter
+        ? this.heliTrackPath(alert)
+        : isReferenceRoute
+          ? referenceFlightPath(alert.flight_direction, alert.flight_target)
+          : directFlightPath(alert.location, alert.flight_target);
+      const savedBearing = isHelicopter ? NaN : directFlightBearing(alert.location, alert.flight_target);
       const routeBearing = flightPathBearing(route);
-      const heading = isReferenceRoute && Number.isFinite(routeBearing) ? routeBearing : aircraftHeading(alert, savedBearing);
+      const heading = isHelicopter || (isReferenceRoute && Number.isFinite(routeBearing)) ? routeBearing : aircraftHeading(alert, savedBearing);
       keep.add(alert.id);
-      const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
-      const color = eventVisual('air_movement').color;
+      const aircraft = isHelicopter ? 'helicopter' : alert.aircraft === 'uav' ? 'uav' : 'plane';
+      const color = isHelicopter ? eventVisual('helicopter').color : eventVisual('air_movement').color;
       const iconColor = aircraft === 'uav' ? color : '#3b8eff';
-      const routeColor = aircraft === 'uav' ? '#e5484d' : '#2476c9';
+      const routeColor = aircraft === 'uav' ? '#e5484d' : isHelicopter ? color : '#2476c9';
       const lang = this.opts.lang === 'en' ? 'en' : 'ar';
-      const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
+      const direction = isHelicopter
+        ? (lang === 'en' ? 'Helicopter flight' : 'تحليق مروحية')
+        : FLIGHT_DIRECTIONS[alert.flight_direction][lang];
       const reportedPlace = lang === 'en'
         ? (alert.place?.name_en || alert.location?.name_en || 'the original report location')
         : (alert.place?.name_ar || alert.location?.name_ar || 'الموقع الأصلي للبلاغ');
@@ -710,7 +737,7 @@ export class AlertMap {
       }
       if (!track) {
         const el = document.createElement('div');
-        el.className = `maplibregl-marker map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'} is-${alert.flight_direction.replace(/_/g, '-')}`;
+        el.className = `maplibregl-marker map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : aircraft === 'helicopter' ? 'is-helicopter' : 'is-plane'} is-${isHelicopter ? 'helicopter' : alert.flight_direction.replace(/_/g, '-')}`;
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
         el.setAttribute('aria-label', `${movementTitle} · ${direction}`);
@@ -718,11 +745,18 @@ export class AlertMap {
         const visual = document.createElement('span'); visual.className = 'map-flight-track-visual';
         const squad = document.createElement('span'); squad.className = 'map-flight-track-squad';
         const formation = document.createElement('span'); formation.className = 'map-flight-track-formation';
-        for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
+        if (aircraft === 'helicopter') {
           const airframe = document.createElement('span');
-          airframe.className = `map-flight-track-airframe ${slot.name}`;
-          airframe.innerHTML = svgTag(aircraft, slot.size, `fill="${iconColor}" class="map-flight-track-svg"`);
+          airframe.className = 'map-flight-track-airframe is-lead is-heli';
+          airframe.innerHTML = '<img src="/img/helicopter-top.png?v=1" width="34" height="34" class="heli-img" alt="">';
           formation.append(airframe);
+        } else {
+          for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
+            const airframe = document.createElement('span');
+            airframe.className = `map-flight-track-airframe ${slot.name}`;
+            airframe.innerHTML = svgTag(aircraft, slot.size, `fill="${iconColor}" class="map-flight-track-svg"`);
+            formation.append(airframe);
+          }
         }
         squad.append(formation);
         visual.append(squad);
@@ -733,7 +767,7 @@ export class AlertMap {
         this.movementTracks.set(alert.id, track);
       }
       track.path = route;
-      if (aircraft === 'plane' && route.length === 2) {
+      if ((aircraft === 'plane' || aircraft === 'helicopter') && route.length === 2) {
         if (track.frame == null) {
           const animate = (now) => {
             if (this.movementTracks.get(alert.id) !== track) return;
@@ -757,7 +791,7 @@ export class AlertMap {
         track.marker.setLngLat(position);
         track.marker.setRotation(heading);
       }
-      track.element.dataset.flightDirection = alert.flight_direction;
+      if (alert.flight_direction) track.element.dataset.flightDirection = alert.flight_direction;
     });
     const archivedAlert = !this.newsHidden && this.selectedAlert?.id === this.selectedId
       && isLegacyQuneitraArchiveAlert(this.selectedAlert) ? this.selectedAlert : null;
@@ -1131,10 +1165,12 @@ export class AlertMap {
       const svg = signalDrone ? svgTag(glyph, 36, `class="${svgClass}"`) : svgTag(glyph, 24, `class="${svgClass}"`);
       el.innerHTML = `<div class="uav-box"><div class="uav">${svg}</div></div>`;
     } else if (marker === 'helicopter') {
-      const helicopterSvg = () => svgTag('helicopter_mobile', 24, 'class="helicopter-svg"');
-      const craft = `<span class="heli-craft">${helicopterSvg()}</span>`;
-      const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${helicopterSvg()}</span>` : '';
-      el.innerHTML = `<div class="heli-route"><span class="heli-orbit-guide" aria-hidden="true"></span>${craft}${second}</div>`;
+      // Ended helicopter sightings keep the realistic top-view marker at the reported point;
+      // active ones render as the animated flight track (syncMovementTracks).
+      const heliImg = '<img src="/img/helicopter-top.png?v=1" width="34" height="34" class="heli-img" alt="">';
+      const craft = `<span class="heli-craft heli-static">${heliImg}</span>`;
+      const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second heli-static">${heliImg}</span>` : '';
+      el.innerHTML = `<div class="heli-route">${craft}${second}</div>`;
     } else if (marker === 'squad') {
       // redalert.com.lb warplane language (owner 20:35, both anchors): a warplane with a
       // flight direction climbs a dashed trail (two chasing jets, purple); a plain

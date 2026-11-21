@@ -35,7 +35,7 @@ test('live map icons, markers and impact-zone pulses use the same category color
   assert.match(map, /const visual = eventVisual\(a\.type\);/);
   assert.match(map, /el\.style\.setProperty\('--c', visual\.color\)/);
   assert.match(map, /color: eventVisual\(a\.type\)\.color, active:/);
-  assert.match(map, /const color = eventVisual\('air_movement'\)\.color/);
+  assert.match(map, /const color = isHelicopter \? eventVisual\('helicopter'\)\.color : eventVisual\('air_movement'\)\.color/);
   assert.match(alertImage, /const color = eventVisual\(type\)\.color/);
   assert.match(alertImage, /const col = eventVisual\(type\)\.color/);
 });

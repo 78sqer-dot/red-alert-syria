@@ -56,7 +56,7 @@ test('aircraft movement is separate from unchanged hovering markers', () => {
   assert.equal(Array.from(NEWS_TYPES).includes('air_movement'), false, 'manual movement reports are not auto-classified from news');
 });
 
-test('helicopter keeps its dedicated 24px military glyph with a fixed circular orbit and shared alert-circle pulses', () => {
+test('helicopter keeps its dedicated marker with the approved realistic render and shared alert-circle pulses', () => {
   const warplane = ALERT_TYPES.warplane;
   const helicopter = ALERT_TYPES.helicopter;
   assert.ok(TYPE_KEYS.includes('helicopter'));
@@ -65,7 +65,7 @@ test('helicopter keeps its dedicated 24px military glyph with a fixed circular o
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
   assert.equal(helicopter.glyph, 'helicopter_simple');
   assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
-  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\('helicopter_mobile', 24,/);
+  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,400}heli-craft heli-static/);
   assert.match(mapSource, /a\.helicopters > 1/);
   assert.match(mapSource, /heli-craft-second/);
   assert.match(mapCss, /\.heli-craft-second \{ animation-delay: -4\.5s; \}/);

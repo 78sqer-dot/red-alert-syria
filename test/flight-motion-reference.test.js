@@ -35,9 +35,9 @@ test('formation preserves exactly three 24px blue aircraft and does not alter ro
   assert.match(map, /for \(const slot of \[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]\)/);
   assert.match(map, /formation\.append\(airframe\);[\s\S]{0,100}squad\.append\(formation\);/);
   assert.match(map, /const iconColor = aircraft === 'uav' \? color : '#3b8eff';/);
-  assert.match(map, /const route = isReferenceRoute[\s\S]{0,160}referenceFlightPath\(alert\.flight_direction, alert\.flight_target\)[\s\S]{0,100}directFlightPath\(alert\.location, alert\.flight_target\)/);
+  assert.match(map, /const route = isHelicopter[\s\S]{0,120}heliTrackPath\(alert\)[\s\S]{0,200}referenceFlightPath\(alert\.flight_direction, alert\.flight_target\)[\s\S]{0,100}directFlightPath\(alert\.location, alert\.flight_target\)/);
   assert.match(map, /directFlightBearing\(alert\.location, alert\.flight_target\)/);
-  assert.match(map, /const heading = isReferenceRoute && Number\.isFinite\(routeBearing\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
+  assert.match(map, /const heading = isHelicopter \|\| \(isReferenceRoute && Number\.isFinite\(routeBearing\)\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
   assert.match(map, /setRotation\(heading\)/);
 });
 
@@ -52,9 +52,9 @@ test('UAV animation declarations and reduced-motion/gesture pause behavior remai
 test('entering plane keeps right-to-left travel and faces left; cache versions refresh assets', () => {
   assert.match(css, /\.map-flight-track-marker\.is-plane\.is-entering-syria \.map-flight-track-squad \{ animation-name: flightTrackPlaneApproach; \}/);
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
-  assert.match(html, /app\.css\?v=95/);
-  assert.match(html, /app\.js\?v=103/);
-  assert.match(app, /map\.js\?v=97/);
+  assert.match(html, /app\.css\?v=96/);
+  assert.match(html, /app\.js\?v=104/);
+  assert.match(app, /map\.js\?v=98/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {

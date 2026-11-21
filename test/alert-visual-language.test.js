@@ -99,11 +99,11 @@ test('a signal-sweep drone uses the standard 24px, type-colored orbit marker onl
 });
 
 test('schematic movement uses one compact blue three-aircraft group at the report location without extra rings', () => {
-  assert.match(map, /const color = eventVisual\('air_movement'\)\.color;/);
+  assert.match(map, /const color = isHelicopter \? eventVisual\('helicopter'\)\.color : eventVisual\('air_movement'\)\.color;/);
   assert.match(map, /\[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]/);
   assert.match(map, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
-  assert.match(map, /const heading = isReferenceRoute && Number\.isFinite\(routeBearing\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
-  assert.match(map, /is-\$\{alert\.flight_direction\.replace\(\/_\/g, '-'\)\}/);
+  assert.match(map, /const heading = isHelicopter \|\| \(isReferenceRoute && Number\.isFinite\(routeBearing\)\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
+  assert.match(map, /is-\$\{isHelicopter \? 'helicopter' : alert\.flight_direction\.replace\(\/_\/g, '-'\)\}/);
   assert.match(map, /const movementTrackIds = new Set\(this\.movementTrackAlerts\(\)\.map\(\(a\) => a\.id\)\)/);
   assert.match(map, /movementTrackIds\.has\(a\.id\)/);
   assert.match(map, /visual\.append\(squad\)/);
