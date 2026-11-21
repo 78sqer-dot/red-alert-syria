@@ -63,6 +63,17 @@ test('repair path: المدينة pin detected as generic, story re-resolves to 
   assert.deepEqual(ids, [173530]);
 });
 
+test('repeated lead (post 1424) collapses to the fuller telling', () => {
+  const dup = 'قرار رئاسي تركي يقضي بإغلاق كليات ومعاهد تابعة لجامعة غازي عنتاب في ريف حلب. قرار رئاسي تركي يقضي بإغلاق كليات تابعة لجامعة غازي عنتاب في ريف حلب والمعهد العالي المهني في جرابلس، وكلية الطب ومعهد الخدمات الصحية في الراعي.';
+  const out = cleanPostText(dup).text;
+  assert.equal(out, 'قرار رئاسي تركي يقضي بإغلاق كليات تابعة لجامعة غازي عنتاب في ريف حلب والمعهد العالي المهني في جرابلس، وكلية الطب ومعهد الخدمات الصحية في الراعي.');
+});
+
+test('distinct sentences that merely share an opening are kept', () => {
+  const ok = 'قصف مدفعي على قرية الصمدانية الشرقية. قصف صاروخي استهدف موقعاً عسكرياً في محيط القنيطرة ليلاً.';
+  assert.equal(cleanPostText(ok).text, ok);
+});
+
 test('natural/unknown deaths stay death', () => {
   assert.equal(refineType('death', 'وفاة مسنّ في منزله بمدينة حماة إثر أزمة قلبية'), 'death');
 });

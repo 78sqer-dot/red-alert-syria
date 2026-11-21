@@ -154,6 +154,30 @@ const PROMO_LINE = /(اضغط|الرابط|على الرابط|فيسبوك|في
 // Cut from the outlet signature to the end ONLY when promo words follow — a plain attribution («…حسب وكالة أنباء هاوار») is kept.
 const OUTLET_TAIL = /\s+وكالة أنباء هاوار(?:\s+ANHA)?(?=[\s\S]{0,220}$)(?=[\s\S]*(?:موقعنا|بلوسكاي|واتس|لحظة بلحظة|ANHA|Bluesky))/iu;
 const PROMO_TAIL = /\s*(?:موقعنا على|لحظة بلحظة عبر)[\s\S]*$/u;
+// Lead duplication: outlets often repeat their lead - a short first sentence, then a
+// fuller restatement («قرار رئاسي تركي يقضي بإغلاق كليات ومعاهد… في ريف حلب. قرار رئاسي
+// تركي يقضي بإغلاق كليات تابعة… في الراعي.», post 1424). Drop the shorter first telling
+// when the two opening sentences clearly say the same thing: a shared opening run of 4+
+// words and 80%+ of the shorter sentence's words present in the longer one.
+const leadWord = (w) => w.replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+function dedupeLead(t) {
+  const m = String(t).match(/^(.{10,}?[.!؟?])\s+(.{10,}?[.!؟?])([\s\S]*)$/u);
+  if (!m) return t;
+  const [, s1, s2, rest] = m;
+  const w1 = s1.split(/\s+/).map(leadWord).filter(Boolean);
+  const w2 = s2.split(/\s+/).map(leadWord).filter(Boolean);
+  if (w1.length < 4 || w2.length < 4) return t;
+  let run = 0;
+  while (run < w1.length && run < w2.length && w1[run] === w2[run]) run++;
+  const [short, long] = w1.length <= w2.length ? [w1, w2] : [w2, w1];
+  const longSet = new Set(long);
+  const contained = short.filter((w) => longSet.has(w)).length;
+  if (run >= 4 && contained >= Math.ceil(short.length * 0.8)) {
+    const kept = w2.length >= w1.length ? s2 : s1;
+    return kept + rest;
+  }
+  return t;
+}
 export function cleanPostText(raw) {
   // Telegram/source text can include its "show more" control followed by the outlet's
   // site/social footer. It is not part of the reported story. The control can glue to the
@@ -182,5 +206,6 @@ export function cleanPostText(raw) {
   // anti-filter spellings: "الإسـ..ـرائيلي", "مقت.ل", "جثم.ان", "م.ش.ن.و.ق،اً", "حـ.ـ.ـ.ـ،،زب" -> plain words
   t = t.replace(/(\p{Script=Arabic})(?:[.*ـ،]*[.*ـ][.*ـ،]*|،+(?=[اى]|ً))(?=\p{Script=Arabic})/gu, '$1').replace(/ـ+/g, '');
   t = t.replace(/[📌🔹🔸▪️•●◾️✅🔻🔺]+/gu, '•').replace(/[ \t]+/g, ' ').trim();
+  t = dedupeLead(t);
   return { text: t, breaking };
 }
