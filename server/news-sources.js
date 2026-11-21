@@ -149,11 +149,16 @@ const SIGNATURE = /(اشترك|تابعونا|انضموا|لمتابعة|للم
 // A channel's promo block ("🔻لمتابعة زينو🔻 اضغط على الرابط 👇", "تابع قناة التلغرام", "للتواصل مع الإدارة")
 // ends the news: everything from its first line on is dropped.
 const PROMO_START = /^[\s\p{Extended_Pictographic}\uFE0F🔻🔺•▪️*_~-]*(لمتابعة|للمتابعة|تابعونا|تابعوا|تابع قناة|تابع صفحة|تابعو|اشترك|اشتركوا|للاشتراك|انضم|انضموا|للانضمام|للتواصل|للإعلان|للاعلان|لإعلاناتكم|رابط القناة|رابط اليوتيوب|رابط الفيسبوك|رابط الصفحة|قناتنا|صفحتنا|أخبار أكثر|اخبار اكثر|أخــبـــار|ادعم|لدعم القناة|شاركونا|راسلونا)/u;
-const PROMO_LINE = /(اضغط|الرابط|على الرابط|فيسبوك|فيس بوك|يوتيوب|انستغرام|انستقرام|واتساب|تيك توك|Facebook|YouTube|Instagram|WhatsApp|TikTok|تفاصيل أكثر حال ورودها|التفاصيل تباعاً|بالسلامة للجميع|تابعونا)/iu;
+const PROMO_LINE = /(اضغط|الرابط|على الرابط|فيسبوك|فيس بوك|يوتيوب|انستغرام|انستقرام|واتساب|واتس اب|تيك توك|بلوسكاي|Bluesky|موقعنا على|لحظة بلحظة|ANHA|Facebook|YouTube|Instagram|WhatsApp|TikTok|تفاصيل أكثر حال ورودها|التفاصيل تباعاً|بالسلامة للجميع|تابعونا)/iu;
+// ANHA-style signature tail glued to the story's last sentence: «…مدينة ديرك. وكالة أنباء هاوار ANHA موقعنا على بلوسكاي…».
+// Cut from the outlet signature to the end ONLY when promo words follow — a plain attribution («…حسب وكالة أنباء هاوار») is kept.
+const OUTLET_TAIL = /\s+وكالة أنباء هاوار(?:\s+ANHA)?(?=[\s\S]{0,220}$)(?=[\s\S]*(?:موقعنا|بلوسكاي|واتس|لحظة بلحظة|ANHA|Bluesky))/iu;
+const PROMO_TAIL = /\s*(?:موقعنا على|لحظة بلحظة عبر)[\s\S]*$/u;
 export function cleanPostText(raw) {
   // Telegram/source text can include its "show more" control followed by the outlet's
-  // site/social footer on the same line. It is not part of the reported story.
-  const sourceText = String(raw || '').replace(/(?:^|\s)عرض المزيد(?=\s|$)[\s\S]*$/iu, '').trim();
+  // site/social footer. It is not part of the reported story. The control can glue to the
+  // preceding sentence with no whitespace («…مدينة ديرك.عرض المزيد وكالة أنباء هاوار…»).
+  const sourceText = String(raw || '').replace(/عرض المزيد(?=[\s.,:;،]|$)[\s\S]*$/iu, '').trim();
   const lines = sourceText.split('\n').map((l) => l.replace(/https?:\/\/\S+/g, '').trim());
   const keep = [];
   for (const l of lines) {
@@ -168,6 +173,7 @@ export function cleanPostText(raw) {
     keep.push(l);
   }
   let t = keep.join('\n').replace(/https?:\/\/\S+/g, '').replace(/\n{2,}/g, '\n').trim();
+  t = t.replace(OUTLET_TAIL, '').replace(PROMO_TAIL, '').trim();
   const breaking = /(^|[\s#|])عاجل/.test(t.slice(0, 40));
   t = t.replace(/^[\s#|🔴🚨⚡️⭕️❗️]*عاجل[\s|:：\-–—]*/u, '').trim();
   // "#بصرى_الشام" -> "بصرى الشام", "#درعا" -> "درعا"

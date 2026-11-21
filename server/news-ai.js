@@ -225,6 +225,10 @@ export function resolvePlace({ name, gov } = {}) {
   const g = gov ? govCodeOf(gov) : null;
   const raw = String(name || '').trim();
   if (!raw) return g ? { kind: 'governorate', govCode: g } : null;
+  // Generic placeholder words (المدينة / البلدة / القرية …) are never a place, however the
+  // extractor produced them: a post «قرب مدينة ديرك» must fall back to the governorate,
+  // never pin to one of the villages literally named «المدينة» (owner, 2026-11-21).
+  if (GENERIC.has(N(raw)) || GENERIC.has(stripAl(N(raw)))) return g ? { kind: 'governorate', govCode: g } : null;
   const asGov = govCodeOf(raw);
   if (asGov && (!g || g === asGov)) {
     // "درعا" can be the city or the governorate: the city when name and governorate are the same word
@@ -773,6 +777,9 @@ const SHOOT_W = RX(['اطلاق نار', 'اطلاق النار', 'اطلاق ر
 const MARTYR_W = RX(['استشهاد', 'استشهد', 'استشهدت', 'شهيد', 'شهيده', 'شهداء']);
 const DEATH_W = RX(['وفاه', 'توفي', 'توفيت', 'وفاته', 'وفاتها', 'انتشال جثه', 'العثور علي جثه', 'عثر علي جثه']);
 const SHOOT_TARGET_W = RX(['استهداف', 'استهدف', 'اطلاق النار علي', 'اطلاق رصاص علي', 'اصيب', 'اصابه', 'جرح', 'قتل', 'مقتل', 'كمين', 'هجوم', 'اشتباك', 'مسلحين', 'مسلحون']);
+const KILLED_W = RX(['مقتل', 'قتل', 'قتيل', 'قتلي', 'قضي', 'فارق الحياه']);
+const FIREARM_W = RX(['رصاص', 'اطلاق نار', 'اطلاق النار', 'بندقيه', 'مسدس', 'قنص', 'قناص']);
+const ASSASSIN_W = RX(['اغتيال', 'اغتيل', 'اغتالت', 'محاوله اغتيال']);
 const AIRSTRIKE_W = RX(['غاره جويه', 'غارات جويه', 'غاره', 'غارات', 'قصف جوي', 'قصف بالطيران الحربي', 'قصف بالطيران', 'استهداف جوي', 'هجوم جوي', 'airstrike', 'air strike']);
 const UAV_STRIKE_W = RX(['استهداف بمسيره', 'استهداف بطائره مسيره', 'استهداف مسيره', 'استهدفتها مسيره', 'مسيره استهدفت', 'طائره مسيره استهدفت', 'غاره بمسيره', 'غاره بطائره مسيره', 'قصف بمسيره', 'ضربه بمسيره', 'ضربات بمسيره']);
 const HELI_W = RX(['طيران مروحي', 'الطيران المروحي', 'تحليق مروحي', 'تحليق طيران مروحي', 'مروحيه عسكريه', 'مروحيات عسكريه', 'مروحيه', 'مروحيات', 'helicopter', 'helicopters']);
@@ -860,5 +867,11 @@ export function refineType(type, text) {
     }
   }
   if (type === 'attack' && any(EXPL_W) && !any(GUN_W)) return 'explosion';
+  // A killing by firearm is a violent incident, never a plain 🟢 وفاة notice
+  // (owner 2026-11-21: «مقتل شاب برصاص الجندرمة التركية» was classified death).
+  if ((type === 'death' || type === 'martyrdom') && any(FIREARM_W)) {
+    if (any(ASSASSIN_W)) return 'assassination';
+    if (any(KILLED_W)) return 'attack';
+  }
   return type;
 }
