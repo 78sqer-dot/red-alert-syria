@@ -1137,8 +1137,9 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || d.flightHeading || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || editorialMode ? {
+    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || d.flightHeading || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || editorialMode || d.id ? {
       meta: {
+        ...(d.id ? { dedupKey: `${d.source || 'news'}:${d.id}` } : {}),
         ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.flightHeading ? { flightHeading: d.flightHeading } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
@@ -1419,6 +1420,16 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
   const editorialMode = input?.source === 'news' && ['opinion', 'satire'].includes(input?.meta?.publicEditorialTone) ? input.meta.publicEditorialTone : null;
   const editorialCopy = editorialMode && isPublicEditorialCopy(input?.description, editorialMode) ? input.description : null;
   assertPublicCopySafeWithEditorial(editorialCopy, editorialMode, input?.title, input?.title_en, input?.description, input?.description_en, input?.meta?.channelTitle);
+  // Idempotency guard: a stable per-source key (news draft id, quake event id, weather hazard+day)
+  // can never produce two map alerts, however many times the caller retries or double-fires.
+  const dedupKey = input?.meta?.dedupKey;
+  if (dedupKey) {
+    const existing = (store.state.alerts || []).find((a) => a.meta?.dedupKey === dedupKey);
+    if (existing) {
+      console.warn(`[bot] dedup: ${dedupKey} already published as alert ${existing.id}; skipping duplicate`);
+      return existing;
+    }
+  }
   const alert = store.addAlert(input);
   if (input.meta) alert.meta = input.meta;
   if (!toChannel || !config.channel) return alert;

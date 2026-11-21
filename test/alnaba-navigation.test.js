@@ -52,13 +52,16 @@ test('the Al-Nabaa source content remains while its public routes and bot-menu e
   assert.match(bot, /\.text\(en \? '🎵 Nasheeds' : '🎵 أناشيد', 'nb:nasheed'\)/, 'the owner bot upload control for nasheeds remains unchanged');
 });
 
-test('robots and sitemap publish the three requested public pages', () => {
-  const robots = fs.readFileSync(path.join(ROOT, 'public/robots.txt'), 'utf8');
-  const sitemap = fs.readFileSync(path.join(ROOT, 'public/sitemap.xml'), 'utf8');
-  assert.match(robots, /User-agent:\s*\*\s*\nAllow:\s*\/\s*\nSitemap:\s*https:\/\/red-alert-syria-q6k8\.onrender\.com\/sitemap\.xml/);
-  assert.deepEqual([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]), [
-    'https://red-alert-syria-q6k8.onrender.com/',
-    'https://red-alert-syria-q6k8.onrender.com/ar/',
-    'https://red-alert-syria-q6k8.onrender.com/en/',
-  ]);
+test('robots and sitemap are served by the dynamic SEO route (no static file may shadow them)', async () => {
+  // 2026-11-21: a stale static public/sitemap.xml (3 URLs) shadowed the dynamic
+  // sitemapXml() route since launch, hiding every area page from crawlers.
+  assert.ok(!fs.existsSync(path.join(ROOT, 'public/sitemap.xml')), 'no static sitemap.xml may shadow the route');
+  assert.ok(!fs.existsSync(path.join(ROOT, 'public/robots.txt')), 'no static robots.txt may shadow the route');
+  const { _test } = await import('../server/seo.js');
+  assert.match(_test.robotsTxt(), /User-agent: \*\nAllow: \/\nDisallow: \/api\//);
+  const locs = [..._test.sitemapXml().matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  assert.ok(locs.includes('https://red-alert-syria-q6k8.onrender.com/ar/'));
+  assert.ok(locs.includes('https://red-alert-syria-q6k8.onrender.com/en/'));
+  assert.ok(locs.includes('https://red-alert-syria-q6k8.onrender.com/ar/areas/'));
+  assert.ok(locs.includes('https://red-alert-syria-q6k8.onrender.com/ar/archive/'));
 });

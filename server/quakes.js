@@ -119,7 +119,7 @@ export function describe(e) {
     ttlMin: m >= 5 ? 180 : 120,
     source: 'quake',
     author: { id: 0, name: e.src.toUpperCase() },
-    meta: { mag: m, depth, src: e.src, ids: [e.id], at: new Date(e.t).toISOString(), inSyria: syria },
+    meta: { mag: m, depth, src: e.src, ids: [e.id], at: new Date(e.t).toISOString(), inSyria: syria, dedupKey: `quake:${e.id}` },
   };
 }
 

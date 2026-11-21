@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://red-alert-syria-q6k8.onrender.com/sitemap.xml
