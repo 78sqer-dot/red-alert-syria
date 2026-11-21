@@ -60,7 +60,7 @@ test('services toolbar and place icons exist and are registered for map display'
   assert.match(html, /<button class="map-btn" id="btnSvc"[^>]*><span data-icon="apps"><\/span>/);
   assert.ok(ICONS.apps, 'the services entry button uses a defined apps icon');
   assert.match(icon('apps', 18), /<svg[^>]*viewBox="0 0 24 24"/);
-  assert.match(app, /\$\$\('\[data-icon\]'\)\.forEach\(\(el\) => \{\s*if \(!el\.firstChild\) el\.innerHTML = icon\(el\.dataset\.icon, 18\)/);
+  assert.match(app, /\$\$\('\[data-icon\]'\)\.forEach\(\(el\) => \{\s*if \(!el\.firstChild\) el\.innerHTML = icon\(el\.dataset\.icon, \(ICONS\[el\.dataset\.icon\] \|\| \{\}\)\.size \|\| 18\)/);
   for (const category of ['hospital', 'clinic', 'pharmacy', 'fuel', 'bakery']) {
     assert.match(services, new RegExp(`'${category}':?`));
   }
@@ -77,7 +77,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   const tabOrder = [...services.matchAll(/tabBtn\('([^']+)'/g)].map((match) => match[1]);
   assert.deepEqual(tabOrder.slice(0, 2), ['jobs', 'prices']);
   assert.match(app, /services\.js\?v=38/);
-  assert.match(app, /icons\.js\?v=9/);
+  assert.match(app, /icons\.js\?v=10/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
   assert.match(services, /findWorker: 'مطلوب موظف'/);

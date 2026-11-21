@@ -5,7 +5,7 @@ import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { matchesFollowArea } from '/shared/area-follow.js?v=1';
-import { icon } from './icons.js?v=9';
+import { icon, ICONS } from './icons.js?v=10';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
 import { AlertMap, typeIcon, glyphDisc } from './map.js?v=100';
@@ -149,7 +149,7 @@ function visibleAlerts() {
 // ------------------------------------------------------------------ static text & icons
 function hydrateStatic() {
   $$('[data-icon]').forEach((el) => {
-    if (!el.firstChild) el.innerHTML = icon(el.dataset.icon, 18);
+    if (!el.firstChild) el.innerHTML = icon(el.dataset.icon, (ICONS[el.dataset.icon] || {}).size || 18);
   });
   $$('[data-t]').forEach((el) => {
     const v = T[el.dataset.t];

@@ -39,14 +39,14 @@ export const ICONS = {
   mapPin: { filled: false, body: "<path d=\"M9 11a3 3 0 1 0 6 0a3 3 0 0 0 -6 0\" /><path d=\"M17.657 16.657l-4.243 4.243a2 2 0 0 1 -2.827 0l-4.244 -4.243a8 8 0 1 1 11.314 0\" />" },
   share: { filled: false, body: "<path d=\"M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0\" /><path d=\"M15 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0\" /><path d=\"M15 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0\" /><path d=\"M8.7 10.7l6.6 -3.4\" /><path d=\"M8.7 13.3l6.6 3.4\" />" },
   x: { filled: false, body: "<path d=\"M18 6l-12 12\" /><path d=\"M6 6l12 12\" />" },
-  chevUp: { filled: false, body: "<path d=\"M6 15l6 -6l6 6\" />" },
+  chevUp: { filled: false, stroke: 1.4, size: 14, body: "<path d=\"M6.5 14.6l5.5-5 5.5 5\" />" },
   chevDown: { filled: false, body: "<path d=\"M6 9l6 6l6 -6\" />" },
   chevLeft: { filled: false, body: "<path d=\"M15 6l-6 6l6 6\" />" },
   chevRight: { filled: false, body: "<path d=\"M9 6l6 6l-6 6\" />" },
   copy: { filled: false, body: "<path d=\"M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666\" /><path d=\"M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1\" />" },
   bell: { filled: false, body: "<path d=\"M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6\" /><path d=\"M9 17v1a3 3 0 0 0 6 0v-1\" />" },
   volume: { filled: false, body: "<path d=\"M15 8a5 5 0 0 1 0 8\" /><path d=\"M17.7 5a9 9 0 0 1 0 14\" /><path d=\"M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5\" />" },
-  info: { filled: false, body: "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 9h.01\" /><path d=\"M11 12h1v4h1\" />" },
+  info: { filled: false, stroke: 1.4, size: 14, body: "<circle cx=\"12\" cy=\"7.6\" r=\"1.25\" fill=\"currentColor\" stroke=\"none\" /><path d=\"M12 11v5.6\" />" },
   plus: { filled: false, body: "<path d=\"M12 5l0 14\" /><path d=\"M5 12l14 0\" />" },
   minus: { filled: false, body: "<path d=\"M5 12l14 0\" />" },
   list: { filled: false, body: "<path d=\"M9 6l11 0\" /><path d=\"M9 12l11 0\" /><path d=\"M9 18l11 0\" /><path d=\"M5 6l0 .01\" /><path d=\"M5 12l0 .01\" /><path d=\"M5 18l0 .01\" />" },
@@ -54,7 +54,8 @@ export const ICONS = {
   storm: { filled: false, body: "<path d=\"M7 18a4.6 4.4 0 0 1 0 -9a5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7h-1\" /><path d=\"M13 14l-2 4h3l-2 4\" />" },
   door: { filled: false, body: "<path d=\"M14 12v.01\" /><path d=\"M3 21h18\" /><path d=\"M6 21v-16a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v16\" />" },
   clock: { filled: false, body: "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 7v5l3 3\" />" },
-  world: { filled: false, body: "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M3.6 9h16.8\" /><path d=\"M3.6 15h16.8\" /><path d=\"M11.5 3a17 17 0 0 0 0 18\" /><path d=\"M12.5 3a17 17 0 0 1 0 18\" />" },
+  // Bottom-bar trio: owner-picked hairline symbol set (2026-11-21 13:12 «تمام») — 1.4px strokes, smaller marks.
+  world: { filled: false, stroke: 1.4, size: 15, body: "<circle cx=\"12\" cy=\"12\" r=\"8.2\" /><path d=\"M4.4 13c2.5-1.3 5-1.9 7.6-1.9s5.1.6 7.6 1.9\" />" },
   language: { filled: false, body: "<path d=\"M9 6.371c0 4.418 -2.239 6.629 -5 6.629\" /><path d=\"M4 6.371h7\" /><path d=\"M5 9c0 2.144 2.252 3.908 6 4\" /><path d=\"M12 20l4 -9l4 9\" /><path d=\"M19.1 18h-6.2\" /><path d=\"M6.694 3l.793 .582\" />" },
   play: { filled: true, body: "<path d=\"M6 4v16a1 1 0 0 0 1.524 .852l13 -8a1 1 0 0 0 0 -1.704l-13 -8a1 1 0 0 0 -1.524 .852z\" />" },
   check: { filled: false, body: "<path d=\"M5 12l5 5l10 -10\" />" },
@@ -92,6 +93,6 @@ export const ICONS = {
 export function icon(name, size = 18, extra = '') {
   const i = ICONS[name];
   if (!i) return '';
-  const attrs = i.filled ? 'fill="currentColor" stroke="none"' : 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+  const attrs = i.filled ? 'fill="currentColor" stroke="none"' : `fill="none" stroke="currentColor" stroke-width="${i.stroke || 2}" stroke-linecap="round" stroke-linejoin="round"`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" ${attrs} aria-hidden="true" ${extra}>${i.body}</svg>`;
 }

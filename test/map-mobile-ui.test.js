@@ -118,12 +118,12 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=100'/);
   assert.match(html, /app\.css\?v=98/);
-  assert.match(html, /app\.js\?v=106/);
+  assert.match(html, /app\.js\?v=107/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
   assert.match(app, /from '\.\/services\.js\?v=38'/);
-  assert.match(app, /from '\.\/icons\.js\?v=9'/);
+  assert.match(app, /from '\.\/icons\.js\?v=10'/);
   assert.match(app, /from '\.\/i18n\.js\?v=10'/);
   assert.match(app, /from '\/shared\/types\.js\?v=42'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);
