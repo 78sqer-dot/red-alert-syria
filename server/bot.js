@@ -323,8 +323,11 @@ function collapseStory(desc, body) {
   const leadSet = storySet(desc);
   const sentences = splitStorySentences(body);
   if (sentences.length <= 1) {
-    if (storyCoverage(storyTokens(body), leadSet) < 0.65) return { lead: desc, extra: body };
+    // A fuller restatement of the lead (desc nearly contained in a longer body) is one
+    // telling: the body alone. This check must run FIRST - with the order reversed the
+    // body never covers the shorter lead and both print, duplicating it (post 1424).
     if (storyCoverage(storyTokens(desc), storySet(body)) >= 0.65 && body.length > desc.length) return { lead: body, extra: '' };
+    if (storyCoverage(storyTokens(body), leadSet) < 0.65) return { lead: desc, extra: body };
     return { lead: desc, extra: '' };
   }
   const kept = sentences.filter((sentence) => {
@@ -1605,7 +1608,12 @@ export async function repairNewsAlert(api, id) {
     patch.title = named ? `${titles.ar} — ${b.place.name_ar}` : titles.ar;
     patch.title_en = named ? `${titles.en} — ${b.place.name_en}` : titles.en;
   }
-  if (!Object.keys(patch).length) return { ok: true, id, changed: false };
+  if (!Object.keys(patch).length) {
+    // Nothing to patch in the record, but the caller asked for a repair: re-edit the
+    // channel post anyway so render-layer fixes reach already-published posts.
+    if (a.channel_message_id && api && config.channel) await refreshChannelPost(api, a, !a.is_active);
+    return { ok: true, id, changed: false, post: a.channel_message_id || null };
+  }
   const oldType = a.type;
   store.updateAlert(id, patch);
   if (patch.type && patch.type !== oldType) store._logPatch(id, { ty: patch.type });

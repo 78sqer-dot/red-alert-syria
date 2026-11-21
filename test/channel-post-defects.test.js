@@ -74,6 +74,21 @@ test('distinct sentences that merely share an opening are kept', () => {
   assert.equal(cleanPostText(ok).text, ok);
 });
 
+test('render: lead restated fuller in body prints once (post 1424 layout bug)', async () => {
+  const { channelPost } = await import('../server/bot.js');
+  const alert = {
+    id: '3de6fe3f-1134-4c5c-975e-f097d17daf73', source: 'news', type: 'political', channel_format: 3,
+    title: 'تطور سياسي — جرابلس',
+    place: { scope: 'place', name_ar: 'جرابلس', governorate_ar: 'حلب' },
+    description: 'قرار رئاسي تركي يقضي بإغلاق كليات ومعاهد تابعة لجامعة غازي عنتاب في ريف حلب.',
+    body: 'قرار رئاسي تركي يقضي بإغلاق كليات تابعة لجامعة غازي عنتاب في ريف حلب والمعهد العالي المهني في جرابلس، وكلية الطب ومعهد الخدمات الصحية في الراعي.',
+    areas: [], extra: [],
+  };
+  const out = channelPost(alert);
+  assert.ok(out.includes('وكلية الطب ومعهد الخدمات الصحية في الراعي'), 'fuller telling present');
+  assert.ok(!out.includes('ومعاهد'), 'abbreviated lead not duplicated');
+});
+
 test('natural/unknown deaths stay death', () => {
   assert.equal(refineType('death', 'وفاة مسنّ في منزله بمدينة حماة إثر أزمة قلبية'), 'death');
 });
