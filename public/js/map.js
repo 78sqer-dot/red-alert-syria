@@ -427,6 +427,7 @@ export class AlertMap {
     }
     this.ready = true;
     this.render();
+    this.startAircraftFeed();
     if (this._pending) { const [a, o] = this._pending; this._pending = null; this.select(a, o); }
   }
 
@@ -674,6 +675,52 @@ export class AlertMap {
     const dx = Math.cos(rad) * rLon;
     const dy = Math.sin(rad) * rLat;
     return [[lon - dx, lat - dy], [lon + dx, lat + dy]];
+  }
+
+  // Live military aircraft over the region (adsb.lol via /api/aircraft, cached server-side).
+  // Display layer only: it never creates or edits alerts. Warplanes keep the production flat
+  // glyph; helicopter-category traffic uses the approved realistic top-view render.
+  startAircraftFeed() {
+    if (this._aircraftTimer) return;
+    const load = async () => {
+      try {
+        const r = await fetch('/api/aircraft');
+        if (!r.ok) return;
+        const j = await r.json();
+        this._aircraft = Array.isArray(j.aircraft) ? j.aircraft : [];
+        this._syncAircraft();
+      } catch { /* keep last known positions */ }
+    };
+    load();
+    this._aircraftTimer = setInterval(load, 60000);
+  }
+
+  _syncAircraft() {
+    const M = ml();
+    if (!this.map || !M) return;
+    this.aircraftMarkers = this.aircraftMarkers || new Map();
+    const seen = new Set();
+    for (const a of this._aircraft || []) {
+      if (typeof a.lat !== 'number' || typeof a.lon !== 'number') continue;
+      seen.add(a.hex);
+      const isHeli = a.cat === 'A7' || /^(H|UH|AH|CH|MI|KA)-?/i.test(a.t || '');
+      let m = this.aircraftMarkers.get(a.hex);
+      if (!m) {
+        const el = document.createElement('div');
+        el.className = `adsb-craft${isHeli ? ' is-heli' : ''}`;
+        el.innerHTML = isHeli
+          ? '<img src="/img/helicopter-top.png?v=1" width="20" height="20" alt="">'
+          : svgTag('plane', 20, 'fill="#9fb3c8" class="adsb-svg"');
+        m = new M.Marker({ element: el, anchor: 'center', rotationAlignment: 'map' }).setLngLat([a.lon, a.lat]).addTo(this.map);
+        this.aircraftMarkers.set(a.hex, m);
+      } else {
+        m.setLngLat([a.lon, a.lat]);
+      }
+      if (typeof a.trk === 'number') m.setRotation(a.trk);
+      const el = m.getElement();
+      el.title = [a.cs, a.t, a.alt != null ? `FL${Math.round(a.alt / 100)}` : null].filter(Boolean).join(' · ');
+    }
+    for (const [k, m] of this.aircraftMarkers) if (!seen.has(k)) { m.remove(); this.aircraftMarkers.delete(k); }
   }
 
   // Warplane icons may travel along the selected illustrative route; this is not live tracking and
