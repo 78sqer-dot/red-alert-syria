@@ -1416,7 +1416,7 @@ export class AlertMap {
       const latitudes = archiveRoute.map(([, lat]) => lat);
       flySafely(() => this.map.fitBounds([[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]], {
         padding: this.padding(), maxZoom: 9, duration: 950, essential: true,
-      });
+      }));
     } else if (fly && !tapped && !orbiting && alert.more && alert.more.length && zs.length > 1) {
       // several areas: frame all of their circles
       let w = 180, e = -180, s = 90, n = -90;
