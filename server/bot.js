@@ -1599,9 +1599,11 @@ export function synthAirDescription(type, meta, place) {
 export async function repairNewsAlert(api, id) {
   const a = store.getAlert(id);
   if (!a) return { ok: false, error: 'unknown alert' };
-  if (a.source !== 'news') return { ok: false, error: 'not a news alert' };
+  // News alerts get the full text cleaner; manual/radar reports skip it (their text is
+  // already authored) but still get type/place re-resolution and the air-sighting line.
+  const isNews = a.source === 'news';
   const rawBody = String(a.body || a.description || '');
-  const cleaned = cleanPostText(rawBody).text.trim();
+  const cleaned = isNews ? cleanPostText(rawBody).text.trim() : rawBody.trim();
   const classText = `${a.title || ''}\n${a.description || ''}\n${cleaned}`;
   const patch = {};
   if (cleaned && cleaned !== rawBody.trim()) patch.body = cleaned;
