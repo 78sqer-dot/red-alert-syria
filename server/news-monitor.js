@@ -660,6 +660,16 @@ function textSim(a, b) {
   let n = 0; for (const w of A) if (B.has(w)) n++;
   return n / (A.size + B.size - n);
 }
+// A raid may be classified as attack by one source and patrol by another.
+// Do not merge those families globally: nearby patrols and attacks can be distinct.
+// Only full raid copy, strong text overlap and known compatible geography qualify.
+function crossTypeRaidDuplicate(a, b, aText, bText) {
+  if (!((a.type === 'attack' && b.type === 'patrol') || (a.type === 'patrol' && b.type === 'attack'))) return false;
+  if (a.geo.none || b.geo.none || !near(a.geo, b.geo)) return false;
+  if (Math.abs((a.ts || 0) - (b.ts || 0)) > 6 * H_MS) return false;
+  const raid = (text) => /(?:مداهم|دهم|تفتيش)/u.test(N(text));
+  return raid(aText) && raid(bText) && !distinctPersons(aText, bText) && textSim(aText, bText) >= 0.45;
+}
 function near(g1, g2) {
   for (const p of g1.pts) for (const q of g2.pts) if (km(p, q) <= 15) return true;
   if (g1.dists.some((d) => g2.dists.includes(d))) return true;
@@ -682,7 +692,7 @@ export function sameIncident(c, k) {
     if (c.type !== k.type) return (bothKnownAndNear && sim >= 0.25) || (locationMissing && sim >= 0.85);
     return (bothKnownAndNear && sim >= 0.2) || (locationMissing && sim >= 0.85);
   }
-  if (!sameFamily(c.type, k.type)) return false;
+  if (!sameFamily(c.type, k.type)) return crossTypeRaidDuplicate(c, k, c.headline, k.headline);
   if (distinctPersons(c.headline, k.headline)) return false; // same kind/place, different named people
   // Similar wording alone is not evidence of the same event: two incidents in distant
   // governorates must remain separate. Unknown locations need near-identical headlines.
@@ -1121,7 +1131,7 @@ function selfEchoOf(cand, texts) {
     if (!e || e.ts < since || !e.text) continue;
     if (cand.type === 'political' || e.type === 'political') {
       if (cand.type !== 'political' || e.type !== 'political' || !cand.politicalCategory || cand.politicalCategory !== e.politicalCategory) continue;
-    } else if (!sameFamily(cand.type, e.type)) continue;
+    } else if (!sameFamily(cand.type, e.type) && !crossTypeRaidDuplicate(cand, e, texts, e.text)) continue;
     if (!cand.geo.none && !e.geo.none && !near(cand.geo, e.geo)) continue;
     const sim = Math.max(textSim(texts, e.text), textSim(cand.headline, e.text));
     if (sim >= 0.5 && (!best || sim > best.sim)) best = { id: e.id, sim };
@@ -1241,7 +1251,7 @@ function finalPublishDuplicate(d, pub) {
     if (d.alertId && e.id === d.alertId) continue; // our own already-published copy of THIS draft
     if (cand.type === 'political' || e.type === 'political') {
       if (cand.type !== 'political' || e.type !== 'political' || !cand.politicalCategory || cand.politicalCategory !== e.politicalCategory) continue;
-    } else if (!sameFamily(cand.type, e.type)) continue;
+    } else if (!sameFamily(cand.type, e.type) && !crossTypeRaidDuplicate(cand, e, text, e.text)) continue;
     const geoKnown = !cand.geo.none && !e.geo.none;
     if (geoKnown && !near(cand.geo, e.geo)) continue;
     if (distinctPersons(text, e.text)) continue; // same case/town, different named people (رسلان vs زيدان)

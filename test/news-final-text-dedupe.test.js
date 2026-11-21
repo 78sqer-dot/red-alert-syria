@@ -96,3 +96,31 @@ test('a duplicate that still lands in a race is auto-deleted (map + draft marked
   assert.equal(store.getAlert(landedAlert.id), undefined, 'landed duplicate alert should be deleted from the store');
   assert.equal(d.status, 'duplicate');
 });
+
+
+test('same raid survives attack/patrol classification drift and is suppressed', () => {
+  const body = 'شنت القوات الإسرائيلية حملة مداهمات وتفتيش طالت عدداً من المنازل وحظائر الماشية في قرية رويحينة بريف القنيطرة الأوسط.';
+  const id = seedPublished('هجوم — رويحينة', body, 'attack');
+  const d = { ...draft('دورية — رويحينة', 'وكالات إعلام محلية: دورية للاحتلال تشن حملة مداهمات وتفتيش في قرية رويحينة بريف القنيطرة الأوسط طالت عددا من المنازل وحظائر الماشية'), type: 'patrol' };
+  const hit = mon._test.finalPublishDuplicate(d, { headline: d.headline, body: d.body });
+  assert.equal(hit?.id, id);
+});
+
+test('a separate patrol is not suppressed merely because an attack was nearby', () => {
+  const d = { ...draft('دورية — رويحينة', 'سيرت القوات الإسرائيلية دورية استطلاع على الطريق قرب القرية ثم انسحبت دون مداهمات أو تفتيش للمنازل.'), type: 'patrol' };
+  assert.equal(mon._test.finalPublishDuplicate(d, { headline: d.headline, body: d.body }), null);
+});
+
+test('cross-type raid match still requires known geography', () => {
+  const d = { ...draft('دورية — رويحينة', 'شنت القوات الإسرائيلية حملة مداهمات وتفتيش طالت عدداً من المنازل وحظائر الماشية في قرية رويحينة بريف القنيطرة الأوسط.'), type: 'patrol', loc: null };
+  assert.equal(mon._test.finalPublishDuplicate(d, { headline: d.headline, body: d.body }), null);
+});
+
+
+test('cross-type raid is caught by the echo guard, not only final publication', () => {
+  const loc = haleb();
+  const cand = { type: 'patrol', ts: Date.now(), headline: 'دورية — رويحينة', geo: mon._test.geoOf([loc]) };
+  const body = 'شنت القوات الإسرائيلية حملة مداهمات وتفتيش طالت عدداً من المنازل وحظائر الماشية في قرية رويحينة بريف القنيطرة الأوسط.';
+  assert.ok(mon._test.selfEchoOf(cand, body));
+  assert.equal(mon._test.selfEchoOf({ ...cand, ts: Date.now() + 7 * 3600000 }, body), null);
+});
