@@ -508,10 +508,6 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 .mk-helicopter .helicopter-svg, .mk-helicopter.sel .helicopter-svg { fill: #13283d; }
 html.dark .heli-craft { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.92)) drop-shadow(0 0 3px rgba(59,142,255,.94)); }
 @keyframes heliRotor { to { transform: rotate(1turn); } }
-/* Live military-aircraft layer (adsb.lol): quiet small markers, warplane glyph or the realistic heli render. */
-.adsb-craft { opacity: .8; filter: drop-shadow(0 1px 1.2px rgba(0,0,0,.65)); }
-.adsb-craft .adsb-svg { display: block; transform: rotate(-45deg); }
-.adsb-craft.is-heli img { display: block; width: 20px; height: 20px; }
 /* Realistic top-view helicopter (owner pick #2, 2026-11-21): outline/glow baked into the PNG. */
 .heli-img { display: block; width: 34px; height: 34px; }
 .map-flight-track-airframe.is-heli { width: 34px; height: 34px; }

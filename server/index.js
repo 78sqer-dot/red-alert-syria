@@ -1,5 +1,4 @@
 import { startTranslations } from './translate.js';
-import { aircraftFeed } from './aircraft.js';
 import express from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -133,12 +132,6 @@ app.use((req, res, next) => {
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size, pageviews: { ...pageStats } }));
-
-app.get('/api/aircraft', apiLimiter, async (req, res) => {
-  const feed = await aircraftFeed();
-  res.setHeader('Cache-Control', 'public, max-age=60');
-  res.json(feed);
-});
 
 app.get('/api/alerts', apiLimiter, (req, res) => {
   const includeInactive = req.query.include === 'inactive' || req.query.all === '1';
