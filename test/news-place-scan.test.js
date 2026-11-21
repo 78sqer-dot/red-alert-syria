@@ -132,3 +132,10 @@ test('handleResult: with a genuine second place, the draft pins there — never 
   assert.notEqual(draft.loc?.place_id, 420874, 'the main location is not the village of سلمان');
   assert.ok(!(draft.extra || []).some((l) => l.place_id === 420874), 'nor is سلمان kept as an extra area');
 });
+
+test('hospital destination is excluded from event pins in the pipeline', () => {
+  const r = { places: [{ name: 'محجة', gov: 'درعا' }, { name: 'إزرع', gov: 'درعا' }] };
+  const locs = mon._test.buildLocations(r, { text: 'العثور على جثة تحت جسر بلدة محجة بريف درعا، ثم نقل جثمانه إلى مشفى إزرع الوطني' });
+  assert.ok(locs.some((p) => p.name_ar === 'محجة'));
+  assert.ok(!locs.some((p) => p.name_ar === 'ازرع'));
+});

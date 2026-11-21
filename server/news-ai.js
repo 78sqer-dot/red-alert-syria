@@ -394,6 +394,16 @@ export function scanTextPlaces(text, govCode, max = 3) {
   }
   return out;
 }
+/** A hospital destination alone is not the incident site. Keep other mentions. */
+export function hospitalDestinationOnly(name, text) {
+  const n = N(String(name || '')).trim();
+  if (!n) return false;
+  const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nt = N(String(text || ''));
+  const rx = new RegExp('(?:مشفي|مشفى|مستشفي|مستشفى|مشفا)\\s+' + escaped + '(?=\\s|[،,.]|$)', 'gu');
+  const rest = nt.replace(rx, ' ');
+  return rest !== nt && !nameInText(name, rest);
+}
 /** a place name must really be in the post (no hallucinated places) */
 export function nameInText(name, text) {
   const n = N(String(name || '')).replace(PREFIX, '').trim();

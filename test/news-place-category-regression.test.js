@@ -43,3 +43,11 @@ test('arrest of kidnapping-case suspects is not a fresh kidnapping', async () =>
   assert.equal(refineType('arrest', 'تحرير مختطف وإلقاء القبض على متورطين بقضايا الخطف'), 'kidnapping');
   assert.equal(refineType('kidnapping', 'اختطاف شاب على يد مجهولين في ريف دير الزور'), 'kidnapping');
 });
+
+
+test('hospital destination is not a second incident location', async () => {
+  const { hospitalDestinationOnly } = await import('../server/news-ai.js');
+  assert.equal(hospitalDestinationOnly('ازرع', 'عثر على جثة في محجة ونقل جثمانه إلى مشفى إزرع الوطني'), true);
+  assert.equal(hospitalDestinationOnly('ازرع', 'وقع حادث في إزرع ونقل المصاب إلى مشفى إزرع الوطني'), false);
+  assert.equal(hospitalDestinationOnly('محجة', 'وقع الحادث تحت جسر محجة ونقل المصاب إلى مشفى إزرع'), false);
+});

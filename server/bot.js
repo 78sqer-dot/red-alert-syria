@@ -33,7 +33,7 @@ function withLabel(loc, label) {
 }
 const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
 import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
-import { refineType, scanTextPlaces, isGenericPlaceWord } from './news-ai.js';
+import { refineType, hospitalDestinationOnly, scanTextPlaces, isGenericPlaceWord } from './news-ai.js';
 import { cleanPostText } from './news-sources.js';
 import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, findAlnabaEntry, updateAlnabaEntry, deleteAlnabaEntry, sanitizeAlnabaState, fetchAlnabaTelegramBytes, parseWeeklyUploadCaption, mimeFromAlnabaFilename, weeklyIssueNumber, nextWeeklyIssueNumber } from './alnaba.js';
 
@@ -1627,6 +1627,12 @@ export async function repairNewsAlert(api, id) {
   const cleaned = isNews ? neutralNewsReporter(cleanPostText(rawBody).text.trim()) : rawBody.trim();
   const classText = `${a.title || ''}\n${a.description || ''}\n${cleaned}`;
   const patch = {};
+  const sourceDraft = Object.values(store.state.news?.drafts || {}).find((d) => d.alertId === id);
+  const sourceText = sourceDraft?.sourceText || sourceDraft?.body || cleaned;
+  if (isNews && a.extra?.some((p) => hospitalDestinationOnly(p.name_ar, sourceText))) {
+    patch.extra = a.extra.filter((p) => !hospitalDestinationOnly(p.name_ar, sourceText));
+    patch.areas = [...new Set([a.place?.name_ar, a.place?.district_ar, a.place?.governorate_ar, ...patch.extra.map((p) => p.name_ar)].filter(Boolean))];
+  }
   if (cleaned && cleaned !== rawBody.trim()) patch.body = cleaned;
   const type = refineType(a.type, classText);
   if (type !== a.type) patch.type = type;
@@ -1654,7 +1660,7 @@ export async function repairNewsAlert(api, id) {
       patch.scope = loc.scope;
     }
   }
-  if ((patch.type || patch.place) && a.type !== 'breaking') {
+  if ((patch.type || patch.place || patch.extra) && a.type !== 'breaking') {
     const b = { ...a, ...patch };
     const titles = TITLES[b.type] || { ar: typeOf(b.type).ar, en: typeOf(b.type).en };
     const named = b.place?.scope && b.place.scope !== 'country';

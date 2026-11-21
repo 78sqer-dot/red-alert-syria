@@ -22,7 +22,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, hospitalDestinationOnly, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
@@ -1511,7 +1511,7 @@ async function automaticPublicDraft(d) {
 // ---------------------------------------------------------------- pipeline
 function buildLocations(r, it) {
   const out = [];
-  const add = (loc) => { if (loc && !out.some((x) => x.scope === loc.scope && x.name_ar === loc.name_ar && x.governorate === loc.governorate)) out.push(loc); };
+  const add = (loc) => { if (loc && hospitalDestinationOnly(loc.name_ar, it.text)) return; if (loc && !out.some((x) => x.scope === loc.scope && x.name_ar === loc.name_ar && x.governorate === loc.governorate)) out.push(loc); };
   const govs = new Set();
   for (const p of (r.places || []).slice(0, 4)) {
     if (!p?.name) continue;
