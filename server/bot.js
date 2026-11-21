@@ -33,6 +33,8 @@ function withLabel(loc, label) {
 }
 const centerBtn = (p, lang) => `📍 ${lang === 'en' ? 'Centre of' : 'مركز مدينة'} ${lang === 'en' ? p.en || p.ar : p.ar}`.slice(0, 60);
 import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
+import { refineType, scanTextPlaces, isGenericPlaceWord } from './news-ai.js';
+import { cleanPostText } from './news-sources.js';
 import { isAlnabaOwner, prepareAlnabaUpload, publishAlnabaItem, prepareAlnabaArchiveEntry, publishAlnabaArchiveEntry, findAlnabaEntry, updateAlnabaEntry, deleteAlnabaEntry, sanitizeAlnabaState, fetchAlnabaTelegramBytes, parseWeeklyUploadCaption, mimeFromAlnabaFilename, weeklyIssueNumber, nextWeeklyIssueNumber } from './alnaba.js';
 
 const PAGE = 24;
@@ -1567,6 +1569,51 @@ export async function resyncChannelPosts(api) {
     await new Promise((r) => setTimeout(r, 3500));
   }
   return list.length;
+}
+// Repair a monitored-news alert after cleaner/classifier fixes: re-runs the current
+// text cleanup, type refinement and place resolution on the stored raw text, updates
+// the record, then re-edits the existing channel message in place (never a repost).
+// Built for owner-flagged post repairs (first case: post 1423, 2026-11-21).
+export async function repairNewsAlert(api, id) {
+  const a = store.getAlert(id);
+  if (!a) return { ok: false, error: 'unknown alert' };
+  if (a.source !== 'news') return { ok: false, error: 'not a news alert' };
+  const rawBody = String(a.body || a.description || '');
+  const cleaned = cleanPostText(rawBody).text.trim();
+  const classText = `${a.title || ''}\n${a.description || ''}\n${cleaned}`;
+  const patch = {};
+  if (cleaned && cleaned !== rawBody.trim()) patch.body = cleaned;
+  const type = refineType(a.type, classText);
+  if (type !== a.type) patch.type = type;
+  // Place: a pin on a generic placeholder word («المدينة»…) is unresolved - re-resolve
+  // from the text (scanTextPlaces applies the introducer/person-name guards), falling
+  // back to the governorate rather than keeping a wrong village pin.
+  if (a.place && isGenericPlaceWord(a.place.name_ar)) {
+    const govCode = a.place.governorate || null;
+    const ids = govCode ? scanTextPlaces(classText, govCode, 1) : [];
+    const loc = ids.length ? locationFrom({ placeId: ids[0] }) : locationFrom({ govCode });
+    if (loc && loc.scope !== 'country') {
+      patch.place = loc;
+      patch.location = Number.isFinite(loc.latitude) ? { latitude: loc.latitude, longitude: loc.longitude } : null;
+      patch.scope = loc.scope;
+    }
+  }
+  if ((patch.type || patch.place) && a.type !== 'breaking') {
+    const b = { ...a, ...patch };
+    const titles = TITLES[b.type] || { ar: typeOf(b.type).ar, en: typeOf(b.type).en };
+    const named = b.place?.scope && b.place.scope !== 'country';
+    patch.title = named ? `${titles.ar} — ${b.place.name_ar}` : titles.ar;
+    patch.title_en = named ? `${titles.en} — ${b.place.name_en}` : titles.en;
+  }
+  if (!Object.keys(patch).length) return { ok: true, id, changed: false };
+  const oldType = a.type;
+  store.updateAlert(id, patch);
+  if (patch.type && patch.type !== oldType) store._logPatch(id, { ty: patch.type });
+  store.persist();
+  await store.flushBackup(true);
+  const b = store.getAlert(id);
+  if (b.channel_message_id && api && config.channel) await refreshChannelPost(api, b, !b.is_active);
+  return { ok: true, id, changed: true, post: b.channel_message_id || null, type: b.type, place: b.place?.name_ar || null, body: b.body || null };
 }
 // Rewrite any legacy site host (old Render service) to the current publicUrl in
 // channel description, pinned message, and bot bios. Owner asked that no old

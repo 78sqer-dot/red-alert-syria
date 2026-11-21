@@ -12,7 +12,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, fixPostMarkup, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, fixPostMarkup, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput, repairNewsAlert } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -318,6 +318,17 @@ app.post('/api/admin/alerts/resync', apiLimiter, async (req, res) => {
   if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
   try { const n = await resyncChannelPosts(bots.admin.api); return res.json({ ok: true, resynced: n }); }
   catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
+});
+// Repair a monitored-news alert after cleaner/classifier fixes: re-runs cleanup, type
+// and place resolution on the stored raw text, updates the record, re-edits the channel
+// post in place (owner-flagged post repairs; never a repost).
+app.post('/api/admin/alerts/:id/repair-news', apiLimiter, async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
+  try {
+    const r = await repairNewsAlert(bots.admin.api, req.params.id);
+    return res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
 });
 app.post('/api/admin/channel/delete-message', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();

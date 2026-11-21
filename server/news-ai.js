@@ -228,7 +228,7 @@ export function resolvePlace({ name, gov } = {}) {
   // Generic placeholder words (المدينة / البلدة / القرية …) are never a place, however the
   // extractor produced them: a post «قرب مدينة ديرك» must fall back to the governorate,
   // never pin to one of the villages literally named «المدينة» (owner, 2026-11-21).
-  if (GENERIC.has(N(raw)) || GENERIC.has(stripAl(N(raw)))) return g ? { kind: 'governorate', govCode: g } : null;
+  if (genericHas(N(raw))) return g ? { kind: 'governorate', govCode: g } : null;
   const asGov = govCodeOf(raw);
   if (asGov && (!g || g === asGov)) {
     // "درعا" can be the city or the governorate: the city when name and governorate are the same word
@@ -255,6 +255,17 @@ export function resolvePlace({ name, gov } = {}) {
 }
 // generic words that are also village names somewhere: never matched from free text
 const GENERIC = new Set(['الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'المدينه', 'البلده', 'القريه', 'الطريق', 'المركز', 'الحاجز', 'السجن', 'السوق', 'المشفي', 'المستشفي', 'الجسر', 'الدوار', 'المنطقه', 'الريف', 'الحدود', 'الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'اليوم', 'مساء', 'صباح', 'عنصر', 'عناصر', 'الامن', 'قوات', 'الجيش', 'الاحتلال', 'مسلحين', 'مدنيين', 'اصابه', 'مقتل', 'حادث', 'سير', 'هجوم', 'قصف', 'انفجار'].map(N));
+// GENERIC stores ال-prefixed normalized forms («المدينه»); candidates arrive with or
+// without the prefix («مدينة» slipped through as bare «مدينه» and pinned a village
+// literally named المدينة, post 1423). Match all prefix variants.
+const genericHas = (n) => GENERIC.has(n) || GENERIC.has(stripAl(n)) || GENERIC.has('ال' + stripAl(n));
+// True when a stored place name is one of the generic placeholder words above
+// (e.g. an alert pinned to a village literally named «المدينة»): the repair tool
+// treats such a pin as unresolved and re-resolves it from the text.
+export function isGenericPlaceWord(name) {
+  const n = N(String(name || '').trim());
+  return Boolean(n) && genericHas(n);
+}
 // Alt-name scanning rule: a free-text match that succeeds ONLY through an
 // alternative spelling (never the place's canonical name) is accepted only when
 // a place introducer immediately precedes it («في قرية المزرعة»). Without one, a
@@ -369,7 +380,7 @@ export function scanTextPlaces(text, govCode, max = 3) {
       const variants = [...new Set([raw, raw.replace(/^(وب|وال|بال|لل|فال)/, 'ال'), raw.replace(/^[وبل](?=\S{3})/, '')])];
       let hits = [];
       for (const cand of variants) {
-        if (cand.length < 4 || GENERIC.has(cand) || GENERIC.has(stripAl(cand)) || govCodeOf(cand)) continue;
+        if (cand.length < 4 || genericHas(cand) || govCodeOf(cand)) continue;
         hits = exactHits(cand, govCode);
         // alt-only: needs a place introducer, and never when the word is spoken
         // as a person's name («الزوجين "سليمان كرنوص"» is not the village سلمان)
@@ -735,7 +746,7 @@ export function ruleClassify(text, { breaking = false } = {}) {
       const cand = rawCand.replace(/^[وبل](?=ال)/, '').replace(/^[وبل](?=[^ا\s].{2,})/u, '');
       if (cand.length < 3) continue;
       // generic words that are also place names («بالسجن المؤبد» is a prison sentence, not the village of Al-Sijn/Al-Mazraah)
-      if (GENERIC.has(N(cand)) || GENERIC.has(stripAl(N(cand)))) continue;
+      if (genericHas(N(cand))) continue;
       const hits = exactHits(cand, null);
       // alt-only matches need a place introducer, and never a person's name
       // («سليمان» the man vs «سلمان» the village)

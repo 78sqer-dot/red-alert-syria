@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanPostText } from '../server/news-sources.js';
-import { resolvePlace, scanTextPlaces, refineType } from '../server/news-ai.js';
+import { resolvePlace, scanTextPlaces, refineType, isGenericPlaceWord } from '../server/news-ai.js';
 
 const STORY = 'مقتل شاب من ريف الحسكة برصاص الجندرمة التركية قُتل شاب من ريف مدينة الحسكة، برصاص الجندرمة التركية (حرس الحدود) على الحدود السورية التركية قرب مدينة ديرك.';
 const JUNK = 'وكالة أنباء هاوار ANHA موقعنا على بلوسكاي موقعنا على X لحظة بلحظة عبر الواتس اب';
@@ -54,6 +54,13 @@ test('a killing by firearm classifies as a violent incident, not 🟢 وفاة',
 
 test('explicit assassination wording upgrades to assassination', () => {
   assert.equal(refineType('death', 'اغتيال قيادي برصاص مسلحين مجهولين في درعا'), 'assassination');
+});
+
+test('repair path: المدينة pin detected as generic, story re-resolves to المالكية', () => {
+  assert.equal(isGenericPlaceWord('المدينة'), true);
+  assert.equal(isGenericPlaceWord('المالكية'), false);
+  const ids = scanTextPlaces(STORY, '01', 1);
+  assert.deepEqual(ids, [173530]);
 });
 
 test('natural/unknown deaths stay death', () => {
