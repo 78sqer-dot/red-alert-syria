@@ -538,7 +538,10 @@ export function startWxBulletin(getApi) {
   started = true;
   officialWeatherWarnings({ waitMs: 0 }); // warm the official CAP cache in the background after boot
   const c0 = wxbState().cfg; const p0 = damascusParts();
-  if (!c0.last && p0.hm >= c0.time) { c0.last = p0.date; save(false); } // first boot after the time: start tomorrow
+  // First boot with no recorded bulletin: skip today only when the day is already well
+  // past bulletin time (>2h). An ordinary morning redeploy must never silently skip the day's bulletin.
+  const minsPast = (Number(p0.hm.slice(0, 2)) * 60 + Number(p0.hm.slice(3, 5))) - (Number(c0.time.slice(0, 2)) * 60 + Number(c0.time.slice(3, 5)));
+  if (!c0.last && minsPast > 120) { c0.last = p0.date; save(false); }
   save(false); // persist the one-time switch/migrations right away
   let busy = false;
   const tick = async () => {
