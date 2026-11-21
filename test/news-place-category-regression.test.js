@@ -23,3 +23,14 @@ test('place rendering never duplicates the same name (الحسكة، الحسك�
   assert.match(mon, /l\.scope !== 'governorate' && l\.governorate_ar !== l\.name_ar \? l\.governorate_ar : ''/, 'whereOf skips a governorate identical to the place name');
   assert.match(mon, /l\.governorate_ar !== l\.district_ar/, 'fmtLoc skips a governorate identical to the district name');
 });
+
+test('an administration label is not automatically resolved to Al Idarah village', async () => {
+  const { isGenericPlaceWord, resolvePlace } = await import('../server/news-ai.js');
+  assert.equal(isGenericPlaceWord('الإدارة'), true);
+  assert.equal(isGenericPlaceWord('ادارة'), true);
+  assert.equal(resolvePlace({ name: 'الإدارة' }), null);
+  const bot = readFileSync(new URL('../server/bot.js', import.meta.url), 'utf8');
+  assert.match(bot, /institutionMisPin \? null : a\.place\.governorate/);
+  assert.match(bot, /patch\.location = null/);
+  assert.match(bot, /patch\.zones = \[\]/);
+});

@@ -1634,10 +1634,21 @@ export async function repairNewsAlert(api, id) {
   // from the text (scanTextPlaces applies the introducer/person-name guards), falling
   // back to the governorate rather than keeping a wrong village pin.
   if (a.place && isGenericPlaceWord(a.place.name_ar)) {
-    const govCode = a.place.governorate || null;
+    // An institution mistaken for a village cannot lend its derived governorate
+    // to the repair. Keep the reported broad region, without inventing a pin.
+    const institutionMisPin = /^(?:الإدارة|الادارة|إدارة|ادارة)$/u.test(a.place.name_ar || '')
+      && /(?:إدارة|ادارة)\s+مكافحة/u.test(classText);
+    const govCode = institutionMisPin ? null : a.place.governorate || null;
     const ids = govCode ? scanTextPlaces(classText, govCode, 1) : [];
     const loc = ids.length ? locationFrom({ placeId: ids[0] }) : locationFrom({ govCode });
-    if (loc && loc.scope !== 'country') {
+    if (institutionMisPin) {
+      patch.place = { ...locationFrom({}), name_ar: /البادية الجنوبية/u.test(classText) ? 'البادية الجنوبية' : 'سوريا', name_en: /البادية الجنوبية/u.test(classText) ? 'Southern Syrian desert' : 'Syria' };
+      patch.location = null;
+      patch.scope = 'country';
+      patch.areas = [patch.place.name_ar];
+      patch.zones = [];
+      patch.extra = [];
+    } else if (loc && loc.scope !== 'country') {
       patch.place = loc;
       patch.location = Number.isFinite(loc.latitude) ? { latitude: loc.latitude, longitude: loc.longitude } : null;
       patch.scope = loc.scope;
