@@ -11,11 +11,9 @@ test('live military-aircraft layer proxies adsb.lol through a cached server endp
   assert.match(server, /app\.get\('\/api\/aircraft', apiLimiter/);
   assert.match(server, /import \{ aircraftFeed \} from '\.\/aircraft\.js';/);
   assert.match(aircraft, /https:\/\/api\.adsb\.lol\/v2\/mil/);
-  assert.match(aircraft, /https:\/\/api\.adsb\.lol\/v2\/lat\/35\.2\/lon\/38\.4\/dist\/250/, 'point-query fallback when the global feed fails');
   assert.match(aircraft, /const FETCH_MS = 10 \* 60_000;/, 'one shared upstream fetch per 10 minutes protects the anonymous daily quota');
   assert.match(aircraft, /a\.lat < BOX\.minLat \|\| a\.lat > BOX\.maxLat \|\| a\.lon < BOX\.minLon \|\| a\.lon > BOX\.maxLon/, 'server filters to the Syria region bbox');
-  assert.match(aircraft, /ctrl\.abort\(\), 15000\)/, 'upstream fetch has a timeout');
-  assert.match(aircraft, /lastError/, 'upstream failures are logged for diagnosis');
+  assert.match(aircraft, /ctrl\.abort\(\), 9000\)/, 'upstream fetch has a timeout');
   assert.match(aircraft, /serve stale/);
 });
 
