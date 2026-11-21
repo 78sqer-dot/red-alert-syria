@@ -396,6 +396,11 @@ export class AlertMap {
     this.map.on('styleimagemissing', (e) => {
       if (!this.map.hasImage(e.id)) this.map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
+    // low-end Android GPUs drop the WebGL context under memory pressure: without this the canvas
+    // dies silently and the app reads as frozen (owner live report 13:19). preventDefault lets
+    // the context restore; on restore, re-measure and re-render.
+    this.map.on('webglcontextlost', (e) => { e.preventDefault(); });
+    this.map.on('webglcontextrestored', () => { this.map.resize(); this._queueZones(); this.refreshMarkerGroups(); this.render(); });
     this.map.on('click', (e) => {
       const markerTap = this._lastMarkerTap;
       this._lastMarkerTap = null; // consume the next map click, whether it is an echo or a separate tap
@@ -896,7 +901,11 @@ export class AlertMap {
     const currentZoom = this.map.getZoom();
     const zoom = Math.min(17, Math.max(currentZoom + 2, 7.5));
     if (zoom <= currentZoom + 0.01 && distanceKm([this.map.getCenter().lng, this.map.getCenter().lat], center) < 0.01) return this.openGroupChooser(group);
-    this.map.once('moveend', () => this.openGroupChooser(group));
+    const token = (this._chooserToken = (this._chooserToken || 0) + 1);
+    const openIfCurrent = () => { if (this._chooserToken === token) this.openGroupChooser(group); };
+    this.map.once('moveend', openIfCurrent);
+    // fallback: if the camera never fires moveend (interrupted/no-op flight), open anyway
+    setTimeout(openIfCurrent, 1400);
     this.map.flyTo({ center, zoom, padding: this.padding(), duration: 800, essential: true });
   }
 
@@ -1400,22 +1409,23 @@ export class AlertMap {
     const archiveRoute = isLegacyQuneitraArchiveAlert(alert) ? legacyQuneitraArchivePath(alert) : [];
     const marker = alertMarkerKind(alert);
     const orbiting = marker === 'orbit' || marker === 'helicopter';
+    const flySafely = (fn) => { try { fn(); } catch (err) { console.warn('camera move failed; opening popup anyway', err); } };
     if (archiveRoute.length === 2 && fly) {
       this.closePopup();
       const longitudes = archiveRoute.map(([lon]) => lon);
       const latitudes = archiveRoute.map(([, lat]) => lat);
-      this.map.fitBounds([[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]], {
+      flySafely(() => this.map.fitBounds([[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]], {
         padding: this.padding(), maxZoom: 9, duration: 950, essential: true,
       });
     } else if (fly && !tapped && !orbiting && alert.more && alert.more.length && zs.length > 1) {
       // several areas: frame all of their circles
       let w = 180, e = -180, s = 90, n = -90;
       for (const q of zs) { const dl = q.km / 111, dn = q.km / (111 * Math.cos((q.lat * Math.PI) / 180)); w = Math.min(w, q.lon - dn); e = Math.max(e, q.lon + dn); s = Math.min(s, q.lat - dl); n = Math.max(n, q.lat + dl); }
-      this.map.fitBounds([[w, s], [e, n]], { padding: this.padding(), maxZoom: 11, duration: 1100, essential: true });
+      flySafely(() => this.map.fitBounds([[w, s], [e, n]], { padding: this.padding(), maxZoom: 11, duration: 1100, essential: true }));
     } else if (fly) {
       const center = this.map.getCenter();
       const duration = alertTransitionDuration(distanceKm([center.lng, center.lat], target));
-      this.map.flyTo({ center: target, zoom: alertFocusZoom(alert.scope, this.map.getZoom(), orbiting ? 11.5 : 0), padding: this.padding(), curve: 1.18, duration, essential: true });
+      flySafely(() => this.map.flyTo({ center: target, zoom: alertFocusZoom(alert.scope, this.map.getZoom(), orbiting ? 11.5 : 0), padding: this.padding(), curve: 1.18, duration, essential: true }));
     }
     if (popup && archiveRoute.length !== 2) this.openPopup(alert);
     else if (archiveRoute.length === 2) this.closePopup();

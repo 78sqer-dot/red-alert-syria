@@ -116,9 +116,9 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=100'/);
+  assert.match(app, /from '\.\/map\.js\?v=101'/);
   assert.match(html, /app\.css\?v=98/);
-  assert.match(html, /app\.js\?v=107/);
+  assert.match(html, /app\.js\?v=108/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
@@ -225,7 +225,7 @@ test('tapping an individual map symbol zooms to its alert and opens details on p
 
 test('count-marker taps zoom to the group before showing a bottom-anchored chooser on phones', () => {
   assert.match(map, /if \(group\?\.alerts\.length > 1\) return this\.zoomToGroupChooser\(group\)/);
-  assert.match(map, /zoomToGroupChooser\(group\)[\s\S]{0,1000}this\.map\.once\('moveend', \(\) => this\.openGroupChooser\(group\)\)[\s\S]{0,180}this\.map\.flyTo/);
+  assert.match(map, /zoomToGroupChooser\(group\)[\s\S]{0,1000}this\.map\.once\('moveend', openIfCurrent\)[\s\S]{0,180}setTimeout\(openIfCurrent, 1400\)[\s\S]{0,180}this\.map\.flyTo/);
   assert.match(map, /className: 'pp-group-popup', anchor: 'bottom', offset: \[0, 0\]/);
   assert.equal((map.match(/if \(!ids\.length \|\| ids\.some\(\(id\) => !liveIds\.has\(String\(id\)\)\)\) this\.closePopup\(\);/g) || []).length, 2);
 });

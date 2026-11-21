@@ -8,7 +8,7 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon, ICONS } from './icons.js?v=10';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=100';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=101';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -1546,6 +1546,9 @@ function bindEvents() {
   });
   // modal
   $('#modalBackdrop').addEventListener('click', async (e) => {
+    // a tap on the bare backdrop (outside the card) dismisses: a stuck or half-rendered
+    // overlay must never leave the whole app untappable (owner live report 13:19)
+    if (e.target.id === 'modalBackdrop') return closeModal();
     const shareAction = e.target.closest('[data-share-act]')?.dataset.shareAct;
     if (shareAction) { e.preventDefault(); return shareCardAction(shareAction); }
     const m = e.target.closest('[data-m]')?.dataset.m;
