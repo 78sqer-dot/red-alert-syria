@@ -359,6 +359,8 @@ export class AlertMap {
       const z = this.map.getZoom();
       const c = this.map.getContainer();
       c.classList.toggle('zoom-detail', z >= 10.5);
+      // Helicopter tracks are tied to the display-scaled circle: recompute per zoom tier.
+      this.syncMovementTracks();
       c.classList.toggle('zoom-tier-mid', z >= 9 && z < 10.5);
       c.classList.toggle('zoom-tier-far', z < 9);
       c.classList.toggle('zoom-far', z < 7.5);
@@ -664,7 +666,11 @@ export class AlertMap {
     const lat = alert.location.latitude;
     const lon = alert.location.longitude;
     const z = Array.isArray(alert.zones) && alert.zones.length ? alert.zones[0] : null;
-    const km = z && Number(z.km) > 0 ? Number(z.km) : (ZONE_KM[alert.scope] || ZONE_KM.place || 8);
+    const rawKm = z && Number(z.km) > 0 ? Number(z.km) : (ZONE_KM[alert.scope] || ZONE_KM.place || 8);
+    // The path crosses the DISPLAYED impact circle, which is screen-capped like every
+    // non-warplane zone: without this the track kept the raw geographic radius and flew
+    // far outside the visible circle at detail zoom (owner review 2026-11-21).
+    const km = this._screenKm(rawKm, lat, 0.11);
     const rLat = km / 111.32;
     const rLon = km / ((111.32 * Math.cos((lat * Math.PI) / 180)) || 1);
     const heading = Number.isFinite(alert.heading)
@@ -727,7 +733,7 @@ export class AlertMap {
         });
       }
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
-      const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${heading}|${position.join(',')}|${route.join(';')}`;
+      const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${heading}|${position.join(',')}|${route.join(';')}|z${Math.round(this.map.getZoom() * 2)}`;
       let track = this.movementTracks.get(alert.id);
       if (track && track.signature !== signature) {
         if (track.frame) cancelAnimationFrame(track.frame);
@@ -748,7 +754,7 @@ export class AlertMap {
         if (aircraft === 'helicopter') {
           const airframe = document.createElement('span');
           airframe.className = 'map-flight-track-airframe is-lead is-heli';
-          airframe.innerHTML = '<img src="/img/helicopter-top.png?v=1" width="34" height="34" class="heli-img" alt="">';
+          airframe.innerHTML = '<img src="/img/helicopter-top.png?v=1" width="34" height="34" class="heli-img" alt=""><span class="heli-rotor" aria-hidden="true"></span>';
           formation.append(airframe);
         } else {
           for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
@@ -1167,7 +1173,7 @@ export class AlertMap {
     } else if (marker === 'helicopter') {
       // Ended helicopter sightings keep the realistic top-view marker at the reported point;
       // active ones render as the animated flight track (syncMovementTracks).
-      const heliImg = '<img src="/img/helicopter-top.png?v=1" width="34" height="34" class="heli-img" alt="">';
+      const heliImg = '<img src="/img/helicopter-top.png?v=1" width="34" height="34" class="heli-img" alt=""><span class="heli-rotor" aria-hidden="true"></span>';
       const craft = `<span class="heli-craft heli-static">${heliImg}</span>`;
       const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second heli-static">${heliImg}</span>` : '';
       el.innerHTML = `<div class="heli-route">${craft}${second}</div>`;

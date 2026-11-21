@@ -10,7 +10,7 @@ const types = await readFile(new URL('../shared/types.js', import.meta.url), 'ut
 const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.meta.url), 'utf8');
 
 test('approved helicopter visual is served under fresh module cache keys', () => {
-  assert.match(appJs, /from '\.\/map\.js\?v=98'/);
+  assert.match(appJs, /from '\.\/map\.js\?v=99'/);
   assert.match(mapJs, /from '\.\/target-svgs\.js\?v=27'/);
 });
 
@@ -83,4 +83,15 @@ test('movement stays anchored to the observed location and draws only the select
   assert.match(mapJs, /source\.setData\(\{ type: 'FeatureCollection', features: routeFeatures \}\)/);
   assert.match(mapJs, /&& Number\.isFinite\(a\.location\?\.latitude\) && Number\.isFinite\(a\.location\?\.longitude\)/);
   assert.match(css, /\.map-flight-track-marker\.is-plane \.map-flight-track-svg \{ transform: rotate\(-45deg\); \}/);
+});
+
+test('helicopter rotor spins and the track follows the display-scaled circle at every zoom', () => {
+  // Owner review 2026-11-21: blades must spin, and the zoomed-in view must stay coherent.
+  assert.match(mapJs, /class="heli-rotor" aria-hidden="true"><\/span>/);
+  assert.match(css, /\.heli-rotor \{[^}]*animation: heliRotorSpin \.5s linear infinite/);
+  assert.match(css, /@keyframes heliRotorSpin/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.heli-rotor \{ animation: none/);
+  assert.match(mapJs, /const km = this\._screenKm\(rawKm, lat, 0\.11\);/, 'track radius uses the same display-scaled radius as the circle');
+  assert.match(mapJs, /\|z\$\{Math\.round\(this\.map\.getZoom\(\) \* 2\)\}/, 'track signature re-keys per zoom bucket');
+  assert.match(mapJs, /c\.classList\.toggle\('zoom-detail', z >= 10\.5\);\n      \/\/ Helicopter tracks are tied to the display-scaled circle: recompute per zoom tier\.\n      this\.syncMovementTracks\(\);/);
 });
