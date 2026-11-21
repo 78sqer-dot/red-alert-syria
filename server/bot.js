@@ -1617,7 +1617,7 @@ export function synthAirDescription(type, meta, place) {
     : 'الأجواء السورية';
   return `رصد تحليق ${craft} فوق ${where}.`;
 }
-export async function repairNewsAlert(api, id) {
+export async function repairNewsAlert(api, id, correction = null) {
   const a = store.getAlert(id);
   if (!a) return { ok: false, error: 'unknown alert' };
   // News alerts get the full text cleaner; manual/radar reports skip it (their text is
@@ -1673,6 +1673,26 @@ export async function repairNewsAlert(api, id) {
     if (!b0.description && !b0.body) {
       const synth = synthAirDescription(b0.type, b0.meta, b0.place);
       if (synth) patch.description = synth;
+    }
+  }
+  // Explicit owner-authorized factual corrections preserve the same alert/post and
+  // source metadata. Coordinates are deliberately not accepted through this path.
+  if (correction && typeof correction === 'object') {
+    for (const key of ['description', 'description_en', 'body']) {
+      if (typeof correction[key] === 'string' && correction[key].length <= 8000) patch[key] = correction[key];
+    }
+    if (typeof correction.place_name_ar === 'string' && correction.gov_code) {
+      const loc = locationFrom({ govCode: correction.gov_code });
+      if (loc?.scope === 'governorate') {
+        patch.place = { ...loc, name_ar: correction.place_name_ar.slice(0, 100), name_en: String(correction.place_name_en || correction.place_name_ar).slice(0, 100), scope: 'country' };
+        patch.location = null;
+        patch.scope = 'country';
+        patch.extra = [];
+        patch.areas = [patch.place.name_ar, loc.governorate_ar || loc.name_ar];
+        const titles = TITLES[a.type] || { ar: typeOf(a.type).ar, en: typeOf(a.type).en };
+        patch.title = `${titles.ar} — ${patch.place.name_ar}`;
+        patch.title_en = `${titles.en} — ${patch.place.name_en}`;
+      }
     }
   }
   if (!Object.keys(patch).length) {

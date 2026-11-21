@@ -51,3 +51,12 @@ test('hospital destination is not a second incident location', async () => {
   assert.equal(hospitalDestinationOnly('ازرع', 'وقع حادث في إزرع ونقل المصاب إلى مشفى إزرع الوطني'), false);
   assert.equal(hospitalDestinationOnly('محجة', 'وقع الحادث تحت جسر محجة ونقل المصاب إلى مشفى إزرع'), false);
 });
+
+test('factual repair keeps source metadata and never accepts ungrounded coordinates', () => {
+  const bot = readFileSync(new URL('../server/bot.js', import.meta.url), 'utf8');
+  const index = readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
+  assert.match(index, /req\.body\?\.correction/);
+  assert.match(bot, /\['description', 'description_en', 'body'\]/);
+  assert.match(bot, /patch\.location = null/);
+  assert.match(bot, /store\.flushBackup\(true\)/);
+});
