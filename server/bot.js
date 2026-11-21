@@ -1119,6 +1119,9 @@ export function buildAlertInput(d, author) {
   // the concise description, never instead of it; dropped when it adds nothing.
   const fullBody = cleanPublicText(String(d.body || ''));
   let body = fullBody && fullBody !== description ? fullBody : undefined;
+  // Air-activity reports that arrive with no text at all still get one sighting line:
+  // a bare header reads broken on the channel (post 1426).
+  if (!description && !body) description = synthAirDescription(d.type, d.meta, loc) || description;
   // ⚖️ Owner-attached condemnation (review cards of both bots): appended exactly
   // once, at the end of the published body — when there is no separate body the
   // description IS the published text, so the line closes it instead. It never
@@ -1577,6 +1580,22 @@ export async function resyncChannelPosts(api) {
 // text cleanup, type refinement and place resolution on the stored raw text, updates
 // the record, then re-edits the existing channel message in place (never a repost).
 // Built for owner-flagged post repairs (first case: post 1423, 2026-11-21).
+// Minimum one-liner for a textless air-activity sighting: what was seen and where.
+// Direction stays in the title when known, so it is not repeated here. Returns '' for
+// non-air types - their bare header is out of scope for now.
+export function synthAirDescription(type, meta, place) {
+  const craft = type === 'helicopter' ? 'طيران مروحي'
+    : type === 'warplane' ? 'طيران حربي'
+    : type === 'uav' ? 'مسيّرة'
+    : type === 'air_movement' ? (FLIGHT_AIRCRAFT[meta?.aircraft]?.ar || 'طيران')
+    : null;
+  if (!craft) return '';
+  const named = place?.scope && place.scope !== 'country';
+  const where = named
+    ? [place.name_ar, place.governorate_ar && place.governorate_ar !== place.name_ar ? place.governorate_ar : null].filter(Boolean).join('، ')
+    : 'الأجواء السورية';
+  return `رصد تحليق ${craft} فوق ${where}.`;
+}
 export async function repairNewsAlert(api, id) {
   const a = store.getAlert(id);
   if (!a) return { ok: false, error: 'unknown alert' };
@@ -1607,6 +1626,14 @@ export async function repairNewsAlert(api, id) {
     const named = b.place?.scope && b.place.scope !== 'country';
     patch.title = named ? `${titles.ar} — ${b.place.name_ar}` : titles.ar;
     patch.title_en = named ? `${titles.en} — ${b.place.name_en}` : titles.en;
+  }
+  // A textless air sighting gets its minimum one-liner too (post 1426).
+  {
+    const b0 = { ...a, ...patch };
+    if (!b0.description && !b0.body) {
+      const synth = synthAirDescription(b0.type, b0.meta, b0.place);
+      if (synth) patch.description = synth;
+    }
   }
   if (!Object.keys(patch).length) {
     // Nothing to patch in the record, but the caller asked for a repair: re-edit the

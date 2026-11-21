@@ -89,6 +89,16 @@ test('render: lead restated fuller in body prints once (post 1424 layout bug)', 
   assert.ok(!out.includes('ومعاهد'), 'abbreviated lead not duplicated');
 });
 
+test('textless air sighting gets a minimum one-line body (post 1426)', async () => {
+  const { synthAirDescription, buildAlertInput } = await import('../server/bot.js');
+  const loc = { scope: 'place', name_ar: 'غباغب', governorate_ar: 'درعا', latitude: 33.18, longitude: 36.22 };
+  assert.equal(synthAirDescription('helicopter', null, loc), 'رصد تحليق طيران مروحي فوق غباغب، درعا.');
+  assert.equal(synthAirDescription('uav', null, loc), 'رصد تحليق مسيّرة فوق غباغب، درعا.');
+  assert.equal(synthAirDescription('death', null, loc), '');
+  const input = buildAlertInput({ type: 'helicopter', location: loc, source: 'telegram', title: 'تحليق طيران مروحي — غباغب' }, { id: 1 });
+  assert.equal(input.description, 'رصد تحليق طيران مروحي فوق غباغب، درعا.');
+});
+
 test('natural/unknown deaths stay death', () => {
   assert.equal(refineType('death', 'وفاة مسنّ في منزله بمدينة حماة إثر أزمة قلبية'), 'death');
 });
