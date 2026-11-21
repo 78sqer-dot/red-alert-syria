@@ -10,7 +10,7 @@ const types = await readFile(new URL('../shared/types.js', import.meta.url), 'ut
 const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.meta.url), 'utf8');
 
 test('approved helicopter visual is served under fresh module cache keys', () => {
-  assert.match(appJs, /from '\.\/map\.js\?v=99'/);
+  assert.match(appJs, /from '\.\/map\.js\?v=100'/);
   assert.match(mapJs, /from '\.\/target-svgs\.js\?v=27'/);
 });
 
@@ -78,7 +78,7 @@ test('movement stays anchored to the observed location and draws only the select
   assert.match(mapJs, /properties: \{ color: routeColor, arrow: '➤'/);
   assert.match(mapJs, /'symbol-placement': 'line-center'/);
   assert.match(mapJs, /'text-rotation-alignment': 'map', 'text-keep-upright': false/);
-  assert.match(mapJs, /'line-opacity': \['case', \['get', 'referenceRoute'\], 0\.92, \['get', 'planeRoute'\], 0\.45, 0\.9\]/);
+  assert.match(mapJs, /'line-opacity': \['case', \['get', 'referenceRoute'\], 0\.92, \['get', 'planeRoute'\], dark \? 0\.45 : 0\.8, 0\.9\]/);
   assert.match(mapJs, /fill="\$\{iconColor\}" class="map-flight-track-svg"/);
   assert.match(mapJs, /source\.setData\(\{ type: 'FeatureCollection', features: routeFeatures \}\)/);
   assert.match(mapJs, /&& Number\.isFinite\(a\.location\?\.latitude\) && Number\.isFinite\(a\.location\?\.longitude\)/);

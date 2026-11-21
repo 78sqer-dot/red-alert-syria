@@ -515,11 +515,9 @@ html.dark .heli-craft { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.92)) drop-sh
    50%/37% of the airframe; soft dark streaks + blur disc read as motion without hiding the art. */
 .heli-craft, .map-flight-track-airframe.is-heli { position: relative; }
 .heli-rotor { position: absolute; left: 50%; top: 37%; width: 96%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
-  background: repeating-conic-gradient(from 0deg, rgba(25,32,22,.34) 0deg 16deg, transparent 16deg 90deg, rgba(25,32,22,.34) 90deg 106deg, transparent 106deg 180deg, rgba(25,32,22,.34) 180deg 196deg, transparent 196deg 270deg, rgba(25,32,22,.34) 270deg 286deg, transparent 286deg 360deg);
-  -webkit-mask-image: radial-gradient(circle, #000 60%, transparent 70%);
-  mask-image: radial-gradient(circle, #000 60%, transparent 70%);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Ccircle cx='17' cy='17' r='15.5' fill='rgba(28,34,26,0.10)'/%3E%3Cline x1='3' y1='17' x2='31' y2='17' stroke='rgba(22,28,20,0.52)' stroke-width='1.9' stroke-linecap='round'/%3E%3Cline x1='17' y1='3' x2='17' y2='31' stroke='rgba(22,28,20,0.22)' stroke-width='1.4' stroke-linecap='round'/%3E%3Ccircle cx='17' cy='17' r='1.6' fill='rgba(22,28,20,0.6)'/%3E%3C/svg%3E") center / contain no-repeat;
   animation: heliRotorSpin .5s linear infinite; }
-.heli-rotor::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, rgba(40,48,36,.16) 28%, transparent 62%); }
+.heli-rotor::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, rgba(40,48,36,.08) 28%, transparent 62%); }
 @keyframes heliRotorSpin { to { transform: translate(-50%, -50%) rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .heli-rotor { animation: none; opacity: .35; } }
 /* Ended sightings: static pin at the reported point, no orbit guide, visible at every zoom. */
