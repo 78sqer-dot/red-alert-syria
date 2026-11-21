@@ -818,6 +818,12 @@ export function refineType(type, text) {
   const violenceAt = firstAt(INCIDENT_FIRST);
   const arrestAt = firstAt(ARREST_CUES);
   const arrestIsFollowUp = violenceAt >= 0 && (arrestAt < 0 || violenceAt < arrestAt);
+  // Kidnapping mentioned as a suspect's case is not an abduction happening now.
+  // Keep explicit rescue/release reports on the kidnapping path.
+  const kidnapCaseArrest = arrestAt >= 0
+    && /(?:متورط(?:ين|ون)?|مشتبه|متهم(?:ين|ون)?|مطلوب(?:ين|ون)?).{0,45}(?:بقضايا|بقضيه|بجرائم|بجريمه|بعمليات|بعمليه).{0,20}(?:الخطف|الاختطاف)/u.test(nt)
+    && !/(?:تحرير|انقاذ|اطلاق سراح).{0,30}(?:مختطف|مخطوف|رهين)/u.test(nt);
+  if (kidnapCaseArrest && ['kidnapping', 'arrest', 'breaking', 'civil', 'none'].includes(type)) return 'arrest';
   if (any(PATROL_W) && ['breaking', 'civil', 'none'].includes(type) && !any([...CLASH_W, ...GUN_W, ...EXPL_W, ...AIRSTRIKE_W, ...UAV_STRIKE_W])) return 'patrol';
   if (any(CLASH_W) && ['attack', 'brawl', 'shooting', 'breaking', 'civil', 'weather', 'none', 'uav', 'warplane', 'helicopter'].includes(type)) return 'clashes';
   const smuggling = detectedSmugglingType(evidenceText);

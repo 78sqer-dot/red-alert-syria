@@ -34,3 +34,12 @@ test('an administration label is not automatically resolved to Al Idarah village
   assert.match(bot, /patch\.location = null/);
   assert.match(bot, /patch\.zones = \[\]/);
 });
+
+
+test('arrest of kidnapping-case suspects is not a fresh kidnapping', async () => {
+  const { refineType } = await import('../server/news-ai.js');
+  const text = 'عملية أمنية تسفر عن توقيف متورطين بقضايا الخطف والابتزاز والاتجار بالمخدرات بريف دير الزور';
+  for (const type of ['kidnapping', 'arrest', 'breaking', 'civil']) assert.equal(refineType(type, text), 'arrest');
+  assert.equal(refineType('arrest', 'تحرير مختطف وإلقاء القبض على متورطين بقضايا الخطف'), 'kidnapping');
+  assert.equal(refineType('kidnapping', 'اختطاف شاب على يد مجهولين في ريف دير الزور'), 'kidnapping');
+});
