@@ -640,6 +640,8 @@ export function hasExplicitDroneFlight(text) {
   const nt = N(String(text || ''));
   const en = String(text || '').toLowerCase();
   return UAV_FLIGHT_CUES.some((word) => nt.includes(N(word)))
+    || /(?:الطيران|طيران|طايرات|الطايرات)\s+(?:المسير|المسيره|مسيره)(?=\s|$)/u.test(nt)
+    || /تحليق\s+(?:مكثف\s+)?(?:ل?طايرات|للطايرات)\s+(?:الاحتلال\s+)?(?:الاسراييلي[هة]?\s+)?(?:المسيره|مسيره)(?=\s|$)/u.test(nt)
     || /\b(?:drones?|uavs?)\s+(?:are\s+|were\s+)?(?:flying|circling|overflying|hovering)\b/.test(en)
     || /\b(?:drone|uav)\s+overflight\b/.test(en);
 }

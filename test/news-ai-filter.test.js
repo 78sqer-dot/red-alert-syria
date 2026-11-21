@@ -270,3 +270,16 @@ test('professional rewrite uses only the fixed fast free-tier model and returns 
   assert.match(request.options.body, /لا تحول الادعاء إلى حقيقة/);
   assert.equal(JSON.parse(request.options.body).generationConfig.temperature, 0.1);
 });
+
+test('separated drone flight cues are not protest marches', () => {
+  for (const text of [
+    'تحليق مكثف للطيران المسير فوق قرية في جنوب سوريا',
+    'تحليق مكثف لطائرات الاحتلال الإسرائيلي المسيرة فوق ريف درعا',
+    'الطيران المسيّر في أجواء حلب',
+  ]) {
+    assert.equal(hasExplicitDroneFlight(text), true, text);
+    assert.equal(refineType('protest', text), 'uav', text);
+  }
+  assert.equal(hasExplicitDroneFlight('مسيرة احتجاجية في دمشق'), false);
+  assert.equal(hasExplicitDroneFlight('مظاهرة ضد الطيران في المدينة'), false);
+});

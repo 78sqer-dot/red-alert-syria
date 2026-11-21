@@ -346,6 +346,10 @@ function collapseStory(desc, body, preferFullerFirst = false) {
 // A submitted call to a gathering is a source document, not our own voice.
 // Strip only its ceremonial opening, retain its claims as attributed text,
 // and separate explicit logistical labels without inventing dates or facts.
+function neutralNewsReporter(body) {
+  // A feed's first-person reporter is not our own reporter. Retain the factual sentence.
+  return String(body || '').replace(/^(?:مراسلنا|مراسلونا|مراسل القناة)\s*[:：]\s*/u, '').trim();
+}
 function tidySourceAnnouncement(desc, body) {
   const opening = /^بسم الله الرحمن الرحيم\s*(?:والصلا[ةه] والسلام على رسول الله الكريم\s*)?(?:[اأإ]م[ا]? بعد\s*)?/u;
   if (!/(?:دعوة|دعوه).*اعتصام/u.test(desc) || !opening.test(body)) return body;
@@ -392,7 +396,7 @@ export function channelPost(alert, { ended = false } = {}) {
   let fullBody = preserveStoryAttribution
     ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
     : cleanAlertText(alert.body || '');
-  if (alert.source === 'news') fullBody = tidySourceAnnouncement(desc, fullBody);
+  if (alert.source === 'news') fullBody = tidySourceAnnouncement(desc, neutralNewsReporter(fullBody));
   // Lead and full text collapse into one telling (see collapseStory); the
   // full text remains on the map regardless. Photo captions drop the extra
   // section first when trimming.
@@ -1620,7 +1624,7 @@ export async function repairNewsAlert(api, id) {
   // already authored) but still get type/place re-resolution and the air-sighting line.
   const isNews = a.source === 'news';
   const rawBody = String(a.body || a.description || '');
-  const cleaned = isNews ? cleanPostText(rawBody).text.trim() : rawBody.trim();
+  const cleaned = isNews ? neutralNewsReporter(cleanPostText(rawBody).text.trim()) : rawBody.trim();
   const classText = `${a.title || ''}\n${a.description || ''}\n${cleaned}`;
   const patch = {};
   if (cleaned && cleaned !== rawBody.trim()) patch.body = cleaned;
