@@ -317,7 +317,7 @@ const splitStorySentences = (s) => {
 // once instead of the lead. Pure numbers never count as story tokens
 // (الواحدة ظهراً and 01.00 are the same fact in two notations), and tokens
 // match across Arabic conjunction/preposition prefixes (وعبوات = عبوات).
-function collapseStory(desc, body) {
+function collapseStory(desc, body, preferFullerFirst = false) {
   if (!body || body === desc) return { lead: desc, extra: '' };
   if (!desc) return { lead: '', extra: body };
   const leadSet = storySet(desc);
@@ -330,12 +330,28 @@ function collapseStory(desc, body) {
     if (storyCoverage(storyTokens(body), leadSet) < 0.65) return { lead: desc, extra: body };
     return { lead: desc, extra: '' };
   }
+  // If a fuller first sentence contains the short lead, print that sentence
+  // once, followed by genuinely new details (multi-sentence post 1437).
+  const first = sentences[0];
+  if (preferFullerFirst && first.length > desc.length && storyCoverage(storyTokens(desc), storySet(first)) >= 0.65) {
+    return { lead: first, extra: sentences.slice(1).filter((sentence) => storyCoverage(storyTokens(sentence), storySet(first)) < 0.65).join(' ') };
+  }
   const kept = sentences.filter((sentence) => {
     const t = storyTokens(sentence);
     if (t.size < 4) return false; // a fragment adds nothing on its own
     return storyCoverage(t, leadSet) < 0.65;
   });
   return { lead: desc, extra: kept.join(' ') };
+}
+// A submitted call to a gathering is a source document, not our own voice.
+// Strip only its ceremonial opening, retain its claims as attributed text,
+// and separate explicit logistical labels without inventing dates or facts.
+function tidySourceAnnouncement(desc, body) {
+  const opening = /^بسم الله الرحمن الرحيم\s*(?:والصلا[ةه] والسلام على رسول الله الكريم\s*)?(?:[اأإ]م[ا]? بعد\s*)?/u;
+  if (!/(?:دعوة|دعوه).*اعتصام/u.test(desc) || !opening.test(body)) return body;
+  const copy = body.replace(opening, '').replace(/(\p{L})(\d)/gu, '$1 $2').replace(/(\d)(\p{L})/gu, '$1 $2')
+    .replace(/\s*(مكان الاعتصام|الساعة|الساعه)\s*:?\s*/gu, '\n$1: ').trim();
+  return `نص الدعوة:\n${copy}`;
 }
 const isNewNewsChannelFormat = (alert) => alert?.source === 'news' && Number(alert.channel_format) === 3;
 export function channelPost(alert, { ended = false } = {}) {
@@ -373,13 +389,14 @@ export function channelPost(alert, { ended = false } = {}) {
   const desc = preserveStoryAttribution
     ? cleanAttributedNewsText(alert.description || '', privateSourceNames)
     : cleanAlertText(alert.description || '');
-  const fullBody = preserveStoryAttribution
+  let fullBody = preserveStoryAttribution
     ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
     : cleanAlertText(alert.body || '');
+  if (alert.source === 'news') fullBody = tidySourceAnnouncement(desc, fullBody);
   // Lead and full text collapse into one telling (see collapseStory); the
   // full text remains on the map regardless. Photo captions drop the extra
   // section first when trimming.
-  const { lead, extra } = collapseStory(desc, fullBody);
+  const { lead, extra } = fullBody.startsWith('نص الدعوة:\n') ? { lead: desc, extra: fullBody } : collapseStory(desc, fullBody, newNewsLayout);
   if (alert.type === 'breaking' && !newNewsLayout) sections.push(`<b>${esc(lead || alert.title)}</b>`);
   if (hasPlace) {
     const locations = newNewsLayout ? [p] : [p, ...(alert.extra || [])];
@@ -387,7 +404,7 @@ export function channelPost(alert, { ended = false } = {}) {
   }
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (newNewsLayout) {
-    const newsBody = [lead, extra].filter(Boolean).join(' ') || (alert.type === 'breaking' ? alert.title || '' : '');
+    const newsBody = [lead, extra].filter(Boolean).join(fullBody.startsWith('نص الدعوة:\n') ? '\n\n' : ' ') || (alert.type === 'breaking' ? alert.title || '' : '');
     if (newsBody) sections.push(`<blockquote>${esc(newsBody)}</blockquote>`);
   } else {
     if (alert.type !== 'breaking' && lead) sections.push(`<blockquote>${esc(lead)}</blockquote>`);

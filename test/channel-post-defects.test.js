@@ -102,3 +102,28 @@ test('textless air sighting gets a minimum one-line body (post 1426)', async () 
 test('natural/unknown deaths stay death', () => {
   assert.equal(refineType('death', 'وفاة مسنّ في منزله بمدينة حماة إثر أزمة قلبية'), 'death');
 });
+
+
+test('multi-sentence body uses fuller lead once and keeps unique safety details', async () => {
+  const { channelPost } = await import('../server/bot.js');
+  const out = channelPost({ source: 'news', type: 'explosion', channel_format: 3,
+    description: 'إصابة سائق جرار زراعي بانفجار لغم أرضي من مخلفات الحرب في قرية تل الرفيع بريف حلب.',
+    body: 'إصابة سائق جرار زراعي نتيجة انفجار لغم أرضي من مخلفات الحرب أثناء عمله في قرية تل الرفيع بريف حلب، اليوم السبت 21 تشرين الثاني، جرى نقله إلى المشفى من قبل المدنيين، قامت فرقنا بتفقد الموقع والتأكد من عدم وجود أي مخلفات حرب تهدد حياة المدنيين. تشكّل مخلفات الحرب، من ألغام وذخائر غير منفجرة، خطراً جسيماً على حياة المدنيين.',
+    place: {}, areas: [], extra: [] });
+  assert.equal((out.match(/إصابة سائق جرار/g) || []).length, 1);
+  assert.ok(out.includes('جرى نقله إلى المشفى'));
+  assert.ok(out.includes('خطراً جسيماً'));
+});
+
+test('source invitation loses ceremonial opening but keeps claims attributed and logistics intact', async () => {
+  const { channelPost } = await import('../server/bot.js');
+  const out = channelPost({ source: 'news', type: 'protest', channel_format: 3,
+    description: 'دعوة لاعتصام عناصر الفرقة 62 سابقاً في ساحة العاصي بمدينة حماة للمطالبة بمستحقاتهم المالية.',
+    body: 'بسم الله الرحمن الرحيم والصلاة والسلام على رسول الله الكريم ام بعد دعوه اعتصام عامه لعناصر الفرقه 62سابقا اللي كانوا يخدموا في ليبيا بعد سرقة المستحقات من قبل قائد الفرقه 62 ابوعمشه و اللتي تبلغ لكل عنصر 800$ دولار مكان الاعتصام: حماه ساحة العاصي الساعه12ضهرا',
+    place: {}, areas: [], extra: [] });
+  assert.ok(!out.includes('بسم الله'));
+  assert.ok(out.includes('نص الدعوة:'));
+  assert.ok(out.includes('800$'));
+  assert.ok(out.includes('الساعه: 12 ضهرا'));
+  assert.ok(out.includes('دعوة لاعتصام'));
+});
