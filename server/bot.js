@@ -1,4 +1,4 @@
-import { BACKUP_NAME, LEGACY_BACKUP_NAME, encodeBackup, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
+import { BACKUP_NAME, isBackupName, encodeBackup, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
 import { captureCoordinationReply } from './editor-coordination.js';
 import { approvedPublicCorrection, approvedCorrectionFingerprint, publishedRepairRevision } from './approved-public-correction.js';
 import { randomUUID, createHash } from 'node:crypto';
@@ -4846,7 +4846,7 @@ export function telegramBackupAdapter(api0) {
         const api = APIS.admin || api0;
         const chat = await api.getChat(config.ownerIds[0]);
         const pm = chat.pinned_message;
-        if (!pm?.document || ![NAME, LEGACY_BACKUP_NAME].includes(pm.document.file_name)) return null;
+        if (!pm?.document || !isBackupName(pm.document.file_name)) return null;
         last.set(key, pm.message_id);
         const f = await api.getFile(pm.document.file_id);
         const res = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${f.file_path}`);

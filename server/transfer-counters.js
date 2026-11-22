@@ -1,5 +1,5 @@
 import { InputFile } from 'grammy';
-import { BACKUP_NAME, LEGACY_BACKUP_NAME } from './backup-codec.js';
+import { isBackupName } from './backup-codec.js';
 
 const HTTP_CATEGORIES=['html','scripts','styles','fonts','images','api','stream','media','other'];
 const TELEGRAM_CATEGORIES=['backup','media','other'];
@@ -34,7 +34,7 @@ function measureTelegramPayload(payload){
       hasFile=true;
       const filename=Object.getOwnPropertyDescriptor(v,'filename')?.value;
       const data=Object.getOwnPropertyDescriptor(v,'fileData')?.value;
-      if(filename===BACKUP_NAME||filename===LEGACY_BACKUP_NAME)backup=true;
+      if(isBackupName(filename))backup=true;
       if(ArrayBuffer.isView(data))knownFileBytes+=data.byteLength;
       else unknownInputFiles++;
       return 6; // Placeholder estimate only. Multipart framing is not measured.
