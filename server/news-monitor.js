@@ -439,8 +439,9 @@ function editorialGate(d) {
   const locs = locsOf(d.loc, d.extra);
   const placeNames = locs.flatMap((loc) => [loc?.name_ar, loc?.district_ar, loc?.governorate_ar]).filter(Boolean);
   const sourcePlaces = placeNames.filter((name) => nameInText(name, rawSource));
-  if (!sourcePlaces.length) return fail('place-missing-from-source');
-  if (!sourcePlaces.some((name) => nameInText(name, rawHeadline))) return fail('place-missing-from-headline');
+  const politicalWithoutPin = d.type === 'political' && d.sourceBodyVersion === 1 && d.loc?.scope === 'country';
+  if (!politicalWithoutPin && !sourcePlaces.length) return fail('place-missing-from-source');
+  if (!politicalWithoutPin && !sourcePlaces.some((name) => nameInText(name, rawHeadline))) return fail('place-missing-from-headline');
 
   const withoutLinks = editorialDigits(rawSource.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' '));
   const publicDigits = editorialDigits(rawHeadline);
@@ -1497,23 +1498,41 @@ function sourceFirstCandidate(d) {
   if (!body || body.length > 2800) throw new Error('source-length-needs-review');
   const roleConflict = locsOf(d.loc, d.extra).some((l) => nonIncidentPlaceOnly(l.name_ar, source));
   if (roleConflict) throw new Error('non-incident-location-role');
-  const where = d.loc?.name_ar || 'سوريا';
+  const geography = d.type === 'political' ? politicalPublicationGeography(d) : { loc: d.loc, extra: d.extra };
+  const where = geography.loc?.name_ar || 'سوريا';
   const headline = `${typeOf(d.type).ar} — ${where}`;
   // Drop every generated/public alternate-text field. The manual preview remains
   // on the private stored draft only, never on this publication candidate.
-  return { ...d, headline, body, details: '', text: '', description: '', description_en: '',
+  return { ...d, ...geography, headline, body, details: '', text: '', description: '', description_en: '',
     title: '', title_en: '', aiRewritePreview: undefined, sourceBodyVersion: 1 };
 }
 function sourceFirstGate(d, candidate) {
   let expected;
   try { expected = sourceFirstCandidate(d); } catch (e) { return { ok: false, reason: e.message }; }
-  if (candidate.body !== expected.body || candidate.headline !== expected.headline) return { ok: false, reason: 'source-copy-changed' };
+  if (candidate.body !== expected.body || candidate.headline !== expected.headline || JSON.stringify(candidate.loc) !== JSON.stringify(expected.loc) || JSON.stringify(candidate.extra) !== JSON.stringify(expected.extra)) return { ok: false, reason: 'source-copy-changed' };
   // Existing type, political-category, private-copy, attribution and uncertainty
   // checks now inspect the complete body, not an AI-authored summary.
   return editorialGate({ ...candidate, headline: candidate.body });
 }
 async function automaticPublicDraft(d, candidate = sourceFirstCandidate(d)) {
   return toBotDraft(candidate, { preservePublishedCopy: true });
+}
+/** Capital names often stand for governments, not meeting venues (1446).
+ * Automatic political posts default to no pin. Only an explicit physical-venue
+ * clause can retain a selected city; an unresolved venue clause stays in review. */
+function politicalPublicationGeography(d) {
+  const source = String(d.sourceText || '').split(/[،.\n]/u).map((part) => N(part)).join('\n');
+  const venueClauses = [...source.matchAll(/(?:عقد|انعقد|جري|يجري|يعقد|انعقاد|اقيم|يقام)\s+(?:(?:هذا|ذلك)\s+)?(?:اللقاء|الاجتماع|المؤتمر|اجتماع|لقاء|مؤتمر)[^،.\n]{0,50}?\s+في\s+([^،.\n]+)/gu)].map((m) => m[1]);
+  // A meeting explicitly at a named institution is a physical venue too, but a
+  // ministry title in the speaker's job description is not.
+  venueClauses.push(...[...source.matchAll(/(?:استقبل|التقي|اجتمع)[^،.\n]{0,80}?\s+في\s+مقر\s+([^،.\n]+)/gu)].map((m) => m[1]));
+  if (!venueClauses.length) return { loc: locationFrom({}), extra: [] };
+  if (/(?:^|\s)(?:لم|لن|قد|ربما|نفي|نفت|افتراضي|افتراضيا|متوقع|محتمل)(?:\s|$)/u.test(source)) throw new Error('political-venue-uncertain');
+  const selected = locsOf(d.loc, d.extra);
+  const grounded = selected.filter((l) => l.scope === 'place' && venueClauses.some((clause) => nameInText(l.name_ar, clause)));
+  if (grounded.length !== 1) throw new Error('political-venue-needs-review');
+  if (venueClauses.some((clause) => !nameInText(grounded[0].name_ar, clause))) throw new Error('political-venue-conflict');
+  return { loc: grounded[0], extra: [] };
 }
 /** A place mentioned only as a directorate/hospital/hometown is not an event pin.
  * Remove these role-qualified mentions; an independent mention keeps the place. */
@@ -2933,4 +2952,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { politicalPublicationGeography, sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

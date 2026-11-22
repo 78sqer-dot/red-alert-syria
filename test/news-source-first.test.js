@@ -25,7 +25,13 @@ for (const [id, d] of Object.entries(replays)) {
     }
     const candidate = _test.sourceFirstCandidate(input);
     assert.equal(candidate.body, cleanPublicNewsAttribution(d.sourceText, d.srcs.map((s) => s.name)));
-    assert.equal(candidate.headline, `${(await import('../shared/types.js')).typeOf(type).ar} — ${input.loc.name_ar}`);
+    assert.equal(candidate.headline, `${(await import('../shared/types.js')).typeOf(type).ar} — ${candidate.loc.name_ar}`);
+    if (id === '1446') {
+      assert.equal(candidate.loc.scope, 'country');
+      assert.equal(candidate.loc.latitude, null);
+      assert.deepEqual(candidate.extra, []);
+      assert.equal(_test.sourceFirstGate(input, candidate).ok, true);
+    }
     const payload = await _test.automaticPublicDraft(input);
     assert.equal(payload.body, candidate.body);
     if (id === '1439') assert.equal(type, 'uav');
@@ -51,4 +57,14 @@ test('missing, legacy-truncated and overlong original source cannot auto-publish
   assert.throws(() => _test.sourceFirstCandidate(d), /missing-original-source/);
   assert.throws(() => _test.sourceFirstCandidate({ ...d, sourceText: 'س'.repeat(1200) }), /legacy-source/);
   assert.throws(() => _test.sourceFirstCandidate({ ...d, sourceText: 'س'.repeat(2900), sourceTextVersion: 2 }), /source-length/);
+});
+
+test('political capital shorthand never establishes a physical venue', () => {
+  const loc = { scope: 'place', name_ar: 'دمشق', latitude: 33.5, longitude: 36.3 };
+  const d = { type: 'political', loc, extra: [], sourceText: 'دمشق وبروكسل تبحثان اتفاقية تعاون. قال المسؤول إن المشاورات مستمرة.' };
+  assert.equal(_test.politicalPublicationGeography(d).loc.scope, 'country');
+  assert.equal(_test.politicalPublicationGeography({ ...d, sourceText: 'عقد الاجتماع في دمشق لبحث اتفاقية تعاون.' }).loc, loc);
+  assert.throws(() => _test.politicalPublicationGeography({ ...d, sourceText: 'لم يعقد الاجتماع في دمشق.' }), /political-venue-uncertain/);
+  assert.throws(() => _test.politicalPublicationGeography({ ...d, sourceText: 'عقد الاجتماع في بيروت لبحث اتفاقية تعاون.' }), /political-venue/);
+  assert.throws(() => _test.politicalPublicationGeography({ ...d, sourceText: 'عقد الاجتماع في دمشق. عقد اللقاء في بيروت.' }), /political-venue/);
 });
