@@ -3,6 +3,7 @@
 // Everything here is additive: the alert map keeps working even if this module fails.
 import { WX_ICONS, WX_LABEL } from '/shared/wx-icons.js';
 import { weatherWarningFeatures } from '/shared/weather-map.js?v=1';
+import { normalizeJobApplicationLink } from '/shared/job-links.js?v=1';
 
 const S = {
   ar: {
@@ -742,7 +743,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       .join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
   function jobCard(j) {
-    const links = (Array.isArray(j.links) ? j.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
+    const links = [...new Set((Array.isArray(j.links) ? j.links : []).map(normalizeJobApplicationLink).filter(Boolean))].slice(0, 8);
     const location = j.location ? (LANG === 'en' ? j.location.label_en : j.location.label_ar) : '';
     const id = String(j.id || '');
     const text = cleanJobDisplayText(String(j.text || '').replace(/https?:\/\/\S+/gi, '')).split(/\r?\n/).filter((line) => !/^\s*(?:🔗\s*)?(?:تقدّم(?:\s+الآن)?|قدم(?:\s+الآن)?|apply(?:\s+now)?)\s*:?\s*$/i.test(line)).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();

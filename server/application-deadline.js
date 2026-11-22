@@ -28,7 +28,7 @@ export function isApplicationDeadlineExpired(value, now = Date.now()) {
 
 const deadlineText = (value) => asciiDigits(value).toLowerCase()
   .replace(/[\u064B-\u065F\u0670\u0640]/gu, '').replace(/[أإآٱ]/gu, 'ا').replace(/[–—]/gu, '-');
-const deadlineLabel = /(?:اخر\s+(?:موعد|مهلة|مد[ةه])|(?:تاريخ|موعد)\s+(?:انتهاء|اغلاق)\s+(?:باب\s+)?التقديم|الموعد\s+النهائي|ينتهي\s+التقديم|نهاية\s+الاعلان|موعد\s+تقديم\s+الطلبات|deadline\b|applications?\s+close(?:s)?\b)/iu;
+const deadlineLabel = /(?:اخر\s+(?:موعد|مهلة|مد[ةه])|(?:تاريخ|موعد)\s+(?:انتهاء|اغلاق)\s+(?:باب\s+)?التقديم|الموعد\s+النهائي|ينتهي\s+التقديم|نهاية\s+الاعلان|(?:موعد|فترة)\s+تقديم\s+الطلبات|deadline\b|applications?\s+close(?:s)?\b)/iu;
 const monthAliases = new Map();
 for (let month = 1; month <= 12; month++) {
   for (const locale of ['ar-SY', 'ar-EG', 'en-GB']) {

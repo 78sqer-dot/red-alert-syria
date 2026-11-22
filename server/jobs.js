@@ -6,6 +6,7 @@ import { fetchChannel } from './news-sources.js';
 import { governorates, places, districtsOf, placesOf, getGov, getDist, getPlace, normalizeArabic } from './places.js';
 import { cleanMenuMessages } from './ui-clean.js';
 import { normalizeApplicationDeadline, isApplicationDeadlineExpired, labelledApplicationDeadline } from './application-deadline.js';
+import { jobApplicationLinks, jobApplicationLinksFromText, normalizeJobApplicationLink } from '../shared/job-links.js';
 
 export const JOB_SOURCE = Object.freeze({ u: 'syrian_jobb', name: 'وظائف سوريا', url: 'https://t.me/syrian_jobb' });
 const POLL_MS = 60_000;
@@ -24,7 +25,7 @@ let helpers = null;
 export function initialJobsState() {
   return {
     source: { u: JOB_SOURCE.u, name: JOB_SOURCE.name, on: true, initialized: false, lastId: null, updatedAt: 0, lastCheck: null, lastError: null },
-    pending: {}, published: {}, decisions: {}, deleted: {}, seen: {}, fingerprints: {}, intake: {},
+    pending: {}, published: {}, decisions: {}, deleted: {}, seen: {}, fingerprints: {}, intake: {}, metadataAudits: {},
     customGovernorates: [], customAreas: [], adminDrafts: {},
   };
 }
@@ -46,6 +47,7 @@ export function jobsState(root = store.state) {
   j.seen = j.seen && typeof j.seen === 'object' ? j.seen : {};
   j.fingerprints = j.fingerprints && typeof j.fingerprints === 'object' ? j.fingerprints : {};
   j.intake = j.intake && typeof j.intake === 'object' ? j.intake : {};
+  j.metadataAudits = j.metadataAudits && typeof j.metadataAudits === 'object' && !Array.isArray(j.metadataAudits) ? j.metadataAudits : {};
   j.customGovernorates = Array.isArray(j.customGovernorates) ? j.customGovernorates : [];
   j.customAreas = Array.isArray(j.customAreas) ? j.customAreas : [];
   j.adminDrafts = j.adminDrafts && typeof j.adminDrafts === 'object' ? j.adminDrafts : {};
@@ -158,15 +160,7 @@ export function addCustomArea(governorateCode, input, j = jobsState(), now = Dat
   return { ok: true, row };
 }
 
-function safeLinks(links = []) {
-  const out = [];
-  for (const raw of links) {
-    const u = String(raw || '').trim().replace(/&amp;/g, '&');
-    if (!/^https:\/\/[a-z0-9.-]+(?::\d+)?(?:\/[^\s<>]*)?$/i.test(u)) continue;
-    if (!out.includes(u)) out.push(u);
-  }
-  return out.slice(0, 8);
-}
+function safeLinks(links = []) { return [...new Set((Array.isArray(links) ? links : []).map(normalizeJobApplicationLink).filter(Boolean))].slice(0, 8); }
 function sourceRelatedJobLink(raw, rawSource) {
   try {
     const link = new URL(raw);
@@ -178,7 +172,7 @@ function sourceRelatedJobLink(raw, rawSource) {
       && (linkPath === sourcePath || (linkPath !== '/' && sourcePath.startsWith(`${linkPath}/`)));
   } catch { return false; }
 }
-function linksFromText(text) { return safeLinks(String(text || '').match(/https:\/\/[^\s<>()[\]{}]+/gi) || []); }
+function linksFromText(text) { return jobApplicationLinksFromText(text); }
 const JOB_CHANNEL_PROMO = /[@#]\s*syrian[_\s-]?jo[b]+\b[#]?/giu;
 const JOB_HASHTAG = /#(?:[\p{L}\p{N}\p{M}_]+)/gu;
 const JOB_HASHTAG_ONLY_LINE = /^(?:\s*#[\p{L}\p{N}\p{M}_]+\s*)+$/u;
@@ -228,7 +222,7 @@ export function createPendingJob(input, j = jobsState(), now = Date.now()) {
     text,
     sourceName: String(input.sourceName || (kind === 'source' ? JOB_SOURCE.name : kind === 'manual' ? 'إضافة الإدارة' : 'طلب صاحب عمل')).slice(0, 80),
     sourceUrl: /^https:\/\//i.test(String(input.sourceUrl || '')) ? String(input.sourceUrl).slice(0, 500) : '',
-    links: safeLinks(input.links || linksFromText(text)),
+    links: jobApplicationLinks(input.links, linksFromText(text)),
     location,
     ...(applicationDeadline ? { applicationDeadline } : {}),
     createdAt: now,
@@ -285,7 +279,7 @@ export function updatePublishedJob(id, patch, j = jobsState(), by = null, now = 
     const text = cleanJobText(String(patch.text || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')).slice(0, MAX_JOB_TEXT);
     if (text.length < 10) return { ok: false, error: 'text_too_short' };
     job.text = text;
-    job.links = safeLinks(patch.links || linksFromText(text));
+    job.links = jobApplicationLinks(patch.links, linksFromText(text));
   }
   if (patch.location !== undefined) {
     const location = normalizeJobLocation(patch.location, j);
@@ -358,7 +352,7 @@ export function closedJobApplication(job) {
 }
 
 export function isPublicJobEligible(job, j = jobsState(), now = Date.now()) {
-  return !!(job && job.status === 'approved' && !j.deleted?.[job.id] && !closedJobApplication(job)
+  return !!(job && job.status === 'approved' && !j.deleted?.[job.id] && job.publicReviewHold?.active !== true && !closedJobApplication(job)
     && !isApplicationDeadlineExpired(effectiveJobDeadline(job), now)
     && (normalizeJobLocation(job.location, j) || job.publishedWithoutLocation === true));
 }
@@ -510,6 +504,13 @@ export function mergeJobsFromBackup(snapshot, j = jobsState()) {
     const mine = j.intake[uid];
     if (!mine || Number(intake.createdAt) > Number(mine.createdAt)) { j.intake[uid] = intake; changed = true; }
   }
+  for (const [id, events] of Object.entries(remote.metadataAudits || {})) {
+    if (!/^[a-f0-9]{14}$/u.test(id) || !Array.isArray(events)) continue;
+    const mine = Array.isArray(j.metadataAudits[id]) ? j.metadataAudits[id] : (j.metadataAudits[id] = []);
+    const known = new Set(mine.map(event => event.id));
+    for (const event of events) if (event?.id && !known.has(event.id)) { mine.push(event); known.add(event.id); changed = true; }
+    mine.sort((a, b) => Number(a.at) - Number(b.at) || String(a.id).localeCompare(String(b.id)));
+  }
   for (const [id, row] of Object.entries(remote.published || {})) {
     if (!row) continue;
     const localDecision = j.decisions[id];
@@ -600,7 +601,16 @@ export function mergeJobsFromBackup(snapshot, j = jobsState()) {
     }
   }
   for (const [id, row] of Object.entries(remote.pending || {})) {
-    if (!row || j.deleted[id] || j.decisions[id] || j.pending[id]) continue;
+    if (!row || j.deleted[id] || j.decisions[id]) continue;
+    const local = j.pending[id];
+    if (local) {
+      if (row.metadataRevision && row.status === 'pending' && row.kind === 'source' && local.kind === 'source'
+        && row.sourceKey === local.sourceKey && row.fingerprint === local.fingerprint
+        && Number(row.updatedAt) > Number(local.updatedAt || local.createdAt || 0)) {
+        j.pending[id] = { ...row, location: normalizeJobLocation(row.location, j) }; changed = true;
+      }
+      continue;
+    }
     const fp = row.fingerprint && j.fingerprints[row.fingerprint];
     if (fp && fp.id !== id) continue;
     j.pending[id] = { ...row, location: normalizeJobLocation(row.location, j) };
