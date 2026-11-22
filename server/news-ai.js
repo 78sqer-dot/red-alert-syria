@@ -387,6 +387,13 @@ export function administrativePlaceOnly(name, text) {
   if (/(?:حي|منطقه|شارع)\s+(?:ال)?(?:محافظه|بلديه)(?=\s|$)/u.test(nt)) return false;
   return /(?:بلديه|مجلس|مبني|مبنى)\s+(?:ال)?محافظه|(?:^|\s)محافظه\s+\S+/u.test(nt);
 }
+/** A church building is not the village Al Kunaysah. Only an explicit locality
+ * introducer can disambiguate this common noun into the gazetteer village. */
+export function churchBuildingOnly(name, text) {
+  const n = stripAl(N(String(name || '').trim()));
+  if (n !== 'كنيسه') return false;
+  return !/(?:^|\s)(?:قريه|بلده|حي|منطقه)\s+(?:ال)?كنيسه(?=\s|$)/u.test(N(text));
+}
 /** exact names of villages/towns of one governorate that appear as words in the text (most specific first) */
 export function scanTextPlaces(text, govCode, max = 3) {
   if (!govCode) return [];
@@ -400,7 +407,7 @@ export function scanTextPlaces(text, govCode, max = 3) {
       const variants = [...new Set([raw, raw.replace(/^(وب|وال|بال|لل|فال)/, 'ال'), raw.replace(/^[وبل](?=\S{3})/, '')])];
       let hits = [];
       for (const cand of variants) {
-        if (cand.length < 4 || genericHas(cand) || govCodeOf(cand) || administrativePlaceOnly(cand, text)) continue;
+        if (cand.length < 4 || genericHas(cand) || govCodeOf(cand) || administrativePlaceOnly(cand, text) || churchBuildingOnly(cand, text)) continue;
         hits = exactHits(cand, govCode);
         // alt-only: needs a place introducer, and never when the word is spoken
         // as a person's name («الزوجين "سليمان كرنوص"» is not the village سلمان)
@@ -789,7 +796,7 @@ export function ruleClassify(text, { breaking = false } = {}) {
       const cand = rawCand.replace(/^[وبل](?=ال)/, '').replace(/^[وبل](?=[^ا\s].{2,})/u, '');
       if (cand.length < 3) continue;
       // generic words that are also place names («بالسجن المؤبد» is a prison sentence, not the village of Al-Sijn/Al-Mazraah)
-      if (genericHas(N(cand)) || administrativePlaceOnly(cand, text)) continue;
+      if (genericHas(N(cand)) || administrativePlaceOnly(cand, text) || churchBuildingOnly(cand, text)) continue;
       const hits = exactHits(cand, null);
       // alt-only matches need a place introducer, and never a person's name
       // («سليمان» the man vs «سلمان» the village)

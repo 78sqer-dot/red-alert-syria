@@ -22,7 +22,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, isExplosiveHazardWithoutBlast, hospitalDestinationOnly, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, administrativePlaceOnly, isPersonNameOnly, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, isExplosiveHazardWithoutBlast, hospitalDestinationOnly, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, administrativePlaceOnly, churchBuildingOnly, isPersonNameOnly, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, anonymizeNewsReportingLead, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
@@ -1587,6 +1587,7 @@ function sourceFirstCandidate(d) {
   if (publicDraftCopyIssue(d)) throw new Error('private-editorial-copy-not-public');
   if (d.type === 'explosion' && isExplosiveHazardWithoutBlast(source)) throw new Error('explosion-not-reported');
   const selected = locsOf(d.loc, d.extra);
+  if (selected.some(l => churchBuildingOnly(l.name_ar, source))) throw new Error('church-building-not-village');
   if (selected.some((place) => selected.some((other) => other !== place && localityQualifierOnly(place.name_ar, other.name_ar, source)))) throw new Error('non-incident-location-qualifier');
   const body = cleanPublicNewsAttribution(source, (d.srcs || []).map((s) => s.name).filter(Boolean));
   if (!body || body.length > 2800) throw new Error('source-length-needs-review');
@@ -1633,7 +1634,7 @@ function politicalPublicationGeography(d) {
 function nonIncidentPlaceOnly(name, text) {
   // Gazetteer display names can include parenthetical aliases absent from the source.
   const shortName = String(name || '').replace(/\([^)]*\)/g, '').trim();
-  if (hospitalDestinationOnly(shortName, text)) return true;
+  if (hospitalDestinationOnly(shortName, text) || churchBuildingOnly(shortName, text)) return true;
   const n = N(shortName).trim();
   if (!n) return false;
   const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1657,7 +1658,7 @@ function buildLocations(r, it) {
   const govs = new Set();
   for (const p of (r.places || []).slice(0, 4)) {
     if (!p?.name) continue;
-    if (administrativePlaceOnly(p.name, text) || isPersonNameOnly(text, p.name)) continue;
+    if (administrativePlaceOnly(p.name, text) || churchBuildingOnly(p.name, text) || isPersonNameOnly(text, p.name)) continue;
     if (!nameInText(p.name, text) && !(p.gov && nameInText(p.gov, text))) continue; // invented by the AI
     const x = resolvePlace(p);
     if (!x) continue;
