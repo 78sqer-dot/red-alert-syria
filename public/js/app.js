@@ -262,6 +262,7 @@ function renderList() {
 }
 
 function detailHtml(a) {
+  const storyText = alertPreviewText(a, LANG);
   const live = a.is_active;
   const political = a.type === 'political';
   const hasLoc = a.location && Number.isFinite(a.location.latitude) && Number.isFinite(a.location.longitude);
@@ -294,17 +295,16 @@ function detailHtml(a) {
     [LANG === 'ar' ? 'حالة المصدر' : 'Source status', `<span class="verify-pill ${esc(a.verification?.status || 'unverified')}">${esc(verificationLabel)}</span>`],
     live ? [T.expires, a.expires_at ? esc(fmtTime.format(new Date(a.expires_at))) : T.noExpiry] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at || a.timestamp)))],
   ];
-  return `<div class="d-card" style="--c:${eventVisual(a.type).color}">
-      <div class="card-top">${badge(a, live)}<span class="time">${timeLine(a.timestamp)}</span></div>
+  return `<article class="d-card d-story" style="--c:${eventVisual(a.type).color}">
+      <div class="d-story-meta">${badge(a, live)}<span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span></div>
       <h3 class="card-title">${esc(titleOf(a))}</h3>
-      ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
-      <span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span>
-    </div>
-    ${a.body && a.body !== descOf(a) ? `<div class="d-card"><div class="sec-label" style="margin:0 0 2px">${esc(LANG === 'ar' ? 'نص الخبر الكامل' : 'Full report')}</div><p class="card-desc">${esc(a.body)}</p></div>` : ''}
-    <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
+      <time class="d-story-time" datetime="${esc(a.timestamp)}" title="${esc(LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time')}">${icon('clock', 14)}${esc(fmtFull.format(new Date(a.timestamp)))}</time>
+      ${storyText ? `<div class="d-story-report"><div class="sec-label">${esc(LANG === 'ar' ? 'نص الخبر' : 'Report')}</div><p class="d-story-text" dir="auto">${esc(storyText)}</p></div>` : ''}
+    </article>
+    <details class="d-card d-meta"><summary>${esc(LANG === 'ar' ? 'معلومات التنبيه' : 'Alert information')}</summary><div class="rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div></details>
     <div class="disclaimer" role="note">${esc(political ? (LANG === 'ar' ? 'منسوب للمصدر — لا يعني تحققاً مستقلاً' : 'Attributed to the source — this does not mean independent verification') : T.verificationNotRecorded)}</div>
     ${archivedQuneitraRoute ? `<div class="disclaimer" role="note"><strong>${esc(LANG === 'ar' ? 'مسار أرشيفي توضيحي فقط' : 'Illustrative archive route only')}</strong><br>${esc(LANG === 'ar' ? 'من مرجع تقريبي داخل إسرائيل إلى القنيطرة. يبقى موقع البلاغ الأصلي صيدا، والتنبيه منتهٍ وغير نشط. ليس مسار طيران حقيقيًا أو تتبعًا مباشرًا.' : 'From an approximate reference inside Israel to Quneitra. The original report location remains Sayda (Saida); this alert is expired and inactive. Not a real flight path or live track.')}</div>` : ''}
-    ${updates.length > 1 ? `<div class="sec-label">${esc(LANG === 'ar' ? 'سجل الخبر والتحديثات' : 'News and update history')}</div><div class="update-history">${updates.map((u) => `<div class="update-item"><span class="update-dot"></span><div><b>${esc(u.kind === 'published' ? (LANG === 'ar' ? 'نشر الخبر' : 'Published') : u.kind === 'ended' ? (LANG === 'ar' ? 'انتهى التنبيه' : 'Alert ended') : (LANG === 'ar' ? 'تحديث' : 'Update'))}</b><time>${esc(fmtFull.format(new Date(u.at)))}</time>${u.description ? `<p>${esc(u.description)}</p>` : ''}</div></div>`).join('')}</div>` : ''}
+    ${updates.length > 1 ? `<details class="d-card d-meta d-history"><summary>${esc(LANG === 'ar' ? 'سجل الخبر والتحديثات' : 'News and update history')}</summary><div class="update-history">${updates.map((u) => `<div class="update-item"><span class="update-dot"></span><div><b>${esc(u.kind === 'published' ? (LANG === 'ar' ? 'نشر الخبر' : 'Published') : u.kind === 'ended' ? (LANG === 'ar' ? 'انتهى التنبيه' : 'Alert ended') : (LANG === 'ar' ? 'تحديث' : 'Update'))}</b><time>${esc(fmtFull.format(new Date(u.at)))}</time>${u.description ? `<p>${esc(u.description)}</p>` : ''}</div></div>`).join('')}</div></details>` : ''}
     ${hasLoc ? `<div class="sec-label">${esc(T.coordinates)}</div>
     <div class="coords"><div class="coord"><div class="k">${esc(T.lat)}</div><div class="v">${fmtNum(a.location.latitude)}° N</div></div><div class="coord"><div class="k">${esc(T.lng)}</div><div class="v">${fmtNum(a.location.longitude)}° E</div></div></div>` : ''}
     <button class="btn-dark" data-act="share">${icon('share', 18)}${esc(T.shareAlert)}</button>

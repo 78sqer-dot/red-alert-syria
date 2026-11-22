@@ -1555,3 +1555,22 @@ html.dark .map-bottom-controls { box-shadow: 0 10px 30px rgba(0, 0, 0, .45), ins
   .pp-alert-popup .pp-desc { font-size: 12px; line-height: 1.95; }
   .pp-alert-popup .pp-foot { bottom: -12px; margin-inline: -15px; padding-inline: 15px; }
 }
+
+/* Channel-link landing: one source report, with optional technical metadata. */
+.d-story { position: relative; overflow: hidden; padding: 18px; border-radius: 16px; }
+.d-story::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg,#587aff,#ff4e6d); }
+.d-story-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.d-story-meta .pill-status { margin: 0; height: 24px; font-size: 10px; padding-inline: 8px; }
+.d-story .card-title { margin: 14px 0 8px; font-size: 19px; line-height: 1.8; }
+.d-story-time { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 10px; line-height: 1.8; }
+.d-story-report { border-top: 1px solid var(--border-subtle); margin-top: 16px; padding-top: 14px; }
+.d-story-report .sec-label { margin: 0 0 8px; font-size: 10px; }
+.d-story-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary); font-size: 14px; line-height: 2.15; text-align: start; }
+.d-meta summary { cursor: pointer; min-height: 30px; align-content: center; color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.d-meta[open] summary { padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle); }
+.d-meta .row { font-size: 11px; line-height: 1.8; }
+.detail-body > .btn-dark, .detail-body > .btn-row .btn-ghost { min-height: 44px; }
+@media (max-width: 760px) { .detail-body { padding: 12px; gap: 10px; } .d-story { padding: 16px; } }
+
+.detail-body > * { flex-shrink: 0; }
+.d-history .update-history { padding-top: 14px; }
