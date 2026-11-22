@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
-import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsReview, operateNewsDraft } from './news-monitor.js';
+import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsReview, operateNewsDraft, operatorNewsStatus, setOperatorNewsMode, reconcilePublishedNewsDuplicate } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
 import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, fixPostMarkup, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput, repairNewsAlert } from './bot.js';
@@ -273,6 +273,20 @@ const adminKeyOk = (req) => {
   const key = String(req.headers['x-admin-key'] || '');
   return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
 };
+app.get('/api/admin/news/status', apiLimiter, (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  return res.json(operatorNewsStatus(req.query.include === 'ids'));
+});
+app.post('/api/admin/news/mode', apiLimiter, express.json({ limit: '2kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  try { return res.json(await setOperatorNewsMode(req.body?.mode)); }
+  catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
+});
+app.post('/api/admin/news/:id/reconcile-duplicate', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  try { return res.json(await reconcilePublishedNewsDuplicate(req.params.id, req.body)); }
+  catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
+});
 app.get('/api/admin/news/:id', apiLimiter, (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   const review = operatorNewsReview(req.params.id);

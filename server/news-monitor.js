@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { unlinkCapturedMedia } from './news-media.js';
 import { InlineKeyboard } from 'grammy';
 import { automaticMonitorRecipientIds, config, isOwner } from './config.js';
-import { store } from './store.js';
+import { store, publicAlert } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, TYPE_MENU, TYPE_MENU_GROUPS, TYPE_MENU_DIRECT, typeMenuGroupOf, typeOf, droneAuto, alertEmoji, alertButtonLabel, stripTypeLabelPrefix } from '../shared/types.js';
 import { CONDEMNATIONS, CONDEMNATION_KEYS, condemnationKey, condemnationText } from '../shared/condemnations.js';
 import { locationFrom, normalizeArabic, localityQualifierOnly, governorates, districts, subdistricts, places, getGov, getPlace } from './places.js';
@@ -519,6 +519,7 @@ export function dayAutoReady(d, now = Date.now()) {
   return daytimeAutoEligible(d) && Number.isFinite(d.dayAutoAt) && d.dayAutoAt <= now;
 }
 function scheduleDayAuto(d, now = Date.now()) {
+  if (newsState().editorialMode === 'reviewed') return false;
   const dueAt = dayAutoDueAt(d, now);
   if (dueAt == null) return false;
   d.dayAutoAt = dueAt;
@@ -754,6 +755,7 @@ function cardText(d, lang = 'ar') {
   lines.push(d.test
     ? tr(lang, '🧪 <b>تجربة — هذه مسودة تجريبية، لن يُنشر شيء</b>', '🧪 <b>TEST — a test draft, nothing will be published</b>')
     : tr(lang, '📡 <b>رصد إخباري — مسودة جاهزة للنشر</b>', '📡 <b>News monitor — draft ready to publish</b>'));
+  if (!d.test && newsState().editorialMode === 'reviewed') lines.push(tr(lang, '🔎 بانتظار المراجعة التحريرية قبل النشر. النشر الآلي متوقف.', '🔎 Waiting for editorial review before publication. Unattended news publishing is off.'));
   const typeEmoji = d.type === 'military_incursion' && d.incursionKind === 'barrier' ? '🚧' : alertEmoji({ type: d.type, hazard: d.hazard });
   lines.push('', `<b>${typeEmoji ? `${typeEmoji} ` : ''}${esc(editableDraftTypeLabel(d, lang))}</b>`);
   if (locs.length > 1) {
@@ -1296,6 +1298,12 @@ async function autoDeleteLandedDuplicate(d, publicationDraft, alertId) {
   return landed;
 }
 async function nightPublish(d) {
+  if (newsState().editorialMode === 'reviewed') return false;
+  R.autoPublishing = (R.autoPublishing || 0) + 1;
+  try { return await unattendedNewsPublish(d); }
+  finally { R.autoPublishing--; }
+}
+async function unattendedNewsPublish(d) {
   const mode = d?.autoMode === 'day' ? 'day' : 'night';
   const a = api();
   const eligible = mode === 'day' ? daytimeAutoEligible(d) : nightEligible(d);
@@ -1392,6 +1400,7 @@ async function nightPublish(d) {
 }
 async function dayAutoTick(now = Date.now()) {
   const n = newsState();
+  if (n.editorialMode === 'reviewed') return;
   if (!api() || !R.H?.publishDraft) return;
   let armedAny = false;
   for (const d of Object.values(n.drafts)) {
@@ -1975,6 +1984,9 @@ export function mergeNewsFromBackup(o) {
   const on = o?.news;
   if (!on || typeof on !== 'object') return;
   const n = newsState();
+  if (Number(on.editorialModeAt) > Number(n.editorialModeAt || 0)) {
+    n.editorialMode = on.editorialMode; n.editorialModeAt = on.editorialModeAt;
+  }
   for (const [id, d] of Object.entries(on.drafts || {})) {
     const mine = n.drafts[id];
     if (!mine) n.drafts[id] = d;
@@ -2159,11 +2171,76 @@ export async function operateNewsDraft(id, request = {}) {
   await closeCards(d, null, true); await unlinkCapturedMedia(d.sourceMedia);
   return { ok: !!d.postId, status: d.operatorReview.result, id: d.id, alertId: d.alertId, postId: d.postId };
 }
+export function operatorNewsStatus(includeIds = false) {
+  const n = newsState();
+  const live = Object.values(n.drafts).filter((d) => !d.test && ['pending', 'publishing'].includes(d.status)).sort((a, b) => a.id.localeCompare(b.id));
+  const pending = live.filter((d) => d.status === 'pending');
+  const mode = n.editorialMode === 'reviewed' ? 'reviewed' : 'automatic';
+  const revision = crypto.createHash('sha256').update(JSON.stringify([mode, ...live.map((d) => [d.id, operatorRevision(d)])])).digest('hex');
+  const result = { mode, modeChangedAt: n.editorialModeAt || null, on: n.on, started: !!R.started,
+    pending_count: pending.length, held_count: pending.filter((d) => d.editorialHold).length,
+    actionable_count: pending.filter((d) => !d.editorialHold).length, publishing_count: live.length - pending.length,
+    automatic_in_flight: R.autoPublishing || 0, last_poll_at: R.lastPollAt || null,
+    latest_created_at: live.reduce((max, d) => Math.max(max, Number(d.created) || 0), 0) || null, revision };
+  if (includeIds) result.items = live.map((d) => ({ id: d.id, status: d.status, held: !!d.editorialHold, created: d.created, revision: operatorRevision(d) }));
+  return result;
+}
+/** Source ingestion stays on. Only unattended news publication changes here. */
+export async function setOperatorNewsMode(mode) {
+  if (!['reviewed', 'automatic'].includes(mode)) throw new Error('invalid-editorial-mode');
+  if (R.autoPublishing) throw new Error('automatic-publication-in-flight-try-after-reconciliation');
+  const n = newsState();
+  n.editorialMode = mode; n.editorialModeAt = Date.now();
+  if (mode === 'reviewed') for (const d of Object.values(n.drafts)) if (d.status === 'pending') { d.dayAutoAt = null; delete d.autoMode; }
+  save();
+  if (store.backup && !await store.flushBackup(true)) throw new Error('editorial-mode-durability-unverified');
+  return { ok: true, ...operatorNewsStatus() };
+}
+/** Finalize the PRIVATE ledger only after an approved public correction/removal.
+ * Raw source copy and original publication identifiers remain in the audit record. */
+export async function reconcilePublishedNewsDuplicate(id, request = {}) {
+  const n = newsState(), d = n.drafts[id], other = n.drafts[request.duplicateId];
+  if (!d || !other || d === other) throw new Error('invalid-correction-pair');
+  if (other.reconciliation?.canonicalDraftId === id) {
+    if (store.backup && !await store.flushBackup(true)) throw new Error('correction-ledger-durability-unverified');
+    return { ok: true, reused: true, reconciliation: other.reconciliation };
+  }
+  if (operatorRevision(d) !== request.revision || operatorRevision(other) !== request.duplicateRevision) throw new Error('stale-review');
+  if (d.status !== 'published' || other.status !== 'published') throw new Error('published-pair-required');
+  const a = store.getAlert(d.alertId), removedId = other.alertId;
+  if (!a || a.source !== 'news' || a.id === removedId || !a.channel_message_id || !other.postId) throw new Error('invalid-canonical-publication');
+  if (store.getAlert(removedId) || !store.state.gone?.[removedId]) throw new Error('duplicate-public-removal-not-verified');
+  if (!a.body || a.body === d.body) throw new Error('canonical-body-not-updated');
+  let sourceUrl;
+  try { const url = new URL(request.sourceUrl); if (url.protocol !== 'https:' || url.username || url.password) throw new Error(); sourceUrl = url.href; }
+  catch { throw new Error('verified-source-url-required'); }
+  const at = Date.now();
+  const reconciliation = { at, canonicalDraftId: id, canonicalAlertId: a.id, canonicalPostId: a.channel_message_id,
+    removedAlertId: removedId, removedPostId: other.postId, sourceUrl, originalSourceText: other.sourceText || other.body,
+    originalSources: structuredClone(other.srcs || []), previousStatus: other.status };
+  const seen = new Set();
+  const sources = [...(d.srcs || []), ...(other.srcs || [])].filter((s) => { const key = s.url || s.u; if (seen.has(key)) return false; seen.add(key); return true; });
+  d.editorialUpdates = [...(d.editorialUpdates || []), reconciliation];
+  d.srcs = sources; d.publishedBody = a.body; d.publishedHeadline = a.title;
+  d.loc = structuredClone(a.place); d.extra = structuredClone(a.extra || []);
+  other.reconciliation = reconciliation; other.status = 'duplicate'; other.duplicateOf = a.id; other.duplicateMarkedAt = at;
+  other.alertId = a.id; other.postId = a.channel_message_id;
+  const sourceRecords = sources.filter((s) => s.url).map((s) => ({ name: s.name || s.u || '', url: s.url, timestamp: s.ts || null }));
+  sourceRecords.push({ name: 'تحديث المصدر', url: sourceUrl, timestamp: null });
+  store.updateAlert(a.id, { meta: { ...a.meta, newsSources: sourceRecords, editorialUpdates: [...(a.meta?.editorialUpdates || []), { at, sourceUrl, replacesAlertId: removedId, replacesPostId: reconciliation.removedPostId }] } });
+  n.alerts = n.alerts.filter((e) => e.id !== a.id && e.id !== removedId);
+  n.echoLog = (n.echoLog || []).filter((e) => e.id !== a.id && e.id !== removedId);
+  rememberAlert(publicAlert(a)); n.stats.dupes++;
+  save();
+  if (store.backup && !await store.flushBackup(true)) throw new Error('correction-ledger-durability-unverified');
+  return { ok: true, publicChanged: false, reconciliation };
+}
 export function newsDebug() {
   const n = newsState();
   return {
     on: n.on, started: R.started, lastPollAt: R.lastPollAt ? new Date(R.lastPollAt).toISOString() : null, queue: R.queue.length, aiOk: R.aiOk,
-    ai: { ...aiStats, key: Boolean(NEWS_CFG.aiKey()), models: NEWS_CFG.models() }, stats: n.stats, night: { ...n.night, active: nightActive() },
+    editorialMode: n.editorialMode === 'reviewed' ? 'reviewed' : 'automatic',
+    ai: { ...aiStats, key: Boolean(NEWS_CFG.aiKey()), models: NEWS_CFG.models() }, stats: n.stats, night: { ...n.night, active: n.editorialMode !== 'reviewed' && nightActive() },
     sources: n.sources.map((s) => ({ ...s, last: n.last[s.u] ?? null, status: R.src[s.u] || null })),
     types: n.types,
     drafts: Object.values(n.drafts).sort((a, b) => b.created - a.created).slice(0, 30).map((d) => ({ id: d.id, test: !!d.test, status: d.status, type: d.type, where: whereOf(locsOf(d.loc, d.extra)), headline: d.headline, sources: d.srcs.map((s) => s.u), created: new Date(d.created).toISOString() })),
@@ -2779,12 +2856,12 @@ export function registerNewsTools(bot, h) {
     return [
       t(ctx, '📡 <b>الرصد الإخباري التلقائي</b>', '📡 <b>Automatic news monitor</b>'),
       '',
-      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>بالنهار، الخبر المؤهل غير السياسي يُنشر تلقائياً بعد دقيقتين إذا ما راجعته؛ وبالليل قد يُنشر السياسي فقط إذا كان تصنيف Gemini حقيقياً، وفئته محددة، ومكانه السوري واضح، ومصدره مستوفياً للشروط. غير ذلك يبقى للمراجعة البشرية.</b> والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
+      n.editorialMode === 'reviewed' ? t(ctx, 'الرصد يعمل ويجهز المسودات، لكن النشر الآلي للأخبار متوقف نهاراً وليلاً. تُراجع الوقائع والمصادر والمكان والتكرار قبل النشر. النشر بعد المراجعة التحريرية أو موافقة المالك أو المحرر فقط.', 'Source monitoring continues and prepares drafts, but unattended news publishing is off by day and night. Facts, sources, location and duplicates are checked before publication. News publishes only after editorial review or owner/editor approval.') : t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>بالنهار، الخبر المؤهل غير السياسي يُنشر تلقائياً بعد دقيقتين إذا ما راجعته؛ وبالليل قد يُنشر السياسي فقط إذا كان تصنيف Gemini حقيقياً، وفئته محددة، ومكانه السوري واضح، ومصدره مستوفياً للشروط. غير ذلك يبقى للمراجعة البشرية.</b> والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
         'The server watches Syrian news channels around the clock; each new incident arrives as a ready draft (type, place, sources). <b>By day, eligible non-political news may auto-publish after 2 minutes if you have not reviewed it. At night, political news may publish only with a real Gemini classification, a valid category, a specific Syrian place, and the existing source checks; otherwise it stays for human review.</b> Repeated incidents never come twice.'),
       '',
       `${t(ctx, 'الحالة', 'Status')}: ${n.on ? t(ctx, '✅ يعمل', '✅ running') : t(ctx, '⏸ متوقف', '⏸ paused')}${n.on ? ` · ${t(ctx, 'آخر فحص', 'last check')} ${ago(R.lastPollAt, ctx)}` : ''}`,
       `${t(ctx, 'التصنيف', 'Classification')}: ${ai}`,
-      `🌙 ${t(ctx, 'النشر الليلي', 'Night auto-publish')}: ${n.night.on ? `✅ ${n.night.from}–${n.night.to}${nightActive() ? t(ctx, ' (فعّال الآن)', ' (active now)') : ''}` : t(ctx, '⏸ متوقف', '⏸ off')}`,
+      `🌙 ${t(ctx, 'النشر الليلي', 'Night auto-publish')}: ${n.editorialMode === 'reviewed' ? t(ctx, '⏸ متوقف للمراجعة التحريرية', '⏸ paused for editorial review') : n.night.on ? `✅ ${n.night.from}–${n.night.to}${nightActive() ? t(ctx, ' (فعّال الآن)', ' (active now)') : ''}` : t(ctx, '⏸ متوقف', '⏸ off')}`,
       `📰 ${t(ctx, 'المصادر المفعّلة', 'Active sources')}: ${on} / ${n.sources.length}${bad ? t(ctx, ` (⚠️ ${bad} لا يُقرأ حالياً)`, ` (⚠️ ${bad} unreadable now)`) : ''}`,
       `🏷 ${t(ctx, 'الأنواع المرصودة', 'Watched types')}: ${ty} / ${NEWS_TYPES.length}`,
       `📊 ${t(ctx, 'اليوم (بتوقيت دمشق)', 'Today (Damascus time)')}: ${t(ctx, 'مسودات', 'drafts')} ${n.stats.drafts} · ${t(ctx, 'نُشر', 'published')} ${n.stats.published} · ${t(ctx, 'تُجوهل', 'ignored')} ${n.stats.ignored} · ${t(ctx, 'تكرار مُنع', 'duplicates stopped')} ${n.stats.merged + n.stats.dupes}${pending ? ` · ${t(ctx, 'بانتظارك', 'waiting')} ${pending}` : ''}`,
@@ -2851,6 +2928,10 @@ export function registerNewsTools(bot, h) {
   };
   const ngText = (ctx) => {
     const g = newsState().night;
+    if (newsState().editorialMode === 'reviewed') return [
+      t(ctx, '🔎 <b>المراجعة التحريرية مفعّلة</b>', '🔎 <b>Editorial review is active</b>'),
+      t(ctx, 'النشر الآلي للأخبار متوقف نهاراً وليلاً. الرصد والمسودات مستمران؛ النشر بعد المراجعة أو موافقة المالك أو المحرر فقط. إعدادات الليل القديمة محفوظة ولا تتجاوز هذا القرار.', 'Unattended news publishing is off by day and night. Monitoring and drafts continue; publication requires editorial review or owner/editor approval. Saved night settings do not override this mode.'),
+    ].join('\n\n');
     return [
       t(ctx, '🌙 <b>النشر الليلي التلقائي</b>', '🌙 <b>Night auto-publish</b>'),
       '',
