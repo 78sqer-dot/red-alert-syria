@@ -1,7 +1,7 @@
-import { BACKUP_NAME, LEGACY_BACKUP_NAME, encodeBackup, decodeBackup, recordBackupTransfer } from './backup-codec.js';
+import { BACKUP_NAME, LEGACY_BACKUP_NAME, encodeBackup, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
 import { captureCoordinationReply } from './editor-coordination.js';
 import { approvedPublicCorrection, approvedCorrectionFingerprint, publishedRepairRevision } from './approved-public-correction.js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
 import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
 import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
@@ -4789,15 +4789,27 @@ export function telegramBackupAdapter(api0) {
   if (!config.ownerIds[0]) return null;
   const NAME = BACKUP_NAME;
   const last = new Map(); // `${token}|${chat}` -> pinned message id
+  const confirmed = new Map(); // destination -> fingerprint of its last confirmed payload
   const caption = '🗄 نسخة احتياطية تلقائية لبيانات Red Alert Syria — لا تحذفها ولا تلغِ تثبيتها.\nAutomatic backup — keep pinned.';
-  const put = async (api, token, chat, json) => {
+  const put = async (api, token, chat, json, { force = false } = {}) => {
     const key = `${token}|${chat}`;
+    const fingerprint = createHash('sha256').update(json).digest('hex');
+    const prior = confirmed.get(key);
+    // Skip only routine byte-identical copies already confirmed at this exact
+    // destination. Forced decision/repair saves always retain their remote barrier.
+    if (!force && last.has(key) && prior?.messageId === last.get(key) && prior.fingerprint === fingerprint) {
+      return { uploaded: false, bytes: prior.bytes };
+    }
     const payload = encodeBackup(json);
+    const accept = (messageId) => {
+      confirmed.set(key, { fingerprint, bytes: payload.length, messageId });
+      return { uploaded: true, payload };
+    };
     const file = () => new InputFile(payload, NAME);
     const prev = last.get(key);
     if (prev) {
-      try { await api.editMessageMedia(chat, prev, InputMediaBuilder.document(file(), { caption })); return; } catch (e) {
-        if (/not modified/i.test(e.description || '')) return;
+      try { await api.editMessageMedia(chat, prev, InputMediaBuilder.document(file(), { caption })); return accept(prev); } catch (e) {
+        if (/not modified/i.test(e.description || '')) return accept(prev);
         // Telegram slow / 5xx / network: the edit may still land. Do not post a second backup file now;
         // the store keeps the backup pending and retries on its next save.
         if (!(e instanceof GrammyError) || e.error_code >= 500 || e.error_code === 429) throw e;
@@ -4807,13 +4819,15 @@ export function telegramBackupAdapter(api0) {
     await api.pinChatMessage(chat, m.message_id, { disable_notification: true });
     if (prev) { try { await api.deleteMessage(chat, prev); } catch { /* ignore */ } }
     last.set(key, m.message_id);
+    return accept(m.message_id);
   };
   return {
-    async save(json) {
+    async save(json, { force = false } = {}) {
       const api = APIS.admin || api0;
       const owner = config.ownerIds[0];
-      await put(api, config.botToken, owner, json);
-      recordBackupTransfer(json, encodeBackup(json));
+      const primary = await put(api, config.botToken, owner, json, { force });
+      if (primary.uploaded) recordBackupTransfer(json, primary.payload);
+      else recordIdenticalBackupSkip(primary.bytes);
       // After an in-bot hand-over (owner changed, same publishing bot) and until the Render env vars are
       // updated, a restart reads the backup from the env owner's chat: keep a copy there, without tokens.
       const envOwner = envDefaults.ownerIds[0];
@@ -4821,20 +4835,28 @@ export function telegramBackupAdapter(api0) {
         try {
           const st = JSON.parse(json);
           if (st?.settings?.project) { delete st.settings.project.botToken; delete st.settings.project.reportBotToken; }
-          await put(api, config.botToken, envOwner, JSON.stringify(st));
+          await put(api, config.botToken, envOwner, JSON.stringify(st), { force });
         } catch (e) { console.error('[store] mirror backup failed', e.description || e.message); }
       }
     },
     async load() {
-      const api = APIS.admin || api0;
-      const chat = await api.getChat(config.ownerIds[0]);
-      const pm = chat.pinned_message;
-      if (!pm?.document || ![NAME, LEGACY_BACKUP_NAME].includes(pm.document.file_name)) return null;
-      last.set(`${config.botToken}|${config.ownerIds[0]}`, pm.message_id);
-      const f = await api.getFile(pm.document.file_id);
-      const res = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${f.file_path}`);
-      if (!res.ok) throw new Error(`backup download failed (${res.status})`);
-      return decodeBackup(await res.arrayBuffer());
+      const key = `${config.botToken}|${config.ownerIds[0]}`;
+      confirmed.delete(key);
+      try {
+        const api = APIS.admin || api0;
+        const chat = await api.getChat(config.ownerIds[0]);
+        const pm = chat.pinned_message;
+        if (!pm?.document || ![NAME, LEGACY_BACKUP_NAME].includes(pm.document.file_name)) return null;
+        last.set(key, pm.message_id);
+        const f = await api.getFile(pm.document.file_id);
+        const res = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${f.file_path}`);
+        if (!res.ok) throw new Error(`backup download failed (${res.status})`);
+        return decodeBackup(await res.arrayBuffer());
+      } finally {
+        // A read/merge or concurrent save may observe another pinned snapshot.
+        // Re-confirm once before suppressing another routine write.
+        confirmed.delete(key);
+      }
     },
   };
 }

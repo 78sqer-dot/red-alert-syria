@@ -16,7 +16,11 @@ export function decodeBackup(input) {
   if (!state || !Array.isArray(state.alerts)) throw new Error('backup state is invalid');
   return json;
 }
-export const backupTransfer = { since: new Date().toISOString(), saves: 0, rawBytes: 0, uploadedBytes: 0, lastRawBytes: 0, lastUploadedBytes: 0 };
+export const backupTransfer = { since: new Date().toISOString(), saves: 0, rawBytes: 0, uploadedBytes: 0, lastRawBytes: 0, lastUploadedBytes: 0, skippedIdenticalSaves: 0, avoidedIdenticalPayloadBytes: 0 };
+export function recordIdenticalBackupSkip(payloadBytes) {
+  backupTransfer.skippedIdenticalSaves++;
+  backupTransfer.avoidedIdenticalPayloadBytes += payloadBytes;
+}
 export function recordBackupTransfer(json, payload) {
   const rawBytes = Buffer.byteLength(json);
   const uploadedBytes = payload.length;

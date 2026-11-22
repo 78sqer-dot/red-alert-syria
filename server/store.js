@@ -270,7 +270,7 @@ class Store extends EventEmitter {
     }
     this._backupPending = false; this._backupLazy = false;
     const flight = (async () => {
-      await this.backup.save(JSON.stringify(this.state));
+      await this.backup.save(JSON.stringify(this.state), { force });
       this.lastBackupAt = new Date().toISOString();
       return true;
     })();
