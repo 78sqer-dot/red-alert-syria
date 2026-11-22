@@ -1716,18 +1716,13 @@ export async function repairNewsAlert(api, id, correction = null, options = {}) 
       patch.extra = [];
       patch.areas = [...new Set([a.place?.name_ar, a.place?.district_ar, a.place?.governorate_ar].filter(Boolean))];
     }
-    if (typeof correction.title === 'string' && correction.title.trim() && correction.title.length <= 240) {
-      patch.title = correction.title.trim();
-      patch.title_en = typeof correction.title_en === 'string' ? correction.title_en : patch.title;
-      patch.meta = { ...(a.meta || {}), channelTitle: patch.title };
-    }
     if (correction.caution_visual === true) {
       if (correction.approved_copy !== true || (patch.type || a.type) !== 'civil') throw new Error('approved-civil-caution-only');
       patch.caution_visual = true;
       patch.marker_glyph = 'urgent_warning';
       patch.meta = { ...(a.meta || {}), ...(patch.meta || {}), civilEmoji: 'warning' };
     }
-    if (typeof correction.place_name_ar === 'string' && correction.gov_code) {
+    if (typeof correction.place_name_ar === 'string' && correction.gov_code && correction.clear_location !== true) {
       const loc = locationFrom({ govCode: correction.gov_code });
       if (loc?.scope === 'governorate') {
         patch.place = { ...loc, name_ar: correction.place_name_ar.slice(0, 100), name_en: String(correction.place_name_en || correction.place_name_ar).slice(0, 100), scope: 'country' };
@@ -1739,6 +1734,24 @@ export async function repairNewsAlert(api, id, correction = null, options = {}) 
         patch.title = `${titles.ar} — ${patch.place.name_ar}`;
         patch.title_en = `${titles.en} — ${patch.place.name_en}`;
       }
+    }
+    if (correction.clear_location === true) {
+      if (correction.approved_copy !== true) throw new Error('approved-no-location-only');
+      const label = typeof correction.place_name_ar === 'string' && correction.place_name_ar.trim()
+        ? correction.place_name_ar.trim().slice(0, 100) : locationFrom({}).name_ar;
+      patch.place = { ...locationFrom({}), name_ar: label,
+        name_en: typeof correction.place_name_en === 'string' && correction.place_name_en.trim()
+          ? correction.place_name_en.trim().slice(0, 100) : label };
+      patch.location = null;
+      patch.scope = 'country';
+      patch.extra = [];
+      patch.areas = [label];
+      patch.zones = [];
+    }
+    if (typeof correction.title === 'string' && correction.title.trim() && correction.title.length <= 240) {
+      patch.title = correction.title.trim();
+      patch.title_en = typeof correction.title_en === 'string' ? correction.title_en : patch.title;
+      patch.meta = { ...(a.meta || {}), ...(patch.meta || {}), channelTitle: patch.title };
     }
   }
   if (correction?.approved_copy === true) {
