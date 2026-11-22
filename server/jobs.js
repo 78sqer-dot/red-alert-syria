@@ -5,7 +5,7 @@ import { store } from './store.js';
 import { fetchChannel } from './news-sources.js';
 import { governorates, places, districtsOf, placesOf, getGov, getDist, getPlace, normalizeArabic } from './places.js';
 import { cleanMenuMessages } from './ui-clean.js';
-import { normalizeApplicationDeadline, isApplicationDeadlineExpired } from './application-deadline.js';
+import { normalizeApplicationDeadline, isApplicationDeadlineExpired, labelledApplicationDeadline } from './application-deadline.js';
 
 export const JOB_SOURCE = Object.freeze({ u: 'syrian_jobb', name: 'وظائف سوريا', url: 'https://t.me/syrian_jobb' });
 const POLL_MS = 60_000;
@@ -298,7 +298,11 @@ export function updatePublishedJob(id, patch, j = jobsState(), by = null, now = 
     const deadline = normalizeApplicationDeadline(patch.applicationDeadline);
     if (patch.applicationDeadline != null && patch.applicationDeadline !== '' && !deadline) return { ok: false, error: 'deadline_invalid' };
     if (deadline) job.applicationDeadline = deadline; else delete job.applicationDeadline;
+    job.applicationDeadlineOverride = true;
   }
+  // Distinguish future text/location edits from a deliberate deadline override.
+  // Older edited records without that distinction retain their prior behavior.
+  job.applicationDeadlineOverride ??= Boolean(job.updatedAt);
   job.updatedAt = now;
   if (by != null) job.updatedBy = Number(by) || null;
   return { ok: true, job };
@@ -310,6 +314,7 @@ export function updateJobDeadline(id, value, j = jobsState(), by = null, now = D
   const deadline = normalizeApplicationDeadline(value);
   if (value != null && value !== '' && !deadline) return { ok: false, error: 'deadline_invalid' };
   if (deadline) job.applicationDeadline = deadline; else delete job.applicationDeadline;
+  job.applicationDeadlineOverride = true;
   job.updatedAt = now;
   if (by != null) job.updatedBy = Number(by) || null;
   return { ok: true, job };
@@ -328,8 +333,38 @@ export function deleteJobListing(id, j = jobsState(), by = null, now = Date.now(
   return { ok: true, job, tombstone };
 }
 
+export function effectiveJobDeadline(job) {
+  const explicit = normalizeApplicationDeadline(job?.applicationDeadline);
+  if (explicit || job?.applicationDeadlineOverride === true) return explicit || null;
+  if (job?.kind !== 'source' || (job.updatedAt && job.applicationDeadlineOverride === undefined)) return null;
+  return labelledApplicationDeadline(job.text);
+}
+
+export function closedJobApplication(job) {
+  if (job?.kind !== 'source') return false;
+  const links = safeLinks(job.links || []).filter((link) => {
+    try {
+      const url = new URL(link);
+      const sourcePromo = /^(?:www\.)?t\.me$/iu.test(url.hostname) && /^\/syrian_?job+\/?$/iu.test(url.pathname);
+      return !sourcePromo && !sourceRelatedJobLink(link, String(job.sourceUrl || ''));
+    } catch { return false; }
+  });
+  return links.length > 0 && links.every((link) => {
+    try {
+      const url = new URL(link);
+      return url.hostname === 'docs.google.com' && /^\/forms\/.+\/closedform\/?$/u.test(url.pathname);
+    } catch { return false; }
+  });
+}
+
+export function isPublicJobEligible(job, j = jobsState(), now = Date.now()) {
+  return !!(job && job.status === 'approved' && !j.deleted?.[job.id] && !closedJobApplication(job)
+    && !isApplicationDeadlineExpired(effectiveJobDeadline(job), now)
+    && (normalizeJobLocation(job.location, j) || job.publishedWithoutLocation === true));
+}
+
 export function publicJobs(j = jobsState(), now = Date.now()) {
-  return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && !j.deleted?.[x.id] && !isApplicationDeadlineExpired(x.applicationDeadline, now) && (normalizeJobLocation(x.location, j) || x.publishedWithoutLocation === true))
+  return Object.values(j.published || {}).filter((x) => isPublicJobEligible(x, j, now))
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)).slice(0, 100)
     .map((x) => {
       const sourceUrl = String(x.sourceUrl || '');
@@ -338,7 +373,7 @@ export function publicJobs(j = jobsState(), now = Date.now()) {
       return {
       id: x.id, title, text, links: safeLinks(x.links || []).filter((link) => !sourceRelatedJobLink(link, sourceUrl)),
       location: normalizeJobLocation(x.location, j) || null,
-      application_deadline: x.applicationDeadline || null,
+      application_deadline: effectiveJobDeadline(x),
       published_at: x.publishedAt || null,
       };
     });
@@ -346,7 +381,7 @@ export function publicJobs(j = jobsState(), now = Date.now()) {
 
 let lastExpiredJobIds = null;
 function expiredJobIds(j = jobsState()) {
-  return Object.values(j.published || {}).filter((job) => job && isApplicationDeadlineExpired(job.applicationDeadline))
+  return Object.values(j.published || {}).filter((job) => job && isApplicationDeadlineExpired(effectiveJobDeadline(job)))
     .map((job) => job.id).sort().join(',');
 }
 function broadcastDeadlineChanges(j = jobsState()) {
@@ -674,6 +709,13 @@ async function deleteJobCards(ctx, job) {
   if (current?.message_id) cards.push([current.chat.id, current.message_id]);
   const unique = new Set(cards.map(([chat, mid]) => `${chat}:${mid}`));
   await Promise.allSettled([...unique].map((key) => { const [chat, mid] = key.split(':'); return ctx.api.deleteMessage(Number(chat), Number(mid)); }));
+}
+
+export async function closeJobReviewCards(job) {
+  const api = adminApi?.();
+  if (!api) return;
+  const unique = new Set((job.cards || []).map(([chat, mid]) => `${chat}:${mid}`));
+  await Promise.allSettled([...unique].map((key) => { const [chat, mid] = key.split(':'); return api.deleteMessage(Number(chat), Number(mid)); }));
 }
 
 const LOC_PAGE_SIZE = 20;

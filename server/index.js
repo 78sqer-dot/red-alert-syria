@@ -13,6 +13,7 @@ import { config } from './config.js';
 import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsReview, operateNewsDraft, operatorNewsStatus, setOperatorNewsMode, reconcilePublishedNewsDuplicate } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
+import { operatorJobsStatus, operatorJobReview, operateJobDraft } from './jobs-operator.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
 import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, fixPostMarkup, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput, repairNewsAlert } from './bot.js';
 import { applyProject } from './config.js';
@@ -273,6 +274,25 @@ const adminKeyOk = (req) => {
   const key = String(req.headers['x-admin-key'] || '');
   return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
 };
+app.get('/api/admin/jobs/status', apiLimiter, (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json(operatorJobsStatus());
+});
+app.get('/api/admin/jobs/:id', apiLimiter, (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  res.setHeader('Cache-Control', 'no-store');
+  const review = operatorJobReview(req.params.id);
+  return review ? res.json(review) : res.status(404).json({ error: 'unknown-listing' });
+});
+app.post('/api/admin/jobs/:id/review', apiLimiter, express.json({ limit: '2kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const result = await operateJobDraft(req.params.id, { action: req.body?.action, revision: req.body?.revision });
+    return res.status(result.ok ? 200 : 409).json(result);
+  } catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
+});
 app.get('/api/admin/news/status', apiLimiter, (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   return res.json(operatorNewsStatus(req.query.include === 'ids'));
