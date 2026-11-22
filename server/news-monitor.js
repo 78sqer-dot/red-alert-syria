@@ -24,7 +24,7 @@ const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, isExplosiveHazardWithoutBlast, hospitalDestinationOnly, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
-import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
+import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, anonymizeNewsReportingLead, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
 // All type pickers in this module — the draft edit menu (EDIT_TYPE_*) and the
 // monitoring filter panel (NEWS_TYPE_GROUPS) — are generated from the ONE
@@ -444,10 +444,12 @@ function editorialGate(d) {
   if (!sourceNamedWithoutPin && !sourcePlaces.length) return fail('place-missing-from-source');
   if (!sourceNamedWithoutPin && !sourcePlaces.some((name) => nameInText(name, rawHeadline))) return fail('place-missing-from-headline');
 
-  const withoutLinks = editorialDigits(rawSource.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' '));
+  const factSource = anonymizeNewsReportingLead(rawSource, (d.srcs || []).map((source) => source.name).filter(Boolean));
+  const withoutLinks = editorialDigits(factSource.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' '));
   const publicDigits = editorialDigits(rawHeadline);
   const numbers = withoutLinks.match(/\d+(?::\d+)?(?:[.,]\d+)?/g) || [];
-  if (numbers.some((number) => !publicDigits.includes(number))) return fail('number-or-time-omitted');
+  const publicNumbers = new Set(publicDigits.match(/\d+(?::\d+)?(?:[.,]\d+)?/g) || []);
+  if (numbers.some((number) => !publicNumbers.has(number))) return fail('number-or-time-omitted');
   for (const marker of ['اليوم', 'امس', 'غدا', 'صباح', 'ظهرا', 'مساء', 'فجر', 'ليلا', 'الساعة', 'كانون', 'شباط', 'اذار', 'نيسان', 'ايار', 'حزيران', 'تموز', 'اب', 'ايلول', 'تشرين', 'يناير', 'فبراير', 'مارس', 'ابريل', 'مايو', 'يونيو', 'يوليو', 'اغسطس', 'سبتمبر', 'اكتوبر', 'نوفمبر', 'ديسمبر']) {
     if (editorialHas(source, marker) && !editorialHas(headline, marker)) return fail('date-or-time-omitted');
   }
@@ -1503,6 +1505,24 @@ function routePublicationGeography(d) {
   return { loc: { ...locationFrom({}), name_ar: route[0], name_en: '' }, extra: [] };
 }
 
+/** A governorate/countryside mention alone cannot identify its same-named city. */
+function sourceScopedLocation(loc, text) {
+  if (!loc || loc.scope !== 'place' || !loc.governorate_ar || N(loc.name_ar) !== N(loc.governorate_ar)) return loc;
+  const g = N(loc.governorate_ar).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nt = N(text);
+  const withoutBroad = nt.replace(new RegExp('(?:ريف(?:\\s+(?:محافظه|محافظة))?|محافظه|محافظة)\\s+' + g + '(?=\\s|$)', 'gu'), ' ');
+  return withoutBroad !== nt && !nameInText(loc.name_ar, withoutBroad)
+    ? locationFrom({ govCode: loc.governorate || govCodeOf(loc.governorate_ar) }) : loc;
+}
+function sourceScopedGeography(d) {
+  const geography = routePublicationGeography(d);
+  const facts = anonymizeNewsReportingLead(d.sourceText || d.body || '', (d.srcs || []).map((source) => source.name).filter(Boolean));
+  const loc = sourceScopedLocation(geography.loc, facts);
+  const extra = (geography.extra || []).map((place) => sourceScopedLocation(place, facts))
+    .filter((place, index, list) => ![loc, ...list.slice(0, index)].some((other) => other && place && other.scope === place.scope && other.name_ar === place.name_ar && other.governorate === place.governorate));
+  return { loc, extra };
+}
+
 /** the bot's normal draft (same as a hand-made alert) from a news draft */
 export function toBotDraft(d, options = {}) {
   newsState();
@@ -1513,7 +1533,7 @@ export function toBotDraft(d, options = {}) {
   if (options.editorialMode && (!editorialSelection || editorialSelection.mode !== options.editorialMode)) {
     throw new Error('The owner-selected editorial preview is stale or not approved for publication');
   }
-  const geography = routePublicationGeography(d);
+  const geography = sourceScopedGeography(d);
   const rawHeadline = editorialSelection?.text || d.headline;
   const rawBody = editorialSelection ? rawHeadline : d.body || rawHeadline;
   const safeDraft = {
@@ -1572,7 +1592,7 @@ function sourceFirstCandidate(d) {
   if (!body || body.length > 2800) throw new Error('source-length-needs-review');
   const roleConflict = locsOf(d.loc, d.extra).some((l) => nonIncidentPlaceOnly(l.name_ar, source));
   if (roleConflict) throw new Error('non-incident-location-role');
-  const geography = d.type === 'political' ? politicalPublicationGeography(d) : routePublicationGeography(d);
+  const geography = d.type === 'political' ? politicalPublicationGeography(d) : sourceScopedGeography(d);
   const where = geography.loc?.name_ar || 'سوريا';
   const headline = `${typeOf(d.type).ar} — ${where}`;
   // Drop every generated/public alternate-text field. The manual preview remains
@@ -1631,12 +1651,13 @@ function nonIncidentPlaceOnly(name, text) {
 
 // ---------------------------------------------------------------- pipeline
 function buildLocations(r, it) {
+  const text = anonymizeNewsReportingLead(it.text, [it.src?.name].filter(Boolean));
   const out = [];
-  const add = (loc) => { if (loc && nonIncidentPlaceOnly(loc.name_ar, it.text)) return; if (loc && !out.some((x) => x.scope === loc.scope && x.name_ar === loc.name_ar && x.governorate === loc.governorate)) out.push(loc); };
+  const add = (loc) => { loc = sourceScopedLocation(loc, text); if (loc && nonIncidentPlaceOnly(loc.name_ar, text)) return; if (loc && !out.some((x) => x.scope === loc.scope && x.name_ar === loc.name_ar && x.governorate === loc.governorate)) out.push(loc); };
   const govs = new Set();
   for (const p of (r.places || []).slice(0, 4)) {
     if (!p?.name) continue;
-    if (!nameInText(p.name, it.text) && !(p.gov && nameInText(p.gov, it.text))) continue; // invented by the AI
+    if (!nameInText(p.name, text) && !(p.gov && nameInText(p.gov, text))) continue; // invented by the AI
     const x = resolvePlace(p);
     if (!x) continue;
     // Person-name guard: the proposed name may be in the post only as somebody's
@@ -1644,20 +1665,14 @@ function buildLocations(r, it) {
     // a village («سلمان», Hasakah). That pin comes from the person, not from a
     // place mention: drop the pin and keep only its governorate as the fallback
     // level (the draft then lands governorate-level or waits for review).
-    if (x.kind === 'place' && altPinFromPersonName(p.name, it.text, getPlace(x.placeId))) {
+    if (x.kind === 'place' && altPinFromPersonName(p.name, text, getPlace(x.placeId))) {
       const pg = getPlace(x.placeId)?.gov;
       if (pg) govs.add(pg);
       continue;
     }
     if (x.govCode) govs.add(x.govCode);
     let loc = locationFrom(x);
-    // "بريف القنيطرة" -> the countryside, not the city of the same name
-    if (loc && loc.scope === 'place' && loc.governorate_ar && N(loc.name_ar) === N(loc.governorate_ar)) {
-      const g = N(loc.governorate_ar);
-      const nt = N(it.text);
-      const broadOnly = nt.replace(new RegExp('(?:ريف|محافظه|محافظة)\\s+' + g, 'gu'), ' ');
-      if (broadOnly !== nt && !nameInText(loc.name_ar, broadOnly)) loc = locationFrom({ govCode: loc.governorate });
-    }
+    loc = sourceScopedLocation(loc, text);
     if (loc) { add(loc); if (loc.governorate) govs.add(loc.governorate); }
   }
   // "اعتداءات في القنيطرة … منطقة المعكر": the city named like its governorate is just the governorate
@@ -1669,17 +1684,17 @@ function buildLocations(r, it) {
   }
   // only a governorate: look for an exact village/town of it in the text
   if (!out.some((l) => l.scope === 'place' || l.scope === 'district')) {
-    for (const g of govs) for (const id of scanTextPlaces(it.text, g, 2)) add(locationFrom({ placeId: id }));
+    for (const g of govs) for (const id of scanTextPlaces(text, g, 2)) add(locationFrom({ placeId: id }));
   }
   // "طريق درعا - دمشق" / "أوتوستراد حمص حماة": the two cities are the ends of the road, not the place
   // of the incident -> keep only the first of them (unless a village on the road was named)
-  const nt = N(it.text);
+  const nt = N(text);
   const ends = new Set();
   const addEnd = (w) => { for (const v of [w, w.replace(/^و/, ''), w.replace(/^و?ال/, '')]) if (v) ends.add(v); };
   for (const m of nt.matchAll(/(?:طريق|اوتوستراد|اوتستراد|الاوتوستراد|الطريق الدولي|الطريق|طريق عام)\s+(?:\S*\d\S*\s+)?(?:بين\s+)?(\S+)\s+(?:-\s*)?(\S+)/g)) { addEnd(m[1]); addEnd(m[2]); }
   for (const m of nt.matchAll(/بين\s+(?:مدينتي\s+)?(\S+)\s+(?:-\s*)?(\S+)/g)) { addEnd(m[1]); addEnd(m[2]); }
   const isEndCity = (l) => l.scope === 'place' && (l.rank ?? 9) <= 2 && (ends.has(N(l.name_ar)) || ends.has(N(l.name_ar).replace(/^ال/, '')));
-  let fine = out.filter((l) => l.scope !== 'governorate' && !out.some((o) => o !== l && localityQualifierOnly(l.name_ar, o.name_ar, it.text)));
+  let fine = out.filter((l) => l.scope !== 'governorate' && !out.some((o) => o !== l && localityQualifierOnly(l.name_ar, o.name_ar, text)));
   if (fine.filter(isEndCity).length >= 1 && fine.length > 1) {
     const rest = fine.filter((l) => !isEndCity(l));
     fine = rest.length ? rest : fine.slice(0, 1);
@@ -1688,7 +1703,7 @@ function buildLocations(r, it) {
   if (!list.some((l) => l.scope === 'place' || l.scope === 'district')) {
     // An explicit incident village not in the gazetteer stays named, without
     // coordinates. The source-first editorial gate holds this for review.
-    const village = String(it.text || '').match(/(?:في|من أبناء)\s+(?:قرية|بلدة)\s+([^،.\n]+?)(?=\s+(?:في|بريف|بمحافظة|الواقعة|حيث|بعد)|[،.\n]|$)/u)?.[1]?.trim();
+    const village = String(text || '').match(/(?:في|من أبناء)\s+(?:قرية|بلدة)\s+([^،.\n]+?)(?=\s+(?:في|بريف|بمحافظة|الواقعة|حيث|بعد)|[،.\n]|$)/u)?.[1]?.trim();
     if (village && village.length < 60) return [{ ...locationFrom({}), name_ar: village, name_en: '' }];
   }
   return list.slice(0, 4);
