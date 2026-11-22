@@ -1,0 +1,138 @@
+{
+  "1451": {
+    "type": "assassination",
+    "headline": "اغتيال عنصر من وزارة الدفاع على طريق الظاهرية بريف حماة الليلة الماضية.",
+    "sourceText": "حماة\nاغتيال عنصر من وزارة الدفاع على طريق الظاهرية الليلة الماضية",
+    "sourceTextVersion": 2,
+    "body": "حماة اغتيال عنصر من وزارة الدفاع على طريق الظاهرية الليلة الماضية",
+    "loc": {
+      "scope": "place",
+      "place_id": 162520,
+      "rank": 5,
+      "district": "170016",
+      "name_ar": "الزارة",
+      "name_en": "Az Zarah",
+      "district_ar": "حماة",
+      "district_en": "Hama",
+      "governorate": "10",
+      "governorate_ar": "حماة",
+      "governorate_en": "Hama",
+      "latitude": 34.91994,
+      "longitude": 36.65981
+    },
+    "extra": [],
+    "srcs": [
+      {
+        "u": "zainaldinmaham1",
+        "name": "زينو ياسر محاميد",
+        "url": "https://t.me/zainaldinmaham1/143453",
+        "ts": 1795332377000,
+        "local": true
+      }
+    ],
+    "ts": 1795332377000,
+    "created": 1795332457308
+  },
+  "1453": {
+    "type": "accident",
+    "headline": "فقدان شخص حياته وإصابة آخر إثر حادث سير نتج عن تصادم شاحنتين مع صهريج على طريق حمص طرطوس.",
+    "sourceText": "🔴فقدان شخص لحياته وإصابة آخر في حادث سير على طريق حمص – طرطوس\n🔵فقد شخص حياته وأصيب آخر بجروح إثر حادث سير وقع اليوم الأحد، على طريق حمص – طرطوس (تحويلة دمشق)، إثر تصادم شاحنتين مع صهريج.",
+    "sourceTextVersion": 2,
+    "body": "فقدان شخص لحياته وإصابة آخر في حادث سير على طريق حمص – طرطوس فقد شخص حياته وأصيب آخر بجروح إثر حادث سير وقع اليوم الأحد، على طريق حمص – طرطوس (تحويلة دمشق)، إثر تصادم شاحنتين مع صهريج.",
+    "loc": {
+      "scope": "place",
+      "place_id": 169577,
+      "rank": 1,
+      "district": "169576",
+      "name_ar": "حمص",
+      "name_en": "Homs",
+      "district_ar": "حمص",
+      "district_en": "Homs",
+      "governorate": "11",
+      "governorate_ar": "حمص",
+      "governorate_en": "Homs",
+      "latitude": 34.72405,
+      "longitude": 36.72559
+    },
+    "extra": [],
+    "srcs": [
+      {
+        "u": "HawarNews",
+        "name": "وكالة هاوار للأنباء",
+        "url": "https://t.me/HawarNews/85974",
+        "ts": 1795334817000,
+        "local": true
+      }
+    ],
+    "ts": 1795334817000,
+    "created": 1795334863007
+  },
+  "1455": {
+    "type": "accident",
+    "headline": "حادث سير على طريق حلب - اعزاز.",
+    "sourceText": "- حلب\nحادث سير على طريق حلب - اعزاز",
+    "sourceTextVersion": 2,
+    "body": "حلب حادث سير على طريق حلب - اعزاز",
+    "loc": {
+      "scope": "place",
+      "place_id": 170063,
+      "rank": 1,
+      "district": "169326",
+      "name_ar": "حلب",
+      "name_en": "Aleppo",
+      "district_ar": "جبل سمعان",
+      "district_en": "Mount Simeon",
+      "governorate": "09",
+      "governorate_ar": "حلب",
+      "governorate_en": "Aleppo",
+      "latitude": 36.20124,
+      "longitude": 37.16117
+    },
+    "extra": [],
+    "srcs": [
+      {
+        "u": "zainaldinmaham1",
+        "name": "زينو ياسر محاميد",
+        "url": "https://t.me/zainaldinmaham1/143461",
+        "ts": 1795338841000,
+        "local": true
+      }
+    ],
+    "ts": 1795338841000,
+    "created": 1795338913622
+  },
+  "1452": {
+    "type": "civil",
+    "headline": "انهيار صخري في منطقة جرف الباغوز بريف دير الزور.",
+    "sourceText": "انهيار صخري في جهفة الباغوز بريف دير الزور",
+    "sourceTextVersion": 2,
+    "body": "انهيار صخري في جهفة الباغوز بريف دير الزور",
+    "loc": {
+      "scope": "place",
+      "place_id": 171944,
+      "rank": 5,
+      "district": "174447",
+      "name_ar": "الباغوز",
+      "name_en": "Al Bagouz",
+      "district_ar": "البو كمال",
+      "district_en": "Abu Kamal",
+      "governorate": "07",
+      "governorate_ar": "دير الزور",
+      "governorate_en": "Deir ez-Zor",
+      "latitude": 34.4337,
+      "longitude": 40.98887
+    },
+    "extra": [],
+    "srcs": [
+      {
+        "u": "ajasyr",
+        "name": "الجزيرة سوريا",
+        "url": "https://t.me/ajasyr/125207",
+        "ts": 1795339432000,
+        "local": false
+      }
+    ],
+    "ts": 1795339432000,
+    "created": 1795339478896
+  }
+}

@@ -432,6 +432,7 @@ function openDirectAlert(id) {
   if (!id) return;
   if (state.alerts.has(id)) {
     if (state.selectedId !== id) select(id);
+    if (isMobile()) setSheetOpen(true);
     return;
   }
   if (directAlertLookups.has(id)) return;
@@ -442,7 +443,10 @@ function openDirectAlert(id) {
       if (!alert) return;
       state.alerts.set(alert.id, alert);
       refresh();
-      if (location.hash.slice(1) === id) select(alert.id);
+      if (location.hash.slice(1) === id) {
+        select(alert.id);
+        if (isMobile()) setSheetOpen(true);
+      }
     })
     .catch(() => {})
     .finally(() => directAlertLookups.delete(id));

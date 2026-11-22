@@ -68,3 +68,37 @@ test('political capital shorthand never establishes a physical venue', () => {
   assert.throws(() => _test.politicalPublicationGeography({ ...d, sourceText: 'عقد الاجتماع في بيروت لبحث اتفاقية تعاون.' }), /political-venue/);
   assert.throws(() => _test.politicalPublicationGeography({ ...d, sourceText: 'عقد الاجتماع في دمشق. عقد اللقاء في بيروت.' }), /political-venue/);
 });
+
+const batchReplays = JSON.parse(fs.readFileSync(new URL('./fixtures/batch-1451-source-guards.json', import.meta.url)));
+test('1451 manual publish refuses a village pin absent from the original source', async () => {
+  const { toBotDraft } = await import('../server/news-monitor.js');
+  assert.throws(() => toBotDraft(batchReplays['1451']), /publication-place-not-grounded/);
+});
+test('1453 and1455 road endpoints cannot become exact incident pins in either publish path', async () => {
+  const { toBotDraft } = await import('../server/news-monitor.js');
+  for (const id of ['1453', '1455']) {
+    const d = batchReplays[id];
+    const manual = toBotDraft(d);
+    const automatic = _test.sourceFirstCandidate(d);
+    assert.equal(manual.location.latitude, null);
+    assert.equal(automatic.loc.latitude, null);
+    assert.equal(_test.sourceFirstGate(d, automatic).ok, true, 'a named source-exact road is allowed without invented coordinates');
+    assert.match(manual.location.name_ar, /طريق/);
+    assert.deepEqual(manual.extra, []);
+    assert.deepEqual(automatic.extra, []);
+  }
+});
+test('1452 circulating qualifier survives a standalone hashtag line and both news cleaners', async () => {
+  const { cleanPostText } = await import('../server/news-sources.js');
+  const { cleanAlertText } = await import('../server/clean-text.js');
+  const raw = batchReplays['1452'].sourceText + '\n#متداول\n#قناة_تجريبية';
+  const cleaned = cleanPostText(raw).text;
+  assert.match(cleaned, /متداول/);
+  assert.ok(!cleaned.includes('قناة_تجريبية'));
+  assert.match(cleanPublicNewsAttribution(cleaned), /متداول/);
+  assert.match(cleanAlertText('#متداول: انهيار صخري'), /متداول/);
+  const d = { ...batchReplays['1452'], sourceText: cleaned };
+  const candidate = _test.sourceFirstCandidate(d);
+  assert.equal(_test.sourceFirstGate(d, candidate).ok, true);
+  assert.equal(_test.editorialGate({ ...candidate, headline: candidate.body.replace('متداول', '') }).reason, 'uncertainty-changed');
+});

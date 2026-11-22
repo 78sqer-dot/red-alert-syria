@@ -193,7 +193,7 @@ export function cleanPostText(raw) {
     if (SIGNATURE.test(l) && l.length < 160) continue;
     if (/^(https?:\/\/|www\.)\S+$/.test(l)) continue;
     if (/^[-ـ_—=•.]{3,}$/.test(l)) continue;
-    if (/^(#[\p{L}\p{N}_]+\s*)+$/u.test(l) && !/عاجل/.test(l)) continue; // hashtag-only line (#سانا, #الإخبارية_السورية)
+    if (/^(#[\p{L}\p{N}_]+\s*)+$/u.test(l) && !/عاجل|متداول|غير_مؤكد|معلومات_أولية|معلومات_اولية/u.test(l)) continue; // hashtag-only line (#سانا, #الإخبارية_السورية)
     keep.push(l);
   }
   let t = keep.join('\n').replace(/https?:\/\/\S+/g, '').replace(/\n{2,}/g, '\n').trim();

@@ -440,8 +440,9 @@ function editorialGate(d) {
   const placeNames = locs.flatMap((loc) => [loc?.name_ar, loc?.district_ar, loc?.governorate_ar]).filter(Boolean);
   const sourcePlaces = placeNames.filter((name) => nameInText(name, rawSource));
   const politicalWithoutPin = d.type === 'political' && d.sourceBodyVersion === 1 && d.loc?.scope === 'country';
-  if (!politicalWithoutPin && !sourcePlaces.length) return fail('place-missing-from-source');
-  if (!politicalWithoutPin && !sourcePlaces.some((name) => nameInText(name, rawHeadline))) return fail('place-missing-from-headline');
+  const sourceNamedWithoutPin = politicalWithoutPin || (d.sourceBodyVersion === 1 && d.loc?.scope === 'country' && d.loc.name_ar && d.loc.name_ar !== 'سوريا' && nameInText(d.loc.name_ar, rawSource));
+  if (!sourceNamedWithoutPin && !sourcePlaces.length) return fail('place-missing-from-source');
+  if (!sourceNamedWithoutPin && !sourcePlaces.some((name) => nameInText(name, rawHeadline))) return fail('place-missing-from-headline');
 
   const withoutLinks = editorialDigits(rawSource.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' '));
   const publicDigits = editorialDigits(rawHeadline);
@@ -461,6 +462,7 @@ function editorialGate(d) {
 
   const uncertaintyGroups = [
     ['قد', 'ربما', 'على الارجح', 'احتمال', 'من المحتمل'],
+    ['متداول'],
     ['غير مؤكد', 'لم يتسن التحقق', 'لم يتم التحقق', 'انباء غير مؤكدة', 'معلومات اولية', 'اولية'],
     ['يشتبه', 'مشتبه', 'مزعوم', 'مزعم', 'alleged', 'unconfirmed', 'possibly', 'may have'],
   ];
@@ -1436,13 +1438,27 @@ async function nightSummaryTick() {
   console.log(`[news] night summary sent: ${items.length} item(s), ${held} held`);
 }
 
+/** A road's named city endpoints do not establish an incident at either city centre. */
+function routePublicationGeography(d) {
+  const source = String(d.sourceText || d.body || '');
+  const route = source.match(/(?:طريق|أوتوستراد|اوتوستراد)\s+([^\s،.]+)\s*[-–—]\s*([^\s،.()]+)/u);
+  if (!route) return { loc: d.loc, extra: d.extra || [] };
+  const selected = locsOf(d.loc, d.extra);
+  if (!selected.length || !selected.every((l) => l.scope === 'place' && (l.rank ?? 9) <= 2 && nameInText(l.name_ar, route[0]))) return { loc: d.loc, extra: d.extra || [] };
+  return { loc: { ...locationFrom({}), name_ar: route[0], name_en: '' }, extra: [] };
+}
+
 /** the bot's normal draft (same as a hand-made alert) from a news draft */
 export function toBotDraft(d, options = {}) {
   newsState();
+  if (auditPlaceSuspect(d) || locsOf(d.loc, d.extra).some((l) => nonIncidentPlaceOnly(l.name_ar, d.sourceText || d.body || ''))) {
+    throw new Error('publication-place-not-grounded-in-source');
+  }
   const editorialSelection = options.editorialMode ? approvedOwnerEditorialCopy(d, options.ownerId) : null;
   if (options.editorialMode && (!editorialSelection || editorialSelection.mode !== options.editorialMode)) {
     throw new Error('The owner-selected editorial preview is stale or not approved for publication');
   }
+  const geography = routePublicationGeography(d);
   const rawHeadline = editorialSelection?.text || d.headline;
   const rawBody = editorialSelection ? rawHeadline : d.body || rawHeadline;
   const safeDraft = {
@@ -1466,7 +1482,7 @@ export function toBotDraft(d, options = {}) {
     // existing roles); owner-selected editorial previews never carry a body.
     ...(editorialSelection ? {} : { body }),
     ...(editorialSelection ? { publicEditorialTone: editorialSelection.mode, publicEditorialText: editorialSelection.text } : {}),
-    location: d.loc || locationFrom({}), extra: d.extra || [],
+    location: geography.loc || locationFrom({}), extra: geography.extra || [],
     // ⚖️ Owner-attached condemnation rides as a variant key only; bot.js
     // (buildAlertInput) resolves the formula and appends it once at publish.
     ...(condemnationKey(d.condemn) ? { condemn: d.condemn } : {}),
@@ -1498,7 +1514,7 @@ function sourceFirstCandidate(d) {
   if (!body || body.length > 2800) throw new Error('source-length-needs-review');
   const roleConflict = locsOf(d.loc, d.extra).some((l) => nonIncidentPlaceOnly(l.name_ar, source));
   if (roleConflict) throw new Error('non-incident-location-role');
-  const geography = d.type === 'political' ? politicalPublicationGeography(d) : { loc: d.loc, extra: d.extra };
+  const geography = d.type === 'political' ? politicalPublicationGeography(d) : routePublicationGeography(d);
   const where = geography.loc?.name_ar || 'سوريا';
   const headline = `${typeOf(d.type).ar} — ${where}`;
   // Drop every generated/public alternate-text field. The manual preview remains
@@ -2952,4 +2968,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { politicalPublicationGeography, sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { routePublicationGeography, politicalPublicationGeography, sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

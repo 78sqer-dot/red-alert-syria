@@ -39,8 +39,8 @@ export function cleanAlertText(raw) {
   const M = mediaRe();
   s = stripRawUrls(s);
   s = s.replace(/(^|[\s(])@[A-Za-z0-9_]{4,}/g, '$1');
-  s = s.replace(/#(?:متداول|عاجل|خاص|حصري|سوريا_الآن|سوريا_الان)(?![\p{L}\p{N}_])/gu, ' ');
-  s = s.replace(/(^|\s)(?:متداول|عاجل)\s*[|:：]\s*/gu, '$1');
+  s = s.replace(/#(?:عاجل|خاص|حصري|سوريا_الآن|سوريا_الان)(?![\p{L}\p{N}_])/gu, ' ');
+  s = s.replace(/(^|\s)(?:عاجل)\s*[|:：]\s*/gu, '$1');
   s = s.replace(/#([\p{L}\p{N}_]+)/gu, (_, w) => w.replace(/_/g, ' '));
   // "(المصدر: الجزيرة سوريا)", "المصدر: سانا", "نقلاً عن العربية"
   s = s.replace(new RegExp(`[(\\[]\\s*(?:${CREDIT}\\s*[:：]?\\s*)?${M}\\s*[)\\]]`, 'giu'), ' ');

@@ -23,3 +23,9 @@ test('direct alert hashes fetch IDs outside the current snapshot and clear on ba
   assert.match(app, /if \(!id\) \{\s*if \(state\.selectedId\) select\(null\);/);
   assert.match(app, /if \(first\) \{\s*const id = location\.hash\.slice\(1\);\s*if \(id\) openDirectAlert\(id\);/);
 });
+
+test('direct alert links open the mobile detail sheet without changing normal marker selection', () => {
+  const body = app.slice(app.indexOf('function openDirectAlert(id)'), app.indexOf('function openDirectAlert(id)') + 1200);
+  assert.match(body, /if \(isMobile\(\)\) setSheetOpen\(true\)/);
+  assert.match(app, /showDetail\(\);\s*if \(isMobile\(\)\) setSheetOpen\(false\)/);
+});
