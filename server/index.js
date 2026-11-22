@@ -1,3 +1,4 @@
+import { transferCounters } from './transfer-counters.js';
 import { backupTransfer } from './backup-codec.js';
 import { configureCoordination } from './editor-coordination.js';
 import { startTranslations } from './translate.js';
@@ -44,6 +45,8 @@ const REPORT_SHORT_EN = 'Report an event in Syria — Red Alert Syria';
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+// Install before compression so these private counters see compressed body chunks.
+app.use(transferCounters.middleware);
 
 // ------------------------------------------------------------------ security headers
 app.use(
@@ -274,6 +277,7 @@ const adminKeyOk = (req) => {
   const key = String(req.headers['x-admin-key'] || '');
   return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
 };
+transferCounters.mountPrivateStatus(app, adminKeyOk, apiLimiter);
 app.get('/api/admin/jobs/status', apiLimiter, (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   res.setHeader('Cache-Control', 'no-store');
