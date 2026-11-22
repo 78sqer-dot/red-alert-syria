@@ -85,9 +85,9 @@ function reportGroupKeyboard(group, lang) {
     // military_incursion keeps its kind-picker entry point ('mi'), exactly as
     // on the old top-level keyboard — the kind is chosen before the draft.
     kb.text(label, type === 'military_incursion' ? 'mi' : `t:${type}`);
-    if (index % 2 === 1 && index < types.length - 1) kb.row();
+    kb.row();
   });
-  if (types.length % 2 === 1 || types.length === 0) kb.row();
+  if (types.length === 0) kb.row();
   return kb.text(lang === 'en' ? '↩️ Back to menu' : '↩️ العودة للقائمة', 'home');
 }
 function safeHttpUrl(value) {
@@ -350,8 +350,9 @@ function collapseStory(desc, body, preferFullerFirst = false) {
 // Strip only its ceremonial opening, retain its claims as attributed text,
 // and separate explicit logistical labels without inventing dates or facts.
 function neutralNewsReporter(body) {
-  // A feed's first-person reporter is not our own reporter. Retain the factual sentence.
-  return String(body || '').replace(/^(?:مراسلنا|مراسلونا|مراسل القناة)\s*[:：]\s*/u, '').trim();
+  // A feed's first-person reporter is not ours, but removing the reporting
+  // role would turn an attributed observation into our own assertion.
+  return String(body || '').replace(/^(?:مراسلنا|مراسل القناة)\s*[:：]\s*/u, 'مراسل: ').replace(/^مراسلونا\s*[:：]\s*/u, 'مراسلون: ').trim();
 }
 function tidySourceAnnouncement(desc, body) {
   const opening = /^بسم الله الرحمن الرحيم\s*(?:والصلا[ةه] والسلام على رسول الله الكريم\s*)?(?:[اأإ]م[ا]? بعد\s*)?/u;

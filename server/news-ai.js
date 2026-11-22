@@ -96,7 +96,7 @@ export function keywordTypes(text) {
   const nt = ' ' + N(text) + ' ';
   // words split by a space to dodge filters ("انفج ار", "لغ م"): long keywords are also looked for without spaces
   const tight = nt.replace(/\s+/g, '');
-  const protestMarch = /(?:مسيره|مسيرات)(?:\s|$)/.test(nt)
+  const protestMarch = /(?:مسيره|مسيرات)(?:\s|$)/.test(nt) && !hasExplicitDroneFlight(text)
     && !['مسيره استطلاع', 'مسيره استطلاعيه', 'مسيره انتحاريه', 'مسيرات استطلاع', 'تحليق مسيره', 'تحليق مسيرات', 'طائره مسيره', 'طائرات مسيره', 'بدون طيار', 'drone', 'uav'].some((w) => nt.includes(N(w)));
   const found = Object.keys(KW_N).filter((k) => !(k === 'uav' && protestMarch) && KW_N[k].some((w) => has(nt, w) || (w.replace(/\s+/g, '').length >= 5 && tight.includes(w.replace(/\s+/g, '')))));
   if (protestMarch && !found.includes('protest')) found.push('protest');
@@ -266,7 +266,7 @@ export function resolvePlace({ name, gov } = {}) {
   return g ? { kind: 'governorate', govCode: g } : null;
 }
 // generic words that are also village names somewhere: never matched from free text
-const GENERIC = new Set(['الاداره', 'الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'المدينه', 'البلده', 'القريه', 'الطريق', 'المركز', 'الحاجز', 'السجن', 'السوق', 'المشفي', 'المستشفي', 'الجسر', 'الدوار', 'المنطقه', 'الريف', 'الحدود', 'الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'اليوم', 'مساء', 'صباح', 'عنصر', 'عناصر', 'الامن', 'قوات', 'الجيش', 'الاحتلال', 'مسلحين', 'مدنيين', 'اصابه', 'مقتل', 'حادث', 'سير', 'هجوم', 'قصف', 'انفجار'].map(N));
+const GENERIC = new Set(['الاداره', 'البلديه', 'الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'المدينه', 'البلده', 'القريه', 'الطريق', 'المركز', 'الحاجز', 'السجن', 'السوق', 'المشفي', 'المستشفي', 'الجسر', 'الدوار', 'المنطقه', 'الريف', 'الحدود', 'الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'اليوم', 'مساء', 'صباح', 'عنصر', 'عناصر', 'الامن', 'قوات', 'الجيش', 'الاحتلال', 'مسلحين', 'مدنيين', 'اصابه', 'مقتل', 'حادث', 'سير', 'هجوم', 'قصف', 'انفجار'].map(N));
 // GENERIC stores ال-prefixed normalized forms («المدينه»); candidates arrive with or
 // without the prefix («مدينة» slipped through as bare «مدينه» and pinned a village
 // literally named المدينة, post 1423). Match all prefix variants.
@@ -379,6 +379,14 @@ export function altPinFromPersonName(name, text, place) {
   for (let i = 0; i < 3 && PREFIX.test(s); i++) { s = s.replace(PREFIX, ''); tries.push(s); }
   return tries.some((t) => t && isAltOnlyMatch(t, [place]) && isPersonNameOnly(text, t));
 }
+/** Administrative governorate wording is not a neighbourhood called المحافظة.
+ * An explicit حي المحافظة still counts as a real location mention. */
+export function administrativePlaceOnly(name, text) {
+  if (!['المحافظه', 'محافظه', 'البلديه', 'بلديه'].includes(N(name))) return false;
+  const nt = N(text);
+  if (/(?:حي|منطقه|شارع)\s+(?:ال)?(?:محافظه|بلديه)(?=\s|$)/u.test(nt)) return false;
+  return /(?:بلديه|مجلس|مبني|مبنى)\s+(?:ال)?محافظه|(?:^|\s)محافظه\s+\S+/u.test(nt);
+}
 /** exact names of villages/towns of one governorate that appear as words in the text (most specific first) */
 export function scanTextPlaces(text, govCode, max = 3) {
   if (!govCode) return [];
@@ -392,10 +400,11 @@ export function scanTextPlaces(text, govCode, max = 3) {
       const variants = [...new Set([raw, raw.replace(/^(وب|وال|بال|لل|فال)/, 'ال'), raw.replace(/^[وبل](?=\S{3})/, '')])];
       let hits = [];
       for (const cand of variants) {
-        if (cand.length < 4 || genericHas(cand) || govCodeOf(cand)) continue;
+        if (cand.length < 4 || genericHas(cand) || govCodeOf(cand) || administrativePlaceOnly(cand, text)) continue;
         hits = exactHits(cand, govCode);
         // alt-only: needs a place introducer, and never when the word is spoken
         // as a person's name («الزوجين "سليمان كرنوص"» is not the village سلمان)
+        if (hits.length && isPersonNameOnly(text, cand)) hits = [];
         if (hits.length && isAltOnlyMatch(cand, hits) && (!hasPlaceIntroducer(words, i, raw) || pBound.has(i))) hits = [];
         if (hits.length) break;
       }
@@ -664,7 +673,13 @@ const UAV_FLIGHT_CUES = ['تحليق مسيره', 'تحليق مسيرات', 'ت
 export function hasExplicitDroneFlight(text) {
   const nt = N(String(text || ''));
   const en = String(text || '').toLowerCase();
-  return UAV_FLIGHT_CUES.some((word) => nt.includes(N(word)))
+  // A sighted Israeli-owned drone may be written with a possessive phrase,
+  // not the adjective recognized by the flight-cue list. Do not apply this
+  // narrow recovery to an explicitly civilian/protest march.
+  const ownedSighting = nt.split(/[.!؟\n]/u).some(clause =>
+    /(?:^|\s)(?:مسيره|مسيرات)\s+ل(?:اسراييل|اسرايل)\s+(?:تم\s+)?رصد(?:ها|هما)(?:\s|$)/u.test(clause)
+    && !/(?:مظاهره|احتجاج|تضامن|سلميه|جماهيريه|متظاهر|لافتات|دعما|تاييدا)/u.test(clause));
+  return ownedSighting || UAV_FLIGHT_CUES.some((word) => nt.includes(N(word)))
     || /(?:الطيران|طيران|طايرات|الطايرات)\s+(?:المسير|المسيره|مسيره)(?=\s|$)/u.test(nt)
     || /تحليق\s+(?:مكثف\s+)?(?:ل?طايرات|للطايرات)\s+(?:الاحتلال\s+)?(?:الاسراييلي[هة]?\s+)?(?:المسيره|مسيره)(?=\s|$)/u.test(nt)
     || /\b(?:drones?|uavs?)\s+(?:are\s+|were\s+)?(?:flying|circling|overflying|hovering)\b/.test(en)
@@ -774,10 +789,11 @@ export function ruleClassify(text, { breaking = false } = {}) {
       const cand = rawCand.replace(/^[وبل](?=ال)/, '').replace(/^[وبل](?=[^ا\s].{2,})/u, '');
       if (cand.length < 3) continue;
       // generic words that are also place names («بالسجن المؤبد» is a prison sentence, not the village of Al-Sijn/Al-Mazraah)
-      if (genericHas(N(cand))) continue;
+      if (genericHas(N(cand)) || administrativePlaceOnly(cand, text)) continue;
       const hits = exactHits(cand, null);
       // alt-only matches need a place introducer, and never a person's name
       // («سليمان» the man vs «سلمان» the village)
+      if (hits.length && isPersonNameOnly(text, cand)) continue;
       if (hits.length && isAltOnlyMatch(cand, hits) && (!hasPlaceIntroducer(words, i, rawCand) || pBound.has(i))) continue;
       const g = govCodeOf(cand);
       if (g && len <= 2) { found.push({ name: cand, gov: getGov(g).ar }); i += len - 1; break; }

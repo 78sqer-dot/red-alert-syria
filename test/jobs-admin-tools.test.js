@@ -112,3 +112,20 @@ test('opening a listing deletion prompt does not delete it before the confirmati
     store.state.jobs = original;
   }
 });
+
+test('admin panel distinguishes stored approvals from eligible and capped public output', async()=>{
+ const previous=store.state.jobs;store.state.jobs=initialJobsState();
+ try{
+  for(let i=0;i<104;i++){
+   const {job}=createPendingJob({kind:'manual',sourceKey:`count:${i}`,title:`وظيفة اختبار ${i}`,text:`وصف وظيفة اختبار مستقل برقم ${i} لمراجعة العدادات.`});
+   assert.ok(job);assert.equal(decideJob(job.id,'approve_without_location').ok,true);
+   if(i===0)job.publicReviewHold={active:true,reason:'test'};
+   if(i===1)job.applicationDeadline='2000-01-01';
+  }
+  const bot=new FakeBot();registerJobsAdminTools(bot,helpers());const ctx=context({isOwner:true});
+  await bot.findCallback('j:admin').handler(ctx);
+  assert.match(ctx.screen.text,/المعتمدة المحفوظة: <b>104<\/b>/);
+  assert.match(ctx.screen.text,/المؤهلة للعرض: <b>102<\/b>/);
+  assert.match(ctx.screen.text,/الظاهرة في الموجز: <b>100<\/b>/);
+ }finally{store.state.jobs=previous;}
+});

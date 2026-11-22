@@ -1,5 +1,5 @@
 // Red Alert Syria — front-end application
-import { createServices, GOV_C } from './services.js?v=39';
+import { createServices, GOV_C } from './services.js?v=40';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=43';
 import { alertPreviewText } from '/shared/alert-preview.js?v=1';
 import { DICT } from './i18n.js?v=10';

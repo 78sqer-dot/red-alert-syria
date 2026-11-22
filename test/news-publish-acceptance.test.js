@@ -1975,3 +1975,30 @@ test('ministry-condolence source enables owner-only opinion and satire without c
     for (const draft of drafts) delete newsState().drafts[draft.id];
   }
 });
+
+test('category report submenus follow the existing political single-column arrangement without changing callbacks',async()=>{
+ const captured=[];
+ for(const [user,targetBot,name] of [[owner,bot,'admin'],[reporter,reportBot,'report']]){
+  await tap('home',user,targetBot);await tap('t:political',user,targetBot);
+  const political=[...calls].reverse().find(({payload})=>payload.reply_markup?.inline_keyboard?.flat().some(b=>b.callback_data?.startsWith('pcat:')));
+  assert.ok(political);assert.ok(political.payload.reply_markup.inline_keyboard.every(row=>row.length<=1));
+  captured.push({name:`${name}-political-reference`,...political.payload});
+  for(const group of ['air','strikes','security','smuggling']){
+   await tap('home',user,targetBot);await tap(`ag:${group}`,user,targetBot);
+   const output=[...calls].reverse().find(({payload})=>payload.reply_markup?.inline_keyboard);
+   assert.ok(output.payload.reply_markup.inline_keyboard.every(row=>row.length<=1),group);
+   const buttons=output.payload.reply_markup.inline_keyboard.flat();
+   for(const type of BOT_ALERT_MENU_GROUPS[group])assert.ok(buttons.some(b=>b.callback_data===(type==='military_incursion'?'mi':`t:${type}`)));
+   captured.push({name:`${name}-${group}`, ...output.payload});
+  }
+ }
+ if(process.env.RAS_KEYBOARD_CAPTURE)fs.writeFileSync(process.env.RAS_KEYBOARD_CAPTURE,JSON.stringify(captured));
+});
+test('source first-person reporter remains attributed without claiming to be our reporter',()=>{
+ for(const [lead,expected] of [['مراسلنا:','مراسل:'],['مراسلونا:','مراسلون:'],['مراسل القناة:','مراسل:']]){
+  const input=buildAlertInput({type:'breaking',source:'news',headline:'خبر',body:`${lead} قد يكون الطريق مغلقاً.`,location:{scope:'country'},extra:[]},{id:ownerId});
+  const post=channelPost({...input,id:'reporter-role-test',timestamp:new Date().toISOString(),place:{scope:'country'}});
+  assert.match(post,new RegExp(expected));
+  assert.match(post,/قد يكون/);
+ }
+});

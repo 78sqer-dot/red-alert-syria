@@ -63,10 +63,11 @@ export function publicBorders(now = Date.now()) {
   const b = bstate().borders;
   return CROSSINGS.map((c) => {
     const s = b[c.id];
-    const fresh = s && now - s.ts < STALE_MS;
+    const age = now - Number(s?.ts);
+    const fresh = s && Number.isFinite(age) && Number(s.ts) > 0 && age >= 0 && age < STALE_MS && Object.hasOwn(BORDER_STATUS, s.st);
     return { id: c.id, country: c.country, country_ar: COUNTRIES[c.country].ar, country_en: COUNTRIES[c.country].en,
       name_ar: c.ar, other_ar: c.other, name_en: c.en, lat: c.lat, lon: c.lon,
-      status: fresh ? s.st : 'unknown', note: fresh ? s.note || '' : '', ts: s?.ts || null };
+      status: fresh ? s.st : 'unknown', note: fresh ? s.note || '' : '', ts: Number.isFinite(Number(s?.ts)) && Number(s.ts) > 0 && age >= 0 ? Number(s.ts) : null, stale: Boolean(s && !fresh) };
   });
 }
 const emit = () => store.emit?.('borders', publicBorders());
