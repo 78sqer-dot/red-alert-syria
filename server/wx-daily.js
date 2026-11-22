@@ -348,17 +348,17 @@ export const weatherNowDebug = () => ({ at: R.at, nextFetchAt: R.nextFetchAt || 
 
 // ---------------------------------------------------------------- bulletin state
 export const WXB_TIMES = ['07:00', '07:30', '08:00', '08:30', '09:30'];
-export function wxbState() {
+export function wxbState(now = Date.now()) {
   const s = (store.state.svc ||= {});
   const b = (s.wxb ||= {});
   b.cfg ||= { on: false, time: '08:00', last: null }; // off until the owner turns it on from the menu
   if (!WXB_TIMES.includes(b.cfg.time)) b.cfg.time = '08:00';
   // the very first build switched it on by default before the owner saw a preview: off once, then the owner decides
-  if (b.cfg.v !== 2) { b.cfg.on = false; b.cfg.v = 2; }
+  if (![2, 3].includes(b.cfg.v)) { b.cfg.on = false; b.cfg.v = 2; }
   // owner approved the preview and said «أي شغلها» (2026-10-25): switch on once, first run the next 08:00
   if (b.cfg.v === 2) {
     b.cfg.on = true; b.cfg.v = 3;
-    const p = damascusParts(); if (p.hm >= b.cfg.time) b.cfg.last = p.date; // a time already passed today starts tomorrow
+    const p = damascusParts(now); if (p.hm >= b.cfg.time) b.cfg.last = p.date; // a time already passed today starts tomorrow
     else if (b.cfg.last === p.date) b.cfg.last = null;
   }
   return b;
