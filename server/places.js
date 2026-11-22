@@ -282,8 +282,9 @@ export function alertZones(a) {
     return governorates.find((g) => normalizeArabic(g.ar) === name || normalizeArabic(g.en) === name)?.code || '';
   };
   const covered = new Set([a.place, ...(a.extra || [])].map(codeOf).filter(Boolean));
-  const narrative = [a.description, a.description_en].filter(Boolean);
-  const text = (narrative.length ? narrative : [a.title, a.title_en]).filter(Boolean).join(' ');
+  // The translation may use a governorate's city name (for example Damascus
+  // countryside). Do not create a second incident from translated place wording.
+  const text = a.description || a.description_en || a.title || a.title_en || '';
   for (const gov of mentionedGovernorates(text)) {
     if (covered.has(gov.code)) continue;
     const center = capitalOf(gov.code) || gov;

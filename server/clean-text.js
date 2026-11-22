@@ -150,6 +150,13 @@ export function cleanAttributedNewsText(raw, privateNames = []) {
     s = s.replace(privateName, (match, offset, fullText) => {
       const before = fullText.slice(0, offset);
       const after = fullText.slice(offset + match.length);
+      // These outlet labels are also ordinary adjectives in institution names.
+      // Remove them only in an explicit outlet-credit position, never mid-story.
+      if (['العربي', 'العربية'].includes(name)) {
+        const outletContext = /(?:^|\n)\s*$/u.test(before) && /^\s*(?:[:：|]|$)/u.test(after)
+          || /(?:مراسل|قناة|تلفزيون|التلفزيون|مصادر|المصدر)\s+$/u.test(before);
+        if (!outletContext) return match;
+      }
       const completeInstitutionSource = /^مصادر\s+/iu.test(name) && !before.trim();
       return isInstitutionSpeakerName(name)
         && (completeInstitutionSource || attribution.test(before))
