@@ -39,4 +39,4 @@ export const TYPE_ICON = Object.freeze({
   weather: 'storm',
 });
 
-export const typeIcon = (type) => TYPE_ICON[type] || 'alert';
+export const typeIcon = (type, alert = null) => type === 'civil' && alert?.caution_visual === true ? 'alert' : TYPE_ICON[type] || 'alert';

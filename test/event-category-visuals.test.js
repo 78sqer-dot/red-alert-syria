@@ -31,13 +31,13 @@ test('every alert type receives one shared color-dot category visual', () => {
 });
 
 test('live map icons, markers and impact-zone pulses use the same category color', () => {
-  assert.match(map, /--ring:\$\{t\.color\}/, 'the unified pin ring carries the type colour');
-  assert.match(map, /const visual = eventVisual\(a\.type\);/);
+  assert.match(map, /--ring:\$\{ringColor \|\| t\.color\}/, 'the unified pin ring carries the type colour');
+  assert.match(map, /const visual = eventVisual\(a\.type, a\);/);
   assert.match(map, /el\.style\.setProperty\('--c', visual\.color\)/);
-  assert.match(map, /color: eventVisual\(a\.type\)\.color, active:/);
+  assert.match(map, /color: eventVisual\(a\.type, a\)\.color, active:/);
   assert.match(map, /const color = isHelicopter \? eventVisual\('helicopter'\)\.color : eventVisual\('air_movement'\)\.color/);
-  assert.match(alertImage, /const color = eventVisual\(type\)\.color/);
-  assert.match(alertImage, /const col = eventVisual\(type\)\.color/);
+  assert.match(alertImage, /const color = eventVisual\(type, alert\)\.color/);
+  assert.match(alertImage, /const col = eventVisual\(type, alert\)\.color/);
 });
 
 test('map relies on built-in RTL shaping instead of the deprecated CSP-incompatible plugin', () => {

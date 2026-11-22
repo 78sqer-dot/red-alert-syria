@@ -27,7 +27,7 @@ test('alert counter remains smoked-glass translucent and uses Western digits', (
 
 test('pulse tap continues to select and focus the original alert without replacing its event symbol', () => {
   assert.match(map, /this\.bindMarkerTap\(el, \(\) => this\.onSelect\(alert\.id, \{ fromMap: true, fly: true \}\)\)/);
-  assert.match(map, /eventVisual\(a\.type\)\.color/);
+  assert.match(map, /eventVisual\(a\.type, a\)\.color/);
   assert.match(map, /this\.onSelect\(alert\.id, \{ fromMap: true, fly: true \}\)/);
 });
 

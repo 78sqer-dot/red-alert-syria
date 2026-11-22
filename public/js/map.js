@@ -1,10 +1,10 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=42';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=43';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
 import { EXTRA_SVG } from './target-svgs.js?v=27';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
-import { typeIcon } from './type-icons.js?v=8';
+import { typeIcon } from './type-icons.js?v=9';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=3';
@@ -37,10 +37,10 @@ const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="$
 // a ring in the type's own colour and its white glyph centred. Layout size is
 // set by CSS context (map zoom tiers, legend, toast); the size arguments only
 // seed the intrinsic SVG size for contexts without a CSS rule.
-export function glyphDisc(type, size = 32, iconSize = 20, cls = 'pin', glyphOverride = null) {
+export function glyphDisc(type, size = 32, iconSize = 20, cls = 'pin', glyphOverride = null, ringColor = null) {
   const t = typeOf(type);
   const glyph = glyphOverride || t.glyph;
-  return `<span class="${cls} ${cls}-${glyph}" style="--ring:${t.color}">${svgTag(glyph, iconSize, 'fill="#ffffff"')}</span>`;
+  return `<span class="${cls} ${cls}-${glyph}" style="--ring:${ringColor || t.color}">${svgTag(glyph, iconSize, 'fill="#ffffff"')}</span>`;
 }
 
 const styleCache = {};
@@ -1076,7 +1076,7 @@ export class AlertMap {
       if (movementTrackIds.has(a.id) || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       seen.add(a.id);
       let m = this.markers.get(a.id);
-      const sig = `${a.type}|${a.is_active}|${a.marker_glyph || ''}|${a.meta?.incursionKind || a.incursion_kind || ''}|${a.meta?.vehicleCount || a.vehicle_count || ''}|${a.meta?.patrolForm || ''}`;
+      const sig = `${a.type}|${a.is_active}|${a.marker_glyph || ''}|${a.caution_visual || ''}|${a.meta?.incursionKind || a.incursion_kind || ''}|${a.meta?.vehicleCount || a.vehicle_count || ''}|${a.meta?.patrolForm || ''}`;
       if (m && m._sig !== sig) {
         m.remove();
         this.markers.delete(a.id);
@@ -1164,7 +1164,7 @@ export class AlertMap {
 
   markerEl(a) {
     const t = typeOf(a.type);
-    const visual = eventVisual(a.type);
+    const visual = eventVisual(a.type, a);
     const incursionKind = a.meta?.incursionKind || a.incursion_kind || (Number.isInteger(a.meta?.vehicleCount) || Number.isInteger(a.vehicle_count) ? 'vehicles' : null);
     const signalDrone = a.type === 'signal_sweep' && (a.signal_platform === 'uav' || a.meta?.signalPlatform === 'uav');
     const marker = alertMarkerKind(a);
@@ -1216,7 +1216,7 @@ export class AlertMap {
       // resolution above already covers described firearms and incursion kinds;
       // civil medical reports keep their ambulance glyph.
       const pinGlyph = a.type === 'civil' && alertEmoji(a) === '🚑' ? 'ambulance' : glyph;
-      el.innerHTML = glyphDisc(a.type, 32, 20, 'pin', pinGlyph === t.glyph ? (a.marker_glyph || null) : pinGlyph);
+      el.innerHTML = glyphDisc(a.type, 32, 20, 'pin', pinGlyph === t.glyph ? (a.marker_glyph || null) : pinGlyph, a.caution_visual ? visual.color : null);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
     if (!['squad', 'movement', 'fly'].includes(marker)) el.insertAdjacentHTML('afterbegin', '<span class="news-pulse-ring" aria-hidden="true"></span>');
@@ -1263,7 +1263,7 @@ export class AlertMap {
       const planeArea = a.type === 'warplane' || (a.type === 'air_movement' && a.aircraft !== 'uav');
       if (!t || (t.marker === 'movement' && !(planeArea && a.is_active)) || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       const marker = alertMarkerKind(a);
-      const props = planeArea ? { color: '#3b8eff', active: !!a.is_active, dashed: true, planeArea: true } : { color: eventVisual(a.type).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
+      const props = planeArea ? { color: '#3b8eff', active: !!a.is_active, dashed: true, planeArea: true } : { color: eventVisual(a.type, a).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
       if (marker === 'orbit' || marker === 'helicopter') {

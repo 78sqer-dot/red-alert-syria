@@ -116,20 +116,20 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=102'/);
+  assert.match(app, /from '\.\/map\.js\?v=103'/);
   assert.match(html, /app\.css\?v=99/);
-  assert.match(html, /app\.js\?v=109/);
+  assert.match(html, /app\.js\?v=110/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
   assert.match(app, /from '\.\/services\.js\?v=38'/);
   assert.match(app, /from '\.\/icons\.js\?v=10'/);
   assert.match(app, /from '\.\/i18n\.js\?v=10'/);
-  assert.match(app, /from '\/shared\/types\.js\?v=42'/);
+  assert.match(app, /from '\/shared\/types\.js\?v=43'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);
-  assert.match(map, /from '\/shared\/types\.js\?v=42'/);
+  assert.match(map, /from '\/shared\/types\.js\?v=43'/);
   assert.match(map, /from '\.\/target-svgs\.js\?v=27'/);
-  assert.match(map, /from '\.\/type-icons\.js\?v=8'/);
+  assert.match(map, /from '\.\/type-icons\.js\?v=9'/);
   assert.match(map, /from '\.\/marker-layout\.js\?v=3'/);
   assert.match(map, /from '\/shared\/zone-visuals\.js\?v=3'/);
   assert.match(settings, /from '\/shared\/types\.js\?v=42'/);
@@ -208,10 +208,10 @@ test('follow area picker saves local preferences and only sends area IDs to push
 });
 
 test('alert symbols use shared category colors in badges, filters and map markers', () => {
-  assert.match(app, /eventVisual\(a\.type\)\.color/);
+  assert.match(app, /eventVisual\(a\.type, a\)\.color/);
   assert.match(app, /eventVisual\(t\)\.color/);
   assert.match(css, /\.badge svg \{ color: var\(--symbol-color, currentColor\)/);
-  assert.match(map, /eventVisual\(a\.type\)/);
+  assert.match(map, /eventVisual\(a\.type, a\)/);
   assert.doesNotMatch(app, /HAZARD_EMOJI\[a\.hazard\]/);
   assert.match(css, /background: color-mix\(in srgb, var\(--c\) 4%, var\(--bg-card\)\)/);
 });

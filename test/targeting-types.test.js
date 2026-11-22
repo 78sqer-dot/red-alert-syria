@@ -377,7 +377,7 @@ test('political developments use the category color and marker only for explicit
   assert.match(typeIconsSource, /political: 'news'/);
   assert.equal(eventVisual('political').dot, '🟡');
   assert.equal(eventVisual('political').color, '#a16207');
-  assert.match(mapSource, /color: eventVisual\(a\.type\)\.color, active:/, 'political rings use the shared category color');
+  assert.match(mapSource, /color: eventVisual\(a\.type, a\)\.color, active:/, 'political rings use the shared category color');
   assert.doesNotMatch(mapSource, /a\.type === 'political' \|\| t\.marker === 'movement'/);
   assert.match(mapSource, /a\.scope === 'country' \|\| !a\.location/);
   assert.match(mapSource, /const km = planeArea \? z\.km : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.11\);/, 'political and other non-warplane circles retain the softened display cap');

@@ -63,7 +63,7 @@ test('explosion and detonation have distinct Arabic labels and glyphs on the uni
   assert.equal(eventVisual('detonation').category, 'strikes');
   assert.equal(eventVisual('detonation').color, '#c2410c');
   assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/);
-  assert.match(map, /--ring:\$\{t\.color\}/, 'the pin ring carries the type colour');
+  assert.match(map, /--ring:\$\{ringColor \|\| t\.color\}/, 'the pin ring carries the type colour');
 });
 
 test('warplane follows the climbing-jets flight-trail reference (redalert.com.lb design) while drones keep their orbiting silhouette', () => {
@@ -169,7 +169,7 @@ test('urgent marker core, red pulse and glow follow the shared map zoom scale', 
 });
 
 test('map pins use type colours for the ring while the helicopter keeps its slim military-blue palette', () => {
-  assert.match(map, /--ring:\$\{t\.color\}/, 'the pin ring uses the type colour');
+  assert.match(map, /--ring:\$\{ringColor \|\| t\.color\}/, 'the pin ring uses the type colour');
   assert.match(map, /fill="#ffffff"/, 'pin glyphs render white on the dark roundel');
   assert.match(css, /\.pin \{[^}]*border: 2px solid var\(--ring/);
   assert.doesNotMatch(map, /const iconColor = visual\.color/);

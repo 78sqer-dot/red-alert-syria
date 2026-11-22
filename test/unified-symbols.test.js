@@ -72,8 +72,8 @@ test('map pins: one glass roundel at every zoom, mini pin with glyph at country 
   const map = readFileSync(new URL('../public/js/map.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
   // one builder, one construction for static types and breaking alike
-  assert.match(map, /export function glyphDisc\(type, size = 32, iconSize = 20, cls = 'pin', glyphOverride = null\)/);
-  assert.match(map, /--ring:\$\{t\.color\}/);
+  assert.match(map, /export function glyphDisc\(type, size = 32, iconSize = 20, cls = 'pin', glyphOverride = null, ringColor = null\)/);
+  assert.match(map, /--ring:\$\{ringColor \|\| t\.color\}/);
   assert.doesNotMatch(map, /civ-dot|map-event-emoji|news-marker-core/);
   assert.doesNotMatch(css, /civ-dot|map-event-emoji|news-marker-core/);
   // the pin itself: dark disc, type ring, white glyph, outline + shadow

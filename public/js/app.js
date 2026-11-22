@@ -1,6 +1,6 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=38';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=42';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=43';
 import { alertPreviewText } from '/shared/alert-preview.js?v=1';
 import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
@@ -9,7 +9,7 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon, ICONS } from './icons.js?v=10';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=102';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=103';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -218,11 +218,11 @@ setInterval(updateConnAge, 15_000);
 
 // ------------------------------------------------------------------ list & detail
 function badge(a, live = false) {
-  return `<span class="badge${live ? ' live' : ''}" style="--c:${eventVisual(a.type).color};--symbol-color:${eventVisual(a.type).color}">${icon(typeIcon(a.type), 13)}${esc(typeName(a.type))}</span>`;
+  return `<span class="badge${live ? ' live' : ''}" style="--c:${eventVisual(a.type, a).color};--symbol-color:${eventVisual(a.type, a).color}">${icon(typeIcon(a.type, a), 13)}${esc(typeName(a.type))}</span>`;
 }
 function cardHtml(a, fresh) {
   const hasLoc = a.location && Number.isFinite(a.location.latitude);
-  return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}${isNear(a) ? ' near' : ''}" data-id="${esc(a.id)}" style="--c:${eventVisual(a.type).color}" tabindex="0">
+  return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}${isNear(a) ? ' near' : ''}" data-id="${esc(a.id)}" style="--c:${eventVisual(a.type, a).color}" tabindex="0">
     <div class="card-top">${badge(a)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <h3 class="card-title">${esc(titleOf(a))}</h3>
     ${distChip(a)}
@@ -295,7 +295,7 @@ function detailHtml(a) {
     [LANG === 'ar' ? 'حالة المصدر' : 'Source status', `<span class="verify-pill ${esc(a.verification?.status || 'unverified')}">${esc(verificationLabel)}</span>`],
     live ? [T.expires, a.expires_at ? esc(fmtTime.format(new Date(a.expires_at))) : T.noExpiry] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at || a.timestamp)))],
   ];
-  return `<article class="d-card d-story" style="--c:${eventVisual(a.type).color}">
+  return `<article class="d-card d-story" style="--c:${eventVisual(a.type, a).color}">
       <div class="d-story-meta">${badge(a, live)}<span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span></div>
       <h3 class="card-title">${esc(titleOf(a))}</h3>
       <time class="d-story-time" datetime="${esc(a.timestamp)}" title="${esc(LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time')}">${icon('clock', 14)}${esc(fmtFull.format(new Date(a.timestamp)))}</time>
@@ -959,7 +959,7 @@ function alertToast(a) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.style.setProperty('--c', t.color);
-  el.innerHTML = `<span class="ti">${glyphDisc(a.type, 34, 17)}</span><span class="tt"><small>${esc(T.newAlert)} · ${esc(typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
+  el.innerHTML = `<span class="ti">${glyphDisc(a.type, 34, 17, 'pin', a.caution_visual ? 'urgent_warning' : null, a.caution_visual ? eventVisual(a.type, a).color : null)}</span><span class="tt"><small>${esc(T.newAlert)} · ${esc(typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
   el.addEventListener('click', () => {
     select(a.id);
     el.remove();

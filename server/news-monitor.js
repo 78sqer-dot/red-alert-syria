@@ -22,7 +22,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, hospitalDestinationOnly, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, isExplosiveHazardWithoutBlast, hospitalDestinationOnly, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
@@ -1565,6 +1565,9 @@ function sourceFirstCandidate(d) {
   if (!source) throw new Error('missing-original-source');
   if (d.sourceTextVersion !== 2 && source.length >= 1200) throw new Error('legacy-source-may-be-truncated');
   if (publicDraftCopyIssue(d)) throw new Error('private-editorial-copy-not-public');
+  if (d.type === 'explosion' && isExplosiveHazardWithoutBlast(source)) throw new Error('explosion-not-reported');
+  const selected = locsOf(d.loc, d.extra);
+  if (selected.some((place) => selected.some((other) => other !== place && localityQualifierOnly(place.name_ar, other.name_ar, source)))) throw new Error('non-incident-location-qualifier');
   const body = cleanPublicNewsAttribution(source, (d.srcs || []).map((s) => s.name).filter(Boolean));
   if (!body || body.length > 2800) throw new Error('source-length-needs-review');
   const roleConflict = locsOf(d.loc, d.extra).some((l) => nonIncidentPlaceOnly(l.name_ar, source));
@@ -2110,6 +2113,9 @@ export function startNewsMonitor() {
     for (const d of Object.values(n.drafts)) {
       if (d.status !== 'pending' || d.test) continue;
       const text = d.sourceText || d.body || d.headline || '';
+      // Newly detected non-blast ordnance hazards need a fresh review, not a
+      // startup rewrite of an existing held or explicitly selected category.
+      if (isExplosiveHazardWithoutBlast(text)) continue;
       const t2 = refinePrimaryType(d.type, d.headline || text);
       if (t2 === d.type) continue;
       console.log(`[news] draft ${d.id} re-tagged ${d.type} -> ${t2}`);

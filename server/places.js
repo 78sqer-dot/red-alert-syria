@@ -260,11 +260,18 @@ export function mentionedGovernorates(text) {
 export function localityQualifierOnly(name, primaryName, text) {
   const key = (v) => normalizeArabic(v).replace(/^ال/u, '');
   const parent = key(name), child = key(primaryName);
-  if (!parent || !child || parent === child || child.includes(' ')) return false;
+  if (!parent || !child || parent === child) return false;
   const escape = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const normalized = normalizeArabic(text);
-  const compound = new RegExp('(^|\\s)(?:ال)?' + escape(child) + '\\s+(?:ال)?' + escape(parent) + '(?=\\s|$)', 'gu');
-  const rest = normalized.replace(compound, '$1');
+  let rest = normalized;
+  if (!child.includes(' ')) {
+    const compound = new RegExp('(^|\\s)(?:ال)?' + escape(child) + '\\s+(?:ال)?' + escape(parent) + '(?=\\s|$)', 'gu');
+    rest = rest.replace(compound, '$1');
+  }
+  // Explicit child + countryside/subdistrict phrase. Do not cross intervening
+  // event words or discard a parent name independently mentioned elsewhere.
+  const administrative = new RegExp('(^|\\s)(?:ال)?' + escape(child) + '\\s+(?:في\\s+)?ب?ريف\\s+(?:(?:ناحيه|منطقه|مدينه|بلده)\\s+)?(?:ال)?' + escape(parent) + '(?=\\s|$)', 'gu');
+  rest = rest.replace(administrative, '$1' + child + ' ');
   return rest !== normalized && !new RegExp('(^|\\s)(?:ال)?' + escape(parent) + '(?=\\s|$)', 'u').test(rest);
 }
 

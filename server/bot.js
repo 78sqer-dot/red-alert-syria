@@ -1,5 +1,6 @@
 import { BACKUP_NAME, LEGACY_BACKUP_NAME, encodeBackup, decodeBackup, recordBackupTransfer } from './backup-codec.js';
 import { captureCoordinationReply } from './editor-coordination.js';
+import { approvedPublicCorrection, approvedCorrectionFingerprint, publishedRepairRevision } from './approved-public-correction.js';
 import { randomUUID } from 'node:crypto';
 import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
 import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
@@ -364,6 +365,7 @@ export function channelPost(alert, { ended = false } = {}) {
   const editorialMode = alert?.source === 'news' && ['opinion', 'satire'].includes(alert?.meta?.publicEditorialTone) ? alert.meta.publicEditorialTone : null;
   const editorialCopy = editorialMode && isPublicEditorialCopy(alert?.description, editorialMode) ? alert.description : null;
   assertPublicCopySafeWithEditorial(editorialCopy, editorialMode, alert?.title, alert?.title_en, alert?.description, alert?.description_en, alert?.meta?.channelTitle);
+  const approvedCorrection = approvedPublicCorrection(alert);
   const t = typeOf(alert.type);
   let title = alert.meta?.channelTitle || (TITLES[alert.type] || {}).ar || t.ar;
   if (alert.type === 'military_incursion') {
@@ -386,19 +388,19 @@ export function channelPost(alert, { ended = false } = {}) {
   const newNewsLayout = isNewNewsChannelFormat(alert);
   const versioned = Number(alert.channel_format) >= 2;
   const emoji = versioned ? channelEventSymbol(alert) : alertEmoji(alert);
-  const dot = versioned ? `${eventVisual(alert.type).dot} ` : '';
+  const dot = versioned ? `${eventVisual(alert.type, alert).dot} ` : '';
   const preserveStoryAttribution = alert.source === 'news' || ['political', 'breaking'].includes(alert.type);
   const privateSources = [...(Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []), ...(Array.isArray(alert.meta?.political?.sources) ? alert.meta.political.sources : [])];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
-  title = (preserveStoryAttribution ? cleanAttributedNewsText : cleanAlertText)(title, privateSourceNames) || title;
+  title = approvedCorrection?.title || (preserveStoryAttribution ? cleanAttributedNewsText : cleanAlertText)(title, privateSourceNames) || title;
   const sections = [`${ended ? '✅ انتهى · ' : ''}${dot}<b>${esc(title)}</b>${emoji ? ` - ${emoji}` : ''}`];
-  const desc = preserveStoryAttribution
+  const desc = approvedCorrection ? approvedCorrection.description : preserveStoryAttribution
     ? cleanAttributedNewsText(alert.description || '', privateSourceNames)
     : cleanAlertText(alert.description || '');
-  let fullBody = preserveStoryAttribution
+  let fullBody = approvedCorrection ? approvedCorrection.body : preserveStoryAttribution
     ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
     : cleanAlertText(alert.body || '');
-  if (alert.source === 'news') fullBody = tidySourceAnnouncement(desc, neutralNewsReporter(fullBody));
+  if (alert.source === 'news' && !approvedCorrection) fullBody = tidySourceAnnouncement(desc, neutralNewsReporter(fullBody));
   // Preserve source-first bodies, including their short attribution fragments.
   // Invitation framing remains a separate editorial format.
   const { lead, extra } = fullBody.startsWith('نص الدعوة:\n') ? { lead: desc, extra: fullBody }
@@ -1270,7 +1272,7 @@ function channelEditPatch(alert, message) {
     const suffix = ` - ${symbol}`;
     if (symbol && value.endsWith(suffix)) value = value.slice(0, -suffix.length).trim();
     if (versioned) {
-      const prefix = `${eventVisual(alert.type).dot} `;
+      const prefix = `${eventVisual(alert.type, alert).dot} `;
       if (value.startsWith(prefix)) value = value.slice(prefix.length).trim();
     }
     return value;
@@ -1637,9 +1639,14 @@ export function synthAirDescription(type, meta, place) {
     : 'الأجواء السورية';
   return `رصد تحليق ${craft} فوق ${where}.`;
 }
-export async function repairNewsAlert(api, id, correction = null) {
+export async function repairNewsAlert(api, id, correction = null, options = {}) {
   const a = store.getAlert(id);
   if (!a) return { ok: false, error: 'unknown alert' };
+  const revision = publishedRepairRevision(a);
+  if (options.expectedPostId != null && options.expectedPostId !== a.channel_message_id) throw new Error('repair-post-changed-no-write');
+  if (options.expectedRevision && options.expectedRevision !== revision) throw new Error('stale-repair-no-write');
+  if (correction?.approved_copy && !options.dryRun && !options.expectedRevision) throw new Error('expected-repair-revision-required');
+  if (store._backupWritesPaused) throw new Error('backup-recovery-in-progress-no-repair');
   // News alerts get the full text cleaner; manual/radar reports skip it (their text is
   // already authored) but still get type/place re-resolution and the air-sighting line.
   const isNews = a.source === 'news';
@@ -1654,7 +1661,7 @@ export async function repairNewsAlert(api, id, correction = null) {
     patch.areas = [...new Set([a.place?.name_ar, a.place?.district_ar, a.place?.governorate_ar, ...patch.extra.map((p) => p.name_ar)].filter(Boolean))];
   }
   if (cleaned && cleaned !== rawBody.trim()) patch.body = cleaned;
-  const type = refineType(a.type, classText);
+  const type = refineType(a.type, isNews ? sourceText : classText);
   if (type !== a.type) patch.type = type;
   // Place: a pin on a generic placeholder word («المدينة»…) is unresolved - re-resolve
   // from the text (scanTextPlaces applies the introducer/person-name guards), falling
@@ -1701,6 +1708,25 @@ export async function repairNewsAlert(api, id, correction = null) {
     for (const key of ['description', 'description_en', 'body']) {
       if (typeof correction[key] === 'string' && correction[key].length <= 8000) patch[key] = correction[key];
     }
+    if (correction.type !== undefined) {
+      if (!ALERT_TYPES[correction.type]) throw new Error('invalid-repair-type');
+      patch.type = correction.type;
+    }
+    if (correction.clear_extra === true) {
+      patch.extra = [];
+      patch.areas = [...new Set([a.place?.name_ar, a.place?.district_ar, a.place?.governorate_ar].filter(Boolean))];
+    }
+    if (typeof correction.title === 'string' && correction.title.trim() && correction.title.length <= 240) {
+      patch.title = correction.title.trim();
+      patch.title_en = typeof correction.title_en === 'string' ? correction.title_en : patch.title;
+      patch.meta = { ...(a.meta || {}), channelTitle: patch.title };
+    }
+    if (correction.caution_visual === true) {
+      if (correction.approved_copy !== true || (patch.type || a.type) !== 'civil') throw new Error('approved-civil-caution-only');
+      patch.caution_visual = true;
+      patch.marker_glyph = 'urgent_warning';
+      patch.meta = { ...(a.meta || {}), ...(patch.meta || {}), civilEmoji: 'warning' };
+    }
     if (typeof correction.place_name_ar === 'string' && correction.gov_code) {
       const loc = locationFrom({ govCode: correction.gov_code });
       if (loc?.scope === 'governorate') {
@@ -1715,20 +1741,46 @@ export async function repairNewsAlert(api, id, correction = null) {
       }
     }
   }
-  if (!Object.keys(patch).length) {
-    // Nothing to patch in the record, but the caller asked for a repair: re-edit the
-    // channel post anyway so render-layer fixes reach already-published posts.
-    if (a.channel_message_id && api && config.channel) await refreshChannelPost(api, a, !a.is_active);
-    return { ok: true, id, changed: false, post: a.channel_message_id || null };
+  if (correction?.approved_copy === true) {
+    const title = patch.title || a.title;
+    const body = patch.body ?? a.body;
+    if (!isNews || !title || !body || isPrivateEditorialCopy(title) || isPrivateEditorialCopy(body)
+      || /<[^>]+>|https?:\/\//iu.test(title + '\n' + body)) throw new Error('invalid-approved-public-correction');
+    const approved = { ...a, ...patch, meta: { ...(a.meta || {}), ...(patch.meta || {}) } };
+    patch.meta = { ...approved.meta, approvedPublicCorrection: { version: 1, fingerprint: approvedCorrectionFingerprint(approved) } };
   }
+  const candidate = { ...a, ...patch };
+  if (correction?.approved_copy && !approvedPublicCorrection(candidate)) throw new Error('approved-copy-binding-failed-no-write');
+  const caption = ['photo', 'video'].includes(candidate.channel_media) ? channelCaption(candidate, { ended: !candidate.is_active }) : channelPost(candidate, { ended: !candidate.is_active });
+  if (correction?.approved_copy && !caption.includes(esc(candidate.body))) throw new Error('approved-copy-exceeds-current-caption-limit-no-write');
+  if (options.dryRun) return { ok: true, dryRun: true, id, post: a.channel_message_id || null, revision, fields: Object.keys(patch), candidate: publicAlert(candidate), caption };
+  let png = null;
+  if (options.refreshPhoto) {
+    if (!api || !config.channel || !candidate.channel_message_id || candidate.channel_media !== 'photo' || sanitizeAlertMedia(candidate.media)) throw new Error('existing-generated-photo-required-no-write');
+    png = await withDeadline((options.renderSnapshot || alertImage)(candidate, 'ar'), 30000);
+  }
+  if (publishedRepairRevision(store.getAlert(id)) !== revision) throw new Error('stale-repair-after-preview-no-write');
   const oldType = a.type;
-  store.updateAlert(id, patch);
-  if (patch.type && patch.type !== oldType) store._logPatch(id, { ty: patch.type });
-  store.persist();
-  await store.flushBackup(true);
+  if (Object.keys(patch).length) {
+    store.updateAlert(id, patch);
+    if (patch.type && patch.type !== oldType) store._logPatch(id, { ty: patch.type });
+    store.persist();
+    const durable = await store.flushBackup(true);
+    if (store.backup && !durable) throw new Error('repair-map-updated-backup-unverified-no-channel-edit');
+  }
   const b = store.getAlert(id);
-  if (b.channel_message_id && api && config.channel) await refreshChannelPost(api, b, !b.is_active);
-  return { ok: true, id, changed: true, post: b.channel_message_id || null, type: b.type, place: b.place?.name_ar || null, body: b.body || null };
+  if (b.channel_message_id && api && config.channel) {
+    try {
+      if (png) await api.editMessageMedia(config.channel, b.channel_message_id,
+        InputMediaBuilder.photo(new InputFile(png, `red-alert-syria-${b.id.slice(0, 8)}.png`), { caption, parse_mode: 'HTML' }),
+        { reply_markup: channelKeyboard(b) });
+      else if (['photo', 'video'].includes(b.channel_media)) await api.editMessageCaption(config.channel, b.channel_message_id, { caption, parse_mode: 'HTML', reply_markup: channelKeyboard(b) });
+      else await api.editMessageText(config.channel, b.channel_message_id, caption, { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(b) });
+    } catch (e) {
+      if (!/message is not modified/i.test(String(e.description || e.message || e))) return { ok: false, status: 'map-updated-channel-unverified', id, post: b.channel_message_id, error: String(e.description || e.message || e) };
+    }
+  }
+  return { ok: true, id, changed: Object.keys(patch).length > 0, post: b.channel_message_id || null, type: b.type, place: b.place?.name_ar || null, body: b.body || null, photoRefreshed: !!png };
 }
 // Rewrite any legacy site host (old Render service) to the current publicUrl in
 // channel description, pinned message, and bot bios. Owner asked that no old

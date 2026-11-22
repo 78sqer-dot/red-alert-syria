@@ -3,6 +3,7 @@
 // zoomed on the affected place with category-coloured impact circles / marker, and a short note footer.
 // Pure SVG -> PNG with resvg; map = raster tiles (CARTO Voyager, OSM fallback), cached in memory.
 // Swap the logo by replacing public/img/logo-wordmark.svg (or set ALERT_IMAGE_LOGO to an .svg/.png).
+import { approvedPublicCorrection } from './approved-public-correction.js';
 import fs from 'node:fs';
 import { DEFAULT_PUBLIC_URL } from './config.js';
 import path from 'node:path';
@@ -156,7 +157,7 @@ async function fetchTile(z, x, y, timeoutMs) {
 // ------------------------------------------------------------------ marker for point alerts
 export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = null) {
   const t = ALERT_TYPES[type] || ALERT_TYPES.breaking;
-  const color = eventVisual(type).color;
+  const color = eventVisual(type, alert).color;
   const incursionKind = alert?.meta?.incursionKind || (Number.isInteger(alert?.meta?.vehicleCount) ? 'vehicles' : null);
   const signalDrone = type === 'signal_sweep' && alert?.meta?.signalPlatform === 'uav';
   const glyphKey = type === 'assassination' ? (assassinationWeaponGlyph(alert) || t.glyph)
@@ -240,7 +241,7 @@ export async function alertImageSvg(alert, opts = {}) {
   const px = (lat, lon) => [lon2x(lon, z) - left, lat2y(lat, z) - top + HEAD];
   if (zoned) {
     const dashed = t.zone === 'dashed';
-    const col = eventVisual(type).color;
+    const col = eventVisual(type, alert).color;
     const fill = col;
     o.push(`<defs><radialGradient id="zglow"><stop offset="0.5" stop-color="${fill}" stop-opacity="0.38"/><stop offset="0.75" stop-color="${fill}" stop-opacity="0.14"/><stop offset="1" stop-color="${fill}" stop-opacity="0"/></radialGradient></defs>`);
     for (const zn of zones) {
@@ -264,11 +265,12 @@ export async function alertImageSvg(alert, opts = {}) {
   // ---- header
   o.push(`<rect x="0" y="0" width="${W}" height="${HEAD}" fill="#0f172a"/><rect x="0" y="0" width="${W}" height="6" fill="#f97316"/>`);
   const FF = en ? 'Noto Sans' : 'Noto Kufi Arabic';
-  const lvl = LEVELS[(type === 'weather' && alert.meta?.level === 2) || (type === 'quake' && (alert.meta?.mag ?? 0) >= 5) ? 'danger' : LEVEL_OF[type] || 'notice'];
+  const lvl = LEVELS[alert.type === 'civil' && alert.caution_visual === true ? 'caution' : (type === 'weather' && alert.meta?.level === 2) || (type === 'quake' && (alert.meta?.mag ?? 0) >= 5) ? 'danger' : LEVEL_OF[type] || 'notice'];
   let head = type === 'military_incursion' && alert.meta?.incursionKind === 'barrier'
     ? (en ? 'Military checkpoint' : 'حاجز عسكري')
     : (HEADLINE[en ? 'en' : 'ar'][type]) || (en ? t.en : t.ar);
   const mag = type === 'quake' ? (alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1])) : null;
+  if (approvedPublicCorrection(alert)) head = en ? alert.title_en || alert.title : alert.title;
   if (alert.place?.head_ar) head = en ? alert.place.head_en || head : alert.place.head_ar;
   if (Number.isFinite(mag)) head = en ? `M${mag.toFixed(1)} earthquake` : `زلزال بقوة ${arDigits(mag.toFixed(1))}`;
   if (type === 'signal_sweep' && alert.meta?.signalPlatform === 'uav') head += en ? ' — Drone' : ' — مسيّرة';

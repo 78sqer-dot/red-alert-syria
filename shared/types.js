@@ -262,7 +262,8 @@ export const EVENT_VISUALS = Object.freeze(Object.fromEntries(TYPE_KEYS.map((typ
   const category = EVENT_CATEGORY_OVERRIDES[type] || ALERT_GROUP_BY_TYPE.get(type) || 'security';
   return [type, Object.freeze({ category, ...EVENT_PALETTES[category] })];
 })));
-export const eventVisual = (type) => EVENT_VISUALS[type] || EVENT_VISUALS.breaking;
+const CIVIL_CAUTION_VISUAL = Object.freeze({ category: 'civil', dot: '🟡', color: '#b45309' });
+export const eventVisual = (type, alert = null) => type === 'civil' && alert?.caution_visual === true ? CIVIL_CAUTION_VISUAL : EVENT_VISUALS[type] || EVENT_VISUALS.breaking;
 
 // ── The ONE canonical type menu (owner-approved unified symbols, 2026-11-17) ──
 // Every type picker in the project — the reporting bot's keyboards, the news

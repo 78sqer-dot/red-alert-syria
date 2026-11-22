@@ -60,6 +60,18 @@ const SMUGGLING_GOODS = [
 ];
 const ACTUAL_EXPLOSION_CUES = ['انفجار', 'انفجارات', 'انفجر', 'انفجرت', 'تفجير', 'تفجيرات', 'explosion', 'exploded', 'detonated'].map(N);
 const hasActualExplosion = (text) => { const nt = N(String(text || '')); return ACTUAL_EXPLOSION_CUES.some((w) => nt.includes(w)); };
+/** Discovery/possession/clearance of ordnance does not itself report a blast.
+ * Deliberately narrow: an explicit blast cue keeps the normal event review path. */
+export function isExplosiveHazardWithoutBlast(text) {
+  const nt = N(String(text || ''));
+  const ordnance = ['لغم', 'الغام', 'متفجر', 'عبوه', 'قنبله', 'ذخائر', 'مخلفات الحرب', 'مخلفات حرب'].some((word) => nt.includes(N(word)));
+  const discovery = ['العثور', 'عثر', 'يعثر', 'وجود', 'اكتشاف', 'اكتشف', 'ازاله', 'تزيل', 'تفكيك', 'ابطال', 'تطهير', 'تأمين', 'تصنيع', 'مستودع', 'مخزن', 'ضبط'].some((word) => nt.includes(N(word)));
+  return ordnance && discovery && !hasActualExplosion(text);
+}
+function nonBlastHazardType(text) {
+  const kt = keywordTypes(text);
+  return RULE_ORDER.find((key) => key !== 'explosion' && kt.includes(key)) || 'civil';
+}
 function detectedSmugglingType(text) {
   const nt = N(String(text || ''));
   if (!SMUGGLING_CUES.some((w) => nt.includes(w))) return null;
@@ -455,7 +467,7 @@ const TYPE_HELP = `- uav: drone (مسيّرة) flight, sighting or surveillance 
 - brawl: a physical civilian fight without firearms or other armed-attack indicators (مشاجرة، شجار، عراك بالأيدي); use attack/shooting when weapons, a target or an armed clash are reported
 - shooting: a concrete report of gunfire without a named target, injury or armed attack; if someone/place is targeted or harmed, use attack/assassination instead
 - weather: ONLY an explicit, actionable official severe-weather warning/advisory for a named Syrian place, with a hazard and safety guidance (تحذير/تنبيه جوي رسمي مع مكان وتعليمات). NOT routine forecasts. Choose weather over civil/electricity when the post warns about dangerous storms, heavy rain, snow, wind, heat, frost or dust.
-- explosion: ANY explosion or blast (انفجار، تفجير، دوي انفجار): landmine (لغم), war remnants / unexploded ordnance (مخلفات حرب، ذخائر), IED / explosive device (عبوة ناسفة), car bomb (سيارة مفخخة), suicide bomber, gas cylinder / fuel tank / ammunition depot blowing up, controlled detonation of ordnance, a loud explosion heard, blowing up a house
+- explosion: a REPORTED explosion or blast (انفجار، تفجير، دوي انفجار), including a landmine/IED/war-remnant detonation, a car bomb, a suicide bombing, an exploding gas cylinder/fuel tank/ammunition depot, or a reported controlled detonation. Finding, storing, manufacturing or clearing mines/explosives/unexploded ordnance without a reported blast is NOT explosion; use civil for a public-safety hazard unless another actual event type fits
 - civil: ONLY when no other type fits: building collapse, drowning, flood, electrocution, poisoning, a body found without a known cause, a person found hanged, a missing person found dead
 - breaking: another urgent, major security or humanitarian event in Syria that people need to know right now and that has none of the types above (e.g. curfew, road closed for security, major security operation starting, foreign forces setting up a checkpoint inside Syria). Use military_incursion for a clearly reported ground entry/penetration. Construction, digging, bulldozing or positioning without a reported entry/penetration can remain breaking when it is a current concrete event and no more specific type fits.`;
 export function buildPrompt(items, known, nowIso) {
@@ -745,6 +757,7 @@ export function ruleClassify(text, { breaking = false } = {}) {
   let type = groundIncursion ? 'military_incursion' : nonviolentIsraeliGroundActivity(evidence) && !specificOther ? 'breaking' : RULE_ORDER.find((k) => kt.includes(k));
   const smuggling = detectedSmugglingType(evidence);
   if (smuggling && !hasActualExplosion(evidence)) type = smuggling; // ammunition/contraband keywords can overlap the generic explosion list
+  if (type === 'explosion' && isExplosiveHazardWithoutBlast(evidence)) type = nonBlastHazardType(evidence);
   if (type === 'helicopter' && HELI_ATTACK_W.some((w) => evidenceNorm.includes(w))) type = 'attack';
   if (type === 'brawl' && (kt.includes('shooting') || kt.includes('attack'))) type = 'attack';
   if (type === 'shooting' && ['استهداف', 'استهدف', 'على حاجز', 'على شخص', 'على مدني', 'اصيب', 'اصابه', 'جرح', 'مقتل', 'كمين', 'هجوم', 'اشتباك', 'مسلحين', 'مسلحون'].some((w) => evidenceNorm.includes(N(w)))) type = 'attack';
@@ -821,6 +834,7 @@ export function refineType(type, text) {
   const evidenceText = labels.includes(N(firstLabel)) ? lines.slice(1).join('\n') : String(text || '');
   const nt = ' ' + N(evidenceText) + ' ';
   const any = (ws) => ws.some((w) => nt.includes(' ' + N(w) + ' ') || nt.includes(N(w)));
+  if (['explosion', 'civil', 'breaking', 'none'].includes(type) && isExplosiveHazardWithoutBlast(evidenceText)) return nonBlastHazardType(evidenceText);
   // An arrest named only as the authorities' response AFTER a violent incident is not the
   // story («إصابة 6 أشخاص بمشاجرة تطورت لإطلاق نار… والأمن يوقف المتورطين» is the brawl/
   // shooting, not an اعتقال): when the violence is told before the first arrest cue, the

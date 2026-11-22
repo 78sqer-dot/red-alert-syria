@@ -1,3 +1,4 @@
+import { approvedPublicCorrection } from './approved-public-correction.js';
 import { mergeCoordination } from './editor-coordination.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -845,9 +846,12 @@ export function publicAlert(a) {
     ...(Array.isArray(a.meta?.political?.sources) ? a.meta.political.sources : []),
   ];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
+  const approvedCorrection = approvedPublicCorrection(a);
+  const approvedValues = new Set(approvedCorrection ? Object.values(approvedCorrection) : []);
   const publicText = (value) => {
     const selectedEditorialCopy = Boolean(editorialMode && value === a.description && isPublicEditorialCopy(value, editorialMode));
     if (isPrivateEditorialCopy(value) && !selectedEditorialCopy) return '';
+    if (approvedCorrection && approvedValues.has(value)) return value;
     const cleaned = a.source === 'news' || ['political', 'breaking'].includes(a.type)
       ? cleanAttributedNewsText(value, privateSourceNames) : cleanAlertText(value);
     return isPrivateEditorialCopy(cleaned) && !(selectedEditorialCopy && isPublicEditorialCopy(cleaned, editorialMode)) ? '' : cleaned;
@@ -870,7 +874,8 @@ export function publicAlert(a) {
   return {
     id: a.id,
     type: a.type,
-    marker_glyph: a.marker_glyph === 'weapon' ? 'weapon' : undefined,
+    marker_glyph: a.marker_glyph === 'weapon' ? 'weapon' : approvedCorrection && a.caution_visual === true && a.type === 'civil' ? 'urgent_warning' : undefined,
+    ...(approvedCorrection && a.caution_visual === true && a.type === 'civil' ? { caution_visual: true, civil_emoji: 'warning' } : {}),
     hazard: a.type === 'weather' ? a.meta?.hazard || undefined : undefined,
     border: BORDER_REGIONS[a.meta?.border] ? a.meta.border : undefined,
     flight_direction: FLIGHT_DIRECTIONS[a.meta?.flightDirection] ? a.meta.flightDirection : undefined,

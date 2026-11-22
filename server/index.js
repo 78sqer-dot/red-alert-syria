@@ -391,7 +391,10 @@ app.post('/api/admin/alerts/:id/repair-news', apiLimiter, express.json({ limit: 
   if (!adminKeyOk(req)) return res.status(404).end();
   if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
   try {
-    const r = await repairNewsAlert(bots.admin.api, req.params.id, req.body?.correction);
+    const r = await repairNewsAlert(bots.admin.api, req.params.id, req.body?.correction, {
+      dryRun: req.body?.dry_run === true, refreshPhoto: req.body?.refresh_photo === true,
+      expectedRevision: req.body?.expected_revision, expectedPostId: req.body?.expected_post_id,
+    });
     return res.status(r.ok ? 200 : 400).json(r);
   } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
 });
