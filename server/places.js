@@ -256,6 +256,18 @@ export function mentionedGovernorates(text) {
   }
   return [...new Map(accepted.sort((a, b) => a.start - b.start).map(({ gov }) => [gov.code, gov])).values()];
 }
+/** A city used only to qualify the adjacent named locality is not another incident. */
+export function localityQualifierOnly(name, primaryName, text) {
+  const key = (v) => normalizeArabic(v).replace(/^ال/u, '');
+  const parent = key(name), child = key(primaryName);
+  if (!parent || !child || parent === child || child.includes(' ')) return false;
+  const escape = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const normalized = normalizeArabic(text);
+  const compound = new RegExp('(^|\\s)(?:ال)?' + escape(child) + '\\s+(?:ال)?' + escape(parent) + '(?=\\s|$)', 'gu');
+  const rest = normalized.replace(compound, '$1');
+  return rest !== normalized && !new RegExp('(^|\\s)(?:ال)?' + escape(parent) + '(?=\\s|$)', 'u').test(rest);
+}
+
 // every circle of an alert: its main area + each extra area picked in the bot (one or more circles each)
 export function alertZones(a) {
   const out = [];

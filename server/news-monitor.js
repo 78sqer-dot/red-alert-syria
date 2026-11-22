@@ -12,7 +12,7 @@ import { automaticMonitorRecipientIds, config, isOwner } from './config.js';
 import { store } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, TYPE_MENU, TYPE_MENU_GROUPS, TYPE_MENU_DIRECT, typeMenuGroupOf, typeOf, droneAuto, alertEmoji, alertButtonLabel, stripTypeLabelPrefix } from '../shared/types.js';
 import { CONDEMNATIONS, CONDEMNATION_KEYS, condemnationKey, condemnationText } from '../shared/condemnations.js';
-import { locationFrom, normalizeArabic, governorates, districts, subdistricts, places, getGov, getPlace } from './places.js';
+import { locationFrom, normalizeArabic, localityQualifierOnly, governorates, districts, subdistricts, places, getGov, getPlace } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
 import { onRoadNewsPost, roadMonitorDebug, roadMonitorActivationTime, parseRoadText } from './road-monitor.js';
@@ -1618,7 +1618,7 @@ function buildLocations(r, it) {
   for (const m of nt.matchAll(/(?:طريق|اوتوستراد|اوتستراد|الاوتوستراد|الطريق الدولي|الطريق|طريق عام)\s+(?:\S*\d\S*\s+)?(?:بين\s+)?(\S+)\s+(?:-\s*)?(\S+)/g)) { addEnd(m[1]); addEnd(m[2]); }
   for (const m of nt.matchAll(/بين\s+(?:مدينتي\s+)?(\S+)\s+(?:-\s*)?(\S+)/g)) { addEnd(m[1]); addEnd(m[2]); }
   const isEndCity = (l) => l.scope === 'place' && (l.rank ?? 9) <= 2 && (ends.has(N(l.name_ar)) || ends.has(N(l.name_ar).replace(/^ال/, '')));
-  let fine = out.filter((l) => l.scope !== 'governorate');
+  let fine = out.filter((l) => l.scope !== 'governorate' && !out.some((o) => o !== l && localityQualifierOnly(l.name_ar, o.name_ar, it.text)));
   if (fine.filter(isEndCity).length >= 1 && fine.length > 1) {
     const rest = fine.filter((l) => !isEndCity(l));
     fine = rest.length ? rest : fine.slice(0, 1);

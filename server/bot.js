@@ -24,7 +24,7 @@ import { registerWeatherTools } from './weather.js';
 import { registerWxBulletinTools } from './wx-daily.js';
 import { registerBorderTools } from './borders.js';
 import { registerRoadMonitorTools, rememberIgnoredRoadReport } from './road-monitor.js';
-import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox, centerOfDist, capitalOf, centerOfSub, centerSuggestions, getPlace } from './places.js';
+import { governorates, getGov, getDist, getSub, districtsOf, placesOf, subsOf, placesOfSub, searchPlaces, locationFrom, insideSyriaBox, centerOfDist, capitalOf, centerOfSub, centerSuggestions, getPlace, localityQualifierOnly } from './places.js';
 // publishing bot: a custom name for the pinned spot ("مخيم الرسم الجديد") while the pin stays on the chosen centre
 function withLabel(loc, label) {
   const base = loc.custom_label ? loc.base : { name_ar: loc.name_ar, name_en: loc.name_en, short_ar: loc.short_ar, short_en: loc.short_en };
@@ -1647,8 +1647,8 @@ export async function repairNewsAlert(api, id, correction = null) {
   const patch = {};
   const sourceDraft = Object.values(store.state.news?.drafts || {}).find((d) => d.alertId === id);
   const sourceText = sourceDraft?.sourceText || sourceDraft?.body || cleaned;
-  if (isNews && a.extra?.some((p) => hospitalDestinationOnly(p.name_ar, sourceText))) {
-    patch.extra = a.extra.filter((p) => !hospitalDestinationOnly(p.name_ar, sourceText));
+  if (isNews && a.extra?.some((p) => hospitalDestinationOnly(p.name_ar, sourceText) || localityQualifierOnly(p.name_ar, a.place?.name_ar, sourceText))) {
+    patch.extra = a.extra.filter((p) => !hospitalDestinationOnly(p.name_ar, sourceText) && !localityQualifierOnly(p.name_ar, a.place?.name_ar, sourceText));
     patch.areas = [...new Set([a.place?.name_ar, a.place?.district_ar, a.place?.governorate_ar, ...patch.extra.map((p) => p.name_ar)].filter(Boolean))];
   }
   if (cleaned && cleaned !== rawBody.trim()) patch.body = cleaned;

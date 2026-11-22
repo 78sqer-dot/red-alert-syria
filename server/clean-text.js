@@ -93,6 +93,14 @@ export function isPublicEditorialCopy(raw, mode) {
 export function cleanPublicNewsAttribution(raw, privateNames = []) {
   if (!raw) return raw;
   let text = stripRawUrls(String(raw));
+  // Keep reported attribution chains inside the narrative, while standalone
+  // outlet credits and promotional tails remain removable.
+  const reportedChains = [];
+  text = text.replace(/(?:و)?نقلت?\s+(?:وكالة\s+)?سانا\s+عن/gu, (value) => {
+    const key = `NEWSATTRIBUTIONKEEP${reportedChains.length}`;
+    reportedChains.push(value);
+    return key;
+  });
   const tidyNames = (values) => [...new Set(values.map((value) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim())
     .filter((name) => name.length >= 3 && name.length <= 80))].sort((a, b) => b.length - a.length);
   const mediaNames = tidyNames(MEDIA);
@@ -125,6 +133,7 @@ export function cleanPublicNewsAttribution(raw, privateNames = []) {
     text = text.replace(new RegExp(`(^|\\n)([\\s•\\-–—]*)${verb}\\s*[:：]\\s*`, 'gimu'), '$1$2');
   }
   text = stripReporterPromo(text);
+  text = text.replace(/NEWSATTRIBUTIONKEEP(\d+)/g, (_match, index) => reportedChains[Number(index)] || '');
   return String(text || '').replace(/^[\s،,;|•—–:-]+|[\s،,;|•—–:-]+$/g, '').replace(/\s+/g, ' ').trim();
 }
 
