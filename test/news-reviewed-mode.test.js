@@ -40,6 +40,8 @@ function pair(){
 test('ledger reconciliation requires an already corrected canonical and removed duplicate, never deletes or posts',async()=>{
  const {n,a,request}=pair();store.state.alerts.push({id:'removed'});await assert.rejects(mon.reconcilePublishedNewsDuplicate('a',request),/removal-not-verified/);store.state.alerts.pop();
  const result=await mon.reconcilePublishedNewsDuplicate('a',request);assert.equal(result.publicChanged,false);assert.equal(calls,0);assert.equal(n.drafts.b.status,'duplicate');assert.equal(n.drafts.b.alertId,a.id);assert.equal(n.drafts.b.postId,11);assert.equal(n.drafts.b.reconciliation.removedPostId,12);assert.equal(n.drafts.a.sourceText,'سماع دوي انفجار في محجة');assert.equal(n.drafts.a.publishedBody,a.body);assert.equal(a.meta.newsSources.length,3);assert.equal(n.alerts.some(x=>x.id==='removed'),false);assert.equal(n.echoLog.some(x=>x.id==='removed'),false);assert.ok(n.echoLog.some(x=>x.id==='canonical'&&x.text.includes('مستودع')));
+ assert.equal(mon._test.knownEvents().filter(e=>e.alertId===a.id).length,1,'the reconciled alias cannot become a second event with its old geography');
+ assert.equal(mon._test.knownEvents().some(e=>e.draftId==='b'),false);
  assert.equal((await mon.reconcilePublishedNewsDuplicate('a',request)).reused,true);assert.equal(n.drafts.a.editorialUpdates.length,1);
 });
 test('ledger refuses stale review and unsafe source URLs',async()=>{

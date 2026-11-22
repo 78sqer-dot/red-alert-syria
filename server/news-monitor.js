@@ -710,6 +710,9 @@ function knownEvents(hours = 12) {
   const fromDraft = new Set();
   for (const d of Object.values(n.drafts)) {
     if (d.test || (d.ts || d.created) < since) continue;
+    // A reconciled public duplicate is an audit alias, not another known event.
+    // Its original source geography must never compete with the canonical event.
+    if (d.status === 'duplicate' && d.reconciliation?.canonicalAlertId) continue;
     const locs = locsOf(d.loc, d.extra);
     if (d.alertId) fromDraft.add(d.alertId);
     out.push({ kind: 'draft', status: d.status, draftId: d.id, alertId: d.alertId, type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: d.headline, where: whereOf(locs), geo: geoOf(locs) });
