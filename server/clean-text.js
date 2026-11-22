@@ -107,6 +107,17 @@ export function cleanPublicNewsAttribution(raw, privateNames = []) {
   const privateSourceNames = tidyNames([...extraNames, ...(Array.isArray(privateNames) ? privateNames : [])]);
   const role = '(?:مراسل(?:ة)?|مصادر?|مصدر|وسائل(?:\\s+الإعلام)?|قناة|موقع|شبكة|وكالة|صحيفة|منصة)';
   const verb = '(?:أفاد(?:ت)?|قال(?:ت)?|ذكر(?:ت)?|نقل(?:ت)?|أوضح(?:ت)?|كشف(?:ت)?|أكد(?:ت)?|أشار(?:ت)?)';
+  // Hide a configured feed name without deleting the original third-party
+  // reporting role/verb or turning its statement into our own assertion.
+  // This does not add a reporter, a source, a locality or a speech verb.
+  const privateReportingNames = tidyNames([...mediaNames, ...privateSourceNames]).filter((name) => !isInstitutionSpeakerName(name));
+  const reportingNames = tidyNames([...privateReportingNames, ...privateReportingNames.map((name) => name.replace(/^(?:مراسل(?:ة)?|مصادر?|مصدر)\s+/u, ''))]);
+  if (reportingNames.length) {
+    const outlet = `(?:${reportingNames.map(esc).join('|')})`;
+    const reportingRole = '(?:مراسل(?:ة)?|مصادر?|مصدر)';
+    const reportedLead = new RegExp(`(^|[\\s،,;|•—–(])(?:(${verb})\\s+)?(${reportingRole})\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s*(?:بأن|أن|إن|[:：،,]))`, 'gimu');
+    text = text.replace(reportedLead, (_match, prefix, speech, speaker) => `${prefix}${speech ? speech + ' ' : ''}${speaker} `);
+  }
   if (mediaNames.length) {
     const outlet = `(?:${mediaNames.map(esc).join('|')})`;
     const attributedLead = new RegExp(`(^|[\\s،,;|•—–])(?:(?:${verb})\\s+)?(?:${role}\\s+)?(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}\\s*(?:بأن|أن|[:：|]|—|–)\\s*`, 'gimu');

@@ -35,15 +35,15 @@ const qualified = (overrides = {}) => ({
   ...overrides,
 });
 
-test('public news copy drops outlet/reporting credits but keeps speaker attribution and private source records', () => {
+test('public news copy hides outlet identities while preserving reporting roles, speaker attribution and private source records', () => {
   const examples = [
     {
       raw: 'أفاد مراسل الجزيرة بأن القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
-      clean: 'القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
+      clean: 'أفاد مراسل بأن القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
     },
     {
       raw: 'مصادر العربية: طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
-      clean: 'طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
+      clean: 'مصادر: طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
     },
     {
       raw: 'توغل وإطلاق نار يطال منازل وأراضي قرية كويا بريف درعا.. رئيس البلدية يروي لـ سوريا الآن ما جرى',
@@ -58,9 +58,9 @@ test('public news copy drops outlet/reporting credits but keeps speaker attribut
   assert.equal(cleanPublicNewsAttribution(institutionAttribution, ['مصادر الدفاع المدني السوري']), institutionAttribution,
     'a complete monitored institution source name remains attributed');
   assert.equal(cleanPublicNewsAttribution('مصادر قناة الرصد: وقع انفجار وأصيب 3 أشخاص.', ['مصادر قناة الرصد']),
-    'وقع انفجار وأصيب 3 أشخاص.', 'a monitoring channel does not leak as a speaker attribution');
+    'مصادر: وقع انفجار وأصيب 3 أشخاص.', 'a monitoring channel stays hidden without deleting its source role');
   assert.equal(cleanPublicNewsAttribution('مصادر قناة الدفاع المدني: وقع انفجار.', ['مصادر قناة الدفاع المدني']),
-    'وقع انفجار.', 'a monitoring channel named after an institution is still a channel');
+    'مصادر: وقع انفجار.', 'a monitoring channel named after an institution stays hidden without deleting its source role');
 
   const sourceText = examples[0].raw;
   const draft = qualified({
@@ -559,4 +559,32 @@ test('failed editorial gate keeps an eligible draft pending, clears its timer, a
     _test.R.H = previousHandler;
     delete newsState().drafts[id];
   }
+});
+
+test('source-first reporter cleanup preserves third-party attribution without lifting a held draft', () => {
+  const draft = qualified({
+    type: 'military_incursion',
+    sourceText: 'أفاد مراسل قناة الرصد الخاصة بأن قوة عسكرية توغلت في ريف درعا الغربي اليوم.',
+    sourceTextVersion: 2,
+    loc: { scope: 'governorate', name_ar: 'درعا', governorate_ar: 'درعا', latitude: 32.6, longitude: 36.1 },
+    extra: [],
+    srcs: [{ u: 'synthetic-private-feed', name: 'قناة الرصد الخاصة', local: false }],
+    editorialHold: true,
+    editorialHoldReason: 'operator-review-hold',
+    alertId: null,
+    postId: null,
+  });
+  const original = structuredClone(draft);
+  const candidate = _test.sourceFirstCandidate(draft);
+  assert.equal(candidate.body, 'أفاد مراسل بأن قوة عسكرية توغلت في ريف درعا الغربي اليوم.');
+  assert.doesNotMatch(candidate.body, /قناة الرصد الخاصة|مراسلنا|synthetic-private-feed|https?:/u);
+  assert.equal(candidate.editorialHold, true);
+  assert.equal(candidate.editorialHoldReason, 'operator-review-hold');
+  assert.equal(candidate.alertId, null);
+  assert.equal(candidate.postId, null);
+  assert.equal(daytimeAutoEligible(candidate), false);
+  assert.equal(nightEligible(candidate), false);
+  assert.deepEqual(draft, original, 'candidate generation does not mutate the held draft or its private sources');
+  assert.deepEqual(_test.sourceFirstGate(draft, { ...candidate, body: candidate.body.replace('أفاد مراسل بأن ', '') }),
+    { ok: false, reason: 'source-copy-changed' }, 'the source-copy gate is not weakened');
 });
