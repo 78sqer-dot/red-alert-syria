@@ -1,3 +1,4 @@
+import { configureReporterContact, captureReporterReply } from './reporter-contact.js';
 import { configureReportOperator } from './reports-operator.js';
 import { BACKUP_NAME, isBackupName, encodeBackup, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
 import { captureCoordinationReply } from './editor-coordination.js';
@@ -5,7 +6,7 @@ import { approvedPublicCorrection, approvedCorrectionFingerprint, publishedRepai
 import { randomUUID, createHash } from 'node:crypto';
 import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
 import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
-import { Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
+import { Api, Bot, InlineKeyboard, InputFile, InputMediaBuilder, GrammyError, HttpError } from 'grammy';
 import { config, isOwner, envDefaults, DEFAULT_PUBLIC_URL } from './config.js';
 import { registerOwnerTools, registerReportOwnerCommands, runtimeHooks } from './owner-tools.js';
 export { runtimeHooks };
@@ -1852,6 +1853,19 @@ export async function fixPostMarkup(messageId) {
 // publishing bot; the reporter gets it in the report bot signed as the team (staff identity hidden).
 // The reporter answers in the report bot (reply, or a plain message while a conversation is open).
 const APIS = {}; const TOKENS = {};
+let reporterContactApi = null;
+configureReporterContact(async (uid, text) => {
+  if (!APIS.report) throw new Error('report-bot-unavailable');
+  const lang = store.userLang(uid) === 'en';
+  const header = lang ? '💬 Message from the Red Alert Syria team' : '💬 رسالة من إدارة Red Alert Syria';
+  const footer = lang ? 'Reply here with the details needed to verify your report. Do not send names or private information about other people.' : 'ردّ هون بتفاصيل التحقق من بلاغك. لا ترسل أسماء أو معلومات خاصة عن أشخاص آخرين.';
+  if (!reporterContactApi) {
+    reporterContactApi = new Api(TOKENS.report, { timeoutSeconds: 30 });
+    installTracker(reporterContactApi, 'report');
+  }
+  // Deliberately no retry transformer: an ambiguous send must not duplicate a question.
+  return reporterContactApi.sendMessage(uid, `${header}\n\n${text}\n\n${footer}`, { link_preview_options: { is_disabled: true }, _keep: 'c' });
+});
 configureReportOperator({
   ready: () => Boolean(APIS.admin && store.backup && !store._backupWritesPaused),
   publish: (rep) => {
@@ -2158,6 +2172,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     return next();
   });
   if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerSupportTools(bot, OH); registerNewsTools(bot, OH); registerJobsTools(bot, OH, role); registerJobsAdminTools(bot, OH); registerArmyAdminTools(bot, OH); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerWxBulletinTools(bot, OH); registerBorderTools(bot, OH); registerPowerTools(bot, OH); registerRoadMonitorTools(bot, OH); } else { registerJobsTools(bot, OH, role); registerReportOwnerCommands(bot, OH); }
+  if (role === 'report') bot.on('message', async (ctx, next) => {
+    if (!getDraft(ctx)) await captureReporterReply(ctx.message);
+    return next();
+  });
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons
   if (role === 'admin') {
     bot.on('message', async (ctx, next) => {

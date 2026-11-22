@@ -218,6 +218,7 @@ class Store extends EventEmitter {
       ui: s.ui && typeof s.ui === 'object' ? s.ui : {},
       // public reports waiting for a decision (survive restarts/deploys) and decided report ids
       reports: s.reports && typeof s.reports === 'object' ? s.reports : {},
+      reportContacts: s.reportContacts && typeof s.reportContacts === 'object' ? s.reportContacts : {},
       reportsAudit: s.reportsAudit && typeof s.reportsAudit === 'object' ? s.reportsAudit : {},
       reportsDone: s.reportsDone && typeof s.reportsDone === 'object' ? s.reportsDone : {},
       // ids of alerts removed by hand / auto-delete (so a late copy from an old instance can't bring them back)
@@ -428,7 +429,7 @@ class Store extends EventEmitter {
   /** Claim a report for a decision: returns it once, then it is gone (no double publishing). */
   reportTake(rid) {
     const rep = this.state.reports?.[rid];
-    if (!rep || rep.reviewOperation) return null;
+    if (!rep || rep.reviewOperation || this.state.reportContacts?.[rid]?.outbound?.some(m => ['claimed', 'uncertain', 'backup-unverified'].includes(m.status))) return null;
     delete this.state.reports[rid];
     (this.state.reportsDone ||= {})[rid] = Date.now();
     (this.state.reportsAudit ||= {})[rid] = { at: Date.now(), result: 'native-claimed', draft: rep.draft };
@@ -466,6 +467,8 @@ class Store extends EventEmitter {
       console.error('[store] merge: backup read failed', e.message); return { reports: 0, alerts: 0, backupLoaded: false };
     }
     let reports = 0, alerts = 0, alnabaBatches = 0;
+    this.state.reportContacts ||= {};
+    for (const [id,c] of Object.entries(o.reportContacts || {})) if (!this.state.reportContacts[id]) this.state.reportContacts[id] = c;
     const st = this.state;
     if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
     st.reports ||= {}; st.reportsDone ||= {}; st.reportsAudit ||= {}; st.gone ||= {};

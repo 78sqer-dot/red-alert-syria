@@ -2,19 +2,19 @@ import crypto from 'node:crypto';
 import { store } from './store.js';
 let hooks = {};
 export function configureReportOperator(next) { hooks = next; }
-const revision = (r) => crypto.createHash('sha256').update(JSON.stringify([r.created, r.draft, r.verification || null, r.reviewOperation || null])).digest('hex');
+const revision = (r, id) => crypto.createHash('sha256').update(JSON.stringify([r.created, r.draft, r.verification || null, r.reviewOperation || null, store.state.reportContacts?.[id] || null])).digest('hex');
 const state = () => { store.state.reports ||= {}; store.state.reportsAudit ||= {}; return store.state; };
 export function operatorReportsStatus() {
   const s = state();
   return { ready: Boolean(hooks.publish && hooks.ready?.()), pending_count: Object.values(s.reports).filter(r => !r.reviewOperation || r.reviewOperation.result === 'held').length,
     unresolved_count: Object.values(s.reports).filter(r => r.reviewOperation && !['held'].includes(r.reviewOperation.result)).length + Object.values(s.reportsAudit).filter(a => ['native-claimed', 'native-edit-staged', 'uncertain', 'map-only', 'terminal-backup-unverified'].includes(a.result)).length,
     ids: Object.keys(s.reports), unresolved_ids: Object.entries(s.reportsAudit).filter(([,a]) => ['native-claimed', 'native-edit-staged', 'uncertain', 'map-only', 'terminal-backup-unverified'].includes(a.result)).map(([id])=>id), handled_count: Object.keys(s.reportsDone || {}).length,
-    contact: { route: 'native-admin-bot-reply-on-mapped-review-card', identity: 'Red Alert Syria reporting bot', universal_reachability: false, api_sending_enabled: false } };
+    contact: { route: 'native-admin-bot-reply-on-mapped-review-card', identity: 'Red Alert Syria reporting bot', universal_reachability: false, api_sending_enabled: true } };
 }
 export function operatorReportReview(id) {
   const s = state(), r = s.reports[id];
   if (!r) return s.reportsAudit[id] ? { id, status: 'handled', outcome: { result: s.reportsAudit[id].result, at: s.reportsAudit[id].at, alertId: s.reportsAudit[id].alertId || null, postId: s.reportsAudit[id].postId || null, draft: s.reportsAudit[id].draft || null } } : null;
-  return { id, status: r.reviewOperation?.result || 'pending', revision: revision(r), created: r.created,
+  return { id, status: r.reviewOperation?.result || 'pending', revision: revision(r, id), created: r.created,
     draft: r.draft, verification: r.verification || null, operation: r.reviewOperation || null,
     reporter: { personal_identifiers_redacted: true, review_cards: (r.messages || []).length, bot_route_recorded: Boolean(r.via) },
     actions: r.reviewOperation && r.reviewOperation.result !== 'held' ? [] : ['hold', 'reject', 'publish'] };
@@ -30,7 +30,8 @@ export async function operateReport(id, request = {}) {
   if (!r) throw new Error('unknown-or-handled-report');
   if (store._backupWritesPaused || !store.backup) throw new Error('durable-backup-unavailable-no-send');
   if (r.reviewOperation && r.reviewOperation.result !== 'held') throw new Error('report-claimed-or-outcome-unresolved');
-  if (!request.revision || request.revision !== revision(r)) throw new Error('stale-review');
+  if (store.state.reportContacts?.[id]?.outbound?.some(m => ['claimed', 'uncertain', 'backup-unverified'].includes(m.status))) throw new Error('reporter-contact-outcome-unresolved');
+  if (!request.revision || request.revision !== revision(r, id)) throw new Error('stale-review');
   if (!['hold', 'reject', 'publish'].includes(request.action)) throw new Error('invalid-operation');
   const evidence = request.evidence;
   if (request.action === 'publish' && (!evidence || typeof evidence !== 'object' || evidence.checked !== true || typeof evidence.summary !== 'string' || !evidence.summary.trim() || evidence.summary.length > 2000 || !Array.isArray(evidence.sources) || !evidence.sources.length || evidence.sources.length > 10 || evidence.sources.some(u => typeof u !== 'string' || !/^https:\/\//.test(u) || u.length > 2000))) throw new Error('independent-verification-evidence-required');
@@ -38,7 +39,7 @@ export async function operateReport(id, request = {}) {
   const op = { revision: request.revision, at: Date.now(), actor: 'delegated-report-editor', result: request.action === 'hold' ? 'held' : 'claimed', action: request.action, ...(request.action === 'publish' ? { evidence } : {}) };
   r.reviewOperation = op;
   try { await durable(); } catch (e) { op.result = 'claim-backup-unverified'; store.persist(); throw e; }
-  if (request.action === 'hold') return { ok: true, id, status: 'held', revision: revision(r) };
+  if (request.action === 'hold') return { ok: true, id, status: 'held', revision: revision(r, id) };
   if (request.action === 'publish') {
     let alert;
     try { alert = await hooks.publish(r); } catch { op.result = 'uncertain'; await durable(); throw new Error('publication-unverified-do-not-retry'); }

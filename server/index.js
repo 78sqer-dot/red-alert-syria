@@ -1,3 +1,4 @@
+import { reporterContactReview, sendReporterQuestion } from './reporter-contact.js';
 import { operatorReportsStatus, operatorReportReview, operateReport } from './reports-operator.js';
 import { transferCounters } from './transfer-counters.js';
 import { backupTransfer } from './backup-codec.js';
@@ -309,6 +310,17 @@ app.post('/api/admin/jobs/:id/metadata', apiLimiter, (req, res, next) => adminKe
 app.get('/api/admin/reports/status', apiLimiter, (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   res.setHeader('Cache-Control', 'no-store'); return res.json(operatorReportsStatus());
+});
+app.get('/api/admin/reports/:id/contact', apiLimiter, (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  res.setHeader('Cache-Control', 'no-store'); const r = reporterContactReview(req.params.id);
+  return r ? res.json(r) : res.status(404).json({ error: 'unknown-report' });
+});
+app.post('/api/admin/reports/:id/contact', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  res.setHeader('Cache-Control', 'no-store');
+  try { const r = await sendReporterQuestion(req.params.id, req.body); return res.status(r.ok ? 200 : 409).json(r); }
+  catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
 });
 app.get('/api/admin/reports/:id', apiLimiter, (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
