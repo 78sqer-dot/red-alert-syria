@@ -710,9 +710,10 @@ function knownEvents(hours = 12) {
   const fromDraft = new Set();
   for (const d of Object.values(n.drafts)) {
     if (d.test || (d.ts || d.created) < since) continue;
-    // A reconciled public duplicate is an audit alias, not another known event.
-    // Its original source geography must never compete with the canonical event.
-    if (d.status === 'duplicate' && d.reconciliation?.canonicalAlertId) continue;
+    // A supported duplicate is an audit alias, not another known event. This
+    // covers both reconciled public posts and never-published queued copies.
+    // Original source geography must never compete with the canonical event.
+    if (d.status === 'duplicate' && (d.reconciliation?.canonicalAlertId || d.duplicateOf)) continue;
     const locs = locsOf(d.loc, d.extra);
     if (d.alertId) fromDraft.add(d.alertId);
     out.push({ kind: 'draft', status: d.status, draftId: d.id, alertId: d.alertId, type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: d.headline, where: whereOf(locs), geo: geoOf(locs) });
@@ -1130,6 +1131,43 @@ function knownDuplicateDraft(d) {
 // same type family (political: same category), compatible geography, and
 // ≥0.5 token overlap with the published text.
 const ECHO_HOURS = 96;
+// Reporting labels drift between sources (official_entity vs statement). Only
+// an identical ordered statement core from the SAME ministry may cross these
+// descriptive speech labels. Never strip new facts or change their word order.
+const POLITICAL_SPEECH_CATEGORIES = new Set(['statement', 'position', 'official_announcement', 'government_announcement', 'official_entity', 'support']);
+const MINISTRY_NAMES = 'الداخليه|الخارجيه|الدفاع|الصحه|التربيه|التعليم|الماليه|العدل|الاقتصاد|الطاقه|النقل|الاوقاف|الاعلام';
+const SPEECH_VERBS = 'ترحب|يرحب|رحبت|رحب|تثمن|يثمن|ثمنت|ثمن|تعلن|يعلن|اعلنت|اعلن|توكد|يوكد|اكدت|اكد|تدين|يدين|دانت|دان|تدعم|يدعم|دعمت|دعم';
+function officialStatementCore(text) {
+  const normalized = N(text).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/gu, ' ').trim();
+  const actor = new RegExp('(?:^|\\s)(?:وزاره\\s+(' + MINISTRY_NAMES + ')(?:\\s+السوريه)?|(' + MINISTRY_NAMES + ')\\s+السوريه)(?=\\s+(?:' + SPEECH_VERBS + ')(?=\\s|$))', 'gu');
+  const matches = [...normalized.matchAll(actor)];
+  if (!matches.length) return null;
+  // The echo log prepends deterministic type/place metadata. Anything else
+  // before the speaker may change attribution or negate the statement.
+  const prefix = normalized.slice(0, matches[0].index).trim();
+  if (prefix && !/^(?:تطور\s+سياسي(?:\s+سوريا)?\s*)+$/u.test(prefix)) return null;
+  const institution = matches[0][1] || matches[0][2];
+  if (matches.some((m) => (m[1] || m[2]) !== institution)) return null;
+  const core = normalized.slice(matches[0].index).replace(actor, ' rasministry ')
+    .replace(/(?:^|\s)في بيان(?: لها)?(?=\s|$)/gu, ' ')
+    .replace(new RegExp('(?:^|\\s)و(?=(?:' + SPEECH_VERBS + ')(?=\\s|$))', 'gu'), ' ');
+  let seenActor = false;
+  const words = normTokens(core).filter((word) => {
+    if (word !== 'rasministry') return true;
+    if (seenActor) return false;
+    seenActor = true; return true;
+  });
+  if (words.length < 14) return null;
+  // Short numerals and negations are below normTokens' length floor.
+  const numbers = (core.match(/[0-9٠-٩۰-۹]+/gu) || []).join('|');
+  const negation = (core.match(/(?:^|\s)(?:لا|لم|لن|ليس|ليست)(?=\s|$)/gu) || []).map((s) => s.trim()).join('|');
+  return { institution, words: words.join(' '), numbers, negation };
+}
+function sameOfficialStatement(cand, known, text, knownText) {
+  if (!POLITICAL_SPEECH_CATEGORIES.has(cand.politicalCategory) || !POLITICAL_SPEECH_CATEGORIES.has(known.politicalCategory)) return false;
+  const a = officialStatementCore(text), b = officialStatementCore(knownText);
+  return !!a && !!b && a.institution === b.institution && a.words === b.words && a.numbers === b.numbers && a.negation === b.negation;
+}
 function selfEchoOf(cand, texts) {
   const log = newsState().echoLog;
   if (!Array.isArray(log) || !log.length) return null;
@@ -1138,7 +1176,7 @@ function selfEchoOf(cand, texts) {
   for (const e of log) {
     if (!e || e.ts < since || !e.text) continue;
     if (cand.type === 'political' || e.type === 'political') {
-      if (cand.type !== 'political' || e.type !== 'political' || !cand.politicalCategory || cand.politicalCategory !== e.politicalCategory) continue;
+      if (cand.type !== 'political' || e.type !== 'political' || !cand.politicalCategory || (cand.politicalCategory !== e.politicalCategory && !sameOfficialStatement(cand, e, texts, e.text))) continue;
     } else if (!sameFamily(cand.type, e.type) && !crossTypeRaidDuplicate(cand, e, texts, e.text)) continue;
     if (!cand.geo.none && !e.geo.none && !near(cand.geo, e.geo)) continue;
     const sim = Math.max(textSim(texts, e.text), textSim(cand.headline, e.text));
@@ -1249,7 +1287,9 @@ const ENTITY_DUP_HOURS = 48;
 function finalPublishDuplicate(d, pub) {
   const log = newsState().echoLog;
   if (!Array.isArray(log) || !log.length) return null;
-  const cand = { type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: pub?.headline || d.headline, geo: geoOf(locsOf(d.loc, d.extra)) };
+  const comparisonLoc = Object.hasOwn(pub || {}, 'loc') ? pub.loc : Object.hasOwn(pub || {}, 'location') ? pub.location : d.loc;
+  const comparisonExtra = Object.hasOwn(pub || {}, 'extra') ? pub.extra : d.extra;
+  const cand = { type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: pub?.headline || d.headline, geo: geoOf(locsOf(comparisonLoc, comparisonExtra)) };
   const text = `${pub?.headline || ''}\n${pub?.body || ''}`.trim();
   if (!text) return null;
   const candRuns = personNameRuns(text).filter((run) => run.length >= 3);
@@ -1260,7 +1300,7 @@ function finalPublishDuplicate(d, pub) {
     if (!e || e.ts < since || !e.text) continue;
     if (d.alertId && e.id === d.alertId) continue; // our own already-published copy of THIS draft
     if (cand.type === 'political' || e.type === 'political') {
-      if (cand.type !== 'political' || e.type !== 'political' || !cand.politicalCategory || cand.politicalCategory !== e.politicalCategory) continue;
+      if (cand.type !== 'political' || e.type !== 'political' || !cand.politicalCategory || (cand.politicalCategory !== e.politicalCategory && !sameOfficialStatement(cand, e, text, e.text))) continue;
     } else if (!sameFamily(cand.type, e.type) && !crossTypeRaidDuplicate(cand, e, text, e.text)) continue;
     const geoKnown = !cand.geo.none && !e.geo.none;
     if (geoKnown && !near(cand.geo, e.geo)) continue;
@@ -2099,7 +2139,7 @@ export function operatorNewsReview(id) {
     candidate = sourceFirstCandidate(d);
     const gate = sourceFirstGate(d, candidate);
     if (!gate.ok) issue = gate.reason;
-    duplicate = finalPublishDuplicate(d, { headline: candidate.headline, body: candidate.body });
+    duplicate = finalPublishDuplicate(d, candidate);
   } catch (e) { issue = e.message; }
   return { id: d.id, status: d.status, revision: operatorRevision(d), test: !!d.test,
     type: d.type, headline: d.headline, sourceText: d.sourceText, sources: d.srcs || [],
@@ -3168,4 +3208,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { routePublicationGeography, politicalPublicationGeography, sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { officialStatementCore, sameOfficialStatement, routePublicationGeography, politicalPublicationGeography, sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
