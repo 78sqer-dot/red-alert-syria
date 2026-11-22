@@ -14,7 +14,7 @@ process.env.ALERT_IMAGES = 'false';
 
 const { store } = await import('../server/store.js');
 await store.init(null);
-const { channelPost, publishInput } = await import('../server/bot.js');
+const { channelPost, publishInput, refreshChannelPost } = await import('../server/bot.js');
 
 const politicalNews = {
   id: 'new-news-layout-test', type: 'political', source: 'news', channel_format: 3,
@@ -56,7 +56,7 @@ test('format 2 remains unchanged for existing posts; future breaking news uses t
   assert.ok(breaking.indexOf('📍') < breaking.indexOf('<blockquote>'), 'breaking-news body follows its location too');
 });
 
-test('format 3 retains the rendered map photo and trims long news to Telegram caption limits', async () => {
+test('format 3 publishes complete long news as text instead of losing its body to a photo limit', async () => {
   const calls = [];
   const api = {
     async sendPhoto(...args) { calls.push({ method: 'sendPhoto', args }); return { message_id: 811 }; },
@@ -70,12 +70,46 @@ test('format 3 retains the rendered map photo and trims long news to Telegram ca
   }, { renderSnapshot: async () => Buffer.from('local map snapshot') });
 
   assert.equal(published.channel_format, 3);
-  assert.equal(calls[0]?.method, 'sendPhoto', 'the map image is sent before its caption');
-  assert.equal(calls.length, 1, 'the test uses a local API mock and sends no second text post');
-  const caption = calls[0].args[2].caption;
-  const captionLength = caption.replace(/<[^>]+>/g, '').replace(/&(lt|gt|amp|quot|#39);/g, 'x').length;
-  assert.ok(captionLength <= 1024, 'the visible caption stays within Telegram\'s 1024-character limit');
-  assert.match(caption, /<blockquote>تفاصيل موثقة/);
-  assert.equal((caption.match(/<blockquote>/g) || []).length, 1);
-  assert.ok(calls[0].args[2].reply_markup.inline_keyboard.length > 0, 'existing footer buttons remain attached');
+  assert.equal(calls[0]?.method, 'sendMessage');
+  assert.equal(calls.length, 1, 'a long story sends one complete text post, not a photo plus duplicate');
+  assert.ok(calls[0].args[1].includes('تفاصيل موثقة '.repeat(180).trim()));
+  assert.ok(calls[0].args[2].reply_markup.inline_keyboard.length > 0);
+});
+
+const real1449 = JSON.parse(fs.readFileSync(new URL('./fixtures/news-1449-long-body.json', import.meta.url), 'utf8'));
+
+test('1449 replay preserves the complete source in a new text-only channel post', async () => {
+  const calls = [];
+  const api = {
+    async sendPhoto(...args) { calls.push({ method: 'photo', args }); return { message_id: 813 }; },
+    async sendMessage(...args) { calls.push({ method: 'text', args }); return { message_id: 814 }; },
+  };
+  await publishInput(api, {
+    type: 'political', source: 'news', title: 'تطور سياسي', description: 'تطور سياسي — سوريا',
+    body: real1449.body, location: { scope: 'country', name_ar: 'سوريا', name_en: 'Syria' },
+    extra: [], ttlMin: 360, meta: { political: { category: 'meeting' } },
+  }, { renderSnapshot: async () => { throw Error('long story must not render a photo'); } });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].method, 'text');
+  assert.ok(calls[0].args[1].includes(real1449.body.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')));
+});
+
+test('1449 existing photo repair uses an honest source-exact excerpt and complete-story link', async () => {
+  const calls = [];
+  const api = { async editMessageCaption(...args) { calls.push(args); } };
+  await refreshChannelPost(api, {
+    ...politicalNews, id: '208ab96a-84e1-4703-b1ce-611c106d054d',
+    description: 'تطور سياسي — سوريا', body: real1449.body,
+    place: { scope: 'country', name_ar: 'سوريا' }, extra: [],
+    channel_message_id: 1449, channel_media: 'photo',
+  }, false);
+  assert.equal(calls.length, 1);
+  const caption = calls[0][2].caption;
+  assert.match(caption, /مقتطف من نص المصدر:/);
+  assert.match(caption, /النص الكامل على الخريطة/);
+  assert.ok(caption.includes('/ar/a/208ab96a-84e1-4703-b1ce-611c106d054d'));
+  const plain = caption.replace(/<[^>]+>/g, '').replace(/&(lt|gt|amp|quot|#39);/g, 'x');
+  assert.ok(plain.length <= 1024);
+  const excerpt = caption.match(/<blockquote>([\s\S]*?)…<\/blockquote>/)[1];
+  assert.ok(real1449.body.startsWith(excerpt), 'excerpt is a prefix of the original, never an AI summary');
 });

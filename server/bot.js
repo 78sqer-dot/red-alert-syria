@@ -397,10 +397,11 @@ export function channelPost(alert, { ended = false } = {}) {
     ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
     : cleanAlertText(alert.body || '');
   if (alert.source === 'news') fullBody = tidySourceAnnouncement(desc, neutralNewsReporter(fullBody));
-  // Lead and full text collapse into one telling (see collapseStory); the
-  // full text remains on the map regardless. Photo captions drop the extra
-  // section first when trimming.
-  const { lead, extra } = fullBody.startsWith('نص الدعوة:\n') ? { lead: desc, extra: fullBody } : collapseStory(desc, fullBody, newNewsLayout);
+  // Preserve source-first bodies, including their short attribution fragments.
+  // Invitation framing remains a separate editorial format.
+  const { lead, extra } = fullBody.startsWith('نص الدعوة:\n') ? { lead: desc, extra: fullBody }
+    : newNewsLayout && fullBody ? { lead: '', extra: fullBody }
+    : collapseStory(desc, fullBody, newNewsLayout);
   if (alert.type === 'breaking' && !newNewsLayout) sections.push(`<b>${esc(lead || alert.title)}</b>`);
   if (hasPlace) {
     const locations = newNewsLayout ? [p] : [p, ...(alert.extra || [])];
@@ -1201,6 +1202,22 @@ const visibleLen = (html) => html.replace(/<[^>]+>/g, '').replace(/&(lt|gt|amp|q
 function channelCaption(alert, opts) {
   let s = channelPost(alert, opts);
   if (visibleLen(s) <= CAPTION_MAX) return s;
+  // Existing long news photos cannot be converted to text in place. Keep an
+  // explicitly marked, source-exact excerpt and a link to the complete story.
+  // New long news posts bypass the photo path below and publish the full text.
+  if (isNewNewsChannelFormat(alert) && alert.body) {
+    const header = channelPost({ ...alert, body: '', description: '' }, opts);
+    const storyPost = channelPost({ ...alert, description: '' }, opts);
+    const story = plainTelegramText(storyPost.match(/<blockquote>([\s\S]*?)<\/blockquote>/)?.[1] || alert.body);
+    const storyUrl = config.publicUrl ? `${config.publicUrl.replace(/\/$/, '')}/ar/a/${encodeURIComponent(alert.id)}` : mapUrl(alert.id);
+    const tail = storyUrl ? `\n\n<a href="${esc(storyUrl)}">النص الكامل على الخريطة</a>` : '';
+    const label = '<b>مقتطف من نص المصدر:</b>';
+    const budget = CAPTION_MAX - visibleLen(`${header}\n\n${label}\n<blockquote></blockquote>${tail}`) - 1;
+    let excerpt = story.slice(0, Math.max(0, budget));
+    const lastSpace = excerpt.lastIndexOf(' ');
+    if (lastSpace > 0) excerpt = excerpt.slice(0, lastSpace);
+    return `${header}\n\n${label}\n<blockquote>${esc(excerpt)}…</blockquote>${tail}`;
+  }
   // The full report body is the first thing a photo caption gives up: the map
   // keeps the complete text even when the caption cannot.
   if (alert.body) {
@@ -1484,7 +1501,8 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
  * or { failure } with the reason. */
 async function postAlertToChannel(api, alert, { renderSnapshot = null, ended = false } = {}) {
   const text = channelPost(alert, { ended });
-  const photoCaption = isNewNewsChannelFormat(alert) ? channelCaption(alert, { ended }) : text;
+  // Never silently discard source text to fit a new photo caption.
+  const photoCaption = text;
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
   let m = null; let media = 'text'; let uncertainMediaSend = false; let failure = '';
   // Attached source media stays on the public map; channel posts use the rendered map snapshot only.
