@@ -1211,7 +1211,8 @@ const WEAK_PLACE_N = new Set();
   for (const d of districts) { add(d.ar, true); add(d.en, true); }
   for (const sd of subdistricts) { add(sd.ar, true); add(sd.en, true); }
 }
-const PERSON_LEADS = new Set(['قبض', 'اعتقال', 'اعتقل', 'اعتقلت', 'توقيف', 'اوقفت', 'مقتل', 'اغتيال', 'اغتيل', 'وفاه', 'مصرع', 'استشهاد']);
+const PERSON_ROLE_LEADS = new Set(['شاب', 'شابه', 'مواطن', 'مواطنه', 'مدعو', 'مدعوه']);
+const PERSON_LEADS = new Set(['قبض', 'اعتقال', 'اعتقل', 'اعتقلت', 'توقيف', 'اوقفت', 'مقتل', 'اغتيال', 'اغتيل', 'وفاه', 'مصرع', 'استشهاد', ...PERSON_ROLE_LEADS]);
 const PERSON_SKIP = new Set(['مجرم', 'مجرمه', 'شاب', 'شابه', 'شخص', 'مواطن', 'مواطنه', 'مدعو', 'مدعوه', 'جراء', 'بسبب', 'علي']);
 function personNameRuns(text) {
   const toks = normTokens(text);
@@ -1221,7 +1222,7 @@ function personNameRuns(text) {
     const names = [];
     for (let j = i + 1; j < toks.length && names.length < 3; j++) {
       const w = toks[j];
-      if (PERSON_SKIP.has(w)) continue;
+      if (PERSON_SKIP.has(w) && !(PERSON_ROLE_LEADS.has(toks[i]) && w === 'علي')) continue;
       if (NEWS_WORDS_N.has(w) || /^\d+$/.test(w)) break;
       if (STRONG_PLACE_N.has(w) || (WEAK_PLACE_N.has(w) && names.length)) { if (names.length) break; continue; }
       names.push(w);
