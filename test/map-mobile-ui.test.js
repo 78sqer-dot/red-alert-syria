@@ -143,10 +143,10 @@ test('alert popup switches between news and attached photo/video in the same win
   assert.match(app, /const initialMode = initialAlertDisplayMode\(displayModes\)/);
   assert.match(app, /const mediaActions = displayModes\.length \?/);
   assert.match(app, /const titleRow = `<div class="pp-title-row"><p class="pp-title">[\s\S]*?<\/p><\/div>`;/);
-  assert.match(app, /const content = `\$\{titleRow\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
+  assert.match(app, /const content = `\$\{titleRow\}\$\{metadata\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
   assert.match(app, /class="pp-news-panel" data-pp-news-panel/);
   assert.match(app, /class="pp-media-panel" data-pp-media-panel/);
-  assert.match(app, /const content = `\$\{titleRow\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
+  assert.match(app, /const content = `\$\{titleRow\}\$\{metadata\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
   assert.doesNotMatch(app, /pp-view-tabs|data-pp-tab/);
   assert.match(app, /data-pp-mode="\$\{mode\}"/);
   assert.match(app, /alertDisplayPanelState\(mode\)/);

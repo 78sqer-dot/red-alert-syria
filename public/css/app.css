@@ -1532,3 +1532,26 @@ html.dark .map-bottom-controls { box-shadow: 0 10px 30px rgba(0, 0, 0, .45), ins
 .about-pill::before { width: 6px; height: 6px; }
 .reset-view-btn { width: 34px; height: 34px; }
 .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib-button { display: none !important; }
+
+/* Editorial quick view: stable metadata, equal content tabs, full source body. */
+.pp-alert-popup .pp-title { font-size: 16px; line-height: 1.65; letter-spacing: 0; }
+.pp-metadata { display: grid; gap: 8px; margin-top: 10px; }
+.pp-category-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.pp-category-row .badge { min-height: 25px; height: auto; padding: 3px 8px; border-radius: 7px; font-size: 10.5px; line-height: 1.4; }
+.pp-date-row { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 10px; line-height: 1.7; }
+.pp-date-row > svg { flex: none; opacity: .7; }
+.pp-date-row time { min-width: 0; }
+.pp-age { margin-inline-start: auto; flex: none; font-variant-numeric: tabular-nums; }
+.pp-alert-popup .pp-media-actions { display: flex; gap: 4px; flex-wrap: nowrap; margin: 13px 0 0; padding: 4px; box-sizing: border-box; border: 1px solid var(--border-subtle); border-radius: 11px; background: var(--bg-subtle); }
+.pp-alert-popup .pp-media-action { flex: 1; min-width: 0; min-height: 39px; padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; font-size: 11px; font-weight: 700; }
+.pp-alert-popup .pp-media-action[aria-pressed='true'] { border-color: var(--border-subtle); background: var(--bg-elevated); box-shadow: 0 1px 4px rgba(15, 23, 42, .08); color: var(--red-strong); }
+.pp-alert-popup .pp-desc { margin: 13px 0 2px; color: var(--text-primary); font-size: 12px; font-weight: 400; line-height: 2; overflow-wrap: anywhere; white-space: pre-line; text-align: start; }
+.pp-alert-popup .pp-foot { margin-top: 15px; gap: 8px; }
+.pp-alert-popup .pp-more, .pp-alert-popup .pp-share { min-height: 44px; box-sizing: border-box; }
+@media (max-width: 480px) {
+  .pp-alert-popup .maplibregl-popup-content { max-height: min(62dvh, 540px); padding: 16px 15px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .pp-alert-popup .pp-title { font-size: 15px; line-height: 1.7; }
+  .pp-alert-popup .pp-media-action { min-height: 40px; font-size: 11px; }
+  .pp-alert-popup .pp-desc { font-size: 12px; line-height: 1.95; }
+  .pp-alert-popup .pp-foot { bottom: -12px; margin-inline: -15px; padding-inline: 15px; }
+}

@@ -1,3 +1,4 @@
+import { configureCoordination } from './editor-coordination.js';
 import { startTranslations } from './translate.js';
 import express from 'express';
 import helmet from 'helmet';
@@ -266,6 +267,18 @@ const adminKeyOk = (req) => {
   const key = String(req.headers['x-admin-key'] || '');
   return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
 };
+app.get('/api/admin/editor-coordination', apiLimiter, (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  return res.json(store.state.news?.coordination || { until: null, chats: [], replies: [] });
+});
+app.post('/api/admin/editor-coordination', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  try {
+    const value = configureCoordination(store.state, req.body, [...config.ownerIds, ...store.state.editors]);
+    store.persist(); await store.flushBackup(true);
+    return res.json({ ok: true, until: value.until, chats: value.chats });
+  } catch (error) { return res.status(400).json({ ok: false, error: error.message }); }
+});
 app.post('/api/admin/alerts/:id/delete', apiLimiter, async (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   try {

@@ -1,6 +1,7 @@
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=38';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=42';
+import { alertPreviewText } from '/shared/alert-preview.js?v=1';
 import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
@@ -381,7 +382,8 @@ function popupHtml(a) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : (a.media ? [a.media] : []);
   const mediaItems = ['photo', 'video'].map((type) => rawMediaItems.find((item) => item?.type === type)).filter(Boolean);
-  const newsText = [titleOf(a), descOf(a)].filter((value) => String(value || '').trim()).join('\n');
+  const fullPreview = alertPreviewText(a, LANG);
+  const newsText = [titleOf(a), fullPreview].filter((value) => String(value || '').trim()).join('\n');
   const illustrationFallback = mediaItems.length === 0;
   const displayModes = availableAlertDisplayModes(newsText, mediaItems, { illustrationFallback });
   const displayMediaItems = mediaItems.length ? mediaItems : illustrationFallback ? [{ type: 'photo', illustration: true }] : [];
@@ -393,11 +395,12 @@ function popupHtml(a) {
     return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}" data-pp-media-mime="${esc(item?.mime_type || '')}" data-pp-illustration="${item?.illustration === true}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
   }).join('')}</div>` : '';
   const titleRow = `<div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p></div>`;
-  const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}><div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span>${distChip(a)}${Array.isArray(a.more) && a.more.length ? `<span class="pp-areas">${icon('locate', 13)}${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</span>` : ''}</div>
-    ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}</section>` : '';
+  const metadata = `<div class="pp-metadata"><div class="pp-category-row">${badge(shown)}${distChip(a)}${Array.isArray(a.more) && a.more.length ? `<span class="pp-areas">${icon('locate', 13)}${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</span>` : ''}</div><div class="pp-date-row" title="${LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time'}">${icon('clock', 13)}<time datetime="${esc(a.timestamp)}">${esc(fmtDay.format(new Date(a.timestamp)))} <span aria-hidden="true">·</span> ${esc(fmtTime.format(new Date(a.timestamp)))}</time><span class="pp-age">${esc(ago(a.timestamp))}</span></div></div>`;
+  const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}>
+    ${fullPreview ? `<p class="pp-desc" dir="auto">${esc(fullPreview)}</p>` : ''}</section>` : '';
   const activeMedia = displayMediaItems.find((item) => item.type === initialMode);
   const mediaViewer = displayMediaItems.length ? `<section class="pp-media-panel" data-pp-media-panel role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"${initialMode === 'news' ? ' hidden' : ''}><div class="pp-media-content" data-pp-media-content>${activeMedia ? alertMediaFrameHtml(activeMedia, a.id) : ''}</div></section>` : '';
-  const content = `${titleRow}${mediaActions}${newsPanel}${mediaViewer}`;
+  const content = `${titleRow}${metadata}${mediaActions}${newsPanel}${mediaViewer}`;
   return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" data-alert-id="${esc(a.id)}">
     ${content}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>

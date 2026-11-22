@@ -1,3 +1,4 @@
+import { captureCoordinationReply } from './editor-coordination.js';
 import { randomUUID } from 'node:crypto';
 import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
 import { installResilience, isDefinitiveTelegramRejection } from './tg-net.js';
@@ -2060,6 +2061,18 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       return ctx.reply(l.privateBot(botInfo.report || 'Red_Alert_Syria') + '\n\n' + l.yourId(ctx.from.id), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     }
     await next();
+  });
+  if (role === 'admin') bot.on('message', async (ctx, next) => {
+    const message = ctx.message;
+    const reply = captureCoordinationReply(store.state, {
+      chatId: Number(ctx.chat?.id), fromId: Number(ctx.from?.id), messageId: message.message_id,
+      replyTo: message.reply_to_message?.message_id || null,
+      text: message.text || message.caption || '', inDraft: Boolean(getDraft(ctx)),
+    });
+    if (!reply) return next();
+    if (!reply.duplicate) { store.persist(); await store.flushBackup(true); }
+    if (reply.threadMatch) { ctx.ras.keepInput = true; return; }
+    return next();
   });
   if (role === 'admin') { registerOwnerTools(bot, OH); registerContactTools(bot, OH); registerSupportTools(bot, OH); registerNewsTools(bot, OH); registerJobsTools(bot, OH, role); registerJobsAdminTools(bot, OH); registerArmyAdminTools(bot, OH); registerPriceTools(bot, OH); registerQuakeTools(bot, OH); registerWeatherTools(bot, OH); registerWxBulletinTools(bot, OH); registerBorderTools(bot, OH); registerPowerTools(bot, OH); registerRoadMonitorTools(bot, OH); } else { registerJobsTools(bot, OH, role); registerReportOwnerCommands(bot, OH); }
   // ---- relay: staff reply (publishing bot) -> reporter (report bot); no menus, no buttons

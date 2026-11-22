@@ -1,3 +1,4 @@
+import { mergeCoordination } from './editor-coordination.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -462,6 +463,7 @@ class Store extends EventEmitter {
     }
     let reports = 0, alerts = 0, alnabaBatches = 0;
     const st = this.state;
+    if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
     st.reports ||= {}; st.reportsDone ||= {}; st.gone ||= {};
     for (const [rid, t] of Object.entries(o.reportsDone || {})) {
       if (!st.reportsDone[rid]) st.reportsDone[rid] = t;
