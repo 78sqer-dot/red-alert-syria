@@ -1034,7 +1034,7 @@ function publishedLinksKb(d, alert, lang = 'ar', includeWhatsApp = false) {
   if (map) kb.url(tr(lang, '🗺 على الخريطة', '🗺 On the map'), map);
   if (post) kb.url(tr(lang, '📣 المنشور', '📣 Post'), post);
   if (includeWhatsApp && map) {
-    const shareText = [d.publishedHeadline || d.headline || d.title || '', d.body || d.details || '', map].filter(Boolean).join('\n\n');
+    const shareText = [d.publishedHeadline || d.headline || d.title || '', d.publishedBody || d.body || d.details || '', map].filter(Boolean).join('\n\n');
     kb.row().url(tr(lang, '🟢 فتح واتساب للمشاركة اليدوية', '🟢 Open WhatsApp to share manually'), `https://wa.me/?text=${encodeURIComponent(shareText)}`);
   }
   return kb;
@@ -1427,7 +1427,7 @@ async function unattendedNewsPublish(d) {
   // A same-story alert that slipped through the pre-publish guard in a race is
   // deleted right away (map + channel post) — a duplicate never stays up.
   if (await autoDeleteLandedDuplicate(d, publicationDraft, alert?.id)) return false;
-  d.status = 'published'; d.auto = true; d.autoMode = mode; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.publishedHeadline = publicationDraft.headline || d.headline;
+  d.status = 'published'; d.auto = true; d.autoMode = mode; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.publishedHeadline = publicationDraft.headline || d.headline; d.publishedBody = publicationDraft.body || publicationDraft.details || '';
   n.stats.published++; n.stats.auto = (n.stats.auto || 0) + 1;
   save();
   await closeCards(d, null, true); await unlinkCapturedMedia(d.sourceMedia); // a draft that was waiting (single local source, then confirmed) leaves the chat
@@ -2727,6 +2727,9 @@ export function registerNewsTools(bot, h) {
       forgetCurrentCard(d, ctx); save();
       return;
     }
+    if ((act === 'p' || act === 'e') && (d.editorialHold || d.operatorReview?.result === 'held' || ['claimed', 'uncertain', 'published-backup-unverified'].includes(d.operatorReview?.result))) {
+      return toast(ctx, t(ctx, 'المسودة موقوفة للمراجعة التحريرية؛ لم يُنشر شيء.', 'Editorial hold or unresolved claim: nothing was published.'), true);
+    }
     if ((act === 'p' || act === 'e') && publicDraftCopyIssue(d)) {
       d.editorialHold = true;
       d.editorialHoldReason = 'private-editorial-copy-not-public';
@@ -2772,7 +2775,7 @@ export function registerNewsTools(bot, h) {
     }
     let publicationDraft;
     try {
-      publicationDraft = toBotDraft(d, ownerEditorialSelection
+      publicationDraft = toBotDraft(ownerEditorialSelection ? d : sourceFirstCandidate(d), ownerEditorialSelection
         ? { editorialMode: ownerEditorialSelection.mode, ownerId: ctx.from.id }
         : {});
     } catch {
@@ -2786,28 +2789,33 @@ export function registerNewsTools(bot, h) {
       return toast(ctx, t(ctx, '✔️ مُنع النشر: هذه القصة منشورة مسبقاً على القناة. لم يُحذف أي منشور.', '✔️ Publishing blocked: this story is already posted on the channel. No post was deleted.'));
     }
     // publish: claimed once, so a second tap / a second reviewer can't publish it twice
-    d.status = 'publishing'; save();
+    d.status = 'publishing'; d.nativeReview = { at: Date.now(), by: ctx.from.id, result: 'claimed' }; save();
+    if (store.backup && !await store.flushBackup(true)) {
+      d.nativeReview.result = 'claim-backup-unverified'; d.editorialHold = true; save();
+      return toast(ctx, t(ctx, 'تعذّر حفظ قرار النشر؛ لم يُرسل شيء.', 'Claim backup unavailable; nothing sent.'), true);
+    }
     await toast(ctx, t(ctx, '⏳ جاري النشر…', '⏳ Publishing…'));
     try { await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(t(ctx, '⏳ جاري النشر…', '⏳ Publishing…'), 'noop') }); } catch { /* ignore */ }
     let alert;
     try {
       alert = await h.publishDraft(ctx.api, publicationDraft, { id: ctx.from.id, name: ctx.from.first_name, via: 'news' });
     } catch (e) {
-      d.status = 'pending'; save();
+      d.nativeReview.result = 'uncertain'; d.editorialHold = true; d.editorialHoldReason = 'native-send-needs-reconciliation'; save(); await store.flushBackup(true);
       console.error('[news] publish failed', e.description || e.message);
       try { await ctx.editMessageText(cardText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id), link_preview_options: { is_disabled: true } }); } catch { /* ignore */ }
-      return toast(ctx, t(ctx, '⚠️ تعذّر النشر — اضغط «نشر» مرة ثانية.', '⚠️ Publishing failed — tap Publish again.'), true);
+      return toast(ctx, t(ctx, '⚠️ نتيجة النشر غير مؤكدة؛ لا تعاود النشر قبل التدقيق.', '⚠️ Publication outcome uncertain; do not retry before reconciliation.'), true);
     }
     // Same landed-dup sweep as the auto path: a story another draft posted moments
     // earlier is removed at once instead of staying up as a second copy.
     if (await autoDeleteLandedDuplicate(d, publicationDraft, alert?.id)) {
       return toast(ctx, t(ctx, '✔️ حُذف مكرر فوراً: هذه القصة منشورة مسبقاً على القناة.', '✔️ Duplicate deleted immediately: this story is already posted on the channel.'), true);
     }
-    d.status = 'published'; d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.by = ctx.from.id; d.publishedHeadline = publicationDraft.headline || d.headline;
+    d.status = 'published'; d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.by = ctx.from.id; d.publishedHeadline = publicationDraft.headline || d.headline; d.publishedBody = publicationDraft.body || publicationDraft.details || '';
     await unlinkCapturedMedia(d.sourceMedia);
     d.approvedBy = { id: ctx.from.id, name: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' '), username: ctx.from.username || null };
     d.approvedAt = new Date().toISOString(); n.stats.published++;
-    save();
+    d.nativeReview.result = d.postId ? 'published' : 'map-only';
+    save(); await store.flushBackup(true);
     const reviewer = d.approvedBy.username ? `@${d.approvedBy.username}` : d.approvedBy.name;
     for (const ownerId of ownerIdsU()) {
       if (Number(ownerId) === Number(ctx.from.id)) continue;

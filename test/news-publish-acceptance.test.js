@@ -1206,6 +1206,15 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.match(checkReply.payload.text, /لا يقرأ تاريخ القناة كاملاً/, 'the result explains that this is not a full channel-history search');
 
   const callback = `nw:p:${draftId}`;
+  const heldStart = calls.length;
+  await tap(callback, owner, bot, checkMessageId);
+  await tap(`nw:e:${draftId}`, owner, bot, checkMessageId);
+  assert.equal(newsState().drafts[draftId].status, 'pending', 'native publish/edit cannot override editorial hold');
+  assert.equal(calls.slice(heldStart).some(c => c.chatId === '@mock_news_channel'), false, 'held card sends no channel post');
+  delete newsState().drafts[draftId].editorialHold;
+  delete newsState().drafts[draftId].editorialHoldReason;
+  newsState().drafts[draftId].sourceText = 'اغتيال شخص في حارم بمحافظة إدلب على يد مجهولين';
+  newsState().drafts[draftId].sourceTextVersion = 2;
   const publishStart = calls.length;
   await tap(callback, owner, bot, checkMessageId);
   assert.equal(newsState().drafts[draftId].status, 'published');
@@ -1219,7 +1228,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const mapButton = shareButtons.find((button) => button.text?.includes('على الخريطة') || button.text?.includes('On the map'));
   assert.ok(mapButton?.url, 'the published alert has a map link');
   const whatsAppText = new URL(whatsAppButton.url).searchParams.get('text');
-  assert.ok(whatsAppText.includes(newsState().drafts[draftId].headline), 'share text contains the story headline');
+  assert.ok(whatsAppText.includes(newsState().drafts[draftId].publishedHeadline), 'share text contains the source-first published headline');
   assert.ok(whatsAppText.includes(mapButton.url), 'share text contains the public map link');
   assert.equal(calls.slice(publishStart).some((call) => /whatsapp/i.test(call.method)), false, 'the bot only opens WhatsApp with a prepared link; it never sends a message');
 
@@ -1386,6 +1395,9 @@ test('every monitored alert type builds, and accepting the same mock draft twice
       assert.equal(manualOpinion.status, 'pending', 'even an editor cannot publish the owner-selected private tone');
       assert.equal(calls.filter((call) => call.method === 'sendMessage' && call.chatId === process.env.CHANNEL_ID).length, beforeManualChannel);
       const ownerPublishStart = calls.length;
+      await tap(`nw:p:${manualId}`, owner);
+      assert.equal(manualOpinion.status, 'pending', 'owner tone selection does not override an editorial hold');
+      delete manualOpinion.editorialHold; delete manualOpinion.editorialHoldReason;
       await tap(`nw:p:${manualId}`, owner);
       assert.equal(manualOpinion.status, 'published');
       assert.equal(manualOpinion.publishedHeadline, manualOpinion.privateEditorial.opinion);
@@ -1563,6 +1575,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const editorDraft = newsState().drafts[editorDraftId] = {
     id: editorDraftId, type: 'assassination', status: 'pending',
     headline: 'اعتقال تجريبي في حارم', body: 'تفاصيل محاكاة: أعلنت جهة عامة عن توقيف شخص في حارم.',
+    sourceText: 'أعلنت جهة عامة عن اغتيال شخص في حارم.', sourceTextVersion: 2,
     loc: { scope: 'place', name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib' },
     extra: [], ttlMin: 360, srcs: [{ u: 'mock-source', local: false }], cards: [], created: Date.now(),
   };
@@ -1581,8 +1594,8 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     assert.ok(map?.url, 'the owner notice contains a direct map link for this alert');
     assert.ok(whatsapp, 'the owner notice contains a WhatsApp manual-share button');
     const shareText = new URL(whatsapp.url).searchParams.get('text');
-    assert.ok(shareText.includes(editorDraft.headline), 'WhatsApp share text contains the published headline');
-    assert.ok(shareText.includes(editorDraft.body), 'WhatsApp share text contains the story details');
+    assert.ok(shareText.includes(editorDraft.publishedHeadline), 'WhatsApp share text contains the published headline');
+    assert.ok(shareText.includes('اغتيال شخص في حارم'), 'WhatsApp share text contains the source-first story details');
     assert.ok(shareText.includes(map.url), 'WhatsApp share text contains the direct map link');
     assert.equal(calls.slice(editorPublishStart).some((call) => /whatsapp/i.test(call.method)), false, 'the bot never sends a WhatsApp message automatically');
     const editorNewAlerts = store.state.alerts.filter((alert) => !editorBeforeAlerts.has(alert.id));
