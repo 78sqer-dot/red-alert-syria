@@ -157,7 +157,7 @@ function hydrateStatic() {
     if (typeof v === 'string') el.textContent = v;
   });
   const search = $('#alertSearch');
-  if (search) search.placeholder = T.searchAlerts;
+  if (search) { search.placeholder = T.searchAlerts; search.setAttribute('aria-label', T.searchAlerts); }
   const other = LANG === 'ar' ? 'en' : 'ar';
   const lb = $('#btnLang');
   lb.querySelector('.lbl').textContent = LANG === 'ar' ? 'EN' : 'ع';
@@ -191,6 +191,7 @@ function hydrateStatic() {
   $('#locateMe').title = T.myLocation;
   $('#locateMe').setAttribute('aria-label', T.myLocation);
   $('#btnSettingsM').title = T.settings;
+  $('#btnSettingsM').setAttribute('aria-label', T.settings);
   syncNotificationButton();
 }
 

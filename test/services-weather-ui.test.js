@@ -192,3 +192,8 @@ test('official warning cards show their start time and clarify source-button des
   assert.match(services, /منشور النشرة الرسمي للمصرف المركزي/);
   assert.match(services, /تفاصيل التسعيرة لدى سانا/);
 });
+
+test('Arabic accessibility labels use the same translated labels as visible controls',()=>{
+ assert.match(app,/search\.setAttribute\('aria-label', T\.searchAlerts\)/);
+ assert.match(app,/\$\('#btnSettingsM'\)\.setAttribute\('aria-label', T\.settings\)/);
+});

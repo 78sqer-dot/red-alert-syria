@@ -623,6 +623,7 @@ function mainKeyboard(ctx) {
       .text(lang === 'en' ? '🌍 Earthquakes' : '🌍 الزلازل', 'qk').text(lang === 'en' ? '⛈ Weather warnings' : '⛈ تحذيرات الطقس', 'wx').row()
       .text(lang === 'en' ? '🌤 Weather bulletin' : '🌤 نشرة الطقس', 'wxb').row();
   }
+  kb.text(lang === 'en' ? '❓ How to use' : '❓ طريقة الاستخدام', 'help').row();
   if (config.publicUrl) kb.url(l.btnMap, mapUrl('', lang));
   kb.url(l.btnChannel, config.channelUrl);
   return kb;
@@ -2249,7 +2250,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const text = staff(ctx) ? `${l.welcomeAdmin(name)}\n\n${l.mainMenu}` : `${l.welcomeReport(name)}\n\n${l.publicMenu}`;
     await ctx.reply(text, { parse_mode: 'HTML', reply_markup: mainKeyboard(ctx), link_preview_options: { is_disabled: true } });
   });
-  bot.command('help', (ctx) => ctx.reply(staff(ctx) ? L(ctx).help : L(ctx).helpReport, { parse_mode: 'HTML' }));
+  const helpText = (ctx) => {
+    if (!staff(ctx)) return L(ctx).helpReport;
+    if (owner(ctx)) return L(ctx).help;
+    // Editors get publishing commands only, never owner account/admin commands.
+    return L(ctx).help.split(/\n\n<b>(?:للمالك|Owner)<\/b>/u)[0];
+  };
+  const helpKeyboard = (ctx) => new InlineKeyboard().text(L(ctx).btnHome, 'home');
+  bot.command('help', (ctx) => ctx.reply(helpText(ctx), { parse_mode: 'HTML', reply_markup: helpKeyboard(ctx) }));
+  bot.callbackQuery('help', async (ctx) => { await ctx.answerCallbackQuery(); await show(ctx, helpText(ctx), helpKeyboard(ctx)); });
   bot.command('id', (ctx) => ctx.reply(L(ctx).yourId(ctx.from.id), { parse_mode: 'HTML' }));
   bot.command('lang', async (ctx) => {
     store.setUserLang(ctx.from.id, langOf(ctx) === 'ar' ? 'en' : 'ar');

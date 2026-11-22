@@ -2002,3 +2002,20 @@ test('source first-person reporter remains attributed without claiming to be our
   assert.match(post,/قد يكون/);
  }
 });
+
+test('Help navigation works in both bots and keeps owner guidance private',async()=>{
+ const helpOutputs=[];const editor={...reporter,id:888000123};const previous=[...store.state.editors];store.state.editors.push(editor.id);
+ try{
+  for(const [user,targetBot,expected,forbidden]of [[owner,bot,/للمالك/,null],[editor,bot,/الأوامر/,/للمالك|addeditor|removeeditor|backup/],[reporter,reportBot,/طريقة الإبلاغ/,/للمالك|addeditor|removeeditor|backup/]]){
+   await tap('home',user,targetBot);let output=[...calls].reverse().find(({payload})=>payload.reply_markup?.inline_keyboard);
+   assert.ok(output.payload.reply_markup.inline_keyboard.flat().some(b=>b.callback_data==='help'));
+   await tap('help',user,targetBot);output=[...calls].reverse().find(({payload})=>payload.reply_markup?.inline_keyboard);
+   helpOutputs.push({name:user.id===owner.id?'owner':targetBot===reportBot?'report':'editor',...output.payload});
+   assert.match(output.payload.text,expected);if(forbidden)assert.doesNotMatch(output.payload.text,forbidden);
+   assert.ok(output.payload.reply_markup.inline_keyboard.flat().some(b=>b.callback_data==='home'));
+   await tap('home',user,targetBot);
+  }
+  const start=calls.length;await tap('help',{...reporter,id:999555123},bot);const texts=calls.slice(start).map(x=>x.payload?.text||'').join('\n');assert.doesNotMatch(texts,/للمالك|addeditor|backup/);
+  if(process.env.RAS_HELP_CAPTURE)fs.writeFileSync(process.env.RAS_HELP_CAPTURE,JSON.stringify(helpOutputs));
+ }finally{store.state.editors=previous;}
+});
