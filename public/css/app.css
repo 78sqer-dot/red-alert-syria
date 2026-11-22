@@ -1574,3 +1574,7 @@ html.dark .map-bottom-controls { box-shadow: 0 10px 30px rgba(0, 0, 0, .45), ins
 
 .detail-body > * { flex-shrink: 0; }
 .d-history .update-history { padding-top: 14px; }
+
+/* Markerless reports use the existing card without implying a geographic pin. */
+.pp-unlocated .maplibregl-popup-tip { display: none; }
+.pp-no-location { margin: 0 0 10px; color: var(--text-secondary); font-size: 11px; line-height: 1.8; }

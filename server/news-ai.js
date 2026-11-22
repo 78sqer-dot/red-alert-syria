@@ -400,6 +400,9 @@ export function hospitalDestinationOnly(name, text) {
   if (!n) return false;
   const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const nt = N(String(text || ''));
+  // A direct attack/fire INSIDE a hospital is an incident there, not a transfer.
+  const directHospitalIncident = new RegExp('(?:قصف|استهداف|انفجار|حريق|اقتحام|اطلاق\\s+نار)\\s+(?:(?:[^\\s]+)\\s+){0,6}(?:في|علي|داخل|ب)\\s+(?:مشفي|مستشفي|مشفا)\\s+' + escaped + '(?=\\s|$)', 'u');
+  if (directHospitalIncident.test(nt)) return false;
   const rx = new RegExp('(?:مشفي|مشفى|مستشفي|مستشفى|مشفا)\\s+' + escaped + '(?=\\s|[،,.]|$)', 'gu');
   const rest = nt.replace(rx, ' ');
   return rest !== nt && !nameInText(name, rest);

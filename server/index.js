@@ -1,3 +1,4 @@
+import { backupTransfer } from './backup-codec.js';
 import { configureCoordination } from './editor-coordination.js';
 import { startTranslations } from './translate.js';
 import express from 'express';
@@ -10,7 +11,7 @@ import crypto from 'node:crypto';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
-import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
+import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsReview, operateNewsDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
 import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, fixPostMarkup, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput, repairNewsAlert } from './bot.js';
@@ -132,7 +133,12 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size, pageviews: { ...pageStats } }));
+app.get('/api/health', (req, res) => {
+  const latest = store.state.alerts.reduce((best, a) => Number(a.channel_message_id) > Number(best?.channel_message_id || 0) ? a : best, null);
+  res.json({ ok: true, build: BUILD, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size,
+    latest_publication: latest ? { id: latest.id, telegram_post_id: latest.channel_message_id } : null,
+    backup_transfer: { ...backupTransfer }, pageviews: { ...pageStats } });
+});
 
 app.get('/api/alerts', apiLimiter, (req, res) => {
   const includeInactive = req.query.include === 'inactive' || req.query.all === '1';
@@ -267,6 +273,18 @@ const adminKeyOk = (req) => {
   const key = String(req.headers['x-admin-key'] || '');
   return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
 };
+app.get('/api/admin/news/:id', apiLimiter, (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  const review = operatorNewsReview(req.params.id);
+  return review ? res.json(review) : res.status(404).json({ error: 'unknown-draft' });
+});
+app.post('/api/admin/news/:id/review', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  try {
+    const result = await operateNewsDraft(req.params.id, { action: req.body?.action, revision: req.body?.revision });
+    return res.status(result.ok ? 200 : 409).json(result);
+  } catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
+});
 app.get('/api/admin/editor-coordination', apiLimiter, (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   return res.json(store.state.news?.coordination || { until: null, chats: [], replies: [] });

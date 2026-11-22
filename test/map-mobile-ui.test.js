@@ -100,7 +100,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(map, /if \(p\._alertId \|\| p\._groupKey\)\s*\{[\s\S]{0,250}r\.left \+ r\.width \/ 2 - \(vis\.l \+ vis\.r\) \/ 2[\s\S]{0,180}r\.top \+ r\.height \/ 2 - \(top \+ bottom\) \/ 2/);
   assert.match(map, /this\.schedulePopupFit\(1\)/);
   assert.match(map, /schedulePopupFit\(count = 1\)[\s\S]{0,140}this\.fitPopup\(\)/);
-  assert.match(map, /openPopup\(alert\)\s*\{\s*const controlPanel = document\.querySelector\('#mapCtrlPanel'\);[\s\S]{0,180}controlPanel\.hidden = true/);
+  assert.match(map, /openPopup\(alert, \{ unlocated = false \} = \{\}\)\s*\{\s*const controlPanel = document\.querySelector\('#mapCtrlPanel'\);[\s\S]{0,180}controlPanel\.hidden = true/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \{ z-index: 60; \}/);
   assert.match(css, /\.pp-alert-popup \.maplibregl-popup-content \{ max-height: min\(62dvh, 600px\); \}/);
   assert.match(css, /\.maplibregl-popup-anchor-bottom \.maplibregl-popup-tip \{ border-top-color: var\(--bg-elevated\); \}/);
@@ -116,7 +116,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=101'/);
+  assert.match(app, /from '\.\/map\.js\?v=102'/);
   assert.match(html, /app\.css\?v=99/);
   assert.match(html, /app\.js\?v=109/);
 });

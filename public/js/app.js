@@ -9,7 +9,7 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon, ICONS } from './icons.js?v=10';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=101';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=102';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -408,7 +408,7 @@ function popupHtml(a) {
 }
 
 // ------------------------------------------------------------------ selection
-function select(id, { fromMap = false, fly = true } = {}) {
+function select(id, { fromMap = false, fly = true, popupOnly = false } = {}) {
   if (id && svc?.mode?.()) svc.exitMode(); // a news item was chosen: leave the services map mode
   if (!id) {
     state.selectedId = null;
@@ -423,6 +423,13 @@ function select(id, { fromMap = false, fly = true } = {}) {
   state.selectedId = id;
   if (history.replaceState) history.replaceState(null, '', '#' + encodeURIComponent(id));
   const shown = isLive(a) ? a : { ...a, is_active: false };
+  if (popupOnly) {
+    showList();
+    if (isMobile()) setSheetOpen(false);
+    else toggleSidebar(false, { persist: false });
+    amap && amap.select(shown, { fly, popup: true, allowUnlocatedPopup: true });
+    return;
+  }
   amap && amap.select(shown, { fly: fly, popup: true });
   showDetail();
   if (isMobile()) setSheetOpen(false);
@@ -434,8 +441,7 @@ const directAlertLookups = new Map();
 function openDirectAlert(id) {
   if (!id) return;
   if (state.alerts.has(id)) {
-    if (state.selectedId !== id) select(id);
-    if (isMobile()) setSheetOpen(true);
+    select(id, { popupOnly: true });
     return;
   }
   if (directAlertLookups.has(id)) return;
@@ -447,8 +453,7 @@ function openDirectAlert(id) {
       state.alerts.set(alert.id, alert);
       refresh();
       if (location.hash.slice(1) === id) {
-        select(alert.id);
-        if (isMobile()) setSheetOpen(true);
+        select(alert.id, { popupOnly: true });
       }
     })
     .catch(() => {})
@@ -1046,12 +1051,12 @@ function renderTour() {
 }
 
 // ------------------------------------------------------------------ sidebar / sheet
-function toggleSidebar(show) {
+function toggleSidebar(show, { persist = true } = {}) {
   const app = $('#app');
   const hidden = show === undefined ? !app.classList.contains('sb-hidden') : !show;
   app.classList.toggle('sb-hidden', hidden);
   $('#listFab').hidden = !hidden;
-  settings.set({ sidebarHidden: hidden });
+  if (persist) settings.set({ sidebarHidden: hidden });
   setTimeout(() => amap && amap.resize(), 320);
 }
 function placeListFab() {

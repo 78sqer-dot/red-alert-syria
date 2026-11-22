@@ -32,7 +32,7 @@ test('pulse tap continues to select and focus the original alert without replaci
 });
 
 test('choosing the alert still opens its existing details using the stored alert content', () => {
-  assert.match(app, /function select\(id, \{ fromMap = false, fly = true \} = \{\}\) \{[\s\S]*?state\.selectedId = id;[\s\S]*?amap && amap\.select\(shown, \{ fly: fly, popup: true \}\);[\s\S]*?showDetail\(\);/);
+  assert.match(app, /function select\(id, \{ fromMap = false, fly = true, popupOnly = false \} = \{\}\) \{[\s\S]*?state\.selectedId = id;[\s\S]*?amap && amap\.select\(shown, \{ fly: fly, popup: true \}\);[\s\S]*?showDetail\(\);/);
   assert.match(app, /function renderDetail\(\) \{[\s\S]*?const a = state\.alerts\.get\(state\.selectedId\);[\s\S]*?\$\('#detailBody'\)\.innerHTML = detailHtml\(shown\);/);
 });
 

@@ -1390,15 +1390,18 @@ export class AlertMap {
       this._arrivalTimer = null;
     }, 2400);
   }
-  select(alert, { fly = true, popup = true } = {}) {
+  select(alert, { fly = true, popup = true, allowUnlocatedPopup = false } = {}) {
     this.selectedId = alert ? alert.id : null;
     this.selectedAlert = alert || null;
-    if (!this.ready) { this._pending = alert ? [alert, { fly, popup }] : null; return; }
+    if (!this.ready) { this._pending = alert ? [alert, { fly, popup, allowUnlocatedPopup }] : null; return; }
     this.syncMovementTracks();
     this.refreshMarkerGroups();
     this._syncPulses((this._lastPulseData || []).map((p) => ({ ...p, selected: p.alertIds.has(this.selectedId) })));
     if (!alert) return this.closePopup();
-    if (!alert.location || !Number.isFinite(alert.location.latitude)) return this.closePopup();
+    if (!alert.location || !Number.isFinite(alert.location.latitude) || !Number.isFinite(alert.location.longitude)) {
+      if (popup && allowUnlocatedPopup) return this.openPopup(alert, { unlocated: true });
+      return this.closePopup();
+    }
     if (fly) this._playArrival(alert.id);
     const ll = [alert.location.longitude, alert.location.latitude];
     // A circle click may target an additional affected locality rather than the alert's
@@ -1508,7 +1511,7 @@ export class AlertMap {
     };
     if (this.map.isMoving()) this.map.once('moveend', () => setTimeout(go, 30)); else go();
   }
-  openPopup(alert) {
+  openPopup(alert, { unlocated = false } = {}) {
     const controlPanel = document.querySelector('#mapCtrlPanel');
     if (controlPanel) {
       controlPanel.hidden = true;
@@ -1523,6 +1526,12 @@ export class AlertMap {
     this._popupAt = null;
     const M = ml();
     const contentNode = htmlToNode(this.popupHtml(alert));
+    if (unlocated) {
+      const note = document.createElement('p');
+      note.className = 'pp-no-location';
+      note.textContent = this.opts.lang === 'en' ? 'No precise location was supplied for this report.' : 'لم يُحدَّد موقع دقيق لهذا الخبر.';
+      contentNode.querySelector('.pp')?.prepend(note);
+    }
     if (groupNav) {
       const root = contentNode.querySelector('.pp');
       const navNode = this.groupPopupNavigationNode(groupNav);
@@ -1531,7 +1540,8 @@ export class AlertMap {
     }
     // Keep the tip endpoint on the exact marker / circle coordinate, without a visual gap.
     this.popup = new M.Popup({ className: 'pp-alert-popup', anchor: 'bottom', closeButton: true, closeOnClick: false, maxWidth: 'min(420px, calc(100vw - 28px))', offset: [0, 0], focusAfterOpen: false })
-      .setLngLat(at || [alert.location.longitude, alert.location.latitude])
+      // An unlocated card is anchored to the current VIEW, never a made-up incident pin.
+      .setLngLat(unlocated ? this.map.getCenter() : at || [alert.location.longitude, alert.location.latitude])
       .setDOMContent(contentNode)
       .addTo(this.map);
     this.popup._alertId = alert.id;
@@ -1539,6 +1549,7 @@ export class AlertMap {
     // put the card inside the map's gesture layer (like the markers): pinch / drag that start on the card
     // now zoom and pan the map instead of being swallowed (on phones the card covers the middle of the map)
     const pe = this.popup.getElement();
+    if (unlocated) pe?.classList.add('pp-unlocated');
     if (pe) {
       pe.classList.add('pp-gest');
       const content = pe.querySelector('.maplibregl-popup-content');
@@ -1619,6 +1630,7 @@ export class AlertMap {
   }
 
   syncPopupConnector(pe, ct, moved) {
+    if (pe.classList.contains('pp-unlocated')) { pe._popupConnector?.remove(); delete pe._popupConnector; return; }
     if (!pe.classList.contains('pp-alert-popup') && !pe.classList.contains('pp-group-popup')) return;
     let svg = pe._popupConnector;
     if (!moved) { svg?.remove(); delete pe._popupConnector; return; }

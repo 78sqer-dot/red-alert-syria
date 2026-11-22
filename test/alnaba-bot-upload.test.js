@@ -999,8 +999,8 @@ test('backup flush reports success only after the pending snapshot is durably sa
 test('Telegram backup adapter rejects a replacement until the new snapshot is pinned', async () => {
   const adapter = telegramBackupAdapter(bot.api);
   failBackupPin = true;
-  await assert.rejects(adapter.save('{"fixture":"not pinned"}'), /fixture pin failure/);
+  await assert.rejects(adapter.save('{"alerts":[],"fixture":"not pinned"}'), /fixture pin failure/);
   failBackupPin = false;
-  await adapter.save('{"fixture":"pinned"}');
+  await adapter.save('{"alerts":[],"fixture":"pinned"}');
   assert.ok(calls.some(({ method }) => method === 'pinChatMessage'), 'a confirmed pin is required before the adapter reports success');
 });

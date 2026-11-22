@@ -1,3 +1,4 @@
+import { BACKUP_NAME, LEGACY_BACKUP_NAME, encodeBackup, decodeBackup, recordBackupTransfer } from './backup-codec.js';
 import { captureCoordinationReply } from './editor-coordination.js';
 import { randomUUID } from 'node:crypto';
 import { installTracker, cleanChat, cleanMenuMessages, setKeep } from './ui-clean.js';
@@ -4721,12 +4722,13 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
 
 export function telegramBackupAdapter(api0) {
   if (!config.ownerIds[0]) return null;
-  const NAME = 'red-alert-syria-backup.json';
+  const NAME = BACKUP_NAME;
   const last = new Map(); // `${token}|${chat}` -> pinned message id
   const caption = '🗄 نسخة احتياطية تلقائية لبيانات Red Alert Syria — لا تحذفها ولا تلغِ تثبيتها.\nAutomatic backup — keep pinned.';
   const put = async (api, token, chat, json) => {
     const key = `${token}|${chat}`;
-    const file = () => new InputFile(Buffer.from(json), NAME);
+    const payload = encodeBackup(json);
+    const file = () => new InputFile(payload, NAME);
     const prev = last.get(key);
     if (prev) {
       try { await api.editMessageMedia(chat, prev, InputMediaBuilder.document(file(), { caption })); return; } catch (e) {
@@ -4746,6 +4748,7 @@ export function telegramBackupAdapter(api0) {
       const api = APIS.admin || api0;
       const owner = config.ownerIds[0];
       await put(api, config.botToken, owner, json);
+      recordBackupTransfer(json, encodeBackup(json));
       // After an in-bot hand-over (owner changed, same publishing bot) and until the Render env vars are
       // updated, a restart reads the backup from the env owner's chat: keep a copy there, without tokens.
       const envOwner = envDefaults.ownerIds[0];
@@ -4761,14 +4764,12 @@ export function telegramBackupAdapter(api0) {
       const api = APIS.admin || api0;
       const chat = await api.getChat(config.ownerIds[0]);
       const pm = chat.pinned_message;
-      if (!pm?.document || pm.document.file_name !== NAME) return null;
+      if (!pm?.document || ![NAME, LEGACY_BACKUP_NAME].includes(pm.document.file_name)) return null;
       last.set(`${config.botToken}|${config.ownerIds[0]}`, pm.message_id);
       const f = await api.getFile(pm.document.file_id);
       const res = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${f.file_path}`);
       if (!res.ok) throw new Error(`backup download failed (${res.status})`);
-      const payload = await res.text();
-      if (!payload.trim()) throw new Error('backup payload is empty');
-      return payload;
+      return decodeBackup(await res.arrayBuffer());
     },
   };
 }

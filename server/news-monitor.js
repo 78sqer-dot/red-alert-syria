@@ -1149,6 +1149,7 @@ async function suppressDuplicateDraft(d, duplicate, by = 0) {
   if (by) d.by = by;
   newsState().stats.dupes++;
   save();
+  await store.flushBackup(true);
   await closeCards(d);
   return true;
 }
@@ -1245,7 +1246,7 @@ function finalPublishDuplicate(d, pub) {
   const cand = { type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: pub?.headline || d.headline, geo: geoOf(locsOf(d.loc, d.extra)) };
   const text = `${pub?.headline || ''}\n${pub?.body || ''}`.trim();
   if (!text) return null;
-  const candRuns = nameRuns(text);
+  const candRuns = personNameRuns(text).filter((run) => run.length >= 3);
   const since = Date.now() - ECHO_HOURS * H_MS;
   const entitySince = Date.now() - ENTITY_DUP_HOURS * H_MS;
   let best = null;
@@ -1357,6 +1358,7 @@ async function nightPublish(d) {
     console.log(`[news] ${mode} auto-publish blocked: final text matches published alert ${finalDup.id} (${finalDup.via})`);
     return false;
   }
+  if (d.status !== 'pending') return false; // another reviewer/operator may have claimed it while preparing
   d.status = 'publishing'; save();
   let alert;
   try {
@@ -1553,19 +1555,22 @@ function politicalPublicationGeography(d) {
 /** A place mentioned only as a directorate/hospital/hometown is not an event pin.
  * Remove these role-qualified mentions; an independent mention keeps the place. */
 function nonIncidentPlaceOnly(name, text) {
-  if (hospitalDestinationOnly(name, text)) return true;
-  const n = N(String(name || '')).trim();
+  // Gazetteer display names can include parenthetical aliases absent from the source.
+  const shortName = String(name || '').replace(/\([^)]*\)/g, '').trim();
+  if (hospitalDestinationOnly(shortName, text)) return true;
+  const n = N(shortName).trim();
   if (!n) return false;
   const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const nt = N(String(text || ''));
-  const roles = [
-    '(?:مديريه|مديرية|قياده|قيادة|فرع|مركز)\\s+(?:قوي\\s+)?(?:الامن|امن|الشرطه|شرطة|شرطه|الداخلي)\\s+(?:الداخلي\\s+)?(?:في\\s+)?',
-    '(?:ينحدر|تنحدر|ينحدرون)\\s+من\\s+(?:(?:مدينه|مدينة|بلده|بلدة|قريه|قرية)\\s+)?',
-    '(?:مسقط\\s+راسه|مسقط\\s+راسها)\\s+(?:(?:في|هو|هي)\\s+)?',
-  ];
-  let rest = nt;
-  for (const role of roles) rest = rest.replace(new RegExp(role + escaped + '(?=\\s|[،,.:؛]|$)', 'gu'), ' ');
-  return rest !== nt && !nameInText(name, rest);
+  // Preserve clause boundaries before normalization removes punctuation/hashtags.
+  const nt = N(String(text || '').replace(/[،,\n؛.!؟?]/gu, ' rasroleboundary '));
+  const role = '(?:(?:و|ف)?(?:ال)?(?:منحدر|منحدره|منحدرون|ينحدر|تنحدر|ينحدرون)\\s+من|(?:و|ف)?(?:ال)?(?:مقيم|مقيمه|مقيمون|يقيم|تقيم|يسكن|تسكن|يقطن|تقطن)\\s+(?:في|ب)|من\\s+(?:اهالي|ابناء)|مواليد|مسقط\\s+راس(?:ه|ها)\\s*(?:(?:في|هو|هي)\\s*)?)';
+  const stop = '(?:و|ف)?(?:المقيم|المقيمه|يقيم|تقيم|يسكن|يقطن|عثر|يعثر|قتل|مقتل|اصيب|اصابه|استشهد|استهداف|انفجار|قصف|اعتقل|اوقف|وجد|نقل|اسعف|حيث|الذي|التي|بعد|قبل|جراء|اثر|وقد)|rasroleboundary';
+  const word = '(?!(?:' + stop + ')(?=\\s|$))\\S+';
+  const residenceOrOrigin = new RegExp('(?:^|\\s)' + role + '\\s+' + word + '(?:\\s+' + word + '){0,15}', 'gu');
+  let rest = nt.replace(residenceOrOrigin, ' ');
+  const institution = '(?:مديريه|قياده|فرع|مركز)\\s+(?:قوي\\s+)?(?:الامن|امن|الشرطه|شرطه|الداخلي)\\s+(?:الداخلي\\s+)?(?:في\\s+)?';
+  rest = rest.replace(new RegExp(institution + escaped + '(?=\\s|$)', 'gu'), ' ');
+  return rest !== nt && !nameInText(shortName, rest);
 }
 
 // ---------------------------------------------------------------- pipeline
@@ -2032,6 +2037,7 @@ export function startNewsMonitor() {
       save();
       try { await refreshCards(d); } catch { /* ignore */ }
     }
+    try { await refreshPendingLocationRoles(); } catch (e) { console.warn('[news] location-role repair failed', e.message); }
     try { await refreshPendingCardKeyboards(); } catch (e) { console.warn('[news] review keyboard sync failed', e.message); }
     console.log(`[news] monitor started: ${n.on ? 'ON' : 'paused'} · ${n.sources.filter((s) => s.on).length} sources · AI ${NEWS_CFG.aiKey() ? NEWS_CFG.models()[0] : 'OFF (rules only)'} · every ${NEWS_CFG.pollSec}s`);
     loop();
@@ -2043,6 +2049,115 @@ export function startNewsMonitor() {
   t.unref?.();
 }
 export function stopNewsMonitor() { R.stopped = true; clearTimeout(R.timer); clearInterval(R.dayAutoTimer); }
+/** Repair pending geography only, without replaying sources or moving published pins. */
+export async function refreshPendingLocationRoles() {
+  const changed = [];
+  for (const d of Object.values(newsState().drafts)) {
+    if (d.status !== 'pending' || d.test) continue;
+    const before = locsOf(d.loc, d.extra);
+    const kept = before.filter((l) => !nonIncidentPlaceOnly(l.name_ar, d.sourceText || d.body || ''));
+    if (kept.length === before.length) continue;
+    d.loc = kept[0] || locationFrom({}); d.extra = kept.slice(1);
+    d.locationRoleRepair = { at: Date.now(), removed: before.filter((l) => !kept.includes(l)).map((l) => l.name_ar) };
+    d.editorialHold = true; d.editorialHoldReason = 'location-role-repaired-needs-review';
+    d.dayAutoAt = null; delete d.autoMode;
+    changed.push(d.id);
+  }
+  if (changed.length) {
+    save(); await store.flushBackup(true);
+    for (const id of changed) await refreshCards(newsState().drafts[id]);
+  }
+  return changed;
+}
+const operatorRevision = (d) => crypto.createHash('sha256').update(JSON.stringify({
+  status: d.status, type: d.type, headline: d.headline, body: d.body, sourceText: d.sourceText,
+  loc: d.loc, extra: d.extra, srcs: d.srcs, politicalCategory: d.politicalCategory,
+  editorialHold: d.editorialHold, privateEditorial: d.privateEditorial, aiRewritePreview: d.aiRewritePreview,
+  operation: d.operatorReview,
+})).digest('hex');
+export function operatorNewsReview(id) {
+  const d = newsState().drafts[id];
+  if (!d) return null;
+  let candidate = null, issue = null, duplicate = null;
+  try {
+    candidate = sourceFirstCandidate(d);
+    const gate = sourceFirstGate(d, candidate);
+    if (!gate.ok) issue = gate.reason;
+    duplicate = finalPublishDuplicate(d, { headline: candidate.headline, body: candidate.body });
+  } catch (e) { issue = e.message; }
+  return { id: d.id, status: d.status, revision: operatorRevision(d), test: !!d.test,
+    type: d.type, headline: d.headline, sourceText: d.sourceText, sources: d.srcs || [],
+    location: d.loc, extra: d.extra || [], editorialHold: !!d.editorialHold,
+    holdReason: d.editorialHoldReason || null, candidate: candidate ? { headline: candidate.headline, body: candidate.body, location: candidate.loc, extra: candidate.extra } : null,
+    issue, duplicate, alertId: d.alertId || null, postId: d.postId || null, operation: d.operatorReview || null };
+}
+/** Uses only the already-running monitor. A durable claim precedes every send.
+ * An uncertain send stays claimed, so retries/restarts cannot blindly repost it. */
+export async function operateNewsDraft(id, request = {}) {
+  const n = newsState(), d = n.drafts[id];
+  const fail = (message) => { throw new Error(message); };
+  if (!d) return fail('unknown-draft');
+  const prior = d.operatorReview;
+  if (prior?.revision === request.revision && ['published', 'map-only', 'duplicate', 'held'].includes(prior.result)) {
+    return { ok: prior.result !== 'map-only', reused: true, status: prior.result, id: d.id, alertId: d.alertId || null, postId: d.postId || null, duplicateOf: d.duplicateOf || null };
+  }
+  if (d.status !== 'pending') return fail('draft-already-handled-or-publication-unresolved');
+  if (!request.revision || request.revision !== operatorRevision(d)) return fail('stale-review');
+  if (d.test) return fail('test-draft-cannot-publish');
+  if (!['hold', 'duplicate', 'publish'].includes(request.action)) return fail('invalid-operation');
+  if (request.action === 'hold') {
+    d.editorialHold = true; d.editorialHoldReason = 'operator-review-hold'; d.dayAutoAt = null; delete d.autoMode;
+    d.operatorReview = { revision: request.revision, at: Date.now(), result: 'held' };
+    save(); await store.flushBackup(true); await refreshCards(d);
+    return { ok: true, status: 'held', id: d.id };
+  }
+  const review = operatorNewsReview(id);
+  if (review.issue && request.action === 'publish') return fail(review.issue);
+  const duplicate = review.duplicate || knownDuplicateDraft(d);
+  if (duplicate) {
+    await suppressDuplicateDraft(d, { alertId: duplicate.id || duplicate.alertId, draftId: duplicate.draftId, kind: 'operator-reviewed-duplicate' });
+    d.operatorReview = { revision: request.revision, at: Date.now(), result: 'duplicate' };
+    save(); await store.flushBackup(true);
+    return { ok: true, status: 'duplicate', id: d.id, duplicateOf: d.duplicateOf || null };
+  }
+  if (request.action === 'duplicate') return fail('no-supported-duplicate-match');
+  if (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) return fail('owner-private-editorial-approval-required');
+  if ((d.srcs || []).length === 0 || (d.srcs || []).every((s) => s.local)) return fail('independent-source-review-required');
+  const publication = toBotDraft(sourceFirstCandidate(d), { preservePublishedCopy: true });
+  if (!api() || !R.H?.publishDraft) return fail('publisher-not-ready');
+  d.status = 'publishing'; d.operatorReview = { revision: request.revision, at: Date.now(), result: 'claimed' };
+  save();
+  if (store.backup && !await store.flushBackup(true)) {
+    d.editorialHold = true; d.editorialHoldReason = 'operator-claim-not-durable';
+    return fail('durable-claim-failed-no-send');
+  }
+  let alert;
+  try { alert = await R.H.publishDraft(api(), publication, { id: 0, name: 'مراجعة تحريرية', via: 'news-reviewed-operator' }); }
+  catch (e) {
+    d.operatorReview.result = 'uncertain'; d.editorialHold = true; d.editorialHoldReason = 'operator-send-needs-reconciliation';
+    save(); await store.flushBackup(true);
+    return fail('publication-outcome-unverified-do-not-retry');
+  }
+  if (!alert?.id) {
+    d.operatorReview.result = 'uncertain'; save(); await store.flushBackup(true);
+    return fail('publication-outcome-unverified-do-not-retry');
+  }
+  if (await autoDeleteLandedDuplicate(d, publication, alert.id)) {
+    d.operatorReview.result = 'duplicate'; save(); await store.flushBackup(true);
+    return { ok: true, status: 'duplicate', id: d.id, duplicateOf: d.duplicateOf || null };
+  }
+  d.alertId = alert.id; d.postId = alert.channel_message_id || null;
+  d.status = 'published'; d.by = 0; d.publishedHeadline = publication.headline || d.headline;
+  d.approvedBy = { id: 0, name: 'مراجعة تحريرية', via: 'delegated-project-operator' }; d.approvedAt = new Date().toISOString();
+  d.operatorReview.result = d.postId ? 'published' : 'map-only'; n.stats.published++;
+  save();
+  if (store.backup && !await store.flushBackup(true)) {
+    d.operatorReview.result = 'published-backup-unverified';
+    return { ok: false, status: 'published-backup-unverified', id: d.id, alertId: d.alertId, postId: d.postId };
+  }
+  await closeCards(d, null, true); await unlinkCapturedMedia(d.sourceMedia);
+  return { ok: !!d.postId, status: d.operatorReview.result, id: d.id, alertId: d.alertId, postId: d.postId };
+}
 export function newsDebug() {
   const n = newsState();
   return {
