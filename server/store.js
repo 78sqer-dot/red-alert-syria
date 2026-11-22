@@ -218,6 +218,7 @@ class Store extends EventEmitter {
       ui: s.ui && typeof s.ui === 'object' ? s.ui : {},
       // public reports waiting for a decision (survive restarts/deploys) and decided report ids
       reports: s.reports && typeof s.reports === 'object' ? s.reports : {},
+      reportsAudit: s.reportsAudit && typeof s.reportsAudit === 'object' ? s.reportsAudit : {},
       reportsDone: s.reportsDone && typeof s.reportsDone === 'object' ? s.reportsDone : {},
       // ids of alerts removed by hand / auto-delete (so a late copy from an old instance can't bring them back)
       gone: s.gone && typeof s.gone === 'object' ? s.gone : {},
@@ -423,25 +424,27 @@ class Store extends EventEmitter {
     this.persist();
   }
   reportGet(rid) { return this.state.reports?.[rid] || null; }
-  reportDone(rid) { return !!this.state.reportsDone?.[rid]; }
+  reportDone(rid) { return !!this.state.reportsDone?.[rid] || !!this.state.reportsAudit?.[rid]; }
   /** Claim a report for a decision: returns it once, then it is gone (no double publishing). */
   reportTake(rid) {
     const rep = this.state.reports?.[rid];
-    if (!rep) return null;
+    if (!rep || rep.reviewOperation) return null;
     delete this.state.reports[rid];
     (this.state.reportsDone ||= {})[rid] = Date.now();
+    (this.state.reportsAudit ||= {})[rid] = { at: Date.now(), result: 'native-claimed', draft: rep.draft };
     this.persist();
     return rep;
   }
   /** Undo a claim when publishing failed, so the reviewer can try again. */
   reportRestore(rid, rep) {
     delete this.state.reportsDone?.[rid];
+    delete this.state.reportsAudit?.[rid];
     this.reportPut(rid, rep);
   }
   reportsPrune(maxAgeMs = 48 * 3600_000) {
     const now = Date.now();
     let n = 0;
-    for (const [k, r] of Object.entries(this.state.reports || {})) if (!r || now - (r.created || 0) > maxAgeMs) { delete this.state.reports[k]; n++; }
+    for (const [k, r] of Object.entries(this.state.reports || {})) if (!r || (!r.reviewOperation && now - (r.created || 0) > maxAgeMs)) { delete this.state.reports[k]; n++; }
     for (const [k, t] of Object.entries(this.state.reportsDone || {})) if (now - t > 4 * 86400_000) { delete this.state.reportsDone[k]; n++; }
     if (n) this.persist({ backupSoon: false });
   }
@@ -465,13 +468,16 @@ class Store extends EventEmitter {
     let reports = 0, alerts = 0, alnabaBatches = 0;
     const st = this.state;
     if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
-    st.reports ||= {}; st.reportsDone ||= {}; st.gone ||= {};
+    st.reports ||= {}; st.reportsDone ||= {}; st.reportsAudit ||= {}; st.gone ||= {};
+    for (const [rid, audit] of Object.entries(o.reportsAudit || {})) {
+      if (!st.reportsAudit[rid] || (audit.at || 0) > (st.reportsAudit[rid].at || 0)) st.reportsAudit[rid] = audit;
+    }
     for (const [rid, t] of Object.entries(o.reportsDone || {})) {
       if (!st.reportsDone[rid]) st.reportsDone[rid] = t;
       if (st.reports[rid]) { delete st.reports[rid]; reports++; }
     }
     for (const [rid, r] of Object.entries(o.reports || {})) {
-      if (!r || st.reports[rid] || st.reportsDone[rid]) continue;
+      if (!r || st.reports[rid] || st.reportsDone[rid] || st.reportsAudit[rid]) continue;
       st.reports[rid] = r; reports++;
     }
     const beforeBatchCount = st.alnabaBatches?.length || 0;

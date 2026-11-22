@@ -1823,7 +1823,7 @@ test('public reporters can attach a photo and video to one pending report before
   assert.equal(calls.slice(start).some(({ method, chatId }) => ['sendPhoto', 'sendVideo'].includes(method) && chatId === '@mock_news_channel'), false, 'report media is kept on the website map, not uploaded as source media to the channel');
 });
 
-test('a failed report approval is acknowledged early and restores a clear retry path', async (t) => {
+test('a failed report approval is acknowledged early and retained for reconciliation', async (t) => {
   const rid = 'approval_retry_regression';
   const rep = { draft: null, from: { id: reporter.id, first_name: reporter.first_name }, messages: [], created: Date.now(), via: 'report' };
   store.reportPut(rid, rep);
@@ -1834,11 +1834,12 @@ test('a failed report approval is acknowledged early and restores a clear retry 
 
   const attempted = calls.slice(start);
   const ackIndex = attempted.findIndex(({ method }) => method === 'answerCallbackQuery');
-  const retryNoticeIndex = attempted.findIndex(({ method, chatId, payload }) => method === 'sendMessage' && chatId === ownerId && /(?:أُعيد البلاغ إلى قائمة المراجعة|the report is back in the queue)/.test(payload.text || ''));
+  const retryNoticeIndex = attempted.findIndex(({ method, chatId, payload }) => method === 'sendMessage' && chatId === ownerId && /(?:تعذّر تأكيد نتيجة النشر|Publication could not be verified)/.test(payload.text || ''));
   assert.ok(ackIndex >= 0 && retryNoticeIndex > ackIndex, 'the reviewer receives a callback acknowledgement before the retry notice');
   assert.equal(attempted.filter(({ method }) => method === 'answerCallbackQuery').length, 1, 'the failure path does not answer the already-acknowledged callback again');
-  assert.ok(store.reportGet(rid), 'the report is restored so the reviewer can retry from the original card');
-  assert.equal(store.reportDone(rid), false, 'a failed publish does not mark the report handled');
+  assert.equal(store.reportGet(rid), null, 'uncertain outcomes cannot be blindly retried');
+  assert.equal(store.state.reportsAudit[rid].result, 'uncertain');
+  assert.equal(store.reportDone(rid), true, 'the durable claim prevents a second send pending reconciliation');
   assert.equal(attempted.some(({ chatId }) => chatId === '@mock_news_channel'), false, 'a failure before publication creates no channel post');
 });
 

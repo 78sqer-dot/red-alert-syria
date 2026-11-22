@@ -1,3 +1,4 @@
+import { configureReportOperator } from './reports-operator.js';
 import { BACKUP_NAME, isBackupName, encodeBackup, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
 import { captureCoordinationReply } from './editor-coordination.js';
 import { approvedPublicCorrection, approvedCorrectionFingerprint, publishedRepairRevision } from './approved-public-correction.js';
@@ -1851,6 +1852,20 @@ export async function fixPostMarkup(messageId) {
 // publishing bot; the reporter gets it in the report bot signed as the team (staff identity hidden).
 // The reporter answers in the report bot (reply, or a plain message while a conversation is open).
 const APIS = {}; const TOKENS = {};
+configureReportOperator({
+  ready: () => Boolean(APIS.admin && store.backup && !store._backupWritesPaused),
+  publish: (rep) => {
+    if (!APIS.admin) throw new Error('admin-bot-unavailable');
+    return publishDraft(APIS.admin, { ...rep.draft, toChannel: true }, { id: rep.from.id, name: rep.from.first_name, approvedBy: 0, via: 'report-reviewed-operator' });
+  },
+  close: async (rep) => {
+    for (const [chat, mid] of rep.messages || []) {
+      setKeep('admin', chat, mid, false);
+      try { await APIS.admin?.deleteMessage(chat, mid); } catch { /* terminal state prevents repeat publication */ }
+    }
+  },
+});
+
 const alertMediaCache = new Map();
 let alertMediaCacheBytes = 0;
 const ALERT_MEDIA_CACHE_MAX = 32 * 1024 * 1024;
@@ -3383,6 +3398,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const rid = ctx.match[1];
     if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
     const rep = store.reportGet(rid);
+    if (rep?.reviewOperation) return ctx.answerCallbackQuery({ text: 'البلاغ محجوز للمراجعة التحريرية.', show_alert: true });
     if (!rep) {
       const en = langOf(ctx) === 'en';
       try { await ctx.answerCallbackQuery({ text: en ? 'This report is no longer available.' : 'هذا البلاغ لم يعد متاحاً.', show_alert: true }); } catch { /* ignore */ }
@@ -3418,7 +3434,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       result = { checkedAt: new Date().toISOString(), totalSources: 0, checkedSources: 0, errors: [], matches: [], failed: true };
     }
     const latest = store.reportGet(rid);
-    if (!latest) return; // a reviewer may have made a decision while the lookup was running
+    if (!latest || latest.reviewOperation) return; // a reviewer may have made a decision while the lookup was running
     latest.verification = { ...result, status: 'done', by: ctx.from.id };
     store.reportPut(rid, latest);
     await refresh(latest);
@@ -3429,7 +3445,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   // removing is clean; buildAlertInput resolves and appends it once at publish.
   const loadPendingReport = async (rid) => {
     if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
-    return store.reportGet(rid);
+    const rep = store.reportGet(rid);
+    return rep?.reviewOperation ? null : rep;
   };
   const reportGone = async (ctx) => {
     const en = langOf(ctx) === 'en';
@@ -3491,6 +3508,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const en = langOf(ctx) === 'en';
     // a card sent by the previous instance during a deploy: pull its final state first
     if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
+    const pendingReport = store.reportGet(rid);
+    if (pendingReport?.reviewOperation) return ctx.answerCallbackQuery({ text: en ? 'This report is reserved for editorial review.' : 'هذا البلاغ محجوز للمراجعة التحريرية.', show_alert: true });
     const rep = store.reportTake(rid); // claimed once: a second tap / a second reviewer can't publish it again
     if (!rep) {
       if (store.reportDone(rid)) return vanish(ctx, en ? 'This report was already handled ✔️' : 'تمت معالجة هذا البلاغ مسبقاً ✔️');
@@ -3499,6 +3518,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       try { await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(en ? '🏠 Menu' : '🏠 القائمة', 'home') }); } catch { /* ignore */ }
       return;
     }
+    if (store.backup && !await store.flushBackup(true)) {
+      store.reportRestore(rid, rep);
+      return ctx.answerCallbackQuery({ text: en ? 'Backup unavailable. No decision sent.' : 'النسخة الاحتياطية غير متاحة. لم يُنفّذ القرار.', show_alert: true });
+    }
     const notify = APIS[rep.via] || APIS.report || ctx.api;
     if (action === 'ap') {
       try { await ctx.answerCallbackQuery({ text: en ? '⏳ Publishing…' : '⏳ جارٍ النشر…' }); } catch (e) { console.warn('[bot] report acceptance acknowledgement failed', e.description || e.message); }
@@ -3506,14 +3529,17 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       try {
         published = await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
       } catch (e) {
-        store.reportRestore(rid, rep); // nothing lost: the reviewer can tap again
+        store.state.reportsAudit[rid] = { ...store.state.reportsAudit[rid], result: 'uncertain', actor: ctx.from.id };
+        store.persist(); await store.flushBackup(true);
         console.error('[bot] report publish failed', e.description || e.message);
         await sendTransient(ctx.api, ctx.callbackQuery.message.chat.id, en
-          ? '⚠️ Publishing failed — the report is back in the queue. Tap Approve on the original card to retry.'
-          : '⚠️ تعذّر النشر — أُعيد البلاغ إلى قائمة المراجعة. اضغط «موافقة» على البطاقة الأصلية لإعادة المحاولة.');
+          ? '⚠️ Publication could not be verified. Do not approve again; editorial reconciliation is required.'
+          : '⚠️ تعذّر تأكيد نتيجة النشر. لا توافق مجدداً؛ يلزم تدقيق تحريري لتجنّب التكرار.');
         return;
       }
       const channelPostFailed = Boolean(published?.channel_post_failed);
+      store.state.reportsAudit[rid] = { at: Date.now(), result: channelPostFailed ? 'map-only' : 'published', actor: ctx.from.id, alertId: published?.id, postId: published?.channel_message_id || null };
+      store.persist(); await store.flushBackup(true);
       const cardChatId = ctx.callbackQuery.message.chat.id;
       const approvedBy = L(ctx).reportApproved(ctx.from.first_name || '');
       const channelWarning = en
@@ -3524,13 +3550,17 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       if (channelPostFailed) await sendTransient(ctx.api, cardChatId, channelWarning);
       await sendTransient(notify, rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser);
     } else if (action === 'ed') {
-      // Load the report into this editor's publishing session so it can be adjusted first.
+      // Retain the staged draft durably even if the editing session is lost on restart.
+      store.state.reportsAudit[rid] = { at: Date.now(), result: 'native-edit-staged', actor: ctx.from.id, draft: rep.draft };
+      store.persist(); await store.flushBackup(true);
       await ctx.answerCallbackQuery();
       await closeReport(ctx, rep, true);
       const d = { ...rep.draft, mode: 'publish', created: Date.now(), msgId: null, fromReport: rep.from, notifyVia: rep.via };
       sessions.set(sk(ctx), d);
       await showPreview(ctx, d);
     } else {
+      store.state.reportsAudit[rid] = { at: Date.now(), result: action === 'bn' ? 'banned' : 'rejected', actor: ctx.from.id };
+      store.persist(); await store.flushBackup(true);
       if (action === 'bn') store.ban(rep.from.id);
       if (rep.draft?.type === 'road') rememberIgnoredRoadReport(rep.draft);
       await closeReport(ctx, rep, true);
