@@ -2023,6 +2023,31 @@ async function sweep() {
 }
 
 // ---------------------------------------------------------------- start / stop / hand-off
+const NEWS_DECISION_FLAGS = ['editorialHold', 'editorialHoldReason', 'dayAutoAt', 'autoMode', 'operatorReview'];
+const NEWS_DECISION_PROOF = ['alertId', 'postId', 'publishedHeadline', 'publishedBody', 'approvedBy', 'approvedAt', 'by', 'auto', 'autoAt', 'duplicateOf', 'duplicateMarkedAt', 'reconciliation', 'editorialUpdates'];
+function newsDecisionAt(d) {
+  return Math.max(Number(d.operatorReview?.at) || 0, Number(d.duplicateMarkedAt) || 0,
+    Number(d.autoAt) || 0, Date.parse(d.approvedAt || '') || 0,
+    Number(d.reconciliation?.at) || 0,
+    ...(Array.isArray(d.editorialUpdates) ? d.editorialUpdates : []).map((item) => Number(item?.at) || 0));
+}
+function mergeNewsDecision(mine, remote) {
+  const localAt = newsDecisionAt(mine), remoteAt = newsDecisionAt(remote);
+  const legacyTransition = !localAt && !remoteAt && mine.status === 'pending' && remote.status && remote.status !== 'pending';
+  if (!(remoteAt > localAt || legacyTransition)) return;
+  // Never reopen a terminal decision or clear an unresolved publication claim.
+  // A publishing claim may advance only to a confirmed publication with proof.
+  const confirmedClaim = mine.status === 'publishing' && remote.status === 'published' && !!remote.alertId;
+  if (mine.status !== 'pending' && mine.status !== remote.status && !confirmedClaim) return;
+  if (remote.status) mine.status = remote.status;
+  for (const field of NEWS_DECISION_FLAGS) {
+    if (Object.hasOwn(remote, field)) mine[field] = structuredClone(remote[field]);
+    else delete mine[field];
+  }
+  for (const field of NEWS_DECISION_PROOF) if (Object.hasOwn(remote, field)) mine[field] = structuredClone(remote[field]);
+  // Working copy, source text, source list and inferred geography stay local
+  // audit data. A decision merge is never an editorial rewrite or public edit.
+}
 export function mergeNewsFromBackup(o) {
   const on = o?.news;
   if (!on || typeof on !== 'object') return;
@@ -2033,7 +2058,7 @@ export function mergeNewsFromBackup(o) {
   for (const [id, d] of Object.entries(on.drafts || {})) {
     const mine = n.drafts[id];
     if (!mine) n.drafts[id] = d;
-    else if (mine.status === 'pending' && d.status && d.status !== 'pending') { mine.status = d.status; mine.alertId ||= d.alertId; }
+    else mergeNewsDecision(mine, d);
   }
   for (const [u, id] of Object.entries(on.last || {})) if (!(n.last[u] >= id)) n.last[u] = id;
   for (const [h, t] of Object.entries(on.seen || {})) if (!n.seen[h]) n.seen[h] = t;
@@ -2149,7 +2174,11 @@ export function operatorNewsReview(id) {
 }
 /** Uses only the already-running monitor. A durable claim precedes every send.
  * An uncertain send stays claimed, so retries/restarts cannot blindly repost it. */
+function assertOperatorRecoveryReady() {
+  if (store.backup && store._backupWritesPaused) throw new Error('backup-recovery-in-progress-no-decision-written');
+}
 export async function operateNewsDraft(id, request = {}) {
+  assertOperatorRecoveryReady();
   const n = newsState(), d = n.drafts[id];
   const fail = (message) => { throw new Error(message); };
   if (!d) return fail('unknown-draft');
@@ -2219,8 +2248,9 @@ export function operatorNewsStatus(includeIds = false) {
   const live = Object.values(n.drafts).filter((d) => !d.test && ['pending', 'publishing'].includes(d.status)).sort((a, b) => a.id.localeCompare(b.id));
   const pending = live.filter((d) => d.status === 'pending');
   const mode = n.editorialMode === 'reviewed' ? 'reviewed' : 'automatic';
-  const revision = crypto.createHash('sha256').update(JSON.stringify([mode, ...live.map((d) => [d.id, operatorRevision(d)])])).digest('hex');
-  const result = { mode, modeChangedAt: n.editorialModeAt || null, on: n.on, started: !!R.started,
+  const decisionWritesReady = !store.backup || !store._backupWritesPaused;
+  const revision = crypto.createHash('sha256').update(JSON.stringify([mode, decisionWritesReady, ...live.map((d) => [d.id, operatorRevision(d)])])).digest('hex');
+  const result = { mode, modeChangedAt: n.editorialModeAt || null, on: n.on, started: !!R.started, decision_writes_ready: decisionWritesReady,
     pending_count: pending.length, held_count: pending.filter((d) => d.editorialHold).length,
     actionable_count: pending.filter((d) => !d.editorialHold).length, publishing_count: live.length - pending.length,
     automatic_in_flight: R.autoPublishing || 0, last_poll_at: R.lastPollAt || null,
@@ -2230,6 +2260,7 @@ export function operatorNewsStatus(includeIds = false) {
 }
 /** Source ingestion stays on. Only unattended news publication changes here. */
 export async function setOperatorNewsMode(mode) {
+  assertOperatorRecoveryReady();
   if (!['reviewed', 'automatic'].includes(mode)) throw new Error('invalid-editorial-mode');
   if (R.autoPublishing) throw new Error('automatic-publication-in-flight-try-after-reconciliation');
   const n = newsState();
@@ -2242,6 +2273,7 @@ export async function setOperatorNewsMode(mode) {
 /** Finalize the PRIVATE ledger only after an approved public correction/removal.
  * Raw source copy and original publication identifiers remain in the audit record. */
 export async function reconcilePublishedNewsDuplicate(id, request = {}) {
+  assertOperatorRecoveryReady();
   const n = newsState(), d = n.drafts[id], other = n.drafts[request.duplicateId];
   if (!d || !other || d === other) throw new Error('invalid-correction-pair');
   if (other.reconciliation?.canonicalDraftId === id) {
