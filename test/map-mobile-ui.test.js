@@ -136,12 +136,12 @@ test('changed type and icon modules use fresh cache keys', () => {
 });
 
 test('alert popup switches between news and attached photo/video in the same window', () => {
-  assert.match(app, /const mediaItems = \['photo', 'video'\]\.map\(\(type\) => rawMediaItems\.find\(\(item\) => item\?\.type === type\)\)\.filter\(Boolean\)/);
-  assert.match(app, /const illustrationFallback = mediaItems\.length === 0/);
-  assert.match(app, /const displayModes = availableAlertDisplayModes\(newsText, mediaItems, \{ illustrationFallback \}\)/);
-  assert.match(app, /const displayMediaItems = mediaItems\.length \? mediaItems : illustrationFallback \? \[\{ type: 'photo', illustration: true \}\] : \[\]/);
+  assert.match(app, /const mediaItems = \['photo', 'video'\]\.map\(\(type\) => rawMediaItems\.find\(\(item\) => item\?\.type === type && item\.illustration !== true && item\.generated !== true\)\)\.filter\(Boolean\)/);
+  assert.doesNotMatch(app, /illustrationFallback/);
+  assert.match(app, /const displayModes = availableAlertDisplayModes\(newsText, mediaItems\)/);
+  assert.match(app, /const displayMediaItems = mediaItems;/);
   assert.match(app, /const initialMode = initialAlertDisplayMode\(displayModes\)/);
-  assert.match(app, /const mediaActions = displayModes\.length \?/);
+  assert.match(app, /const mediaActions = displayModes\.length > 1 \?/);
   assert.match(app, /const titleRow = `<div class="pp-title-row"><p class="pp-title">[\s\S]*?<\/p><\/div>`;/);
   assert.match(app, /const content = `\$\{titleRow\}\$\{metadata\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
   assert.match(app, /class="pp-news-panel" data-pp-news-panel/);
@@ -156,11 +156,11 @@ test('alert popup switches between news and attached photo/video in the same win
   assert.match(app, /mediaVideo' : 'mediaImage/);
   assert.match(app, /function alertMediaFrameHtml\(item, alertId\)/);
   assert.match(app, /<video class="pp-media-video" controls playsinline preload="none"/);
-  assert.equal((app.match(/<img class="pp-media-image"[^>]*loading="eager"/g) || []).length, 1, 'source and illustrative images share one frame renderer');
-  assert.match(app, /data-pp-illustration=/);
+  assert.equal((app.match(/<img class="pp-media-image"[^>]*loading="eager"/g) || []).length, 1, 'actual attachments keep the same frame renderer');
+  assert.doesNotMatch(app, /data-pp-illustration=/);
   assert.match(app, /display\.innerHTML = alertMediaFrameHtml\(/);
-  assert.match(app, /Source media; source marks, if present, are left visible\./);
-  assert.match(app, /Illustrative design based on alert details; not a scene photograph\./);
+  assert.match(app, /Display alone does not verify its location or time\./);
+  assert.doesNotMatch(app, /Illustrative design based on alert details|\/illustration\?lang/);
   assert.match(css, /\.ras-media-frame-stage \{/);
   assert.match(css, /\.ras-media-frame-note \{/);
   assert.match(app, /schedulePopupFit\?\.\(2\)/);

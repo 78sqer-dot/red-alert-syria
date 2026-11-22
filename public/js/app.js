@@ -363,36 +363,30 @@ function distChip(a) {
   return `<span class="dist-chip${r.near ? ' near' : ''}">${icon('locate', 12)}${esc(txt)}${r.near && !inside ? ` · ${esc(LANG === 'ar' ? 'قريب منك' : 'near you')}` : ''}</span>`;
 }
 function alertMediaFrameHtml(item, alertId) {
-  const illustration = item.illustration === true;
-  const url = illustration
-    ? `/api/alerts/${encodeURIComponent(alertId)}/illustration?lang=${LANG === 'en' ? 'en' : 'ar'}`
-    : `/api/alerts/${encodeURIComponent(alertId)}/media?type=${encodeURIComponent(item.type)}${/^[a-f0-9]{12}$/.test(item.version || '') ? `&v=${encodeURIComponent(item.version)}` : ''}`;
+  const url = `/api/alerts/${encodeURIComponent(alertId)}/media?type=${encodeURIComponent(item.type)}${/^[a-f0-9]{12}$/.test(item.version || '') ? `&v=${encodeURIComponent(item.version)}` : ''}`;
   const viewer = item.type === 'video'
     ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(url)}" type="${esc(item.mime_type || 'video/mp4')}"></video>`
-    : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(illustration ? (LANG === 'en' ? 'Illustrative alert graphic' : 'بطاقة توضيحية للخبر') : T.photoTab)}" loading="eager" decoding="async">`;
-  const label = illustration
-    ? (LANG === 'en' ? 'ILLUSTRATIVE GRAPHIC' : 'بطاقة توضيحية')
-    : (LANG === 'en' ? 'SOURCE MEDIA' : 'وسيط المصدر');
-  const note = illustration
-    ? (LANG === 'en' ? 'Illustrative design based on alert details; not a scene photograph.' : 'تصميم مبني على تفاصيل التنبيه، وليس صورةً للمشهد.')
-    : (LANG === 'en' ? 'Source media; source marks, if present, are left visible.' : 'وسيط المصدر؛ تُترك علاماته كما هي إن وُجدت.');
+    : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(T.photoTab)}" loading="eager" decoding="async">`;
+  const label = LANG === 'en' ? 'ATTACHED MEDIA' : 'وسيط مرفق';
+  const note = LANG === 'en'
+    ? 'Attachment as supplied, with its original marks. Display alone does not verify its location or time.'
+    : 'مرفق كما ورد، مع علاماته الأصلية. عرضه وحده لا يثبت مكانه أو توقيته.';
   return `<div class="ras-media-frame" dir="ltr"><div class="ras-media-frame-head"><img src="/img/logo-wordmark.svg" alt="" loading="lazy"><span class="ras-media-frame-label">${esc(label)}</span></div><div class="ras-media-frame-stage">${viewer}</div><div class="ras-media-frame-note" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">${esc(note)}</div></div>`;
 }
 function popupHtml(a) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : (a.media ? [a.media] : []);
-  const mediaItems = ['photo', 'video'].map((type) => rawMediaItems.find((item) => item?.type === type)).filter(Boolean);
+  const mediaItems = ['photo', 'video'].map((type) => rawMediaItems.find((item) => item?.type === type && item.illustration !== true && item.generated !== true)).filter(Boolean);
   const fullPreview = alertPreviewText(a, LANG);
   const newsText = [titleOf(a), fullPreview].filter((value) => String(value || '').trim()).join('\n');
-  const illustrationFallback = mediaItems.length === 0;
-  const displayModes = availableAlertDisplayModes(newsText, mediaItems, { illustrationFallback });
-  const displayMediaItems = mediaItems.length ? mediaItems : illustrationFallback ? [{ type: 'photo', illustration: true }] : [];
+  const displayModes = availableAlertDisplayModes(newsText, mediaItems);
+  const displayMediaItems = mediaItems;
   const initialMode = initialAlertDisplayMode(displayModes);
-  const mediaActions = displayModes.length ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'محتوى التنبيه' : 'Alert content')}">${displayModes.map((mode) => {
+  const mediaActions = displayModes.length > 1 ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'محتوى التنبيه' : 'Alert content')}">${displayModes.map((mode) => {
     const item = displayMediaItems.find((candidate) => candidate.type === mode);
     const label = mode === 'news' ? T.alertNewsTab : mode === 'video' ? T.videoTab : T.photoTab;
     const glyph = mode === 'news' ? 'news' : mode === 'video' ? 'mediaVideo' : 'mediaImage';
-    return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}" data-pp-media-mime="${esc(item?.mime_type || '')}" data-pp-illustration="${item?.illustration === true}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
+    return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}" data-pp-media-mime="${esc(item?.mime_type || '')}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
   }).join('')}</div>` : '';
   const titleRow = `<div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p></div>`;
   const metadata = `<div class="pp-metadata"><div class="pp-category-row">${badge(shown)}${distChip(a)}${Array.isArray(a.more) && a.more.length ? `<span class="pp-areas">${icon('locate', 13)}${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</span>` : ''}</div><div class="pp-date-row" title="${LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time'}">${icon('clock', 13)}<time datetime="${esc(a.timestamp)}">${esc(fmtDay.format(new Date(a.timestamp)))} <span aria-hidden="true">·</span> ${esc(fmtTime.format(new Date(a.timestamp)))}</time><span class="pp-age">${esc(ago(a.timestamp))}</span></div></div>`;
@@ -1368,7 +1362,6 @@ function bindEvents() {
         type: panels.mediaType,
         version: mediaButton.dataset.ppMediaVersion || '',
         mime_type: mediaButton.dataset.ppMediaMime || '',
-        illustration: mediaButton.dataset.ppIllustration === 'true',
       }, root.dataset.alertId || '');
       amap?.schedulePopupFit?.(2);
       return;

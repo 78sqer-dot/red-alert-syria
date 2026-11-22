@@ -27,9 +27,12 @@ test('popup tab order is always news, photo, then video when available', () => {
   assert.deepEqual(availableAlertDisplayModes('خبر', [{ type: 'video' }, { type: 'photo' }, { type: 'audio' }]), ['news', 'photo', 'video']);
 });
 
-test('photo fallback is available only when neither a source photo nor video exists', () => {
-  assert.deepEqual(availableAlertDisplayModes('عنوان الخبر', [], { illustrationFallback: true }), ['news', 'photo']);
-  assert.deepEqual(availableAlertDisplayModes('', [], { illustrationFallback: true }), ['photo']);
-  assert.deepEqual(availableAlertDisplayModes('عنوان الخبر', [{ type: 'video' }], { illustrationFallback: true }), ['news', 'video']);
-  assert.deepEqual(availableAlertDisplayModes('عنوان الخبر', [{ type: 'photo' }], { illustrationFallback: true }), ['news', 'photo']);
+test('attachmentless news never invents a photo, including the retired fallback option', () => {
+  assert.deepEqual(availableAlertDisplayModes('عنوان الخبر', [], { illustrationFallback: true }), ['news']);
+  assert.deepEqual(availableAlertDisplayModes('', [], { illustrationFallback: true }), []);
+  assert.deepEqual(availableAlertDisplayModes('عنوان الخبر', [{ type: 'video' }]), ['news', 'video']);
+  assert.deepEqual(availableAlertDisplayModes('عنوان الخبر', [{ type: 'photo' }]), ['news', 'photo']);
+});
+test('retired generated graphics cannot masquerade as real attachments', () => {
+  assert.deepEqual(availableAlertDisplayModes('خبر', [{ type: 'photo', illustration: true }, { type: 'video', generated: true }]), ['news']);
 });
