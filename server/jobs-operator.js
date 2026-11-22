@@ -11,7 +11,7 @@ function revision(job, now) {
     day: damascusDate(now), id: job.id, kind: job.kind, status: job.status, sourceKey: job.sourceKey,
     fingerprint: job.fingerprint, sourceName: job.sourceName, sourceUrl: job.sourceUrl,
     title: job.title, text: job.text, links: job.links, location: job.location,
-    deadline: job.applicationDeadline, override: job.applicationDeadlineOverride, updatedAt: job.updatedAt,
+    deadline: job.applicationDeadline, override: job.applicationDeadlineOverride, updatedAt: job.updatedAt, metadataRevision: job.metadataRevision, publicReviewHold: job.publicReviewHold,
   })).digest('hex');
 }
 function duplicateOf(job, j) {
@@ -29,6 +29,7 @@ export function operatorJobsStatus(now = Date.now()) {
     stored_approved_count: approved.length, eligible_approved_count: approved.filter((job) => isPublicJobEligible(job, j, now)).length,
     expired_approved_count: approved.filter((job) => isApplicationDeadlineExpired(effectiveJobDeadline(job), now)).length,
     closed_application_count: approved.filter(closedJobApplication).length,
+    quarantined_approved_count: approved.filter(job => job.publicReviewHold?.active === true).length,
     public_feed_count: publicJobs(j, now).length,
     items: pending.map((job) => ({ id: job.id, revision: revision(job, now), title: job.title, createdAt: job.createdAt })),
   };
@@ -37,7 +38,7 @@ export function operatorJobReview(id, now = Date.now()) {
   if (!/^[a-f0-9]{14}$/u.test(String(id))) return null;
   const j = jobsState(), job = j.pending[id] || j.published[id], decision = j.decisions[id];
   if (!job && !decision) return null;
-  if (!job) return { id, status: decision.action, revision: null, operation: decision.operatorReview || null, decision };
+  if (!job) return { id, status: decision.action, revision: null, operation: decision.operatorReview || null, decision, metadata_reviews: j.metadataAudits[id] || [] };
   const deadline = effectiveJobDeadline(job), duplicate = duplicateOf(job, j), issues = [];
   if (job.kind !== 'source') issues.push('outside-monitored-job-scope');
   if (isApplicationDeadlineExpired(deadline, now)) issues.push('application-deadline-expired');
@@ -52,6 +53,9 @@ export function operatorJobReview(id, now = Date.now()) {
     location: normalizeJobLocation(job.location, j) || null,
     application_deadline: deadline, deadline_override: job.applicationDeadlineOverride === true,
     issues, duplicateOf: duplicate, operation: decision?.operatorReview || null,
+    metadata_revision: job.metadataRevision || null, metadata_reviews: j.metadataAudits[id] || [],
+    public_quarantine: job.publicReviewHold || null,
+    metadata_actions: job.kind === 'source' && ['pending', 'approved'].includes(job.status) && !j.deleted[id] && (!decision || decision.action === 'approved') ? ['revise_metadata'] : [],
     actions: job.kind === 'source' && job.status === 'pending' && !j.deleted[id]
       ? ['ignore', ...(!issues.length ? [normalizeJobLocation(job.location, j) ? 'approve' : 'approve_without_location'] : [])] : [],
   };

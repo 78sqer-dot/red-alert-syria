@@ -14,6 +14,7 @@ import { config } from './config.js';
 import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsReview, operateNewsDraft, operatorNewsStatus, setOperatorNewsMode, reconcilePublishedNewsDuplicate } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
+import { reviseJobMetadata } from './jobs-metadata.js';
 import { operatorJobsStatus, operatorJobReview, operateJobDraft } from './jobs-operator.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
 import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, fixPostMarkup, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput, repairNewsAlert } from './bot.js';
@@ -294,6 +295,13 @@ app.post('/api/admin/jobs/:id/review', apiLimiter, express.json({ limit: '2kb' }
   res.setHeader('Cache-Control', 'no-store');
   try {
     const result = await operateJobDraft(req.params.id, { action: req.body?.action, revision: req.body?.revision });
+    return res.status(result.ok ? 200 : 409).json(result);
+  } catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
+});
+app.post('/api/admin/jobs/:id/metadata', apiLimiter, (req, res, next) => adminKeyOk(req) ? next() : res.status(404).end(), express.json({ limit: '40kb' }), async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const result = await reviseJobMetadata(req.params.id, req.body);
     return res.status(result.ok ? 200 : 409).json(result);
   } catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
 });
