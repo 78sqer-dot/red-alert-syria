@@ -434,7 +434,7 @@ function editorialGate(d) {
   const publicRaw = `${rawHeadline}\n${d.body || ''}`;
   if (/https?:\/\/|www\.|t\.me\/|@[A-Za-z0-9_]{4,}/i.test(publicRaw)) return fail('public-link-or-handle');
   const feedNames = (d.srcs || []).flatMap((sourceItem) => [sourceItem?.name, sourceItem?.u]).filter(Boolean);
-  if (feedNames.some((name) => editorialHas(publicRaw, name))) return fail('private-feed-identity');
+  if (d.sourceBodyVersion !== 1 && feedNames.some((name) => editorialHas(publicRaw, name))) return fail('private-feed-identity');
 
   const locs = locsOf(d.loc, d.extra);
   const placeNames = locs.flatMap((loc) => [loc?.name_ar, loc?.district_ar, loc?.governorate_ar]).filter(Boolean);
@@ -1310,6 +1310,7 @@ async function nightPublish(d) {
     d.dayAutoAt = null;
     delete d.autoMode;
     save();
+    await store.flushBackup(true);
     await refreshCards(d);
     console.warn(`[news] auto-publish audit failed: ${d.id} (${audit.reason}) — held for manual review`);
     return false;
@@ -1319,7 +1320,10 @@ async function nightPublish(d) {
     save();
     console.log(`[news] auto-publish audit corrected ${d.id}: ${audit.corrected.join(', ')}`);
   }
-  const editorial = editorialGate(d);
+  let sourceCandidate;
+  let editorial;
+  try { sourceCandidate = sourceFirstCandidate(d); editorial = sourceFirstGate(d, sourceCandidate); }
+  catch (e) { editorial = { ok: false, reason: e.message }; }
   if (!editorial.ok) {
     d.status = 'pending';
     d.editorialHold = true;
@@ -1328,6 +1332,7 @@ async function nightPublish(d) {
     d.dayAutoAt = null;
     delete d.autoMode;
     save();
+    await store.flushBackup(true);
     await refreshCards(d);
     console.warn(`[news] automatic publication held for editorial review: ${d.id} (${editorial.reason})`);
     return false;
@@ -1335,7 +1340,7 @@ async function nightPublish(d) {
   const duplicate = knownDuplicateDraft(d);
   if (duplicate) { await suppressDuplicateDraft(d, duplicate); return false; }
   let publicationDraft;
-  try { publicationDraft = await automaticPublicDraft(d); }
+  try { publicationDraft = await automaticPublicDraft(d, sourceCandidate); }
   catch (e) {
     d.status = 'pending';
     if (mode === 'day') d.dayAutoAt = Date.now() + DAY_AUTO_DELAY_MS;
@@ -1480,38 +1485,58 @@ export function toBotDraft(d, options = {}) {
   };
 }
 
-/** Automatic posts use neutral newsroom wording only; failures preserve the already-classified factual copy. */
-async function automaticPublicDraft(d) {
-  const preview = d.aiRewritePreview;
-  if (preview?.mode === 'news' && preview.applied === true && preview.text === d.headline) return toBotDraft(d);
-  const sourceText = String(d.sourceText || d.headline || '').trim();
-  if (!sourceText || (!R.rewriteImpl && !process.env.NEWS_REWRITE_GEMINI_API_KEY)) return toBotDraft(d);
-  let stage = 'rewrite';
-  try {
-    const raw = R.rewriteImpl
-      ? await R.rewriteImpl(sourceText, { mode: 'news' })
-      : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '', mode: 'news' });
-    stage = 'finalize';
-    const headline = finalizeRewriteOutput(String(raw || ''), 'news', d.srcs?.[0]?.name || '');
-    const candidate = { ...d, headline, body: '' };
-    stage = 'editorial-gate';
-    const gate = editorialGate(candidate);
-    if (publicDraftCopyIssue(candidate) || !gate.ok) {
-      console.warn(`[news] neutral auto rewrite failed conservative gate (${gate.reason || 'private-copy'}); keeping classified copy for ${d.id}`);
-      return toBotDraft(d);
-    }
-    stage = 'draft-validation';
-    return toBotDraft(candidate);
-  } catch {
-    console.warn(`[news] neutral auto rewrite unavailable at ${stage}; keeping classified copy for ${d.id}`);
-    return toBotDraft(d);
-  }
+/** Automatic publishing never calls a language model or trusts its factual headline.
+ * The only body allowed is the cleaned source; a deterministic type/place line is
+ * metadata, not a summary. Missing, truncated or overlong source stays in review. */
+function sourceFirstCandidate(d) {
+  const source = String(d.sourceText || '').trim();
+  if (!source) throw new Error('missing-original-source');
+  if (d.sourceTextVersion !== 2 && source.length >= 1200) throw new Error('legacy-source-may-be-truncated');
+  if (publicDraftCopyIssue(d)) throw new Error('private-editorial-copy-not-public');
+  const body = cleanPublicNewsAttribution(source, (d.srcs || []).map((s) => s.name).filter(Boolean));
+  if (!body || body.length > 2800) throw new Error('source-length-needs-review');
+  const roleConflict = locsOf(d.loc, d.extra).some((l) => nonIncidentPlaceOnly(l.name_ar, source));
+  if (roleConflict) throw new Error('non-incident-location-role');
+  const where = d.loc?.name_ar || 'سوريا';
+  const headline = `${typeOf(d.type).ar} — ${where}`;
+  // Drop every generated/public alternate-text field. The manual preview remains
+  // on the private stored draft only, never on this publication candidate.
+  return { ...d, headline, body, details: '', text: '', description: '', description_en: '',
+    title: '', title_en: '', aiRewritePreview: undefined, sourceBodyVersion: 1 };
+}
+function sourceFirstGate(d, candidate) {
+  let expected;
+  try { expected = sourceFirstCandidate(d); } catch (e) { return { ok: false, reason: e.message }; }
+  if (candidate.body !== expected.body || candidate.headline !== expected.headline) return { ok: false, reason: 'source-copy-changed' };
+  // Existing type, political-category, private-copy, attribution and uncertainty
+  // checks now inspect the complete body, not an AI-authored summary.
+  return editorialGate({ ...candidate, headline: candidate.body });
+}
+async function automaticPublicDraft(d, candidate = sourceFirstCandidate(d)) {
+  return toBotDraft(candidate, { preservePublishedCopy: true });
+}
+/** A place mentioned only as a directorate/hospital/hometown is not an event pin.
+ * Remove these role-qualified mentions; an independent mention keeps the place. */
+function nonIncidentPlaceOnly(name, text) {
+  if (hospitalDestinationOnly(name, text)) return true;
+  const n = N(String(name || '')).trim();
+  if (!n) return false;
+  const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nt = N(String(text || ''));
+  const roles = [
+    '(?:مديريه|مديرية|قياده|قيادة|فرع|مركز)\\s+(?:قوي\\s+)?(?:الامن|امن|الشرطه|شرطة|شرطه|الداخلي)\\s+(?:الداخلي\\s+)?(?:في\\s+)?',
+    '(?:ينحدر|تنحدر|ينحدرون)\\s+من\\s+(?:(?:مدينه|مدينة|بلده|بلدة|قريه|قرية)\\s+)?',
+    '(?:مسقط\\s+راسه|مسقط\\s+راسها)\\s+(?:(?:في|هو|هي)\\s+)?',
+  ];
+  let rest = nt;
+  for (const role of roles) rest = rest.replace(new RegExp(role + escaped + '(?=\\s|[،,.:؛]|$)', 'gu'), ' ');
+  return rest !== nt && !nameInText(name, rest);
 }
 
 // ---------------------------------------------------------------- pipeline
 function buildLocations(r, it) {
   const out = [];
-  const add = (loc) => { if (loc && hospitalDestinationOnly(loc.name_ar, it.text)) return; if (loc && !out.some((x) => x.scope === loc.scope && x.name_ar === loc.name_ar && x.governorate === loc.governorate)) out.push(loc); };
+  const add = (loc) => { if (loc && nonIncidentPlaceOnly(loc.name_ar, it.text)) return; if (loc && !out.some((x) => x.scope === loc.scope && x.name_ar === loc.name_ar && x.governorate === loc.governorate)) out.push(loc); };
   const govs = new Set();
   for (const p of (r.places || []).slice(0, 4)) {
     if (!p?.name) continue;
@@ -1534,7 +1559,8 @@ function buildLocations(r, it) {
     if (loc && loc.scope === 'place' && loc.governorate_ar && N(loc.name_ar) === N(loc.governorate_ar)) {
       const g = N(loc.governorate_ar);
       const nt = N(it.text);
-      if (nt.includes(N('ريف') + ' ' + g) && !nt.split(N('ريف') + ' ' + g).join(' ').split(' ').includes(g)) loc = locationFrom({ govCode: loc.governorate });
+      const broadOnly = nt.replace(new RegExp('(?:ريف|محافظه|محافظة)\\s+' + g, 'gu'), ' ');
+      if (broadOnly !== nt && !nameInText(loc.name_ar, broadOnly)) loc = locationFrom({ govCode: loc.governorate });
     }
     if (loc) { add(loc); if (loc.governorate) govs.add(loc.governorate); }
   }
@@ -1563,6 +1589,12 @@ function buildLocations(r, it) {
     fine = rest.length ? rest : fine.slice(0, 1);
   }
   const list = fine.length ? fine : out.slice(0, 1);
+  if (!list.some((l) => l.scope === 'place' || l.scope === 'district')) {
+    // An explicit incident village not in the gazetteer stays named, without
+    // coordinates. The source-first editorial gate holds this for review.
+    const village = String(it.text || '').match(/(?:في|من أبناء)\s+(?:قرية|بلدة)\s+([^،.\n]+?)(?=\s+(?:في|بريف|بمحافظة|الواقعة|حيث|بعد)|[،.\n]|$)/u)?.[1]?.trim();
+    if (village && village.length < 60) return [{ ...locationFrom({}), name_ar: village, name_en: '' }];
+  }
   return list.slice(0, 4);
 }
 function capReached() {
@@ -1691,7 +1723,7 @@ async function handleResult(it, r, known, pmap) {
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
     droneRuleVersion: 1, dronePresence: hasExplicitDroneFlight(it.text),
     ...(['uav', 'uav_strike', 'warplane', 'helicopter'].includes(r.type) && extractFlightDirection(it.text) ? { flightHeading: extractFlightDirection(it.text) } : {}),
-    sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
+    sourceText: String(it.text || ''), sourceTextVersion: 2, ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
   };
   scheduleDayAuto(d, d.created);
   n.drafts[d.id] = d;
@@ -2901,4 +2933,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

@@ -420,7 +420,7 @@ test('daytime publication dispatch accepts a newly qualified type that remains e
   }
 });
 
-test('automatic publication requests neutral news wording only and safely falls back when rewriting fails', async () => {
+test('automatic publication never invokes rewrites and publishes only source text', async () => {
   const previousHandler = _test.R.H;
   const previousRewrite = _test.R.rewriteImpl;
   const state = newsState();
@@ -460,8 +460,9 @@ test('automatic publication requests neutral news wording only and safely falls 
     };
     assert.equal(nightEligible(rewritten), true);
     assert.equal(await _test.nightPublish(rewritten), true);
-    assert.deepEqual(modes, ['news'], 'the automatic publisher never requests opinion or satire mode');
-    assert.match(calls[0].headline, /حلب مساء اليوم وأُصيب 3 أشخاص/);
+    assert.deepEqual(modes, [], 'the automatic publisher never calls an abstractive rewriter');
+    assert.equal(calls[0].headline, 'انفجار — حلب');
+    assert.equal(calls[0].body, base.sourceText);
     assert.doesNotMatch(JSON.stringify(calls[0]), /رأي\/تحليل|محاكاة ساخرة|EDITORIAL_REVIEW_REQUIRED/);
     assert.equal(rewritten.publishedHeadline, calls[0].headline);
 
@@ -471,8 +472,9 @@ test('automatic publication requests neutral news wording only and safely falls 
     };
     assert.equal(nightEligible(fallback), true);
     assert.equal(await _test.nightPublish(fallback), true, 'a rejected private-tone rewrite does not change eligibility');
-    assert.deepEqual(modes, ['news', 'news']);
-    assert.equal(calls[1].headline, fallback.headline, 'failed neutral-only rewriting preserves the classified factual copy');
+    assert.deepEqual(modes, []);
+    assert.equal(calls[1].headline, 'انفجار — حمص');
+    assert.equal(calls[1].body, fallback.sourceText);
     assert.doesNotMatch(JSON.stringify(calls[1]), /محاكاة ساخرة|ليست خبراً/);
   } finally {
     _test.R.H = previousHandler;
@@ -508,7 +510,7 @@ test('automatic draft-preparation failures never strand a draft in publishing', 
     const attemptedAt = Date.now();
     assert.equal(await _test.nightPublish(draft), false);
     assert.equal(draft.status, 'pending');
-    assert.ok(draft.dayAutoAt > attemptedAt, 'daytime retry is moved forward after a preparation failure');
+    assert.equal(draft.editorialHold, true, 'unusable source metadata requires review instead of a retry loop');
     assert.equal(publishAttempts, 0);
   } finally {
     delete sources.map;
@@ -524,7 +526,7 @@ test('failed editorial gate keeps an eligible draft pending, clears its timer, a
     id,
     type: 'explosion',
     headline: 'قال الدفاع المدني السوري: وقع انفجار في قرية كودنة مساء اليوم وأصيب 4 أشخاص.',
-    sourceText: 'قال الدفاع المدني السوري: وقع انفجار في قرية كودنة مساء اليوم وأصيب 3 أشخاص.',
+    sourceText: 'قال الدفاع المدني السوري: وقع انفجار مساء اليوم وأصيب 3 أشخاص ونقلوا إلى مشفى كودنة.',
     loc: { scope: 'place', name_ar: 'كودنة', governorate_ar: 'القنيطرة', latitude: 33.2, longitude: 35.9 },
     srcs: [{ u: 'trusted-feed', name: 'قناة الرصد الخاصة', local: false }],
     dayAutoAt: daytimeStart,

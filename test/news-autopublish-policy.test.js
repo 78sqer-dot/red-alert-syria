@@ -242,7 +242,8 @@ test('a correctable draft is auto-published in its corrected form', async () => 
   try {
     assert.equal(await _test.nightPublish(d), true);
     assert.equal(payloads.length, 1);
-    assert.equal(payloads[0].headline, clean, 'what publishes is the corrected headline, not the raw draft text');
+    assert.equal(payloads[0].headline, 'انفجار — حلب', 'automatic heading is deterministic');
+    assert.equal(payloads[0].body, clean, 'complete source body, not generated summary');
     assert.equal(d.headline, clean);
     assert.ok(d.autoAudit?.corrected?.includes('type-label-prefix'));
     assert.equal(d.status, 'published');
