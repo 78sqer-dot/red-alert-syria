@@ -1583,3 +1583,8 @@ html.dark .map-bottom-controls { box-shadow: 0 10px 30px rgba(0, 0, 0, .45), ins
 .mk-reference-news .news-pulse-ring { width:24px; height:24px; border:1.5px solid var(--c); background:transparent; box-shadow:none; animation:referenceNewsPulse 2.2s ease-out infinite; }
 .mk-reference-news .news-pulse-ring::after { display:none; }
 @keyframes referenceNewsPulse { 0% { transform:translate(-50%,-50%) scale(.75); opacity:.9; } 100% { transform:translate(-50%,-50%) scale(1.35); opacity:0; } }
+
+/* Existing point and small news pulse, for a named locality reference only. */
+.mk-locality-reference .locality-reference-dot{display:block;position:absolute;left:0;top:0;width:14px;height:14px;box-sizing:border-box;transform:translate(-50%,-50%);border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;}
+
+.mk-locality-reference .news-pulse-ring{transform:translate(-50%,-50%);width:25px;height:25px;}

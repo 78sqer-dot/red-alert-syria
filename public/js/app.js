@@ -6,11 +6,11 @@ import { alertPreviewText } from '/shared/alert-preview.js?v=1';
 import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
-import { matchesFollowArea } from '/shared/area-follow.js?v=1';
+import { matchesFollowArea } from '/shared/area-follow.js?v=2';
 import { icon, ICONS } from './icons.js?v=10';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=105';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=106';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -124,7 +124,7 @@ const isLive = (a) => a.is_active && (a.expires_at == null || Date.parse(a.expir
 const shareUrl = (a) => `${location.origin}/${LANG}/a/${encodeURIComponent(a.id)}`;
 const siteUrl = () => `${location.origin}/${LANG}/`;
 const fbShare = (u) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`;
-const shareText = (a) => `🚨 ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}`;
+const shareText = (a) => `${neutralReport(a)?'🔵':'🚨'} ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}${a.geographic_reference?'\n'+(LANG==='ar'?a.geographic_reference.note_ar:a.geographic_reference.note_en):''}`;
 
 // ------------------------------------------------------------------ alerts selection
 const URGENT_TYPES = new Set(['breaking', 'uav_strike', 'airstrike', 'warplane', 'helicopter', 'air_movement', 'missile', 'attack', 'artillery', 'assassination', 'shooting', 'military_incursion']);
@@ -285,7 +285,8 @@ function detailHtml(a) {
   const verificationLabel = a.verification?.status === 'official' ? (LANG === 'ar' ? 'مصدر رسمي' : 'Official source') : a.verification?.status === 'attributed' ? (LANG === 'ar' ? 'منسوب إلى المصدر' : 'Attributed to source') : (LANG === 'ar' ? 'غير موثق مستقلًا' : 'Not independently verified');
   const rows = [
     [T.type, `${badge(a)}`],
-    [T.location, political && !hasLoc ? (LANG === 'ar' ? 'موقع غير محدد — بلا دبوس' : 'Location unspecified — no pin') : esc(placeName(a))],
+    ...(a.geographic_reference?[[LANG==='ar'?'مرجع جغرافي':'Geographic reference',esc((LANG==='ar'?a.geographic_reference.label_ar:a.geographic_reference.label_en)+' · '+(LANG==='ar'?a.geographic_reference.note_ar:a.geographic_reference.note_en))]]:[]),
+    [T.location, a.geographic_reference ? (LANG==='ar'?'موقع الحدث الدقيق غير محدد؛ المرجع الجغرافي مبيّن أعلاه':'Exact incident location unknown; geographic reference shown above') : political && !hasLoc ? (LANG === 'ar' ? 'موقع غير محدد — بلا دبوس' : 'Location unspecified — no pin') : esc(placeName(a))],
     ...(category ? [[LANG === 'ar' ? 'الفئة الفرعية' : 'Subcategory', esc(LANG === 'ar' ? category.ar : category.en)]] : []),
     ...(sources.length ? [[LANG === 'ar' ? 'المصادر' : 'Sources', sources.join('<br>')]] : []),
     ...(sourceTimestamp ? [[LANG === 'ar' ? 'تاريخ المصدر' : 'Source date', esc(sourceTimestamp)]] : []),
@@ -400,7 +401,8 @@ function popupHtml(a) {
     ${fullPreview ? `<p class="pp-desc" dir="auto">${esc(fullPreview)}</p>` : ''}</section>` : '';
   const activeMedia = displayMediaItems.find((item) => item.type === initialMode);
   const mediaViewer = displayMediaItems.length ? `<section class="pp-media-panel" data-pp-media-panel role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"${initialMode === 'news' ? ' hidden' : ''}><div class="pp-media-content" data-pp-media-content>${activeMedia ? alertMediaFrameHtml(activeMedia, a.id) : ''}</div></section>` : '';
-  const content = `${titleRow}${metadata}${mediaActions}${newsPanel}${mediaViewer}`;
+  const referenceNote=a.geographic_reference?`<p class="pp-desc">${esc(LANG==='ar'?a.geographic_reference.note_ar:a.geographic_reference.note_en)}</p>`:'';
+  const content = `${titleRow}${metadata}${referenceNote}${mediaActions}${newsPanel}${mediaViewer}`;
   return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" data-alert-id="${esc(a.id)}">
     ${content}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
@@ -1123,7 +1125,7 @@ function openShareCard(a) {
   openModal(`<div class="share-card-modal" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" aria-labelledby="shareCardTitle">
     <div class="share-card-head"><div><h2 id="shareCardTitle">${esc(T.shareCardTitle)}</h2><p>${esc(T.shareCardPreview)}</p></div><button class="sb-x" type="button" data-m="close" aria-label="${esc(T.close)}">${icon('x', 17)}</button></div>
     <div class="share-card-map"><img id="shareCardMapImage" src="${esc(imageUrl)}" alt="${esc(T.shareCardMapAlt)}" loading="eager" decoding="async"/><div id="shareCardMapFallback" class="share-card-fallback" hidden>${esc(T.shareCardMapFallback)}</div></div>
-    <div class="share-card-info"><h3>${esc(titleOf(a))}</h3><div class="share-card-meta">${icon('mapPin', 15)}<span><b>${esc(T.shareCardLocation)}:</b> ${esc(placeName(a))}</span></div>
+    <div class="share-card-info"><h3>${esc(titleOf(a))}</h3>${a.geographic_reference?`<p>${esc((LANG==='ar'?a.geographic_reference.label_ar:a.geographic_reference.label_en)+' · '+(LANG==='ar'?a.geographic_reference.note_ar:a.geographic_reference.note_en))}</p>`:''}<div class="share-card-meta">${icon('mapPin', 15)}<span><b>${esc(T.shareCardLocation)}:</b> ${esc(a.geographic_reference?(LANG==='ar'?'موقع الحدث الدقيق غير محدد؛ المرجع الجغرافي مبيّن أعلاه':'Exact incident location unknown; geographic reference shown above'):placeName(a))}</span></div>
       <div class="share-card-meta">${icon('clock', 15)}<span><b>${esc(T.eventTime)}:</b> ${esc(eventWhen)}</span></div>${lastWhen ? `<div class="share-card-meta">${icon('refresh', 15)}<span><b>${esc(update.label)}:</b> ${esc(lastWhen)}</span></div>` : ''}</div>
     <div class="share-card-link"><label for="shareCardUrl">${esc(T.directAlertLink)}</label><div><input id="shareCardUrl" type="url" value="${esc(url)}" readonly dir="ltr"/><a href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(T.directAlertLink)}">${icon('link', 15)}</a></div></div>
     <div class="share-card-actions"><button class="btn-red" type="button" data-share-act="share">${icon('share', 16)}${esc(T.shareCardOpenShare)}</button><button class="btn-sm" type="button" data-share-act="copy">${icon('copy', 15)}${esc(T.shareCardCopy)}</button></div>

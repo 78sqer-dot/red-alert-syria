@@ -1,3 +1,4 @@
+import {alertLocalityReference} from './reviewed-image-reference.js';
 import { reviewedAlertCopy } from './reviewed-news-copy.js';
 import { attributedAlertCopy } from './attributed-report.js';
 import { approvedPublicCorrection } from './approved-public-correction.js';
@@ -864,6 +865,7 @@ export function publicAlert(a) {
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
   const approvedCorrection = approvedPublicCorrection(a);
   if(a.location_display==='geographic_reference' && !approvedCorrection)throw Error('invalid-geographic-reference-public');
+  const localityReference=alertLocalityReference(a,reviewed);
   const approvedValues = new Set(approvedCorrection ? Object.values(approvedCorrection) : []);
   const publicText = (value) => {
     const selectedEditorialCopy = Boolean(editorialMode && value === a.description && isPublicEditorialCopy(value, editorialMode));
@@ -933,6 +935,7 @@ export function publicAlert(a) {
     scope: a.scope,
     // Political rings use only manually/explicitly selected areas; never infer locations from article mentions.
     zones: a.location ? (a.type === 'political' ? selectedAlertZones(a) : alertZones(a)) : undefined,
+    ...(localityReference ? {geographic_reference:{kind:'locality_reference',latitude:localityReference.latitude,longitude:localityReference.longitude,label_ar:localityReference.label_ar,label_en:localityReference.label_en,note_ar:localityReference.note_ar,note_en:localityReference.note_en}} : {}),
     more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
     source_info: publicSourceInfo(a),

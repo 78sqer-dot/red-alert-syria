@@ -3,6 +3,7 @@
 // zoomed on the affected place with category-coloured impact circles / marker, and a short note footer.
 // Pure SVG -> PNG with resvg; map = raster tiles (CARTO Voyager, OSM fallback), cached in memory.
 // Swap the logo by replacing public/img/logo-wordmark.svg (or set ALERT_IMAGE_LOGO to an .svg/.png).
+import { alertLocalityReference } from './reviewed-image-reference.js';
 import { reviewedAlertCopy } from './reviewed-news-copy.js';
 import { approvedPublicCorrection } from './approved-public-correction.js';
 import fs from 'node:fs';
@@ -211,7 +212,8 @@ export async function alertImageSvg(alert, opts = {}) {
   const t = ALERT_TYPES[type];
   const reviewedCopy=reviewedAlertCopy(alert);
   if(alert.meta?.reviewedNewsCopy && !reviewedCopy) throw new Error('invalid-reviewed-image-copy');
-  const imageContext=reviewedCopy?.imageContext;
+  const imageReference=alertLocalityReference(alert,reviewedCopy);
+  const imageContext=imageReference || reviewedCopy?.imageContext;
   const loc = alert.location || {};
   const politicalLocation = Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude) && alert.scope !== 'country';
   const country = type === 'political' ? !politicalLocation : alert.scope === 'country' || !Number.isFinite(loc.latitude);
@@ -270,6 +272,10 @@ export async function alertImageSvg(alert, opts = {}) {
   } else if (!country && !imageContext) {
     const [x, y] = px(center.lat, center.lon);
     o.push(geographicReference ? `<defs><radialGradient id="referenceGlow"><stop offset="0.35" stop-color="#263445" stop-opacity="0.32"/><stop offset="1" stop-color="#263445" stop-opacity="0"/></radialGradient></defs><circle cx="${x}" cy="${y}" r="145" fill="url(#referenceGlow)"/><circle cx="${x}" cy="${y}" r="72" fill="#263445" fill-opacity="0.20" stroke="#263445" stroke-width="4.5" stroke-dasharray="14 9"/>` : approximatePoint ? `<circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/>` : type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));
+  }
+  if (imageReference) {
+    const [x,y]=px(center.lat,center.lon);
+    o.push(`<g id="reviewed-geographic-reference"><circle cx="${x}" cy="${y}" r="21" fill="#ef233c" fill-opacity=".05" stroke="#ef233c" stroke-opacity=".25" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="16" fill="none" stroke="#ef233c" stroke-opacity=".5" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/></g>`);
   }
   // attribution (required by the tile licence)
   o.push(`<rect x="${W - 210}" y="${HEAD + MAP_H - 26}" width="210" height="26" fill="#ffffff" opacity="0.75"/>`);

@@ -116,9 +116,9 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=105'/);
-  assert.match(html, /app\.css\?v=100/);
-  assert.match(html, /app\.js\?v=116/);
+  assert.match(app, /from '\.\/map\.js\?v=106'/);
+  assert.match(html, /app\.css\?v=101/);
+  assert.match(html, /app\.js\?v=117/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
@@ -143,10 +143,10 @@ test('alert popup switches between news and attached photo/video in the same win
   assert.match(app, /const initialMode = initialAlertDisplayMode\(displayModes\)/);
   assert.match(app, /const mediaActions = displayModes\.length > 1 \?/);
   assert.match(app, /const titleRow = `<div class="pp-title-row"><p class="pp-title">[\s\S]*?<\/p><\/div>`;/);
-  assert.match(app, /const content = `\$\{titleRow\}\$\{metadata\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
+  assert.match(app, /const content = `\$\{titleRow\}\$\{metadata\}\$\{referenceNote\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
   assert.match(app, /class="pp-news-panel" data-pp-news-panel/);
   assert.match(app, /class="pp-media-panel" data-pp-media-panel/);
-  assert.match(app, /const content = `\$\{titleRow\}\$\{metadata\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
+  assert.match(app, /const content = `\$\{titleRow\}\$\{metadata\}\$\{referenceNote\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
   assert.doesNotMatch(app, /pp-view-tabs|data-pp-tab/);
   assert.match(app, /data-pp-mode="\$\{mode\}"/);
   assert.match(app, /alertDisplayPanelState\(mode\)/);

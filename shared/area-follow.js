@@ -22,6 +22,7 @@ const key = (value) => String(value || '').normalize('NFKD')
 
 export function matchesFollowArea(alert, area) {
   if (!area || typeof area !== 'object') return true;
+  if(alert?.geographic_reference?.kind==='locality_reference')return false;
   if (alert?.scope === 'country') return true;
 
   const locations = [alert?.place, ...(Array.isArray(alert?.more) ? alert.more : [])].filter(Boolean);

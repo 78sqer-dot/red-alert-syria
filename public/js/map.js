@@ -566,7 +566,8 @@ export class AlertMap {
 
   // ------------------------------------------------------------- markers
   setAlerts(alerts, selectedId) {
-    this.alerts = alerts;
+    this.alerts = alerts.map(a=>a.geographic_reference?.kind==='locality_reference'?{...a,location:{latitude:a.geographic_reference.latitude,longitude:a.geographic_reference.longitude},location_display:'locality_reference',scope:'place',zones:[]}:a);
+    alerts=this.alerts;
     this.selectedId = selectedId;
     const selected = alerts.find((alert) => alert.id === selectedId);
     if (selected) this.selectedAlert = selected;
@@ -1174,6 +1175,9 @@ export class AlertMap {
         : a.type === 'military_incursion' ? (incursionKind === 'barrier' ? 'military_barrier' : incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
         : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
+    if (a.location_display === 'locality_reference') {
+      el.className='mk mk-locality-reference';el.innerHTML='<span class="news-pulse-ring" aria-hidden="true"></span><span class="locality-reference-dot"></span>';el.setAttribute('aria-label',this.opts.lang==='en'?a.geographic_reference.note_en:a.geographic_reference.note_ar);return el;
+    }
     if (a.location_display === 'approximate_point') {
       el.className = 'mk mk-approximate-point';
       el.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;';
@@ -1270,6 +1274,7 @@ export class AlertMap {
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
       const planeArea = a.type === 'warplane' || (a.type === 'air_movement' && a.aircraft !== 'uav');
       if (a.location_display === 'approximate_point') continue;
+      if (a.location_display === 'locality_reference') continue;
       if (a.location_display === 'geographic_reference') continue;
       if (!t || (t.marker === 'movement' && !(planeArea && a.is_active)) || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       const marker = alertMarkerKind(a);
@@ -1401,6 +1406,7 @@ export class AlertMap {
     }, 2400);
   }
   select(alert, { fly = true, popup = true, allowUnlocatedPopup = false } = {}) {
+    if(alert?.geographic_reference?.kind==='locality_reference')alert={...alert,location:{latitude:alert.geographic_reference.latitude,longitude:alert.geographic_reference.longitude},location_display:'locality_reference',scope:'place',zones:[]};
     this.selectedId = alert ? alert.id : null;
     this.selectedAlert = alert || null;
     if (!this.ready) { this._pending = alert ? [alert, { fly, popup, allowUnlocatedPopup }] : null; return; }
