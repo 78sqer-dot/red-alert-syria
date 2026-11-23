@@ -2,6 +2,32 @@ import crypto from 'node:crypto';
 export const reviewedCopyHash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 // Release-reviewed source/copy manifests only. Request bodies cannot add entries.
 export const REVIEWED_NEWS_COPIES = Object.freeze({
+  "816c5721fc": {
+    "type": "political",
+    "title": "تقرير عن تعميم مؤرخ في 17 تشرين الثاني لصرف رواتب موظفي المصارف العامة عبر حساباتهم",
+    "title_en": "Report on November 17 circular allowing public-bank staff salaries through bank accounts",
+    "body": "أورد تقرير اقتصادي منشور اليوم أن وزارة المالية وافقت، في تعميم مؤرخ في 17 تشرين الثاني 2026، على صرف الرواتب الشهرية للعاملين لدى المصارف العامة عبر حساباتهم الموطّنة فيها، بدلاً من تحويلها عبر تطبيق شام كاش.\n\nويخص التعميم موظفي المصارف العامة الستة المذكورة فيه، وليس جميع العاملين في الدولة. وتشمل وسائل استلام الرواتب الصرافات الآلية ونقاط البيع ومنافذ المصارف. هذا عرض لتعميم سابق، وليس إعلاناً عن قرار جديد صدر اليوم.",
+    "location": "سوريا",
+    "sourceBinding": "5cb983d76f720aed4d42764d4f66baac68f66b0318e1a6ca79ff2e3a46458142",
+    "publicSourcesHash": "7111def3dd9317b0d0bedfba346f15aabf5de307bb9699efc7a8edd399f993eb",
+    "approvalReference": "wamid.HBgLOTYxODE5OTQ4OTMVAgASGCBBQ0FDRDM0NTNDMjMwRjkwRTFENjhBMzg3Nzk4RkVCNQA=",
+    "singleSourceAcknowledgement": false,
+    "verification": "source-attributed-not-independently-verified",
+    "sourceNote": "Both full texts read. Economic report explicitly dates circular November17, number756/2. Original ministry circular not independently recovered. Accurate generic report attribution, no named outlet public copy. No new-rule urgency. Exact November17 circular date retained. Public-bank employees only, not whole state workforce. Source report, not independent government rule verification.",
+    "imageContext": {
+        "latitude": 34.85,
+        "longitude": 38.6,
+        "zoom": 5,
+        "label_ar": "سياق: سوريا",
+        "label_en": "Context: Syria",
+        "note_ar": "تقرير عن تعميم 17 تشرين الثاني، لا قرار جديد اليوم",
+        "note_en": "Report on a November17 circular, not a new decision today.",
+        "evidence": [
+            "https://t.me/ShaamNetwork/108702?embed=1&mode=tme",
+            "https://aliqtisadiya.com/banking-finance/banking/bank-salary-localization-reshapes-liquidity-and-intermediary-role/"
+        ]
+    }
+},
   "be70c52d5c": {
     "type": "political",
     "title": "مصدر صحفي: واشنطن تبحث تدريب قوات سورية على إزالة الألغام",
