@@ -26,7 +26,7 @@ test('actual pipeline reviewed alert rejects invented coordinates/scope/zones/di
  for(const id of ids){reset();await prepareReviewedNewsCopy(id,req(id));const d=store.state.news.drafts[id];
   for(const candidate of [d,_test.sourceFirstCandidate(d)]){const a=store.addAlert(buildAlertInput(toBotDraft(candidate,{preservePublishedCopy:true}),null));assert.ok(reviewedAlertCopy(a));
    for(const mutate of [a=>{a.location={latitude:33,longitude:36};a.scope='place';a.zones=[{lat:33,lon:36,km:5000}]},a=>a.location={latitude:33,longitude:36},a=>a.scope='place',a=>a.zones=[{lat:33,lon:36,km:5000}],a=>a.location_display='geographic_reference',a=>a.areas=['invented'],a=>a.extra=[{latitude:33,longitude:36}],a=>a.zones={},a=>a.areas=null,a=>a.extra={},a=>a.title_en='wrong']){
-    const b=structuredClone(a);mutate(b);assert.equal(reviewedAlertCopy(b),null);assert.throws(()=>publicAlert(b),/invalid-reviewed/);assert.throws(()=>channelPost(b),/invalid-reviewed/);await assert.rejects(()=>alertImageSvg(b),/invalid-reviewed/);
+    const b=structuredClone(a);mutate(b);assert.equal(reviewedAlertCopy(b),null);assert.throws(()=>publicAlert(b),/invalid-reviewed/);assert.throws(()=>channelPost(b),/invalid-(reviewed|geographic-reference)/);await assert.rejects(()=>alertImageSvg(b),/invalid-(reviewed|geographic-reference)/);
    }
   }
  }

@@ -1179,7 +1179,7 @@ export class AlertMap {
       el.style.cssText = a.location_display==='geographic_reference' ? 'width:144px;height:144px;border-radius:50%;background:#26344533;border:4px dashed #263445;box-shadow:0 0 28px 28px #26344522;' : 'width:14px;height:14px;border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;';
       el.setAttribute('role', 'button');
       el.setAttribute('tabindex', '0');
-      el.setAttribute('aria-label', a.location_display==='geographic_reference' ? (this.opts.lang==='en' ? 'Approximate hill reference' : 'مرجع جغرافي تقريبي للتل') : this.opts.lang === 'en' ? 'Approximate town location' : 'موقع البلدة تقريبي');
+      el.setAttribute('aria-label', a.location_display==='geographic_reference' ? (a.geographic_reference_kind==='village' ? (this.opts.lang==='en' ? 'Approximate village reference' : 'مرجع جغرافي تقريبي للقرية') : (this.opts.lang==='en' ? 'Approximate hill reference' : 'مرجع جغرافي تقريبي للتل')) : this.opts.lang === 'en' ? 'Approximate town location' : 'موقع البلدة تقريبي');
       return el;
     }
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${marker}`;
@@ -1539,7 +1539,7 @@ export class AlertMap {
     if (unlocated || ['approximate_point','geographic_reference'].includes(alert.location_display)) {
       const note = document.createElement('p');
       note.className = 'pp-no-location';
-      note.textContent = alert.location_display==='geographic_reference' ? (this.opts.lang==='en' ? 'Approximate hill reference, not troop position. No danger radius is implied.' : 'مرجع جغرافي تقريبي للتل، وليس موقع القوات. لا يدل على نطاق خطر.') : alert.location_display === 'approximate_point'
+      note.textContent = alert.location_display==='geographic_reference' ? (alert.geographic_reference_kind==='village' ? (this.opts.lang==='en' ? 'Approximate village reference, not the target location. No danger radius is implied.' : 'مرجع جغرافي تقريبي للقرية، وليس موقع النقطة المستهدفة. لا يدل على نطاق خطر.') : (this.opts.lang==='en' ? 'Approximate hill reference, not troop position. No danger radius is implied.' : 'مرجع جغرافي تقريبي للتل، وليس موقع القوات. لا يدل على نطاق خطر.')) : alert.location_display === 'approximate_point'
         ? (this.opts.lang === 'en' ? 'Approximate town location only, not the homes searched. No danger radius is implied.' : 'موقع البلدة تقريبي فقط، وليس المنازل التي فُتشت. لا يدلّ على نطاق خطر.')
         : this.opts.lang === 'en' ? 'No precise location was supplied for this report.' : 'لم يُحدَّد موقع دقيق لهذا الخبر.';
       contentNode.querySelector('.pp')?.prepend(note);

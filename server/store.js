@@ -863,6 +863,7 @@ export function publicAlert(a) {
   ];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
   const approvedCorrection = approvedPublicCorrection(a);
+  if(a.location_display==='geographic_reference' && !approvedCorrection)throw Error('invalid-geographic-reference-public');
   const approvedValues = new Set(approvedCorrection ? Object.values(approvedCorrection) : []);
   const publicText = (value) => {
     const selectedEditorialCopy = Boolean(editorialMode && value === a.description && isPublicEditorialCopy(value, editorialMode));
@@ -920,6 +921,7 @@ export function publicAlert(a) {
     ...(media ? { media, media_items: mediaItems } : {}),
     location: a.location,
     ...((approvedCorrection || (a.source === 'news' && a.type === 'breaking' && a.meta?.searchNewsTreatment === 1)) && ['approximate_point','geographic_reference'].includes(a.location_display) ? {location_display:a.location_display} : {}),
+    ...(approvedCorrection && a.location_display==='geographic_reference' ? {geographic_reference_kind:a.meta?.geographicReferenceAudit?.featureKind||'hill'} : {}),
     place: {
       name_ar: p.name_ar, name_en: p.name_en,
       district_ar: p.district_ar, district_en: p.district_en,

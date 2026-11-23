@@ -369,6 +369,7 @@ function tidySourceAnnouncement(desc, body) {
 }
 const isNewNewsChannelFormat = (alert) => alert?.source === 'news' && Number(alert.channel_format) === 3;
 export function channelPost(alert, { ended = false } = {}) {
+  if(alert.location_display==='geographic_reference' && !approvedPublicCorrection(alert))throw Error('invalid-geographic-reference-caption');
   const editorialMode = alert?.source === 'news' && ['opinion', 'satire'].includes(alert?.meta?.publicEditorialTone) ? alert.meta.publicEditorialTone : null;
   const editorialCopy = editorialMode && isPublicEditorialCopy(alert?.description, editorialMode) ? alert.description : null;
   assertPublicCopySafeWithEditorial(editorialCopy, editorialMode, alert?.title, alert?.title_en, alert?.description, alert?.description_en, alert?.meta?.channelTitle);
@@ -1783,7 +1784,7 @@ export async function repairNewsAlert(api, id, correction = null, options = {}) 
   }
   const hillPatch=hillReferenceRepair(a,correction,sourceDraft);
   if(hillPatch) {
-    if(!options.expectedRevision || options.expectedPostId!==1495) throw new Error('hill-reference-exact-revision-post-required');
+    if(!options.expectedRevision || options.expectedPostId!==a.channel_message_id) throw new Error('hill-reference-exact-revision-post-required');
     Object.assign(patch,hillPatch);
   }
   if(a.meta?.reviewedNewsCopy) throw new Error('reviewed-copy-repair-requires-separate-review');

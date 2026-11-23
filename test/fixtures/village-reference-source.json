@@ -1,0 +1,130 @@
+{
+  "alert": {
+    "id": "dcf53943-acdf-44db-b8ed-20870109fb09",
+    "type": "uav_strike",
+    "title": "استهداف بمسيّرة — ريمة حازم",
+    "title_en": "Drone strike — Rimat Hazim",
+    "description": "استهداف بمسيّرة — ريمة حازم",
+    "body": "مراسلنا: إصابة 4 عناصر من قوى الأمن الداخلي، جراء استهداف نقطة تابعة لهم في قرية ريمة حازم بريف السويداء، بواسطة طائرة مسيرة تابعة لما تُسمى قوات الحرس الوطني.",
+    "location": {
+      "latitude": 32.75808,
+      "longitude": 36.5344
+    },
+    "place": {
+      "scope": "place",
+      "place_id": 165304,
+      "rank": 5,
+      "district": "172409",
+      "name_ar": "ريمة حازم",
+      "name_en": "Rimat Hazim",
+      "district_ar": "السويداء",
+      "district_en": "As-Suwayda",
+      "governorate": "05",
+      "governorate_ar": "السويداء",
+      "governorate_en": "As-Suwayda",
+      "latitude": 32.75808,
+      "longitude": 36.5344
+    },
+    "areas": [
+      "ريمة حازم",
+      "السويداء"
+    ],
+    "extra": [],
+    "scope": "place",
+    "timestamp": "2026-11-23T11:51:56.279Z",
+    "expires_at": "2026-11-23T13:51:56.279Z",
+    "source": "news",
+    "meta": {
+      "newsSources": [
+        {
+          "name": "تجمع أحرار حوران",
+          "url": "https://t.me/HoranFreeMedia/35100",
+          "timestamp": null
+        }
+      ]
+    },
+    "is_active": true,
+    "history": [
+      {
+        "at": "2026-11-23T11:51:56.279Z",
+        "kind": "published",
+        "title": "استهداف بمسيّرة — ريمة حازم",
+        "description": "استهداف بمسيّرة — ريمة حازم",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-23T11:51:58.834Z",
+        "kind": "updated",
+        "title": "استهداف بمسيّرة — ريمة حازم",
+        "description": "استهداف بمسيّرة — ريمة حازم",
+        "is_active": true
+      }
+    ],
+    "author": {
+      "id": 8808894711,
+      "name": "Red Alert Syria ،",
+      "via": "news"
+    },
+    "channel_message_id": 1496,
+    "channel_format": 3,
+    "description_en": "Drone strike — Rime Hazem",
+    "channel_media": "photo"
+  },
+  "draft": {
+    "id": "409c26a910",
+    "type": "uav_strike",
+    "loc": {
+      "scope": "place",
+      "place_id": 165304,
+      "rank": 5,
+      "district": "172409",
+      "name_ar": "ريمة حازم",
+      "name_en": "Rimat Hazim",
+      "district_ar": "السويداء",
+      "district_en": "As-Suwayda",
+      "governorate": "05",
+      "governorate_ar": "السويداء",
+      "governorate_en": "As-Suwayda",
+      "latitude": 32.75808,
+      "longitude": 36.5344
+    },
+    "extra": [],
+    "headline": "إصابة 4 عناصر من قوى الأمن الداخلي جراء استهداف نقطة تابعة لهم بطائرة مسيرة في قرية ريمة حازم بريف السويداء.",
+    "body": "مراسلنا: إصابة 4 عناصر من قوى الأمن الداخلي، جراء استهداف نقطة تابعة لهم في قرية ريمة حازم بريف السويداء، بواسطة طائرة مسيرة تابعة لما تُسمى قوات الحرس الوطني.",
+    "srcs": [
+      {
+        "u": "HoranFreeMedia",
+        "name": "تجمع أحرار حوران",
+        "url": "https://t.me/HoranFreeMedia/35100",
+        "ts": 1795434501000,
+        "local": true
+      }
+    ],
+    "ts": 1795434501000,
+    "created": 1795434608239,
+    "status": "published",
+    "cards": [],
+    "rule": false,
+    "droneRuleVersion": 1,
+    "dronePresence": false,
+    "sourceText": "مراسلنا: إصابة 4 عناصر من قوى الأمن الداخلي، جراء استهداف نقطة تابعة لهم في قرية ريمة حازم بريف السويداء، بواسطة طائرة مسيرة تابعة لما تُسمى قوات الحرس الوطني.",
+    "sourceTextVersion": 2,
+    "nativeReview": {
+      "at": 1795434711545,
+      "by": 8808894711,
+      "result": "published"
+    },
+    "alertId": "dcf53943-acdf-44db-b8ed-20870109fb09",
+    "postId": 1496,
+    "by": 8808894711,
+    "publishedHeadline": "استهداف بمسيّرة — ريمة حازم",
+    "publishedBody": "مراسلنا: إصابة 4 عناصر من قوى الأمن الداخلي، جراء استهداف نقطة تابعة لهم في قرية ريمة حازم بريف السويداء، بواسطة طائرة مسيرة تابعة لما تُسمى قوات الحرس الوطني.",
+    "approvedBy": {
+      "id": 8808894711,
+      "name": "Red Alert Syria ،",
+      "username": "Red_Alert_Syria1"
+    },
+    "approvedAt": "2026-11-23T11:51:59.126Z",
+    "mediaCards": []
+  }
+}
