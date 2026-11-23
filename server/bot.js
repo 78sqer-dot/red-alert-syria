@@ -23,7 +23,7 @@ import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
 import { registerContactTools } from './contact-tools.js';
 import { registerSupportTools } from './support-tools.js';
-import { registerNewsTools, verifyReportSources } from './news-monitor.js';
+import { registerNewsTools, verifyReportSources, ownerReviewNewsPreview } from './news-monitor.js';
 import { registerJobsTools } from './jobs.js';
 import { registerJobsAdminTools } from './jobs-admin-tools.js';
 import { registerArmyAdminTools } from './army-admin-tools.js';
@@ -3394,9 +3394,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     kb.text(en ? '🏁 End this road status' : '🏁 إنهاء حالة الطريق', 'rdx:' + r.id).row().text(L(ctx).btnHome, 'home');
     await show(ctx, `${en ? '✅ Added to the map\'s roads layer' : '✅ انضافت على طبقة الطرق بالخريطة'}${toChannel ? (en ? ' and posted in the channel' : ' وانتشرت بالقناة') : ''}.\n\n${draftSummary(d, langOf(ctx))}`, kb);
   };
-  bot.callbackQuery('publish:ch', needDraft((ctx, d) => (d.type === 'road' ? publishRoadDraft(ctx, d, true) : null)));
+  bot.callbackQuery('publish:ch', needDraft((ctx, d) => (!d.ownerNewsReview && d.type === 'road' ? publishRoadDraft(ctx, d, true) : null)));
   bot.callbackQuery('publish', needDraft(async (ctx, d) => {
     if (!staff(ctx)) return;
+    if(d.ownerNewsReview){try{const r=await ownerReviewNewsPreview(ctx,d);if(r.preview){sessions.set(sk(ctx),{...r.preview,mode:'publish',created:Date.now(),msgId:d.msgId});return showPreview(ctx,sessions.get(sk(ctx)));}sessions.delete(sk(ctx));return show(ctx,r.result?.status==='published'?L(ctx).published:'تمت معالجة القرار: '+r.result?.status,new InlineKeyboard().text(L(ctx).btnHome,'home'));}catch(e){return ctx.answerCallbackQuery({text:langOf(ctx)==='en'?'Review required: '+e.message:'تحتاج مراجعة: '+e.message,show_alert:true});}}
     if (d.type === 'road') return publishRoadDraft(ctx, d, false);
     if (d.type === 'breaking' && !d.text) return askLocation(ctx, d);
     sessions.delete(sk(ctx));

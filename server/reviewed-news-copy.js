@@ -2,6 +2,31 @@ import crypto from 'node:crypto';
 export const reviewedCopyHash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 // Release-reviewed source/copy manifests only. Request bodies cannot add entries.
 export const REVIEWED_NEWS_COPIES = Object.freeze({
+  "be70c52d5c": {
+    "type": "political",
+    "title": "مصدر صحفي: واشنطن تبحث تدريب قوات سورية على إزالة الألغام",
+    "title_en": "Report: US discussing demining training for Syrian forces",
+    "body": "نقل تقرير صحفي عن خمسة أشخاص مطلعين أن الولايات المتحدة تبحث مقترحاً لتدريب جنود سوريين على إزالة الألغام والتخلص الآمن من الذخائر، بمشاركة محتملة من نحو 15 دولة حليفة.\n\nلا يزال المقترح قيد النقاش ويواجه عقبات قانونية وتحفظات لدى بعض المسؤولين العسكريين السوريين. ولم تُتخذ قرارات نهائية بشأن هيكل المهمة ونطاقها، وفق متحدث باسم القيادة المركزية الأميركية. ولا يعني التقرير بدء برنامج التدريب أو إقرار عودة قوات أميركية إلى سوريا.",
+    "location": "سوريا",
+    "sourceBinding": "bee84bd01078de564f2eb9e251f10473744266d64d3782e57ea15d16ac68780b",
+    "publicSourcesHash": "3a8bcc1ff18b968059c480aee27dcb3016d016ada652ee611bc5e2833a27a471",
+    "approvalReference": "wamid.HBgLOTYxODE5OTQ4OTMVAgASGCBBQ0Q2QkI5Qzg0N0RBNzk2REMzNzUyRUM3QTdDNzM5OAA=",
+    "singleSourceAcknowledgement": false,
+    "verification": "source-attributed-not-independently-verified",
+    "sourceNote": "Full Reuters wire inspected, one wire with syndications not independent corroboration. Five unnamed sources; proposed multinational demining training only, legal hurdles and reservations, no final decision or actual operation. November12 meeting is background, not new incident. Generic public attribution under owner preference. No wire photograph.",
+    "imageContext": {
+        "latitude": 34.85,
+        "longitude": 38.6,
+        "zoom": 5,
+        "label_ar": "سياق: سوريا",
+        "label_en": "Context: Syria",
+        "note_ar": "مقترح قيد النقاش، لا بدء لتدريب أو عملية ميدانية",
+        "note_en": "Proposal under discussion, not an underway training or field operation.",
+        "evidence": [
+            "https://www.al-monitor.com/originals/2026/11/exclusive-us-discussing-military-training-syrian-forces"
+        ]
+    }
+},
   "7daae46d35": {
     "imageContext": {"latitude":33.16265,"longitude":36.0357,"zoom":13,"label_ar":"كفر ناسج–سبسبا","label_en":"Kafr Nasij-Sabsaba","note_ar":"سياق جغرافي فقط، موقع الدوي غير محدد على الطريق","note_en":"Geographic context only. Sound location on the road is unknown.","evidence":["https://ar.wikipedia.org/wiki/كفر_ناسج","http://www.fallingrain.net/world/SY/08/Sabsaba.html"]},
     "type": "breaking",

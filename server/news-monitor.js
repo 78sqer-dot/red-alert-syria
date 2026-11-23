@@ -2303,6 +2303,27 @@ function operatorNewsReviewFromDraft(d) {
     holdReason: d.editorialHoldReason || null, candidate: candidate ? { headline: candidate.headline, body: candidate.body, location: candidate.loc, extra: candidate.extra } : null,
     issue, duplicate, alertId: d.alertId || null, postId: d.postId || null, operation: d.operatorReview || null };
 }
+/** Private configured owner reviews the original source through the existing preview. */
+export async function ownerReviewNewsPreview(ctx, preview) {
+  if (!preview?.ownerNewsReview) return null;
+  const ref=preview.ownerNewsReview,id=ref.id,d=newsState().drafts[id],uid=Number(ctx.from?.id);
+  if(!isOwner(uid)||ctx.chat?.type!=='private'||Number(ctx.chat.id)!==uid||ref.owner!==uid)throw Error('owner-private-news-review-required');
+  if(!d||d.status!=='pending'||operatorRevision(d)!==ref.revision||d.reviewedCopy||d.attributedReport||['claimed','uncertain','published-backup-unverified'].includes(d.operatorReview?.result)||['claimed','uncertain'].includes(d.nativeReview?.result))throw Error('stale-or-unresolved-owner-news-review');
+  const edited={...d,type:preview.type,loc:preview.location,extra:preview.extra||[],politicalCategory:preview.politicalCategory};
+  const candidate=sourceFirstCandidate(edited),gate=sourceFirstGate(edited,candidate);
+  if(!gate.ok)throw Error(gate.reason);
+  if(knownDuplicateDraft(edited)||finalPublishDuplicate(edited,candidate))throw Error('duplicate-owner-news-review');
+  const canonical=toBotDraft(candidate,{preservePublishedCopy:true});
+  const view=x=>({type:x.type,headline:x.headline,body:x.body,text:x.text,details:x.details,location:x.location,extra:x.extra||[],politicalCategory:x.politicalCategory,media:x.media,media_items:x.media_items,condemn:x.condemn,ttlMin:x.ttlMin});
+  if(JSON.stringify(view(canonical))!==JSON.stringify(view(preview))){
+    return {preview:{...canonical,ownerNewsReview:ref}};
+  }
+  assertOperatorRecoveryReady();
+  if((d.srcs||[]).length===0||(d.srcs||[]).every(s=>s.local))throw Error('independent-source-review-required');
+  d.ownerReviewAudit={at:Date.now(),by:uid,prior:{type:d.type,loc:d.loc,extra:d.extra,politicalCategory:d.politicalCategory},sourceBinding:reviewedSourceBinding(d)};
+  d.type=edited.type;d.loc=edited.loc;d.extra=edited.extra;d.politicalCategory=edited.politicalCategory;save();
+  return {result:await operateNewsDraft(id,{action:'publish',revision:operatorRevision(d)})};
+}
 /** Uses only the already-running monitor. A durable claim precedes every send.
  * An uncertain send stays claimed, so retries/restarts cannot blindly repost it. */
 function assertOperatorRecoveryReady() {
@@ -2844,6 +2865,11 @@ export function registerNewsTools(bot, h) {
     }
     if ((act === 'p' || act === 'e') && d.reviewedCopy) return toast(ctx, t(ctx, 'تحتاج هذه النسخة قرار نشر المراجعة المنفصل.', 'Separate reviewed-copy publication required.'), true);
     if ((act === 'p' || act === 'e') && d.attributedReport) return toast(ctx, t(ctx, 'هذه المادة تحتاج قرار نشر الإسناد المنفصل.', 'Separate attributed-report publication required.'), true);
+    if (act === 'e' && privateOwner(ctx) && (d.editorialHold || d.operatorReview?.result === 'held') && !['claimed','uncertain','published-backup-unverified'].includes(d.operatorReview?.result) && !['claimed','uncertain'].includes(d.nativeReview?.result)) {
+      try { const review=operatorNewsReview(d.id);const candidate=sourceFirstCandidate(d);const gate=sourceFirstGate(d,candidate);if(!gate.ok && !['type-conflict','political-category-conflict'].includes(gate.reason))throw Error(gate.reason);if(review.duplicate)throw Error('duplicate-needs-review');
+        const preview=toBotDraft(candidate,{preservePublishedCopy:true});preview.ownerNewsReview={id:d.id,owner:Number(ctx.from.id),revision:review.revision};await toast(ctx,'');return h.loadDraft(ctx,preview);
+      } catch(e) { return toast(ctx,t(ctx,'تحتاج معالجة السبب قبل النشر: ','Resolve before publishing: ')+e.message,true); }
+    }
     if ((act === 'p' || act === 'e') && (d.editorialHold || d.operatorReview?.result === 'held' || ['claimed', 'uncertain', 'published-backup-unverified'].includes(d.operatorReview?.result))) {
       return toast(ctx, t(ctx, 'المسودة موقوفة للمراجعة التحريرية؛ لم يُنشر شيء.', 'Editorial hold or unresolved claim: nothing was published.'), true);
     }
