@@ -428,6 +428,7 @@ export function channelPost(alert, { ended = false } = {}) {
     const locations = newNewsLayout ? [p] : [p, ...(alert.extra || [])];
     sections.push(locations.map((x) => `📍<b>${esc(locFirstName(x, 'ar'))}</b>`).join('\n'));
   }
+  else if (reviewed?.localityReference) sections.push(`📍 <b>${esc(reviewed.localityReference.label_ar)}</b>\n${esc(reviewed.localityReference.note_ar)}`);
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (newNewsLayout) {
     const newsBody = [lead, extra].filter(Boolean).join(fullBody.startsWith('نص الدعوة:\n') ? '\n\n' : ' ') || (alert.type === 'breaking' ? alert.title || '' : '');

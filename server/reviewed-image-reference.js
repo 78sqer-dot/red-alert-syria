@@ -1,3 +1,4 @@
+import {validatedManifestLocality} from './reviewed-locality.js';
 import {getPlace} from './places.js';
 import {reviewedAlertCopy} from './reviewed-news-copy.js';
 // Release-qualified historical references, never incident coordinates. New records fail closed.
@@ -53,6 +54,7 @@ const QUALIFIED_REFERENCES=[
 ];
 export function alertLocalityReference(a,reviewed){
  const verified=reviewedAlertCopy(a);if(!verified||verified.version!==2||!reviewed||verified!==reviewed)return null;
+ const dynamic=validatedManifestLocality(verified);if(dynamic)return dynamic;
  const q=QUALIFIED_REFERENCES.find(q=>q.alertId===a.id&&q.postId===a.channel_message_id&&q.copyHash===a.meta.reviewedNewsCopy.copyHash&&q.sourceBinding===verified.sourceBinding);if(!q)return null;
  const p=getPlace(q.placeId);if(!p||p.region||p.rank>5)return null;
  return {kind:'locality_reference',placeId:p.id,name_ar:p.ar,name_en:p.en,latitude:p.lat,longitude:p.lon,zoom:12,label_ar:'مرجع جغرافي: '+p.ar,label_en:'Geographic reference: '+p.en,note_ar:q.note_ar,note_en:q.note_en};

@@ -1,3 +1,4 @@
+import {validatedManifestLocality} from './reviewed-locality.js';
 import { config } from './config.js';
 import crypto from 'node:crypto';
 export const reviewedCopyHash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -110,6 +111,7 @@ export function signReviewedSummary(manifest) { if(!config.botToken)throw Error(
 export function dynamicReviewedManifest(proof) {
   const m=proof?.envelope?.manifest,signature=proof?.envelope?.signature;
   if(proof?.version!==2||!m||m.version!==2||typeof signature!=='string'||!/^[a-f0-9]{64}$/.test(signature)||!config.botToken)return null;
+  if(m.localityReference&&!validatedManifestLocality(m))return null;
   return crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(summarySignature(m))) && m.authorityReference===SUMMARY_AUTHORITY_REFERENCE && proof.copyHash===reviewedCopyHash(m) ? m : null;
 }
 export function reviewedDraftManifest(d) { return d?.reviewedCopy?.version===2 ? dynamicReviewedManifest(d.reviewedCopy) : REVIEWED_NEWS_COPIES[d?.id]; }
