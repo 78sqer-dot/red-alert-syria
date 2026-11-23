@@ -652,15 +652,16 @@ const km = (a, b) => {
 };
 const locsOf = (loc, extra) => [loc, ...(extra || [])].filter((x) => x && x.scope !== 'country');
 function geoOf(locs) {
-  const pts = [], dists = [], govs = [];
+  const pts = [], precisePts = [], dists = [], govs = [];
   let coarse = false;
   for (const l of locs) {
     if (l.scope === 'governorate') coarse = true;
+    if (l.scope === 'place' && Number.isFinite(l.latitude) && Number.isFinite(l.longitude)) precisePts.push({ lat: l.latitude, lon: l.longitude });
     if (Number.isFinite(l.latitude) && l.scope !== 'governorate') pts.push({ lat: l.latitude, lon: l.longitude });
     if (l.district_ar) dists.push(N(l.district_ar));
     if (l.governorate_ar) govs.push(N(l.governorate_ar));
   }
-  return { pts, dists, govs, coarse, none: !locs.length };
+  return { pts, precisePts, dists, govs, coarse, none: !locs.length };
 }
 const whereOf = (locs) => (locs.length ? locs.map((l) => [l.name_ar, l.scope !== 'governorate' && l.governorate_ar !== l.name_ar ? l.governorate_ar : ''].filter(Boolean).join('، ')).join(' + ') : 'سوريا');
 const AIR = new Set(['uav', 'warplane', 'helicopter', 'missile']);
@@ -691,11 +692,28 @@ function near(g1, g2) {
   if ((g1.coarse || g2.coarse) && g1.govs.some((g) => g2.govs.includes(g))) return true;
   return false;
 }
+// Incursion reports in one district can be different convoys/actions. Unknown stays separate.
+function conservativeIncursionMatch(c, k, sim) {
+  if (c.type !== 'military_incursion' && k.type !== 'military_incursion') return null;
+  if (c.type !== k.type) return false;
+  const a = String(c.sourceText || c.headline || ''), b = String(k.sourceText || k.headline || '');
+  const count = (text) => text.match(/(?:مؤلف[ةه]?\s+من\s+)?(ثلاث|ثلاثة|سبع|سبعة|عشر|عشرة|[0-9٠-٩]+)\s*(?:سيار|آلي|الي|مركب)/u)?.[1];
+  const norm = (x) => ({ ثلاث: '3', ثلاثة: '3', سبع: '7', سبعة: '7', عشر: '10', عشرة: '10' }[x] || x?.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))));
+  const ca = norm(count(a)), cb = norm(count(b));
+  if (ca && cb && ca !== cb) return false;
+  const fire = (text) => /(?:إطلاق نار|اطلاق نار|قنابل مضيئة|قنابل مضيئه)/u.test(text);
+  const route = (text) => /(?:باتجاه|نحو|متجه|قادمة من|قادمه من)/u.test(text);
+  if ((fire(a) && route(b) && !fire(b)) || (fire(b) && route(a) && !fire(a))) return false;
+  const preciseNear = (c.geo.precisePts || []).some((p) => (k.geo.precisePts || []).some((q) => km(p, q) <= 3));
+  return preciseNear && sim >= 0.45;
+}
 /** is candidate `c` the same incident as known event `k`? */
 export function sameIncident(c, k) {
   const win = Math.max(WINDOW_MIN[c.type] || 360, WINDOW_MIN[k.type] || 360) * 60_000;
   if (Math.abs((c.ts || 0) - (k.ts || 0)) > win) return false;
   const sim = textSim(c.headline, k.headline);
+  const incursion = conservativeIncursionMatch(c, k, sim);
+  if (incursion !== null) return incursion;
   const bothKnownAndNear = !c.geo.none && !k.geo.none && near(c.geo, k.geo);
   const locationMissing = c.geo.none || k.geo.none;
   if (c.type === 'political' || k.type === 'political') {
@@ -727,7 +745,7 @@ function knownEvents(hours = 12) {
     if (d.status === 'duplicate' && (d.reconciliation?.canonicalAlertId || d.duplicateOf)) continue;
     const locs = locsOf(d.loc, d.extra);
     if (d.alertId) fromDraft.add(d.alertId);
-    out.push({ kind: 'draft', status: d.status, draftId: d.id, alertId: d.alertId, type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: d.headline, where: whereOf(locs), geo: geoOf(locs) });
+    out.push({ kind: 'draft', status: d.status, draftId: d.id, alertId: d.alertId, type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: d.headline, ...(d.type==='military_incursion'?{sourceText:d.sourceText||d.body||d.headline}:{}), where: whereOf(locs), geo: geoOf(locs) });
   }
   for (const a of n.alerts) {
     if (a.ts < since || fromDraft.has(a.id)) continue;
@@ -1066,7 +1084,7 @@ function noticeKb(d, lang = 'ar') {
 function channelPublishedDuplicateDraft(d) {
   const candidate = {
     type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created,
-    headline: d.headline, geo: geoOf(locsOf(d.loc, d.extra)),
+    headline: d.headline, ...(d.type === 'military_incursion' ? { sourceText: d.sourceText || d.body || d.headline } : {}), geo: geoOf(locsOf(d.loc, d.extra)),
   };
   return knownEvents(12).find((known) => {
     if (known.draftId === d.id || !known.alertId || !sameIncident(candidate, known)) return false;
@@ -1110,6 +1128,7 @@ function channelCheckKeyboard(d, duplicate, lang = 'ar') {
 function entityDuplicateDraft(candType, text) {
   // Only PERSON-name runs may entity-match (owner 2026-11-20): place/event runs
   // like «عبوة ناسفة درعا» false-merge two different incidents in one town.
+  if (candType === 'military_incursion') return null; // Named people do not identify a convoy/event.
   const runs = personNameRuns(text).filter((r) => r.length >= 2);
   const DEATH_PAIR = new Set(['death', 'martyrdom']);
   const n = newsState();
@@ -1128,7 +1147,7 @@ function entityDuplicateDraft(candType, text) {
 function knownDuplicateDraft(d) {
   const candidate = {
     type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created,
-    headline: d.headline, geo: geoOf(locsOf(d.loc, d.extra)),
+    headline: d.headline, ...(d.type === 'military_incursion' ? { sourceText: d.sourceText || d.body || d.headline } : {}), geo: geoOf(locsOf(d.loc, d.extra)),
   };
   return knownEvents(12).find((known) => known.draftId !== d.id && sameIncident(candidate, known)) || null;
 }
@@ -1191,6 +1210,7 @@ function selfEchoOf(cand, texts) {
     } else if (!sameFamily(cand.type, e.type) && !crossTypeRaidDuplicate(cand, e, texts, e.text)) continue;
     if (!cand.geo.none && !e.geo.none && !near(cand.geo, e.geo)) continue;
     const sim = Math.max(textSim(texts, e.text), textSim(cand.headline, e.text));
+    if (conservativeIncursionMatch({ ...cand, sourceText: cand.sourceText || texts }, { ...e, sourceText: e.text }, sim) === false) continue;
     if (sim >= 0.5 && (!best || sim > best.sim)) best = { id: e.id, sim };
   }
   return best;
@@ -1317,6 +1337,7 @@ function finalPublishDuplicate(d, pub) {
     if (geoKnown && !near(cand.geo, e.geo)) continue;
     if (distinctPersons(text, e.text)) continue; // same case/town, different named people (رسلان vs زيدان)
     const sim = Math.max(textSim(text, e.text), textSim(cand.headline, e.text));
+    if (conservativeIncursionMatch({ ...cand, sourceText: d.sourceText || text }, { ...e, sourceText: e.text }, sim) === false) continue;
     if (sim >= 0.45) { if (!best || sim > best.sim) best = { id: e.id, sim, via: 'text' }; continue; }
     if (e.ts < entitySince) continue;
     const eTok = normTokens(e.text);
@@ -1757,11 +1778,17 @@ async function mergeInto(d, it, locs = []) {
   if (d.droneRuleVersion === 1 && hasExplicitDroneFlight(it.text)) d.dronePresence = true;
   d.srcs.push({ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local });
   // new corroborating input is the ONE event that earns an audit-held draft a re-audit:
-  // lift the audit hold (only that hold) so the eligibility + audit gates judge it afresh
-  if (d.editorialHold && d.editorialHoldReason === AUTO_AUDIT_HOLD_REASON) {
+  // lift the audit hold (only that hold) so the eligibility + audit gates judge it afresh.
+  // Incursion merges retain all holds pending semantic review of convoy/action identity.
+  if (d.type !== 'military_incursion' && d.editorialHold && d.editorialHoldReason === AUTO_AUDIT_HOLD_REASON) {
     delete d.editorialHold; delete d.editorialHoldReason; delete d.editorialHoldAt;
   }
   scheduleDayAuto(d);
+  // Keep incoming geography as provenance, never silently replace an incursion's original location.
+  if (d.type === 'military_incursion') {
+    (d.mergeEvidence ||= []).push({ sourceUrl: it.url, sourceText: it.text, locations: structuredClone(locs), at: Date.now() });
+    locs = [];
+  }
   // another channel names a more precise nearby place (e.g. "المعكر" next to "مزرعة الحانوت"): add it as an extra area
   const main = d.loc && Number.isFinite(d.loc.latitude) ? { lat: d.loc.latitude, lon: d.loc.longitude } : null;
   for (const l of locs) {
@@ -1840,7 +1867,7 @@ async function handleResult(it, r, known, pmap) {
   const politicalCategory = r.type === 'political'
     ? (inferPoliticalCategory(it.text) || (POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null))
     : null;
-  const cand = { type: r.type, politicalCategory, ts: it.ts, headline, geo: geoOf(locs) };
+  const cand = { type: r.type, politicalCategory, ts: it.ts, headline, ...(r.type==='military_incursion'?{sourceText:it.text}:{}), geo: geoOf(locs) };
   if (target && !sameIncident(cand, target)) {
     note(it, `AI same_as rejected: event type/location/time mismatch (${r.same_as})`);
     target = null;
@@ -1851,7 +1878,7 @@ async function handleResult(it, r, known, pmap) {
     target = entityDuplicateDraft(r.type, `${headline}\n${fullBody || ''}\n${String(it.text || '')}`);
     if (target) note(it, `entity-matched into pending draft ${target.draftId} (same story, different wording)`);
   }
-  if (!target && r.new_incident === false && !rejectedSameAs && !(r.type === 'political' && (!politicalCategory || r.political_category === 'none'))) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
+  if (!target && r.type !== 'military_incursion' && r.new_incident === false && !rejectedSameAs && !(r.type === 'political' && (!politicalCategory || r.political_category === 'none'))) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
   if (target) {
     pmap.set(it.i, target);
     const d = target.draftId ? n.drafts[target.draftId] : null;
@@ -1877,7 +1904,7 @@ async function handleResult(it, r, known, pmap) {
   scheduleDayAuto(d, d.created);
   n.drafts[d.id] = d;
   n.stats.drafts++;
-  const ev = { kind: 'draft', status: 'pending', draftId: d.id, type: d.type, ts: d.ts, headline, where: whereOf(locs), geo: cand.geo };
+  const ev = { kind: 'draft', status: 'pending', draftId: d.id, type: d.type, ts: d.ts, headline, ...(d.type === 'military_incursion' ? { sourceText: d.sourceText } : {}), where: whereOf(locs), geo: cand.geo };
   known.unshift(ev); pmap.set(it.i, ev);
   save();
   if (nightActive() && nightEligible(d) && await nightPublish(d)) {
