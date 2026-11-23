@@ -37,3 +37,12 @@ test('future locality requires exact original-place quote, qualified gazetteer a
 test('locality name boundary does not match a larger place-name substring',async()=>{
  const d=reset();d.sourceText='أفاد مصدر عن قرية عابدينستان في سوريا.';const r=request(d);r.summary.locality_reference={place_id:174633,source_place_quote:'قرية عابدينستان',evidence_urls:['https://example.org/gazetteer']};r.review.evidence_urls.push('https://example.org/gazetteer');await assert.rejects(()=>n.prepareReviewedSummary(d.id,r),/invalid-reviewed-locality-place/);
 });
+
+
+test('mounted reviewed-summary publish exposes confirmed stored canonical URL without browser discovery',async()=>{
+ const {alertShareUrl}=await import('../server/alert-share-url.js');const d=reset();await n.prepareReviewedSummary(d.id,request(d));let sends=0;
+ n._test.R.H={apis:()=>({admin:{}}),publishDraft:async(_,publication)=>{sends++;const a=store.addAlert(buildAlertInput(publication,null));a.channel_format=3;a.channel_message_id=123;return a;}};
+ const final={action:'publish-reviewed',revision:n.operatorNewsReview(d.id).revision,copy_hash:d.reviewedCopy.copyHash,approval_reference:SUMMARY_AUTHORITY_REFERENCE,single_source_acknowledged:true};
+ const app=express();mountNewsReviewRoutes(app,{adminKeyOk:r=>r.headers['x-admin-key']==='synthetic',apiLimiter:(_r,_s,next)=>next()});const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+ try{const u=`http://127.0.0.1:${server.address().port}/api/admin/news/sample/review`;const post=()=>fetch(u,{method:'POST',headers:{'content-type':'application/json','x-admin-key':'synthetic'},body:JSON.stringify(final)});const response=await post();const result=await response.json();assert.equal(response.status,200,JSON.stringify(result));assert.equal(result.share_url,alertShareUrl(result.alertId));assert.ok(result.share_url);assert.equal((await(await post()).json()).share_url,result.share_url);assert.equal(sends,1);}finally{await new Promise(r=>server.close(r));n._test.R.H=null;}
+});

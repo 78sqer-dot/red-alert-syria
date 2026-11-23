@@ -1,3 +1,4 @@
+import { alertShareUrl } from './alert-share-url.js';
 import {resolveReviewedLocality} from './reviewed-locality.js';
 import { REVIEWED_NEWS_COPIES, reviewedCopyHash, reviewedSourceBinding, reviewedStateBinding, boundReviewedCopy, signReviewedSummary, SUMMARY_AUTHORITY_REFERENCE } from './reviewed-news-copy.js';
 import { ATTRIBUTED_ITEM, eligibleAttributedOriginal, attributedDraftBinding, boundAttributedReport, attributedPublicationProof } from './attributed-report.js';
@@ -2393,6 +2394,14 @@ export async function ownerReviewNewsPreview(ctx, preview) {
 function assertOperatorRecoveryReady() {
   if (store.backup && store._backupWritesPaused) throw new Error('backup-recovery-in-progress-no-decision-written');
 }
+function confirmedPublicationShare(d, status) {
+  if (status !== 'published' || d.status !== 'published' || !d.alertId || !d.postId) return {};
+  const a = store.getAlert(d.alertId);
+  if (!a || a.id !== d.alertId || a.channel_message_id !== d.postId || store.state.gone?.[a.id]) return {};
+  try { if (!publicAlert(a)) return {}; } catch { return {}; }
+  const url = alertShareUrl(a.id);
+  return url ? { share_url: url } : {};
+}
 export async function operateNewsDraft(id, request = {}) {
   assertOperatorRecoveryReady();
   const n = newsState(), d = n.drafts[id];
@@ -2400,7 +2409,7 @@ export async function operateNewsDraft(id, request = {}) {
   if (!d) return fail('unknown-draft');
   const prior = d.operatorReview;
   if (prior?.revision === request.revision && ['published', 'map-only', 'duplicate', 'held'].includes(prior.result)) {
-    return { ok: prior.result !== 'map-only', reused: true, status: prior.result, id: d.id, alertId: d.alertId || null, postId: d.postId || null, duplicateOf: d.duplicateOf || null };
+    return { ok: prior.result !== 'map-only', reused: true, status: prior.result, id: d.id, alertId: d.alertId || null, postId: d.postId || null, duplicateOf: d.duplicateOf || null, ...confirmedPublicationShare(d, prior.result) };
   }
   if (d.status !== 'pending') return fail('draft-already-handled-or-publication-unresolved');
   if (!request.revision || request.revision !== operatorRevision(d)) return fail('stale-review');
@@ -2465,7 +2474,7 @@ export async function operateNewsDraft(id, request = {}) {
     return { ok: false, status: 'published-backup-unverified', id: d.id, alertId: d.alertId, postId: d.postId };
   }
   await closeCards(d, null, true); await unlinkCapturedMedia(d.sourceMedia);
-  return { ok: !!d.postId, status: d.operatorReview.result, id: d.id, alertId: d.alertId, postId: d.postId };
+  return { ok: !!d.postId, status: d.operatorReview.result, id: d.id, alertId: d.alertId, postId: d.postId, ...confirmedPublicationShare(d, d.operatorReview.result) };
 }
 export function operatorNewsStatus(includeIds = false) {
   const n = newsState();

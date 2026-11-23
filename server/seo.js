@@ -1,3 +1,4 @@
+import { alertSharePath, alertShareUrl } from './alert-share-url.js';
 // Search & sharing: server-rendered, indexable pages around the live map.
 //   /ar/area/<slug>/  /en/area/<slug>/   "شو صاير بدرعا هلق؟" — recent alerts of one governorate / city
 //   /ar/areas/        /en/areas/         hub linking every area page
@@ -146,10 +147,10 @@ h2{font-size:18px;margin:22px 0 10px}
 .hub h3{margin:16px 0 8px;font-size:16px}.faq p{margin:0 0 10px;color:var(--mut)}.faq b{color:var(--fg)}
 footer{max-width:880px;margin:auto;padding:16px;color:var(--mut);font-size:12.5px;border-top:1px solid var(--bd)}`;
 
-function shell({ lang, title, desc, path, alt, ogImage, ogW = 1200, ogH = 630, jsonld = [], body, robots = 'index,follow,max-image-preview:large' }) {
+function shell({ lang, title, desc, path, canonicalUrl, alt, ogImage, ogW = 1200, ogH = 630, jsonld = [], body, robots = 'index,follow,max-image-preview:large' }) {
   const site = SITE();
   const other = lang === 'ar' ? 'en' : 'ar';
-  const url = site + path;
+  const url = canonicalUrl || site + path;
   return `<!doctype html>
 <html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">
 <head>
@@ -384,7 +385,7 @@ function alertSharePage(id, lang) {
   const og = info.a ? `${site}/og/a/${encodeURIComponent(id)}-${lang}.png?v=${encodeURIComponent(version)}` : `${site}/og/site-${lang}.png`;
   const body = `<h1>${esc(typeLabel(info.ty, lang))}${placeLine ? ` — ${esc(placeLine)}` : ''}</h1><p class="lead">${en ? 'Reported' : 'وقت البلاغ'}: ${esc(when)}</p>${lastUpdated ? `<p class="lead">${en ? 'Last updated' : 'آخر تحديث'}: ${esc(lastUpdated)}</p>` : ''}
 <div class="cta"><a class="btn red" href="${target}">${en ? 'Open on the live map' : 'افتح على الخريطة المباشرة'}</a><a class="btn tg" href="${CHANNEL_URL}">${en ? 'Follow on Telegram' : 'تابعنا على تيليغرام'}</a></div>`;
-  let html = shell({ lang, title, desc, path: `/${lang}/a/${encodeURIComponent(id)}`, alt: null, ogImage: og, ogW: info.a ? 820 : 1200, ogH: info.a ? 791 : 630, body, robots: 'index,follow,max-image-preview:large' });
+  let html = shell({ lang, title, desc, path: alertSharePath(id, lang), canonicalUrl: alertShareUrl(id, lang), alt: null, ogImage: og, ogW: info.a ? 820 : 1200, ogH: info.a ? 791 : 630, body, robots: 'index,follow,max-image-preview:large' });
   html = html.replace('<meta name="robots"', `<meta http-equiv="refresh" content="0;url=${esc(target)}"><meta name="robots"`);
   return html;
 }
