@@ -1,3 +1,4 @@
+import { searchNewsTreatment } from './search-news-treatment.js';
 // 📡 News monitor: the server (Render, 24/7) reads public Syrian news channels every minute, turns
 // each NEW incident into a ready-made alert draft and sends it to the primary owner in the private
 // publishing bot with ✅ Publish / ❌ Ignore; only qualified AI news has an automatic fallback.
@@ -1534,7 +1535,8 @@ export function toBotDraft(d, options = {}) {
     throw new Error('The owner-selected editorial preview is stale or not approved for publication');
   }
   const geography = sourceScopedGeography(d);
-  const rawHeadline = editorialSelection?.text || d.headline;
+  const searchTreatment = editorialSelection ? null : searchNewsTreatment(d.sourceText, geography.loc);
+  const rawHeadline = searchTreatment?.title || editorialSelection?.text || d.headline;
   const rawBody = editorialSelection ? rawHeadline : d.body || rawHeadline;
   const safeDraft = {
     ...d, headline: rawHeadline,
@@ -1552,12 +1554,13 @@ export function toBotDraft(d, options = {}) {
   const patrolText = N(`${headline || ''} ${editorialSelection ? '' : d.body || ''}`);
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
-    type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin, headline,
+    type: searchTreatment ? 'breaking' : d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(searchTreatment ? 'breaking' : d.type).ttlMin, headline,
+    ...(searchTreatment ? { searchSourceText: d.sourceText } : {}),
     // Full report text rides alongside the concise lead (details/text keep their
     // existing roles); owner-selected editorial previews never carry a body.
     ...(editorialSelection ? {} : { body }),
     ...(editorialSelection ? { publicEditorialTone: editorialSelection.mode, publicEditorialText: editorialSelection.text } : {}),
-    location: geography.loc || locationFrom({}), extra: geography.extra || [],
+    location: searchTreatment && !searchTreatment.location_display ? locationFrom({}) : geography.loc || locationFrom({}), extra: searchTreatment ? [] : geography.extra || [],
     // ⚖️ Owner-attached condemnation rides as a variant key only; bot.js
     // (buildAlertInput) resolves the formula and appends it once at publish.
     ...(condemnationKey(d.condemn) ? { condemn: d.condemn } : {}),

@@ -1,3 +1,4 @@
+import { searchNewsTreatment } from './search-news-treatment.js';
 import { configureReporterContact, captureReporterReply } from './reporter-contact.js';
 import { configureReportOperator } from './reports-operator.js';
 import { BACKUP_NAME, isBackupName, encodeBackupAsync, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
@@ -1077,6 +1078,7 @@ export function buildAlertInput(d, author) {
     ? d.publicEditorialTone : null;
   const editorialCopy = editorialMode && isPublicEditorialCopy(d?.publicEditorialText, editorialMode) ? d.publicEditorialText : null;
   assertPublicCopySafeWithEditorial(editorialCopy, editorialMode, d?.title, d?.title_en, d?.headline, d?.body, d?.text, d?.details, d?.description, d?.description_en);
+  const searchTreatment = !editorialMode && d.source === 'news' && d.type === 'breaking' ? searchNewsTreatment(d.searchSourceText, d.location) : null;
   const incursionKind = d.type === 'military_incursion'
     ? (d.incursionKind === 'vehicles' || Number.isInteger(d.vehicleCount) ? 'vehicles' : ['soldiers', 'barrier'].includes(d.incursionKind) ? d.incursionKind : null)
     : null;
@@ -1164,10 +1166,11 @@ export function buildAlertInput(d, author) {
   }
   return {
     type: d.type,
-    title: `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${d.flightHeading ? ` — باتجاه ${d.flightHeading}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}${signalPlatform ? ' — مسيّرة' : ''}`,
-    title_en: `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
+    ...(searchTreatment?.location_display ? { location_display: searchTreatment.location_display } : {}),
+    title: searchTreatment?.title || `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${d.flightHeading ? ` — باتجاه ${d.flightHeading}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}${signalPlatform ? ' — مسيّرة' : ''}`,
+    title_en: searchTreatment?.title_en || `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
     extra,
-    description,
+    description: searchTreatment?.title || description,
     ...(body ? { body } : {}),
     ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
     location: loc,
@@ -1175,8 +1178,9 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || d.flightHeading || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || editorialMode || d.id ? {
+    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || d.flightHeading || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || editorialMode || searchTreatment || d.id ? {
       meta: {
+        ...(searchTreatment ? { searchNewsTreatment: 1, channelTitle: searchTreatment.title } : {}),
         ...(d.id ? { dedupKey: `${d.source || 'news'}:${d.id}` } : {}),
         ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.flightHeading ? { flightHeading: d.flightHeading } : {}),

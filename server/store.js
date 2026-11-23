@@ -309,6 +309,7 @@ class Store extends EventEmitter {
       description: input.description || '',
       ...(input.body ? { body: String(input.body) } : {}),
       ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
+      ...(input.source === 'news' && input.type === 'breaking' && input.meta?.searchNewsTreatment === 1 && input.location_display === 'approximate_point' ? { location_display: 'approximate_point' } : {}),
       location: input.location?.latitude != null ? { latitude: input.location.latitude, longitude: input.location.longitude } : null,
       place: input.location || null,
       areas: input.areas || [],
@@ -910,7 +911,7 @@ export function publicAlert(a) {
     ...(a.body ? { body: publicText(a.body) || undefined } : {}),
     ...(media ? { media, media_items: mediaItems } : {}),
     location: a.location,
-    ...(approvedCorrection && a.location_display === 'approximate_point' ? {location_display: 'approximate_point'} : {}),
+    ...((approvedCorrection || (a.source === 'news' && a.type === 'breaking' && a.meta?.searchNewsTreatment === 1)) && a.location_display === 'approximate_point' ? {location_display: 'approximate_point'} : {}),
     place: {
       name_ar: p.name_ar, name_en: p.name_en,
       district_ar: p.district_ar, district_en: p.district_en,
