@@ -1588,3 +1588,24 @@ html.dark .map-bottom-controls { box-shadow: 0 10px 30px rgba(0, 0, 0, .45), ins
 .mk-locality-reference .locality-reference-dot{display:block;position:absolute;left:0;top:0;width:14px;height:14px;box-sizing:border-box;transform:translate(-50%,-50%);border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;}
 
 .mk-locality-reference .news-pulse-ring{transform:translate(-50%,-50%);width:25px;height:25px;}
+
+/* Compact bottom controls. Symbol styling stays unchanged. */
+.map-bottom-controls{padding:6px!important;gap:7px!important;}
+#aboutPill,#resetView{position:relative;width:48px!important;height:48px!important;min-width:48px!important;padding:0!important;border-radius:50%!important;display:flex!important;align-items:center;justify-content:center;box-sizing:border-box;}
+#aboutPill b,#aboutPill .sep,#aboutPill [data-t=aboutMap],#aboutPill [data-icon=chevUp]{display:none!important;}
+#aboutPill::before{display:none!important;}
+#aboutPill [data-icon=info]{display:flex!important;opacity:.8;}
+#aboutPill::after,#resetView::after{content:'';position:absolute;right:6px;bottom:6px;width:6px;height:6px;background:#39df84;border-radius:50%;box-shadow:0 0 0 0 #39df8477;animation:previewGreenPulse 1.8s infinite;}
+@keyframes previewGreenPulse{0%,100%{box-shadow:0 0 0 0 #39df8477;opacity:1}65%{box-shadow:0 0 0 6px #39df8400;opacity:.7}}
+@media(prefers-reduced-motion:reduce){#aboutPill::after,#resetView::after{animation:none}}
+/* Smaller visible circles; each button keeps an invisible 44px touch target. */
+.map-bottom-controls{padding:2px!important;gap:4px!important;background:transparent!important;border:none!important;box-shadow:none!important;isolation:isolate;}
+.map-bottom-controls::before{content:'';position:absolute;inset:6px 5px;border-radius:999px;background:rgba(24,25,35,.94);border:1px solid rgba(255,255,255,.10);box-shadow:0 3px 10px rgba(0,0,0,.25);z-index:-1;pointer-events:none;}
+html:not(.dark) .map-bottom-controls::before{background:rgba(255,255,255,.96);border-color:#dddfe5;}
+#aboutPill,#resetView{width:36px!important;height:36px!important;min-width:36px!important;margin:4px!important;isolation:isolate;}
+#aboutPill::before,#resetView::before{content:''!important;display:block!important;position:absolute;inset:-4px!important;border:0!important;border-radius:50%;background:transparent!important;box-shadow:none!important;animation:none!important;pointer-events:auto;}
+#aboutPill::after,#resetView::after{width:5px;height:5px;right:4px;bottom:4px;}
+#aboutPill [data-icon=info],#resetView svg{width:16px!important;height:16px!important;}
+#aboutPill,#resetView{min-height:0!important;}
+#aboutPill [data-icon=info],#resetView svg{visibility:hidden!important;}
+#aboutPill::after,#resetView::after{left:50%!important;top:50%!important;right:auto!important;bottom:auto!important;transform:translate(-50%,-50%);width:6px;height:6px;}

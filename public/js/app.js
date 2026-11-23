@@ -187,6 +187,8 @@ function hydrateStatic() {
   $('#shareSite').setAttribute('aria-label', T.shareMap);
   $('#zoomOut').title = T.zoomOut;
   $('#zoomOut').setAttribute('aria-label', T.zoomOut);
+  $('#aboutPill').setAttribute('aria-label', T.aboutMap);
+  $('#aboutPill').title = T.aboutMap;
   $('#resetView').title = T.resetView;
   $('#resetView').setAttribute('aria-label', T.resetView);
   $('#locateMe').title = T.myLocation;

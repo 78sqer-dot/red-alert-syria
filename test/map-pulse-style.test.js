@@ -37,7 +37,7 @@ test('choosing the alert still opens its existing details using the stored alert
 });
 
 test('updated stylesheet is requested with a new cache-busting version', () => {
-  assert.match(html, /href="\/css\/app\.css\?v=101"/);
+  assert.match(html, /href="\/css\/app\.css\?v=102"/);
 });
 
 
