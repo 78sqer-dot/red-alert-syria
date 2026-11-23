@@ -93,9 +93,10 @@ test('reading or failing to read a pinned snapshot invalidates prior skip confir
 });
 test('a concurrent read cannot bind an old-message upload to a different pinned message',async()=>{
  const f=fixture();await f.adapter.save(json);const changed=JSON.stringify({...JSON.parse(json),fixture:'changed'}),guardedFetch=globalThis.fetch;
- let release;const gate=new Promise(resolve=>release=resolve),originalEdit=f.api.editMessageMedia;
- f.api.editMessageMedia=async(...args)=>{await gate;return originalEdit(...args);};
+ let release,entered;const gate=new Promise(resolve=>release=resolve),started=new Promise(resolve=>entered=resolve),originalEdit=f.api.editMessageMedia;
+ f.api.editMessageMedia=async(...args)=>{entered();await gate;return originalEdit(...args);};
  const flight=f.adapter.save(changed);
+ await started;
  f.api.getChat=async()=>({pinned_message:{message_id:99,document:{file_name:BACKUP_NAME,file_id:'fixture'}}});f.api.getFile=async()=>({file_path:'synthetic-remote.gz'});globalThis.fetch=async()=>new Response(encodeBackup(json));
  try{await f.adapter.load();release();await flight;f.api.editMessageMedia=originalEdit;await f.adapter.save(changed);assert.equal(f.uploads().length,3);assert.deepEqual(f.uploads().slice(1).map(c=>c.id),[1,99]);}
  finally{release();globalThis.fetch=guardedFetch;}

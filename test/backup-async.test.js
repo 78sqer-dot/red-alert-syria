@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {encodeBackupAsync,encodeBackup,decodeBackup} from '../server/backup-codec.js';
+const json=JSON.stringify({alerts:Array.from({length:100},(_,i)=>({id:'synthetic-'+i,body:'Synthetic multilingual exact audit fixture خبر تجريبي '.repeat(30),history:[{kind:'published',at:i}]})),news:{drafts:{held:{editorialHold:true,status:'pending'},published:{status:'published',postId:99}},last:{fixture:31}},reports:{claim:{revision:'synthetic',status:'claimed'}},jobs:{decisions:{fixture:{status:'ignored'}}}});
+test('async stronger backup preserves exact frame data and older synchronous reader compatibility',async()=>{const b=await encodeBackupAsync(json);assert.equal(decodeBackup(b),json);assert.ok(b.length<encodeBackup(json).length);assert.deepEqual(b,await encodeBackupAsync(json));});
+test('compression yields to the event loop while preserving the caller snapshot',async()=>{let yielded=false;const flight=encodeBackupAsync(json);setImmediate(()=>{yielded=true;});const b=await flight;assert.equal(yielded,true);assert.equal(decodeBackup(b),json);});
+test('async encoder rejects malformed or oversized states without returning a payload',async()=>{for(const v of ['','null','{}','bad'])await assert.rejects(encodeBackupAsync(v));await assert.rejects(encodeBackupAsync(JSON.stringify({alerts:[],text:'x'.repeat(32*1024*1024)})),/output length/);});

@@ -1,4 +1,5 @@
-import { gunzipSync, brotliCompressSync, brotliDecompressSync, constants as zlibConstants } from 'node:zlib';
+import { promisify } from 'node:util';
+import { gunzipSync, brotliCompress, brotliCompressSync, brotliDecompressSync, constants as zlibConstants } from 'node:zlib';
 import { createHash, timingSafeEqual } from 'node:crypto';
 export const GZIP_BACKUP_NAME = 'red-alert-syria-backup.json.gz';
 export const LEGACY_BACKUP_NAME = 'red-alert-syria-backup.json';
@@ -13,7 +14,7 @@ const BROTLI_HEADER_BYTES = BROTLI_MAGIC.length + 4 + 32;
 export function isBackupName(name) {
   return [GZIP_BACKUP_NAME, LEGACY_BACKUP_NAME, BROTLI_BACKUP_NAME].includes(name);
 }
-export function encodeBackup(json) {
+function backupInput(json) {
   if (typeof json !== 'string' || !json.trim()) throw new Error('backup payload is empty');
   const state = JSON.parse(json);
   if (!state || !Array.isArray(state.alerts)) throw new Error('backup state is invalid');
@@ -23,12 +24,22 @@ export function encodeBackup(json) {
   BROTLI_MAGIC.copy(header);
   header.writeUInt32BE(raw.length, BROTLI_MAGIC.length);
   createHash('sha256').update(raw).digest().copy(header, BROTLI_MAGIC.length + 4);
-  const payload = brotliCompressSync(raw, { params: {
-    [zlibConstants.BROTLI_PARAM_QUALITY]: 6,
+  return { raw, header };
+}
+function compressionOptions(raw, quality) { return { params: {
+    [zlibConstants.BROTLI_PARAM_QUALITY]: quality,
     [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
     [zlibConstants.BROTLI_PARAM_SIZE_HINT]: raw.length,
-  } });
-  return Buffer.concat([header, payload]);
+  } }; }
+export function encodeBackup(json) {
+  const { raw, header } = backupInput(json);
+  return Buffer.concat([header, brotliCompressSync(raw, compressionOptions(raw, 6))]);
+}
+const compressAsync = promisify(brotliCompress);
+// Same checksum frame and exact state, with compression off the main event loop.
+export async function encodeBackupAsync(json) {
+  const { raw, header } = backupInput(json);
+  return Buffer.concat([header, await compressAsync(raw, compressionOptions(raw, 10))]);
 }
 function decodeFramedBrotli(data) {
   if (data.length < BROTLI_HEADER_BYTES || !data.subarray(0, BROTLI_MAGIC.length).equals(BROTLI_MAGIC)) {

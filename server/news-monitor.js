@@ -1960,6 +1960,7 @@ async function pollOnce() {
   const roadActiveSince = roadMonitorActivationTime();
   R.lastPollAt = Date.now();
   const fresh = [];
+  let checkpointsChanged = false;
   for (const src of n.sources.filter((s) => s.on)) {
     if (R.stopped) return;
     try {
@@ -1973,15 +1974,15 @@ async function pollOnce() {
       }
       R.src[src.u] = { ok: true, at: Date.now(), n: r.posts.length, pages: r.pages || 1 };
       for (const p of checkpointSourcePosts(n, src, r.posts)) fresh.push({ src, p });
+      if (n.last[src.u] !== last) checkpointsChanged = true;
     } catch (e) {
       R.src[src.u] = { ok: false, at: Date.now(), err: e.code === 'nopreview' ? 'no public preview' : String(e.message || e).slice(0, 80) };
     }
     await sleep(700);
   }
-  // the per-source checkpoints were just advanced in the durable store: push them to the
-  // remote backup promptly (backupSoon, not the lazy path), so a deploy/restart can only
-  // ever roll the watermark back by seconds — and the freshness gate covers even that
-  save();
+  // A changed cursor still gets its prompt durable save. An unchanged poll must
+  // not upload a full snapshot merely because another monitor updated a timestamp.
+  if (checkpointsChanged) save();
   for (const { src, p } of fresh) {
     n.stats.posts++;
     const it = { src: { u: src.u, name: src.name, local: !!src.local, roadOnly: !!src.roadOnly }, url: p.url, ts: p.ts || Date.now(), qAt: Date.now(), media: p.media };

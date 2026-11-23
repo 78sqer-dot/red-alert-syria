@@ -1,6 +1,6 @@
 import { configureReporterContact, captureReporterReply } from './reporter-contact.js';
 import { configureReportOperator } from './reports-operator.js';
-import { BACKUP_NAME, isBackupName, encodeBackup, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
+import { BACKUP_NAME, isBackupName, encodeBackupAsync, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
 import { captureCoordinationReply } from './editor-coordination.js';
 import { approvedPublicCorrection, approvedCorrectionFingerprint, publishedRepairRevision } from './approved-public-correction.js';
 import { randomUUID, createHash } from 'node:crypto';
@@ -4858,7 +4858,7 @@ export function telegramBackupAdapter(api0) {
     if (!force && last.has(key) && prior?.messageId === last.get(key) && prior.fingerprint === fingerprint) {
       return { uploaded: false, bytes: prior.bytes };
     }
-    const payload = encodeBackup(json);
+    const payload = await encodeBackupAsync(json);
     const accept = (messageId) => {
       confirmed.set(key, { fingerprint, bytes: payload.length, messageId });
       return { uploaded: true, payload };

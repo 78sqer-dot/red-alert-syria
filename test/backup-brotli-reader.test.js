@@ -6,7 +6,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {gzipSync,brotliCompressSync,constants as Z} from 'node:zlib';
 import {InputFile} from 'grammy';
-import {encodeBackup,decodeBackup,isBackupName,BACKUP_NAME,GZIP_BACKUP_NAME,LEGACY_BACKUP_NAME,BROTLI_BACKUP_NAME} from '../server/backup-codec.js';
+import {encodeBackup,encodeBackupAsync,decodeBackup,isBackupName,BACKUP_NAME,GZIP_BACKUP_NAME,LEGACY_BACKUP_NAME,BROTLI_BACKUP_NAME} from '../server/backup-codec.js';
 import {createTransferCounters} from '../server/transfer-counters.js';
 
 const MAGIC=Buffer.from('RASB2\r\n\x1a\n','ascii'),HEADER=MAGIC.length+4+32;
@@ -30,7 +30,7 @@ const {store}=await import('../server/store.js');
 const originalFetch=globalThis.fetch;let downloads=0,uploads=[];
 const api={async getChat(){return{pinned_message:{message_id:101,document:{file_name:BROTLI_BACKUP_NAME,file_id:'fixture-file'}}};},async getFile(){return{file_path:'fixture/backup.rasb'};},async editMessageMedia(chat,id,media){uploads.push({chat,id,payload:media.media.fileData,name:media.media.filename});return{message_id:id};}};
 globalThis.fetch=async()=>{downloads++;return new Response(framed(json));};
-test('adapter restores new-format pinned file then writes the exact new format with a forced durability barrier',async()=>{const adapter=telegramBackupAdapter(api);assert.equal(await adapter.load(),json);assert.equal(downloads,1);await adapter.save(json,{force:true});assert.equal(uploads.length,1);assert.equal(uploads[0].id,101);assert.equal(uploads[0].name,BACKUP_NAME);assert.deepEqual(uploads[0].payload,encodeBackup(json));});
+test('adapter restores new-format pinned file then writes the exact new format with a forced durability barrier',async()=>{const adapter=telegramBackupAdapter(api);assert.equal(await adapter.load(),json);assert.equal(downloads,1);await adapter.save(json,{force:true});assert.equal(uploads.length,1);assert.equal(uploads[0].id,101);assert.equal(uploads[0].name,BACKUP_NAME);assert.deepEqual(uploads[0].payload,await encodeBackupAsync(json));});
 test('adapter refuses an unrelated pinned filename without downloading it',async()=>{const before=downloads,old=api.getChat;api.getChat=async()=>({pinned_message:{message_id:102,document:{file_name:'unrelated.rasb',file_id:'fixture'}}});try{assert.equal(await telegramBackupAdapter(api).load(),null);assert.equal(downloads,before);}finally{api.getChat=old;}});
 test('adapter upgrades either legacy pin in place without a new backup message or weaker forced save',async()=>{const oldChat=api.getChat,oldFetch=globalThis.fetch;try{for(const name of [GZIP_BACKUP_NAME,LEGACY_BACKUP_NAME]){api.getChat=async()=>({pinned_message:{message_id:101,document:{file_name:name,file_id:'fixture-file'}}});globalThis.fetch=async()=>{downloads++;return new Response(name===GZIP_BACKUP_NAME?gzipSync(Buffer.from(json),{level:6}):Buffer.from(json));};const adapter=telegramBackupAdapter(api),before=uploads.length;assert.equal(await adapter.load(),json);await adapter.save(json,{force:true});assert.equal(uploads.length,before+1);const current=uploads.at(-1);assert.equal(current.id,101);assert.equal(current.name,BROTLI_BACKUP_NAME);assert.equal(decodeBackup(current.payload),json);}}finally{api.getChat=oldChat;globalThis.fetch=oldFetch;}});
 after(()=>{globalThis.fetch=originalFetch;clearTimeout(store._backupTimer);clearTimeout(store._saveTimer);fs.rmSync(dir,{recursive:true,force:true});});
