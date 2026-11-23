@@ -919,6 +919,7 @@ export function publicAlert(a) {
     description_en: publicText(a.description_en) || undefined,
     ...(a.body ? { body: publicText(a.body) || undefined } : {}),
     ...(media ? { media, media_items: mediaItems } : {}),
+    ...(reviewed && a.meta?.reviewedNewsCopy?.draftId==='4f2193d1a9' ? {presentation:{kind:'dated_report',event_date:'2026-11-22'}} : {}),
     location: a.location,
     ...((approvedCorrection || (a.source === 'news' && a.type === 'breaking' && a.meta?.searchNewsTreatment === 1)) && ['approximate_point','geographic_reference'].includes(a.location_display) ? {location_display:a.location_display} : {}),
     ...(approvedCorrection && a.location_display==='geographic_reference' ? {geographic_reference_kind:a.meta?.geographicReferenceAudit?.featureKind||'hill'} : {}),

@@ -1,4 +1,5 @@
 // Red Alert Syria — front-end application
+import {datedReport,reportPublicationLabel,reportEventLabel,reportBadgeLabel} from '/shared/report-presentation.js?v=1';
 import { createServices, GOV_C } from './services.js?v=40';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=43';
 import { alertPreviewText } from '/shared/alert-preview.js?v=1';
@@ -127,7 +128,7 @@ const shareText = (a) => `🚨 ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}
 
 // ------------------------------------------------------------------ alerts selection
 const URGENT_TYPES = new Set(['breaking', 'uav_strike', 'airstrike', 'warplane', 'helicopter', 'air_movement', 'missile', 'attack', 'artillery', 'assassination', 'shooting', 'military_incursion']);
-const isUrgent = (a) => !!(a?.is_active && URGENT_TYPES.has(a.type));
+const isUrgent = (a) => !!(a?.is_active && !datedReport(a) && URGENT_TYPES.has(a.type));
 const searchKey = (value) => String(value || '').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').toLowerCase();
 function matchesSearch(a) {
   const q = searchKey(state.search).trim();
@@ -219,12 +220,13 @@ setInterval(updateConnAge, 15_000);
 
 // ------------------------------------------------------------------ list & detail
 function badge(a, live = false) {
+  if(datedReport(a))return `<span class="badge" style="--c:#7dd3fc;--symbol-color:#7dd3fc">${icon('clock',13)}${esc(reportBadgeLabel(a,LANG))}</span>`;
   return `<span class="badge${live ? ' live' : ''}" style="--c:${eventVisual(a.type, a).color};--symbol-color:${eventVisual(a.type, a).color}">${icon(typeIcon(a.type, a), 13)}${esc(typeName(a.type))}</span>`;
 }
 function cardHtml(a, fresh) {
   const hasLoc = a.location && Number.isFinite(a.location.latitude);
   return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}${isNear(a) ? ' near' : ''}" data-id="${esc(a.id)}" style="--c:${eventVisual(a.type, a).color}" tabindex="0">
-    <div class="card-top">${badge(a)}<span class="time">${timeLine(a.timestamp)}</span></div>
+    <div class="card-top">${badge(a)}<span class="time">${datedReport(a)?esc(reportPublicationLabel(a,LANG))+' · ':''}${timeLine(a.timestamp)}</span></div>${datedReport(a)?`<div class="time">${esc(reportEventLabel(a,LANG))}</div>`:''}
     <h3 class="card-title">${esc(titleOf(a))}</h3>
     ${distChip(a)}
     ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
@@ -291,7 +293,8 @@ function detailHtml(a) {
     ...(FLIGHT_AIRCRAFT[a.aircraft] ? [[LANG === 'ar' ? 'نوع الطائرة' : 'Aircraft type', esc(LANG === 'ar' ? FLIGHT_AIRCRAFT[a.aircraft].ar : FLIGHT_AIRCRAFT[a.aircraft].en)]] : []),
     ...(FLIGHT_DIRECTIONS[a.flight_direction] ? [[LANG === 'ar' ? 'اتجاه الطيران' : 'Flight direction', esc(LANG === 'ar' ? FLIGHT_DIRECTIONS[a.flight_direction].ar : FLIGHT_DIRECTIONS[a.flight_direction].en)]] : []),
     ...(alertDist(a) ? [[LANG === 'ar' ? 'المسافة عنك' : 'Distance from you', distChip(a)]] : []),
-    [T.time, esc(fmtFull.format(new Date(a.timestamp)))],
+    [datedReport(a)?reportPublicationLabel(a,LANG):T.time, esc(fmtFull.format(new Date(a.timestamp)))],
+    ...(datedReport(a)?[[LANG==='ar'?'تاريخ الحدث':'Event date',esc(reportEventLabel(a,LANG))]]:[]),
     [a.source_info?.kind === 'provider' ? T.dataProvider : T.publisher, sourceInfoUrl ? `<a href="${esc(sourceInfoUrl)}" target="_blank" rel="noopener noreferrer">${esc(a.source_info?.name)}</a>` : esc(a.source_info?.name || 'Red Alert Syria')],
     [LANG === 'ar' ? 'حالة المصدر' : 'Source status', `<span class="verify-pill ${esc(a.verification?.status || 'unverified')}">${esc(verificationLabel)}</span>`],
     live ? [T.expires, a.expires_at ? esc(fmtTime.format(new Date(a.expires_at))) : T.noExpiry] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at || a.timestamp)))],
@@ -299,7 +302,8 @@ function detailHtml(a) {
   return `<article class="d-card d-story" style="--c:${eventVisual(a.type, a).color}">
       <div class="d-story-meta">${badge(a, live)}<span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span></div>
       <h3 class="card-title">${esc(titleOf(a))}</h3>
-      <time class="d-story-time" datetime="${esc(a.timestamp)}" title="${esc(LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time')}">${icon('clock', 14)}${esc(fmtFull.format(new Date(a.timestamp)))}</time>
+      <time class="d-story-time" datetime="${esc(a.timestamp)}" title="${esc(LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time')}">${icon('clock', 14)}${datedReport(a)?esc(reportPublicationLabel(a,LANG))+' · ':''}${esc(fmtFull.format(new Date(a.timestamp)))}</time>
+      ${datedReport(a)?`<div class="d-story-time">${icon('clock',14)}${esc(reportEventLabel(a,LANG))}</div>`:''}
       ${storyText ? `<div class="d-story-report"><div class="sec-label">${esc(LANG === 'ar' ? 'نص الخبر' : 'Report')}</div><p class="d-story-text" dir="auto">${esc(storyText)}</p></div>` : ''}
     </article>
     <details class="d-card d-meta"><summary>${esc(LANG === 'ar' ? 'معلومات التنبيه' : 'Alert information')}</summary><div class="rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div></details>
@@ -390,7 +394,8 @@ function popupHtml(a) {
     return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}" data-pp-media-mime="${esc(item?.mime_type || '')}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
   }).join('')}</div>` : '';
   const titleRow = `<div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p></div>`;
-  const metadata = `<div class="pp-metadata"><div class="pp-category-row">${badge(shown)}${distChip(a)}${Array.isArray(a.more) && a.more.length ? `<span class="pp-areas">${icon('locate', 13)}${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</span>` : ''}</div><div class="pp-date-row" title="${LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time'}">${icon('clock', 13)}<time datetime="${esc(a.timestamp)}">${esc(fmtDay.format(new Date(a.timestamp)))} <span aria-hidden="true">·</span> ${esc(fmtTime.format(new Date(a.timestamp)))}</time><span class="pp-age">${esc(ago(a.timestamp))}</span></div></div>`;
+  const eventDate=datedReport(a)?`<div class="pp-date-row">${esc(reportEventLabel(a,LANG))}</div>`:'';
+  const metadata = `${eventDate}<div class="pp-metadata"><div class="pp-category-row">${badge(shown)}${distChip(a)}${Array.isArray(a.more) && a.more.length ? `<span class="pp-areas">${icon('locate', 13)}${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</span>` : ''}</div><div class="pp-date-row" title="${LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time'}">${icon('clock', 13)}<time datetime="${esc(a.timestamp)}">${esc(fmtDay.format(new Date(a.timestamp)))} <span aria-hidden="true">·</span> ${esc(fmtTime.format(new Date(a.timestamp)))}</time><span class="pp-age">${esc((datedReport(a)?reportPublicationLabel(a,LANG)+' · ':'')+ago(a.timestamp))}</span></div></div>`;
   const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}>
     ${fullPreview ? `<p class="pp-desc" dir="auto">${esc(fullPreview)}</p>` : ''}</section>` : '';
   const activeMedia = displayMediaItems.find((item) => item.type === initialMode);
@@ -481,7 +486,7 @@ function renderTicker() {
     const el = document.createElement('div');
     el.className = 'tick';
     el.dataset.id = a.id;
-    el.innerHTML = `${badge(a)}<span class="t-title">${esc(stripTypeLabelPrefix(titleOf(a), a.type))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
+    el.innerHTML = `${badge(a)}<span class="t-title">${esc(stripTypeLabelPrefix(titleOf(a), a.type))}</span><span class="t-time">${esc((datedReport(a)?reportPublicationLabel(a,LANG)+' · ':'')+ago(a.timestamp))}</span>`;
     box.appendChild(el);
     if (document.hidden) {
       olds.forEach((o) => o.remove());
@@ -929,14 +934,14 @@ function notify(a) {
   const s = settings.get();
   const n = s.notifications;
   if (s.filter.includes(a.type)) alertToast(a);
-  if (a.type === 'breaking') showBreaking(a);
+  if (a.type === 'breaking' && !datedReport(a)) showBreaking(a);
   if (!n.enabled || !n.types.includes(a.type)) return;
   if (s.followArea && !matchesFollowArea(a, s.followArea)) return;
-  if (n.sound) playRingtone(n.ringtone, n.volume);
-  if (n.vibration && navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
+  if (n.sound && !datedReport(a)) playRingtone(n.ringtone, n.volume);
+  if (n.vibration && !datedReport(a) && navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
     try {
-      const notif = new Notification(`${alertEmoji(a)} ${typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (descOf(a) ? '\n' + descOf(a) : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr' });
+      const notif = new Notification(`${datedReport(a)?'ℹ️':alertEmoji(a)} ${reportBadgeLabel(a,LANG)||typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (descOf(a) ? '\n' + descOf(a) : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr', ...(datedReport(a)?{silent:true}:{}) });
       notif.onclick = () => {
         window.focus();
         select(a.id);
@@ -959,8 +964,8 @@ function alertToast(a) {
   const t = typeOf(a.type);
   const el = document.createElement('div');
   el.className = 'toast';
-  el.style.setProperty('--c', t.color);
-  el.innerHTML = `<span class="ti">${glyphDisc(a.type, 34, 17, 'pin', a.caution_visual ? 'urgent_warning' : null, a.caution_visual ? eventVisual(a.type, a).color : null)}</span><span class="tt"><small>${esc(T.newAlert)} · ${esc(typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
+  el.style.setProperty('--c', datedReport(a)?'#7dd3fc':t.color);
+  el.innerHTML = `<span class="ti">${datedReport(a)?icon('clock',24):glyphDisc(a.type, 34, 17, 'pin', a.caution_visual ? 'urgent_warning' : null, a.caution_visual ? eventVisual(a.type, a).color : null)}</span><span class="tt"><small>${esc(datedReport(a)?reportPublicationLabel(a,LANG):T.newAlert)} · ${esc(reportBadgeLabel(a,LANG)||typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
   el.addEventListener('click', () => {
     select(a.id);
     el.remove();

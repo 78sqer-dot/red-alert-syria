@@ -31,3 +31,13 @@ test('actual pipeline reviewed alert rejects invented coordinates/scope/zones/di
   }
  }
 });
+
+test('dated released report presentation is derived only from exact sourcebound proof; event date differs from publication',async()=>{const{datedReport,reportEventLabel,reportPublicationLabel}=await import('../shared/report-presentation.js');reset();const id='4f2193d1a9';await prepareReviewedNewsCopy(id,req(id));const a=store.addAlert(buildAlertInput(toBotDraft(_test.sourceFirstCandidate(store.state.news.drafts[id])),null));const p=publicAlert(a);assert.ok(datedReport(p));assert.equal(p.presentation.event_date,'2026-11-22');assert.equal(p.timestamp,a.timestamp);assert.match(reportEventLabel(p,'en'),/November 22/);assert.equal(reportPublicationLabel(p),'نُشر');const forged={...structuredClone(a),meta:{}};forged.presentation=p.presentation;assert.equal(publicAlert(forged).presentation,undefined);for(const other of ['7daae46d35','91becc7c06']){await prepareReviewedNewsCopy(other,req(other));const b=store.addAlert(buildAlertInput(toBotDraft(_test.sourceFirstCandidate(store.state.news.drafts[other])),null));assert.equal(publicAlert(b).presentation,undefined);}});
+
+
+test('dated source-bound report background push is neutral silent normal priority; ordinary breaking unchanged',async()=>{
+ const {dispatchPush}=await import('../server/push.js');reset();const id='4f2193d1a9';await prepareReviewedNewsCopy(id,req(id));const a=store.addAlert(buildAlertInput(toBotDraft(_test.sourceFirstCandidate(store.state.news.drafts[id])),null));
+ const calls=[],fake={pushSubscriptions:()=>[['one',{types:[],governorate:'all'}]],removePushSubscription:()=>{}};
+ await dispatchPush(fake,a,'new',async(s,p,o)=>calls.push({p:JSON.parse(p),o}));assert.equal(calls.length,1);assert.equal(calls[0].p.silent,true);assert.equal(calls[0].o.urgency,'normal');assert.match(calls[0].p.title,/خبر/);assert.doesNotMatch(calls[0].p.title,/🚨/);
+ calls.length=0;await dispatchPush(fake,{id:'ordinary',type:'breaking',title:'ordinary'},'new',async(s,p,o)=>calls.push({p:JSON.parse(p),o}));assert.equal(calls[0].o.urgency,'high');assert.equal(calls[0].p.silent,undefined);
+});

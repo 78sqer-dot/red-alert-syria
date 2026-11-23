@@ -1,3 +1,4 @@
+import {datedReport,reportPublicationLabel,reportEventLabel,reportBadgeLabel} from '../shared/report-presentation.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,7 +12,7 @@ assert.ok(start>=0&&end>start);
 const component=source.slice(start,end);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function renderMediaPopupFixture(alert,{mode=null}={}){
- const ctx={LANG:'ar',esc,T:DICT.ar,icon:()=>'',isLive:a=>a.is_active!==false,titleOf:a=>a.title||'',alertPreviewText,availableAlertDisplayModes,initialAlertDisplayMode:mode?()=>mode:initialAlertDisplayMode,
+ const ctx={datedReport,reportPublicationLabel,reportEventLabel,reportBadgeLabel,LANG:'ar',esc,T:DICT.ar,icon:()=>'',isLive:a=>a.is_active!==false,titleOf:a=>a.title||'',alertPreviewText,availableAlertDisplayModes,initialAlertDisplayMode:mode?()=>mode:initialAlertDisplayMode,
   distChip:()=>'',badge:()=>'<span class="badge">اختبار عرض معزول</span>',ago:()=>'',fmtDay:{format:()=> '٢٢ تشرين الثاني ٢٠٢٦'},fmtTime:{format:()=> '١٤:٠٠'}};
  const api=vm.runInNewContext(component+'\n({popupHtml,alertMediaFrameHtml})',ctx);
  return api.popupHtml(alert);

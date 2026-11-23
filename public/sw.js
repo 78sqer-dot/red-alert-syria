@@ -51,8 +51,8 @@ self.addEventListener('push', (e) => {
     icon: '/img/icon-192.png',
     badge: '/img/icon-192.png',
     tag: data.tag || 'ras-alert',
-    renotify: data.event === 'new',
+    renotify: !data.silent && data.event === 'new',
     data: { url: data.url || '/ar/' },
-    vibrate: [180, 80, 180],
+    ...(data.silent ? {silent:true} : {vibrate:[180,80,180]}),
   }));
 });

@@ -1,3 +1,4 @@
+import {datedReport,reportPublicationLabel,reportEventLabel,reportBadgeLabel} from '../shared/report-presentation.js';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
@@ -8,7 +9,7 @@ import * as types from '../shared/types.js';
 const source = fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
 const code = source.slice(source.indexOf('function detailHtml(a)'), source.indexOf('function renderDetail()')).trim();
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ctx = { ...types, alertPreviewText, LANG: 'ar', T: DICT.ar, esc, titleOf: (a) => a.title, descOf: (a) => a.description,
+const ctx = {datedReport,reportPublicationLabel,reportEventLabel,reportBadgeLabel, ...types, alertPreviewText, LANG: 'ar', T: DICT.ar, esc, titleOf: (a) => a.title, descOf: (a) => a.description,
   safeExternalUrl: (s) => /^https?:\/\//.test(s || '') ? s : null,
   isLegacyQuneitraArchiveAlert: () => false, alertDist: () => null, distChip: () => '',
   placeName: (a) => a.place?.name_ar || '', badge: (a) => `<span class="badge">${esc(types.typeOf(a.type).ar)}</span>`,
