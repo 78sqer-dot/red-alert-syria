@@ -1,3 +1,4 @@
+import { config } from './config.js';
 import crypto from 'node:crypto';
 export const reviewedCopyHash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 // Release-reviewed source/copy manifests only. Request bodies cannot add entries.
@@ -102,14 +103,25 @@ export function reviewedSourceBinding(d) {
 export function reviewedStateBinding(d) {
   return reviewedCopyHash({source:reviewedSourceBinding(d),type:d.type,headline:d.headline,body:d.body,loc:d.loc,extra:d.extra,politicalCategory:d.politicalCategory,hold:d.editorialHold,operator:d.operatorReview,native:d.nativeReview,undone:d.undone,duplicateOf:d.duplicateOf,alertId:d.alertId,postId:d.postId});
 }
+// Private reviewed operator envelopes, signed by this configured publisher only.
+export const SUMMARY_AUTHORITY_REFERENCE = 'wamid.HBgLOTYxODE5OTQ4OTMVAgASGCBBQ0U2RkJDNUE3NTI1RjhERDhFQjgzODk2NUZGMjVFRgA=';
+function summarySignature(manifest) { return crypto.createHmac('sha256', config.botToken + ':reviewed-summary-v2').update(JSON.stringify(manifest)).digest('hex'); }
+export function signReviewedSummary(manifest) { if(!config.botToken)throw Error('summary-signing-unavailable');return {manifest,signature:summarySignature(manifest)}; }
+export function dynamicReviewedManifest(proof) {
+  const m=proof?.envelope?.manifest,signature=proof?.envelope?.signature;
+  if(proof?.version!==2||!m||m.version!==2||typeof signature!=='string'||!/^[a-f0-9]{64}$/.test(signature)||!config.botToken)return null;
+  return crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(summarySignature(m))) && m.authorityReference===SUMMARY_AUTHORITY_REFERENCE && proof.copyHash===reviewedCopyHash(m) ? m : null;
+}
+export function reviewedDraftManifest(d) { return d?.reviewedCopy?.version===2 ? dynamicReviewedManifest(d.reviewedCopy) : REVIEWED_NEWS_COPIES[d?.id]; }
+export function reviewedProofManifest(proof) {return proof?.version===2 ? dynamicReviewedManifest(proof) : REVIEWED_NEWS_COPIES[proof?.draftId];}
 export function boundReviewedCopy(d) {
-  const manifest=REVIEWED_NEWS_COPIES[d?.id],c=d?.reviewedCopy;
-  return manifest && c?.version===1 && manifest.sourceBinding===reviewedSourceBinding(d) && c.copyHash===reviewedCopyHash(manifest) && c.binding===reviewedStateBinding(d)
+  const manifest=reviewedDraftManifest(d),c=d?.reviewedCopy;
+  return manifest && [1,2].includes(c?.version) && (c.version!==2||(manifest.draftId===d.id && d.reviewedCopyAudit?.review && manifest.reviewHash===reviewedCopyHash(d.reviewedCopyAudit.review))) && manifest.sourceBinding===reviewedSourceBinding(d) && c.copyHash===reviewedCopyHash(manifest) && c.binding===reviewedStateBinding(d)
     && d.type===manifest.type && d.headline===manifest.title && d.body===manifest.body && d.loc?.scope==='country' && d.loc?.name_ar===manifest.location && d.loc.latitude==null && d.loc.longitude==null && d.extra?.length===0 ? manifest : null;
 }
 export function reviewedAlertCopy(a) {
-  const proof=a?.meta?.reviewedNewsCopy,manifest=REVIEWED_NEWS_COPIES[proof?.draftId];
-  return manifest && a.source==='news' && proof.version===1 && proof.copyHash===reviewedCopyHash(manifest) && a.meta.dedupKey===`news:${proof.draftId}`
+  const proof=a?.meta?.reviewedNewsCopy,manifest=reviewedProofManifest(proof);
+  return manifest && a.source==='news' && [1,2].includes(proof.version) && (proof.version!==2 || (manifest.draftId===proof.draftId && !a.media && !(a.media_items?.length))) && proof.copyHash===reviewedCopyHash(manifest) && a.meta.dedupKey===`news:${proof.draftId}`
     && a.location===null && a.scope==='country' && a.location_display==null && (a.zones==null || (Array.isArray(a.zones)&&a.zones.length===0)) && Array.isArray(a.areas) && a.areas.length===0
     && a.type===manifest.type && a.title===manifest.title && a.title_en===manifest.title_en && a.description===manifest.title && a.body===manifest.body && a.place?.scope==='country' && a.place.name_ar===manifest.location && a.place.latitude==null && a.place.longitude==null && Array.isArray(a.extra) && a.extra.length===0
     && reviewedCopyHash(a.meta.newsSources||a.meta.political?.sources)===manifest.publicSourcesHash ? manifest : null;

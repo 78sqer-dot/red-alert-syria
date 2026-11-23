@@ -1,5 +1,5 @@
 import express from 'express';
-import { operatorNewsReview, prepareReviewedNewsCopy, prepareAttributedNewsDraft, correctOperatorNewsDraft, operateNewsDraft } from './news-monitor.js';
+import { operatorNewsReview, prepareReviewedSummary, prepareReviewedNewsCopy, prepareAttributedNewsDraft, correctOperatorNewsDraft, operateNewsDraft } from './news-monitor.js';
 /** Mounted by the production app and exercised through HTTP in integration tests. */
 export function mountNewsReviewRoutes(app, { adminKeyOk, apiLimiter }) {
   app.get('/api/admin/news/:id', apiLimiter, (req, res) => {
@@ -7,7 +7,7 @@ export function mountNewsReviewRoutes(app, { adminKeyOk, apiLimiter }) {
     const review = operatorNewsReview(req.params.id);
     return review ? res.json(review) : res.status(404).json({error:'unknown-draft'});
   });
-  for (const [suffix, operation] of [['prepare-reviewed',prepareReviewedNewsCopy], ['prepare-attributed', prepareAttributedNewsDraft], ['correct', correctOperatorNewsDraft]]) {
+  for (const [suffix, operation] of [['prepare-reviewed-summary',prepareReviewedSummary], ['prepare-reviewed',prepareReviewedNewsCopy], ['prepare-attributed', prepareAttributedNewsDraft], ['correct', correctOperatorNewsDraft]]) {
     app.post(`/api/admin/news/:id/${suffix}`, apiLimiter, express.json({limit:'12kb'}), async (req,res) => {
       if (!adminKeyOk(req)) return res.status(404).end();
       try { return res.json(await operation(req.params.id,req.body)); }

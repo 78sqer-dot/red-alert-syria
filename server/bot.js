@@ -1,6 +1,6 @@
 import { marineValidityRepair } from './marine-warning-validity.js';
 import { hillReferenceRepair } from './hill-reference.js';
-import { REVIEWED_NEWS_COPIES, reviewedAlertCopy } from './reviewed-news-copy.js';
+import { REVIEWED_NEWS_COPIES, reviewedAlertCopy, reviewedProofManifest } from './reviewed-news-copy.js';
 import { ATTRIBUTED_ITEM, attributedAlertCopy, revisedAttributedRepairMeta, eligibleAttributedOriginal } from './attributed-report.js';
 import { searchNewsTreatment } from './search-news-treatment.js';
 import { configureReporterContact, captureReporterReply } from './reporter-contact.js';
@@ -1148,7 +1148,7 @@ export function buildAlertInput(d, author) {
   const baseTitleEn = d.type === 'air_movement'
     ? (aircraft?.en || titles.en)
     : wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
-  const reviewed=d.reviewedNewsCopy ? REVIEWED_NEWS_COPIES[d.reviewedNewsCopy.draftId] : null;
+  const reviewed=d.reviewedNewsCopy ? reviewedProofManifest(d.reviewedNewsCopy) : null;
   if(d.reviewedNewsCopy && (!reviewed || !reviewedAlertCopy({source:d.source,type:d.type,title:d.correctedTitle,title_en:d.correctedTitleEn,description:d.headline,body:d.body,place:loc,location:loc?.latitude==null?null:{latitude:loc.latitude,longitude:loc.longitude},scope:loc?.scope,areas,zones:d.zones,location_display:d.location_display,extra,meta:{reviewedNewsCopy:d.reviewedNewsCopy,dedupKey:`news:${d.id}`,newsSources:monitoredSources.length?monitoredSources:politicalMeta?.sources}}))) throw new Error('invalid-reviewed-input-copy');
   const attributed = d.attributedReport ? ATTRIBUTED_ITEM : null;
   if (attributed && !attributedAlertCopy({source:d.source,type:d.type,title:d.correctedTitle,description:d.headline,body:d.body,place:loc,extra,meta:{attributedReport:d.attributedReport,dedupKey:`news:${d.id}`,newsSources:monitoredSources}})) throw new Error('invalid-attributed-input-copy');

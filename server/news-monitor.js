@@ -1,4 +1,4 @@
-import { REVIEWED_NEWS_COPIES, reviewedCopyHash, reviewedSourceBinding, reviewedStateBinding, boundReviewedCopy } from './reviewed-news-copy.js';
+import { REVIEWED_NEWS_COPIES, reviewedCopyHash, reviewedSourceBinding, reviewedStateBinding, boundReviewedCopy, signReviewedSummary, SUMMARY_AUTHORITY_REFERENCE } from './reviewed-news-copy.js';
 import { ATTRIBUTED_ITEM, eligibleAttributedOriginal, attributedDraftBinding, boundAttributedReport, attributedPublicationProof } from './attributed-report.js';
 import { searchNewsTreatment } from './search-news-treatment.js';
 // 📡 News monitor: the server (Render, 24/7) reads public Syrian news channels every minute, turns
@@ -418,8 +418,13 @@ function approvedOwnerEditorialCopy(d, ownerId) {
   return { mode, text: finalized };
 }
 /** A no-AI, fail-closed check: uncertain edits stay pending for the owner instead of reaching either public surface. */
+function historicalCasualtyClearance(d) {
+  const text=String(d?.sourceText||d?.body||'');
+  return ['death','explosion','attack','airstrike','targeted_strike'].includes(d?.type) && /(?:إزالة|ازالة|تفكيك|تطهير|تزيل|تطهر).{0,100}(?:لغام|مخلفات الحرب|عبوات)/u.test(text) && /(?:بعد|عقب|إثر|اثر).{0,60}(?:وفاة|مقتل|إصابة|اصابة)/u.test(text);
+}
 function editorialGate(d) {
   const fail = (reason) => ({ ok: false, reason });
+  if(historicalCasualtyClearance(d))return fail('historical-casualties-clearance-needs-reviewed-copy');
   const rawSource = String(d?.sourceText || d?.body || '').trim();
   const rawHeadline = String(d?.headline || '').trim();
   if (publicDraftCopyIssue(d)) return fail('private-editorial-copy-not-public');
@@ -1564,7 +1569,7 @@ export function toBotDraft(d, options = {}) {
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
     type: searchTreatment ? 'breaking' : d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(searchTreatment ? 'breaking' : d.type).ttlMin, headline,
-    ...(reviewed ? {id:d.id, reviewedNewsCopy:{version:1,draftId:d.id,copyHash:reviewedCopyHash(reviewed)}, correctedTitle:reviewed.title,correctedTitleEn:reviewed.title_en} : {}),
+    ...(reviewed ? {id:d.id, reviewedNewsCopy:{version:d.reviewedCopy.version,draftId:d.id,copyHash:reviewedCopyHash(reviewed),...(d.reviewedCopy.version===2?{envelope:d.reviewedCopy.envelope}:{})}, correctedTitle:reviewed.title,correctedTitleEn:reviewed.title_en} : {}),
     ...(attributed ? { id:d.id, attributedReport: attributedPublicationProof(), correctedTitle: attributed.title, correctedTitleEn: attributed.title_en } : {}),
     ...(factualCorrection ? { correctedTitle: factualCorrection.title, correctedTitleEn: factualCorrection.title_en } : {}),
     ...(searchTreatment ? { searchSourceText: d.sourceText } : {}),
@@ -1578,7 +1583,7 @@ export function toBotDraft(d, options = {}) {
     ...(condemnationKey(d.condemn) ? { condemn: d.condemn } : {}),
     details: d.type === 'breaking' ? '' : body || headline, text: d.type === 'breaking' ? (editorialSelection ? '' : headline) : '',
     created: Date.now(), source: 'news',
-    srcs: (d.srcs || []).map((s) => ({ u: s.u, name: s.name, url: s.url, ts: s.ts, local: !!s.local })),
+    srcs: (d.srcs || []).map((s) => ({ u: s.u, name: s.name, url: s.url, ts: reviewed?.version===2 && Number.isFinite(s.ts) ? new Date(s.ts).toISOString() : s.ts, local: !!s.local })),
     ...(d.type === 'military_incursion' && ['soldiers', 'vehicles', 'barrier'].includes(d.incursionKind) ? { incursionKind: d.incursionKind } : {}),
     ...(patrolForm ? { patrolForm } : {}),
     ...(d.flightHeading ? { flightHeading: d.flightHeading } : {}),
@@ -1603,6 +1608,7 @@ function sourceFirstCandidate(d) {
   if (reviewed) return {...d,headline:reviewed.title,body:reviewed.body,details:'',text:'',description:'',description_en:'',title:'',title_en:'',aiRewritePreview:undefined,sourceBodyVersion:1};
   if (d.attributedReport && !attributed) throw new Error('stale-attributed-report-needs-review');
   if (attributed) return { ...d, headline:attributed.title, body:attributed.body, details:'', text:'', description:'', description_en:'', title:'', title_en:'', aiRewritePreview:undefined, sourceBodyVersion:1 };
+  if(historicalCasualtyClearance(d))throw Error('historical-casualties-clearance-needs-reviewed-copy');
   if (d.correctedCandidate && !boundDraftCorrection(d)) throw new Error('stale-corrected-candidate-needs-review');
   if (!source) throw new Error('missing-original-source');
   if (d.sourceTextVersion !== 2 && source.length >= 1200) throw new Error('legacy-source-may-be-truncated');
@@ -2256,6 +2262,33 @@ export async function prepareReviewedNewsCopy(id, request={}) {
   save();if(store.backup&&!await store.flushBackup(true)) throw new Error('reviewed-copy-durability-unverified-remains-held');await refreshCards(d);
   return {ok:true,status:'reviewed-copy-held',review:operatorNewsReview(id),copyHash:reviewedCopyHash(m)};
 }
+/** Authenticated delegated operator prepares exact copy, held; never publishes here. */
+export async function prepareReviewedSummary(id,request={}) {
+  assertOperatorRecoveryReady();const n=newsState(),d=n.drafts[id];
+  if(n.editorialMode!=='reviewed')throw Error('summary-reviewed-mode-required');
+  if(!d||d.status!=='pending'||d.test||d.rule||d.alertId||d.postId||d.undone||d.duplicateOf||d.correctedCandidate||d.attributedReport||d.reviewedCopy||d.privateEditorial&&Object.keys(d.privateEditorial).length||d.aiRewritePreview?.applied||['claimed','uncertain','published','map-only','published-backup-unverified'].includes(d.operatorReview?.result)||['claimed','uncertain'].includes(d.nativeReview?.result))throw Error('summary-not-eligible');
+  if(request.revision!==operatorRevision(d)||request.expected_status!=='pending')throw Error('stale-summary-review');
+  if(Object.keys(request).some(k=>!['revision','expected_status','source_binding','authority_reference','summary','review','dry_run'].includes(k))||request.source_binding!==reviewedSourceBinding(d)||request.authority_reference!==SUMMARY_AUTHORITY_REFERENCE)throw Error('summary-source-authority-mismatch');
+  const c=request.summary,r=request.review;
+  if(!c||Object.keys(c).some(k=>!['type','title','title_en','body','image_heading_ar','image_heading_en','location','political_category'].includes(k))||!['breaking','political'].includes(c.type)||c.location!=='سوريا'||(c.type==='political'?!POLITICAL_CATEGORIES[c.political_category]:c.political_category!=null))throw Error('invalid-summary-country-report');
+  for(const[k,max]of [['title',200],['title_en',200],['body',2000],['image_heading_ar',36],['image_heading_en',48]])if(typeof c[k]!=='string'||!c[k].trim()||c[k]!==c[k].trim()||c[k].length>max||/[<>]|https?:|@[A-Za-z0-9_]/u.test(c[k])||isPrivateEditorialCopy(c[k])||cleanPublicNewsAttribution(c[k],(d.srcs||[]).flatMap(s=>[s.name,s.u]).filter(Boolean))!==c[k])throw Error('invalid-summary-public-copy:'+k);
+  const urls=(d.srcs||[]).map(s=>s.url).filter(Boolean);if(!String(d.sourceText||'').trim()||!urls.length||urls.some(u=>{try{return !['http:','https:'].includes(new URL(u).protocol)}catch{return true}}))throw Error('summary-original-source-required');
+  if(!r||Object.keys(r).some(k=>!['source_read','facts_checked','privacy_checked','duplicates_checked','single_source_acknowledged','independently_verified','notes','evidence_urls','prior_hold_resolved','resolution','unresolved'].includes(k))||!['source_read','facts_checked','privacy_checked','duplicates_checked'].every(k=>r[k]===true)||typeof r.independently_verified!=='boolean'||typeof r.single_source_acknowledged!=='boolean'||typeof r.notes!=='string'||r.notes.length<20||r.notes.length>2000||!Array.isArray(r.evidence_urls)||r.evidence_urls.length<1||r.evidence_urls.length>8||r.evidence_urls.some(u=>{try{return !['http:','https:'].includes(new URL(u).protocol)}catch{return true}})||!urls.some(u=>r.evidence_urls.includes(u)))throw Error('summary-source-review-required');
+  if(r.prior_hold_resolved!==true||!Array.isArray(r.unresolved)||r.unresolved.length!==0||typeof r.resolution!=='string'||r.resolution.length<20||r.resolution.length>2000)throw Error('summary-unresolved-editorial-hold');
+  if((urls.length===1||(d.srcs||[]).every(s=>s.local))&&r.single_source_acknowledged!==true)throw Error('summary-single-source-acknowledgement-required');
+  if(r.independently_verified&&(d.srcs||[]).every(s=>s.local))throw Error('summary-local-independent-verification-unsupported');
+  if(!r.independently_verified&&!/(?:أفاد|أورد|ذكر|نقل|بحسب|وفق|تقرير|مصدر)/u.test(c.body))throw Error('summary-attribution-required');
+  if(!r.independently_verified&&!/(?:لم نتحقق|لم يتسن.{0,20}التحقق|لم يُتحقق)/u.test(c.body))throw Error('summary-verification-caveat-required');
+  const sourceRecords=(d.srcs||[]).map(s=>({name:s.name||s.u||'',url:s.url,timestamp:Number.isFinite(s.ts)?new Date(s.ts).toISOString():null}));
+  const m={version:2,reviewHash:reviewedCopyHash(r),draftId:id,type:c.type,title:c.title,title_en:c.title_en,body:c.body,location:'سوريا',sourceBinding:reviewedSourceBinding(d),publicSourcesHash:reviewedCopyHash(sourceRecords),approvalReference:SUMMARY_AUTHORITY_REFERENCE,authorityReference:SUMMARY_AUTHORITY_REFERENCE,singleSourceAcknowledgement:r.single_source_acknowledged,verification:r.independently_verified?'operator-source-reviewed':'source-attributed-not-independently-verified',imageHeading:{ar:c.image_heading_ar,en:c.image_heading_en},imageContext:{latitude:34.85,longitude:38.6,zoom:5,label_ar:'سياق: سوريا',label_en:'Context: Syria',note_ar:'تقرير إخباري، الموقع الدقيق غير محدد',note_en:'News report. Exact incident location is unknown.'}};
+  const next=structuredClone(d);Object.assign(next,{type:m.type,headline:m.title,body:m.body,loc:{...locationFrom({}),name_ar:'سوريا',name_en:''},extra:[],politicalCategory:c.political_category||null,politicalNeedsCategory:false,editorialHold:true,editorialHoldReason:'reviewed-summary-needs-separate-publish',dayAutoAt:null});delete next.autoMode;
+  next.reviewedCopy={version:2,copyHash:reviewedCopyHash(m),envelope:signReviewedSummary(m),preparedFromRevision:request.revision,editorialModeAt:n.editorialModeAt||null};next.reviewedCopy.binding=reviewedStateBinding(next);next.reviewedCopyAudit={review:structuredClone(r)};
+  const preview=operatorNewsReviewFromDraft(next);if(preview.issue||preview.duplicate)throw Error('summary-invalid-or-duplicate:'+ (preview.issue||'duplicate'));
+  if(request.dry_run===true)return {ok:true,dryRun:true,id,revision:operatorRevision(d),copyHash:reviewedCopyHash(m),candidate:preview.candidate,duplicate:null,verification:m.verification};
+  const prior=structuredClone(d);Object.assign(d,next);d.reviewedCopyAudit={version:2,at:new Date().toISOString(),prior,copyHash:reviewedCopyHash(m),approvalReference:SUMMARY_AUTHORITY_REFERENCE,verification:m.verification,sourceBinding:m.sourceBinding,review:structuredClone(r)};
+  save();if(store.backup&&!await store.flushBackup(true))throw Error('summary-durability-unverified-remains-held');await refreshCards(d);
+  return {ok:true,status:'reviewed-summary-held',copyHash:reviewedCopyHash(m),review:operatorNewsReview(id)};
+}
 /** One source-checked report, prepared held and never sent by this action. */
 export async function prepareAttributedNewsDraft(id, request = {}) {
   assertOperatorRecoveryReady();
@@ -2308,6 +2341,7 @@ export async function ownerReviewNewsPreview(ctx, preview) {
   if (!preview?.ownerNewsReview) return null;
   const ref=preview.ownerNewsReview,id=ref.id,d=newsState().drafts[id],uid=Number(ctx.from?.id);
   if(!isOwner(uid)||ctx.chat?.type!=='private'||Number(ctx.chat.id)!==uid||ref.owner!==uid)throw Error('owner-private-news-review-required');
+  if(d?.editorialHoldReason==='operator-review-hold')throw Error('delegated-reviewed-copy-required');
   if(!d||d.status!=='pending'||operatorRevision(d)!==ref.revision||d.reviewedCopy||d.attributedReport||['claimed','uncertain','published-backup-unverified'].includes(d.operatorReview?.result)||['claimed','uncertain'].includes(d.nativeReview?.result))throw Error('stale-or-unresolved-owner-news-review');
   const edited={...d,type:preview.type,loc:preview.location,extra:preview.extra||[],politicalCategory:preview.politicalCategory};
   const candidate=sourceFirstCandidate(edited),gate=sourceFirstGate(edited,candidate);
@@ -2349,6 +2383,7 @@ export async function operateNewsDraft(id, request = {}) {
     return { ok: true, status: 'held', id: d.id };
   }
   const reviewed=boundReviewedCopy(d);
+  if(request.action==='publish' && d.editorialHoldReason==='operator-review-hold')return fail('delegated-reviewed-copy-required');
   if(request.action==='publish-reviewed' && (newsState().editorialMode!=='reviewed' || d.reviewedCopy?.editorialModeAt!==(newsState().editorialModeAt||null))) return fail('reviewed-copy-mode-changed');
   if(request.action==='publish-reviewed' && (!reviewed || request.copy_hash!==reviewedCopyHash(reviewed) || request.approval_reference!==reviewed.approvalReference || (reviewed.singleSourceAcknowledgement && request.single_source_acknowledged!==true))) return fail('bound-reviewed-copy-approval-required');
   if(d.reviewedCopy && !['publish-reviewed','duplicate'].includes(request.action)) return fail('separate-reviewed-copy-publish-required');
@@ -2863,6 +2898,7 @@ export function registerNewsTools(bot, h) {
       forgetCurrentCard(d, ctx); save();
       return;
     }
+    if ((act === 'p' || act === 'e') && d.editorialHoldReason==='operator-review-hold') return toast(ctx,t(ctx,'هذه المادة قيد التصحيح والمراجعة المفوّضة قبل النشر؛ لا تحتاج موافقة جديدة منك.','Delegated editorial correction is in progress; no new owner approval is needed.'),true);
     if ((act === 'p' || act === 'e') && d.reviewedCopy) return toast(ctx, t(ctx, 'تحتاج هذه النسخة قرار نشر المراجعة المنفصل.', 'Separate reviewed-copy publication required.'), true);
     if ((act === 'p' || act === 'e') && d.attributedReport) return toast(ctx, t(ctx, 'هذه المادة تحتاج قرار نشر الإسناد المنفصل.', 'Separate attributed-report publication required.'), true);
     if (act === 'e' && privateOwner(ctx) && (d.editorialHold || d.operatorReview?.result === 'held') && !['claimed','uncertain','published-backup-unverified'].includes(d.operatorReview?.result) && !['claimed','uncertain'].includes(d.nativeReview?.result)) {

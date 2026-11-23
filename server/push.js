@@ -71,7 +71,8 @@ function matches(alert, sub) {
 
 export async function dispatchPush(store, alert, event = 'new', sendNotification) {
   if (!alert?.id || typeof sendNotification !== 'function') return { sent: 0, skipped: 0 };
-  const report = (alert.meta?.reviewedNewsCopy?.draftId === '4f2193d1a9' && !!reviewedAlertCopy(alert));
+  const proof=reviewedAlertCopy(alert);
+  const report = !!proof && (proof.version===2 || alert.meta?.reviewedNewsCopy?.draftId === '4f2193d1a9');
   const title = report ? 'ℹ️ خبر — Red Alert Syria' : event === 'update' ? '🔄 تحديث تنبيه — Red Alert Syria' : '🚨 تنبيه جديد — Red Alert Syria';
   const body = String(alert.title || alert.description || 'تنبيه جديد').slice(0, 240);
   const url = `/${alert.lang === 'en' ? 'en' : 'ar'}/#${encodeURIComponent(alert.id)}`;

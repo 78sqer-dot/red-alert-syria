@@ -53,7 +53,7 @@ test('entering plane keeps right-to-left travel and faces left; cache versions r
   assert.match(css, /\.map-flight-track-marker\.is-plane\.is-entering-syria \.map-flight-track-squad \{ animation-name: flightTrackPlaneApproach; \}/);
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
   assert.match(html, /app\.css\?v=100/);
-  assert.match(html, /app\.js\?v=115/);
+  assert.match(html, /app\.js\?v=116/);
   assert.match(app, /map\.js\?v=105/);
 });
 

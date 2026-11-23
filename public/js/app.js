@@ -1,5 +1,5 @@
 // Red Alert Syria — front-end application
-import {datedReport,reportPublicationLabel,reportEventLabel,reportBadgeLabel} from '/shared/report-presentation.js?v=1';
+import {datedReport,neutralReport,reportPublicationLabel,reportEventLabel,reportBadgeLabel} from '/shared/report-presentation.js?v=2';
 import { createServices, GOV_C } from './services.js?v=40';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=43';
 import { alertPreviewText } from '/shared/alert-preview.js?v=1';
@@ -128,7 +128,7 @@ const shareText = (a) => `🚨 ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}
 
 // ------------------------------------------------------------------ alerts selection
 const URGENT_TYPES = new Set(['breaking', 'uav_strike', 'airstrike', 'warplane', 'helicopter', 'air_movement', 'missile', 'attack', 'artillery', 'assassination', 'shooting', 'military_incursion']);
-const isUrgent = (a) => !!(a?.is_active && !datedReport(a) && URGENT_TYPES.has(a.type));
+const isUrgent = (a) => !!(a?.is_active && !neutralReport(a) && URGENT_TYPES.has(a.type));
 const searchKey = (value) => String(value || '').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').toLowerCase();
 function matchesSearch(a) {
   const q = searchKey(state.search).trim();
@@ -220,7 +220,7 @@ setInterval(updateConnAge, 15_000);
 
 // ------------------------------------------------------------------ list & detail
 function badge(a, live = false) {
-  if(datedReport(a))return `<span class="badge" style="--c:#7dd3fc;--symbol-color:#7dd3fc">${icon('clock',13)}${esc(reportBadgeLabel(a,LANG))}</span>`;
+  if(neutralReport(a))return `<span class="badge" style="--c:#7dd3fc;--symbol-color:#7dd3fc">${icon('clock',13)}${esc(reportBadgeLabel(a,LANG))}</span>`;
   return `<span class="badge${live ? ' live' : ''}" style="--c:${eventVisual(a.type, a).color};--symbol-color:${eventVisual(a.type, a).color}">${icon(typeIcon(a.type, a), 13)}${esc(typeName(a.type))}</span>`;
 }
 function cardHtml(a, fresh) {
@@ -934,14 +934,14 @@ function notify(a) {
   const s = settings.get();
   const n = s.notifications;
   if (s.filter.includes(a.type)) alertToast(a);
-  if (a.type === 'breaking' && !datedReport(a)) showBreaking(a);
+  if (a.type === 'breaking' && !neutralReport(a)) showBreaking(a);
   if (!n.enabled || !n.types.includes(a.type)) return;
   if (s.followArea && !matchesFollowArea(a, s.followArea)) return;
-  if (n.sound && !datedReport(a)) playRingtone(n.ringtone, n.volume);
-  if (n.vibration && !datedReport(a) && navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
+  if (n.sound && !neutralReport(a)) playRingtone(n.ringtone, n.volume);
+  if (n.vibration && !neutralReport(a) && navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
     try {
-      const notif = new Notification(`${datedReport(a)?'ℹ️':alertEmoji(a)} ${reportBadgeLabel(a,LANG)||typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (descOf(a) ? '\n' + descOf(a) : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr', ...(datedReport(a)?{silent:true}:{}) });
+      const notif = new Notification(`${neutralReport(a)?'ℹ️':alertEmoji(a)} ${reportBadgeLabel(a,LANG)||typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (descOf(a) ? '\n' + descOf(a) : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr', ...(neutralReport(a)?{silent:true}:{}) });
       notif.onclick = () => {
         window.focus();
         select(a.id);
@@ -964,8 +964,8 @@ function alertToast(a) {
   const t = typeOf(a.type);
   const el = document.createElement('div');
   el.className = 'toast';
-  el.style.setProperty('--c', datedReport(a)?'#7dd3fc':t.color);
-  el.innerHTML = `<span class="ti">${datedReport(a)?icon('clock',24):glyphDisc(a.type, 34, 17, 'pin', a.caution_visual ? 'urgent_warning' : null, a.caution_visual ? eventVisual(a.type, a).color : null)}</span><span class="tt"><small>${esc(datedReport(a)?reportPublicationLabel(a,LANG):T.newAlert)} · ${esc(reportBadgeLabel(a,LANG)||typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
+  el.style.setProperty('--c', neutralReport(a)?'#7dd3fc':t.color);
+  el.innerHTML = `<span class="ti">${neutralReport(a)?icon('clock',24):glyphDisc(a.type, 34, 17, 'pin', a.caution_visual ? 'urgent_warning' : null, a.caution_visual ? eventVisual(a.type, a).color : null)}</span><span class="tt"><small>${neutralReport(a)?esc(reportBadgeLabel(a,LANG)):esc(T.newAlert)+' · '+esc(typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
   el.addEventListener('click', () => {
     select(a.id);
     el.remove();
