@@ -35,15 +35,15 @@ const qualified = (overrides = {}) => ({
   ...overrides,
 });
 
-test('public news copy hides outlet identities while preserving reporting roles, speaker attribution and private source records', () => {
+test('public news copy retains original attribution without appending private source records', () => {
   const examples = [
     {
       raw: 'أفاد مراسل الجزيرة بأن القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
-      clean: 'أفاد مراسل بأن القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
+      clean: 'أفاد مراسل الجزيرة بأن القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
     },
     {
       raw: 'مصادر العربية: طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
-      clean: 'مصادر: طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
+      clean: 'مصادر العربية: طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
     },
     {
       raw: 'توغل وإطلاق نار يطال منازل وأراضي قرية كويا بريف درعا.. رئيس البلدية يروي لـ سوريا الآن ما جرى',
@@ -58,11 +58,11 @@ test('public news copy hides outlet identities while preserving reporting roles,
   assert.equal(cleanPublicNewsAttribution(institutionAttribution, ['مصادر الدفاع المدني السوري']), institutionAttribution,
     'a complete monitored institution source name remains attributed');
   assert.equal(cleanPublicNewsAttribution('مصادر قناة الرصد: وقع انفجار وأصيب 3 أشخاص.', ['مصادر قناة الرصد']),
-    'مصادر: وقع انفجار وأصيب 3 أشخاص.', 'a monitoring channel stays hidden without deleting its source role');
+    'مصادر قناة الرصد: وقع انفجار وأصيب 3 أشخاص.', 'source-written channel attribution survives');
   assert.equal(cleanPublicNewsAttribution('مصادر قناة الدفاع المدني: وقع انفجار.', ['مصادر قناة الدفاع المدني']),
-    'مصادر: وقع انفجار.', 'a monitoring channel named after an institution stays hidden without deleting its source role');
+    'مصادر قناة الدفاع المدني: وقع انفجار.', 'source-written media attribution does not become our assertion');
 
-  const sourceText = examples[0].raw;
+  const sourceText = examples[0].raw + '\n' + examples[1].raw;
   const draft = qualified({
     id: 'private-source-attribution-cleanup', type: 'explosion',
     headline: examples[0].raw,
@@ -75,7 +75,7 @@ test('public news copy hides outlet identities while preserving reporting roles,
   const publicDraft = toBotDraft(draft);
   assert.equal(publicDraft.headline, examples[0].clean);
   assert.equal(publicDraft.details, examples[1].clean);
-  assert.doesNotMatch(`${publicDraft.headline} ${publicDraft.details}`, /الجزيرة|العربية|سوريا الآن|قناة الرصد الداخلية/);
+  assert.doesNotMatch(`${publicDraft.headline} ${publicDraft.details}`, /سوريا الآن|قناة الرصد الداخلية/);
   assert.deepEqual(publicDraft.srcs, [{ u: 'private-monitor-feed', name: 'قناة الرصد الداخلية', url: 'https://t.me/private-monitor-feed/55', ts: draft.srcs[0].ts, local: false }]);
   assert.equal(draft.sourceText, sourceText, 'raw source text remains on the internal draft');
   assert.equal(draft.headline, originalHeadline, 'pre-existing draft text is not rewritten in place');
@@ -576,8 +576,8 @@ test('source-first reporter cleanup preserves third-party attribution without li
   });
   const original = structuredClone(draft);
   const candidate = _test.sourceFirstCandidate(draft);
-  assert.equal(candidate.body, 'أفاد مراسل بأن قوة عسكرية توغلت في ريف درعا الغربي اليوم.');
-  assert.doesNotMatch(candidate.body, /قناة الرصد الخاصة|مراسلنا|synthetic-private-feed|https?:/u);
+  assert.equal(candidate.body, 'أفاد مراسل قناة الرصد الخاصة بأن قوة عسكرية توغلت في ريف درعا الغربي اليوم.');
+  assert.doesNotMatch(candidate.body, /مراسلنا|synthetic-private-feed|https?:/u);
   assert.equal(candidate.editorialHold, true);
   assert.equal(candidate.editorialHoldReason, 'operator-review-hold');
   assert.equal(candidate.alertId, null);
@@ -585,6 +585,6 @@ test('source-first reporter cleanup preserves third-party attribution without li
   assert.equal(daytimeAutoEligible(candidate), false);
   assert.equal(nightEligible(candidate), false);
   assert.deepEqual(draft, original, 'candidate generation does not mutate the held draft or its private sources');
-  assert.deepEqual(_test.sourceFirstGate(draft, { ...candidate, body: candidate.body.replace('أفاد مراسل بأن ', '') }),
+  assert.deepEqual(_test.sourceFirstGate(draft, { ...candidate, body: candidate.body.replace('أفاد مراسل قناة الرصد الخاصة بأن ', '') }),
     { ok: false, reason: 'source-copy-changed' }, 'the source-copy gate is not weakened');
 });

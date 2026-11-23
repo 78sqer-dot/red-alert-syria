@@ -25,7 +25,7 @@ const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
 import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, isSearchOnlySecurityReport, isExplosiveHazardWithoutBlast, hospitalDestinationOnly, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, administrativePlaceOnly, churchBuildingOnly, isPersonNameOnly, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
-import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, anonymizeNewsReportingLead, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
+import { setSourceNames, missingNamedReportingAttribution, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, anonymizeNewsReportingLead, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
 // All type pickers in this module — the draft edit menu (EDIT_TYPE_*) and the
 // monitoring filter panel (NEWS_TYPE_GROUPS) — are generated from the ONE
@@ -447,7 +447,7 @@ function editorialGate(d) {
 
   const factSource = anonymizeNewsReportingLead(rawSource, (d.srcs || []).map((source) => source.name).filter(Boolean));
   const withoutLinks = editorialDigits(factSource.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' '));
-  const publicDigits = editorialDigits(rawHeadline);
+  const publicDigits = editorialDigits(anonymizeNewsReportingLead(rawHeadline, (d.srcs || []).map((source) => source.name).filter(Boolean)));
   const numbers = withoutLinks.match(/\d+(?::\d+)?(?:[.,]\d+)?/g) || [];
   const publicNumbers = new Set(publicDigits.match(/\d+(?::\d+)?(?:[.,]\d+)?/g) || []);
   if (numbers.some((number) => !publicNumbers.has(number))) return fail('number-or-time-omitted');
@@ -1551,6 +1551,7 @@ export function toBotDraft(d, options = {}) {
     ? rawBody
     : cleanPublicNewsAttribution(rawBody, privateSourceNames);
   if (!headline) throw new Error('No public news copy remains after removing media attribution');
+  if (d.sourceText && !editorialSelection && missingNamedReportingAttribution(`${headline}\n${body}`, d.sourceText, privateSourceNames)) throw new Error('named-reporting-attribution-not-in-original');
   const patrolText = N(`${headline || ''} ${editorialSelection ? '' : d.body || ''}`);
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
@@ -1595,6 +1596,7 @@ function sourceFirstCandidate(d) {
   if (selected.some((place) => selected.some((other) => other !== place && localityQualifierOnly(place.name_ar, other.name_ar, source)))) throw new Error('non-incident-location-qualifier');
   const body = cleanPublicNewsAttribution(source, (d.srcs || []).map((s) => s.name).filter(Boolean));
   if (!body || body.length > 2800) throw new Error('source-length-needs-review');
+  if (missingNamedReportingAttribution(source, body, (d.srcs || []).map((s) => s.name).filter(Boolean))) throw new Error('named-reporting-attribution-lost-needs-review');
   const roleConflict = locsOf(d.loc, d.extra).some((l) => nonIncidentPlaceOnly(l.name_ar, source));
   if (roleConflict) throw new Error('non-incident-location-role');
   const geography = d.type === 'political' ? politicalPublicationGeography(d) : sourceScopedGeography(d);

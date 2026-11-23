@@ -28,8 +28,8 @@ const draft = (extra = {}) => ({
 });
 
 test('a pipe-separated third-party reporting role survives without a new speech verb', () => {
-  assert.equal(cleanPublicNewsAttribution(sourceText, [feed]), `مراسل | ${fact}`);
-  assert.equal(cleanPublicNewsAttribution(`أفادت مراسلة ${feed} | ${fact}`, [feed]), `أفادت مراسلة | ${fact}`);
+  assert.equal(cleanPublicNewsAttribution(sourceText, [feed]), `مراسل ${feed} | ${fact}`);
+  assert.equal(cleanPublicNewsAttribution(`أفادت مراسلة ${feed} | ${fact}`, [feed]), `أفادت مراسلة ${feed} | ${fact}`);
 });
 
 test('feed identity is not an independent city mention in countryside-only reporting', () => {
@@ -71,7 +71,7 @@ test('real event counts, times and dates stay protected even when they equal fee
     const d = draft({ sourceText: sourceText + ' ' + tail, loc: locationFrom({ govCode: '06' }) });
     const c = _test.sourceFirstCandidate(d);
     assert.deepEqual(_test.sourceFirstGate(d, c), { ok: true, reason: null });
-    assert.equal(_test.editorialGate({ ...c, headline: c.body.replace(removed, '') }).reason, 'number-or-time-omitted', tail + ' / ' + removed);
+    assert.equal(_test.editorialGate({ ...c, headline: c.body.replaceAll(removed, '') }).reason, 'number-or-time-omitted', tail + ' / ' + removed);
   }
 });
 

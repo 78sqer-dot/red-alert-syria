@@ -110,10 +110,39 @@ export function anonymizeNewsReportingLead(raw, privateNames = []) {
   return text;
 }
 
+// Protect only an attribution span already present in the supplied narrative.
+// Configured names are match vocabulary, never text to append to public copy.
+function protectOriginalReportingAttribution(raw, privateNames = []) {
+  const source = String(raw || '');
+  const names = [...new Set([...MEDIA, ...extraNames, ...(Array.isArray(privateNames) ? privateNames : [])].flatMap((name) => [name, String(name || '').replace(/^(?:مراسل(?:ة)?|مصادر?|مصدر)\s+/u, '')])
+    .map((name) => String(name || '').replace(/[<>\r\n]/g, '').trim()).filter((name) => name.length >= 3 && !isInstitutionSpeakerName(name)))].sort((a, b) => b.length - a.length);
+  let prefix = 'RASORIGINALATTRIBUTIONKEEP';
+  while (source.includes(prefix)) prefix += 'X';
+  const kept = [];
+  const re = names.length ? new RegExp(`(?:مراسل(?:ة)?|مصادر?|مصدر)\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?(?:${names.map(esc).join('|')})(?=\\s*(?:بأن|أن|إن|[:：،,|]))`, 'giu') : null;
+  const text = re ? source.replace(re, (value) => { const key = `${prefix}${kept.length}END`; kept.push(value); return key; }) : source;
+  return { text, restore: (value) => String(value).replace(new RegExp(`${prefix}(\\d+)END`, 'g'), (_match, index) => kept[Number(index)] || '') };
+}
+
+/** Fail closed when source cleanup removed a named reporting identity.
+ * This detects a loss only; it never invents attribution or changes public copy. */
+export function missingNamedReportingAttribution(raw, candidate, privateNames = []) {
+  const source = String(raw || '');
+  const names = [...new Set([...MEDIA, ...extraNames, ...(Array.isArray(privateNames) ? privateNames : [])].flatMap((name) => [name, String(name || '').replace(/^(?:مراسل(?:ة)?|مصادر?|مصدر)\s+/u, '')])
+    .map((name) => String(name || '').trim()).filter((name) => name.length >= 3 && !isInstitutionSpeakerName(name)))].sort((a, b) => b.length - a.length);
+  if (!names.length) return false;
+  const outlet = names.map(esc).join('|');
+  const re = new RegExp(`(?:مراسل(?:ة)?|مصادر?|مصدر)\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?(?:${outlet})(?=\\s*(?:بأن|أن|إن|[:：،,|]))`, 'giu');
+  const normalized = (text) => String(text).replace(/\s+/g, ' ').trim();
+  const target = normalized(candidate);
+  return [...source.matchAll(re)].some((match) => !target.includes(normalized(match[0])));
+}
+
 /** Remove media-outlet/reporting credits from public copy without stripping attributed speakers or institutions. */
 export function cleanPublicNewsAttribution(raw, privateNames = []) {
   if (!raw) return raw;
-  let text = stripRawUrls(String(raw));
+  const originalAttribution = protectOriginalReportingAttribution(raw, privateNames);
+  let text = stripRawUrls(originalAttribution.text);
   // Keep reported attribution chains inside the narrative, while standalone
   // outlet credits and promotional tails remain removable.
   const reportedChains = [];
@@ -156,13 +185,14 @@ export function cleanPublicNewsAttribution(raw, privateNames = []) {
   }
   text = stripReporterPromo(text);
   text = text.replace(/NEWSATTRIBUTIONKEEP(\d+)/g, (_match, index) => reportedChains[Number(index)] || '');
-  return String(text || '').replace(/^[\s،,;|•—–:-]+|[\s،,;|•—–:-]+$/g, '').replace(/\s+/g, ' ').trim();
+  return originalAttribution.restore(String(text || '').replace(/^[\s،,;|•—–:-]+|[\s،,;|•—–:-]+$/g, '').replace(/\s+/g, ' ').trim());
 }
 
 /** Sanitize public news copy while preserving story attribution and removing private feed identities. */
 export function cleanAttributedNewsText(raw, privateNames = []) {
   if (!raw) return raw;
-  let s = String(raw)
+  const originalAttribution = protectOriginalReportingAttribution(raw, privateNames);
+  let s = originalAttribution.text
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
     .replace(/<[^>]*>/g, ' ')
     .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '')
@@ -198,5 +228,5 @@ export function cleanAttributedNewsText(raw, privateNames = []) {
     .replace(/(^|\n)\s*[:：|•\-–—]+\s*/gmu, '$1');
   s = s.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n');
   s = s.replace(/\s+([.،,:؛!؟])/g, '$1').trim();
-  return s;
+  return originalAttribution.restore(s);
 }
