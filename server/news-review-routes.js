@@ -1,7 +1,11 @@
 import express from 'express';
-import { operatorNewsReview, prepareReviewedSummary, prepareReviewedNewsCopy, prepareAttributedNewsDraft, correctOperatorNewsDraft, operateNewsDraft } from './news-monitor.js';
+import { setTimedNewsPolicy, operatorNewsReview, prepareReviewedSummary, prepareReviewedNewsCopy, prepareAttributedNewsDraft, correctOperatorNewsDraft, operateNewsDraft } from './news-monitor.js';
 /** Mounted by the production app and exercised through HTTP in integration tests. */
 export function mountNewsReviewRoutes(app, { adminKeyOk, apiLimiter }) {
+  app.post('/api/admin/news/timed-policy', apiLimiter, express.json({limit:'1kb'}), async (req,res) => {
+    if (!adminKeyOk(req)) return res.status(404).end();
+    try {return res.json({ok:true,...await setTimedNewsPolicy(req.body?.enabled)});} catch(e){return res.status(409).json({ok:false,error:e.message});}
+  });
   app.get('/api/admin/news/:id', apiLimiter, (req, res) => {
     if (!adminKeyOk(req)) return res.status(404).end();
     const review = operatorNewsReview(req.params.id);

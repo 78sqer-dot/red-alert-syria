@@ -1,3 +1,4 @@
+import { timedNewsDue, timedNewsEligible, timedNewsWindow } from './timed-news-policy.js';
 import { alertShareUrl } from './alert-share-url.js';
 import {resolveReviewedLocality} from './reviewed-locality.js';
 import { REVIEWED_NEWS_COPIES, reviewedCopyHash, reviewedSourceBinding, reviewedStateBinding, boundReviewedCopy, signReviewedSummary, SUMMARY_AUTHORITY_REFERENCE } from './reviewed-news-copy.js';
@@ -531,7 +532,7 @@ export function dayAutoReady(d, now = Date.now()) {
   return daytimeAutoEligible(d) && Number.isFinite(d.dayAutoAt) && d.dayAutoAt <= now;
 }
 function scheduleDayAuto(d, now = Date.now()) {
-  if (newsState().editorialMode === 'reviewed') return false;
+  if (newsState().editorialMode === 'reviewed' || newsState().timedPolicy?.enabled) return false;
   const dueAt = dayAutoDueAt(d, now);
   if (dueAt == null) return false;
   d.dayAutoAt = dueAt;
@@ -789,7 +790,8 @@ function cardText(d, lang = 'ar') {
   lines.push(d.test
     ? tr(lang, '🧪 <b>تجربة — هذه مسودة تجريبية، لن يُنشر شيء</b>', '🧪 <b>TEST — a test draft, nothing will be published</b>')
     : tr(lang, '📡 <b>رصد إخباري — مسودة جاهزة للنشر</b>', '📡 <b>News monitor — draft ready to publish</b>'));
-  if (!d.test && newsState().editorialMode === 'reviewed') lines.push(tr(lang, '🔎 بانتظار المراجعة التحريرية قبل النشر. النشر الآلي متوقف.', '🔎 Waiting for editorial review before publication. Unattended news publishing is off.'));
+  if (!d.test && newsState().timedPolicy?.enabled) lines.push(tr(lang, 'النشر الصحفي مفعّل: نهاراً بعد دقيقتين دون موافقة، وليلاً دون انتظار، بتوقيت سوريا.', 'Professional publishing enabled: two-minute daytime approval window, no overnight wait, Syria time.'));
+  else if (!d.test && newsState().editorialMode === 'reviewed') lines.push(tr(lang, '🔎 بانتظار المراجعة التحريرية قبل النشر. النشر الآلي متوقف.', '🔎 Waiting for editorial review before publication. Unattended news publishing is off.'));
   const typeEmoji = d.type === 'military_incursion' && d.incursionKind === 'barrier' ? '🚧' : alertEmoji({ type: d.type, hazard: d.hazard });
   lines.push('', `<b>${typeEmoji ? `${typeEmoji} ` : ''}${esc(editableDraftTypeLabel(d, lang))}</b>`);
   if (locs.length > 1) {
@@ -1003,6 +1005,101 @@ function politicalCategoryKb(d, lang = 'ar', namespace = 'nw') {
   });
   return kb.row().text(tr(lang, '↩️ رجوع', '↩️ Back'), `${namespace}:b:${d.id}`);
 }
+let timedNewsRunning = false;
+export async function setTimedNewsPolicy(enabled) {
+  assertOperatorRecoveryReady();
+  if (typeof enabled !== 'boolean' || !store.backup) throw Error('invalid-timed-news-policy');
+  const n = newsState();
+  if (n.timedPolicy?.enabled === enabled) return timedNewsStatus();
+  const prior = n.timedPolicy ? structuredClone(n.timedPolicy) : null;
+  if (enabled && n.editorialMode !== 'reviewed') throw Error('timed-policy-requires-source-bound-publisher-mode');
+  n.timedPolicy = { enabled, effectiveAt: Date.now(), timezone: 'Asia/Damascus', dayFrom: '08:00', dayTo: '22:00', dayDelayMs: 120000, nightDelayMs: 0 };
+  save(); try {if (!await store.flushBackup(true)) throw Error('timed-policy-backup-unverified');} catch(e) {n.timedPolicy=prior;save();throw e;}
+  return timedNewsStatus();
+}
+function timedNewsStatus() {
+  const p = newsState().timedPolicy;
+  return { enabled: p?.enabled === true, effectiveAt: p?.effectiveAt || null, timezone: 'Asia/Damascus', day: '08:00–22:00', dayDelaySeconds: 120, night: '22:00–08:00', nightDelaySeconds: 0, copyMode: 'faithful-source-attributed-framing', enrolled: Object.values(newsState().drafts).filter(d => d.timedNews).map(d => ({ id:d.id,status:d.status,...d.timedNews })) };
+}
+function professionalFactualText(source,feedNames) {
+  const attribution=anonymizeNewsReportingLead(source,feedNames);
+  return cleanPublicNewsAttribution(attribution,feedNames)
+    .replace(/(?:^|\n)\s*S\.N\.N\.?\s*(?:[|:：-].*)?(?=\n|$)/gimu,' ')
+    .replace(/\bS\.N\.N\.?\s*[|:：-]?\s*$/giu,' ')
+    .replace(/قوات الاحتلال الإسرائيلي/gu,'قوات إسرائيلية')
+    .replace(/الاحتلال الإسرائيلي/gu,'الجيش الإسرائيلي')
+    .replace(/(?:[|:：،-]\s*)?(?:التفاصيل|التفاصيل لاحقاً|تابع التفاصيل|للمزيد من التفاصيل)\s*$/u,'')
+    .replace(/^[\s◂▸▶◀|:：•-]+|[\s|:：•-]+$/gu,'').trim();
+}
+function professionalOriginalDuplicate(d) {
+  const original=d.reviewedCopyAudit?.review?.copyMode==='faithful-source-attributed-framing'?d.reviewedCopyAudit.prior:d;
+  const text=N(original.sourceText||original.body||'');
+  // Exact source identity survives publication category/geography framing. No fuzzy expansion.
+  if(text.length>=20){
+    const since=Date.now()-12*H_MS;
+    const existing=(store.state.alerts||[]).find(a=>a.id!==d.alertId && (Date.parse(a.timestamp)||0)>=since && [a.description,a.body].some(x=>N(x||'').includes(text)));
+    if(existing)return {id:existing.id};
+    const competing=Object.values(newsState().drafts).find(x=>x.id!==d.id && ['publishing','published'].includes(x.status) && (x.ts||x.created)>=since && N(x.sourceText||x.body||'')===text);
+    if(competing)return {id:competing.alertId,draftId:competing.id};
+  }
+  return knownDuplicateDraft(original)||finalPublishDuplicate(original,original);
+}
+async function prepareTimedProfessional(d, { native = false } = {}) {
+  if (!native && (d.privateEditorial && Object.keys(d.privateEditorial).length || d.aiRewritePreview?.applied || d.editorialHold && d.editorialHoldReason !== 'reviewed-summary-needs-separate-publish')) throw Error('explicit-owner-hold-not-automatic');
+  if (d.reviewedCopy) { if (!boundReviewedCopy(d)) throw Error('stale-professional-copy'); return; }
+  if (d.status !== 'pending' || d.test || d.rule || d.alertId || d.postId || d.undone || d.duplicateOf || d.correctedCandidate || d.attributedReport || ['claimed','uncertain','published-backup-unverified'].includes(d.operatorReview?.result) || ['claimed','uncertain'].includes(d.nativeReview?.result)) throw Error('professional-draft-unavailable');
+  if (!isFreshSourceTs(draftSourceTs(d))) throw Error('source-no-longer-fresh');
+  if (professionalOriginalDuplicate(d)) throw Error('original-incident-already-published');
+  const policyAt=newsState().timedPolicy?.effectiveAt;
+  const before = operatorRevision(d), source = String(d.sourceText || '').trim();
+  if (!source || source.length > 1200 || !(d.srcs || []).length || (d.sourceMedia || []).length) throw Error('unsupported-professional-source');
+  // Deterministic journalistic framing keeps every source assertion, not a lossy model paraphrase.
+  // An asynchronous boundary allows owner rejection/claim to win before preparation commits.
+  await Promise.resolve();
+  if (!newsState().timedPolicy?.enabled || newsState().timedPolicy.effectiveAt!==policyAt || (!native&&!newsState().on)) throw Error('professional-policy-stopped');
+  if (operatorRevision(d) !== before || d.status !== 'pending') throw Error('professional-source-or-owner-decision-changed');
+  const feedNames = (d.srcs || []).flatMap(s => [s.name,s.u]).filter(Boolean);
+  const faithful = professionalFactualText(source,feedNames);
+  if (!faithful || isPrivateEditorialCopy(faithful) || sharpToneReason(faithful) || /رأي\s*[/：:]|محاكاة ساخرة|EDITORIAL_REVIEW_REQUIRED/u.test(faithful)) throw Error('source-not-factual-public-news');
+  const lead=faithful.split(/[.\n]/u).find(x=>x.trim())?.trim();
+  const title=lead&&lead.length<=190?lead:'تقرير إخباري عن سوريا';
+  const body = `بحسب تقرير إخباري، ورد النص الآتي: ${faithful}${/[.؟!]$/u.test(faithful)?'':'.'} لم نتحقق بشكل مستقل من هذه المعلومات. اشتركوا في قنواتنا لمتابعة أخبار سوريا وتحديثاتها.`;
+  const publicSources = d.srcs.map(s => ({name:s.name||s.u||'',url:s.url,timestamp:Number.isFinite(s.ts)?new Date(s.ts).toISOString():null}));
+  if (publicSources.some(s => {try {return !['http:','https:'].includes(new URL(s.url).protocol);}catch{return true;}})) throw Error('invalid-professional-source-url');
+  const review = {kind:'automatic-source-bound-professional-rewrite',sourceReadBy:'server',independentlyVerified:false,copyMode:'faithful-source-attributed-framing',nativeApproval:native};
+  const manifest = {version:2,reviewHash:reviewedCopyHash(review),draftId:d.id,type:'breaking',title,title_en:'News report about Syria',body,location:'سوريا',sourceBinding:reviewedSourceBinding(d),publicSourcesHash:reviewedCopyHash(publicSources),approvalReference:SUMMARY_AUTHORITY_REFERENCE,authorityReference:SUMMARY_AUTHORITY_REFERENCE,singleSourceAcknowledgement:true,verification:'source-attributed-not-independently-verified',imageHeading:{ar:'تقرير إخباري عن سوريا',en:'News report about Syria'},imageContext:{latitude:34.85,longitude:38.6,zoom:5,label_ar:'سياق: سوريا',label_en:'Context: Syria',note_ar:'سياق عام لسوريا، وليس موقع الحادث',note_en:'General Syria context, not an incident location.'}};
+  const prior = structuredClone(d);
+  Object.assign(d,{type:'breaking',headline:title,body,loc:{...locationFrom({}),name_ar:'سوريا',name_en:''},extra:[],politicalCategory:null,politicalNeedsCategory:false,editorialHold:true,editorialHoldReason:'reviewed-summary-needs-separate-publish',dayAutoAt:null});
+  delete d.privateEditorial; delete d.aiRewritePreview; delete d.autoMode;
+  d.reviewedCopy={version:2,copyHash:reviewedCopyHash(manifest),envelope:signReviewedSummary(manifest),preparedFromRevision:before,editorialModeAt:newsState().editorialModeAt||null};
+  d.reviewedCopy.binding=reviewedStateBinding(d);
+  d.reviewedCopyAudit={version:2,at:new Date().toISOString(),prior,review,copyHash:d.reviewedCopy.copyHash,sourceBinding:manifest.sourceBinding};
+  save();if (!store.backup || !await store.flushBackup(true)) throw Error('professional-copy-backup-unverified');
+  await refreshCards(d);
+}
+async function publishTimedProfessional(d, automatic = false) {
+  if (!newsState().timedPolicy?.enabled) throw Error('professional-policy-stopped');
+  if (!isFreshSourceTs(draftSourceTs(d))) throw Error('source-no-longer-fresh');
+  return operateNewsDraft(d.id,{action:'publish-reviewed',revision:operatorRevision(d),copy_hash:d.reviewedCopy.copyHash,approval_reference:SUMMARY_AUTHORITY_REFERENCE,single_source_acknowledged:true,professional_policy_at:newsState().timedPolicy.effectiveAt,...(automatic?{timed_automatic:true}:{})});
+}
+async function timedNewsTick(now = Date.now()) {
+  if (timedNewsRunning || !newsState().on || !newsState().timedPolicy?.enabled || store._backupWritesPaused || !store.backup || !api() || !R.H?.publishDraft) return;
+  timedNewsRunning = true;
+  try { for (const d of Object.values(newsState().drafts)) {
+    if (!timedNewsEligible(d,newsState().timedPolicy,now)) continue;
+      try {
+      await prepareTimedProfessional(d);
+      if (!newsState().on || !timedNewsEligible(d,newsState().timedPolicy,Date.now())) continue;
+      // A valid signed copy is prepared above. Owner decisions are checked again by the guarded claim.
+      d.timedNews.state='ready'; save();
+      if (!newsState().on) continue;
+      await publishTimedProfessional(d,true);
+    } catch(e) {
+      if (d.status === 'pending') {d.timedNews.state='failed';d.timedNews.reason=String(e.message).slice(0,160);save();await store.flushBackup(true);}
+      console.warn('[timed-news] stopped',d.id,e.message);
+    }
+  }} finally {timedNewsRunning=false;}
+}
 async function sendCards(d, only = null) {
   const a = api();
   if (!a) return 0;
@@ -1013,6 +1110,11 @@ async function sendCards(d, only = null) {
     try {
       const m = await a.sendMessage(uid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang, uid), link_preview_options: { is_disabled: true }, disable_notification: nightActive(), _keep: 'c' });
       d.cards.push([uid, m.message_id]); n++;
+      const policy = newsState().timedPolicy;
+      if (policy?.enabled && ownerIdsU().includes(Number(uid)) && !d.timedNews && d.created >= policy.effectiveAt && !d.test && !d.rule) {
+        const cardAt = Date.now(); d.timedNews = {policyAt:policy.effectiveAt,cardAt,dueAt:timedNewsDue(cardAt),window:timedNewsWindow(cardAt),state:'waiting'};
+        save(); if (!await store.flushBackup(true)) {d.timedNews.state='failed';d.timedNews.reason='owner-card-backup-unverified';save();}
+      }
     } catch (e) { console.warn('[news] card not delivered to', uid, e.description || e.message); }
   }
   return n;
@@ -1374,7 +1476,7 @@ async function autoDeleteLandedDuplicate(d, publicationDraft, alertId) {
   return landed;
 }
 async function nightPublish(d) {
-  if (newsState().editorialMode === 'reviewed') return false;
+  if (newsState().editorialMode === 'reviewed' || newsState().timedPolicy?.enabled) return false;
   R.autoPublishing = (R.autoPublishing || 0) + 1;
   try { return await unattendedNewsPublish(d); }
   finally { R.autoPublishing--; }
@@ -1477,7 +1579,8 @@ async function unattendedNewsPublish(d) {
 }
 async function dayAutoTick(now = Date.now()) {
   const n = newsState();
-  if (n.editorialMode === 'reviewed') return;
+  await timedNewsTick(now);
+  if (n.editorialMode === 'reviewed' || n.timedPolicy?.enabled) return;
   if (!api() || !R.H?.publishDraft) return;
   let armedAny = false;
   for (const d of Object.values(n.drafts)) {
@@ -2108,7 +2211,7 @@ async function sweep() {
 }
 
 // ---------------------------------------------------------------- start / stop / hand-off
-const NEWS_DECISION_FLAGS = ['editorialHold', 'editorialHoldReason', 'dayAutoAt', 'autoMode', 'operatorReview'];
+const NEWS_DECISION_FLAGS = ['timedNews', 'editorialHold', 'editorialHoldReason', 'dayAutoAt', 'autoMode', 'operatorReview'];
 const NEWS_DECISION_PROOF = ['alertId', 'postId', 'publishedHeadline', 'publishedBody', 'approvedBy', 'approvedAt', 'by', 'auto', 'autoAt', 'duplicateOf', 'duplicateMarkedAt', 'reconciliation', 'editorialUpdates'];
 function newsDecisionAt(d) {
   return Math.max(Number(d.operatorReview?.at) || 0, Number(d.duplicateMarkedAt) || 0,
@@ -2137,6 +2240,7 @@ export function mergeNewsFromBackup(o) {
   const on = o?.news;
   if (!on || typeof on !== 'object') return;
   const n = newsState();
+  if (Number(on.timedPolicy?.effectiveAt) > Number(n.timedPolicy?.effectiveAt || 0)) n.timedPolicy=structuredClone(on.timedPolicy);
   if (Number(on.editorialModeAt) > Number(n.editorialModeAt || 0)) {
     n.editorialMode = on.editorialMode; n.editorialModeAt = on.editorialModeAt;
   }
@@ -2431,7 +2535,7 @@ export async function operateNewsDraft(id, request = {}) {
   if (d.attributedReport && request.action!=='publish-attributed' && request.action!=='duplicate') return fail('separate-attributed-publish-required');
   const review = operatorNewsReview(id);
   if (review.issue && ['publish','publish-attributed','publish-reviewed'].includes(request.action)) return fail(review.issue);
-  const duplicate = review.duplicate || knownDuplicateDraft(d);
+  const duplicate = (request.professional_policy_at?professionalOriginalDuplicate(d):null) || review.duplicate || knownDuplicateDraft(d);
   if (duplicate) {
     await suppressDuplicateDraft(d, { alertId: duplicate.id || duplicate.alertId, draftId: duplicate.draftId, kind: 'operator-reviewed-duplicate' });
     d.operatorReview = { revision: request.revision, at: Date.now(), result: 'duplicate' };
@@ -2443,12 +2547,21 @@ export async function operateNewsDraft(id, request = {}) {
   if (((d.srcs || []).length === 0 || (d.srcs || []).every((s) => s.local)) && !((request.action==='publish-attributed' && attributed)||(request.action==='publish-reviewed' && reviewed && reviewed.singleSourceAcknowledgement && request.single_source_acknowledged===true))) return fail('independent-source-review-required');
   const publication = toBotDraft(sourceFirstCandidate(d), { preservePublishedCopy: true });
   if (!api() || !R.H?.publishDraft) return fail('publisher-not-ready');
+  if (request.professional_policy_at && (!n.timedPolicy?.enabled || n.timedPolicy.effectiveAt!==request.professional_policy_at)) return fail('professional-policy-stopped');
+  if (request.timed_automatic && (!n.on || !timedNewsEligible(d,n.timedPolicy,Date.now()))) return fail('timed-policy-or-owner-state-changed');
   d.status = 'publishing'; d.operatorReview = { revision: request.revision, at: Date.now(), result: 'claimed' };
+  const claimRevision=operatorRevision(d);
   save();
   if (store.backup && !await store.flushBackup(true)) {
     d.editorialHold = true; d.editorialHoldReason = 'operator-claim-not-durable';
     return fail('durable-claim-failed-no-send');
   }
+  if (request.timed_automatic && (!n.on || !n.timedPolicy?.enabled || d.timedNews?.policyAt !== n.timedPolicy.effectiveAt)) {d.status='pending';d.operatorReview={revision:request.revision,at:Date.now(),result:'cancelled-before-send'};save();await store.flushBackup(true);return fail('timed-policy-stopped-before-send');}
+  if (request.professional_policy_at) {
+    if (!n.timedPolicy?.enabled || n.timedPolicy.effectiveAt!==request.professional_policy_at) {d.status='pending';d.operatorReview={revision:request.revision,at:Date.now(),result:'cancelled-before-send'};save();await store.flushBackup(true);return fail('professional-policy-stopped');}
+    const duplicate=professionalOriginalDuplicate(d);if(duplicate){await suppressDuplicateDraft(d,{alertId:duplicate.id||duplicate.alertId,draftId:duplicate.draftId,kind:'professional-original-duplicate'});return {ok:true,status:'duplicate',id:d.id};}
+  }
+  if (d.status!=='publishing' || d.operatorReview?.result!=='claimed' || d.operatorReview.revision!==request.revision || operatorRevision(d)!==claimRevision) return fail('publication-claim-changed-before-send');
   let alert;
   try { alert = await R.H.publishDraft(api(), publication, { id: 0, name: 'مراجعة تحريرية', via: 'news-reviewed-operator' }); }
   catch (e) {
@@ -2486,7 +2599,7 @@ export function operatorNewsStatus(includeIds = false) {
   const result = { mode, modeChangedAt: n.editorialModeAt || null, on: n.on, started: !!R.started, decision_writes_ready: decisionWritesReady,
     pending_count: pending.length, held_count: pending.filter((d) => d.editorialHold).length,
     actionable_count: pending.filter((d) => !d.editorialHold).length, publishing_count: live.length - pending.length,
-    automatic_in_flight: R.autoPublishing || 0, last_poll_at: R.lastPollAt || null,
+    automatic_in_flight: (R.autoPublishing || 0) + (timedNewsRunning ? 1 : 0), timed_policy: timedNewsStatus(), last_poll_at: R.lastPollAt || null,
     latest_created_at: live.reduce((max, d) => Math.max(max, Number(d.created) || 0), 0) || null, revision };
   if (includeIds) result.items = live.map((d) => ({ id: d.id, status: d.status, held: !!d.editorialHold, created: d.created, revision: operatorRevision(d) }));
   return result;
@@ -2936,6 +3049,10 @@ export function registerNewsTools(bot, h) {
       await vanish(ctx, by);
       forgetCurrentCard(d, ctx); save();
       return;
+    }
+    if (act === 'p' && privateOwner(ctx) && newsState().timedPolicy?.enabled && !d.attributedReport && !d.correctedCandidate && !d.test) {
+      try {await toast(ctx,'جارٍ تجهيز الصياغة الصحفية والنشر');await prepareTimedProfessional(d,{native:true});const result=await publishTimedProfessional(d);return toast(ctx,result.status==='published'?'تم النشر':'تمت معالجة الطلب دون نشر نسخة مكررة');}
+      catch(e){return toast(ctx,t(ctx,'تعذر النشر الآمن: ','Unable to publish: ')+e.message,true);}
     }
     if ((act === 'p' || act === 'e') && d.editorialHoldReason==='operator-review-hold') return toast(ctx,t(ctx,'هذه المادة قيد التصحيح والمراجعة المفوّضة قبل النشر؛ لا تحتاج موافقة جديدة منك.','Delegated editorial correction is in progress; no new owner approval is needed.'),true);
     if ((act === 'p' || act === 'e') && d.reviewedCopy) return toast(ctx, t(ctx, 'تحتاج هذه النسخة قرار نشر المراجعة المنفصل.', 'Separate reviewed-copy publication required.'), true);
@@ -3489,4 +3606,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { correctionBinding, boundDraftCorrection, officialStatementCore, sameOfficialStatement, routePublicationGeography, politicalPublicationGeography, sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { professionalFactualText, publishTimedProfessional, timedNewsTick, prepareTimedProfessional, timedNewsStatus, correctionBinding, boundDraftCorrection, officialStatementCore, sameOfficialStatement, routePublicationGeography, politicalPublicationGeography, sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
