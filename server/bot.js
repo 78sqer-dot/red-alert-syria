@@ -1,3 +1,5 @@
+import { hillReferenceRepair } from './hill-reference.js';
+import { REVIEWED_NEWS_COPIES, reviewedAlertCopy } from './reviewed-news-copy.js';
 import { ATTRIBUTED_ITEM, attributedAlertCopy, revisedAttributedRepairMeta, eligibleAttributedOriginal } from './attributed-report.js';
 import { searchNewsTreatment } from './search-news-treatment.js';
 import { configureReporterContact, captureReporterReply } from './reporter-contact.js';
@@ -370,6 +372,8 @@ export function channelPost(alert, { ended = false } = {}) {
   const editorialMode = alert?.source === 'news' && ['opinion', 'satire'].includes(alert?.meta?.publicEditorialTone) ? alert.meta.publicEditorialTone : null;
   const editorialCopy = editorialMode && isPublicEditorialCopy(alert?.description, editorialMode) ? alert.description : null;
   assertPublicCopySafeWithEditorial(editorialCopy, editorialMode, alert?.title, alert?.title_en, alert?.description, alert?.description_en, alert?.meta?.channelTitle);
+  const reviewed=reviewedAlertCopy(alert);
+  if(alert.meta?.reviewedNewsCopy && !reviewed) throw new Error('invalid-reviewed-publication-copy');
   const attributed = attributedAlertCopy(alert);
   if (alert.meta?.attributedReport && !attributed) throw new Error('invalid-attributed-publication-copy');
   const approvedCorrection = approvedPublicCorrection(alert);
@@ -399,15 +403,15 @@ export function channelPost(alert, { ended = false } = {}) {
   const preserveStoryAttribution = alert.source === 'news' || ['political', 'breaking'].includes(alert.type);
   const privateSources = [...(Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []), ...(Array.isArray(alert.meta?.political?.sources) ? alert.meta.political.sources : [])];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
-  title = attributed?.title || approvedCorrection?.title || (preserveStoryAttribution ? cleanAttributedNewsText : cleanAlertText)(title, privateSourceNames) || title;
+  title = reviewed?.title || attributed?.title || approvedCorrection?.title || (preserveStoryAttribution ? cleanAttributedNewsText : cleanAlertText)(title, privateSourceNames) || title;
   const sections = [`${ended ? '✅ انتهى · ' : ''}${dot}<b>${esc(title)}</b>${emoji ? ` - ${emoji}` : ''}`];
-  const desc = attributed ? attributed.title : approvedCorrection ? approvedCorrection.description : preserveStoryAttribution
+  const desc = reviewed ? reviewed.title : attributed ? attributed.title : approvedCorrection ? approvedCorrection.description : preserveStoryAttribution
     ? cleanAttributedNewsText(alert.description || '', privateSourceNames)
     : cleanAlertText(alert.description || '');
-  let fullBody = attributed ? attributed.body : approvedCorrection ? approvedCorrection.body : preserveStoryAttribution
+  let fullBody = reviewed ? reviewed.body : attributed ? attributed.body : approvedCorrection ? approvedCorrection.body : preserveStoryAttribution
     ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
     : cleanAlertText(alert.body || '');
-  if (alert.source === 'news' && !approvedCorrection && !attributed) fullBody = tidySourceAnnouncement(desc, neutralNewsReporter(fullBody));
+  if (alert.source === 'news' && !approvedCorrection && !attributed && !reviewed) fullBody = tidySourceAnnouncement(desc, neutralNewsReporter(fullBody));
   // Preserve source-first bodies, including their short attribution fragments.
   // Invitation framing remains a separate editorial format.
   const { lead, extra } = fullBody.startsWith('نص الدعوة:\n') ? { lead: desc, extra: fullBody }
@@ -1142,9 +1146,11 @@ export function buildAlertInput(d, author) {
   const baseTitleEn = d.type === 'air_movement'
     ? (aircraft?.en || titles.en)
     : wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
+  const reviewed=d.reviewedNewsCopy ? REVIEWED_NEWS_COPIES[d.reviewedNewsCopy.draftId] : null;
+  if(d.reviewedNewsCopy && (!reviewed || !reviewedAlertCopy({source:d.source,type:d.type,title:d.correctedTitle,title_en:d.correctedTitleEn,description:d.headline,body:d.body,place:loc,location:loc?.latitude==null?null:{latitude:loc.latitude,longitude:loc.longitude},scope:loc?.scope,areas,zones:d.zones,location_display:d.location_display,extra,meta:{reviewedNewsCopy:d.reviewedNewsCopy,dedupKey:`news:${d.id}`,newsSources:monitoredSources.length?monitoredSources:politicalMeta?.sources}}))) throw new Error('invalid-reviewed-input-copy');
   const attributed = d.attributedReport ? ATTRIBUTED_ITEM : null;
   if (attributed && !attributedAlertCopy({source:d.source,type:d.type,title:d.correctedTitle,description:d.headline,body:d.body,place:loc,extra,meta:{attributedReport:d.attributedReport,dedupKey:`news:${d.id}`,newsSources:monitoredSources}})) throw new Error('invalid-attributed-input-copy');
-  const cleanPublicText = (text) => attributed ? text : (d.source === 'news' || ['breaking', 'political'].includes(d.type)
+  const cleanPublicText = (text) => (attributed || reviewed) ? text : (d.source === 'news' || ['breaking', 'political'].includes(d.type)
     ? cleanAttributedNewsText(text, privateSourceNames) : cleanAlertText(text));
   // Monitored-news drafts that carry a full body keep the concise headline as the
   // public lead (description); the full text travels separately as `body`. Drafts
@@ -1185,6 +1191,7 @@ export function buildAlertInput(d, author) {
     author,
     ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || d.flightHeading || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || editorialMode || searchTreatment || d.correctedTitle || d.id ? {
       meta: {
+        ...(reviewed ? {reviewedNewsCopy:d.reviewedNewsCopy} : {}),
         ...(attributed ? {attributedReport:d.attributedReport} : {}),
         ...(d.correctedTitle ? { correctedNewsTitle: true, channelTitle: d.correctedTitle } : {}),
         ...(searchTreatment ? { searchNewsTreatment: 1, channelTitle: searchTreatment.title } : {}),
@@ -1774,6 +1781,12 @@ export async function repairNewsAlert(api, id, correction = null, options = {}) 
       patch.meta = { ...(a.meta || {}), ...(patch.meta || {}), channelTitle: patch.title };
     }
   }
+  const hillPatch=hillReferenceRepair(a,correction,sourceDraft);
+  if(hillPatch) {
+    if(!options.expectedRevision || options.expectedPostId!==1495) throw new Error('hill-reference-exact-revision-post-required');
+    Object.assign(patch,hillPatch);
+  }
+  if(a.meta?.reviewedNewsCopy) throw new Error('reviewed-copy-repair-requires-separate-review');
   if (a.meta?.attributedReport) {
     if (!options.expectedRevision || options.expectedPostId!==1494) throw new Error('attributed-repair-exact-revision-post-required');
     if (!eligibleAttributedOriginal(sourceDraft) || sourceDraft.alertId!==a.id || sourceDraft.postId!==1494 || sourceDraft.status!=='published' || !sourceDraft.attributedReportAudit) throw new Error('attributed-repair-original-source-audit-required');

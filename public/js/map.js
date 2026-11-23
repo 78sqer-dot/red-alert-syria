@@ -1174,12 +1174,12 @@ export class AlertMap {
         : a.type === 'military_incursion' ? (incursionKind === 'barrier' ? 'military_barrier' : incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
         : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
-    if (a.location_display === 'approximate_point') {
+    if (['approximate_point','geographic_reference'].includes(a.location_display)) {
       el.className = 'mk mk-approximate-point';
-      el.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;';
+      el.style.cssText = a.location_display==='geographic_reference' ? 'width:144px;height:144px;border-radius:50%;background:#26344533;border:4px dashed #263445;box-shadow:0 0 28px 28px #26344522;' : 'width:14px;height:14px;border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;';
       el.setAttribute('role', 'button');
       el.setAttribute('tabindex', '0');
-      el.setAttribute('aria-label', this.opts.lang === 'en' ? 'Approximate town location' : 'موقع البلدة تقريبي');
+      el.setAttribute('aria-label', a.location_display==='geographic_reference' ? (this.opts.lang==='en' ? 'Approximate hill reference' : 'مرجع جغرافي تقريبي للتل') : this.opts.lang === 'en' ? 'Approximate town location' : 'موقع البلدة تقريبي');
       return el;
     }
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${marker}`;
@@ -1270,6 +1270,7 @@ export class AlertMap {
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
       const planeArea = a.type === 'warplane' || (a.type === 'air_movement' && a.aircraft !== 'uav');
       if (a.location_display === 'approximate_point') continue;
+      if (a.location_display === 'geographic_reference') continue;
       if (!t || (t.marker === 'movement' && !(planeArea && a.is_active)) || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       const marker = alertMarkerKind(a);
       const props = planeArea ? { color: '#3b8eff', active: !!a.is_active, dashed: true, planeArea: true } : { color: eventVisual(a.type, a).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
@@ -1535,10 +1536,10 @@ export class AlertMap {
     this._popupAt = null;
     const M = ml();
     const contentNode = htmlToNode(this.popupHtml(alert));
-    if (unlocated || alert.location_display === 'approximate_point') {
+    if (unlocated || ['approximate_point','geographic_reference'].includes(alert.location_display)) {
       const note = document.createElement('p');
       note.className = 'pp-no-location';
-      note.textContent = alert.location_display === 'approximate_point'
+      note.textContent = alert.location_display==='geographic_reference' ? (this.opts.lang==='en' ? 'Approximate hill reference, not troop position. No danger radius is implied.' : 'مرجع جغرافي تقريبي للتل، وليس موقع القوات. لا يدل على نطاق خطر.') : alert.location_display === 'approximate_point'
         ? (this.opts.lang === 'en' ? 'Approximate town location only, not the homes searched. No danger radius is implied.' : 'موقع البلدة تقريبي فقط، وليس المنازل التي فُتشت. لا يدلّ على نطاق خطر.')
         : this.opts.lang === 'en' ? 'No precise location was supplied for this report.' : 'لم يُحدَّد موقع دقيق لهذا الخبر.';
       contentNode.querySelector('.pp')?.prepend(note);

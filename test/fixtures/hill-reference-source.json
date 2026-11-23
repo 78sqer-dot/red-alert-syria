@@ -1,0 +1,125 @@
+{
+  "alert": {
+    "id": "c9550bfd-ae4f-4a6f-938d-90a3e4c80740",
+    "type": "military_incursion",
+    "title": "تلفزيون سوريا: توغل إسرائيلي في تل أحمر قرب عين النورية",
+    "title_en": "Syria TV reports Israeli incursion at Tell Ahmar near Ein Al-Nuriyah",
+    "description": "تلفزيون سوريا: توغل إسرائيلي في تل أحمر قرب عين النورية",
+    "body": "أفاد تلفزيون سوريا بتوغل قوات إسرائيلية في تل أحمر قرب قرية عين النورية بريف القنيطرة الشمالي. ولم يُحدَّد موقع التوغل بدقة على الخريطة.",
+    "location": null,
+    "place": {
+      "scope": "country",
+      "name_ar": "تل أحمر",
+      "name_en": "",
+      "latitude": null,
+      "longitude": null
+    },
+    "areas": [],
+    "extra": [],
+    "scope": "country",
+    "timestamp": "2026-11-23T11:25:33.919Z",
+    "expires_at": "2026-11-23T14:25:33.919Z",
+    "source": "news",
+    "meta": {
+      "correctedNewsTitle": true,
+      "channelTitle": "تلفزيون سوريا: توغل إسرائيلي في تل أحمر قرب عين النورية",
+      "newsSources": [
+        {
+          "name": "تلفزيون سوريا",
+          "url": "https://t.me/TelevisionSyria/98722",
+          "timestamp": null
+        },
+        {
+          "name": "تجمع أحرار حوران",
+          "url": "https://t.me/HoranFreeMedia/35098",
+          "timestamp": null
+        },
+        {
+          "name": "الجزيرة سوريا",
+          "url": "https://t.me/ajasyr/125312",
+          "timestamp": null
+        },
+        {
+          "name": "التلفزيون العربي - سوريا",
+          "url": "https://t.me/AlarabyTvSy/65510",
+          "timestamp": null
+        }
+      ],
+      "approvedPublicCorrection": {
+        "version": 1,
+        "fingerprint": "7b14820a144dd85cc19f0c8e0a3f84ff7d677e34fc8dcf49dbb047ee3855c641"
+      }
+    },
+    "is_active": true,
+    "history": [
+      {
+        "at": "2026-11-23T11:25:33.919Z",
+        "kind": "published",
+        "title": "تلفزيون سوريا: توغل إسرائيلي في تل أحمر قرب عين النورية",
+        "description": "تلفزيون سوريا: توغل إسرائيلي في تل أحمر قرب عين النورية",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-23T11:25:36.736Z",
+        "kind": "updated",
+        "title": "تلفزيون سوريا: توغل إسرائيلي في تل أحمر قرب عين النورية",
+        "description": "تلفزيون سوريا: توغل إسرائيلي في تل أحمر قرب عين النورية",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-23T11:28:05.728Z",
+        "kind": "updated",
+        "title": "تلفزيون سوريا: توغل إسرائيلي في تل أحمر قرب عين النورية",
+        "description": "تلفزيون سوريا: توغل إسرائيلي في تل أحمر قرب عين النورية",
+        "is_active": true
+      }
+    ],
+    "author": {
+      "id": 0,
+      "name": "مراجعة تحريرية",
+      "via": "news-reviewed-operator"
+    },
+    "channel_message_id": 1495,
+    "channel_format": 3,
+    "description_en": "Syria TV: Israeli incursion into Tel al-Ahmar near Ain al-Nouriyeh",
+    "channel_media": "photo"
+  },
+  "draft": {
+    "id": "598e59c9f1",
+    "type": "military_incursion",
+    "srcs": [
+      {
+        "u": "TelevisionSyria",
+        "name": "تلفزيون سوريا",
+        "url": "https://t.me/TelevisionSyria/98722",
+        "ts": 1795430488000,
+        "local": false
+      },
+      {
+        "u": "HoranFreeMedia",
+        "name": "تجمع أحرار حوران",
+        "url": "https://t.me/HoranFreeMedia/35098",
+        "ts": 1795431056000,
+        "local": true
+      },
+      {
+        "u": "ajasyr",
+        "name": "الجزيرة سوريا",
+        "url": "https://t.me/ajasyr/125312",
+        "ts": 1795431960000,
+        "local": false
+      },
+      {
+        "u": "AlarabyTvSy",
+        "name": "التلفزيون العربي - سوريا",
+        "url": "https://t.me/AlarabyTvSy/65510",
+        "ts": 1795432822000,
+        "local": false
+      }
+    ],
+    "status": "published",
+    "sourceText": "مراسلنا: الاحتلال الإسرائيلي يتوغل في تل أحمر قرب قرية عين النورية بريف القنيطرة الشمالي",
+    "alertId": "c9550bfd-ae4f-4a6f-938d-90a3e4c80740",
+    "postId": 1495
+  }
+}

@@ -3,6 +3,7 @@
 // zoomed on the affected place with category-coloured impact circles / marker, and a short note footer.
 // Pure SVG -> PNG with resvg; map = raster tiles (CARTO Voyager, OSM fallback), cached in memory.
 // Swap the logo by replacing public/img/logo-wordmark.svg (or set ALERT_IMAGE_LOGO to an .svg/.png).
+import { reviewedAlertCopy } from './reviewed-news-copy.js';
 import { approvedPublicCorrection } from './approved-public-correction.js';
 import fs from 'node:fs';
 import { DEFAULT_PUBLIC_URL } from './config.js';
@@ -199,13 +200,17 @@ export async function alertImageSvg(alert, opts = {}) {
   const en = lang === 'en';
   const type = ALERT_TYPES[alert.type] ? alert.type : 'breaking';
   const t = ALERT_TYPES[type];
+  const reviewedCopy=reviewedAlertCopy(alert);
+  if(alert.meta?.reviewedNewsCopy && !reviewedCopy) throw new Error('invalid-reviewed-image-copy');
+  const imageContext=reviewedCopy?.imageContext;
   const loc = alert.location || {};
   const politicalLocation = Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude) && alert.scope !== 'country';
   const country = type === 'political' ? !politicalLocation : alert.scope === 'country' || !Number.isFinite(loc.latitude);
-  const center = country ? { lat: 34.85, lon: 38.6 } : { lat: loc.latitude, lon: loc.longitude };
+  const center = imageContext ? {lat:imageContext.latitude,lon:imageContext.longitude} : country ? { lat: 34.85, lon: 38.6 } : { lat: loc.latitude, lon: loc.longitude };
   // every alert type: a glowing circle over each affected area (main area + extra areas)
-  const approximatePoint = alert.location_display === 'approximate_point';
-  const zoned = !country && !approximatePoint;
+  const geographicReference=alert.location_display==='geographic_reference';
+  const approximatePoint = geographicReference || alert.location_display === 'approximate_point';
+  const zoned = !imageContext && !country && !approximatePoint;
   let zones = [];
   if (zoned) {
     zones = type === 'political' ? selectedAlertZones({ ...alert, location: loc })
@@ -213,7 +218,8 @@ export async function alertImageSvg(alert, opts = {}) {
     if (!zones.length) zones = [{ lat: center.lat, lon: center.lon, km: 2.2 }];
   }
   const view = chooseView(zoned ? zones : [{ lat: center.lat, lon: center.lon, km: 1.6 }], center);
-  if (country) view.z = 7;
+  if (imageContext) view.z=imageContext.zoom;
+  else if (country) view.z = 7;
   else if (zones.length === 1) view.z = Math.min(view.z, 12);
   const { z } = view;
   const cx = lon2x(view.lon, z); const cy = lat2y(view.lat, z);
@@ -254,9 +260,9 @@ export async function alertImageSvg(alert, opts = {}) {
     // a single area keeps its type icon; several areas show just their glowing circles (the title names the type)
     if (type === 'political') { const [x, y] = px(center.lat, center.lon); o.push(politicalMarkerSvg(x, y)); }
     else if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph, alert)); }
-  } else if (!country) {
+  } else if (!country && !imageContext) {
     const [x, y] = px(center.lat, center.lon);
-    o.push(approximatePoint ? `<circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/>` : type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));
+    o.push(geographicReference ? `<defs><radialGradient id="referenceGlow"><stop offset="0.35" stop-color="#263445" stop-opacity="0.32"/><stop offset="1" stop-color="#263445" stop-opacity="0"/></radialGradient></defs><circle cx="${x}" cy="${y}" r="145" fill="url(#referenceGlow)"/><circle cx="${x}" cy="${y}" r="72" fill="#263445" fill-opacity="0.20" stroke="#263445" stroke-width="4.5" stroke-dasharray="14 9"/>` : approximatePoint ? `<circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/>` : type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));
   }
   // attribution (required by the tile licence)
   o.push(`<rect x="${W - 210}" y="${HEAD + MAP_H - 26}" width="210" height="26" fill="#ffffff" opacity="0.75"/>`);
@@ -266,19 +272,19 @@ export async function alertImageSvg(alert, opts = {}) {
   // ---- header
   o.push(`<rect x="0" y="0" width="${W}" height="${HEAD}" fill="#0f172a"/><rect x="0" y="0" width="${W}" height="6" fill="#f97316"/>`);
   const FF = en ? 'Noto Sans' : 'Noto Kufi Arabic';
-  const lvl = LEVELS[alert.type === 'civil' && alert.caution_visual === true ? 'caution' : (type === 'weather' && alert.meta?.level === 2) || (type === 'quake' && (alert.meta?.mag ?? 0) >= 5) ? 'danger' : LEVEL_OF[type] || 'notice'];
+  const lvl = imageContext ? {ar:'خبر',en:'Report',color:'#7dd3fc'} : LEVELS[alert.type === 'civil' && alert.caution_visual === true ? 'caution' : (type === 'weather' && alert.meta?.level === 2) || (type === 'quake' && (alert.meta?.mag ?? 0) >= 5) ? 'danger' : LEVEL_OF[type] || 'notice'];
   let head = type === 'military_incursion' && alert.meta?.incursionKind === 'barrier'
     ? (en ? 'Military checkpoint' : 'حاجز عسكري')
     : (HEADLINE[en ? 'en' : 'ar'][type]) || (en ? t.en : t.ar);
   const mag = type === 'quake' ? (alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1])) : null;
-  if (approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1 || alert.meta?.correctedNewsTitle === true) head = en ? alert.title_en || alert.title : alert.title;
+  if (reviewedCopy || approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1 || alert.meta?.correctedNewsTitle === true) head = en ? alert.title_en || alert.title : alert.title;
   if (alert.place?.head_ar) head = en ? alert.place.head_en || head : alert.place.head_ar;
   if (Number.isFinite(mag)) head = en ? `M${mag.toFixed(1)} earthquake` : `زلزال بقوة ${arDigits(mag.toFixed(1))}`;
   if (type === 'signal_sweep' && alert.meta?.signalPlatform === 'uav') head += en ? ' — Drone' : ' — مسيّرة';
   const short = en ? alert.place?.short_en : alert.place?.short_ar;
-  const place = opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
+  const place = imageContext ? (en ? imageContext.label_en : imageContext.label_ar) : opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
   let titleSize = head.length > 16 ? 44 : 52;
-  if (!en && (approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1 || alert.meta?.correctedNewsTitle === true)) {
+  if (!en && (reviewedCopy || approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1 || alert.meta?.correctedNewsTitle === true)) {
     const logoWidth = LOGO ? Math.min(220, 50 * (LOGO.ratio || 2.5)) : 0;
     const titleWidth = W - 72 - (logoWidth ? logoWidth + 24 : 0);
     while (titleSize > 20 && illustrationTextWidth(head, titleSize, 800) > titleWidth) titleSize--;
@@ -314,7 +320,7 @@ export async function alertImageSvg(alert, opts = {}) {
   o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
   // ---- footer: note (multi-circle / aircraft) + time
   const notes = NOTE[en ? 'en' : 'ar'];
-  const note = approximatePoint ? (en ? 'Approximate town location only. No danger radius.' : 'موقع البلدة تقريبي فقط، دون نطاق خطر') : type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
+  const note = imageContext ? (en ? imageContext.note_en : imageContext.note_ar) : geographicReference ? (en ? 'Approximate hill reference, not troop position. No danger radius.' : 'مرجع جغرافي تقريبي للتل، وليس موقع القوات. دون نطاق خطر') : approximatePoint ? (en ? 'Approximate town location only. No danger radius.' : 'موقع البلدة تقريبي فقط، دون نطاق خطر') : type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
   const when = whenText(alert.timestamp || Date.now(), lang);
   const fy = HEAD + MAP_H;
   o.push(`<rect x="0" y="${fy}" width="${W}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${fy}" width="${W}" height="1.5" fill="#e2e8f0"/>`);

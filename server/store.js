@@ -1,3 +1,4 @@
+import { reviewedAlertCopy } from './reviewed-news-copy.js';
 import { attributedAlertCopy } from './attributed-report.js';
 import { approvedPublicCorrection } from './approved-public-correction.js';
 import { mergeCoordination } from './editor-coordination.js';
@@ -843,6 +844,8 @@ function publicSourceInfo(a) {
 /** Strip private fields before sending an alert to browsers. */
 export function publicAlert(a) {
   const p = a.place || {};
+  const reviewed=reviewedAlertCopy(a);
+  if(a.meta?.reviewedNewsCopy && !reviewed) throw new Error('invalid-reviewed-public-copy');
   const attributed=attributedAlertCopy(a);
   if (a.meta?.attributedReport && !attributed) throw new Error('invalid-attributed-public-copy');
   const editorialMode = a.source === 'news' && ['opinion', 'satire'].includes(a.meta?.publicEditorialTone)
@@ -864,6 +867,7 @@ export function publicAlert(a) {
   const publicText = (value) => {
     const selectedEditorialCopy = Boolean(editorialMode && value === a.description && isPublicEditorialCopy(value, editorialMode));
     if (isPrivateEditorialCopy(value) && !selectedEditorialCopy) return '';
+    if (reviewed && [reviewed.title,reviewed.title_en,reviewed.body].includes(value)) return value;
     if (attributed && [attributed.title,attributed.title_en,attributed.body].includes(value)) return value;
     if (approvedCorrection && approvedValues.has(value)) return value;
     const cleaned = a.source === 'news' || ['political', 'breaking'].includes(a.type)
@@ -915,7 +919,7 @@ export function publicAlert(a) {
     ...(a.body ? { body: publicText(a.body) || undefined } : {}),
     ...(media ? { media, media_items: mediaItems } : {}),
     location: a.location,
-    ...((approvedCorrection || (a.source === 'news' && a.type === 'breaking' && a.meta?.searchNewsTreatment === 1)) && a.location_display === 'approximate_point' ? {location_display: 'approximate_point'} : {}),
+    ...((approvedCorrection || (a.source === 'news' && a.type === 'breaking' && a.meta?.searchNewsTreatment === 1)) && ['approximate_point','geographic_reference'].includes(a.location_display) ? {location_display:a.location_display} : {}),
     place: {
       name_ar: p.name_ar, name_en: p.name_en,
       district_ar: p.district_ar, district_en: p.district_en,
