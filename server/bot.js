@@ -292,11 +292,14 @@ function explicitMeetingCountryFlag(alert) {
   return located.length === 1 ? located[0].country.flag : '';
 }
 function channelEventSymbol(alert) {
+  // Resolve from validated signed copy, never trust a presentation flag here.
+  if (reviewedAlertCopy(alert)?.version === 2) return '🕒';
   if (alert.type !== 'political') return alertEmoji(alert);
   const category = alert.meta?.political?.category;
   if (category === 'meeting') return explicitMeetingCountryFlag(alert) || POLITICAL_CATEGORIES.meeting.emoji;
   return POLITICAL_CATEGORIES[category]?.emoji || alertEmoji(alert);
 }
+const channelEventDot = (alert) => reviewedAlertCopy(alert)?.version === 2 ? '🔵' : eventVisual(alert.type, alert).dot;
 // Channel post format (owner, revised 2026-11-18): header, place, one telling
 // of the story — nothing else. No category line (the header carries it), no
 // date/time lines (Telegram stamps every post), no repeated full text when
@@ -400,8 +403,8 @@ export function channelPost(alert, { ended = false } = {}) {
   const hasPlace = p.scope && p.scope !== 'country';
   const newNewsLayout = isNewNewsChannelFormat(alert);
   const versioned = Number(alert.channel_format) >= 2;
-  const emoji = versioned ? channelEventSymbol(alert) : alertEmoji(alert);
-  const dot = versioned ? `${eventVisual(alert.type, alert).dot} ` : '';
+  const emoji = reviewed?.version === 2 || versioned ? channelEventSymbol(alert) : alertEmoji(alert);
+  const dot = reviewed?.version === 2 || versioned ? `${channelEventDot(alert)} ` : '';
   const preserveStoryAttribution = alert.source === 'news' || ['political', 'breaking'].includes(alert.type);
   const privateSources = [...(Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []), ...(Array.isArray(alert.meta?.political?.sources) ? alert.meta.political.sources : [])];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
@@ -1292,11 +1295,12 @@ function channelEditPatch(alert, message) {
   const stripIcon = (headline) => {
     let value = headline.trim();
     const versioned = Number(alert.channel_format) >= 2;
-    const symbol = versioned ? channelEventSymbol(alert) : alertEmoji(alert);
+    const neutral = reviewedAlertCopy(alert)?.version === 2;
+    const symbol = neutral || versioned ? channelEventSymbol(alert) : alertEmoji(alert);
     const suffix = ` - ${symbol}`;
     if (symbol && value.endsWith(suffix)) value = value.slice(0, -suffix.length).trim();
-    if (versioned) {
-      const prefix = `${eventVisual(alert.type, alert).dot} `;
+    if (neutral || versioned) {
+      const prefix = `${channelEventDot(alert)} `;
       if (value.startsWith(prefix)) value = value.slice(prefix.length).trim();
     }
     return value;
