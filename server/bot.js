@@ -1,3 +1,4 @@
+import { ATTRIBUTED_ITEM, attributedAlertCopy } from './attributed-report.js';
 import { searchNewsTreatment } from './search-news-treatment.js';
 import { configureReporterContact, captureReporterReply } from './reporter-contact.js';
 import { configureReportOperator } from './reports-operator.js';
@@ -369,6 +370,8 @@ export function channelPost(alert, { ended = false } = {}) {
   const editorialMode = alert?.source === 'news' && ['opinion', 'satire'].includes(alert?.meta?.publicEditorialTone) ? alert.meta.publicEditorialTone : null;
   const editorialCopy = editorialMode && isPublicEditorialCopy(alert?.description, editorialMode) ? alert.description : null;
   assertPublicCopySafeWithEditorial(editorialCopy, editorialMode, alert?.title, alert?.title_en, alert?.description, alert?.description_en, alert?.meta?.channelTitle);
+  const attributed = attributedAlertCopy(alert);
+  if (alert.meta?.attributedReport && !attributed) throw new Error('invalid-attributed-publication-copy');
   const approvedCorrection = approvedPublicCorrection(alert);
   const t = typeOf(alert.type);
   let title = alert.meta?.channelTitle || (TITLES[alert.type] || {}).ar || t.ar;
@@ -396,15 +399,15 @@ export function channelPost(alert, { ended = false } = {}) {
   const preserveStoryAttribution = alert.source === 'news' || ['political', 'breaking'].includes(alert.type);
   const privateSources = [...(Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []), ...(Array.isArray(alert.meta?.political?.sources) ? alert.meta.political.sources : [])];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
-  title = approvedCorrection?.title || (preserveStoryAttribution ? cleanAttributedNewsText : cleanAlertText)(title, privateSourceNames) || title;
+  title = attributed?.title || approvedCorrection?.title || (preserveStoryAttribution ? cleanAttributedNewsText : cleanAlertText)(title, privateSourceNames) || title;
   const sections = [`${ended ? '✅ انتهى · ' : ''}${dot}<b>${esc(title)}</b>${emoji ? ` - ${emoji}` : ''}`];
-  const desc = approvedCorrection ? approvedCorrection.description : preserveStoryAttribution
+  const desc = attributed ? attributed.title : approvedCorrection ? approvedCorrection.description : preserveStoryAttribution
     ? cleanAttributedNewsText(alert.description || '', privateSourceNames)
     : cleanAlertText(alert.description || '');
-  let fullBody = approvedCorrection ? approvedCorrection.body : preserveStoryAttribution
+  let fullBody = attributed ? attributed.body : approvedCorrection ? approvedCorrection.body : preserveStoryAttribution
     ? cleanAttributedNewsText(alert.body || '', privateSourceNames)
     : cleanAlertText(alert.body || '');
-  if (alert.source === 'news' && !approvedCorrection) fullBody = tidySourceAnnouncement(desc, neutralNewsReporter(fullBody));
+  if (alert.source === 'news' && !approvedCorrection && !attributed) fullBody = tidySourceAnnouncement(desc, neutralNewsReporter(fullBody));
   // Preserve source-first bodies, including their short attribution fragments.
   // Invitation framing remains a separate editorial format.
   const { lead, extra } = fullBody.startsWith('نص الدعوة:\n') ? { lead: desc, extra: fullBody }
@@ -1139,7 +1142,9 @@ export function buildAlertInput(d, author) {
   const baseTitleEn = d.type === 'air_movement'
     ? (aircraft?.en || titles.en)
     : wx ? `${titles.en}: ${wx[1]}${named ? ` — ${loc.name_en}` : ''}` : named ? `${titles.en} — ${loc.name_en}${more(extra.length, true)}` : titles.en;
-  const cleanPublicText = (text) => (d.source === 'news' || ['breaking', 'political'].includes(d.type)
+  const attributed = d.attributedReport ? ATTRIBUTED_ITEM : null;
+  if (attributed && !attributedAlertCopy({source:d.source,type:d.type,title:d.correctedTitle,description:d.headline,body:d.body,place:loc,extra,meta:{attributedReport:d.attributedReport,dedupKey:`news:${d.id}`,newsSources:monitoredSources}})) throw new Error('invalid-attributed-input-copy');
+  const cleanPublicText = (text) => attributed ? text : (d.source === 'news' || ['breaking', 'political'].includes(d.type)
     ? cleanAttributedNewsText(text, privateSourceNames) : cleanAlertText(text));
   // Monitored-news drafts that carry a full body keep the concise headline as the
   // public lead (description); the full text travels separately as `body`. Drafts
@@ -1180,6 +1185,7 @@ export function buildAlertInput(d, author) {
     author,
     ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || d.flightHeading || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || editorialMode || searchTreatment || d.correctedTitle || d.id ? {
       meta: {
+        ...(attributed ? {attributedReport:d.attributedReport} : {}),
         ...(d.correctedTitle ? { correctedNewsTitle: true, channelTitle: d.correctedTitle } : {}),
         ...(searchTreatment ? { searchNewsTreatment: 1, channelTitle: searchTreatment.title } : {}),
         ...(d.id ? { dedupKey: `${d.source || 'news'}:${d.id}` } : {}),

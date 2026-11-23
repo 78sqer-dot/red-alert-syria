@@ -1,3 +1,4 @@
+import { ATTRIBUTED_ITEM, eligibleAttributedOriginal, attributedDraftBinding, boundAttributedReport, attributedPublicationProof } from './attributed-report.js';
 import { searchNewsTreatment } from './search-news-treatment.js';
 // 📡 News monitor: the server (Render, 24/7) reads public Syrian news channels every minute, turns
 // each NEW incident into a ready-made alert draft and sends it to the primary owner in the private
@@ -369,7 +370,7 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || d.editorialHold || Object.keys(d.privateEditorial || {}).length > 0 || (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
+  if (!d || d.test || d.rule || d.attributedReport || d.editorialHold || Object.keys(d.privateEditorial || {}).length > 0 || (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
   if (!isFreshSourceTs(draftSourceTs(d))) return false; // stale reporting is never auto-published, however the draft got here (e.g. restored from an old backup)
   if (['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'military_incursion', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
   if (d.type === 'political') {
@@ -1350,6 +1351,7 @@ async function nightPublish(d) {
   finally { R.autoPublishing--; }
 }
 async function unattendedNewsPublish(d) {
+  if (d?.attributedReport) return false;
   const mode = d?.autoMode === 'day' ? 'day' : 'night';
   const a = api();
   const eligible = mode === 'day' ? daytimeAutoEligible(d) : nightEligible(d);
@@ -1530,6 +1532,8 @@ export function toBotDraft(d, options = {}) {
   if (auditPlaceSuspect(d) || locsOf(d.loc, d.extra).some((l) => nonIncidentPlaceOnly(l.name_ar, d.sourceText || d.body || ''))) {
     throw new Error('publication-place-not-grounded-in-source');
   }
+  const attributed = boundAttributedReport(d);
+  if (d.attributedReport && !attributed) throw new Error('stale-attributed-report-needs-review');
   const editorialSelection = options.editorialMode ? approvedOwnerEditorialCopy(d, options.ownerId) : null;
   if (options.editorialMode && (!editorialSelection || editorialSelection.mode !== options.editorialMode)) {
     throw new Error('The owner-selected editorial preview is stale or not approved for publication');
@@ -1537,7 +1541,7 @@ export function toBotDraft(d, options = {}) {
   const geography = sourceScopedGeography(d);
   const factualCorrection = boundDraftCorrection(d);
   const searchTreatment = editorialSelection ? null : searchNewsTreatment(d.sourceText, geography.loc);
-  const rawHeadline = factualCorrection?.title || searchTreatment?.title || editorialSelection?.text || d.headline;
+  const rawHeadline = attributed?.title || factualCorrection?.title || searchTreatment?.title || editorialSelection?.text || d.headline;
   const rawBody = editorialSelection ? rawHeadline : d.body || rawHeadline;
   const safeDraft = {
     ...d, headline: rawHeadline,
@@ -1545,18 +1549,19 @@ export function toBotDraft(d, options = {}) {
   };
   if (publicDraftCopyIssue(safeDraft, editorialSelection?.text)) throw new Error('Private editorial or internal review text cannot be converted to a public alert');
   const privateSourceNames = (d.srcs || []).map((source) => source?.name || '').filter(Boolean);
-  const headline = options.preservePublishedCopy
+  const headline = attributed ? attributed.title : options.preservePublishedCopy
     ? rawHeadline
     : cleanPublicNewsAttribution(rawHeadline, privateSourceNames);
-  const body = options.preservePublishedCopy
+  const body = attributed ? attributed.body : options.preservePublishedCopy
     ? rawBody
     : cleanPublicNewsAttribution(rawBody, privateSourceNames);
   if (!headline) throw new Error('No public news copy remains after removing media attribution');
-  if (d.sourceText && !editorialSelection && missingNamedReportingAttribution(`${headline}\n${body}`, d.sourceText, privateSourceNames)) throw new Error('named-reporting-attribution-not-in-original');
+  if (d.sourceText && !editorialSelection && !attributed && missingNamedReportingAttribution(`${headline}\n${body}`, d.sourceText, privateSourceNames)) throw new Error('named-reporting-attribution-not-in-original');
   const patrolText = N(`${headline || ''} ${editorialSelection ? '' : d.body || ''}`);
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
     type: searchTreatment ? 'breaking' : d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(searchTreatment ? 'breaking' : d.type).ttlMin, headline,
+    ...(attributed ? { id:d.id, attributedReport: attributedPublicationProof(), correctedTitle: attributed.title, correctedTitleEn: attributed.title_en } : {}),
     ...(factualCorrection ? { correctedTitle: factualCorrection.title, correctedTitleEn: factualCorrection.title_en } : {}),
     ...(searchTreatment ? { searchSourceText: d.sourceText } : {}),
     // Full report text rides alongside the concise lead (details/text keep their
@@ -1588,6 +1593,9 @@ export function toBotDraft(d, options = {}) {
  * metadata, not a summary. Missing, truncated or overlong source stays in review. */
 function sourceFirstCandidate(d) {
   const source = String(d.sourceText || '').trim();
+  const attributed = boundAttributedReport(d);
+  if (d.attributedReport && !attributed) throw new Error('stale-attributed-report-needs-review');
+  if (attributed) return { ...d, headline:attributed.title, body:attributed.body, details:'', text:'', description:'', description_en:'', title:'', title_en:'', aiRewritePreview:undefined, sourceBodyVersion:1 };
   if (d.correctedCandidate && !boundDraftCorrection(d)) throw new Error('stale-corrected-candidate-needs-review');
   if (!source) throw new Error('missing-original-source');
   if (d.sourceTextVersion !== 2 && source.length >= 1200) throw new Error('legacy-source-may-be-truncated');
@@ -1617,6 +1625,9 @@ function sourceFirstGate(d, candidate) {
   if (candidate.body !== expected.body || candidate.headline !== expected.headline || JSON.stringify(candidate.loc) !== JSON.stringify(expected.loc) || JSON.stringify(candidate.extra) !== JSON.stringify(expected.extra)) return { ok: false, reason: 'source-copy-changed' };
   // Existing type, political-category, private-copy, attribution and uncertainty
   // checks now inspect the complete body, not an AI-authored summary.
+  // Validate source assertions with the ordinary factual gate. The fixed, bound
+  // envelope reports those assertions and explicitly disclaims independent verification.
+  if (boundAttributedReport(d)) return editorialGate({ ...candidate, headline:d.sourceText, body:d.sourceText });
   return editorialGate({ ...candidate, headline: candidate.body });
 }
 async function automaticPublicDraft(d, candidate = sourceFirstCandidate(d)) {
@@ -2218,11 +2229,34 @@ export async function correctOperatorNewsDraft(id, request = {}) {
   await refreshCards(d);
   return {ok:true,id,status:'corrected-held',review:operatorNewsReview(id)};
 }
+/** One source-checked report, prepared held and never sent by this action. */
+export async function prepareAttributedNewsDraft(id, request = {}) {
+  assertOperatorRecoveryReady();
+  const d=newsState().drafts[id];
+  if (!d || d.status!=='pending' || !d.editorialHold || d.test || d.alertId || d.postId || d.undone || d.duplicateOf || d.correctedCandidate || d.attributedReport || d.aiRewritePreview?.applied || ['claimed','uncertain','published','map-only','published-backup-unverified'].includes(d.operatorReview?.result) || d.nativeReview?.result==='claimed') throw new Error('attributed-draft-not-eligible');
+  if (request.revision!==operatorRevision(d) || request.expected_status!=='pending') throw new Error('stale-attributed-review');
+  const x=ATTRIBUTED_ITEM;
+  if (!eligibleAttributedOriginal(d) || request.approval_reference!==x.approvalReference || request.title!==x.title || request.body!==x.body || request.textual_location!==x.location || request.no_pin!==true || request.single_source_acknowledged!==true || Object.keys(request).some(k=>!['revision','expected_status','approval_reference','title','body','textual_location','no_pin','single_source_acknowledged','dry_run'].includes(k))) throw new Error('attributed-envelope-not-approved');
+  const next=structuredClone(d);
+  next.headline=x.title; next.body=x.body; next.loc={...locationFrom({}),name_ar:x.location,name_en:''}; next.extra=[];
+  next.attributedReport={version:1,approvalReference:x.approvalReference,preparedFromRevision:request.revision};
+  next.attributedReport.binding=attributedDraftBinding(next);
+  next.editorialHold=true;next.editorialHoldReason='attributed-report-needs-separate-publish';next.dayAutoAt=null;delete next.autoMode;
+  const preview=operatorNewsReviewFromDraft(next);
+  if (preview.issue) throw new Error('attributed-report-invalid:'+preview.issue);
+  if (request.dry_run===true) return {ok:true,dryRun:true,id,revision:operatorRevision(d),candidate:preview.candidate,duplicate:preview.duplicate,singleSource:true,independentlyVerified:false};
+  const prior=structuredClone(d);
+  Object.assign(d,next);
+  d.attributedReportAudit={at:new Date().toISOString(),revision:request.revision,prior,approvalReference:x.approvalReference,singleSource:true,independentlyVerified:false};
+  save();if(store.backup&&!await store.flushBackup(true)) throw new Error('attributed-report-durability-unverified-remains-held');
+  await refreshCards(d);
+  return {ok:true,status:'attributed-held',review:operatorNewsReview(id)};
+}
 const operatorRevision = (d) => crypto.createHash('sha256').update(JSON.stringify({
   status: d.status, type: d.type, headline: d.headline, body: d.body, sourceText: d.sourceText,
   loc: d.loc, extra: d.extra, srcs: d.srcs, politicalCategory: d.politicalCategory,
   editorialHold: d.editorialHold, privateEditorial: d.privateEditorial, aiRewritePreview: d.aiRewritePreview,
-  operation: d.operatorReview, nativeReview:d.nativeReview, undone:d.undone, duplicateOf:d.duplicateOf, postId:d.postId, alertId:d.alertId, correctedCandidate: d.correctedCandidate, correctionAudit: d.correctionAudit,
+  operation: d.operatorReview, nativeReview:d.nativeReview, undone:d.undone, duplicateOf:d.duplicateOf, postId:d.postId, alertId:d.alertId, correctedCandidate: d.correctedCandidate, correctionAudit: d.correctionAudit, attributedReport:d.attributedReport, attributedReportAudit:d.attributedReportAudit,
 })).digest('hex');
 export function operatorNewsReview(id) {
   const d = newsState().drafts[id];
@@ -2259,15 +2293,18 @@ export async function operateNewsDraft(id, request = {}) {
   if (d.status !== 'pending') return fail('draft-already-handled-or-publication-unresolved');
   if (!request.revision || request.revision !== operatorRevision(d)) return fail('stale-review');
   if (d.test) return fail('test-draft-cannot-publish');
-  if (!['hold', 'duplicate', 'publish'].includes(request.action)) return fail('invalid-operation');
+  if (!['hold', 'duplicate', 'publish', 'publish-attributed'].includes(request.action)) return fail('invalid-operation');
   if (request.action === 'hold') {
     d.editorialHold = true; d.editorialHoldReason = 'operator-review-hold'; d.dayAutoAt = null; delete d.autoMode;
     d.operatorReview = { revision: request.revision, at: Date.now(), result: 'held' };
     save(); await store.flushBackup(true); await refreshCards(d);
     return { ok: true, status: 'held', id: d.id };
   }
+  const attributed = boundAttributedReport(d);
+  if (request.action==='publish-attributed' && (!attributed || request.approval_reference!==attributed.approvalReference || request.single_source_acknowledged!==true)) return fail('bound-attributed-approval-required');
+  if (d.attributedReport && request.action!=='publish-attributed' && request.action!=='duplicate') return fail('separate-attributed-publish-required');
   const review = operatorNewsReview(id);
-  if (review.issue && request.action === 'publish') return fail(review.issue);
+  if (review.issue && ['publish','publish-attributed'].includes(request.action)) return fail(review.issue);
   const duplicate = review.duplicate || knownDuplicateDraft(d);
   if (duplicate) {
     await suppressDuplicateDraft(d, { alertId: duplicate.id || duplicate.alertId, draftId: duplicate.draftId, kind: 'operator-reviewed-duplicate' });
@@ -2277,7 +2314,7 @@ export async function operateNewsDraft(id, request = {}) {
   }
   if (request.action === 'duplicate') return fail('no-supported-duplicate-match');
   if (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) return fail('owner-private-editorial-approval-required');
-  if ((d.srcs || []).length === 0 || (d.srcs || []).every((s) => s.local)) return fail('independent-source-review-required');
+  if (((d.srcs || []).length === 0 || (d.srcs || []).every((s) => s.local)) && !(request.action==='publish-attributed' && attributed)) return fail('independent-source-review-required');
   const publication = toBotDraft(sourceFirstCandidate(d), { preservePublishedCopy: true });
   if (!api() || !R.H?.publishDraft) return fail('publisher-not-ready');
   d.status = 'publishing'; d.operatorReview = { revision: request.revision, at: Date.now(), result: 'claimed' };
@@ -2774,6 +2811,7 @@ export function registerNewsTools(bot, h) {
       forgetCurrentCard(d, ctx); save();
       return;
     }
+    if ((act === 'p' || act === 'e') && d.attributedReport) return toast(ctx, t(ctx, 'هذه المادة تحتاج قرار نشر الإسناد المنفصل.', 'Separate attributed-report publication required.'), true);
     if ((act === 'p' || act === 'e') && (d.editorialHold || d.operatorReview?.result === 'held' || ['claimed', 'uncertain', 'published-backup-unverified'].includes(d.operatorReview?.result))) {
       return toast(ctx, t(ctx, 'المسودة موقوفة للمراجعة التحريرية؛ لم يُنشر شيء.', 'Editorial hold or unresolved claim: nothing was published.'), true);
     }

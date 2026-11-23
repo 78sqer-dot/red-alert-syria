@@ -1,3 +1,4 @@
+import { mountNewsReviewRoutes } from './news-review-routes.js';
 import { reporterContactReview, sendReporterQuestion } from './reporter-contact.js';
 import { operatorReportsStatus, operatorReportReview, operateReport } from './reports-operator.js';
 import { transferCounters } from './transfer-counters.js';
@@ -14,7 +15,7 @@ import crypto from 'node:crypto';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
-import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsReview, correctOperatorNewsDraft, operateNewsDraft, operatorNewsStatus, setOperatorNewsMode, reconcilePublishedNewsDuplicate } from './news-monitor.js';
+import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsStatus, setOperatorNewsMode, reconcilePublishedNewsDuplicate } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { reviseJobMetadata } from './jobs-metadata.js';
 import { operatorJobsStatus, operatorJobReview, operateJobDraft } from './jobs-operator.js';
@@ -347,23 +348,7 @@ app.post('/api/admin/news/:id/reconcile-duplicate', apiLimiter, express.json({ l
   try { return res.json(await reconcilePublishedNewsDuplicate(req.params.id, req.body)); }
   catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
 });
-app.get('/api/admin/news/:id', apiLimiter, (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  const review = operatorNewsReview(req.params.id);
-  return review ? res.json(review) : res.status(404).json({ error: 'unknown-draft' });
-});
-app.post('/api/admin/news/:id/correct', apiLimiter, express.json({ limit: '12kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  try { return res.json(await correctOperatorNewsDraft(req.params.id, req.body)); }
-  catch (e) { return res.status(409).json({ok:false,error:e.message}); }
-});
-app.post('/api/admin/news/:id/review', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  try {
-    const result = await operateNewsDraft(req.params.id, { action: req.body?.action, revision: req.body?.revision });
-    return res.status(result.ok ? 200 : 409).json(result);
-  } catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
-});
+mountNewsReviewRoutes(app, {adminKeyOk, apiLimiter});
 app.get('/api/admin/editor-coordination', apiLimiter, (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   return res.json(store.state.news?.coordination || { until: null, chats: [], replies: [] });

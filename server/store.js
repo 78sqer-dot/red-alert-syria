@@ -1,3 +1,4 @@
+import { attributedAlertCopy } from './attributed-report.js';
 import { approvedPublicCorrection } from './approved-public-correction.js';
 import { mergeCoordination } from './editor-coordination.js';
 import fs from 'node:fs';
@@ -842,6 +843,8 @@ function publicSourceInfo(a) {
 /** Strip private fields before sending an alert to browsers. */
 export function publicAlert(a) {
   const p = a.place || {};
+  const attributed=attributedAlertCopy(a);
+  if (a.meta?.attributedReport && !attributed) throw new Error('invalid-attributed-public-copy');
   const editorialMode = a.source === 'news' && ['opinion', 'satire'].includes(a.meta?.publicEditorialTone)
     && isPublicEditorialCopy(a.description, a.meta.publicEditorialTone) ? a.meta.publicEditorialTone : null;
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : a.media;
@@ -861,6 +864,7 @@ export function publicAlert(a) {
   const publicText = (value) => {
     const selectedEditorialCopy = Boolean(editorialMode && value === a.description && isPublicEditorialCopy(value, editorialMode));
     if (isPrivateEditorialCopy(value) && !selectedEditorialCopy) return '';
+    if (attributed && [attributed.title,attributed.title_en,attributed.body].includes(value)) return value;
     if (approvedCorrection && approvedValues.has(value)) return value;
     const cleaned = a.source === 'news' || ['political', 'breaking'].includes(a.type)
       ? cleanAttributedNewsText(value, privateSourceNames) : cleanAlertText(value);

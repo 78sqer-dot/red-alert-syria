@@ -110,6 +110,17 @@ export function anonymizeNewsReportingLead(raw, privateNames = []) {
   return text;
 }
 
+// Both retention and loss detection use the same source-present spans.
+function originalReportingAttributionRe(names) {
+  if (!names.length) return null;
+  const outlet = `(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?(?:${names.map(esc).join('|')})`;
+  const reporter = `(?:مراسل(?:ة)?|مصادر?|مصدر)\\s+${outlet}(?=\\s*(?:بأن|أن|إن|[:：،,|]))`;
+  // Acquisition wording is evidence attribution, not a removable outlet credit.
+  // Retain the complete uncertainty/acquisition clause, never invent a source.
+  const acquisition = `(?:أفادت?\\s+)?معلومات(?:\\s+خاصة)?\\s+حصلت?\\s+عليها\\s+${outlet}(?=\\s+(?:ب[\\p{L}]|حول\\s|عن\\s|أن\\s))`;
+  return new RegExp(`(?:${reporter}|${acquisition})`, 'giu');
+}
+
 // Protect only an attribution span already present in the supplied narrative.
 // Configured names are match vocabulary, never text to append to public copy.
 function protectOriginalReportingAttribution(raw, privateNames = []) {
@@ -119,7 +130,7 @@ function protectOriginalReportingAttribution(raw, privateNames = []) {
   let prefix = 'RASORIGINALATTRIBUTIONKEEP';
   while (source.includes(prefix)) prefix += 'X';
   const kept = [];
-  const re = names.length ? new RegExp(`(?:مراسل(?:ة)?|مصادر?|مصدر)\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?(?:${names.map(esc).join('|')})(?=\\s*(?:بأن|أن|إن|[:：،,|]))`, 'giu') : null;
+  const re = originalReportingAttributionRe(names);
   const text = re ? source.replace(re, (value) => { const key = `${prefix}${kept.length}END`; kept.push(value); return key; }) : source;
   return { text, restore: (value) => String(value).replace(new RegExp(`${prefix}(\\d+)END`, 'g'), (_match, index) => kept[Number(index)] || '') };
 }
@@ -131,8 +142,7 @@ export function missingNamedReportingAttribution(raw, candidate, privateNames = 
   const names = [...new Set([...MEDIA, ...extraNames, ...(Array.isArray(privateNames) ? privateNames : [])].flatMap((name) => [name, String(name || '').replace(/^(?:مراسل(?:ة)?|مصادر?|مصدر)\s+/u, '')])
     .map((name) => String(name || '').trim()).filter((name) => name.length >= 3 && !isInstitutionSpeakerName(name)))].sort((a, b) => b.length - a.length);
   if (!names.length) return false;
-  const outlet = names.map(esc).join('|');
-  const re = new RegExp(`(?:مراسل(?:ة)?|مصادر?|مصدر)\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?(?:${outlet})(?=\\s*(?:بأن|أن|إن|[:：،,|]))`, 'giu');
+  const re = originalReportingAttributionRe(names);
   const normalized = (text) => String(text).replace(/\s+/g, ' ').trim();
   const target = normalized(candidate);
   return [...source.matchAll(re)].some((match) => !target.includes(normalized(match[0])));
