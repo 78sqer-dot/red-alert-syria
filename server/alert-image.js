@@ -204,7 +204,8 @@ export async function alertImageSvg(alert, opts = {}) {
   const country = type === 'political' ? !politicalLocation : alert.scope === 'country' || !Number.isFinite(loc.latitude);
   const center = country ? { lat: 34.85, lon: 38.6 } : { lat: loc.latitude, lon: loc.longitude };
   // every alert type: a glowing circle over each affected area (main area + extra areas)
-  const zoned = !country;
+  const approximatePoint = alert.location_display === 'approximate_point';
+  const zoned = !country && !approximatePoint;
   let zones = [];
   if (zoned) {
     zones = type === 'political' ? selectedAlertZones({ ...alert, location: loc })
@@ -255,7 +256,7 @@ export async function alertImageSvg(alert, opts = {}) {
     else if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph, alert)); }
   } else if (!country) {
     const [x, y] = px(center.lat, center.lon);
-    o.push(type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));
+    o.push(approximatePoint ? `<circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/>` : type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));
   }
   // attribution (required by the tile licence)
   o.push(`<rect x="${W - 210}" y="${HEAD + MAP_H - 26}" width="210" height="26" fill="#ffffff" opacity="0.75"/>`);
@@ -313,7 +314,7 @@ export async function alertImageSvg(alert, opts = {}) {
   o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
   // ---- footer: note (multi-circle / aircraft) + time
   const notes = NOTE[en ? 'en' : 'ar'];
-  const note = type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
+  const note = approximatePoint ? (en ? 'Approximate town location only. No danger radius.' : 'موقع البلدة تقريبي فقط، دون نطاق خطر') : type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
   const when = whenText(alert.timestamp || Date.now(), lang);
   const fy = HEAD + MAP_H;
   o.push(`<rect x="0" y="${fy}" width="${W}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${fy}" width="${W}" height="1.5" fill="#e2e8f0"/>`);

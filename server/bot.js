@@ -1716,6 +1716,11 @@ export async function repairNewsAlert(api, id, correction = null, options = {}) 
       if (!ALERT_TYPES[correction.type]) throw new Error('invalid-repair-type');
       patch.type = correction.type;
     }
+    if (correction.approximate_point === true) {
+      if (!isNews || correction.approved_copy !== true || (patch.type || a.type) !== 'breaking' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) throw new Error('approved-breaking-existing-location-only');
+      patch.location_display = 'approximate_point';
+      patch.zones = [];
+    }
     if (correction.clear_extra === true) {
       patch.extra = [];
       patch.areas = [...new Set([a.place?.name_ar, a.place?.district_ar, a.place?.governorate_ar].filter(Boolean))];

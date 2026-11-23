@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+process.env.DATA_DIR=fs.mkdtempSync(path.join(os.tmpdir(),'ras-point-'));
+process.env.TELEGRAM_BACKUP='false';
+const {alertZones}=await import('../server/places.js');
+const {publicAlert}=await import('../server/store.js');
+const {approvedCorrectionFingerprint,approvedPublicCorrection}=await import('../server/approved-public-correction.js');
+const {alertImageSvg}=await import('../server/alert-image.js');
+const fixture=()=>({id:'test-point',channel_message_id:1487,source:'news',type:'breaking',title:'حملة تفتيش في الرفيد',title_en:'House search in Rafid',description:'تفتيش منازل',body:'تفتيش منازل',scope:'place',timestamp:'2026-11-23T06:29:47Z',is_active:true,location:{latitude:32.9557,longitude:35.9002},place:{name_ar:'الرفيد',name_en:'Rafid'},extra:[],meta:{}});
+test('explicit approximate point suppresses derived circles and preserves coordinates',()=>{const a=fixture();assert.ok(alertZones(a).length);a.location_display='approximate_point';assert.deepEqual(alertZones(a),[]);assert.equal(a.location.latitude,32.9557);});
+test('public per-alert flag needs bound approval and source body remains intact',()=>{const a=fixture();a.location_display='approximate_point';assert.equal(publicAlert(a).location_display,undefined);a.meta.approvedPublicCorrection={version:1,fingerprint:approvedCorrectionFingerprint(a)};const p=publicAlert(a);assert.equal(p.location_display,'approximate_point');assert.deepEqual(p.location,a.location);assert.deepEqual(p.zones,[]);assert.equal(p.body,a.body);delete a.location_display;assert.equal(approvedPublicCorrection(a),null);});
+test('image point variant has explicit approximation note and no zone gradient',async()=>{const a=fixture();a.location_display='approximate_point';const svg=await alertImageSvg(a);assert.ok(svg.includes('موقع البلدة تقريبي فقط، دون نطاق خطر'));assert.ok(!svg.includes('id="zglow"'));assert.ok(svg.includes('fill="#475569"'));});
+test('mobile map excludes approximate points from geographic zones before fallback',()=>{const s=fs.readFileSync(new URL('../public/js/map.js',import.meta.url),'utf8');const zones=s.slice(s.indexOf('  updateZones() {'),s.indexOf('  _syncPulses('));assert.ok(zones.includes("if (a.location_display === 'approximate_point') continue;"));assert.ok(s.includes('موقع البلدة تقريبي فقط'));assert.ok(s.includes("el.className = 'mk mk-approximate-point'"));});

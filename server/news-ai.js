@@ -467,7 +467,7 @@ const TYPE_HELP = `- uav: drone (مسيّرة) flight, sighting or surveillance 
 - patrol: a specifically reported military/security patrol at a Syrian place (دورية عسكرية، دورية إسرائيلية); use only for patrol presence, not a raid, shooting, or armed clash. This category always waits for human review. Keep singular/plural based on the source wording.
 - military_incursion: a clearly reported ground entry/penetration by troops or military vehicles into Syrian territory/a named place (توغل بري، توغلت قوات، دخلت آليات). Use this as the primary type when that is the main incident, even if a drone is also mentioned or explicitly flying; drone flight is secondary. Do NOT use it for a drone/air strike, an armed clash, or a separately reported attack as the main incident; choose that specific type instead. This category always waits for human review.
 - kidnapping: a recent, specific abduction or the rescue/release of a kidnapped person (اختطاف، تحرير مختطف); use this dedicated type when the abduction or rescue is the central event, rather than attack or arrest. A suspect's arrest in an old case alone is not a new kidnapping.
-- attack: a non-assassination armed attack by people: shooting / gunfire at a named target or checkpoint, stabbing, armed robbery, or a military raid with reported direct attacks on people/property (e.g. searching homes, arresting or shooting at people, blowing up a house); use kidnapping for abduction/rescue and military_incursion for a ground entry/penetration without a more specific attack. Do not use for an armed clash between opposing sides
+- attack: a non-assassination armed attack by people: shooting / gunfire at a named target or checkpoint, stabbing, armed robbery, or a military raid with reported direct attacks on people/property (e.g. shooting at people, blowing up a house); searching homes alone is NOT an attack, and an arrest without violence is arrest, not attack; use kidnapping for abduction/rescue and military_incursion for a ground entry/penetration without a more specific attack. Do not use for an armed clash between opposing sides
 - artillery: artillery / mortar / rocket-launcher shelling (قصف مدفعي، قذائف هاون)
 - smuggling_weapons: a specific, recent attempted or completed illicit transfer/interception of weapons or ammunition inside Syria; require an explicit smuggling/trafficking cue and a named Syrian place
 - smuggling_drugs: a specific, recent attempted or completed illicit transfer/interception of narcotics inside Syria; require an explicit smuggling/trafficking cue and a named Syrian place
@@ -673,6 +673,15 @@ const hasReportedDirectViolence = (text) => {
   const nt = N(String(text || ''));
   return DIRECT_VIOLENCE_CUES.some((word) => nt.includes(word));
 };
+// A search campaign is not proof of an assault, an entry/penetration, or a patrol.
+// Keep this narrow: explicit violence/detention/abduction must retain its own path.
+export function isSearchOnlySecurityReport(text) {
+  const nt = N(String(text || ''));
+  return /(?:تفتيش|تفتش|يفتش|search(?:es|ing)?\s+(?:homes|houses))/u.test(nt)
+    && GROUND_FORCE_CONTEXT.some((word) => nt.includes(word))
+    && !hasReportedDirectViolence(text)
+    && !/(?:اطلق|اطلقت|يطلق|رصاص|نيران|جرح|قتل|قتلى|اعتد|اعتدا|اعتداء|ضرب|طعن|تفجير|نسف|هدم|احراق|حرق|سرقه|نهب|سلب|اعتقال|اعتقل|اعتقلت|يعتقل|توقيف|اوقف|احتجاز|احتجز|خطف|اختطف|اختطاف|ارهاب|assault|arrest|detain|abduct|destroy|stabb)/u.test(nt);
+}
 const UAV_FLIGHT_CUES = ['تحليق مسيره', 'تحليق مسيرات', 'تحليق طائره مسيره', 'تحليق طائرات مسيره', 'مسيره تحلق', 'مسيرات تحلق', 'طائره مسيره تحلق', 'طائرات مسيره تحلق', 'طائره بدون طيار تحلق', 'طائرات بدون طيار تحلق', 'درون يحلق', 'درونات تحلق',
   // a drone with a state adjective or an aerial context is never a protest march
   // (tashkeel stripping makes مسيّرة look like مسيرة)
@@ -776,7 +785,7 @@ export function ruleClassify(text, { breaking = false } = {}) {
   const kt = keywordTypes(evidence);
   const specificOther = kt.some((k) => !['attack', 'breaking', 'civil', 'weather'].includes(k));
   const groundIncursion = isGroundIncursionReport(evidence) && !hasReportedDirectViolence(evidence);
-  let type = groundIncursion ? 'military_incursion' : nonviolentIsraeliGroundActivity(evidence) && !specificOther ? 'breaking' : RULE_ORDER.find((k) => kt.includes(k));
+  let type = groundIncursion ? 'military_incursion' : isSearchOnlySecurityReport(evidence) ? 'breaking' : nonviolentIsraeliGroundActivity(evidence) && !specificOther ? 'breaking' : RULE_ORDER.find((k) => kt.includes(k));
   const smuggling = detectedSmugglingType(evidence);
   if (smuggling && !hasActualExplosion(evidence)) type = smuggling; // ammunition/contraband keywords can overlap the generic explosion list
   if (type === 'explosion' && isExplosiveHazardWithoutBlast(evidence)) type = nonBlastHazardType(evidence);
@@ -892,6 +901,7 @@ export function refineType(type, text) {
     if (any(HELI_ATTACK_W) && ['warplane', 'helicopter', 'uav', 'civil', 'breaking', 'weather', 'none'].includes(type)) return 'attack';
     if (['warplane', 'helicopter', 'uav', 'civil', 'breaking', 'weather', 'none', 'attack'].includes(type)) return 'helicopter';
   }
+  if (isSearchOnlySecurityReport(evidenceText) && ['attack', 'civil', 'breaking'].includes(type)) return 'breaking';
   if (nonviolentIsraeliGroundActivity(evidenceText) && ['attack', 'civil', 'breaking'].includes(type)) return 'breaking';
   const weather = weatherWarningInfo(evidenceText);
   if (keywordTypes(evidenceText).includes('uav') && type === 'warplane') return 'uav';

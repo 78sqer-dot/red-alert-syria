@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+process.env.DATA_DIR=fs.mkdtempSync(path.join(os.tmpdir(),'ras-search-guard-'));
+process.env.TELEGRAM_BACKUP='false';process.env.BOT_TOKEN='123456:LOCAL_TEST';
+const {refineType,ruleClassify,isSearchOnlySecurityReport,buildPrompt}=await import('../server/news-ai.js');
+const {_test}=await import('../server/news-monitor.js');
+const search='قوات الاحتلال الإسرائيلي شنت فجر اليوم حملة تفتيش طالت عدد من منازل بلدة الرفيد بريف القنيطرة.';
+test('source-only house searches do not prove attack, patrol or incursion',()=>{assert.equal(isSearchOnlySecurityReport(search),true);assert.equal(refineType('attack',search),'breaking');assert.equal(ruleClassify(search)?.type,'breaking');assert.equal(refineType('attack','هجوم\n'+search),'breaking');});
+test('explicit ground entry retains incursion rather than generic search type',()=>{assert.equal(refineType('attack','توغلت قوات الاحتلال الإسرائيلي في بلدة الرفيد وفتشت عدداً من المنازل.'),'military_incursion');});
+test('violence, detention, abduction and property destruction prevent search-only guard',()=>{for(const extra of ['وأطلقت النار على السكان','وأصيب مدني','واعتقلت شخصين','واختطفت مدنياً','ونسفت منزلاً','واعتدت على الأهالي','ونهبت الممتلكات','وطعنت شخصاً'])assert.equal(isSearchOnlySecurityReport(search+' '+extra),false,extra);});
+test('ordinary civilian inspection is not this narrow military/security guard',()=>{assert.equal(isSearchOnlySecurityReport('حملة تفتيش للمطاعم في حمص'),false);});
+test('stale attack draft fails closed at native source-first publication gate',()=>{assert.throws(()=>_test.sourceFirstCandidate({type:'attack',sourceText:search,sourceTextVersion:2,srcs:[],loc:{scope:'place',name_ar:'الرفيد'}}),/search-not-attack-needs-review/);});
+test('classification prompt explicitly rejects searching homes as attack proof',()=>{const p=JSON.stringify(buildPrompt([],[],'2026-11-23T06:00:00Z'));assert.ok(p.includes('searching homes alone is NOT an attack'));assert.ok(!p.includes('e.g. searching homes'));});

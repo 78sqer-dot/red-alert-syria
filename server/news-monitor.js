@@ -22,7 +22,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, isExplosiveHazardWithoutBlast, hospitalDestinationOnly, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, administrativePlaceOnly, churchBuildingOnly, isPersonNameOnly, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, isSearchOnlySecurityReport, isExplosiveHazardWithoutBlast, hospitalDestinationOnly, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, extractFlightDirection, truncateAtWordBoundary, truncatedPrefixCut, altPinFromPersonName, administrativePlaceOnly, churchBuildingOnly, isPersonNameOnly, sharpToneReason, isAltOnlyMatch, hasPlaceIntroducer } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, cleanPublicNewsAttribution, anonymizeNewsReportingLead, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
 
@@ -1585,6 +1585,7 @@ function sourceFirstCandidate(d) {
   if (!source) throw new Error('missing-original-source');
   if (d.sourceTextVersion !== 2 && source.length >= 1200) throw new Error('legacy-source-may-be-truncated');
   if (publicDraftCopyIssue(d)) throw new Error('private-editorial-copy-not-public');
+  if (d.type === 'attack' && isSearchOnlySecurityReport(source)) throw new Error('search-not-attack-needs-review');
   if (d.type === 'explosion' && isExplosiveHazardWithoutBlast(source)) throw new Error('explosion-not-reported');
   const selected = locsOf(d.loc, d.extra);
   if (selected.some(l => churchBuildingOnly(l.name_ar, source))) throw new Error('church-building-not-village');

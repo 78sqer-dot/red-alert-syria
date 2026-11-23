@@ -1076,7 +1076,7 @@ export class AlertMap {
       if (movementTrackIds.has(a.id) || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       seen.add(a.id);
       let m = this.markers.get(a.id);
-      const sig = `${a.type}|${a.is_active}|${a.marker_glyph || ''}|${a.caution_visual || ''}|${a.meta?.incursionKind || a.incursion_kind || ''}|${a.meta?.vehicleCount || a.vehicle_count || ''}|${a.meta?.patrolForm || ''}`;
+      const sig = `${a.type}|${a.location_display || ''}|${a.is_active}|${a.marker_glyph || ''}|${a.caution_visual || ''}|${a.meta?.incursionKind || a.incursion_kind || ''}|${a.meta?.vehicleCount || a.vehicle_count || ''}|${a.meta?.patrolForm || ''}`;
       if (m && m._sig !== sig) {
         m.remove();
         this.markers.delete(a.id);
@@ -1174,6 +1174,14 @@ export class AlertMap {
         : a.type === 'military_incursion' ? (incursionKind === 'barrier' ? 'military_barrier' : incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
         : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
+    if (a.location_display === 'approximate_point') {
+      el.className = 'mk mk-approximate-point';
+      el.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;';
+      el.setAttribute('role', 'button');
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('aria-label', this.opts.lang === 'en' ? 'Approximate town location' : 'موقع البلدة تقريبي');
+      return el;
+    }
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${marker}`;
     el.style.setProperty('--c', visual.color);
     el.setAttribute('role', 'button');
@@ -1261,6 +1269,7 @@ export class AlertMap {
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
       const planeArea = a.type === 'warplane' || (a.type === 'air_movement' && a.aircraft !== 'uav');
+      if (a.location_display === 'approximate_point') continue;
       if (!t || (t.marker === 'movement' && !(planeArea && a.is_active)) || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       const marker = alertMarkerKind(a);
       const props = planeArea ? { color: '#3b8eff', active: !!a.is_active, dashed: true, planeArea: true } : { color: eventVisual(a.type, a).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
@@ -1526,10 +1535,12 @@ export class AlertMap {
     this._popupAt = null;
     const M = ml();
     const contentNode = htmlToNode(this.popupHtml(alert));
-    if (unlocated) {
+    if (unlocated || alert.location_display === 'approximate_point') {
       const note = document.createElement('p');
       note.className = 'pp-no-location';
-      note.textContent = this.opts.lang === 'en' ? 'No precise location was supplied for this report.' : 'لم يُحدَّد موقع دقيق لهذا الخبر.';
+      note.textContent = alert.location_display === 'approximate_point'
+        ? (this.opts.lang === 'en' ? 'Approximate town location only, not the homes searched. No danger radius is implied.' : 'موقع البلدة تقريبي فقط، وليس المنازل التي فُتشت. لا يدلّ على نطاق خطر.')
+        : this.opts.lang === 'en' ? 'No precise location was supplied for this report.' : 'لم يُحدَّد موقع دقيق لهذا الخبر.';
       contentNode.querySelector('.pp')?.prepend(note);
     }
     if (groupNav) {

@@ -910,6 +910,7 @@ export function publicAlert(a) {
     ...(a.body ? { body: publicText(a.body) || undefined } : {}),
     ...(media ? { media, media_items: mediaItems } : {}),
     location: a.location,
+    ...(approvedCorrection && a.location_display === 'approximate_point' ? {location_display: 'approximate_point'} : {}),
     place: {
       name_ar: p.name_ar, name_en: p.name_en,
       district_ar: p.district_ar, district_en: p.district_en,

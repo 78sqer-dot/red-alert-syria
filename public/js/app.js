@@ -9,7 +9,7 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon, ICONS } from './icons.js?v=10';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=103';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=104';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';

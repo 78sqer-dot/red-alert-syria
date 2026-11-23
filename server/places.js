@@ -277,6 +277,7 @@ export function localityQualifierOnly(name, primaryName, text) {
 
 // every circle of an alert: its main area + each extra area picked in the bot (one or more circles each)
 export function alertZones(a) {
+  if (a.location_display === 'approximate_point') return [];
   const out = [];
   const add = (loc, scope) => {
     for (const z of zonePoints(loc, scope)) {
