@@ -1167,10 +1167,10 @@ export function buildAlertInput(d, author) {
   return {
     type: d.type,
     ...(searchTreatment?.location_display ? { location_display: searchTreatment.location_display } : {}),
-    title: searchTreatment?.title || `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${d.flightHeading ? ` — باتجاه ${d.flightHeading}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}${signalPlatform ? ' — مسيّرة' : ''}`,
-    title_en: searchTreatment?.title_en || `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
+    title: d.correctedTitle || searchTreatment?.title || `${baseTitle}${border ? ` — ${border.ar}` : ''}${flight ? ` — ${flight.ar}` : ''}${d.flightHeading ? ` — باتجاه ${d.flightHeading}` : ''}${flightTargetAr}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'ar')}` : ''}${signalPlatform ? ' — مسيّرة' : ''}`,
+    title_en: d.correctedTitleEn || searchTreatment?.title_en || `${baseTitleEn}${border ? ` — ${border.en}` : ''}${flight ? ` — ${flight.en}` : ''}${flightTargetEn}${vehicleCount ? ` — ${vehicleCountPhrase(vehicleCount, 'en')}` : ''}${signalPlatform ? ' — Drone' : ''}`,
     extra,
-    description: searchTreatment?.title || description,
+    description: d.correctedTitle || searchTreatment?.title || description,
     ...(body ? { body } : {}),
     ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
     location: loc,
@@ -1178,8 +1178,9 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || d.flightHeading || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || editorialMode || searchTreatment || d.id ? {
+    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || d.flightHeading || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || editorialMode || searchTreatment || d.correctedTitle || d.id ? {
       meta: {
+        ...(d.correctedTitle ? { correctedNewsTitle: true, channelTitle: d.correctedTitle } : {}),
         ...(searchTreatment ? { searchNewsTreatment: 1, channelTitle: searchTreatment.title } : {}),
         ...(d.id ? { dedupKey: `${d.source || 'news'}:${d.id}` } : {}),
         ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),

@@ -271,14 +271,14 @@ export async function alertImageSvg(alert, opts = {}) {
     ? (en ? 'Military checkpoint' : 'حاجز عسكري')
     : (HEADLINE[en ? 'en' : 'ar'][type]) || (en ? t.en : t.ar);
   const mag = type === 'quake' ? (alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1])) : null;
-  if (approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1) head = en ? alert.title_en || alert.title : alert.title;
+  if (approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1 || alert.meta?.correctedNewsTitle === true) head = en ? alert.title_en || alert.title : alert.title;
   if (alert.place?.head_ar) head = en ? alert.place.head_en || head : alert.place.head_ar;
   if (Number.isFinite(mag)) head = en ? `M${mag.toFixed(1)} earthquake` : `زلزال بقوة ${arDigits(mag.toFixed(1))}`;
   if (type === 'signal_sweep' && alert.meta?.signalPlatform === 'uav') head += en ? ' — Drone' : ' — مسيّرة';
   const short = en ? alert.place?.short_en : alert.place?.short_ar;
   const place = opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
   let titleSize = head.length > 16 ? 44 : 52;
-  if (!en && (approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1)) {
+  if (!en && (approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1 || alert.meta?.correctedNewsTitle === true)) {
     const logoWidth = LOGO ? Math.min(220, 50 * (LOGO.ratio || 2.5)) : 0;
     const titleWidth = W - 72 - (logoWidth ? logoWidth + 24 : 0);
     while (titleSize > 20 && illustrationTextWidth(head, titleSize, 800) > titleWidth) titleSize--;

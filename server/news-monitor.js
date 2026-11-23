@@ -441,7 +441,7 @@ function editorialGate(d) {
   const placeNames = locs.flatMap((loc) => [loc?.name_ar, loc?.district_ar, loc?.governorate_ar]).filter(Boolean);
   const sourcePlaces = placeNames.filter((name) => nameInText(name, rawSource));
   const politicalWithoutPin = d.type === 'political' && d.sourceBodyVersion === 1 && d.loc?.scope === 'country';
-  const sourceNamedWithoutPin = politicalWithoutPin || (d.sourceBodyVersion === 1 && d.loc?.scope === 'country' && d.loc.name_ar && d.loc.name_ar !== 'سوريا' && nameInText(d.loc.name_ar, rawSource));
+  const sourceNamedWithoutPin = politicalWithoutPin || (d.sourceBodyVersion === 1 && d.loc?.scope === 'country' && d.loc.name_ar && ((d.loc.name_ar === 'سوريا' && /سوريا/u.test(rawSource)) || nameInText(d.loc.name_ar, rawSource)));
   if (!sourceNamedWithoutPin && !sourcePlaces.length) return fail('place-missing-from-source');
   if (!sourceNamedWithoutPin && !sourcePlaces.some((name) => nameInText(name, rawHeadline))) return fail('place-missing-from-headline');
 
@@ -1535,8 +1535,9 @@ export function toBotDraft(d, options = {}) {
     throw new Error('The owner-selected editorial preview is stale or not approved for publication');
   }
   const geography = sourceScopedGeography(d);
+  const factualCorrection = boundDraftCorrection(d);
   const searchTreatment = editorialSelection ? null : searchNewsTreatment(d.sourceText, geography.loc);
-  const rawHeadline = searchTreatment?.title || editorialSelection?.text || d.headline;
+  const rawHeadline = factualCorrection?.title || searchTreatment?.title || editorialSelection?.text || d.headline;
   const rawBody = editorialSelection ? rawHeadline : d.body || rawHeadline;
   const safeDraft = {
     ...d, headline: rawHeadline,
@@ -1556,6 +1557,7 @@ export function toBotDraft(d, options = {}) {
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
     type: searchTreatment ? 'breaking' : d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(searchTreatment ? 'breaking' : d.type).ttlMin, headline,
+    ...(factualCorrection ? { correctedTitle: factualCorrection.title, correctedTitleEn: factualCorrection.title_en } : {}),
     ...(searchTreatment ? { searchSourceText: d.sourceText } : {}),
     // Full report text rides alongside the concise lead (details/text keep their
     // existing roles); owner-selected editorial previews never carry a body.
@@ -1586,6 +1588,7 @@ export function toBotDraft(d, options = {}) {
  * metadata, not a summary. Missing, truncated or overlong source stays in review. */
 function sourceFirstCandidate(d) {
   const source = String(d.sourceText || '').trim();
+  if (d.correctedCandidate && !boundDraftCorrection(d)) throw new Error('stale-corrected-candidate-needs-review');
   if (!source) throw new Error('missing-original-source');
   if (d.sourceTextVersion !== 2 && source.length >= 1200) throw new Error('legacy-source-may-be-truncated');
   if (publicDraftCopyIssue(d)) throw new Error('private-editorial-copy-not-public');
@@ -1601,11 +1604,12 @@ function sourceFirstCandidate(d) {
   if (roleConflict) throw new Error('non-incident-location-role');
   const geography = d.type === 'political' ? politicalPublicationGeography(d) : sourceScopedGeography(d);
   const where = geography.loc?.name_ar || 'سوريا';
-  const headline = `${typeOf(d.type).ar} — ${where}`;
+  const correction = boundDraftCorrection(d);
+  const headline = correction?.title || `${typeOf(d.type).ar} — ${where}`;
   // Drop every generated/public alternate-text field. The manual preview remains
   // on the private stored draft only, never on this publication candidate.
   return { ...d, ...geography, headline, body, details: '', text: '', description: '', description_en: '',
-    title: '', title_en: '', aiRewritePreview: undefined, sourceBodyVersion: 1 };
+    title: '', title_en: '', ...(correction ? { factualCorrection: correction } : {}), aiRewritePreview: undefined, sourceBodyVersion: 1 };
 }
 function sourceFirstGate(d, candidate) {
   let expected;
@@ -2180,21 +2184,57 @@ export async function refreshPendingLocationRoles() {
   }
   return changed;
 }
+function correctionBinding(d) {
+  return crypto.createHash('sha256').update(JSON.stringify({type:d.type, sourceText:d.sourceText, loc:d.loc, extra:d.extra || [], srcs:d.srcs || []})).digest('hex');
+}
+function boundDraftCorrection(d) {
+  const c = d.correctedCandidate;
+  return c?.version === 1 && c.binding === correctionBinding(d) ? c : null;
+}
+/** Source-faithful, no-coordinate recovery always returns to held review, never sends. */
+export async function correctOperatorNewsDraft(id, request = {}) {
+  assertOperatorRecoveryReady();
+  const d = newsState().drafts[id];
+  if (!d || !['ignored','pending'].includes(d.status) || d.test || d.alertId || d.postId || d.undone || d.duplicateOf || (d.aiRewritePreview?.applied && ['opinion','satire'].includes(d.aiRewritePreview.mode)) || ['claimed','uncertain','published','map-only','published-backup-unverified'].includes(d.operatorReview?.result) || d.nativeReview?.result === 'claimed') throw new Error('draft-not-recoverable-no-write');
+  if (!request.revision || request.revision !== operatorRevision(d) || request.expected_status !== d.status) throw new Error('stale-correction-no-write');
+  const c = request.correction;
+  if (!c || Object.keys(c).some(k=>!['type','title','title_en','body','textual_location','no_pin'].includes(k)) || c.no_pin !== true || !NEWS_TYPES.includes(c.type)) throw new Error('invalid-remove-only-correction');
+  const body = cleanPublicNewsAttribution(String(d.sourceText || '').trim(), (d.srcs || []).map(s=>s.name).filter(Boolean));
+  if (!body || c.body !== body) throw new Error('original-source-body-required');
+  for (const key of ['title','title_en']) if (typeof c[key] !== 'string' || !c[key].trim() || c[key].length > 240 || /<|>|https?:|@[A-Za-z0-9_]/u.test(c[key]) || isPrivateEditorialCopy(c[key])) throw new Error('invalid-factual-title');
+  const label = String(c.textual_location || '').trim();
+  if (!label || label.length > 160 || /<|>|https?:/u.test(label) || (label !== 'سوريا' && !nameInText(label, d.sourceText))) throw new Error('text-location-not-in-source');
+  const next = structuredClone(d);
+  next.type = c.type; next.headline = c.title.trim(); next.body = body; next.loc = {...locationFrom({}),name_ar:label,name_en:''}; next.extra = [];
+  next.correctedCandidate = {version:1,title:c.title.trim(),title_en:c.title_en.trim(),body,binding:correctionBinding(next)};
+  next.status = 'pending'; next.editorialHold = true; next.editorialHoldReason = 'corrected-candidate-needs-review'; next.dayAutoAt = null; delete next.autoMode;
+  const preview = operatorNewsReviewFromDraft(next);
+  if (preview.issue) throw new Error('corrected-candidate-invalid:'+preview.issue);
+  if (request.dry_run === true) return {ok:true,dryRun:true,id,status:d.status,revision:operatorRevision(d),candidate:preview.candidate,duplicate:preview.duplicate};
+  const prior = {status:d.status,type:d.type,loc:d.loc,extra:d.extra,operatorReview:d.operatorReview,by:d.by};
+  Object.assign(d,next);
+  d.correctionAudit = [...(d.correctionAudit || []),{at:new Date().toISOString(),revision:request.revision,prior,title:c.title,sourceBodyUnchanged:true,noPin:true}];
+  save(); if (store.backup && !await store.flushBackup(true)) throw new Error('correction-durability-unverified-remains-held');
+  await refreshCards(d);
+  return {ok:true,id,status:'corrected-held',review:operatorNewsReview(id)};
+}
 const operatorRevision = (d) => crypto.createHash('sha256').update(JSON.stringify({
   status: d.status, type: d.type, headline: d.headline, body: d.body, sourceText: d.sourceText,
   loc: d.loc, extra: d.extra, srcs: d.srcs, politicalCategory: d.politicalCategory,
   editorialHold: d.editorialHold, privateEditorial: d.privateEditorial, aiRewritePreview: d.aiRewritePreview,
-  operation: d.operatorReview,
+  operation: d.operatorReview, nativeReview:d.nativeReview, undone:d.undone, duplicateOf:d.duplicateOf, postId:d.postId, alertId:d.alertId, correctedCandidate: d.correctedCandidate, correctionAudit: d.correctionAudit,
 })).digest('hex');
 export function operatorNewsReview(id) {
   const d = newsState().drafts[id];
-  if (!d) return null;
+  return d ? operatorNewsReviewFromDraft(d) : null;
+}
+function operatorNewsReviewFromDraft(d) {
   let candidate = null, issue = null, duplicate = null;
   try {
     candidate = sourceFirstCandidate(d);
     const gate = sourceFirstGate(d, candidate);
     if (!gate.ok) issue = gate.reason;
-    duplicate = finalPublishDuplicate(d, candidate);
+    duplicate = finalPublishDuplicate(d, candidate) || knownDuplicateDraft(d);
   } catch (e) { issue = e.message; }
   return { id: d.id, status: d.status, revision: operatorRevision(d), test: !!d.test,
     type: d.type, headline: d.headline, sourceText: d.sourceText, sources: d.srcs || [],
@@ -3278,4 +3318,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { officialStatementCore, sameOfficialStatement, routePublicationGeography, politicalPublicationGeography, sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };
+export const _test = { correctionBinding, boundDraftCorrection, officialStatementCore, sameOfficialStatement, routePublicationGeography, politicalPublicationGeography, sourceFirstCandidate, sourceFirstGate, automaticPublicDraft, nonIncidentPlaceOnly, nightPublish, entityDuplicateDraft, personNameRuns, distinctPersons, nameRuns, normTokens, runHit, locsOf, geoOf, sameFamily, near, auditDraftForAutoPublish, dayAutoTick, mergeInto, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, finalPublishDuplicate, autoDeleteLandedDuplicate, selfEchoOf, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, condemnKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, refinePrimaryType, newsTypeGroups: NEWS_TYPE_GROUPS, filterVersion: FILTER_VER };

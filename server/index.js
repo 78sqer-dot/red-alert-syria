@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
-import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsReview, operateNewsDraft, operatorNewsStatus, setOperatorNewsMode, reconcilePublishedNewsDuplicate } from './news-monitor.js';
+import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsReview, correctOperatorNewsDraft, operateNewsDraft, operatorNewsStatus, setOperatorNewsMode, reconcilePublishedNewsDuplicate } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { reviseJobMetadata } from './jobs-metadata.js';
 import { operatorJobsStatus, operatorJobReview, operateJobDraft } from './jobs-operator.js';
@@ -351,6 +351,11 @@ app.get('/api/admin/news/:id', apiLimiter, (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   const review = operatorNewsReview(req.params.id);
   return review ? res.json(review) : res.status(404).json({ error: 'unknown-draft' });
+});
+app.post('/api/admin/news/:id/correct', apiLimiter, express.json({ limit: '12kb' }), async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(404).end();
+  try { return res.json(await correctOperatorNewsDraft(req.params.id, req.body)); }
+  catch (e) { return res.status(409).json({ok:false,error:e.message}); }
 });
 app.post('/api/admin/news/:id/review', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
