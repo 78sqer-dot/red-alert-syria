@@ -147,7 +147,7 @@ test('live alert circles use compositor-safe pulse layers and remain clickable t
 test('static types share one unified pin and breaking news keeps its red pulse', () => {
   assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/);
   assert.match(map, /el\.innerHTML = glyphDisc\(a\.type, 32, 20, 'pin'\);/, 'breaking renders the same pin (alert_tri glyph, type-colour ring)');
-  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;[^}]*background: rgba\(255,255,255,\.96\); border: 2px solid var\(--ring/);
+  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;[^}]*background: transparent; border: 2px solid var\(--ring/);
   assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; fill: var\(--ring, #64748b\); \}/);
   assert.match(css, /\.maplibregl-map\.zoom-far \.pin \{ width: 20px; height: 20px; border-width: 1.5px; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-far \.pin svg \{ width: 13px; height: 13px; \}/);

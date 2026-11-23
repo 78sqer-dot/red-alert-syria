@@ -1,3 +1,4 @@
+import {startEmailRelay,stopEmailRelay,emailRelayStatus} from './email-relay.js';
 import { mountNewsReviewRoutes } from './news-review-routes.js';
 import { reporterContactReview, sendReporterQuestion } from './reporter-contact.js';
 import { operatorReportsStatus, operatorReportReview, operateReport } from './reports-operator.js';
@@ -20,7 +21,7 @@ import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { reviseJobMetadata } from './jobs-metadata.js';
 import { operatorJobsStatus, operatorJobReview, operateJobDraft } from './jobs-operator.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, fixPostMarkup, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput, repairNewsAlert } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, fixPostMarkup, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput, repairNewsAlert, channelPost, plainTelegramText } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -334,6 +335,7 @@ app.post('/api/admin/reports/:id/review', apiLimiter, express.json({ limit: '24k
   try { const r = await operateReport(req.params.id, req.body); return res.status(r.ok ? 200 : 409).json(r); }
   catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
 });
+app.get('/api/admin/relay/status', apiLimiter, (req,res)=>{if(!adminKeyOk(req))return res.status(404).end();res.set('Cache-Control','no-store');res.json(emailRelayStatus());});
 app.get('/api/admin/news/status', apiLimiter, (req, res) => {
   if (!adminKeyOk(req)) return res.status(404).end();
   return res.json(operatorNewsStatus(req.query.include === 'ids'));
@@ -803,7 +805,8 @@ async function start() {
       }).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
     }
     }
-    startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
+    startNewsMonitor();
+    startEmailRelay(a=>plainTelegramText(channelPost(a))); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
     startJobsMonitor(); // 💼 separate Syria jobs source -> owner approval -> website Jobs only
     startArmyMonitor(() => bots.admin?.api); // 🏛 official ministries -> owner approval -> website/map section only
     startTranslations(); // 🌐 English descriptions for /en/
@@ -836,6 +839,7 @@ async function start() {
 }
 
 const shutdown = async () => {
+  stopEmailRelay();
   try { stopNewsMonitor(); } catch { /* ignore */ }
   try { stopJobsMonitor(); } catch { /* ignore */ }
   try { stopArmyMonitor(); } catch { /* ignore */ }
