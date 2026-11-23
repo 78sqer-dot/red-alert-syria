@@ -37,5 +37,15 @@ test('choosing the alert still opens its existing details using the stored alert
 });
 
 test('updated stylesheet is requested with a new cache-busting version', () => {
-  assert.match(html, /href="\/css\/app\.css\?v=99"/);
+  assert.match(html, /href="\/css\/app\.css\?v=100"/);
+});
+
+
+test('reference news uses ordinary icons and a bounded small pulse, never a coverage disc', () => {
+  assert.match(map, /if \(a.location_display === 'approximate_point'\)/);
+  assert.match(map, /mk-reference-news/);
+  assert.doesNotMatch(map, /width:144px;height:144px/);
+  assert.match(css, /\.mk-reference-news \.news-pulse-ring \{ width:24px; height:24px/);
+  assert.match(css, /@keyframes referenceNewsPulse/);
+  assert.match(css, /scale\(1\.35\); opacity:0/);
 });

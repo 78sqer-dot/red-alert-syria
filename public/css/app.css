@@ -1578,3 +1578,8 @@ html.dark .map-bottom-controls { box-shadow: 0 10px 30px rgba(0, 0, 0, .45), ins
 /* Markerless reports use the existing card without implying a geographic pin. */
 .pp-unlocated .maplibregl-popup-tip { display: none; }
 .pp-no-location { margin: 0 0 10px; color: var(--text-secondary); font-size: 11px; line-height: 1.8; }
+
+/* Small news marker pulse only, never a geographic coverage circle. */
+.mk-reference-news .news-pulse-ring { width:24px; height:24px; border:1.5px solid var(--c); background:transparent; box-shadow:none; animation:referenceNewsPulse 2.2s ease-out infinite; }
+.mk-reference-news .news-pulse-ring::after { display:none; }
+@keyframes referenceNewsPulse { 0% { transform:translate(-50%,-50%) scale(.75); opacity:.9; } 100% { transform:translate(-50%,-50%) scale(1.35); opacity:0; } }

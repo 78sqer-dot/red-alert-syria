@@ -1174,15 +1174,15 @@ export class AlertMap {
         : a.type === 'military_incursion' ? (incursionKind === 'barrier' ? 'military_barrier' : incursionKind === 'soldiers' ? 'soldiers' : incursionKind === 'vehicles' ? 'military_vehicle' : t.glyph)
         : a.marker_glyph === 'weapon' ? 'weapon' : t.glyph;
     const el = document.createElement('div');
-    if (['approximate_point','geographic_reference'].includes(a.location_display)) {
+    if (a.location_display === 'approximate_point') {
       el.className = 'mk mk-approximate-point';
-      el.style.cssText = a.location_display==='geographic_reference' ? 'width:144px;height:144px;border-radius:50%;background:#26344533;border:4px dashed #263445;box-shadow:0 0 28px 28px #26344522;' : 'width:14px;height:14px;border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;';
+      el.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;';
       el.setAttribute('role', 'button');
       el.setAttribute('tabindex', '0');
       el.setAttribute('aria-label', a.location_display==='geographic_reference' ? (a.geographic_reference_kind==='village' ? (this.opts.lang==='en' ? 'Approximate village reference' : 'مرجع جغرافي تقريبي للقرية') : (this.opts.lang==='en' ? 'Approximate hill reference' : 'مرجع جغرافي تقريبي للتل')) : this.opts.lang === 'en' ? 'Approximate town location' : 'موقع البلدة تقريبي');
       return el;
     }
-    el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${marker}`;
+    el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${marker}${a.location_display === 'geographic_reference' ? ' mk-reference-news' : ''}`;
     el.style.setProperty('--c', visual.color);
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
