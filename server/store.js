@@ -940,6 +940,7 @@ export function publicAlert(a) {
       label: a.source === 'weather' || a.meta?.political?.official ? 'مصدر رسمي' : a.source ? 'منسوب إلى المصدر' : 'غير موثق مستقلًا',
     },
     updates: Array.isArray(a.history) ? a.history.slice(-20).map((h) => ({ at: h.at, kind: h.kind, title: publicText(h.title), description: publicText(h.description), is_active: h.is_active })) : undefined,
+    ...(a.meta?.officialWarningValidity?.onset===a.valid_from ? {valid_from:a.valid_from} : {}),
     expires_at: a.expires_at,
     ended_at: a.ended_at,
     is_active: a.is_active,

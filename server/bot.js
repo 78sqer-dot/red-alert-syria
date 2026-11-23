@@ -1,3 +1,4 @@
+import { marineValidityRepair } from './marine-warning-validity.js';
 import { hillReferenceRepair } from './hill-reference.js';
 import { REVIEWED_NEWS_COPIES, reviewedAlertCopy } from './reviewed-news-copy.js';
 import { ATTRIBUTED_ITEM, attributedAlertCopy, revisedAttributedRepairMeta, eligibleAttributedOriginal } from './attributed-report.js';
@@ -1782,6 +1783,8 @@ export async function repairNewsAlert(api, id, correction = null, options = {}) 
       patch.meta = { ...(a.meta || {}), ...(patch.meta || {}), channelTitle: patch.title };
     }
   }
+  const validityPatch=marineValidityRepair(a,correction,sourceDraft,options);
+  if(validityPatch) { const meta={...validityPatch.meta,...(patch.meta||{})}; Object.assign(patch,validityPatch);patch.meta=meta; }
   const hillPatch=hillReferenceRepair(a,correction,sourceDraft);
   if(hillPatch) {
     if(!options.expectedRevision || options.expectedPostId!==a.channel_message_id) throw new Error('hill-reference-exact-revision-post-required');

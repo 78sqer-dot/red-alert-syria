@@ -9,5 +9,5 @@ export function approvedPublicCorrection(alert){
  return Object.fromEntries(COPY_KEYS.map(key=>[key,alert[key]??'']));
 }
 export function publishedRepairRevision(alert){
- return crypto.createHash('sha256').update(JSON.stringify({fields:boundFields(alert),meta:alert.meta,active:alert.is_active,expires:alert.expires_at})).digest('hex');
+ return crypto.createHash('sha256').update(JSON.stringify({fields:boundFields(alert),meta:alert.meta,active:alert.is_active,expires:alert.expires_at,...(alert.valid_from?{validFrom:alert.valid_from}:{})})).digest('hex');
 }
