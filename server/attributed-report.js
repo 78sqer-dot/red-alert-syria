@@ -22,9 +22,22 @@ export function boundAttributedReport(d) {
     && d.headline===x.title && d.body===x.body && d.loc?.scope==='country' && d.loc.name_ar===x.location && d.loc.latitude==null && d.loc.longitude==null && d.extra?.length===0 ? x : null;
 }
 export function attributedPublicationProof() { return {version:1,copyHash:hash(ATTRIBUTED_ITEM)}; }
+export const ATTRIBUTED_REVISED_BODY = 'بحسب مصدر محلي، قُتل الشاب صطيف محمد الحمد وأُصيب سليمان محمد الحمد جراء مشاجرة بين عائلتين في منطقة معدان عتيق بريف الرقة. ولم نتحقق بشكل مستقل من الحصيلة.';
+export const ATTRIBUTED_CORRECTION_REFERENCE = 'wamid.HBgLOTYxODE5OTQ4OTMVAgASGCBBQzdFNTEwODMxQTQ3OUY2REI2NDBDRjQ2MUM5REI5MAA=';
+const REVISED_ALERT_ID='cabea2c3-8b6b-4501-a9ae-e2a1118cf9b2';
 export function attributedAlertCopy(a) {
-  const x=ATTRIBUTED_ITEM,p=a?.meta?.attributedReport,s=a?.meta?.newsSources;
-  return a?.source==='news' && a.type===x.type && p?.version===1 && p.copyHash===hash(x) && a.meta.dedupKey===`news:${x.id}`
+  const p=a?.meta?.attributedReport,s=a?.meta?.newsSources;
+  const revised=p?.version===2 && a.id===REVISED_ALERT_ID && a.channel_message_id===1494 && p.correctionReference===ATTRIBUTED_CORRECTION_REFERENCE && p.prior?.version===1 && p.prior.copyHash===hash(ATTRIBUTED_ITEM);
+  const x=revised ? {...ATTRIBUTED_ITEM,body:ATTRIBUTED_REVISED_BODY} : ATTRIBUTED_ITEM;
+  return a?.source==='news' && a.type===x.type && ((p?.version===1 && p.copyHash===hash(x)) || (revised && p.copyHash===hash(x))) && a.meta.dedupKey===`news:${x.id}`
     && a.title===x.title && a.body===x.body && a.description===x.title && a.place?.scope==='country' && a.place?.name_ar===x.location && a.place.latitude==null && a.place.longitude==null && !(a.extra||[]).length
     && s?.length===1 && s[0].url===x.sourceUrl && s[0].name===x.sourceName ? x : null;
+}
+
+/** Exact same-post wording revision; v1 remains valid for historical copies. */
+export function revisedAttributedRepairMeta(a, correction) {
+  if (!a.meta?.attributedReport) return null;
+  if (!attributedAlertCopy(a) || a.meta.attributedReport.version!==1 || a.id!==REVISED_ALERT_ID || a.channel_message_id!==1494 || correction?.approved_copy!==true || correction.body!==ATTRIBUTED_REVISED_BODY || Object.keys(correction).some(k=>!['approved_copy','body'].includes(k))) throw new Error('unsupported-attributed-same-post-correction');
+  const x={...ATTRIBUTED_ITEM,body:ATTRIBUTED_REVISED_BODY};
+  return {...a.meta,attributedReport:{version:2,copyHash:hash(x),prior:structuredClone(a.meta.attributedReport),correctionReference:ATTRIBUTED_CORRECTION_REFERENCE},attributedWordingAudit:{at:new Date().toISOString(),priorBody:a.body,priorTitle:a.title,priorMeta:structuredClone(a.meta),post:1494,alertId:a.id,originalSourceUrl:ATTRIBUTED_ITEM.sourceUrl,correctionReference:ATTRIBUTED_CORRECTION_REFERENCE,independentlyVerified:false}};
 }

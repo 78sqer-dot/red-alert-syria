@@ -1,4 +1,4 @@
-import { ATTRIBUTED_ITEM, attributedAlertCopy } from './attributed-report.js';
+import { ATTRIBUTED_ITEM, attributedAlertCopy, revisedAttributedRepairMeta, eligibleAttributedOriginal } from './attributed-report.js';
 import { searchNewsTreatment } from './search-news-treatment.js';
 import { configureReporterContact, captureReporterReply } from './reporter-contact.js';
 import { configureReportOperator } from './reports-operator.js';
@@ -1773,6 +1773,14 @@ export async function repairNewsAlert(api, id, correction = null, options = {}) 
       patch.title_en = typeof correction.title_en === 'string' ? correction.title_en : patch.title;
       patch.meta = { ...(a.meta || {}), ...(patch.meta || {}), channelTitle: patch.title };
     }
+  }
+  if (a.meta?.attributedReport) {
+    if (!options.expectedRevision || options.expectedPostId!==1494) throw new Error('attributed-repair-exact-revision-post-required');
+    if (!eligibleAttributedOriginal(sourceDraft) || sourceDraft.alertId!==a.id || sourceDraft.postId!==1494 || sourceDraft.status!=='published' || !sourceDraft.attributedReportAudit) throw new Error('attributed-repair-original-source-audit-required');
+    const revisedMeta=revisedAttributedRepairMeta(a,correction);
+    // No classifier/geography/title changes accompany this wording-only repair.
+    for (const key of Object.keys(patch)) delete patch[key];
+    patch.body=correction.body;patch.meta=revisedMeta;
   }
   if (correction?.approved_copy === true) {
     const title = patch.title || a.title;
