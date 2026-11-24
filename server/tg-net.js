@@ -1,4 +1,3 @@
-import { transferCounters } from './transfer-counters.js';
 // Resilient Telegram API calls (both bots).
 //
 // grammY waits up to 500 s for a single API call by default. When Telegram's Bot API is slow or
@@ -42,7 +41,7 @@ function ambiguousRetryAllowed(method, payload) {
 
 export function installResilience(api, label = 'bot') {
   api.config.use(async (prev, method, payload, signal) => {
-    if (method === 'getUpdates') { transferCounters.telegramAttempt(method, payload); return prev(method, payload, signal); } // long polling has its own timeout
+    if (method === 'getUpdates') return prev(method, payload, signal); // long polling has its own timeout
     const started = Date.now();
     const retryable = ambiguousRetryAllowed(method, payload);
     const limit = method === 'answerCallbackQuery' ? NET.callbackMs : !retryable ? NET.oneShotMs : UPLOAD.has(method) ? NET.uploadMs : NET.callMs;
@@ -54,7 +53,7 @@ export function installResilience(api, label = 'bot') {
       const onOuter = () => ctl.abort();
       if (signal) { if (signal.aborted) ctl.abort(); else signal.addEventListener('abort', onOuter, { once: true }); }
       let res; let err;
-      try { transferCounters.telegramAttempt(method, payload); res = await prev(method, payload, ctl.signal); } catch (e) { err = e; } finally {
+      try { res = await prev(method, payload, ctl.signal); } catch (e) { err = e; } finally {
         clearTimeout(timer);
         if (signal) signal.removeEventListener('abort', onOuter);
       }

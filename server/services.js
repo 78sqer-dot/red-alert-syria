@@ -7,7 +7,7 @@
 //    Published items retain a direct source link on the website and in the channel.
 import crypto from 'node:crypto';
 import { InlineKeyboard, InputFile } from 'grammy';
-import { automaticMonitorRecipientIds, config, DEFAULT_PUBLIC_URL } from './config.js';
+import { config } from './config.js';
 import { store } from './store.js';
 import { governorates, normalizeArabic } from './places.js';
 import { weatherWarningInfo } from './news-ai.js';
@@ -18,7 +18,7 @@ const N = normalizeArabic;
 const rid = () => crypto.randomBytes(5).toString('hex');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const save = (soon = true) => store.persist({ backupSoon: soon });
-const siteUrl = () => (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
+const siteUrl = () => (config.publicUrl || 'https://red-alert-syria-q6k8.onrender.com').replace(/\/$/, '');
 const clock = (t) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(t));
 const dayClock = (t) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(t));
 
@@ -226,7 +226,7 @@ export function mergeServicesFromBackup(o) {
 // ---------------------------------------------------------------- bot: electricity tools (publishing bot)
 const pend = new Map(); // owner id -> { k: 'text'|'edit', gov, id, exp }
 const R = { H: null };
-const reviewerIds = () => automaticMonitorRecipientIds();
+const reviewerIds = () => [...new Set([...config.ownerIds])];
 function powerCardText(p) {
   return `⚡ <b>تحديث كهرباء${p.src ? ' من الرصد' : ''}</b> — ${esc(govName(p.gov))}\n\n${esc(p.text)}\n\n`
     + `${p.src?.url ? `<i>المصدر: <a href="${esc(p.src.url)}">${esc(p.src.name || 'مصدر حكومي رسمي')}</a></i>\n` : ''}<i>${dayClock(p.ts)}</i>`;

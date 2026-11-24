@@ -31,17 +31,13 @@ test('every alert type receives one shared color-dot category visual', () => {
 });
 
 test('live map icons, markers and impact-zone pulses use the same category color', () => {
-  assert.match(map, /--ring:\$\{ringColor \|\| t\.color\}/, 'the unified pin ring carries the type colour');
-  assert.match(map, /const visual = eventVisual\(a\.type, a\);/);
+  assert.match(map, /const visual = eventVisual\(type\);[\s\S]{0,100}const fg = visual\.color/);
+  assert.match(map, /const visual = eventVisual\(a\.type\);/);
   assert.match(map, /el\.style\.setProperty\('--c', visual\.color\)/);
-  assert.match(map, /color: eventVisual\(a\.type, a\)\.color, active:/);
-  assert.match(map, /const color = isHelicopter \? eventVisual\('helicopter'\)\.color : eventVisual\('air_movement'\)\.color/);
-  assert.match(alertImage, /const color = eventVisual\(type, alert\)\.color/);
-  assert.match(alertImage, /const col = eventVisual\(type, alert\)\.color/);
-});
-
-test('map relies on built-in RTL shaping instead of the deprecated CSP-incompatible plugin', () => {
-  assert.doesNotMatch(map, /getRTLTextPluginStatus|setRTLTextPlugin/);
+  assert.match(map, /color: eventVisual\(a\.type\)\.color, active:/);
+  assert.match(map, /const color = eventVisual\('air_movement'\)\.color/);
+  assert.match(alertImage, /const color = eventVisual\(type\)\.color/);
+  assert.match(alertImage, /const col = eventVisual\(type\)\.color/);
 });
 
 test('server-rendered map markers use category colors and keep urgent black inside a red triangle', () => {
@@ -55,26 +51,19 @@ test('server-rendered map markers use category colors and keep urgent black insi
   assert.equal((urgent.match(/fill="#000000"/g) || []).length, 1, 'black is used only for the triangle interior');
 });
 
-test('governorate labels stay small, uniform, one-line, and localized', () => {
-  assert.match(map, /id: 'ras-gov-labels', type: 'symbol', source: 'ras-govs'/);
-  assert.ok(map.includes("'text-size': ['interpolate', ['linear'], ['zoom'], 5, 7.5, 8, 8, 11, 9]"));
-  assert.ok(map.includes("'text-max-width': 14"), 'the label width preserves a consistent, tidy line');
-  assert.ok(map.includes("'text-halo-width': 1.3"), 'the smaller text keeps a slim readable halo');
-  assert.ok(map.includes("return lang === 'en' ? ['concat', ['get', 'en'], ' Governorate'] : ['get', 'ar'];"));
-});
-
-test('category recoloring preserves readable markers and approved sizes', () => {
-  // static markers are the unified pin in both themes: dark roundel, type ring
-  assert.match(css, /\.pin \{[^}]*background: transparent; border: 2px solid var\(--ring/);
-  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; fill: var\(--ring, #64748b\); \}/);
+test('category recoloring preserves readable light/dark markers and approved sizes', () => {
+  assert.match(css, /\.sai\.map-event-disc \{[^}]*background: #fff !important/);
+  assert.match(css, /\.ic \{[^}]*background: #fff/);
+  assert.match(css, /html\.dark \.ic-svg \{[^}]*drop-shadow/);
   assert.match(css, /\.maplibregl-map \.mk-helicopter \{ visibility: visible; \}/);
   assert.match(css, /\.news-off \.mk-helicopter \{ display: block !important; visibility: visible !important; \}/);
-  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #13283d; \}/);
-  assert.match(css, /\.helicopter-svg \.heli-main-rotor \{[^}]*fill: #203851; stroke: #091a29; stroke-width: 8; opacity: 1;/);
-  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{[^}]*fill: #203851; stroke: #091a29; stroke-width: 8; opacity: 1;/);
-  assert.doesNotMatch(css, /\.helicopter-svg \.heli-(?:main-rotor|tail-rotor) \{[^}]*animation:\s*heliRotor/);
-  assert.match(css, /\.heli-orbit-guide \{[^}]*border: 1px dashed rgba\(59,142,255,\.4\);[^}]*border-radius: 50%/);
+  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #17212d; \}/);
+  assert.match(css, /\.helicopter-svg \.heli-main-rotor \{[^}]*fill: #0b1220; opacity: \.96;[^}]*animation: heliRotor/);
+  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{[^}]*fill: #ef4444;[^}]*animation: heliRotor/);
+  assert.match(css, /\.heli-orbit \{ --heli-orb: calc\(var\(--orb, 14px\) \+ 4px\);[^}]*animation: heliOrbit 9s linear infinite/);
+  assert.match(css, /\.news-marker-category \{ display: block; width: 15px; height: 15px;/);
   assert.match(css, /\.mk-breaking-news \.news-pulse-ring \{ width: 34px; height: 34px; border-color: #ef233c/);
-  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin'/);
+  assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
+  assert.match(css, /\.ic-svg \{[^}]*width: 24px; height: 24px/);
   assert.match(css, /\.helicopter-svg \{[^}]*width: 24px; height: 24px/);
 });

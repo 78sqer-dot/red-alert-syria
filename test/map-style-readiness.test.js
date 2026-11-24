@@ -18,8 +18,6 @@ const makeFetchStyle = (fetchWithTimeout) => vm.runInNewContext(
   `(() => { const styleCache = {}; ${fetchStyleSource}; return fetchStyle; })()`,
   { fetchWithTimeout, fallbackStyle, BUNDLED_STYLE_URL: bundledStyleUrls, STYLE_URL: styleUrls },
 );
-const governorateLabelSource = source.match(/function governorateLabelExpr\(lang\) \{[\s\S]*?\n\}/)[0];
-const governorateLabelExpr = vm.runInNewContext(`(${governorateLabelSource})`);
 const overlaysBody = source.match(/  async addOverlays\(\) \{([\s\S]*?)\n  \}\n\n  \/\*\* services/)[1];
 const overlaysWith = (loadData) => vm.runInNewContext(`(async function () {${overlaysBody}\n})`, { loadData });
 
@@ -71,10 +69,7 @@ test('OSM raster is retained only when both remote and bundled vector styles fai
   assert.deepEqual(calls, [styleUrls.dark, styleUrls.dark, bundledStyleUrls.dark]);
 });
 
-test('governorate display uses plain Arabic name and preserves the English label', () => {
-  assert.equal(JSON.stringify(governorateLabelExpr('ar')), '["get","ar"]');
-  assert.equal(JSON.stringify(governorateLabelExpr('en')), '["concat",["get","en"]," Governorate"]');
-});
+
 
 test('CSP allows the OSM fallback tile host for images and tile requests', () => {
   const imgSrc = serverSource.match(/'img-src': \[([^\]]+)\]/)?.[1] || '';

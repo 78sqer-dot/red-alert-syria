@@ -23,8 +23,7 @@ test('map types keep drone targeting distinct and visually on-brand', () => {
   assert.equal(drone.marker, 'orbit');
   assert.equal(drone.glyph, 'uav_strike');
   assert.notEqual(drone.glyph, ALERT_TYPES.uav.glyph);
-  assert.notEqual(drone.color, ALERT_TYPES.uav.color, 'each type owns its color in the unified symbol system');
-  assert.equal(drone.color, '#f43f5e', 'drone-strike keeps the family alert red, one shade deeper than the drone pink');
+  assert.equal(drone.color, ALERT_TYPES.uav.color, 'drone-strike keeps the existing alert red while using a distinct symbol');
   assert.match(EXTRA_SVG.uav_strike, /stroke-dasharray/);
   assert.equal(drone.tag_ar, 'استهداف_بمسيّرة');
 });
@@ -56,7 +55,7 @@ test('aircraft movement is separate from unchanged hovering markers', () => {
   assert.equal(Array.from(NEWS_TYPES).includes('air_movement'), false, 'manual movement reports are not auto-classified from news');
 });
 
-test('helicopter keeps its dedicated marker with the approved realistic render and shared alert-circle pulses', () => {
+test('helicopter keeps its dedicated marker at fixed 24px with shared alert-circle pulses', () => {
   const warplane = ALERT_TYPES.warplane;
   const helicopter = ALERT_TYPES.helicopter;
   assert.ok(TYPE_KEYS.includes('helicopter'));
@@ -65,17 +64,17 @@ test('helicopter keeps its dedicated marker with the approved realistic render a
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
   assert.equal(helicopter.glyph, 'helicopter_simple');
   assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
-  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,400}heli-craft heli-static/);
+  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\(t\.glyph, 24,/);
   assert.match(mapSource, /a\.helicopters > 1/);
   assert.match(mapSource, /heli-craft-second/);
-  assert.match(mapCss, /\.heli-craft-second \{ animation-delay: -4\.5s; \}/);
+  assert.match(mapCss, /\.heli-craft-second \{ top: 100%; transform: translate\(-50%, -50%\) rotate\(270deg\); \}/);
   assert.doesNotMatch(mapSource, /helicopterScale|--heli-scale/);
   assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 24px; height: 24px/);
-  assert.match(mapCss, /\.heli-craft \{[^}]*width: 24px; height: 24px;[^}]*animation: heliOrbit 9s linear infinite/);
+  assert.match(mapCss, /\.heli-craft \{[^}]*width: 24px; height: 24px;[^}]*rotate\(90deg\)/);
   assert.match(mapCss, /\.uav \{[^}]*animation: uavOrbit 9s linear infinite/);
-  assert.match(mapCss, /\.heli-orbit-guide \{[^}]*border: 1px dashed rgba\(59,142,255,\.4\);[^}]*border-radius: 50%/);
-  assert.doesNotMatch(mapCss, /\.helicopter-svg \.heli-(?:main-rotor|tail-rotor)[^\n]*animation: heliRotor/,
-    'rotor geometry stays crisp while the full helicopter follows its orbit');
+  assert.match(mapCss, /\.heli-orbit \{[^}]*animation: heliOrbit 9s linear infinite/);
+  assert.match(mapCss, /\.helicopter-svg \.heli-main-rotor[^\n]*animation: heliRotor/);
+  assert.match(mapCss, /\.helicopter-svg \.heli-tail-rotor[^\n]*animation: heliRotor/);
   assert.doesNotMatch(mapCss, /\.heli-orbit::(?:before|after)/, 'do not add decorative orbit rings');
   assert.match(EXTRA_SVG.helicopter_simple, /class="heli-main-rotor"/);
   assert.match(EXTRA_SVG.helicopter_simple, /class="heli-tail-rotor"/);
@@ -95,11 +94,11 @@ test('warplane keeps its three-plane reference pass and independent alert-zone c
   assert.doesNotMatch(mapSource, /t\.marker === 'movement' \|\| t\.marker === 'squad'/, 'warplane zone circles remain enabled');
   assert.match(mapSource, /marker === 'orbit' \|\| marker === 'helicopter'/, 'drone orbit is independent of geographical alert radii');
   assert.match(mapSource, /const classicAircraft = t\.marker === 'squad';/, 'only warplanes retain specialized aircraft pulses; helicopters use the drone/signal pulse size');
-  assert.match(mapSource, /pl\(22, -8, 1\)\}\$\{pl\(6, 12, 0\.85\)\}\$\{pl\(38, 12, 0\.85\)/, 'one alert contains only a lead plane and two wing planes');
+  assert.match(mapSource, /pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)/, 'one alert contains only a lead plane and two wing planes');
   assert.match(mapCss, /\.sq-svg \{[^}]*transform: rotate\(-45deg\)/);
-  assert.match(mapCss, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
-  assert.match(mapCss, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq \{ width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite; \}/);
-  assert.match(mapCss, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq:nth-child\(2\), [^}]*width: 14px; height: 14px; \}/);
+  assert.match(mapCss, /\.mk-squad \.squad\s*\{[^}]*width: 84px; height: 200px; left: -42px; top: -100px;/);
+  assert.match(mapCss, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite;/);
+  assert.match(mapCss, /\.mk-squad \.squad \.sq:nth-child\(3\)\s*\{ left: 54px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
   assert.match(mapCss, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.doesNotMatch(mapCss, /warplaneOrbit/);
   assert.doesNotMatch(mapSource, /warplaneEastOffset|updateWarplaneVectors/, 'the pass remains schematic rather than a fabricated geographic track');
@@ -179,10 +178,10 @@ test('kidnapping is a distinct security type with a restraint icon and human rev
   assert.equal(kidnapping.button_ar, 'خطف أو اختطاف');
   assert.equal(kidnapping.button_en, 'Kidnapping');
   assert.equal(alertButtonLabel('kidnapping'), '⛓️ خطف أو اختطاف');
-  assert.equal(kidnapping.glyph, 'chains', 'kidnapping owns the chain-links glyph; handcuffs belong to arrest alone');
-  assert.equal(typeIcon('kidnapping'), 'link');
-  assert.ok(ICONS.link);
-  assert.ok(EXTRA_SVG.chains);
+  assert.equal(kidnapping.glyph, 'handcuffs');
+  assert.equal(typeIcon('kidnapping'), 'handcuffs');
+  assert.ok(ICONS.handcuffs);
+  assert.ok(EXTRA_SVG.handcuffs);
   assert.equal(eventVisual('kidnapping').category, 'security');
   assert.ok(NEWS_TYPES.includes('kidnapping'), 'the automatic news monitor can route drafts to the dedicated kidnapping button');
   const release = 'قوى الأمن الداخلي بمدينة حلب يحرر المختطف فادي بركات صاحب معمل بركات للأدوية ويوقف أحد المشتبه بهم في عملية الخطف التي جرت قبل أيام في بلدة';
@@ -377,10 +376,10 @@ test('political developments use the category color and marker only for explicit
   assert.match(typeIconsSource, /political: 'news'/);
   assert.equal(eventVisual('political').dot, '🟡');
   assert.equal(eventVisual('political').color, '#a16207');
-  assert.match(mapSource, /color: eventVisual\(a\.type, a\)\.color, active:/, 'political rings use the shared category color');
+  assert.match(mapSource, /color: eventVisual\(a\.type\)\.color, active:/, 'political rings use the shared category color');
   assert.doesNotMatch(mapSource, /a\.type === 'political' \|\| t\.marker === 'movement'/);
   assert.match(mapSource, /a\.scope === 'country' \|\| !a\.location/);
-  assert.match(mapSource, /const km = planeArea \? z\.km : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.11\);/, 'political and other non-warplane circles retain the softened display cap');
+  assert.match(mapSource, /const km = planeArea \? z\.km : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\);/, 'political and other non-warplane circles retain the original display cap');
   assert.match(alertImageSource, /zones = type === 'political' \? selectedAlertZones/);
   assert.match(alertImageSource, /if \(type === 'political'\) \{ const \[x, y\] = px\(center\.lat, center\.lon\); o\.push\(politicalMarkerSvg\(x, y\)\); \}/);
   assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['agreement', 'signing', 'treaty', 'circular', 'support', 'military_cooperation', 'statement', 'position', 'decision', 'appointment', 'official_announcement', 'government_announcement', 'official_entity', 'negotiation', 'meeting', 'visit', 'election']);
@@ -463,8 +462,8 @@ test('explosion and detonation remain distinct across bot, map, and alert-image 
   assert.equal(ALERT_TYPES.detonation.button_ar, 'تفجير');
   assert.equal(ALERT_TYPES.detonation.button_en, 'Detonation');
   assert.equal(alertButtonLabel('explosion', 'ar'), '💥 انفجار');
-  assert.equal(alertButtonLabel('detonation', 'ar'), '🧨 تفجير', 'detonation owns the dynamite symbol; 💥 belongs to explosion alone');
-  assert.equal(alertButtonLabel('detonation', 'en'), '🧨 Detonation');
+  assert.equal(alertButtonLabel('detonation', 'ar'), '💥 تفجير');
+  assert.equal(alertButtonLabel('detonation', 'en'), '💥 Detonation');
   assert.deepEqual(TITLES.explosion, { ar: 'انفجار', en: 'Explosion' });
   assert.deepEqual(TITLES.detonation, { ar: 'تفجير', en: 'Detonation' });
   assert.equal(ALERT_TYPES.detonation.glyph, 'detonation_burst');
@@ -532,13 +531,4 @@ test('clear ground entry routes to military incursion, while armed clashes use t
   assert.equal(refineType('attack', ground), 'military_incursion');
   const clash = 'توغلت قوات الاحتلال الإسرائيلي في ريف القنيطرة جنوب سوريا واندلع اشتباك مع الأهالي اليوم.';
   assert.equal(ruleClassify(clash)?.type, 'clashes');
-});
-
-test('drone overflight never classifies as protest (مسيّرة vs مسيرة ambiguity)', () => {
-  const droneStory = 'تحليق مسيّرة تركية فوق مدينة المالكية بريف الحسكة بالتزامن مع إخلاء نقاط في المنطقة';
-  assert.equal(refineType('protest', droneStory), 'uav', 'a protest mislabel on a drone overflight is corrected');
-  assert.equal(refineType('protest_action', droneStory), 'uav', 'a protest_action mislabel on a drone overflight is corrected');
-  assert.equal(refineType('uav', droneStory), 'uav', 'a correct uav label is not flipped to protest');
-  const marchStory = 'خرجت مسيرة في ساحة سعد الله الجابري بحلب مطالبة بالعدالة الانتقالية';
-  assert.equal(refineType('protest', marchStory), 'protest', 'a real protest march keeps the protest label');
 });

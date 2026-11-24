@@ -1,7 +1,5 @@
 # Growth: watermark, SEO pages, sharing, channel profile
 
-> **Correction (2026-11-20):** the live site is **https://red-alert-syria-q6k8.onrender.com** — both older services (`red-alert-syria` and `red-alert-syria-eiqz`) are permanently suspended and must not be used in links, bios, or Search Console. The historical entries below are kept as written.
-
 ## Telegram channel profile (changed 2026-10-25 via the publishing bot)
 
 Old title: `( Red Alert Syria 🇸🇾)`
@@ -13,7 +11,7 @@ New description:
 ```
 🔴 عاجل سوريا لحظة بلحظة: مسيّرات، طيران حربي، قصف، صواريخ، هجمات، حوادث وحرائق.
 أخبار سوريا وتنبيهاتها ع خريطة مباشرة، اعرف شو صاير حواليك هلق 👇
-🗺 https://red-alert-syria.onrender.com
+🗺 https://red-alert-syria-q6k8.onrender.com
 📩 بلّغ عن حدث: @Rad_Alert_Syria1_bot
 ```
 
@@ -32,7 +30,7 @@ Every channel alert image and the daily/weekly statistics images carry a `t.me/R
 - `/sitemap.xml`, `/robots.txt`; the home page has JSON-LD (WebSite + Organization) and hreflang.
 
 ### Google Search Console
-1. https://search.google.com/search-console → Add property → "URL prefix" → `https://red-alert-syria.onrender.com/`.
+1. https://search.google.com/search-console → Add property → "URL prefix" → `https://red-alert-syria-q6k8.onrender.com/`.
 2. Choose "HTML tag", copy only the `content="…"` value, and set it as Render env var `GOOGLE_SITE_VERIFICATION`
    (or choose "HTML file" and set `GOOGLE_VERIFY_FILE=google….html`). Wait for the redeploy, then press Verify.
 3. Sitemaps → submit `sitemap.xml`.
