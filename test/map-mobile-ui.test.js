@@ -81,9 +81,9 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=86'/);
+  assert.match(app, /from '\.\/map\.js\?v=87'/);
   assert.match(html, /app\.css\?v=107/);
-  assert.match(html, /app\.js\?v=123/);
+  assert.match(html, /app\.js\?v=124/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
@@ -216,4 +216,14 @@ test('alert list shows loading placeholders before the first server snapshot and
   assert.match(app, /if \(state\.firstSnapshot\) \{[\s\S]{0,260}card-skeleton/);
   assert.match(css, /\.card \{[^}]*content-visibility: auto; contain-intrinsic-size: auto 150px/);
   assert.match(css, /\.card-skeleton/);
+});
+
+
+test('initial and reset overview fit Syria after layout with close responsive framing, without overriding deep links', () => {
+  assert.match(map, /fitBoundsOptions: \{ padding: this\.overviewPadding\(\) \}/);
+  assert.match(map, /this\.map\.resize\(\);\s*this\.fitSyria\(0\);\s*this\.ready = true/);
+  assert.match(map, /fitSyria\(duration = 900\)/);
+  assert.match(map, /padding: this\.overviewPadding\(\), duration, pitch: 0, bearing: 0/);
+  assert.match(map, /width < 768 \? \{ top: 70, bottom: 40, left: 12, right: 12 \}/);
+  assert.match(app, /amap\.setAlerts\(visibleAlerts\(\), state\.selectedId\);\s*focusFromUrl\(\);/);
 });

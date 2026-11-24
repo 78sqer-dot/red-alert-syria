@@ -176,6 +176,7 @@ export class AlertMap {
     this.popupHtml = opts.popupHtml || (() => '');
     this.ready = false;
     this._styleEpoch = 0;
+    this._overviewCamera = true;
   }
 
   async init() {
@@ -194,7 +195,7 @@ export class AlertMap {
       container: this.el,
       style: fallbackStyle(this.opts.dark ? 'dark' : 'light'),
       bounds: SYRIA_BOUNDS,
-      fitBoundsOptions: { padding: this.padding() },
+      fitBoundsOptions: { padding: this.overviewPadding() },
       maxBounds: [[25, 25], [52, 45]],
       minZoom: 4,
       maxZoom: 17,
@@ -301,9 +302,17 @@ export class AlertMap {
     if ((window.__viewW ? window.__viewW() : window.innerWidth) < 768) {
       this.el.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
     }
+    this.map.resize();
+    this.fitSyria(0);
     this.ready = true;
     this.render();
     if (this._pending) { const [a, o] = this._pending; this._pending = null; this.select(a, o); }
+  }
+
+  overviewPadding() {
+    // Use the settled map container, not browser chrome or the alert-popup safe area.
+    const width = this.el.clientWidth || window.innerWidth;
+    return width < 768 ? { top: 70, bottom: 40, left: 12, right: 12 } : { top: 45, bottom: 45, left: 35, right: 35 };
   }
 
   padding() {
@@ -314,6 +323,7 @@ export class AlertMap {
   async setOptions(patch) {
     const prev = this.opts;
     this.opts = { ...this.opts, ...patch };
+    if ('map3d' in patch && patch.map3d !== prev.map3d) this._overviewCamera = false;
     if (!this.map) return;
     const styleChanged = ['dark', 'layer', 'lang'].some((k) => k in patch && patch[k] !== prev[k]);
     if (styleChanged) {
@@ -391,7 +401,7 @@ export class AlertMap {
       if (map.setPixelRatio) map.setPixelRatio(phone ? Math.min(1.25, this._pr || 1) : Math.min(1.5, this._pr || 1));
       map.setMaxPitch(phone ? 50 : 60);
       this.el.classList.add('is-3d');
-      if (map.getPitch() < 30) map.easeTo({ pitch: phone ? 40 : 50, duration: 800 });
+      if (!this._overviewCamera && map.getPitch() < 30) map.easeTo({ pitch: phone ? 40 : 50, duration: 800 });
     } else {
       map.setTerrain(null);
       if (map.setPixelRatio && this._pr && map.getPixelRatio() !== this._pr) map.setPixelRatio(this._pr);
@@ -1516,9 +1526,10 @@ export class AlertMap {
     }
   }
 
-  fitSyria() {
+  fitSyria(duration = 900) {
     if (!this.map) return;
-    this.map.fitBounds(SYRIA_BOUNDS, { padding: this.padding(), duration: 900, pitch: this.opts.map3d ? (this.dockMode() ? 40 : 50) : 0, bearing: 0 });
+    this._overviewCamera = true;
+    this.map.fitBounds(SYRIA_BOUNDS, { padding: this.overviewPadding(), duration, pitch: 0, bearing: 0 });
   }
   zoomIn() { this.map && this.map.zoomIn(); }
   zoomOut() { this.map && this.map.zoomOut(); }
