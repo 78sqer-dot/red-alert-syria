@@ -97,6 +97,10 @@ const POLITICAL_CATEGORY_CUES = [
 /** Infer a narrow political category from source wording; null leaves the supplied category for review. */
 export function inferPoliticalCategory(text) {
   const source = N(String(text || ''));
+  // Discussing an existing convention at a side event is not a new treaty.
+  const discussionEvent = /(?:تنظم|نظمت|عقدت|اقامت|تنظيم) (?:فعاليه|ندوه)|(?:الفعاليه|الندوه) (?:ناقشت|تناولت)/.test(source);
+  const newAgreement = /(?:توقيع|وقعت|وقعوا|ابرام|ابرم|اقرار|اقرت) (?:اتفاق|معاهده)|اتفاق(?:يه)? جديد/.test(source);
+  if (discussionEvent && !newAgreement) return 'meeting';
   for (const [category, cues] of POLITICAL_CATEGORY_CUES) {
     if (cues.some((cue) => source.includes(N(cue)))) return category;
   }

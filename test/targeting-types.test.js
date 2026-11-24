@@ -532,3 +532,8 @@ test('clear ground entry routes to military incursion, while armed clashes use t
   const clash = 'توغلت قوات الاحتلال الإسرائيلي في ريف القنيطرة جنوب سوريا واندلع اشتباك مع الأهالي اليوم.';
   assert.equal(ruleClassify(clash)?.type, 'clashes');
 });
+
+test('discussion side event about existing convention is a meeting, not a new treaty',()=>{
+ assert.equal(inferPoliticalCategory('البعثة الدائمة لسوريا تنظم فعالية على هامش اجتماعات مؤتمر الدول الأطراف في اتفاقية حظر الأسلحة الكيميائية. الفعالية ناقشت دعم الناجين.'),'meeting');
+ assert.notEqual(inferPoliticalCategory('تنظم فعالية بمناسبة توقيع اتفاقية جديدة بين الدولتين.'),'meeting');
+});

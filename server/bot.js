@@ -1244,6 +1244,21 @@ export async function correctNewLocalityPostsOnce(api) {
     if(store.backup) { store._backupPending=true; if(!await store.flushBackup(true))throw Error('Compound locality correction backup not confirmed'); }
     results.push({ok:true,post});
   }
+  const politicalKey='owner-opcw-category-1561-2026-11-24';
+  if (!store.state.maint?.[politicalKey]?.done) {
+    const a=store.getAlert('524ce182-e54e-4f4a-9f0d-fccc6ba951b2');
+    const d=store.state.news?.drafts?.dec569cba5;
+    if(a?.channel_message_id===1561&&a.type==='political'&&a.channel_media==='photo'&&a.meta?.political?.category==='treaty'&&d?.status==='published'&&d.alertId===a.id&&a.meta.political.sources?.some(s=>s.url==='https://t.me/HalabTodayTV/143260')) {
+      const meta={...a.meta,political:{...a.meta.political,category:'meeting'}};
+      const b={...a,meta};
+      const png=await withDeadline(alertImage(b,'ar'),30000);
+      await api.editMessageMedia(config.channel,1561,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-corrected-1561.png'),{caption:channelCaption(b,{ended:!b.is_active}),parse_mode:'HTML'}),{reply_markup:channelKeyboard(b)});
+      store.updateAlert(a.id,{meta});d.politicalCategory='meeting';
+      store.state.maint={...store.state.maint,[politicalKey]:{done:new Date().toISOString(),post:1561}};store.persist();
+      if(store.backup){store._backupPending=true;if(!await store.flushBackup(true))throw Error('Political category correction backup not confirmed');}
+      results.push({ok:true,post:1561,category:'meeting'});
+    }
+  }
   return results;
 }
 export async function correctRojPhotoOnce(api) {

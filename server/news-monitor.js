@@ -1021,6 +1021,7 @@ export function toBotDraft(d) {
   const checkpoint = isCheckpointReport(d.sourceText || d.body || d.headline);
   if (checkpoint && ['patrol','breaking','civil','military_incursion'].includes(d.type)) d = {...d,type:'military_incursion',incursionKind:'barrier'};
   const body = d.headline;
+  if (d.type === 'political' && inferPoliticalCategory(d.sourceText || body) === 'meeting') d = {...d,politicalCategory:'meeting'};
   assertNewsLanguageCopy(d.body || body);
   const incident = newsIncidentLocations(d.sourceText || d.body || body, d.loc || locationFrom({}), d.extra || []);
   const patrolText = N(`${d.headline || ''} ${d.body || ''}`);
