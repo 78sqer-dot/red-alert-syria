@@ -1221,13 +1221,27 @@ export async function correctRojPhotoOnce(api) {
   return {ok:true,post:1553};
 }
 export async function correctMineDiscoveryOnce(api) {
- if(store.state.maint?.[MINE_CORRECTION_KEY]?.done)return {skipped:true};
+ if(store.state.maint?.[MINE_CORRECTION_KEY]?.done) {
+   const a=store.getAlert('d991de89-fc86-409e-9f91-99e365c958aa');
+   if(a?.channel_message_id===1552 && a.type==='civil' && a.location===null && a.place?.name_ar==='الشيوخ شرق حلب'
+      && a.meta?.newsSources?.some(s=>s.url==='https://t.me/zainaldinmaham1/143593')) {
+     const areas=['الشيوخ شرق حلب','حلب'];
+     const log=store.state.log.find(x=>x.id===a.id);
+     if(a.scope!=='governorate' || JSON.stringify(a.areas)!==JSON.stringify(areas) || log?.p || log?.d || log?.pa!=='الشيوخ شرق حلب') {
+       store.updateAlert(a.id,{areas,scope:'governorate'});
+       store._logPatch(a.id,{ty:'civil',g:'09',ga:'حلب',ge:'Aleppo',p:undefined,d:undefined,pa:'الشيوخ شرق حلب',pe:'Al-Shuyukh east of Aleppo',xd:undefined});
+       store.persist();if(store.backup&&!await store.flushBackup(true))throw Error('Mine area metadata backup not confirmed');
+       return {ok:true,post:1552,metadataOnly:true};
+     }
+   }
+   return {skipped:true};
+ }
  const a=store.getAlert('d991de89-fc86-409e-9f91-99e365c958aa'),b=mineCorrectionCandidate(a);
  if(!b||sanitizeAlertMedia(a.media))return {skipped:true,reason:'exact original mine guard'};
  const png=await withDeadline(alertImage(b,'ar'),30000);
  await api.editMessageMedia(config.channel,a.channel_message_id,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-mine-1552.png'),{caption:channelCaption(b,{ended:!b.is_active}),parse_mode:'HTML'}),{reply_markup:channelKeyboard(b)});
- store.updateAlert(a.id,{type:b.type,title:b.title,title_en:b.title_en,place:b.place,location:null,scope:'country',extra:[],zones:null});
- store._logPatch(a.id,{ty:'civil'});store.state.maint={...store.state.maint,[MINE_CORRECTION_KEY]:{done:new Date().toISOString(),post:1552}};store.persist();if(store.backup&&!await store.flushBackup(true))throw Error('Mine correction backup not confirmed');return {ok:true,post:1552};
+ store.updateAlert(a.id,{type:b.type,title:b.title,title_en:b.title_en,place:b.place,location:null,scope:'governorate',areas:['الشيوخ شرق حلب','حلب'],extra:[],zones:null});
+ store._logPatch(a.id,{ty:'civil',g:'09',ga:'حلب',ge:'Aleppo',p:undefined,d:undefined,pa:'الشيوخ شرق حلب',pe:'Al-Shuyukh east of Aleppo',xd:undefined});store.state.maint={...store.state.maint,[MINE_CORRECTION_KEY]:{done:new Date().toISOString(),post:1552}};store.persist();if(store.backup&&!await store.flushBackup(true))throw Error('Mine correction backup not confirmed');return {ok:true,post:1552};
 }
 export async function alertImage(alert, lang = 'ar') {
   const p = alert.place || {};

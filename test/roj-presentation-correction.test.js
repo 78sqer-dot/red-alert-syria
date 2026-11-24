@@ -27,3 +27,8 @@ test('owner post repairs wait for durable handoff and do not broaden rule-derive
  assert.match(index,/if \(store._backupWritesPaused\) \{ setTimeout\(runOwnerPostCorrections, 5000\)/);
  assert.match(monitor,/if \(!r.rule \|\| isCheckpointReport\(it.text\) \|\| isMineDiscoveryReport\(it.text\)\)/);
 });
+
+test('mine repair clears wrong historic locality search and SEO metadata without replaying post',()=>{
+ const bot=fs.readFileSync(new URL('../server/bot.js',import.meta.url),'utf8');
+ assert.match(bot,/metadataOnly:true/);assert.match(bot,/p:undefined,d:undefined,pa:'الشيوخ شرق حلب'/);assert.match(bot,/store.updateAlert\(a.id,\{areas,scope:'governorate'\}\)/);
+});
