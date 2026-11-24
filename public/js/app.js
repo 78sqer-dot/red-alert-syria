@@ -1,7 +1,7 @@
 // Red Alert Syria — front-end application
-import { createServices, GOV_C } from './services.js?v=38';
+import { createServices, GOV_C } from './services.js?v=39';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
-import { DICT } from './i18n.js?v=9';
+import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
 import { matchesFollowArea } from '/shared/area-follow.js?v=1';
@@ -12,7 +12,6 @@ import { AlertMap, typeIcon, glyphDisc } from './map.js?v=84';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
-import { normalizeLiveScenePayload, formatLiveSceneTime } from './live-scene.js?v=1';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
@@ -184,6 +183,8 @@ function hydrateStatic() {
   $('#shareSite').setAttribute('aria-label', T.shareMap);
   $('#zoomOut').title = T.zoomOut;
   $('#zoomOut').setAttribute('aria-label', T.zoomOut);
+  $('#aboutPill').setAttribute('aria-label', T.aboutMap);
+  $('#aboutPill').title = T.aboutMap;
   $('#resetView').title = T.resetView;
   $('#resetView').setAttribute('aria-label', T.resetView);
   $('#locateMe').title = T.myLocation;
@@ -814,140 +815,6 @@ function closeModal() {
 function pageModal(title, text) {
   openModal(`<div class="page-modal"><h2>${esc(title)}</h2><p>${esc(text)}</p><p style="font-size:12.5px">${esc(T.disclaimer)}</p><button class="btn-red" data-m="close">${esc(T.close)}</button></div>`);
 }
-function appendLiveSceneFeed(target, items, emptyMessage, kind = 'feed') {
-  target.replaceChildren();
-  if (!items.length) {
-    const empty = document.createElement('p');
-    empty.className = 'live-scene-empty';
-    empty.textContent = emptyMessage;
-    target.append(empty);
-    return;
-  }
-  for (const item of items) {
-    const href = safeExternalUrl(item.url);
-    const entry = document.createElement(href ? 'a' : 'article');
-    entry.className = `live-scene-item${kind === 'market' ? ' live-scene-market-item' : ''}`;
-    if (href) { entry.href = href; entry.target = '_blank'; entry.rel = 'noopener noreferrer'; }
-    const heading = document.createElement('b');
-    heading.className = 'live-scene-item-title';
-    heading.textContent = kind === 'market' ? item.name : item.title;
-    entry.append(heading);
-    if (kind === 'market') {
-      const value = document.createElement('span');
-      value.className = 'live-scene-market-value';
-      value.textContent = [item.value, item.unit].filter(Boolean).join(' ');
-      entry.append(value);
-      if (item.stale) {
-        const age = document.createElement('small');
-        age.className = 'live-scene-market-change live-scene-market-stale';
-        age.textContent = T.liveNotRealtime;
-        entry.append(age);
-      }
-      if (item.change) {
-        const change = document.createElement('small');
-        change.className = 'live-scene-market-change';
-        change.textContent = item.change;
-        entry.append(change);
-      }
-    }
-    const metaParts = [item.source, formatLiveSceneTime(item.publishedAt || item.observedAt, LANG, TZ)].filter(Boolean);
-    if (metaParts.length) {
-      const meta = document.createElement('small');
-      meta.className = 'live-scene-item-meta';
-      meta.textContent = metaParts.join(' · ');
-      entry.append(meta);
-    }
-    target.append(entry);
-  }
-}
-function renderLiveSceneTicker(target, items) {
-  target.replaceChildren();
-  if (!items.length) {
-    const empty = document.createElement('span');
-    empty.className = 'live-scene-ticker-empty';
-    empty.textContent = T.liveEmptyNews;
-    target.append(empty);
-    return;
-  }
-  const track = document.createElement('div');
-  track.className = 'live-scene-ticker-track';
-  for (let copyIndex = 0; copyIndex < 2; copyIndex++) {
-    const group = document.createElement('div');
-    group.className = 'live-scene-ticker-group';
-    if (copyIndex) group.setAttribute('aria-hidden', 'true');
-    for (const item of items.slice(0, 12)) {
-      const href = safeExternalUrl(item.url);
-      const entry = document.createElement(href ? 'a' : 'span');
-      entry.className = 'live-scene-ticker-item';
-      if (href) { entry.href = href; entry.target = '_blank'; entry.rel = 'noopener noreferrer'; if (copyIndex) entry.tabIndex = -1; }
-      const source = document.createElement('b');
-      source.textContent = item.source || T.liveNews;
-      const title = document.createElement('span');
-      title.textContent = item.title;
-      entry.append(source, title);
-      group.append(entry);
-    }
-    track.append(group);
-  }
-  target.append(track);
-}
-function showLiveScene(onClose) {
-  const modal = $('#modal');
-  const backdrop = $('#modalBackdrop');
-  const controller = new AbortController();
-  backdrop.classList.add('live-scene-backdrop');
-  modal.classList.add('live-scene-shell');
-  openModal(`<div class="live-scene" aria-labelledby="liveSceneTitle">
-    <header class="live-scene-head">
-      <div class="live-scene-heading"><span class="live-scene-indicator" aria-hidden="true"></span><div><h2 id="liveSceneTitle">${esc(T.liveScene)}</h2><p>${esc(T.liveSceneSub)}</p></div></div>
-      <div class="live-scene-actions"><span class="live-scene-status-label">${esc(T.liveStatus)}</span><button class="live-scene-icon-btn" id="liveSceneRefresh" type="button" aria-label="${esc(T.liveRefresh)}" title="${esc(T.liveRefresh)}">${icon('refresh', 17)}</button><button class="live-scene-icon-btn" type="button" data-m="close" aria-label="${esc(T.close)}">${icon('x', 17)}</button></div>
-    </header>
-    <section class="live-scene-ticker-wrap" aria-label="${esc(T.liveTicker)}"><b class="live-scene-ticker-label">${esc(T.liveTicker)}</b><div class="live-scene-ticker" id="liveSceneTicker"></div></section>
-    <div class="live-scene-status" id="liveSceneStatus" role="status" aria-live="polite">${esc(T.liveLoading)}</div>
-    <main class="live-scene-content">
-      <section class="live-scene-panel"><h3><span class="live-scene-panel-mark news-mark" aria-hidden="true"></span>${esc(T.liveNews)}</h3><div class="live-scene-list" id="liveSceneNews"></div></section>
-      <section class="live-scene-panel"><h3><span class="live-scene-panel-mark osint-mark" aria-hidden="true"></span>${esc(T.liveOsint)}</h3><div class="live-scene-list" id="liveSceneOsint"></div></section>
-      <section class="live-scene-panel live-scene-markets"><h3><span class="live-scene-panel-mark market-mark" aria-hidden="true"></span>${esc(T.liveMarkets)}</h3><div class="live-scene-market-grid" id="liveSceneMarkets"></div><p class="live-scene-note">${esc(T.liveMarketsNote)}</p></section>
-    </main>
-    <footer class="live-scene-footer"><span>${esc(T.liveSourcesNote)}</span><time id="liveSceneUpdated"></time></footer>
-  </div>`, () => {
-    controller.abort();
-    backdrop.classList.remove('live-scene-backdrop');
-    modal.classList.remove('live-scene-shell');
-    onClose?.();
-  });
-  const refresh = $('#liveSceneRefresh');
-  refresh.addEventListener('click', () => loadLiveScene(controller), { signal: controller.signal });
-  loadLiveScene(controller);
-}
-async function loadLiveScene(controller) {
-  const refresh = $('#liveSceneRefresh');
-  const status = $('#liveSceneStatus');
-  if (!refresh || !status || controller.signal.aborted) return;
-  refresh.disabled = true;
-  status.hidden = false;
-  status.textContent = T.liveLoading;
-  try {
-    const response = await fetch('/api/live-scene', { headers: { Accept: 'application/json' }, cache: 'no-store', signal: controller.signal });
-    if (!response.ok) throw new Error('Live scene unavailable');
-    const payload = normalizeLiveScenePayload(await response.json(), LANG);
-    if (controller.signal.aborted || !$('#liveSceneNews')) return;
-    renderLiveSceneTicker($('#liveSceneTicker'), payload.news);
-    appendLiveSceneFeed($('#liveSceneNews'), payload.news.slice(0, 12), T.liveEmptyNews);
-    appendLiveSceneFeed($('#liveSceneOsint'), payload.osint.slice(0, 12), T.liveEmptyOsint);
-    appendLiveSceneFeed($('#liveSceneMarkets'), payload.markets.slice(0, 8), T.liveEmptyMarkets, 'market');
-    $('#liveSceneUpdated').textContent = payload.updatedAt ? `${T.liveLastUpdated}: ${formatLiveSceneTime(payload.updatedAt, LANG, TZ)}` : '';
-    status.textContent = payload.degraded ? T.livePartial : '';
-    status.hidden = !payload.degraded;
-  } catch (error) {
-    if (error?.name !== 'AbortError' && !controller.signal.aborted) {
-      status.textContent = T.liveUnavailable;
-      status.hidden = false;
-    }
-  } finally {
-    if (!controller.signal.aborted && refresh.isConnected) refresh.disabled = false;
-  }
-}
 function showWelcome() {
   const f = (ic, t, d) => `<div class="feat"><span class="fi">${icon(ic, 20)}</span><div><b>${esc(t)}</b><span>${esc(d)}</span></div></div>`;
   openModal(
@@ -1308,12 +1175,6 @@ function bindEvents() {
     e.stopPropagation();
     toggleDropdown('#btnLayers', '#layersPanel', renderLayersPanel);
   });
-  $('#btnLiveScene').addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeDropdowns();
-    setMapControlsOpen(false);
-    showLiveScene(() => setMapControlsOpen(true));
-  });
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.dd, .dd-panel')) closeDropdowns();
   });
@@ -1528,10 +1389,6 @@ function bindEvents() {
         if (!svc?.mode?.()) { setMapControlsOpen(true); returnToToolsAfterService = false; }
       }, 0);
     }
-  });
-  $('#btnNabaa').addEventListener('click', () => {
-    try { sessionStorage.setItem('ras:return-map-tools', '1'); } catch { /* storage can be disabled */ }
-    setMapControlsOpen(false);
   });
   $('#btnNotifications').addEventListener('click', async (e) => {
     e.stopPropagation();

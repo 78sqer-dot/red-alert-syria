@@ -76,7 +76,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
   const tabOrder = [...services.matchAll(/tabBtn\('([^']+)'/g)].map((match) => match[1]);
   assert.deepEqual(tabOrder.slice(0, 2), ['jobs', 'army']);
-  assert.match(app, /services\.js\?v=38/);
+  assert.match(app, /services\.js\?v=39/);
   assert.match(app, /icons\.js\?v=7/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
@@ -113,7 +113,8 @@ test('jobs service lists only approved vacancies and routes employer submissions
   const armyStart = services.indexOf('function armyHtml()');
   const armyEnd = services.indexOf('function renderResults', armyStart);
   assert.ok(armyStart >= 0 && armyEnd > armyStart);
-  assert.doesNotMatch(services.slice(armyStart, armyEnd), /source_name|source_url|data\.sources|army-source|army-card-source/);
+  assert.match(services.slice(armyStart, armyEnd), /source_name/);
+  assert.match(services.slice(armyStart, armyEnd), /source_url/);
   assert.match(services, /data-job-toggle/);
   assert.match(services, /async function onClick/);
   assert.match(services, /navigator\.share\(\{ title, text: shareText, url: shareUrl \}\)/);
@@ -128,7 +129,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobReadMore: 'Read more'/);
   assert.match(services, /jobReadLess: 'Show less'/);
   assert.match(services, /syrian\[_\\s-\]\?jo\[b\]\+/i, 'channel tags are stripped from previously cached job items');
-  assert.match(app, /services\.js\?v=38/, 'the updated service module bypasses stale browser caches');
+  assert.match(app, /services\.js\?v=39/, 'the updated service module bypasses stale browser caches');
   assert.match(services, /hashtagOnlyLine/, 'standalone hashtag footer lines are removed');
   assert.match(css, /\.jobs-switch\s*\{/);
   assert.match(css, /\.jobs-option\.on\s*\{/);
@@ -140,7 +141,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
-  assert.match(html, /app\.css\?v=81/);
+  assert.match(html, /app\.css\?v=103/);
   assert.match(css, /\.job-deadline, \.army-deadline/);
 });
 
@@ -160,12 +161,12 @@ test('Syrian Army tab is hidden from the map while its data and section remain a
   assert.match(services, /channels\.tg \? `<a class="btn-sm army-follow-link"/);
   assert.match(services, /channels\.wa \? `<a class="btn-sm army-follow-link"/);
   assert.match(services, /tab: 'الجيش السوري'/);
-  assert.match(services, /Army, Enlistment & Salaries/);
+  assert.match(services, /Army, Enlistment & Official Updates/);
   assert.match(app, /svc\.setArmy\(j\.army\)/);
   assert.match(app, /addEventListener\('army'/);
   assert.match(css, /\.army-card\s*\{/);
   assert.match(css, /\.army-source\s*\{/);
-  assert.match(services, /title: 'الجيش والانتساب والرواتب'/);
+  assert.match(services, /title: 'الجيش والانتساب والأخبار الرسمية'/);
   assert.match(services, /General vacancies and civil campaigns are excluded/);
   assert.match(services, /class="army-cat-icon"/);
   assert.match(services, /categoryGlyph\(category\)/);

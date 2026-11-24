@@ -12,7 +12,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -24,15 +24,11 @@ import { publicBorders } from './borders.js';
 import { renderNewsIllustrationPng } from './alert-image.js';
 import { startServices, publicRoads, publicPower } from './services.js';
 import { pushConfigured, pushPublicKey, saveSubscription, removeSubscription, sendPush } from './push.js';
-import { createAlnabaRouter } from './alnaba.js';
-import { fetchAlnabaMediaForWeb } from './bot.js';
-import { createLiveSceneService } from './live-scene.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
 const SHARED = path.join(ROOT, 'shared');
 const startupMaintenanceEnabled = process.env.RUN_STARTUP_MAINTENANCE === 'true';
-const liveSceneService = createLiveSceneService();
 
 const ADMIN_DESC = '🔒 بوت النشر الخاص بإدارة Red Alert Syria (للمشرفين فقط).';
 const ADMIN_SHORT = 'بوت النشر الخاص — Red Alert Syria';
@@ -119,8 +115,6 @@ app.get('/api/places/search', apiLimiter, (req, res) => {
   res.json({ places: searchFollowPlaces(req.query.q, req.query.gov) });
 });
 
-// Public, read-only Al-Nabaa sections; write access exists only through the owner bot.
-app.use('/api/alnaba', createAlnabaRouter({ store, fetchMedia: fetchAlnabaMediaForWeb, limiter: apiLimiter }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size }));
 
@@ -249,15 +243,6 @@ app.get('/api/newstest', apiLimiter, async (req, res) => {
   if (!owner) return res.status(400).json({ error: 'no owner' });
   try { res.json(await sendTestDraft(owner)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.get('/api/live-scene', apiLimiter, async (req, res) => {
-  try {
-    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    res.json(await liveSceneService.getLiveScene());
-  } catch {
-    res.set('Cache-Control', 'no-store');
-    res.status(503).json({ error: 'live scene temporarily unavailable' });
-  }
-});
 // 💱 prices / 🛣 roads / ⚡ electricity for the website
 app.get('/api/weather', apiLimiter, async (req, res) => {
   try { res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60'); res.json(await publicWeather()); } catch { res.set('Cache-Control', 'no-store'); res.status(503).json({ ok: false, error: 'weather unavailable' }); }
@@ -349,7 +334,6 @@ const BUILD = String(process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).s
 // Bust integer app asset versions but preserve semantic vendor versions (e.g. 6.16.0),
 // so modulepreload URLs match the exact imports used by app.js.
 const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8').replace(/\?v=(\d+)(?=["&])/g, `?v=${BUILD}`);
-const alnabaPageTemplate = fs.readFileSync(path.join(ROOT, 'server', 'alnaba-page.html'), 'utf8');
 function renderIndex(lang) {
   const url = config.publicUrl || '';
   const head = `${verifyMetaTags()}<link rel="alternate" hreflang="x-default" href="${url}/ar/" /><meta property="og:locale" content="${lang === 'ar' ? 'ar_SY' : 'en_US'}" />`
@@ -387,33 +371,6 @@ app.get(['/ar', '/en', '/ar/', '/en/'], (req, res) => {
   if (!p.endsWith('/')) return res.redirect(301, p + '/');
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(renderIndex(p.startsWith('/en') ? 'en' : 'ar'));
-});
-app.get(['/alnaba', '/alnaba/', '/alnaba/photos', '/alnaba/photos/', '/alnaba/weekly', '/alnaba/weekly/', '/alnaba/nasheed', '/alnaba/nasheed/', '/alnaba/archive', '/alnaba/archive/'], (req, res) => {
-  const pathname = req.path.replace(/\/+$/, '') || '/alnaba';
-  if (!req.path.endsWith('/')) {
-    const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
-    return res.redirect(301, `${req.path}/${query}`);
-  }
-  const page = pathname === '/alnaba/photos' ? 'photos' : pathname === '/alnaba/weekly' ? 'weekly' : pathname === '/alnaba/nasheed' ? 'nasheed' : pathname === '/alnaba/archive' ? 'archive' : 'home';
-  const title = page === 'photos' ? 'أخبار مصوّرة — النبأ' : page === 'weekly' ? 'الصحيفة الأسبوعية — النبأ' : page === 'nasheed' ? 'أناشيد — النبأ' : page === 'archive' ? 'الأرشيف — النبأ' : 'النبأ — Red Alert Syria';
-  const description = page === 'photos'
-    ? 'أخبار مصوّرة من Red Alert Syria — الإنذار الأحمر سوريا.'
-    : page === 'weekly'
-      ? 'أعداد الصحيفة الأسبوعية بصيغة PDF من Red Alert Syria.'
-      : page === 'nasheed'
-        ? 'أناشيد ومحتوى صوتي ومرئي من النبأ.'
-        : page === 'archive'
-        ? 'دليل روابط قنوات ومجموعات Telegram المضافة إلى أرشيف النبأ.'
-        : 'النبأ: الأخبار المصوّرة والصحيفة الأسبوعية والأناشيد وأرشيف الروابط من Red Alert Syria.';
-  const base = (config.publicUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
-  const canonical = `${base}${pathname}/`;
-  const html = alnabaPageTemplate
-    .replaceAll('{{PAGE}}', page)
-    .replaceAll('{{TITLE}}', title)
-    .replaceAll('{{DESCRIPTION}}', description)
-    .replaceAll('{{CANONICAL}}', canonical);
-  res.setHeader('Cache-Control', 'no-cache');
-  return res.type('html').send(html);
 });
 mountSeo(app, { limiter: apiLimiter });
 app.use((req, res) => res.status(404).type('text').send('Not found'));
@@ -500,7 +457,6 @@ async function start() {
   const backup = envBot ? telegramBackupAdapter(envBot.api) : null;
   if (backup && config.telegramBackup) {
     store._backupWritesPaused = true;
-    pauseAlnabaBatchIntake();
   }
   await store.init(backup, { deferSweep: !!backup && config.telegramBackup });
   // 2) apply hand-over overrides saved from the bot (owner / tokens / channel)
@@ -529,7 +485,6 @@ async function start() {
     const recoverHandoff = async () => {
       if (recovered) return;
       try {
-        if (typeof runtimeHooks.resumeAlnabaBatches !== 'function') throw new Error('bot recovery hook is not ready');
         const merge = await store.mergeFromBackup();
         if (!merge.backupLoaded) throw new Error('durable backup is not readable yet');
         store._backupWritesPaused = false;
@@ -537,12 +492,10 @@ async function start() {
         const backupSaved = await store.flushBackup(true);
         if (!backupSaved || store._backupPending) throw new Error('merged durable backup save was not confirmed');
         store.beginSweeps();
-        await runtimeHooks.resumeAlnabaBatches();
         recovered = true;
       } catch (error) {
         store._backupWritesPaused = true;
-        pauseAlnabaBatchIntake();
-        console.error('[alnaba] handoff recovery failed', error?.message || error);
+        console.error('[store] handoff recovery failed', error?.message || error);
         const delay = retryDelays[Math.min(retryIndex, retryDelays.length - 1)];
         retryIndex += 1;
         setTimeout(recoverHandoff, delay).unref();
@@ -656,7 +609,6 @@ const shutdown = async () => {
   try { stopNewsMonitor(); } catch { /* ignore */ }
   try { stopJobsMonitor(); } catch { /* ignore */ }
   try { stopArmyMonitor(); } catch { /* ignore */ }
-  try { await Promise.race([runtimeHooks.flushAlnabaBatches?.(), new Promise((r) => setTimeout(r, 20_000))]); } catch (e) { console.warn('alnaba batch shutdown flush failed', e?.message || e); }
   try { store._writeLocal(); } catch { /* ignore */ }
   try { await Promise.race([store.flushBackup(true), new Promise((r) => setTimeout(r, 5000))]); } catch { /* ignore */ }
   try { if (config.botMode !== 'webhook') { for (const b of Object.values(bots)) if (b) await b.stop(); } } catch { /* ignore */ }

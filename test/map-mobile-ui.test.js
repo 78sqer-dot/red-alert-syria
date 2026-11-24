@@ -13,10 +13,10 @@ const css = read('public/css/app.css');
 test('map tools are grouped accessibly and the Syria overview remains a separate button', () => {
   assert.match(html, /id="mapControlsToggle"[^>]*aria-expanded="false"[^>]*aria-controls="mapCtrlPanel"/);
   const panelStart = html.indexOf('<div class="map-ctrl-panel" id="mapCtrlPanel"');
-  const panelEnd = html.indexOf('\n          <button class="ctrl-btn" id="resetView"', panelStart);
+  const panelEnd = html.indexOf('\n        <div class="site-share"', panelStart);
   const panel = panelStart >= 0 && panelEnd > panelStart ? html.slice(panelStart, panelEnd) : '';
   assert.ok(panel, 'a collapsed map-tools panel must exist');
-  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNabaa', 'btnLiveScene', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
+  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
     assert.match(panel, new RegExp(`id="${id}"`));
   }
   assert.doesNotMatch(panel, /id="resetView"/);
@@ -28,12 +28,11 @@ test('map tools are grouped accessibly and the Syria overview remains a separate
   assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: 1 \/ -1; \}/);
 });
 
-test('map tools provide a return route from filter, layers, services and Al-Nabaa', () => {
+test('map tools provide a return route from filter, layers, services', () => {
   assert.match(app, /data-dd-close/);
   assert.match(app, /backToTools/);
   assert.match(app, /returnToToolsAfterService = true/);
   assert.match(app, /if \(!svc\?\.mode\?\.\(\)\) \{ setMapControlsOpen\(true\)/);
-  assert.match(app, /sessionStorage\.setItem\('ras:return-map-tools', '1'\)/);
   assert.match(app, /window\.addEventListener\('pageshow', restoreMapTools\)/);
   assert.match(css, /\.dd-panel\.dd-sheet \{ position: fixed;/);
 });
@@ -81,14 +80,14 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
   assert.match(app, /from '\.\/map\.js\?v=84'/);
-  assert.match(html, /app\.css\?v=81/);
-  assert.match(html, /app\.js\?v=96/);
+  assert.match(html, /app\.css\?v=103/);
+  assert.match(html, /app\.js\?v=119/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
-  assert.match(app, /from '\.\/services\.js\?v=38'/);
+  assert.match(app, /from '\.\/services\.js\?v=39'/);
   assert.match(app, /from '\.\/icons\.js\?v=7'/);
-  assert.match(app, /from '\.\/i18n\.js\?v=9'/);
+  assert.match(app, /from '\.\/i18n\.js\?v=10'/);
   assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);
   assert.match(map, /from '\/shared\/types\.js\?v=41'/);

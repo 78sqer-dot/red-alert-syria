@@ -12,7 +12,6 @@ import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneLevel, BORDER_REGIONS, 
 import { alertZones, selectedAlertZones, regionFix } from './places.js';
 import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './public-copy-safety.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
-import { expireAlnabaPhotos, sanitizeAlnabaState, sanitizeAlnabaBatchQueue, mergeAlnabaBatchQueues } from './alnaba.js';
 
 export const ALERT_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
 export function sanitizeAlertMedia(media) {
@@ -70,7 +69,6 @@ class Store extends EventEmitter {
   constructor() {
     super();
     this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 1, autoDel1h: true, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null }, support: sanitizeSupportSettings() }, push: { subscriptions: {} }, log: [], relay: {}, threads: {} };
-    this.state.alnabaBatches = [];
     this.file = path.join(config.dataDir, 'state.json');
     this.backup = null; // { save(jsonString), load() -> jsonString|null }
     this._saveTimer = null;
@@ -132,23 +130,6 @@ class Store extends EventEmitter {
     }
     if (!Array.isArray(this.state.log)) this.state.log = this.state.alerts.map((a) => this._logEntry(a)).reverse();
     if (!deferSweep) this.beginSweeps();
-    const expiredPhotos = deferSweep ? 0 : expireAlnabaPhotos(this);
-    if (expiredPhotos) {
-      clearTimeout(this._saveTimer);
-      this._writeLocal();
-      await this.flushBackup();
-      console.log(`[alnaba] removed ${expiredPhotos} expired photo-news item(s) on restore`);
-    }
-
-    setInterval(() => {
-      if (this._backupWritesPaused || !this._sweepsStarted) return;
-      const expired = expireAlnabaPhotos(this);
-      if (!expired) return;
-      clearTimeout(this._saveTimer);
-      this._writeLocal();
-      this.flushBackup().catch((e) => console.error('[alnaba] expiry backup failed', e.message));
-      console.log(`[alnaba] removed ${expired} expired photo-news item(s)`);
-    }, 30_000).unref();
   }
 
   _apply(s) {
@@ -232,10 +213,6 @@ class Store extends EventEmitter {
       jobs: s.jobs && typeof s.jobs === 'object' ? s.jobs : {},
       // 🏛 official army / government salary and recruitment items: owner-review queue + website-only records
       army: s.army && typeof s.army === 'object' ? s.army : {},
-      // 📰 public Al-Nabaa photo stories, weekly PDF editions, and Telegram archive links.
-      alnaba: sanitizeAlnabaState(s.alnaba),
-      // Pending Al-Nabaa upload batches: only Telegram file references and state, never media bytes or Context objects.
-      alnabaBatches: sanitizeAlnabaBatchQueue(s.alnabaBatches),
       // 💱 prices bulletin, 🛣 road status, ⚡ electricity updates (server/prices.js, server/services.js)
       svc: s.svc && typeof s.svc === 'object' ? s.svc : {},
     };
@@ -469,7 +446,7 @@ class Store extends EventEmitter {
     } catch (e) {
       console.error('[store] merge: backup read failed', e.message); return { reports: 0, alerts: 0, backupLoaded: false };
     }
-    let reports = 0, alerts = 0, alnabaBatches = 0;
+    let reports = 0, alerts = 0;
     const st = this.state;
     if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
     st.reports ||= {}; st.reportsDone ||= {}; st.gone ||= {};
@@ -485,24 +462,7 @@ class Store extends EventEmitter {
       if (!r || st.reports[rid] || st.reportsDone[rid] || st.reportsAudit[rid]) continue;
       st.reports[rid] = r; reports++;
     }
-    const beforeBatchCount = st.alnabaBatches?.length || 0;
-    st.alnabaBatches = mergeAlnabaBatchQueues(st.alnabaBatches, o.alnabaBatches);
-    alnabaBatches = st.alnabaBatches.length - beforeBatchCount;
     const since = (this._restoredAt || Date.now()) - 10 * 60_000;
-    const remoteAlnaba = sanitizeAlnabaState(o.alnaba);
-    st.alnaba = sanitizeAlnabaState(st.alnaba);
-    for (const batch of st.alnabaBatches) {
-      for (const entry of batch.items) {
-        if (entry.status !== 'published' || !entry.published_item_id) continue;
-        const section = entry.section;
-        const remoteItem = section && remoteAlnaba[section]?.find((item) => item.id === entry.published_item_id);
-        if (!remoteItem || Date.parse(remoteItem.published_at) < since) continue;
-        const current = st.alnaba[section] || [];
-        if (current.some((item) => item.id === remoteItem.id || (remoteItem.file_unique_id && item.file_unique_id === remoteItem.file_unique_id))) continue;
-        st.alnaba[section] = [...current, remoteItem];
-      }
-    }
-    st.alnaba = sanitizeAlnabaState(st.alnaba);
     const known = new Set(st.alerts.map((a) => a.id));
     for (const a of Array.isArray(o.alerts) ? o.alerts : []) {
       if (!a || !a.id || !ALERT_TYPES[a.type] || known.has(a.id) || st.gone[a.id] || o.gone?.[a.id]) continue;
@@ -518,7 +478,7 @@ class Store extends EventEmitter {
     for (const [k, v] of Object.entries(o.relay || {})) if (!st.relay[k]) st.relay[k] = v;
     for (const [k, v] of Object.entries(o.threads || {})) if (!st.threads[k]) st.threads[k] = v;
     for (const f of this.mergeHooks || []) { try { f(o); } catch (e) { console.error('[store] merge hook failed', e.message); } }
-    if (reports || alerts || alnabaBatches) console.log(`[store] merged from the previous instance: ${reports} report change(s), ${alerts} alert(s), ${alnabaBatches} Al-Nabaa batch(es)`);
+    if (reports || alerts) console.log(`[store] merged from the previous instance: ${reports} report change(s), ${alerts} alert(s)`);
     this.persist(); // the pinned backup becomes the merged state again
     return { reports, alerts, backupLoaded: true };
   }

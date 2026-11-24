@@ -13,6 +13,7 @@ export const ARMY_CATEGORIES = Object.freeze({
   units: Object.freeze({ ar: 'الفرق العسكرية', en: 'Military units', icon: '🎖️', iconKey: 'swords' }),
   special: Object.freeze({ ar: 'المهام الخاصة', en: 'Special missions', icon: '🎯', iconKey: 'target' }),
   official_links: Object.freeze({ ar: 'روابط الانتساب الرسمية', en: 'Official enlistment links', icon: '🔗', iconKey: 'link' }),
+  judicial: Object.freeze({ ar: 'القضاء والأحكام العسكرية', en: 'Military justice & judgments', icon: '⚖️', iconKey: 'news' }),
   government: Object.freeze({ ar: 'الدوائر الحكومية (سجل قديم)', en: 'Government departments (legacy)', icon: '🏛️', iconKey: 'news', public: false }),
 });
 
@@ -223,7 +224,7 @@ export function armyState(root = store.state) {
   return j;
 }
 
-const SALARY_TERMS = /(?:رواتب|راتب|اجور|مرتبات|تعويضات|علاوات|منحه ماليه|صرف المستحقات|salary|salaries|payroll|wages|pay raise|pay increase)/iu;
+const SALARY_TERMS = /(?:رواتب|راتب|اجور|تعويضات|علاوات|منحه ماليه|صرف المستحقات|salary|salaries|payroll|wages|pay raise|pay increase)/iu;
 const RECRUITMENT_TERMS = /(?:انتساب|التحاق|التجنيد|تجنيد|التطوع|تطوع|متطوع|دوره افراد|recruitment|enlistment|recruiting|recruits?|volunteer(?:ing)?)/iu;
 const CLEAR_RECRUITMENT = /(?:فتح باب الانتساب|دوره افراد|التجنيد|انتساب.{0,55}(?:الجيش|الشرطه|القوات المسلحه|عسكري)|التحاق.{0,55}(?:الجيش|الشرطه|القوات المسلحه|عسكري)|(?:التطوع|تطوع).{0,55}(?:الجيش|الشرطه|القوات المسلحه|عسكري)|(?:army|police|security|armed forces).{0,55}(?:enlistment|recruitment|recruit|volunteer|join))/iu;
 const MILITARY_CONTEXT = /(?:الجيش|القوات المسلحه|وزاره الدفاع|وزاره الداخليه|عسكري|جندي|الشرطه|قوى الامن الداخلي|الامن العام|قوات الامن|المهام الخاصه|القوات الخاصه|army|armed forces|military|police|security forces|soldier)/iu;
@@ -239,9 +240,15 @@ function hasOfficialApplicationLink(text, links, sourceUsername) {
   return officialDomain || officialSourceLink;
 }
 
+const JUDICIAL_TERMS = /(?:المحكمه العسكريه|القضاء العسكري|حكم.{0,35}(?:بالسجن|بالحبس|بالاعدام)|احكام قضائيه|military court|court.{0,30}(?:sentence|judgment))/iu;
+const PERSONNEL_RANKS = /(?:من مرتبات|ضمن مرتبات|احد مرتبات|منتسب.{0,20}مرتبات)/iu;
+function hasSalaryMeaning(n) {
+  return SALARY_TERMS.test(n) || (!PERSONNEL_RANKS.test(n) && /(?:صرف|دفع|زياده|رفع|تسديد).{0,25}مرتبات|مرتبات.{0,25}(?:شهريه|ماليه|المتقاعدين)/iu.test(n));
+}
+
 export function salaryNewsKind(text, sourceUsername = '', links = []) {
   const n = norm(text);
-  const salary = SALARY_TERMS.test(n) && MILITARY_PAY_CONTEXT.test(n);
+  const salary = hasSalaryMeaning(n) && MILITARY_PAY_CONTEXT.test(n);
   const recruitment = RECRUITMENT_TERMS.test(n) && (MILITARY_CONTEXT.test(n) || CLEAR_RECRUITMENT.test(n));
   if (CIVIL_WORK.test(n) && !CLEAR_RECRUITMENT.test(n)) return false;
   if (CIVIL_ACTIVITY.test(n) && !CLEAR_RECRUITMENT.test(n)) return false;
@@ -250,6 +257,7 @@ export function salaryNewsKind(text, sourceUsername = '', links = []) {
 
 export function inferArmyCategory(text, sourceUsername = '', links = []) {
   const n = norm(text);
+  if (JUDICIAL_TERMS.test(n) && /(?:المحكمه العسكريه|القضاء العسكري|military court)/iu.test(n)) return 'judicial';
   if (!salaryNewsKind(text, sourceUsername, links)) return null;
   const source = String(sourceUsername || '').toLowerCase();
   const recruitment = RECRUITMENT_TERMS.test(n) && (MILITARY_CONTEXT.test(n) || CLEAR_RECRUITMENT.test(n));
@@ -257,7 +265,7 @@ export function inferArmyCategory(text, sourceUsername = '', links = []) {
   const units = /(?:فرقه عسكريه|الفرق العسكريه|الفرقه|اللواء|الكتائب|كتيبه|فوج|وحدات عسكريه|military unit|brigade|battalion)/iu.test(n);
   const police = /(?:الشرطه|شرطي|وزاره الداخليه|قوى الامن الداخلي|police)/iu.test(n) || source === 'syrianmoi';
   const security = /(?:الاستخبارات|الامن العام|قوات الامن|الامن الداخلي|security)/iu.test(n);
-  const hasSalary = SALARY_TERMS.test(n);
+  const hasSalary = hasSalaryMeaning(n);
   if (special) return 'special';
   if (units) return 'units';
   if (recruitment && hasOfficialApplicationLink(text, links, source)) return 'official_links';
@@ -414,7 +422,7 @@ export function publicArmy(j = armyState(), now = Date.now()) {
     .filter((item) => item && item.status === 'approved' && !j.deleted?.[item.id] && !isApplicationDeadlineExpired(item.applicationDeadline, now))
     .map((item) => {
       const inferred = inferArmyCategory(`${item.title || ''}\n${item.text || ''}`, armySourceUsername(item), item.links || []);
-      const category = inferred && item.categoryOverride && isPublicArmyCategory(item.category) ? item.category : inferred;
+      const category = inferred === 'judicial' ? inferred : inferred && item.categoryOverride && isPublicArmyCategory(item.category) && item.category !== 'judicial' ? item.category : inferred;
       return category ? { item, category } : null;
     }).filter(Boolean)
     .sort((a, b) => Date.parse(b.item.publishedAt || 0) - Date.parse(a.item.publishedAt || 0))
@@ -423,6 +431,7 @@ export function publicArmy(j = armyState(), now = Date.now()) {
       id: item.id, category, title: cleanPublicArmyText(item.title) || item.title,
       text: cleanPublicArmyText(item.text).replace(/https?:\/\/[^\s<>]+/gi, (raw) => armySourceRelatedLink(raw.replace(/[),.;!?]+$/, ''), item.sourceUrl) ? '' : raw).trim(),
       links: publicArmyLinks(item),
+      source_name: clean(item.sourceName, 100), source_url: safeHttps(item.sourceUrl),
       application_deadline: item.applicationDeadline || null,
       created_at: item.createdAt || null, updated_at: item.updatedAt || null, published_at: item.publishedAt || null,
     }));

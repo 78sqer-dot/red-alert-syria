@@ -31,8 +31,8 @@ test('only approved official-source items appear in the public Syrian Army secti
   const result = publicArmy(j);
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].title, 'إعلان اختبار اصطناعي');
-  assert.equal('source_name' in result.items[0], false);
-  assert.equal('source_url' in result.items[0], false);
+  assert.equal(result.items[0].source_name, 'مصدر اختبار رسمي');
+  assert.equal(result.items[0].source_url, made.item.sourceUrl);
   assert.equal('sources' in result, false);
   assert.equal(result.items[0].text.includes('اختبار اصطناعي'), true);
   assert.equal(result.items[0].status, undefined, 'public projection excludes workflow internals');
@@ -191,7 +191,7 @@ test('salary and recruitment screening covers requested groups without matching 
   assert.equal(inferArmyCategory('إعلان حكومي تجريبي عن صرف الرواتب', 'sana_gov'), null);
   const rejected = createPendingArmyItem({ kind: 'official_source', sourceKey: 'test:civil-vacancy', sourceUrl: 'https://t.me/sana_gov/999', title: 'شواغر وظيفية', text: 'إعلان عن شواغر وظيفية في وزارة الإعلام.' }, initialArmyState(), NOW);
   assert.equal(rejected.error, 'not_army_related');
-  assert.deepEqual(Object.keys(ARMY_CATEGORIES), ['recruitment', 'army', 'police', 'security', 'units', 'special', 'official_links', 'government']);
+  assert.deepEqual(Object.keys(ARMY_CATEGORIES), ['recruitment', 'army', 'police', 'security', 'units', 'special', 'official_links', 'judicial', 'government']);
   assert.equal(ARMY_CATEGORIES.government.public, false);
   assert.ok(ARMY_SOURCES.some((source) => source.u === 'sana_gov' && source.url === 'https://t.me/sana_gov'));
 });
