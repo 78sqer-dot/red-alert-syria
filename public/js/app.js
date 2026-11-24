@@ -8,7 +8,7 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon } from './icons.js?v=7';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=85';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=86';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
@@ -183,7 +183,7 @@ function hydrateStatic() {
   $('#shareSite').setAttribute('aria-label', T.shareMap);
   $('#zoomOut').title = T.zoomOut;
   $('#zoomOut').setAttribute('aria-label', T.zoomOut);
-  $('#aboutPill').setAttribute('aria-label', T.aboutMap);
+  $('#aboutPill').setAttribute('aria-label', `${T.aboutMap} · ${T.sources}`);
   $('#aboutPill').title = T.aboutMap;
   $('#resetView').title = T.resetView;
   $('#resetView').setAttribute('aria-label', T.resetView);
@@ -778,14 +778,15 @@ function renderAbout() {
     <p>${esc(T.aboutText)}</p>
     <div class="sec-label">${esc(T.verificationPolicyTitle)}</div>
     <div class="disclaimer" role="note">${esc(T.verificationPolicy)}</div>
+    <div class="sec-label">${esc(T.sources)}</div>
+    <p class="sources"><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener">© OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a> · <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames (CC BY 4.0)</a> · <a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a> · <a href="https://www.esri.com/en-us/legal/terms/data-attributions" target="_blank" rel="noopener">Powered by Esri · Imagery © Esri, Maxar, Earthstar Geographics</a> · <a href="https://www.mapzen.com/rights/" target="_blank" rel="noopener">Mapzen Terrain (AWS Open Data)</a> · Tabler Icons</p>
     <div class="sec-label">${esc(T.legend)}</div>
     <div class="legend">${legend}</div>
     <div class="disclaimer">${esc(T.disclaimer)}</div>
     ${state.support ? `<section class="support-card"><div class="support-card-head"><span class="support-icon">${icon('heart', 18)}</span><div><h3>${esc(T.supportTitle)}</h3><p>${esc(T.supportTransfer)}</p></div></div><button class="btn-red" data-a="support">${icon('heart', 16)}${esc(T.supportButton)}</button></section>` : ''}
     <div class="about-links" style="margin-bottom:14px"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm wa-channel-btn" href="${WHATSAPP_CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.followWhatsAppChannel)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a><button class="btn-sm" data-a="terms">${esc(T.terms)}</button><button class="btn-sm" data-a="privacy">${esc(T.privacy)}</button></div>
     ${contactRows().length ? `<div class="sec-label">${esc(T.contactUs)}</div>${contactListHtml()}` : ''}
-    <div class="sec-label">${esc(T.sources)}</div>
-    <p class="sources"><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a> · <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames (CC BY 4.0)</a> · <a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a> · Esri World Imagery · Mapzen Terrain (AWS Open Data) · Tabler Icons</p>`;
+`;
 }
 function openAbout() {
   renderAbout();

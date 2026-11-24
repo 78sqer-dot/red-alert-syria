@@ -1452,3 +1452,6 @@ body.pp-docked .map-bottom-controls{display:none;}
 .map-wrap .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-inner{display:block;white-space:normal;overflow-wrap:anywhere;font:10px/1.4 sans-serif;}
 .map-wrap .maplibregl-ctrl-attrib a{color:#1f2937;}
 .map-wrap .maplibregl-ctrl-attrib-button{display:none;}
+
+/* Credits remain accessible from the existing About circle after startup. */
+.map-credits-in-about:not(.map-credits-required) .maplibregl-ctrl-attrib{display:none;}

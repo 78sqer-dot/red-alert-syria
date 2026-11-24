@@ -141,7 +141,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
-  assert.match(html, /app\.css\?v=104/);
+  assert.match(html, /app\.css\?v=105/);
   assert.match(css, /\.job-deadline, \.army-deadline/);
 });
 

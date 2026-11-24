@@ -205,9 +205,28 @@ export class AlertMap {
       locale: this.opts.lang === 'ar' ? { 'NavigationControl.ZoomIn': 'تكبير', 'NavigationControl.ZoomOut': 'تصغير' } : undefined,
     });
     this.map.addControl(new M.AttributionControl({ compact: false, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames</a> · <a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a>' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
+    // Startup credit is visible for five foreground seconds, then available in About.
+    // OSMF interactive-map attribution guidelines permit this collapse pattern.
+    this.map.once('load', () => {
+      let timer;
+      const startCreditTimer = () => {
+        clearTimeout(timer);
+        if (document.hidden) return;
+        timer = setTimeout(() => {
+          this.el.classList.add('map-credits-in-about');
+          document.removeEventListener('visibilitychange', startCreditTimer);
+        }, 5000);
+      };
+      document.addEventListener('visibilitychange', startCreditTimer);
+      startCreditTimer();
+    });
     this.map.addControl(new M.ScaleControl({ maxWidth: 110, unit: 'metric' }), this.opts.lang === 'ar' ? 'bottom-right' : 'bottom-left');
     window.__rasMap = this.map;
-    this.map.on('style.load', () => this.addOverlays().catch((e) => console.warn('[map] overlays unavailable', e?.message || e)));
+    this.map.on('style.load', () => {
+      // Esri imagery providers must remain visible even after startup collapse.
+      this.el.classList.toggle('map-credits-required', Boolean(this.map.getSource('esri')));
+      this.addOverlays().catch((e) => console.warn('[map] overlays unavailable', e?.message || e));
+    });
     stylePromise.then((style) => {
       if (this.map) { this._styleEpoch++; this.map.setStyle(style, { diff: false }); }
     }).catch((e) => console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e));

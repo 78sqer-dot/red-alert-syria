@@ -31,3 +31,14 @@ test('removed map button cannot leave an unconditional listener that aborts init
  const end=app.indexOf("  $('#locateMe').addEventListener",start);
  for(const match of app.slice(start,end).matchAll(/\$\('#([^']+)'\)\.addEventListener/g)) assert.ok(html.includes('id="'+match[1]+'"'),'listener target must exist: '+match[1]);
 });
+
+test('startup credits collapse only after five foreground seconds and remain in existing About',()=>{
+ const map=read('public/js/map.js'),app=read('public/js/app.js');
+ assert.match(map,/this.map.once\('load'/);assert.match(map,/if \(document.hidden\) return/);assert.match(map,/}, 5000\)/);
+ assert.match(app,/https:\/\/openmaptiles.org\//);assert.match(app,/https:\/\/www.openstreetmap.org\/copyright/);assert.match(app,/aria-label', `\$\{T.aboutMap\} · \$\{T.sources\}`/);
+});
+
+test('satellite imagery retains visible provider credits after startup',()=>{
+ assert.match(read('public/js/map.js'), /classList.toggle\('map-credits-required', Boolean\(this.map.getSource\('esri'\)\)\)/);
+ assert.match(read('public/css/app.css'), /map-credits-in-about:not\(\.map-credits-required\)/);
+});
