@@ -1,0 +1,97 @@
+{
+  "id": "2333e6a0-1ff5-47fb-9750-4e2a0de2982c",
+  "type": "breaking",
+  "title": "العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق",
+  "title_en": "News report about Syria",
+  "description": "العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق",
+  "body": "بحسب تقرير إخباري، ورد النص الآتي: العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق. لم نتحقق بشكل مستقل من هذه المعلومات. اشتركوا في قنواتنا لمتابعة أخبار سوريا وتحديثاتها.",
+  "location": null,
+  "place": {
+    "scope": "country",
+    "name_ar": "سوريا",
+    "name_en": "",
+    "latitude": null,
+    "longitude": null
+  },
+  "areas": [],
+  "extra": [],
+  "scope": "country",
+  "timestamp": "2026-11-24T09:38:03.710Z",
+  "expires_at": "2026-11-24T11:38:03.710Z",
+  "source": "news",
+  "meta": {
+    "reviewedNewsCopy": {
+      "version": 2,
+      "draftId": "43000f4fc8",
+      "copyHash": "50a82d3d4dd84e84679a70064acc2324a75e6d60356cb2d867af475bf5cf9bb1",
+      "envelope": {
+        "manifest": {
+          "version": 2,
+          "reviewHash": "d0bc2110c2ddbd34f3fc285c4de259da6f0185b88695f40bcb244c6a21ba9e8a",
+          "draftId": "43000f4fc8",
+          "type": "breaking",
+          "title": "العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق",
+          "title_en": "News report about Syria",
+          "body": "بحسب تقرير إخباري، ورد النص الآتي: العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق. لم نتحقق بشكل مستقل من هذه المعلومات. اشتركوا في قنواتنا لمتابعة أخبار سوريا وتحديثاتها.",
+          "location": "سوريا",
+          "sourceBinding": "6945b9236a93f1b38df702789f8ea0c347b9ffafb33abbb6a4e216a95c87afd1",
+          "publicSourcesHash": "912fb32f1aac5570604eca1f97a34b29c0f2a8d8d111edca93b81ceebc42d0b0",
+          "approvalReference": "wamid.HBgLOTYxODE5OTQ4OTMVAgASGCBBQ0U2RkJDNUE3NTI1RjhERDhFQjgzODk2NUZGMjVFRgA=",
+          "authorityReference": "wamid.HBgLOTYxODE5OTQ4OTMVAgASGCBBQ0U2RkJDNUE3NTI1RjhERDhFQjgzODk2NUZGMjVFRgA=",
+          "singleSourceAcknowledgement": true,
+          "verification": "source-attributed-not-independently-verified",
+          "imageHeading": {
+            "ar": "تقرير إخباري عن سوريا",
+            "en": "News report about Syria"
+          },
+          "imageContext": {
+            "latitude": 34.85,
+            "longitude": 38.6,
+            "zoom": 5,
+            "label_ar": "سياق: سوريا",
+            "label_en": "Context: Syria",
+            "note_ar": "سياق عام لسوريا، وليس موقع الحادث",
+            "note_en": "General Syria context, not an incident location."
+          }
+        },
+        "signature": "synthetic-placeholder"
+      }
+    },
+    "correctedNewsTitle": true,
+    "channelTitle": "العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق",
+    "dedupKey": "news:43000f4fc8",
+    "newsSources": [
+      {
+        "name": "زينو ياسر محاميد",
+        "url": "https://t.me/zainaldinmaham1/143584",
+        "timestamp": "2026-11-24T09:34:08.000Z"
+      }
+    ]
+  },
+  "is_active": true,
+  "history": [
+    {
+      "at": "2026-11-24T09:38:03.710Z",
+      "kind": "published",
+      "title": "العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق",
+      "description": "العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق",
+      "is_active": true
+    },
+    {
+      "at": "2026-11-24T09:38:05.612Z",
+      "kind": "updated",
+      "title": "العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق",
+      "description": "العثور على الشابين إيلي أسعد هلالة وإلياس مارديني مقتولين بطلقات نارية على طريق معرونة – صيدنايا بريف دمشق",
+      "is_active": true
+    }
+  ],
+  "author": {
+    "id": 0,
+    "name": "مراجعة تحريرية",
+    "via": "news-reviewed-operator"
+  },
+  "channel_message_id": 1532,
+  "channel_format": 3,
+  "description_en": "The young men Elie Assad Helaleh and Elias Mardini were found shot dead on the Ma'rouna-Sednaya road in the Damascus countryside.",
+  "channel_media": "photo"
+}

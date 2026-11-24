@@ -52,8 +52,12 @@ const QUALIFIED_REFERENCES=[
     "note_en": "City reference, not market location. Planned for November 24."
   }
 ];
+// Owner-confirmed1532 corridor. Anchor is a display reference along mapped road,
+// never the incident position; exact published copy/source bindings fail closed.
+const ROAD_1532={alertId:'2333e6a0-1ff5-47fb-9750-4e2a0de2982c',postId:1532,copyHash:'50a82d3d4dd84e84679a70064acc2324a75e6d60356cb2d867af475bf5cf9bb1',sourceBinding:'6945b9236a93f1b38df702789f8ea0c347b9ffafb33abbb6a4e216a95c87afd1',reference:{kind:'locality_reference',approximate:true,level:'road',name_ar:'طريق معرونة – صيدنايا',name_en:'Maarouna–Saydnaya road',latitude:33.66703,longitude:36.387019,zoom:11,label_ar:'موقع تقريبي: معرونة–صيدنايا',label_en:'Approximate: Maarouna–Saydnaya road',note_ar:'مرجع تقريبي للطريق، لا موقع الحادث. دون نطاق خطر',note_en:'Approximate road reference, not incident site. No danger radius.'}};
 export function alertLocalityReference(a,reviewed){
  const verified=reviewedAlertCopy(a);if(!verified||verified.version!==2||!reviewed||verified!==reviewed)return null;
+ if(a.id===ROAD_1532.alertId&&a.channel_message_id===ROAD_1532.postId&&a.meta.reviewedNewsCopy.copyHash===ROAD_1532.copyHash&&verified.sourceBinding===ROAD_1532.sourceBinding)return structuredClone(ROAD_1532.reference);
  const dynamic=validatedManifestLocality(verified);if(dynamic)return dynamic;
  const q=QUALIFIED_REFERENCES.find(q=>q.alertId===a.id&&q.postId===a.channel_message_id&&q.copyHash===a.meta.reviewedNewsCopy.copyHash&&q.sourceBinding===verified.sourceBinding);if(!q)return null;
  const p=getPlace(q.placeId);if(!p||p.region||p.rank>5)return null;
