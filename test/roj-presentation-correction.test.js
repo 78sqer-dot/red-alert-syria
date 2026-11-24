@@ -32,3 +32,14 @@ test('mine repair clears wrong historic locality search and SEO metadata without
  const bot=fs.readFileSync(new URL('../server/bot.js',import.meta.url),'utf8');
  assert.match(bot,/metadataOnly:true/);assert.match(bot,/p:undefined,d:undefined,pa:'الشيوخ شرق حلب'/);assert.match(bot,/store.updateAlert\(a.id,\{areas,scope:'governorate'\}\)/);
 });
+
+test('notification action fills cell beside Services, centered quick controls remain',()=>{
+ const css=fs.readFileSync(new URL('../public/css/app.css',import.meta.url),'utf8');
+ assert.match(css,/map-tool-grid > #btnNotifications \{ grid-column: auto/);assert.match(css,/map-control-actions \{ display: flex; justify-content: center/);
+});
+
+test('popup metadata keeps category and location adjacent then timing then quote',()=>{
+ const app=fs.readFileSync(new URL('../public/js/app.js',import.meta.url),'utf8');
+ assert.match(app,/class="pp-meta-row">\$\{badge\(shown\)\}<p class="pp-areas"/);
+ assert.match(app,/class="pp-time-row"[\s\S]*?<blockquote class="pp-desc">/);
+});
