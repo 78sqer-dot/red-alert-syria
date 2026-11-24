@@ -1064,7 +1064,7 @@ async function prepareTimedProfessional(d, { native = false } = {}) {
   if (!faithful || isPrivateEditorialCopy(faithful) || sharpToneReason(faithful) || /رأي\s*[/：:]|محاكاة ساخرة|EDITORIAL_REVIEW_REQUIRED/u.test(faithful)) throw Error('source-not-factual-public-news');
   const lead=faithful.split(/[.\n]/u).find(x=>x.trim())?.trim();
   const title=lead&&lead.length<=190?lead:'تقرير إخباري عن سوريا';
-  const body = `بحسب تقرير إخباري، ورد النص الآتي: ${faithful}${/[.؟!]$/u.test(faithful)?'':'.'} لم نتحقق بشكل مستقل من هذه المعلومات. اشتركوا في قنواتنا لمتابعة أخبار سوريا وتحديثاتها.`;
+  const body = `أنباء متداولة: ${faithful}${/[.؟!]$/u.test(faithful)?'':'.'}`;
   const publicSources = d.srcs.map(s => ({name:s.name||s.u||'',url:s.url,timestamp:Number.isFinite(s.ts)?new Date(s.ts).toISOString():null}));
   if (publicSources.some(s => {try {return !['http:','https:'].includes(new URL(s.url).protocol);}catch{return true;}})) throw Error('invalid-professional-source-url');
   const review = {kind:'automatic-source-bound-professional-rewrite',sourceReadBy:'server',independentlyVerified:false,copyMode:'faithful-source-attributed-framing',nativeApproval:native};
@@ -2413,8 +2413,7 @@ export async function prepareReviewedSummary(id,request={}) {
   if(r.prior_hold_resolved!==true||!Array.isArray(r.unresolved)||r.unresolved.length!==0||typeof r.resolution!=='string'||r.resolution.length<20||r.resolution.length>2000)throw Error('summary-unresolved-editorial-hold');
   if((urls.length===1||(d.srcs||[]).every(s=>s.local))&&r.single_source_acknowledged!==true)throw Error('summary-single-source-acknowledgement-required');
   if(r.independently_verified&&(d.srcs||[]).every(s=>s.local))throw Error('summary-local-independent-verification-unsupported');
-  if(!r.independently_verified&&!/(?:أفاد|أورد|ذكر|نقل|بحسب|وفق|تقرير|مصدر)/u.test(c.body))throw Error('summary-attribution-required');
-  if(!r.independently_verified&&!/(?:لم نتحقق|لم يتسن.{0,20}التحقق|لم يُتحقق)/u.test(c.body))throw Error('summary-verification-caveat-required');
+  if(!r.independently_verified&&!/(?:أفاد|أورد|ذكر|نقل|بحسب|وفق|تقرير|مصدر|أنباء)/u.test(c.body))throw Error('summary-attribution-required');
   const localityReference=resolveReviewedLocality(c.locality_reference,{sourceText:d.sourceText,evidenceUrls:r.evidence_urls})||sourceCardLocality(d.sourceText,r.evidence_urls);
   const sourceRecords=(d.srcs||[]).map(s=>({name:s.name||s.u||'',url:s.url,timestamp:Number.isFinite(s.ts)?new Date(s.ts).toISOString():null}));
   const m={version:2,reviewHash:reviewedCopyHash(r),draftId:id,type:c.type,title:c.title,title_en:c.title_en,body:c.body,location:'سوريا',sourceBinding:reviewedSourceBinding(d),publicSourcesHash:reviewedCopyHash(sourceRecords),approvalReference:SUMMARY_AUTHORITY_REFERENCE,authorityReference:SUMMARY_AUTHORITY_REFERENCE,singleSourceAcknowledgement:r.single_source_acknowledged,verification:r.independently_verified?'operator-source-reviewed':'source-attributed-not-independently-verified',imageHeading:{ar:c.image_heading_ar,en:c.image_heading_en},imageContext:{latitude:34.85,longitude:38.6,zoom:5,label_ar:'سياق: سوريا',label_en:'Context: Syria',note_ar:'تقرير إخباري، الموقع الدقيق غير محدد',note_en:'News report. Exact incident location is unknown.'}};

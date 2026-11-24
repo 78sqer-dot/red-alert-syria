@@ -46,3 +46,10 @@ test('mounted reviewed-summary publish exposes confirmed stored canonical URL wi
  const app=express();mountNewsReviewRoutes(app,{adminKeyOk:r=>r.headers['x-admin-key']==='synthetic',apiLimiter:(_r,_s,next)=>next()});const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
  try{const u=`http://127.0.0.1:${server.address().port}/api/admin/news/sample/review`;const post=()=>fetch(u,{method:'POST',headers:{'content-type':'application/json','x-admin-key':'synthetic'},body:JSON.stringify(final)});const response=await post();const result=await response.json();assert.equal(response.status,200,JSON.stringify(result));assert.equal(result.share_url,alertShareUrl(result.alertId));assert.ok(result.share_url);assert.equal((await(await post()).json()).share_url,result.share_url);assert.equal(sends,1);}finally{await new Promise(r=>server.close(r));n._test.R.H=null;}
 });
+
+test('future attributed summary needs no generic independent-verification boilerplate, keeps unverified provenance and specific uncertainty',async()=>{
+ const d=reset(),r=request(d);r.summary.body='أنباء عن خدمات عامة. ولا يوضح التقرير موعد التنفيذ.';
+ const before=structuredClone(d);await n.prepareReviewedSummary(d.id,{...r,dry_run:true});assert.deepEqual(d,before);await n.prepareReviewedSummary(d.id,r);
+ const a=alert(d);assert.equal(a.body,r.summary.body);assert.equal(publicAlert(a).body,r.summary.body);assert.ok(channelPost(a).includes(r.summary.body));assert.doesNotMatch(a.body,/لم نتحقق بشكل مستقل/);assert.equal(a.meta.reviewedNewsCopy.envelope.manifest.verification,'source-attributed-not-independently-verified');assert.equal(d.reviewedCopyAudit.review.independently_verified,false);
+ const noAttribution=reset(),bad=request(noAttribution);bad.summary.body='وردت معلومات عن خدمات عامة.';await assert.rejects(()=>n.prepareReviewedSummary(noAttribution.id,bad),/summary-attribution-required/);
+});
