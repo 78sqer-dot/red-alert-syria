@@ -1,0 +1,22 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {newsIncidentLocations,assertNewsLanguageCopy} from '../server/news-incident-location.js';
+import {locationFrom} from '../server/places.js';
+const haw=locationFrom({placeId:43748615949}),saalu=locationFrom({placeId:20005188}),hor=locationFrom({placeId:169476}),suq=locationFrom({placeId:163921});
+test('one compound locality never splits into distant token matches',()=>{
+ const r=newsIncidentLocations('فقد شاب حياته متأثراً بإصابته بانفجار قنبلة في بلدة حويجة سعلو بريف دير الزور الشرقي.',haw,[saalu]);
+ assert.equal(r.location.name_ar,'حويجة سعلو');assert.equal(r.location.latitude,undefined);assert.deepEqual(r.extra,[]);
+});
+test('administrative district never adds a second incident circle',()=>{
+ const r=newsIncidentLocations('اعتقال شبان في قرية "حورات عمورين"، التابعة إدارياً لناحية السقيلبية بريف حماة.',hor,[suq]);
+ assert.equal(r.location.place_id,169476);assert.deepEqual(r.extra,[]);
+});
+test('unknown village preserves name without borrowing nearby city pin',()=>{
+ const r=newsIncidentLocations('انفجار لغم بجرار في قرية الجهبل شرقي عين عيسى بريف الرقة الشمالي.',locationFrom({placeId:172134}),[]);
+ assert.equal(r.location.name_ar,'الجهبل');assert.equal(r.location.latitude,undefined);assert.equal(r.location.short_ar,'الجهبل - الرقة');
+});
+test('explicit separate named incidents are not indiscriminately collapsed',()=>{
+ const r=newsIncidentLocations('انفجار في بلدة سعلو، وانفجار آخر في قرية الحويجة.',saalu,[haw]);assert.equal(r.extra.length,1);
+});
+test('attached foreign generation artifact cannot publish',()=>{
+ assert.throws(()=>assertNewsLanguageCopy('في أرضAGRICULTURAL في قرية'),/Mixed-language/);assert.doesNotThrow(()=>assertNewsLanguageCopy('أرض زراعية قرب M4'));
+});

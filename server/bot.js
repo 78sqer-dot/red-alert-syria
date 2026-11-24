@@ -1,3 +1,4 @@
+import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
 import { rojCorrectionCandidate, ROJ_CORRECTION_KEY, mineCorrectionCandidate, MINE_CORRECTION_KEY } from './roj-photo-correction.js';
 import {createHash} from 'node:crypto';
 import { BACKUP_NAME, isBackupName, encodeBackupAsync, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
@@ -951,6 +952,11 @@ async function showPreview(ctx, d) {
 }
 
 export function buildAlertInput(d, author) {
+  if (d.source === 'news') {
+    assertNewsLanguageCopy(d.type === 'breaking' ? d.text : d.details);
+    const incident = newsIncidentLocations(d.sourceText || d.details || d.text, d.location || locationFrom({}), d.extra || []);
+    d = {...d,location:incident.location,extra:incident.extra};
+  }
   assertPublicCopySafe(d?.title, d?.title_en, d?.headline, d?.body, d?.text, d?.details, d?.description, d?.description_en);
   const incursionKind = d.type === 'military_incursion'
     ? (d.incursionKind === 'vehicles' || Number.isInteger(d.vehicleCount) ? 'vehicles' : ['soldiers', 'barrier'].includes(d.incursionKind) ? d.incursionKind : null)
@@ -1205,6 +1211,36 @@ export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph =
   return out;
 }
 // Photo edit succeeds before the live record changes. Exact baseline guard makes this one-shot.
+export async function correctNewLocalityPostsOnce(api) {
+  const results=[];
+  for (const [id,post,draftId,url] of [
+    ['dea7fedb-d56b-4dba-82c8-52816a775c83',1554,'b094afecc7','https://t.me/AlarabyTvSy/65584'],
+    ['5579c1c1-9fca-4584-beef-85a287fe3b7b',1555,'5390d0b8f6','https://t.me/syriancoast24/57213'],
+    ['fe606795-5df6-42b5-868a-f4a8d4dbb48c',1556,'91c39bf91e','https://t.me/HawarNews/86152'],
+  ]) {
+    const key='owner-compound-locality-'+post+'-2026-11-24';
+    if(store.state.maint?.[key]?.done)continue;
+    const a=store.getAlert(id),d=store.state.news?.drafts?.[draftId];
+    if(!a||a.channel_message_id!==post||a.channel_media!=='photo'||sanitizeAlertMedia(a.media)||d?.alertId!==id||d.status!=='published'||!d.srcs?.some(s=>s.url===url)||!a.meta?.newsSources?.some(s=>s.url===url))continue;
+    const copy=post===1554?d.sourceText:a.description;
+    assertNewsLanguageCopy(copy);
+    const incident=newsIncidentLocations(d.sourceText,a.place,a.extra||[]);
+    const loc=incident.location;
+    const areas=[loc.name_ar,loc.governorate_ar].filter((x,i,all)=>x&&all.indexOf(x)===i);
+    const title=typeOf(a.type).ar+' — '+(loc.short_ar||loc.name_ar);
+    const b={...a,title,title_en:typeOf(a.type).en+' — '+(loc.short_en||loc.name_en),description:copy,place:loc,scope:loc.scope,location:Number.isFinite(loc.latitude)?{latitude:loc.latitude,longitude:loc.longitude}:null,extra:incident.extra,zones:null,areas};
+    const png=await withDeadline(alertImage(b,'ar'),30000);
+    await api.editMessageMedia(config.channel,post,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-corrected-'+post+'.png'),{caption:channelCaption(b,{ended:!b.is_active}),parse_mode:'HTML'}),{reply_markup:channelKeyboard(b)});
+    const {title_en,description,place,scope,location,extra,zones}=b;
+    store.updateAlert(id,{title,title_en,description,place,scope,location,extra,zones,areas});
+    store._logPatch(id,{g:loc.governorate,ga:loc.governorate_ar,ge:loc.governorate_en,p:loc.place_id||undefined,d:loc.district||undefined,pa:loc.name_ar,pe:loc.name_en,xd:undefined});
+    d.loc=loc;d.extra=incident.extra;d.headline=copy;
+    store.state.maint={...store.state.maint,[key]:{done:new Date().toISOString(),post}};store.persist();
+    if(store.backup&&!await store.flushBackup(true))throw Error('Compound locality correction backup not confirmed');
+    results.push({ok:true,post});
+  }
+  return results;
+}
 export async function correctRojPhotoOnce(api) {
   if (store.state.maint?.[ROJ_CORRECTION_KEY]?.done) return {skipped:true};
   const a = store.getAlert('3320c747-0028-45be-b13e-a3c81da25fbf');

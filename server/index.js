@@ -12,7 +12,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
+import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -528,6 +528,8 @@ async function start() {
       try {
         const roj = await correctRojPhotoOnce(bots.admin.api);
         const mine = await correctMineDiscoveryOnce(bots.admin.api);
+        const localities = await correctNewLocalityPostsOnce(bots.admin.api);
+        console.log('[owner-correction] localities',JSON.stringify(localities));
         console.log('[owner-post-corrections]', JSON.stringify({roj,mine}));
       } catch(e) { console.error('[owner-post-corrections]', e.description || e.message); }
     };

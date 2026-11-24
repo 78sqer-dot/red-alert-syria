@@ -1,3 +1,4 @@
+import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
 // 📡 News monitor: the server (Render, 24/7) reads public Syrian news channels every minute, turns
 // each NEW incident into a ready-made alert draft and sends it to the owner + editors in the private
 // publishing bot with ✅ Publish / ❌ Ignore; only qualified AI news has an automatic fallback.
@@ -1020,11 +1021,13 @@ export function toBotDraft(d) {
   const checkpoint = isCheckpointReport(d.sourceText || d.body || d.headline);
   if (checkpoint && ['patrol','breaking','civil','military_incursion'].includes(d.type)) d = {...d,type:'military_incursion',incursionKind:'barrier'};
   const body = d.headline;
+  assertNewsLanguageCopy(d.body || body);
+  const incident = newsIncidentLocations(d.sourceText || d.body || body, d.loc || locationFrom({}), d.extra || []);
   const patrolText = N(`${d.headline || ''} ${d.body || ''}`);
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
   return {
     type: d.type, mode: 'publish', step: 'preview', ttlMin: typeOf(d.type).ttlMin,
-    location: d.loc || locationFrom({}), extra: d.extra || [],
+    location: incident.location, extra: incident.extra, sourceText: d.sourceText || d.body || body,
     details: d.type === 'breaking' ? '' : (d.body || body), text: d.type === 'breaking' ? body : '',
     created: Date.now(), source: 'news',
     srcs: (d.srcs || []).map((s) => ({ u: s.u, name: s.name, url: s.url, ts: s.ts, local: !!s.local })),
