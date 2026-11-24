@@ -1,3 +1,4 @@
+import { transferCounters } from './transfer-counters.js';
 import { startTranslations } from './translate.js';
 import express from 'express';
 import helmet from 'helmet';
@@ -41,6 +42,8 @@ const REPORT_SHORT_EN = 'Report an event in Syria — Red Alert Syria';
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+// Install before compression to count compressed response bodies only.
+app.use(transferCounters.middleware);
 
 // ------------------------------------------------------------------ security headers
 app.use(
@@ -252,6 +255,13 @@ app.get('/api/services', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=60');
   res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), borders: publicBorders(), jobs: publicJobs(), army: publicArmy(), server_time: new Date().toISOString() });
 });
+// Aggregate-only measurements, never available without the existing private admin key.
+const transferAdminKeyOk = (req) => {
+  const want = process.env.ADMIN_API_KEY || '';
+  const key = String(req.headers['x-admin-key'] || '');
+  return Boolean(want && Buffer.byteLength(key) === Buffer.byteLength(want) && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
+};
+transferCounters.mountPrivateStatus(app, transferAdminKeyOk, apiLimiter);
 // Token-protected prices tools: status JSON, and a clearly marked preview of the bulletin sent to the
 // owner's private chat only (never the channel). key = sha256(BOT_TOKEN + ':prices').
 const pricesKeyOk = (req) => {

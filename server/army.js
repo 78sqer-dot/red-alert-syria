@@ -633,6 +633,10 @@ export function armyReviewKeyboard(item, english = false) {
   return kb;
 }
 
+// Operational source errors are local/lazy; new baselines and items retain prompt backup.
+export function armyPollSaveOptions(result) {
+  return { backupSoon: !!(result.baseline || result.newItems) };
+}
 export function startArmyMonitor(getApi = () => null, { everyMs = POLL_MS, poller = pollArmyOnce } = {}) {
   if (active) return;
   active = true;
@@ -658,7 +662,7 @@ export function startArmyMonitor(getApi = () => null, { everyMs = POLL_MS, polle
         startArmyMonitor.lastMergeAt = Date.now();
       }
       const result = await poller({ j, notify: notifyArmyPending });
-      if (result.baseline || result.newItems || result.errors?.length) store.persist();
+      if (result.baseline || result.newItems || result.errors?.length) store.persist(armyPollSaveOptions(result));
       if (result.newItems) store.emit('army', publicArmy());
       if (result.newItems) console.log(`[army] queued ${result.newItems} official-source item(s) for owner approval`);
       if (result.errors?.length) console.warn('[army] source checks with errors', result.errors.map((x) => `${x.source}:${x.error}`).join('; '));

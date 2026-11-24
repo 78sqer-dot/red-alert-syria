@@ -447,6 +447,8 @@ class Store extends EventEmitter {
       console.error('[store] merge: backup read failed', e.message); return { reports: 0, alerts: 0, backupLoaded: false };
     }
     let reports = 0, alerts = 0;
+    // Include merge hooks and decision-only changes, not only new report/alert counts.
+    const beforeMerge = JSON.stringify(this.state);
     const st = this.state;
     if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
     st.reports ||= {}; st.reportsDone ||= {}; st.gone ||= {};
@@ -479,8 +481,9 @@ class Store extends EventEmitter {
     for (const [k, v] of Object.entries(o.threads || {})) if (!st.threads[k]) st.threads[k] = v;
     for (const f of this.mergeHooks || []) { try { f(o); } catch (e) { console.error('[store] merge hook failed', e.message); } }
     if (reports || alerts) console.log(`[store] merged from the previous instance: ${reports} report change(s), ${alerts} alert(s)`);
-    this.persist(); // the pinned backup becomes the merged state again
-    return { reports, alerts, backupLoaded: true };
+    const changed = JSON.stringify(this.state) !== beforeMerge;
+    if (changed) this.persist(); // every real merged decision still queues remote durability
+    return { reports, alerts, backupLoaded: true, changed };
   }
 
   // ---------- statistics log ----------
