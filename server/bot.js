@@ -1252,7 +1252,12 @@ export async function correctNewLocalityPostsOnce(api) {
       const meta={...a.meta,political:{...a.meta.political,category:'meeting'}};
       const b={...a,meta};
       const png=await withDeadline(alertImage(b,'ar'),30000);
-      await api.editMessageMedia(config.channel,1561,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-corrected-1561.png'),{caption:channelCaption(b,{ended:!b.is_active}),parse_mode:'HTML'}),{reply_markup:channelKeyboard(b)});
+      try {
+        await api.editMessageMedia(config.channel,1561,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-corrected-1561.png'),{caption:channelCaption(b,{ended:!b.is_active}),parse_mode:'HTML'}),{reply_markup:channelKeyboard(b)});
+      } catch(e) {
+        // A prior timed-out request may already have applied the exact reviewed edit.
+        if (!/message is not modified/i.test(String(e.description||e.message))) throw e;
+      }
       store.updateAlert(a.id,{meta});d.politicalCategory='meeting';
       store.state.maint={...store.state.maint,[politicalKey]:{done:new Date().toISOString(),post:1561}};store.persist();
       if(store.backup){store._backupPending=true;if(!await store.flushBackup(true))throw Error('Political category correction backup not confirmed');}
