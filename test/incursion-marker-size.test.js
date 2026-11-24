@@ -5,14 +5,13 @@ import { readFile } from 'node:fs/promises';
 const css = await readFile(new URL('../public/css/app.css', import.meta.url), 'utf8');
 const map = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf8');
 
-test('military incursion markers are the unified pin at the standard size, halo instead of hover scaling', () => {
-  assert.match(map, /el\.className = `mk t-\$\{a\.type\}/, 'the marker receives a type-specific class');
-  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/, 'incursion renders through the one pin builder');
-  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;/, 'the pin keeps the standard 32px size for every type, incursion included');
-  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; fill: var\(--ring, #64748b\); \}/, 'pin glyphs keep the standard 20px size');
-  assert.doesNotMatch(css, /\.mk:hover \.pin[^}]*scale\(/, 'no pin grows on hover — emphasis is the ring halo');
-  assert.doesNotMatch(css, /\.mk\.sel \.pin[^}]*scale\(/, 'no pin grows when selected either');
-  assert.match(css, /\.mk:hover \.pin, \.mk\.sel \.pin \{ box-shadow: 0 0 0 1px rgba\(6,10,16,\.45\), 0 0 0 5px color-mix\(in srgb, var\(--ring/, 'selected/hover emphasis is the halo in the type colour');
+test('military incursion icons stay at the standard 24px size when selected or hovered', () => {
+  assert.match(map, /el\.className = `mk t-\$\{a\.type\}/, 'the icon receives a type-specific marker class');
+  assert.match(map, /const sz = 24;/, 'map SVG icons retain the standard 24px canvas');
+  assert.match(map, /width:\$\{sz\}px;height:\$\{sz\}px/, 'the icon wrapper remains 24px');
+  assert.match(css, /\.ic-svg \{ display: block; width: 24px; height: 24px;/);
+  assert.match(css, /\.mk:hover \.ic, \.mk\.sel \.ic \{ transform: translate\(-50%, -50%\) scale\(1\.25\); \}/, 'other selected icons keep their existing emphasis');
+  assert.match(css, /\.mk\.t-military_incursion:hover \.ic, \.mk\.t-military_incursion\.sel \.ic \{ transform: translate\(-50%, -50%\) scale\(1\); \}/, 'only incursion avoids the 30px hover/selection enlargement');
   assert.match(map, /el\.style\.setProperty\('--c', visual\.color\)/, 'category color remains data-driven');
   assert.match(map, /if \(!\['squad', 'movement', 'fly'\]\.includes\(marker\)\) el\.insertAdjacentHTML\('afterbegin', '<span class="news-pulse-ring"/, 'the established pulse ring remains enabled');
 });

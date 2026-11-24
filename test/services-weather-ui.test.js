@@ -60,7 +60,7 @@ test('services toolbar and place icons exist and are registered for map display'
   assert.match(html, /<button class="map-btn" id="btnSvc"[^>]*><span data-icon="apps"><\/span>/);
   assert.ok(ICONS.apps, 'the services entry button uses a defined apps icon');
   assert.match(icon('apps', 18), /<svg[^>]*viewBox="0 0 24 24"/);
-  assert.match(app, /\$\$\('\[data-icon\]'\)\.forEach\(\(el\) => \{\s*if \(!el\.firstChild\) el\.innerHTML = icon\(el\.dataset\.icon, \(ICONS\[el\.dataset\.icon\] \|\| \{\}\)\.size \|\| 18\)/);
+  assert.match(app, /\$\$\('\[data-icon\]'\)\.forEach\(\(el\) => \{\s*if \(!el\.firstChild\) el\.innerHTML = icon\(el\.dataset\.icon, 18\)/);
   for (const category of ['hospital', 'clinic', 'pharmacy', 'fuel', 'bakery']) {
     assert.match(services, new RegExp(`'${category}':?`));
   }
@@ -76,8 +76,8 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
   const tabOrder = [...services.matchAll(/tabBtn\('([^']+)'/g)].map((match) => match[1]);
   assert.deepEqual(tabOrder.slice(0, 2), ['jobs', 'army']);
-  assert.match(app, /services\.js\?v=41/);
-  assert.match(app, /icons\.js\?v=10/);
+  assert.match(app, /services\.js\?v=38/);
+  assert.match(app, /icons\.js\?v=7/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
   assert.match(services, /findWorker: 'مطلوب موظف'/);
@@ -128,7 +128,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobReadMore: 'Read more'/);
   assert.match(services, /jobReadLess: 'Show less'/);
   assert.match(services, /syrian\[_\\s-\]\?jo\[b\]\+/i, 'channel tags are stripped from previously cached job items');
-  assert.match(app, /services\.js\?v=41/, 'the updated service module bypasses stale browser caches');
+  assert.match(app, /services\.js\?v=38/, 'the updated service module bypasses stale browser caches');
   assert.match(services, /hashtagOnlyLine/, 'standalone hashtag footer lines are removed');
   assert.match(css, /\.jobs-switch\s*\{/);
   assert.match(css, /\.jobs-option\.on\s*\{/);
@@ -140,7 +140,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
-  assert.match(html, /app\.css\?v=104/);
+  assert.match(html, /app\.css\?v=81/);
   assert.match(css, /\.job-deadline, \.army-deadline/);
 });
 
@@ -193,7 +193,3 @@ test('official warning cards show their start time and clarify source-button des
   assert.match(services, /تفاصيل التسعيرة لدى سانا/);
 });
 
-test('Arabic accessibility labels use the same translated labels as visible controls',()=>{
- assert.match(app,/search\.setAttribute\('aria-label', T\.searchAlerts\)/);
- assert.match(app,/\$\('#btnSettingsM'\)\.setAttribute\('aria-label', T\.settings\)/);
-});

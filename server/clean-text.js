@@ -8,20 +8,10 @@ const MEDIA = [
   'تلفزيون سوريا', 'سوريا تلفزيون', 'تلفزيون سوريا مباشر',
   'الإخبارية السورية', 'قناة الإخبارية', 'الإخبارية', 'الاخبارية السورية', 'الاخبارية',
   'وكالة سانا', 'سانا', 'وكالة الأنباء السورية',
-  'حلب اليوم', 'شبكة المحرر', 'المحرر', 'عنب بلدي', 'السورية نت', 'الحدث سوريا', 'سوريا الآن', 'سوريا الان', 'Syria Now',
+  'حلب اليوم', 'شبكة المحرر', 'المحرر', 'عنب بلدي', 'السورية نت', 'الحدث سوريا',
   'Al Jazeera', 'Al Arabiya', 'Al Araby', 'Syria TV', 'SANA', 'Halab Today',
 ];
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// Raw links never belong in public copy: full URLs, bare domains with or
-// without a path (sana.sy/…), and the orphaned ".tld/path" remnant left when
-// an outlet name is stripped from inside a bare URL — that remnant used to
-// stay glued to the previous word (e.g. "الاقتصادي.sy/syria-and-the-world/…").
-export function stripRawUrls(s) {
-  return String(s)
-    .replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' ')
-    .replace(/(^|[\s(])[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.(?:sy|com|net|org|info|news|tv|me|io|co|gov|edu)(?:\/\S*)?/giu, '$1 ')
-    .replace(/\.(?:sy|com|net|org|info|news|tv|me|io)\/\S+/gi, '');
-}
 let extraNames = [];
 /** Monitored source names (from the news monitor) are treated as media names too. */
 export function setSourceNames(names) {
@@ -37,10 +27,10 @@ export function cleanAlertText(raw) {
   if (!raw) return raw;
   let s = String(raw);
   const M = mediaRe();
-  s = stripRawUrls(s);
+  s = s.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' ');
   s = s.replace(/(^|[\s(])@[A-Za-z0-9_]{4,}/g, '$1');
-  s = s.replace(/#(?:عاجل|خاص|حصري|سوريا_الآن|سوريا_الان)(?![\p{L}\p{N}_])/gu, ' ');
-  s = s.replace(/(^|\s)(?:عاجل)\s*[|:：]\s*/gu, '$1');
+  s = s.replace(/#(?:متداول|عاجل|خاص|حصري|سوريا_الآن|سوريا_الان)(?![\p{L}\p{N}_])/gu, ' ');
+  s = s.replace(/(^|\s)(?:متداول|عاجل)\s*[|:：]\s*/gu, '$1');
   s = s.replace(/#([\p{L}\p{N}_]+)/gu, (_, w) => w.replace(/_/g, ' '));
   // "(المصدر: الجزيرة سوريا)", "المصدر: سانا", "نقلاً عن العربية"
   s = s.replace(new RegExp(`[(\\[]\\s*(?:${CREDIT}\\s*[:：]?\\s*)?${M}\\s*[)\\]]`, 'giu'), ' ');
@@ -58,16 +48,6 @@ export function cleanAlertText(raw) {
   return s.trim();
 }
 
-const SPEAKER_INSTITUTION = /(?:الدفاع المدني|وزارة|رئاسة|الشرطة|البلدية|محافظة|مجلس|مديرية|قيادة|الجيش|إدارة|مكتب|المركز|المستشفى|الهلال الأحمر|الأمن|الحكومة|civil defense|ministry|police|municipal|municipality|government|presidency|army|council|directorate|hospital|red crescent)/iu;
-const MEDIA_IDENTITY_TERMS = /(?:قناة|مراسل|مصادر?|شبكة|وكالة|صحيفة|منصة|التلفزيون|تلفزيون|الإخبارية|الاخبارية|الرصد|أخبار|الاخبار|news|media|agency|press|channel|reporter|journal|\btv\b)/iu;
-const isInstitutionSpeakerName = (name) => {
-  const speaker = String(name).replace(/^مصادر\s+/iu, '');
-  return SPEAKER_INSTITUTION.test(speaker) && !MEDIA_IDENTITY_TERMS.test(speaker);
-};
-const REPORTER_PROMO = /(^|\r?\n)[ \t]*(?:التفاصيل|تفاصيل(?:\s+أكثر)?)\s+(?:مع|لدى|من)\s+(?:مراسل(?:نا|تنا|ة)?|(?:ال)?مراسل(?:ة)?|مراسلي(?:نا)?|مراسلاتنا)(?![\p{L}\p{N}_])[^\r\n]*|(?<=[.!؟؛])[ \t]+(?:التفاصيل|تفاصيل(?:\s+أكثر)?)\s+(?:مع|لدى|من)\s+(?:مراسل(?:نا|تنا|ة)?|(?:ال)?مراسل(?:ة)?|مراسلي(?:نا)?|مراسلاتنا)(?![\p{L}\p{N}_])[^\r\n]*/giu;
-function stripReporterPromo(text) {
-  return String(text || '').replace(REPORTER_PROMO, (_match, lineBreak) => lineBreak || '');
-}
 const PRIVATE_EDITORIAL_LABEL = /(?:رأي\s*\/\s*تحليل|رأي|تحليل|opinion\s*\/\s*analysis|محاكاة\s+(?:سياسية\s+)?ساخرة(?:\s+خيالية)?(?:\s*[\[(]\s*(?:ليست\s+خبراً|not\s+news)\s*[\])])?|fictional\s+political\s+satire)\s*[:：—-]/iu;
 const EDITORIAL_DIAGNOSTIC = /EDITORIAL_REVIEW_REQUIRED|REVIEW_REQUIRED|لا\s+تقدم\s+المادة\s+وقائع\s+موثقة\s+كافية|insufficient\s+(?:verified\s+)?facts\s+for\s+(?:a\s+)?policy\s+criticism/iu;
 
@@ -77,137 +57,15 @@ export function isPrivateEditorialCopy(raw) {
   return Boolean(text && (PRIVATE_EDITORIAL_LABEL.test(text) || EDITORIAL_DIAGNOSTIC.test(text)));
 }
 
-/** Explicit owner-approved editorial copy is public only with its matching leading label and without diagnostics. */
-export function isPublicEditorialCopy(raw, mode) {
-  const text = String(raw || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
-  if (!text || EDITORIAL_DIAGNOSTIC.test(text)) return false;
-  const prefix = mode === 'opinion'
-    ? /^(?:رأي\s*\/\s*تحليل|رأي|تحليل|opinion\s*\/\s*analysis)\s*[:：—-]/iu
-    : mode === 'satire'
-      ? /^(?:محاكاة\s+(?:سياسية\s+)?ساخرة\s+خيالية(?:\s*[\[(]\s*(?:ليست\s+خبراً|not\s+news)\s*[\])])?|fictional\s+political\s+satire)\s*[:：—-]/iu
-      : null;
-  return Boolean(prefix?.test(text));
-}
-
-/** Remove only a named reporting identity, preserving the original role/verb.
- * Number/place grounding uses this same narrow metadata rule, never a full
- * cleanup of the factual source or a blanket removal of source digits. */
-export function anonymizeNewsReportingLead(raw, privateNames = []) {
-  let text = String(raw || '');
-  const tidyNames = (values) => [...new Set(values.map((value) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim())
-    .filter((name) => name.length >= 3 && name.length <= 80))].sort((a, b) => b.length - a.length);
-  const mediaNames = tidyNames(MEDIA);
-  const privateSourceNames = tidyNames([...extraNames, ...(Array.isArray(privateNames) ? privateNames : [])]);
-  const verb = '(?:أفاد(?:ت)?|قال(?:ت)?|ذكر(?:ت)?|نقل(?:ت)?|أوضح(?:ت)?|كشف(?:ت)?|أكد(?:ت)?|أشار(?:ت)?)';
-  const privateReportingNames = tidyNames([...mediaNames, ...privateSourceNames]).filter((name) => !isInstitutionSpeakerName(name));
-  const reportingNames = tidyNames([...privateReportingNames, ...privateReportingNames.map((name) => name.replace(/^(?:مراسل(?:ة)?|مصادر?|مصدر)\s+/u, ''))]);
-  if (reportingNames.length) {
-    const outlet = `(?:${reportingNames.map(esc).join('|')})`;
-    const reportingRole = '(?:مراسل(?:ة)?|مصادر?|مصدر)';
-    const reportedLead = new RegExp(`(^|[\\s،,;|•—–(])(?:(${verb})\\s+)?(${reportingRole})\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s*(?:بأن|أن|إن|[:：،,|]))`, 'gimu');
-    text = text.replace(reportedLead, (_match, prefix, speech, speaker) => `${prefix}${speech ? speech + ' ' : ''}${speaker} `);
-  }
-  return text;
-}
-
-// Both retention and loss detection use the same source-present spans.
-function originalReportingAttributionRe(names) {
-  if (!names.length) return null;
-  const outlet = `(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?(?:${names.map(esc).join('|')})`;
-  const reporter = `(?:مراسل(?:ة)?|مصادر?|مصدر)\\s+${outlet}(?=\\s*(?:بأن|أن|إن|[:：،,|]))`;
-  // Acquisition wording is evidence attribution, not a removable outlet credit.
-  // Retain the complete uncertainty/acquisition clause, never invent a source.
-  const acquisition = `(?:أفادت?\\s+)?معلومات(?:\\s+خاصة)?\\s+حصلت?\\s+عليها\\s+${outlet}(?=\\s+(?:ب[\\p{L}]|حول\\s|عن\\s|أن\\s))`;
-  return new RegExp(`(?:${reporter}|${acquisition})`, 'giu');
-}
-
-// Protect only an attribution span already present in the supplied narrative.
-// Configured names are match vocabulary, never text to append to public copy.
-function protectOriginalReportingAttribution(raw, privateNames = []) {
-  const source = String(raw || '');
-  const names = [...new Set([...MEDIA, ...extraNames, ...(Array.isArray(privateNames) ? privateNames : [])].flatMap((name) => [name, String(name || '').replace(/^(?:مراسل(?:ة)?|مصادر?|مصدر)\s+/u, '')])
-    .map((name) => String(name || '').replace(/[<>\r\n]/g, '').trim()).filter((name) => name.length >= 3 && !isInstitutionSpeakerName(name)))].sort((a, b) => b.length - a.length);
-  let prefix = 'RASORIGINALATTRIBUTIONKEEP';
-  while (source.includes(prefix)) prefix += 'X';
-  const kept = [];
-  const re = originalReportingAttributionRe(names);
-  const text = re ? source.replace(re, (value) => { const key = `${prefix}${kept.length}END`; kept.push(value); return key; }) : source;
-  return { text, restore: (value) => String(value).replace(new RegExp(`${prefix}(\\d+)END`, 'g'), (_match, index) => kept[Number(index)] || '') };
-}
-
-/** Fail closed when source cleanup removed a named reporting identity.
- * This detects a loss only; it never invents attribution or changes public copy. */
-export function missingNamedReportingAttribution(raw, candidate, privateNames = []) {
-  const source = String(raw || '');
-  const names = [...new Set([...MEDIA, ...extraNames, ...(Array.isArray(privateNames) ? privateNames : [])].flatMap((name) => [name, String(name || '').replace(/^(?:مراسل(?:ة)?|مصادر?|مصدر)\s+/u, '')])
-    .map((name) => String(name || '').trim()).filter((name) => name.length >= 3 && !isInstitutionSpeakerName(name)))].sort((a, b) => b.length - a.length);
-  if (!names.length) return false;
-  const re = originalReportingAttributionRe(names);
-  const normalized = (text) => String(text).replace(/\s+/g, ' ').trim();
-  const target = normalized(candidate);
-  return [...source.matchAll(re)].some((match) => !target.includes(normalized(match[0])));
-}
-
-/** Remove media-outlet/reporting credits from public copy without stripping attributed speakers or institutions. */
-export function cleanPublicNewsAttribution(raw, privateNames = []) {
-  if (!raw) return raw;
-  const originalAttribution = protectOriginalReportingAttribution(raw, privateNames);
-  let text = stripRawUrls(originalAttribution.text);
-  // Keep reported attribution chains inside the narrative, while standalone
-  // outlet credits and promotional tails remain removable.
-  const reportedChains = [];
-  text = text.replace(/(?:و)?نقلت?\s+(?:وكالة\s+)?سانا\s+عن/gu, (value) => {
-    const key = `NEWSATTRIBUTIONKEEP${reportedChains.length}`;
-    reportedChains.push(value);
-    return key;
-  });
-  const tidyNames = (values) => [...new Set(values.map((value) => String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim())
-    .filter((name) => name.length >= 3 && name.length <= 80))].sort((a, b) => b.length - a.length);
-  const mediaNames = tidyNames(MEDIA);
-  const privateSourceNames = tidyNames([...extraNames, ...(Array.isArray(privateNames) ? privateNames : [])]);
-  const role = '(?:مراسل(?:ة)?|مصادر?|مصدر|وسائل(?:\\s+الإعلام)?|قناة|موقع|شبكة|وكالة|صحيفة|منصة)';
-  const verb = '(?:أفاد(?:ت)?|قال(?:ت)?|ذكر(?:ت)?|نقل(?:ت)?|أوضح(?:ت)?|كشف(?:ت)?|أكد(?:ت)?|أشار(?:ت)?)';
-  text = anonymizeNewsReportingLead(text, privateNames);
-  if (mediaNames.length) {
-    const outlet = `(?:${mediaNames.map(esc).join('|')})`;
-    const attributedLead = new RegExp(`(^|[\\s،,;|•—–])(?:(?:${verb})\\s+)?(?:${role}\\s+)?(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}\\s*(?:بأن|أن|[:：|]|—|–)\\s*`, 'gimu');
-    text = text.replace(attributedLead, '$1');
-    const mediaRole = new RegExp(`(^|[\\s،,;|•—–])${role}\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s|$|[:：،,])`, 'gimu');
-    text = text.replace(mediaRole, '$1');
-    const outletLink = new RegExp(`\\s+(?:لـ?|إلى|عن|من|عبر|على|في)\\s*(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s|$|[،,.;:؛!?؟])`, 'giu');
-    text = text.replace(outletLink, ' ');
-    text = text.replace(new RegExp(`(^|\\n)\\s*${outlet}\\s*(?=\\n|$)`, 'giu'), '$1');
-  }
-  const removablePrivateSourceNames = privateSourceNames.filter((name) => !isInstitutionSpeakerName(name));
-  if (removablePrivateSourceNames.length) {
-    const outlet = `(?:${removablePrivateSourceNames.map(esc).join('|')})`;
-    const sourceLead = new RegExp(`(^|[\\s،,;|•—–(])(?:(?:${verb})\\s+)?${role}\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=$|[\\s:：،,.;])`, 'gimu');
-    text = text.replace(sourceLead, '$1');
-    text = text.replace(new RegExp(`(^|\\n)\\s*${outlet}\\s*[:：|—–-]\\s*`, 'gimu'), '$1');
-    const sourceLink = new RegExp(`\\s+(?:لـ?|إلى|عن|من|عبر|على|في)\\s*(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s|$|[،,.;:؛!?؟])`, 'giu');
-    text = text.replace(sourceLink, ' ');
-    const sourceAttribution = new RegExp(`(^|[\\s،,;|•—–(])${verb}\\s+(?:قناة\\s+|موقع\\s+|شبكة\\s+|وكالة\\s+)?${outlet}(?=\\s*(?:بأن|أن|إن|[:：|]))`, 'gimu');
-    text = text.replace(sourceAttribution, '$1');
-  }
-  text = cleanAttributedNewsText(text, [...(Array.isArray(privateNames) ? privateNames : []), ...MEDIA]);
-  if (privateSourceNames.some((name) => !isInstitutionSpeakerName(name) && String(raw).includes(name))) {
-    text = text.replace(new RegExp(`(^|\\n)([\\s•\\-–—]*)${verb}\\s*[:：]\\s*`, 'gimu'), '$1$2');
-  }
-  text = stripReporterPromo(text);
-  text = text.replace(/NEWSATTRIBUTIONKEEP(\d+)/g, (_match, index) => reportedChains[Number(index)] || '');
-  return originalAttribution.restore(String(text || '').replace(/^[\s،,;|•—–:-]+|[\s،,;|•—–:-]+$/g, '').replace(/\s+/g, ' ').trim());
-}
-
 /** Sanitize public news copy while preserving story attribution and removing private feed identities. */
 export function cleanAttributedNewsText(raw, privateNames = []) {
   if (!raw) return raw;
-  const originalAttribution = protectOriginalReportingAttribution(raw, privateNames);
-  let s = originalAttribution.text
+  let s = String(raw)
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
     .replace(/<[^>]*>/g, ' ')
     .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '')
     .replace(/#([\p{L}\p{N}_]+)/gu, (_, word) => word.replace(/_/g, ' '));
-  s = stripRawUrls(s)
+  s = s.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, ' ')
     .replace(/(^|[\s(])@[A-Za-z0-9_]{4,}/g, '$1');
   const names = [...new Set([
     ...extraNames,
@@ -216,27 +74,11 @@ export function cleanAttributedNewsText(raw, privateNames = []) {
     .filter((name) => name.length >= 3 && name.length <= 80))].sort((a, b) => b.length - a.length);
   for (const name of names) {
     const privateName = new RegExp(`(?<![\\p{L}\\p{N}_])${esc(name)}(?![\\p{L}\\p{N}_])`, 'giu');
-    const speech = '(?:قال(?:ت)?|أفاد(?:ت)?|ذكر(?:ت)?|أوضح(?:ت)?|أكد(?:ت)?|صرح(?:ت)?|أعلن(?:ت)?|نقل(?:ت)?)';
-    const attribution = new RegExp(`(?:${speech}|مصادر?|المصدر)\\s+$`, 'iu');
-    s = s.replace(privateName, (match, offset, fullText) => {
-      const before = fullText.slice(0, offset);
-      const after = fullText.slice(offset + match.length);
-      // These outlet labels are also ordinary adjectives in institution names.
-      // Remove them only in an explicit outlet-credit position, never mid-story.
-      if (['العربي', 'العربية'].includes(name)) {
-        const outletContext = /(?:^|\n)\s*$/u.test(before) && /^\s*(?:[:：|]|$)/u.test(after)
-          || /(?:مراسل|قناة|تلفزيون|التلفزيون|مصادر|المصدر)\s+$/u.test(before);
-        if (!outletContext) return match;
-      }
-      const completeInstitutionSource = /^مصادر\s+/iu.test(name) && !before.trim();
-      return isInstitutionSpeakerName(name)
-        && (completeInstitutionSource || attribution.test(before))
-        && /^\s*(?:[:：،;]|بأن|أن|إن)/iu.test(after) ? match : ' ';
-    });
+    s = s.replace(privateName, ' ');
   }
   s = s.replace(/(^|\n)\s*(?:المصدر|مصدر|source)\s*[:：]\s*(?=\n|$)/giu, '$1')
     .replace(/(^|\n)\s*[:：|•\-–—]+\s*/gmu, '$1');
   s = s.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n');
   s = s.replace(/\s+([.،,:؛!؟])/g, '$1').trim();
-  return originalAttribution.restore(s);
+  return s;
 }
