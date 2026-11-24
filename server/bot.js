@@ -1219,6 +1219,7 @@ export async function correctNewLocalityPostsOnce(api) {
     ['fe606795-5df6-42b5-868a-f4a8d4dbb48c',1556,'91c39bf91e','https://t.me/HawarNews/86152'],
     ['d73cf3d1-4e8c-4074-ada9-ec45db3e24b5',1557,'eb1d33a423','https://t.me/AlarabyTvSy/65585'],
     ['6e807588-efdf-4efc-8286-aa452ff40e99',1558,'8b4d0027ce','https://t.me/AbomosaabSharkea/183211'],
+    ['4121f35c-b34c-4cb5-8b59-21e10d442e0e',1559,'bef1e235d5','https://t.me/AlarabyTvSy/65591'],
   ]) {
     const key='owner-compound-locality-'+post+'-2026-11-24';
     if(store.state.maint?.[key]?.done)continue;

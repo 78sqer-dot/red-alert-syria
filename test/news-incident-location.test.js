@@ -32,3 +32,10 @@ test('border crossing name never borrows the town centre or danger radius',()=>{
  const r=newsIncidentLocations('اعتقال الإعلامي أثناء دخوله الأراضي السورية عبر معبر اليعربية الحدودي بريف الحسكة.',town,[]);
  assert.equal(r.location.name_ar,'معبر اليعربية');assert.equal(r.location.latitude,undefined);assert.equal(r.location.short_ar,'معبر اليعربية - الحسكة');assert.deepEqual(r.extra,[]);
 });
+
+test('countryside of a named city never uses its city-center incident pin',()=>{
+ const town=locationFrom({placeId:168325});
+ for(const source of ['فرق الهندسة تفجر مخلفات الحرب في ريف مدينة خان شيخون بمحافظة إدلب.','تفجير مخلفات حرب بريف خان شيخون بريف إدلب.']){
+  const r=newsIncidentLocations(source,town,[]);assert.equal(r.location.name_ar,'ريف خان شيخون');assert.equal(r.location.latitude,undefined);assert.equal(r.location.short_ar,'ريف خان شيخون - إدلب');
+ }
+});
