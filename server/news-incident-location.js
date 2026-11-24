@@ -5,6 +5,12 @@ const contains=(s,n)=>(' '+key(s)+' ').includes(' '+key(n)+' ');
 export function newsIncidentLocations(source,main,extra=[]) {
  const text=String(source||'');
  if(!text)return {location:main,extra};
+ // A nearby coastal town is not an offshore earthquake epicentre.
+ if (/(?:هز[ةه] ارضي[ةه]|زلزال)/u.test(N(text)) && /(?:في البحر|قباله الساحل)/u.test(N(text)) && /شمال (?:مدينه )?اللاذقيه/u.test(N(text)) && /(?:قرب|بالقرب من)\s+(?:منطقه\s+)?كسب/u.test(N(text))) {
+  const label='البحر شمال اللاذقية قرب كسب';
+  return {location:{scope:'governorate',name_ar:label,name_en:'Offshore north of Latakia near Kassab',short_ar:label,short_en:'Offshore north of Latakia near Kassab',governorate:'02',governorate_ar:'اللاذقية',governorate_en:'Latakia'},extra:[]};
+ }
+
  const facility = text.match(/(?:^|[\s،,:؛])معبر\s+([\p{L}\s]{2,45}?)(?=\s+(?:الحدودي|بريف|في|بمحافظة)|[،,:؛.\n]|$)/u);
  const ruralName=String(main?.name_ar||'').replace(/^ريف\s+/,'');
  const rural = ruralName && new RegExp('(?:^| )ب?ريف (?:مدينه |بلده |قريه )?'+N(ruralName)+'(?: |$)').test(N(text));
