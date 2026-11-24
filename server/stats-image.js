@@ -56,7 +56,7 @@ const fmtShort = (ms, lang) => {
 
 /**
  * Collect statistics for a period.
- * kind: 'day' (today since 00:00 Damascus), '24h', '7d', '30d'
+ * kind: 'day'/'24h' (rolling 24 hours), 'today' (since Damascus midnight), '7d', '30d'
  */
 export function collectStats(kind = '24h', now = Date.now()) {
   const week = kind === 'week';
@@ -94,13 +94,15 @@ export function collectStats(kind = '24h', now = Date.now()) {
   }
   const byType = Object.fromEntries(TYPE_KEYS.map((k) => [k, 0]));
   const gov = new Map();
+  let unassignedGov = 0;
   const hours = new Array(24).fill(0);
   for (const e of list) hours[damascusParts(Date.parse(e.ts)).h] += 1;
   for (const e of list) {
     if (byType[e.ty] != null) byType[e.ty] += 1;
     buckets[bucketOf(Date.parse(e.ts))] += 1;
-    const key = e.g || '_';
-    const g = gov.get(key) || { ar: e.ga || 'عموم سوريا', en: e.ge || 'All Syria', n: 0 };
+    if (!e.g) { unassignedGov++; continue; }
+    const key = e.g;
+    const g = gov.get(key) || { ar: e.ga || e.g, en: e.ge || e.g, n: 0 };
     g.n += 1;
     gov.set(key, g);
   }
@@ -113,7 +115,7 @@ export function collectStats(kind = '24h', now = Date.now()) {
     kind: week ? 'week' : kind, from, to: now,
     hours, busiestDay: buckets[bd] ? { label: labels[bd], n: buckets[bd] } : null, busiestHour: hours[bh] ? { h: bh, n: hours[bh] } : null,
     topType: topType && topType[1] ? { key: topType[0], n: topType[1] } : null, total: list.length, prev, active, ended: list.length - active,
-    activeNow: activeIds.size, byType, byGov: [...gov.values()].sort((a, b) => b.n - a.n),
+    activeNow: activeIds.size, byType, unassignedGov, byGov: [...gov.values()].sort((a, b) => b.n - a.n),
     buckets, labels, reports: list.filter((e) => e.src === 'report').length,
   };
 }
@@ -231,7 +233,7 @@ export function statsSvg(st, lang = 'ar') {
   if (off) {
     y = 462;
     const hw = (W - 2 * P - 3 * gap) / 4; const hh = 146;
-    const hd = st.busiestDay; const hr = st.busiestHour; const tt = st.topType; const tg = st.byGov[0];
+    const hd = st.busiestDay; const hr = st.busiestHour; const tt = st.topType; const tg = st.byGov[0]?.n !== st.byGov[1]?.n ? st.byGov[0] : null;
     const ty = tt ? ALERT_TYPES[tt.key] : null;
     const items = [
       { label: t.hl.day, value: hd ? (typeof hd.label === 'string' ? hd.label : `${lang === 'en' ? hd.label.en : hd.label.ar} ${hd.label.d}`) : '—', sub: hd ? `${nf(hd.n)} ${t.alerts}` : '' },
@@ -261,8 +263,9 @@ export function statsSvg(st, lang = 'ar') {
   out.push(head(typeX, t.byType)); out.push(head(govX, t.byGov));
   // types
   const maxT = Math.max(1, ...Object.values(st.byType));
-  const rowH = 58; let ry = y + 104;
-  for (const k of TYPE_KEYS) {
+  const visibleTypes = TYPE_KEYS.filter((k) => (st.byType[k] || 0) > 0);
+  const rowH = Math.min(58, (colH - 120) / Math.max(1, visibleTypes.length)); let ry = y + 104;
+  for (const k of visibleTypes) {
     const ty = ALERT_TYPES[k]; const n = st.byType[k] || 0; const col = BAR[k] || ty.icon || ty.color;
     const sub = ty.parent === 'civil';
     const ind = sub ? 26 : 0;
@@ -286,7 +289,7 @@ export function statsSvg(st, lang = 'ar') {
     ry += rowH;
   }
   // governorates
-  const govs = st.byGov.slice(0, 10);
+  const govs = st.byGov.slice(0, st.unassignedGov ? 9 : 10);
   if (!govs.length) {
     out.push(text(govX + colW / 2, y + colH / 2, t.none, { size: 24, weight: 500, fill: '#6b7280', anchor: 'middle' }));
   } else {
@@ -294,7 +297,8 @@ export function statsSvg(st, lang = 'ar') {
     govs.forEach((g, i) => {
       const name = lang === 'en' ? g.en : g.ar;
       const tx = rtl ? govX + colW - 30 : govX + 30;
-      out.push(text(tx, gy, `${i + 1}`, { size: 20, weight: 700, fill: i < 3 ? '#ff6b7a' : '#6b7280', anchor: A, family: 'Noto Sans' }));
+      const rank = govs.findIndex((item) => item.n === g.n) + 1;
+      out.push(text(tx, gy, `${rank}`, { size: 20, weight: 700, fill: i < 3 ? '#ff6b7a' : '#6b7280', anchor: A, family: 'Noto Sans' }));
       out.push(text(rtl ? tx - 34 : tx + 34, gy, name, { size: 22, weight: 600, fill: '#e5e7eb', anchor: A }));
       out.push(text(rtl ? govX + 30 : govX + colW - 30, gy, nf(g.n), { size: 24, weight: 700, fill: '#ffffff', anchor: rtl ? 'start' : 'end', family: 'Noto Sans' }));
       const bw = colW - 60; const fw = Math.max(10, (bw * g.n) / maxG); const by = gy + 14;
@@ -302,6 +306,11 @@ export function statsSvg(st, lang = 'ar') {
       out.push(`<rect x="${rtl ? govX + 30 + bw - fw : govX + 30}" y="${by}" width="${fw}" height="9" rx="4.5" fill="url(#gov)"/>`);
       gy += gH;
     });
+  }
+
+  if (st.unassignedGov) {
+    const label = lang === 'en' ? 'No governorate recorded' : 'بلا محافظة مسجّلة';
+    out.push(text(rtl ? govX + colW - 30 : govX + 30, y + colH - 30, `${label}: ${nf(st.unassignedGov)}`, { size: 22, weight: 500, fill: '#9ca3af', anchor: A }));
   }
 
   // ---- activity chart

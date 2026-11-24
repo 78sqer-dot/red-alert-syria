@@ -1603,19 +1603,20 @@ const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأرب
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 function dailyCaption(st) {
   const p = damascusParts(st.to);
-  const top = st.byGov[0];
+  const top = st.byGov[0]?.n !== st.byGov[1]?.n ? st.byGov[0] : null;
   const types = Object.entries(st.byType).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 3)
     .map(([k, n]) => `${ALERT_TYPES[k].emoji} ${ALERT_TYPES[k].button_ar} ${n}`).join(' · ');
   return `🗓 <b>الملخص اليومي — ${AR_DAYS[p.wd]} ${p.d} ${AR_MONTHS[p.m - 1]} ${p.y}</b>\n\n`
     + `📊 إجمالي التنبيهات خلال 24 ساعة: <b>${st.total}</b>\n`
     + (types ? `🔺 الأكثر: ${types}\n` : '')
     + (top ? `📍 أكثر المحافظات: <b>${esc(top.ar)}</b> (${top.n})\n` : '')
+    + (st.unassignedGov ? `📍 بلا محافظة مسجّلة: <b>${st.unassignedGov}</b>\n` : '')
     + `\n🗺 الخريطة الحية: ${(config.publicUrl || 'https://red-alert-syria-q6k8.onrender.com').replace(/\/$/, '')}/ar/`;
 }
 function weeklyCaption(st) {
   const a = damascusParts(st.from + 3600_000); const b = damascusParts(st.to);
   const range = a.m === b.m ? `من ${a.d} إلى ${b.d} ${AR_MONTHS[b.m - 1]} ${b.y}` : `من ${a.d} ${AR_MONTHS[a.m - 1]} إلى ${b.d} ${AR_MONTHS[b.m - 1]} ${b.y}`;
-  const top = st.byGov[0];
+  const top = st.byGov[0]?.n !== st.byGov[1]?.n ? st.byGov[0] : null;
   const types = Object.entries(st.byType).filter(([, n]) => n).sort((x, y) => y[1] - x[1]).slice(0, 3)
     .map(([k, n]) => `${ALERT_TYPES[k].emoji} ${ALERT_TYPES[k].button_ar} ${n}`).join(' · ');
   const diff = st.total - st.prev;
@@ -1628,6 +1629,7 @@ function weeklyCaption(st) {
     + (top ? `📍 أكثر المحافظات: <b>${esc(top.ar)}</b> (${top.n})\n` : '')
     + (bd ? `📆 أكثر الأيام نشاطاً: <b>${bd.label.ar} ${bd.label.d}</b> (${bd.n})\n` : '')
     + (bh ? `⏰ ساعة الذروة: <b>${String(bh.h).padStart(2, '0')}:00</b>\n` : '')
+    + (st.unassignedGov ? `📍 بلا محافظة مسجّلة: <b>${st.unassignedGov}</b>\n` : '')
     + `\n🗺 الخريطة الحية: ${url}/ar/`;
 }
 /** Built-in scheduler: posts the statistics image in the channel once a day at the configured Damascus time. */
