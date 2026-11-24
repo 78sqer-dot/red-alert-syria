@@ -20,3 +20,9 @@ test('explicit separate named incidents are not indiscriminately collapsed',()=>
 test('attached foreign generation artifact cannot publish',()=>{
  assert.throws(()=>assertNewsLanguageCopy('في أرضAGRICULTURAL في قرية'),/Mixed-language/);assert.doesNotThrow(()=>assertNewsLanguageCopy('أرض زراعية قرب M4'));
 });
+
+test('named area west of another locality is one incident, not a second anchor site',()=>{
+ const maakar=locationFrom({placeId:31000001}),sayda=locationFrom({placeId:10312031});
+ const source='لليوم الثلاثين على التوالي... مشاهد توثق تنفيذ قوات الاحتلال الإسرائيلي عمليات حفر وتجريف في منطقة المعكر، غربي صيدا الحانوت بريف القنيطرة';
+ const r=newsIncidentLocations(source,maakar,[sayda]);assert.equal(r.location.place_id,31000001);assert.deepEqual(r.extra,[]);assert.equal(r.location.short_ar,'المعكر - القنيطرة');
+});
