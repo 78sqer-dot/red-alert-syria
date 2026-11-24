@@ -523,6 +523,7 @@ async function start() {
       }
     };
     upReport();
+    let ownerPostCorrectionAttempts = 0;
     const runOwnerPostCorrections = async () => {
       if (store._backupWritesPaused) { setTimeout(runOwnerPostCorrections, 5000).unref(); return; }
       try {
@@ -531,7 +532,10 @@ async function start() {
         const localities = await correctNewLocalityPostsOnce(bots.admin.api);
         console.log('[owner-correction] localities',JSON.stringify(localities));
         console.log('[owner-post-corrections]', JSON.stringify({roj,mine}));
-      } catch(e) { console.error('[owner-post-corrections]', e.description || e.message); }
+      } catch(e) {
+        console.error('[owner-post-corrections]', e.description || e.message);
+        if (++ownerPostCorrectionAttempts < 4) setTimeout(runOwnerPostCorrections, 20000).unref();
+      }
     };
     setTimeout(runOwnerPostCorrections, 25000).unref();
     startDailySummary(bots.admin.api);

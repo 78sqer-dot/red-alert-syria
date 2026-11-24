@@ -1236,7 +1236,9 @@ export async function correctNewLocalityPostsOnce(api) {
     store._logPatch(id,{g:loc.governorate,ga:loc.governorate_ar,ge:loc.governorate_en,p:loc.place_id||undefined,d:loc.district||undefined,pa:loc.name_ar,pe:loc.name_en,xd:undefined});
     d.loc=loc;d.extra=incident.extra;d.headline=copy;
     store.state.maint={...store.state.maint,[key]:{done:new Date().toISOString(),post}};store.persist();
-    if(store.backup&&!await store.flushBackup(true))throw Error('Compound locality correction backup not confirmed');
+    // A concurrent scheduled flush may already have consumed the pending flag.
+    // Queue this exact post state explicitly before confirming durable handoff.
+    if(store.backup) { store._backupPending=true; if(!await store.flushBackup(true))throw Error('Compound locality correction backup not confirmed'); }
     results.push({ok:true,post});
   }
   return results;
