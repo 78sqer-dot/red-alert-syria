@@ -1221,6 +1221,7 @@ export async function correctNewLocalityPostsOnce(api) {
     ['6e807588-efdf-4efc-8286-aa452ff40e99',1558,'8b4d0027ce','https://t.me/AbomosaabSharkea/183211'],
     ['4121f35c-b34c-4cb5-8b59-21e10d442e0e',1559,'bef1e235d5','https://t.me/AlarabyTvSy/65591'],
     ['c9d6a6ca-f127-4d8c-bfd0-c326e0517ac9',1570,'5da4254e30','https://t.me/AlarabyTvSy/65602'],
+    ['2dad9313-de5c-446b-8b33-4c993a929667',1571,'516022d088','https://t.me/AlarabyTvSy/65604'],
   ]) {
     const key='owner-compound-locality-'+post+'-2026-11-24';
     if(store.state.maint?.[key]?.done)continue;
@@ -1236,7 +1237,7 @@ export async function correctNewLocalityPostsOnce(api) {
     const png=await withDeadline(alertImage(b,'ar'),30000);
     try {
       await api.editMessageMedia(config.channel,post,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-corrected-'+post+'.png'),{caption:channelCaption(b,{ended:!b.is_active}),parse_mode:'HTML'}),{reply_markup:channelKeyboard(b)});
-    } catch(e) { if(post!==1570 || !/message is not modified/i.test(String(e.description||e.message)))throw e; }
+    } catch(e) { if(![1570,1571].includes(post) || !/message is not modified/i.test(String(e.description||e.message)))throw e; }
     const {title_en,description,place,scope,location,extra,zones}=b;
     store.updateAlert(id,{title,title_en,description,place,scope,location,extra,zones,areas});
     store._logPatch(id,{g:loc.governorate,ga:loc.governorate_ar,ge:loc.governorate_en,p:loc.place_id||undefined,d:loc.district||undefined,pa:loc.name_ar,pe:loc.name_en,xd:undefined});

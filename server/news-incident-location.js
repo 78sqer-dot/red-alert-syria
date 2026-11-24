@@ -11,6 +11,11 @@ export function newsIncidentLocations(source,main,extra=[]) {
   return {location:{scope:'governorate',name_ar:label,name_en:'Offshore north of Latakia near Kassab',short_ar:label,short_en:'Offshore north of Latakia near Kassab',governorate:'02',governorate_ar:'اللاذقية',governorate_en:'Latakia'},extra:[]};
  }
 
+ // Explicit Hama-city neighbourhood is not the same-named Suqaylabiyah town.
+ if (/(?:حي|منطقه) الشريعه (?:بمدينه|في مدينه) حماه/u.test(N(text))) {
+  const label='حي الشريعة بمدينة حماة';
+  return {location:{scope:'governorate',name_ar:label,name_en:'Al-Sharia neighborhood, Hama city',short_ar:label,short_en:'Al-Sharia neighborhood, Hama city',governorate:'10',governorate_ar:'حماة',governorate_en:'Hama'},extra:[]};
+ }
  const facility = text.match(/(?:^|[\s،,:؛])معبر\s+([\p{L}\s]{2,45}?)(?=\s+(?:الحدودي|بريف|في|بمحافظة)|[،,:؛.\n]|$)/u);
  const ruralName=String(main?.name_ar||'').replace(/^ريف\s+/,'');
  const rural = ruralName && new RegExp('(?:^| )ب?ريف (?:مدينه |بلده |قريه )?'+N(ruralName)+'(?: |$)').test(N(text));
