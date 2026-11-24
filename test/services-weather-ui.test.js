@@ -75,8 +75,8 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobs: 'Jobs'/);
   assert.match(services, /tabBtn\('jobs', 'briefcase', L\.jobs\)/);
   const tabOrder = [...services.matchAll(/tabBtn\('([^']+)'/g)].map((match) => match[1]);
-  assert.deepEqual(tabOrder.slice(0, 2), ['jobs', 'prices']);
-  assert.match(app, /services\.js\?v=40/);
+  assert.deepEqual(tabOrder.slice(0, 2), ['jobs', 'army']);
+  assert.match(app, /services\.js\?v=41/);
   assert.match(app, /icons\.js\?v=10/);
   assert.match(services, /viewButton\('jobs', L\.findJob/);
   assert.match(services, /viewButton\('workers', L\.findWorker/);
@@ -128,7 +128,7 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /jobReadMore: 'Read more'/);
   assert.match(services, /jobReadLess: 'Show less'/);
   assert.match(services, /syrian\[_\\s-\]\?jo\[b\]\+/i, 'channel tags are stripped from previously cached job items');
-  assert.match(app, /services\.js\?v=40/, 'the updated service module bypasses stale browser caches');
+  assert.match(app, /services\.js\?v=41/, 'the updated service module bypasses stale browser caches');
   assert.match(services, /hashtagOnlyLine/, 'standalone hashtag footer lines are removed');
   assert.match(css, /\.jobs-switch\s*\{/);
   assert.match(css, /\.jobs-option\.on\s*\{/);
@@ -140,18 +140,18 @@ test('jobs service lists only approved vacancies and routes employer submissions
   assert.match(services, /j\.location\.label_en : j\.location\.label_ar/);
   assert.match(services, /class="job-location"/);
   assert.match(css, /\.job-location\s*\{/);
-  assert.match(html, /app\.css\?v=103/);
+  assert.match(html, /app\.css\?v=104/);
   assert.match(css, /\.job-deadline, \.army-deadline/);
 });
 
-test('Syrian Army tab is hidden from the map while its data and section remain available', () => {
+test('Syrian Army entry is visible inside Services while its separate data and section remain available', () => {
   assert.ok(ICONS.shield, 'the Army tab uses a registered shield icon');
   assert.ok(ICONS.telegram && ICONS.whatsapp, 'follow buttons use the existing social icons');
   const renderStart = services.indexOf('function render() {');
   const tabsStart = services.indexOf('<div class="svc-tabs">', renderStart);
   const tabsEnd = services.indexOf('</div>', tabsStart);
   assert.ok(renderStart >= 0 && tabsStart > renderStart && tabsEnd > tabsStart);
-  assert.doesNotMatch(services.slice(tabsStart, tabsEnd), /tabBtn\('army'/, 'the map service tabs do not show the Army entry');
+  assert.match(services.slice(tabsStart, tabsEnd), /tabBtn\('army', 'shield'/, 'the map service tabs show the named shield Army entry');
   assert.match(services, /st\.tab === 'army' \? armyHtml\(\)/, 'the Army section remains renderable');
   assert.match(services, /h === 'army'\) open\(h\)/, 'the existing direct section route remains available');
   assert.match(services, /function armyHtml\(\)/);

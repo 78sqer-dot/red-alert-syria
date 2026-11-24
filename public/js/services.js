@@ -605,14 +605,14 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   function close() {
     if (!sheet) return;
     sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); back.hidden = true;
-    if (/^#(prices|power|roads|borders|services|weather|jobs)$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+    if (/^#(prices|power|roads|borders|services|weather|jobs|army)$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
   }
   const tabBtn = (k, ic, label) => `<button class="svc-tab${st.tab === k ? ' on' : ''}" data-tab="${k}">${icon(ic, 16)}<span>${esc(label)}</span></button>`;
   function render() {
     const b = sheet.querySelector('#svcBody');
     b.innerHTML = `<div class="sheet-grab"></div>
       <div class="svc-head"><div><h2>${esc(L.sheetTitle)}</h2><p>${esc(L.sheetSub)}</p></div><button class="sb-x lg" data-a="close" aria-label="${esc(L.close)}">${icon('x', 18)}</button></div>
-      <div class="svc-tabs">${tabBtn('jobs', 'briefcase', L.jobs)}${tabBtn('prices', 'coin', L.prices)}${tabBtn('weather', 'sun', L.weather)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}</div>
+      <div class="svc-tabs">${tabBtn('jobs', 'briefcase', L.jobs)}${tabBtn('army', 'shield', ARMY_TEXT[LANG === 'en' ? 'en' : 'ar'].tab)}${tabBtn('prices', 'coin', L.prices)}${tabBtn('weather', 'sun', L.weather)}${tabBtn('power', 'bolt', L.power)}${tabBtn('roads', 'route', L.roads)}${tabBtn('borders', 'door', L.borders)}${tabBtn('nearby', 'mapPin', L.nearby)}</div>
       <div class="svc-pane">${st.tab === 'prices' ? pricesHtml() : st.tab === 'weather' ? weatherHtml() : st.tab === 'power' ? powerHtml() : st.tab === 'roads' ? roadsHtml() : st.tab === 'borders' ? bordersHtml() : st.tab === 'jobs' ? jobsHtml() : st.tab === 'army' ? armyHtml() : st.tab === 'nearby' ? nearbyHtml() : pricesHtml()}</div>`;
     if (st.tab === 'nearby') renderResults();
     if (st.tab === 'weather' && (!st.wx || Date.now() - st.wxAt > 10 * 60_000) && !st.wxLoading) loadWx().catch(() => {});

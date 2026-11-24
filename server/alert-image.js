@@ -231,7 +231,7 @@ export async function alertImageSvg(alert, opts = {}) {
     if (!zones.length) zones = [{ lat: center.lat, lon: center.lon, km: 2.2 }];
   }
   const view = chooseView(zoned ? zones : [{ lat: center.lat, lon: center.lon, km: 1.6 }], center);
-  if (imageContext) view.z=imageContext.zoom;
+  if (imageContext) view.z=imageReference?.approximate&&imageReference.level==='road'?12:imageContext.zoom;
   else if (country) view.z = 7;
   else if (zones.length === 1) view.z = Math.min(view.z, 12);
   const { z } = view;
@@ -275,7 +275,7 @@ export async function alertImageSvg(alert, opts = {}) {
   }
   if (imageReference) {
     const [x,y]=px(center.lat,center.lon);
-    if(imageReference.approximate)o.push(`<g id="reviewed-approximate-location"><circle cx="${x}" cy="${y}" r="12" fill="#475569" stroke="#fff" stroke-width="4"/></g>`);
+    if(imageReference.approximate)o.push(`<g id="reviewed-approximate-location" transform="translate(${x} ${y})"><circle r="46" fill="#0284c7" fill-opacity=".16" stroke="#0284c7" stroke-width="4"/><circle r="32" fill="#fff" stroke="#fff" stroke-width="3"/><path d="M-13 -12H13M-13 -2H13M-13 8H5" stroke="#0284c7" stroke-width="5" stroke-linecap="round"/></g>`);
     else o.push(`<g id="reviewed-geographic-reference"><circle cx="${x}" cy="${y}" r="21" fill="#ef233c" fill-opacity=".05" stroke="#ef233c" stroke-opacity=".25" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="16" fill="none" stroke="#ef233c" stroke-opacity=".5" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/></g>`);
   }
   // attribution (required by the tile licence)

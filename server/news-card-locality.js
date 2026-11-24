@@ -71,7 +71,7 @@ function sentenceLocality(source,evidence=[]){
  let govHits=governorates.flatMap(g=>matches(source,g.ar).map(span=>({g,...span})));
  govHits=govHits.filter(h=>!govHits.some(x=>x!==h&&x.start<=h.start&&x.end>=h.end&&x.end-x.start>h.end-h.start));
  const ruralGov=govHits.filter(h=>h.rural||h.g.ar.includes(' ')||new RegExp('(?:محافظه|بمحافظه)\\s+(?:ب)?'+esc(N(h.g.ar)),'u').test(N(source)));
- if(ruralGov.length){const ids=[...new Set(ruralGov.map(h=>h.g.code))];if(ids.length!==1)return null;const g=ruralGov[0].g;const finer=hits.filter(h=>h.p.gov===g.code&&(h.p.rank>2||h.p.region)&&!h.rural);if(finer.length===1)return reference(finer[0].p,evidence,source);return reference(g,evidence,source,'governorate');}
+ if(ruralGov.length){const ids=[...new Set(ruralGov.map(h=>h.g.code))];if(ids.length!==1)return null;const g=ruralGov[0].g;const fineMentions=hits.filter(h=>(h.p.rank>2||h.p.region)&&!h.rural&&!govHits.some(g=>g.start===h.start&&g.end===h.end));const finer=fineMentions.filter(h=>h.p.gov===g.code);if(fineMentions.length&&finer.length!==1)return null;if(finer.length===1)return reference(finer[0].p,evidence,source);return reference(g,evidence,source,'governorate');}
   const unique=new Map();for(const h of hits)if(!unique.has(h.p.id))unique.set(h.p.id,h);
  hits=[...unique.values()];
  const contextGovs=governorates.filter(g=>new RegExp('(?:محافظه|ريف|بريف)\\s+'+esc(N(g.ar))+'(?=\\s|$)','u').test(N(source)));
@@ -85,22 +85,48 @@ function sentenceLocality(source,evidence=[]){
  return null;
 }
 
-// Each independently asserted event keeps its own outcome. Unresolved is not
-// equivalent to a clause without an incident: it must block a misleading single pin.
+// Parse a bounded physical-target relation before locality extraction. Ownership
+// of a targeted object is not the location of its owner or reporting source.
+function targetedEvent(text){
+ const t=N(text).replace(/^[•📌\s]+/u,'');
+ const target=/^(?:(?:مجهولون|مسلحون|قوات\s+\p{L}+|الجيش\s+\p{L}+)\s+)?(?:يستهدفون|استهدفوا|استهدف|تستهدف|يستهدف)\s+(?:حافله|باص|سياره|مركبه|دوريه)(?:\s+(?:مبيت|عسكريه|مدنيه))?(?:\s+تابعه\s+(?:لوزاره\s+الدفاع|لوزاره\s+الداخليه|للجيش|للشرطه))?\s+((?:في|قرب|داخل)\s+(?:(?:منطقه|مدينه|بلده|قريه)\s+)?\p{L}.*)$/u.exec(t);
+ if(!target||/(?:نقل|اسعف|للعلاج|من اهالي|من سكان|يعمل|موظف)/u.test(target[1]))return null;
+ return 'استهداف '+target[1];
+}
+function consequenceOnly(text){
+ const t=N(text).replace(/^[•📌\s]+/u,'');
+ // A complete, closed consequence clause has no independently asserted place,
+ // speaker, transport destination or second event. Anything extra fails closed.
+ return /^(الاستهداف|الانفجار|الحادث|الحريق)\s+(?:اسفر|ادي)\s+عن\s+(?:(?:اصابه|مقتل|وفاه)\s+(?:[0-9٠-٩]+|جنديين|شخصين|طفلين|جندي|شخص|طفل|شابين)(?:\s+(?:اشخاص|جنود|اطفال|مدنيين))?(?:\s+بجروح\s+(?:خفيفه|خطيره|متوسطه))?)\s*$/u.exec(t)?.[1]||null;
+}
+// Every independently asserted event retains an outcome; unresolved is never
+// dropped in favor of another event. Only an explicit closed consequence can
+// refer back to a single preceding resolved event.
 function eventFrames(source){
  const clauses=String(source||'').split(/[.؟!؛،\n]|\s+ولكن\s+/u).filter(s=>s.trim());
- return clauses.flatMap(s=>s.split(/\s+(?=و(?:وقع|حدث|اندلع|انفجر|اصيب|أصيب|قتل|قُتل|غرق|انهار|افتتح|آخر|اخر)\s)/u)).map(text=>{
-  const normalized=N(text),anchors=[...normalized.matchAll(events)];
+ return clauses.flatMap(s=>s.split(/\s+(?=و(?:وقع|حدث|اندلع|انفجر|اصيب|أصيب|قتل|قُتل|غرق|انهار|افتتح|آخر|اخر)\s)/u)).map(original=>{
+  const text=targetedEvent(original)||original,normalized=N(text),anchors=[...normalized.matchAll(events)];
   const positive=anchors.some(e=>!denied(normalized,e));
   const implicit=/(?:^|\s)و?(?:اخر|اخري)(?:\s|$)/u.test(normalized);
-  return {text,incident:positive||implicit};
+  return {text,original,consequence:consequenceOnly(original),incident:positive||implicit};
  });
 }
 export function sourceCardLocality(source,evidence=[]){
  const frames=eventFrames(source).filter(f=>f.incident);
  if(!frames.length)return null;
- const refs=frames.map(f=>sentenceLocality(f.text,evidence));
- if(refs.some(r=>!r))return null;
+ const refs=[];
+ for(const f of frames){
+  if(f.consequence){
+   if(!refs.length||refs.some(r=>!r))return null;
+   const preceding=frames.slice(0,frames.indexOf(f)).filter(p=>!p.consequence);
+   if(preceding.length!==1)return null;
+   const kind=/استهداف/u.test(N(preceding[0].text))?'الاستهداف':/حريق|احتراق/u.test(N(preceding[0].text))?'الحريق':/انفجار/u.test(N(preceding[0].text))?'الانفجار':/حادث/u.test(N(preceding[0].text))?'الحادث':null;
+   if(f.consequence!==kind&&f.consequence!=='الحادث')return null;
+   continue;
+  }
+  const ref=sentenceLocality(f.text,evidence);if(!ref)return null;
+  ref.sourcePlaceQuote=f.original;refs.push(ref);
+ }
  const unique=new Map(refs.map(r=>[r.placeId||r.governorateCode,r]));
  return unique.size===1?[...unique.values()][0]:null;
 }

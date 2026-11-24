@@ -1585,9 +1585,10 @@ html.dark .map-bottom-controls { box-shadow: 0 10px 30px rgba(0, 0, 0, .45), ins
 @keyframes referenceNewsPulse { 0% { transform:translate(-50%,-50%) scale(.75); opacity:.9; } 100% { transform:translate(-50%,-50%) scale(1.35); opacity:0; } }
 
 /* Existing point and small news pulse, for a named locality reference only. */
-.mk-locality-reference .locality-reference-dot{display:block;position:absolute;left:0;top:0;width:14px;height:14px;box-sizing:border-box;transform:translate(-50%,-50%);border-radius:50%;background:#475569;border:3px solid white;box-shadow:0 1px 4px #0005;}
+.mk-locality-reference .locality-reference-dot{display:block;position:absolute;left:0;top:0;width:11px;height:11px;box-sizing:border-box;transform:translate(-50%,-50%);border-radius:50%;background:#475569;border:2px solid white;box-shadow:0 1px 2px #0004;}
 
-.mk-locality-reference .news-pulse-ring{transform:translate(-50%,-50%);width:25px;height:25px;}
+.mk-locality-reference .news-pulse-ring{transform:translate(-50%,-50%);width:17px;height:17px;border:1px solid #64748b;background:transparent;animation:none;box-shadow:none;}
+.mk-locality-reference .news-pulse-ring::after{display:none;}
 
 /* Compact bottom controls. Symbol styling stays unchanged. */
 .map-bottom-controls{padding:6px!important;gap:7px!important;}

@@ -72,3 +72,15 @@ test('explicit unresolved incident geography always outranks dateline context',(
 test('dateline inheritance is closed grammar, not an open preposition blacklist',()=>{
  for(const text of ['حماة: غرق شاب عند نهر الفرات.','حماة: غرق شاب على نهر الفرات.','حماة: غرق شاب بجوار نهر الفرات.','حماة: وقع حادث بمحاذاة نهر الفرات.','دمشق: غرق شاب على ضفاف نهر الفرات.'])assert.equal(sourceCardLocality(text,evidence),null,text);
 });
+
+test('physical target ownership and closed consequence bind one incident, not ministry/source locations',()=>{
+ const source='إدارة الإعلام والاتصال في وزارة الدفاع لتلفزيون سوريا:\n• مجهولون يستهدفون حافلة مبيت تابعة لوزارة الدفاع في منطقة الباغوز بريف دير الزور الشرقي\n• الاستهداف أسفر عن إصابة جنديين بجروح خفيفة';
+ const r=sourceCardLocality(source,evidence);assert.equal(r?.placeId,171944);assert.equal(r.approximate,true);assert.match(r.sourcePlaceQuote,/مجهولون/);
+ assert.equal(sourceCardLocality('مسلحون يستهدفون سيارة في مدينة حماة',evidence)?.name_ar,'حماة');
+ for(const t of ['مجهولون يستهدفون شابا موظفا في حماة قرب الفرات','قال مصدر في وزارة الدفاع في حماة إن حافلة استهدفت في مكان مجهول','مجهولون يستهدفون حافلة يعمل سائقها في حماة قرب الفرات','مجهولون لم يستهدفوا حافلة في الباغوز','مجهولون يستهدفون حافلة في الباغوز. وقع حادث في حماة','مجهولون يستهدفون حافلة في الباغوز\nالاستهداف أسفر عن إصابة جنديين في حماة','مجهولون يستهدفون حافلة في الباغوز\nالاستهداف أسفر عن إصابة جنديين بجروح خفيفة ونقلا إلى حماة'])assert.equal(sourceCardLocality(t,evidence),null,t);
+});
+
+test('consequence class must match unique preceding incident, repeated consequences stay bound',()=>{
+ for(const t of ['وقع حادث سير في حماة\nالحريق أسفر عن إصابة جنديين بجروح خفيفة','وقع حريق في حماة\nالاستهداف أسفر عن إصابة جنديين بجروح خفيفة','مجهولون يستهدفون حافلة في قرية أم الرمان بريف حماة\nالاستهداف أسفر عن إصابة جنديين بجروح خفيفة','مجهولون يستهدفون حافلة في الباغوز نقلت من حماة إلى دمشق\nالاستهداف أسفر عن إصابة جنديين بجروح خفيفة'])assert.equal(sourceCardLocality(t,evidence),null,t);
+ assert.equal(sourceCardLocality('مجهولون يستهدفون حافلة في الباغوز\nالاستهداف أسفر عن إصابة جنديين بجروح خفيفة\nالاستهداف أسفر عن مقتل شخص',evidence)?.placeId,171944);
+});
