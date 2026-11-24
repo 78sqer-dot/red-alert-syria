@@ -21,3 +21,9 @@ test('mine discovery is civil warning not an explosion, detonations stay explosi
  assert.equal(isMineDiscoveryReport(discovery),true);assert.equal(refineType('explosion',discovery),'civil');assert.equal(ruleClassify(discovery)?.type,'civil');
  assert.equal(isMineDiscoveryReport('إصابة طفل جراء انفجار لغم في حلب'),false);assert.equal(refineType('explosion','إصابة طفل جراء انفجار لغم في حلب'),'explosion');
 });
+
+test('owner post repairs wait for durable handoff and do not broaden rule-derived refinement',()=>{
+ const index=fs.readFileSync(new URL('../server/index.js',import.meta.url),'utf8'),monitor=fs.readFileSync(new URL('../server/news-monitor.js',import.meta.url),'utf8');
+ assert.match(index,/if \(store._backupWritesPaused\) \{ setTimeout\(runOwnerPostCorrections, 5000\)/);
+ assert.match(monitor,/if \(!r.rule \|\| isCheckpointReport\(it.text\) \|\| isMineDiscoveryReport\(it.text\)\)/);
+});

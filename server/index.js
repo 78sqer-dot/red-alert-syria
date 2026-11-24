@@ -523,7 +523,15 @@ async function start() {
       }
     };
     upReport();
-    setTimeout(() => correctRojPhotoOnce(bots.admin.api).then(() => correctMineDiscoveryOnce(bots.admin.api)).then(r => console.log('[roj-correction]', JSON.stringify(r))).catch(e => console.error('[roj-correction]', e.description || e.message)), 12000).unref();
+    const runOwnerPostCorrections = async () => {
+      if (store._backupWritesPaused) { setTimeout(runOwnerPostCorrections, 5000).unref(); return; }
+      try {
+        const roj = await correctRojPhotoOnce(bots.admin.api);
+        const mine = await correctMineDiscoveryOnce(bots.admin.api);
+        console.log('[owner-post-corrections]', JSON.stringify({roj,mine}));
+      } catch(e) { console.error('[owner-post-corrections]', e.description || e.message); }
+    };
+    setTimeout(runOwnerPostCorrections, 25000).unref();
     startDailySummary(bots.admin.api);
     startWxBulletin(() => bots.admin?.api); // 🌤 morning weather bulletin (separate post, default 08:00)
     startPrices(() => bots.admin?.api); // 💱 morning prices bulletin (in-app scheduler, Damascus time)
