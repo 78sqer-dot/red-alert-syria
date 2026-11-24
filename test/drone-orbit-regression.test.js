@@ -20,7 +20,7 @@ test('political, normal drone and warplane alerts keep distinct map markers', ()
   assert.equal(alertMarkerKind({ type: 'signal_sweep', signal_platform: 'uav' }), 'orbit');
   assert.deepEqual(political, { type: 'political' }, 'choosing a visual never mutates alert data');
   assert.match(mapSource, /const marker = alertMarkerKind\(a\);/);
-  assert.match(mapSource, /\$\{pl\(22, -8, 1\)\}\$\{pl\(6, 12, 0\.85\)\}\$\{pl\(38, 12, 0\.85\)\}/);
+  assert.match(mapSource, /\$\{pl\(36, -12, 1\)\}\$\{pl\(20, 8, 0\.85\)\}\$\{pl\(52, 8, 0\.85\)\}/);
   assert.match(css, /\.maplibregl-map \.mk-squad\.t-warplane \.squad \{ visibility: visible; \}/);
 });
 
@@ -109,8 +109,7 @@ test('primary and second drone markers orbit the exact displayed circle on phone
       assert.ok(Number.parseFloat(expectedRadiusPx) > 12, 'test radius is large enough to detect the old 8–12px clamp');
     }
   }
-  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit:not\(\.mk-sat\) \.uav, \.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit:not\(\.mk-sat\) \.uav-box::before \{ visibility: hidden; \}/);
-  assert.match(css, /\.uav-box::before \{ content: '';[^}]*width: calc\(2 \* var\(--orb, 20px\)\);[^}]*border: 1px dashed color-mix\(in srgb, var\(--c, #6b7280\) 45%, transparent\); border-radius: 50%;/);
+  assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-orbit:not\(\.mk-sat\) \.uav \{ visibility: hidden; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-orbit:not\(\.mk-sat\) \.uav \{ visibility: visible; \}/);
   assert.match(css, /\.maplibregl-map\.zoom-detail \.mk-sat \.uav \{ animation: uavOrbit 9s linear infinite;/);
 });

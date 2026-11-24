@@ -8,7 +8,7 @@ const bot = await readFile(new URL('../server/bot.js', import.meta.url), 'utf8')
 test('auto-published notices offer an in-place story-format edit', () => {
   assert.match(monitor, /تعديل صيغة الخبر/);
   assert.match(monitor, /d\.status !== 'published' \|\| !d\.auto \|\| !d\.alertId/);
-  assert.match(monitor, /loadPublishedDraft\(ctx, toBotDraft\(latest, \{ preservePublishedCopy: true \}\), d\.alertId\)/);
+  assert.match(monitor, /loadPublishedDraft\(ctx, toBotDraft\(latest\), d\.alertId\)/);
 });
 
 test('published story edits use a dedicated save mode instead of publish', () => {

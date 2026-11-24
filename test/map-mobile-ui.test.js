@@ -13,62 +13,34 @@ const css = read('public/css/app.css');
 test('map tools are grouped accessibly and the Syria overview remains a separate button', () => {
   assert.match(html, /id="mapControlsToggle"[^>]*aria-expanded="false"[^>]*aria-controls="mapCtrlPanel"/);
   const panelStart = html.indexOf('<div class="map-ctrl-panel" id="mapCtrlPanel"');
-  const panelEnd = html.indexOf('\n          </div>\n        </div>', panelStart);
+  const panelEnd = html.indexOf('\n          <button class="ctrl-btn" id="resetView"', panelStart);
   const panel = panelStart >= 0 && panelEnd > panelStart ? html.slice(panelStart, panelEnd) : '';
   assert.ok(panel, 'a collapsed map-tools panel must exist');
-  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
+  for (const id of ['btnFilter', 'btnLayers', 'btnSvc', 'btnNabaa', 'btnLiveScene', 'btnNotifications', 'zoomIn', 'zoomOut', 'locateMe', 'shareSite']) {
     assert.match(panel, new RegExp(`id="${id}"`));
   }
-  assert.doesNotMatch(html, /id="btnNabaa"/);
-  assert.doesNotMatch(app, /\$\(['"]#?btnNabaa['"]\)/, 'the removed Al-Nabaa button has no click handler');
   assert.doesNotMatch(panel, /id="resetView"/);
   assert.match(html, /id="resetView"[^>]*type="button"/);
   assert.match(app, /setAttribute\('aria-expanded', String\(open\)\)/);
   assert.ok(app.includes("if (!$('#filterPanel').hidden || !$('#layersPanel').hidden) { closeDropdowns(); return; }"));
   assert.ok(app.includes("if (!mapCtrlPanel.hidden) { setMapControlsOpen(false); return; }"));
   assert.match(css, /\.map-tool-grid \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: auto; \}/);
+  assert.match(css, /\.map-tool-grid > #btnNotifications \{ grid-column: 1 \/ -1; \}/);
 });
 
-test('interactive sheets restore their home and dismiss competing overlays accessibly', () => {
-  assert.ok(app.includes('const home = ddHome.get(p);'));
-  assert.ok(app.includes('if (home && p.parentElement !== home) home.append(p);'));
-  assert.ok(app.includes("p.classList.remove('dd-sheet')"));
-  assert.ok(app.includes("$(btn).setAttribute('aria-expanded', 'false')"));
-  assert.ok(app.includes("dismissInactivePanels('drawer')"));
-  assert.ok(app.includes("dismissInactivePanels('about')"));
-  assert.ok(app.includes("dismissInactivePanels('modal')"));
-  assert.ok(app.includes("dismissInactivePanels('tour')"));
-  assert.ok(app.includes("if (open) dismissInactivePanels('mapTools');"));
-  assert.ok(app.includes("if (open) dismissInactivePanels('dropdown');"));
-  assert.ok(app.includes("if (except !== 'mapTools' && except !== 'dropdown') {"));
-  assert.ok(app.includes("$('#mapControlsToggle')?.setAttribute('aria-expanded', 'false')"));
-  assert.match(app, /window\.addEventListener\('resize', \(\) => \{[\s\S]{0,260}dismissInactivePanels\(\);/);
-  assert.match(css, /\.drawer-backdrop, \.sheet-backdrop \{[^}]*pointer-events: auto;/);
-  assert.match(css, /\.drawer, \.about-sheet \{ pointer-events: auto; \}/);
-  assert.match(css, /\.modal-backdrop \{[^}]*pointer-events: auto;/);
-  assert.match(css, /\.modal \{[^}]*pointer-events: auto;/);
-  assert.match(css, /\.drawer-body \{[^}]*overscroll-behavior: contain;[^}]*-webkit-overflow-scrolling: touch;/);
-  assert.match(css, /\.about-inner \{[^}]*overscroll-behavior: contain;[^}]*-webkit-overflow-scrolling: touch;/);
-  assert.match(css, /\.modal \{[^}]*overscroll-behavior: contain;[^}]*-webkit-overflow-scrolling: touch;/);
-  assert.doesNotMatch(css, /\.drawer-backdrop, \.sheet-backdrop \{[^}]*backdrop-filter:/);
-  assert.doesNotMatch(css, /\.modal-backdrop \{[^}]*backdrop-filter:/);
-});
-
-test('map tools provide a return route from filter, layers and services without an Al-Nabaa button', () => {
+test('map tools provide a return route from filter, layers, services and Al-Nabaa', () => {
   assert.match(app, /data-dd-close/);
   assert.match(app, /backToTools/);
   assert.match(app, /returnToToolsAfterService = true/);
   assert.match(app, /if \(!svc\?\.mode\?\.\(\)\) \{ setMapControlsOpen\(true\)/);
-  assert.doesNotMatch(app, /sessionStorage\.setItem\('ras:return-map-tools', '1'\)/, 'there is no removed Al-Nabaa navigation handler');
+  assert.match(app, /sessionStorage\.setItem\('ras:return-map-tools', '1'\)/);
   assert.match(app, /window\.addEventListener\('pageshow', restoreMapTools\)/);
   assert.match(css, /\.dd-panel\.dd-sheet \{ position: fixed;/);
-  assert.match(css, /#filterPanel\.dd-sheet, #layersPanel\.dd-sheet \{ z-index: 63; \}/, 'the mobile sheet must paint above its backdrop so its controls remain clickable');
 });
 
 test('map attribution keeps a compact information button and readable credits', () => {
   assert.match(map, /new M\.AttributionControl\(\{ compact: true, customAttribution:/);
-  assert.match(map, /OpenFreeMap<\/a> · © <a href="https:\/\/www\.openstreetmap\.org\/copyright" target="_blank" rel="noopener">OpenStreetMap<\/a> contributors/);
+  assert.match(map, /OpenFreeMap<\/a> © <a href="https:\/\/www\.openstreetmap\.org\/copyright"/);
   assert.match(map, /classList\.remove\('maplibregl-compact-show'\)/);
   assert.match(css, /\.maplibregl-ctrl-attrib \.maplibregl-ctrl-attrib-inner \{[^}]*white-space: normal/);
   assert.match(css, /\.maplibregl-ctrl-attrib\.maplibregl-compact:not\(\.maplibregl-compact-show\) \{[^}]*width: 24px;[^}]*height: 24px/);
@@ -77,19 +49,11 @@ test('map attribution keeps a compact information button and readable credits', 
   assert.match(css, /@media \(max-width: 340px\)[\s\S]{0,220}\.about-pill \{ max-width: calc\(100vw - 170px\)/);
 });
 
-test('phone map tools stay at the top while the reset view button sits in the bottom control group', () => {
+test('phone map tools stay at the top while the about pill remains bottom-aligned', () => {
   assert.match(css, /\.map-ctrls \{ top: 12px; bottom: auto; gap: 7px;/);
-  assert.match(html, /<div class="map-bottom-controls">\s*<button class="ctrl-btn reset-view-btn" id="resetView"[\s\S]*?<button class="about-pill" id="aboutPill"/);
-  assert.match(css, /\.map-bottom-controls \{ position: absolute;[^}]*bottom: 14px/);
-  assert.match(css, /@media \(max-width: 767px\)[\s\S]*?\.map-bottom-controls \{ bottom: calc\(23px \+ env\(safe-area-inset-bottom, 0px\)\); left: auto; inset-inline-end: 10px/);
-  assert.match(css, /\.reset-view-btn \{ width: 40px; height: 40px; flex: none;/);
-  assert.match(css, /\.about-pill \{ position: static;/);
+  assert.match(css, /\.about-pill \{\s*bottom: calc\(23px \+ env\(safe-area-inset-bottom, 0px\)\);/);
   assert.match(css, /\.map-ctrls > \.ctrl-btn \{ width: 44px; height: 44px;/);
   assert.match(css, /\.map-ctrl-panel \{ position: absolute; top: calc\(100% \+ 9px\); bottom: auto;/);
-});
-
-test('the floating bottom bar hides while a docked card (weather / alert) is open so it never covers the card', () => {
-  assert.match(css, /body\.pp-docked \.map-bottom-controls \{ display: none; \}/);
 });
 
 test('alert details stay centered on the map and their popup tip points to the event on every screen', () => {
@@ -100,7 +64,7 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(map, /if \(p\._alertId \|\| p\._groupKey\)\s*\{[\s\S]{0,250}r\.left \+ r\.width \/ 2 - \(vis\.l \+ vis\.r\) \/ 2[\s\S]{0,180}r\.top \+ r\.height \/ 2 - \(top \+ bottom\) \/ 2/);
   assert.match(map, /this\.schedulePopupFit\(1\)/);
   assert.match(map, /schedulePopupFit\(count = 1\)[\s\S]{0,140}this\.fitPopup\(\)/);
-  assert.match(map, /openPopup\(alert, \{ unlocated = false \} = \{\}\)\s*\{\s*const controlPanel = document\.querySelector\('#mapCtrlPanel'\);[\s\S]{0,180}controlPanel\.hidden = true/);
+  assert.match(map, /openPopup\(alert\)\s*\{\s*const controlPanel = document\.querySelector\('#mapCtrlPanel'\);[\s\S]{0,180}controlPanel\.hidden = true/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \{ z-index: 60; \}/);
   assert.match(css, /\.pp-alert-popup \.maplibregl-popup-content \{ max-height: min\(62dvh, 600px\); \}/);
   assert.match(css, /\.maplibregl-popup-anchor-bottom \.maplibregl-popup-tip \{ border-top-color: var\(--bg-elevated\); \}/);
@@ -116,37 +80,37 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=106'/);
-  assert.match(html, /app\.css\?v=103/);
-  assert.match(html, /app\.js\?v=118/);
+  assert.match(app, /from '\.\/map\.js\?v=84'/);
+  assert.match(html, /app\.css\?v=81/);
+  assert.match(html, /app\.js\?v=96/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
-  assert.match(app, /from '\.\/services\.js\?v=40'/);
-  assert.match(app, /from '\.\/icons\.js\?v=10'/);
-  assert.match(app, /from '\.\/i18n\.js\?v=10'/);
-  assert.match(app, /from '\/shared\/types\.js\?v=43'/);
+  assert.match(app, /from '\.\/services\.js\?v=38'/);
+  assert.match(app, /from '\.\/icons\.js\?v=7'/);
+  assert.match(app, /from '\.\/i18n\.js\?v=9'/);
+  assert.match(app, /from '\/shared\/types\.js\?v=41'/);
   assert.match(app, /from '\.\/settings\.js\?v=14'/);
-  assert.match(map, /from '\/shared\/types\.js\?v=43'/);
-  assert.match(map, /from '\.\/target-svgs\.js\?v=27'/);
-  assert.match(map, /from '\.\/type-icons\.js\?v=9'/);
+  assert.match(map, /from '\/shared\/types\.js\?v=41'/);
+  assert.match(map, /from '\.\/target-svgs\.js\?v=20'/);
+  assert.match(map, /from '\.\/type-icons\.js\?v=7'/);
   assert.match(map, /from '\.\/marker-layout\.js\?v=3'/);
   assert.match(map, /from '\/shared\/zone-visuals\.js\?v=3'/);
-  assert.match(settings, /from '\/shared\/types\.js\?v=42'/);
+  assert.match(settings, /from '\/shared\/types\.js\?v=41'/);
 });
 
 test('alert popup switches between news and attached photo/video in the same window', () => {
-  assert.match(app, /const mediaItems = \['photo', 'video'\]\.map\(\(type\) => rawMediaItems\.find\(\(item\) => item\?\.type === type && item\.illustration !== true && item\.generated !== true\)\)\.filter\(Boolean\)/);
-  assert.doesNotMatch(app, /illustrationFallback/);
-  assert.match(app, /const displayModes = availableAlertDisplayModes\(newsText, mediaItems\)/);
-  assert.match(app, /const displayMediaItems = mediaItems;/);
+  assert.match(app, /const mediaItems = \['photo', 'video'\]\.map\(\(type\) => rawMediaItems\.find\(\(item\) => item\?\.type === type\)\)\.filter\(Boolean\)/);
+  assert.match(app, /const illustrationFallback = mediaItems\.length === 0/);
+  assert.match(app, /const displayModes = availableAlertDisplayModes\(newsText, mediaItems, \{ illustrationFallback \}\)/);
+  assert.match(app, /const displayMediaItems = mediaItems\.length \? mediaItems : illustrationFallback \? \[\{ type: 'photo', illustration: true \}\] : \[\]/);
   assert.match(app, /const initialMode = initialAlertDisplayMode\(displayModes\)/);
-  assert.match(app, /const mediaActions = displayModes\.length > 1 \?/);
+  assert.match(app, /const mediaActions = displayModes\.length \?/);
   assert.match(app, /const titleRow = `<div class="pp-title-row"><p class="pp-title">[\s\S]*?<\/p><\/div>`;/);
-  assert.match(app, /const content = `\$\{titleRow\}\$\{metadata\}\$\{referenceNote\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
+  assert.match(app, /const content = `\$\{titleRow\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
   assert.match(app, /class="pp-news-panel" data-pp-news-panel/);
   assert.match(app, /class="pp-media-panel" data-pp-media-panel/);
-  assert.match(app, /const content = `\$\{titleRow\}\$\{metadata\}\$\{referenceNote\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
+  assert.match(app, /const content = `\$\{titleRow\}\$\{mediaActions\}\$\{newsPanel\}\$\{mediaViewer\}`/);
   assert.doesNotMatch(app, /pp-view-tabs|data-pp-tab/);
   assert.match(app, /data-pp-mode="\$\{mode\}"/);
   assert.match(app, /alertDisplayPanelState\(mode\)/);
@@ -156,11 +120,11 @@ test('alert popup switches between news and attached photo/video in the same win
   assert.match(app, /mediaVideo' : 'mediaImage/);
   assert.match(app, /function alertMediaFrameHtml\(item, alertId\)/);
   assert.match(app, /<video class="pp-media-video" controls playsinline preload="none"/);
-  assert.equal((app.match(/<img class="pp-media-image"[^>]*loading="eager"/g) || []).length, 1, 'actual attachments keep the same frame renderer');
-  assert.doesNotMatch(app, /data-pp-illustration=/);
+  assert.equal((app.match(/<img class="pp-media-image"[^>]*loading="eager"/g) || []).length, 1, 'source and illustrative images share one frame renderer');
+  assert.match(app, /data-pp-illustration=/);
   assert.match(app, /display\.innerHTML = alertMediaFrameHtml\(/);
-  assert.match(app, /Display alone does not verify its location or time\./);
-  assert.doesNotMatch(app, /Illustrative design based on alert details|\/illustration\?lang/);
+  assert.match(app, /Source media; source marks, if present, are left visible\./);
+  assert.match(app, /Illustrative design based on alert details; not a scene photograph\./);
   assert.match(css, /\.ras-media-frame-stage \{/);
   assert.match(css, /\.ras-media-frame-note \{/);
   assert.match(app, /schedulePopupFit\?\.\(2\)/);
@@ -208,10 +172,10 @@ test('follow area picker saves local preferences and only sends area IDs to push
 });
 
 test('alert symbols use shared category colors in badges, filters and map markers', () => {
-  assert.match(app, /eventVisual\(a\.type, a\)\.color/);
+  assert.match(app, /eventVisual\(a\.type\)\.color/);
   assert.match(app, /eventVisual\(t\)\.color/);
   assert.match(css, /\.badge svg \{ color: var\(--symbol-color, currentColor\)/);
-  assert.match(map, /eventVisual\(a\.type, a\)/);
+  assert.match(map, /eventVisual\(a\.type\)/);
   assert.doesNotMatch(app, /HAZARD_EMOJI\[a\.hazard\]/);
   assert.match(css, /background: color-mix\(in srgb, var\(--c\) 4%, var\(--bg-card\)\)/);
 });
@@ -225,7 +189,7 @@ test('tapping an individual map symbol zooms to its alert and opens details on p
 
 test('count-marker taps zoom to the group before showing a bottom-anchored chooser on phones', () => {
   assert.match(map, /if \(group\?\.alerts\.length > 1\) return this\.zoomToGroupChooser\(group\)/);
-  assert.match(map, /zoomToGroupChooser\(group\)[\s\S]{0,1000}this\.map\.once\('moveend', openIfCurrent\)[\s\S]{0,180}setTimeout\(openIfCurrent, 1400\)[\s\S]{0,180}this\.map\.flyTo/);
+  assert.match(map, /zoomToGroupChooser\(group\)[\s\S]{0,1000}this\.map\.once\('moveend', \(\) => this\.openGroupChooser\(group\)\)[\s\S]{0,180}this\.map\.flyTo/);
   assert.match(map, /className: 'pp-group-popup', anchor: 'bottom', offset: \[0, 0\]/);
   assert.equal((map.match(/if \(!ids\.length \|\| ids\.some\(\(id\) => !liveIds\.has\(String\(id\)\)\)\) this\.closePopup\(\);/g) || []).length, 2);
 });
@@ -239,10 +203,9 @@ test('group alert popup has accessible previous and next buttons and opens on th
   assert.match(css, /\.pp-group-nav button:active:not\(:disabled\) \{ transform: scale\(\.94\); \}/);
 });
 
-test('general alert pulses stay strong and animated (owner: circles must pulse) while the legacy blue aircraft pulse remains specialized', () => {
-  assert.match(css, /\.zp-fill \{[^}]*animation: zfillPulse 3\.2s ease-in-out infinite/);
-  assert.match(css, /@keyframes zpulse \{\s*0% \{ transform: scale\(1\); opacity: \.4; \}\s*100% \{ transform: scale\(1\.85\); opacity: 0; \}\s*\}/);
-  assert.doesNotMatch(css, /\.zp-fill \{ animation: none; opacity: \.035/); // the b3ab0f4 'gentler' override that killed pulsing must stay gone (the reduced-motion block is fine)
+test('general alert pulses are gentler while the legacy blue aircraft pulse remains specialized', () => {
+  assert.match(css, /\.zp-fill \{ animation: none; opacity: \.035/);
+  assert.match(css, /@keyframes zpulse \{ 0% \{ transform: scale\(1\); opacity: \.27; \} 100% \{ transform: scale\(1\.65\); opacity: 0; \} \}/);
   assert.match(css, /\.zp\.zp-aircraft::before, \.zp\.zp-aircraft::after[\s\S]{0,230}animation: zpulseAircraft 2\.6s/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
 });

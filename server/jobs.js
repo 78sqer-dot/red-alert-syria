@@ -1,12 +1,11 @@
 import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
-import { automaticMonitorRecipientIds, config } from './config.js';
+import { config } from './config.js';
 import { store } from './store.js';
 import { fetchChannel } from './news-sources.js';
 import { governorates, places, districtsOf, placesOf, getGov, getDist, getPlace, normalizeArabic } from './places.js';
 import { cleanMenuMessages } from './ui-clean.js';
-import { normalizeApplicationDeadline, isApplicationDeadlineExpired, labelledApplicationDeadline } from './application-deadline.js';
-import { jobApplicationLinks, jobApplicationLinksFromText, normalizeJobApplicationLink } from '../shared/job-links.js';
+import { normalizeApplicationDeadline, isApplicationDeadlineExpired } from './application-deadline.js';
 
 export const JOB_SOURCE = Object.freeze({ u: 'syrian_jobb', name: 'وظائف سوريا', url: 'https://t.me/syrian_jobb' });
 const POLL_MS = 60_000;
@@ -25,7 +24,7 @@ let helpers = null;
 export function initialJobsState() {
   return {
     source: { u: JOB_SOURCE.u, name: JOB_SOURCE.name, on: true, initialized: false, lastId: null, updatedAt: 0, lastCheck: null, lastError: null },
-    pending: {}, published: {}, decisions: {}, deleted: {}, seen: {}, fingerprints: {}, intake: {}, metadataAudits: {},
+    pending: {}, published: {}, decisions: {}, deleted: {}, seen: {}, fingerprints: {}, intake: {},
     customGovernorates: [], customAreas: [], adminDrafts: {},
   };
 }
@@ -47,7 +46,6 @@ export function jobsState(root = store.state) {
   j.seen = j.seen && typeof j.seen === 'object' ? j.seen : {};
   j.fingerprints = j.fingerprints && typeof j.fingerprints === 'object' ? j.fingerprints : {};
   j.intake = j.intake && typeof j.intake === 'object' ? j.intake : {};
-  j.metadataAudits = j.metadataAudits && typeof j.metadataAudits === 'object' && !Array.isArray(j.metadataAudits) ? j.metadataAudits : {};
   j.customGovernorates = Array.isArray(j.customGovernorates) ? j.customGovernorates : [];
   j.customAreas = Array.isArray(j.customAreas) ? j.customAreas : [];
   j.adminDrafts = j.adminDrafts && typeof j.adminDrafts === 'object' ? j.adminDrafts : {};
@@ -160,7 +158,15 @@ export function addCustomArea(governorateCode, input, j = jobsState(), now = Dat
   return { ok: true, row };
 }
 
-function safeLinks(links = []) { return [...new Set((Array.isArray(links) ? links : []).map(normalizeJobApplicationLink).filter(Boolean))].slice(0, 8); }
+function safeLinks(links = []) {
+  const out = [];
+  for (const raw of links) {
+    const u = String(raw || '').trim().replace(/&amp;/g, '&');
+    if (!/^https:\/\/[a-z0-9.-]+(?::\d+)?(?:\/[^\s<>]*)?$/i.test(u)) continue;
+    if (!out.includes(u)) out.push(u);
+  }
+  return out.slice(0, 8);
+}
 function sourceRelatedJobLink(raw, rawSource) {
   try {
     const link = new URL(raw);
@@ -172,7 +178,7 @@ function sourceRelatedJobLink(raw, rawSource) {
       && (linkPath === sourcePath || (linkPath !== '/' && sourcePath.startsWith(`${linkPath}/`)));
   } catch { return false; }
 }
-function linksFromText(text) { return jobApplicationLinksFromText(text); }
+function linksFromText(text) { return safeLinks(String(text || '').match(/https:\/\/[^\s<>()[\]{}]+/gi) || []); }
 const JOB_CHANNEL_PROMO = /[@#]\s*syrian[_\s-]?jo[b]+\b[#]?/giu;
 const JOB_HASHTAG = /#(?:[\p{L}\p{N}\p{M}_]+)/gu;
 const JOB_HASHTAG_ONLY_LINE = /^(?:\s*#[\p{L}\p{N}\p{M}_]+\s*)+$/u;
@@ -222,7 +228,7 @@ export function createPendingJob(input, j = jobsState(), now = Date.now()) {
     text,
     sourceName: String(input.sourceName || (kind === 'source' ? JOB_SOURCE.name : kind === 'manual' ? 'إضافة الإدارة' : 'طلب صاحب عمل')).slice(0, 80),
     sourceUrl: /^https:\/\//i.test(String(input.sourceUrl || '')) ? String(input.sourceUrl).slice(0, 500) : '',
-    links: jobApplicationLinks(input.links, linksFromText(text)),
+    links: safeLinks(input.links || linksFromText(text)),
     location,
     ...(applicationDeadline ? { applicationDeadline } : {}),
     createdAt: now,
@@ -279,7 +285,7 @@ export function updatePublishedJob(id, patch, j = jobsState(), by = null, now = 
     const text = cleanJobText(String(patch.text || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')).slice(0, MAX_JOB_TEXT);
     if (text.length < 10) return { ok: false, error: 'text_too_short' };
     job.text = text;
-    job.links = jobApplicationLinks(patch.links, linksFromText(text));
+    job.links = safeLinks(patch.links || linksFromText(text));
   }
   if (patch.location !== undefined) {
     const location = normalizeJobLocation(patch.location, j);
@@ -292,11 +298,7 @@ export function updatePublishedJob(id, patch, j = jobsState(), by = null, now = 
     const deadline = normalizeApplicationDeadline(patch.applicationDeadline);
     if (patch.applicationDeadline != null && patch.applicationDeadline !== '' && !deadline) return { ok: false, error: 'deadline_invalid' };
     if (deadline) job.applicationDeadline = deadline; else delete job.applicationDeadline;
-    job.applicationDeadlineOverride = true;
   }
-  // Distinguish future text/location edits from a deliberate deadline override.
-  // Older edited records without that distinction retain their prior behavior.
-  job.applicationDeadlineOverride ??= Boolean(job.updatedAt);
   job.updatedAt = now;
   if (by != null) job.updatedBy = Number(by) || null;
   return { ok: true, job };
@@ -308,7 +310,6 @@ export function updateJobDeadline(id, value, j = jobsState(), by = null, now = D
   const deadline = normalizeApplicationDeadline(value);
   if (value != null && value !== '' && !deadline) return { ok: false, error: 'deadline_invalid' };
   if (deadline) job.applicationDeadline = deadline; else delete job.applicationDeadline;
-  job.applicationDeadlineOverride = true;
   job.updatedAt = now;
   if (by != null) job.updatedBy = Number(by) || null;
   return { ok: true, job };
@@ -327,38 +328,8 @@ export function deleteJobListing(id, j = jobsState(), by = null, now = Date.now(
   return { ok: true, job, tombstone };
 }
 
-export function effectiveJobDeadline(job) {
-  const explicit = normalizeApplicationDeadline(job?.applicationDeadline);
-  if (explicit || job?.applicationDeadlineOverride === true) return explicit || null;
-  if (job?.kind !== 'source' || (job.updatedAt && job.applicationDeadlineOverride === undefined)) return null;
-  return labelledApplicationDeadline(job.text);
-}
-
-export function closedJobApplication(job) {
-  if (job?.kind !== 'source') return false;
-  const links = safeLinks(job.links || []).filter((link) => {
-    try {
-      const url = new URL(link);
-      const sourcePromo = /^(?:www\.)?t\.me$/iu.test(url.hostname) && /^\/syrian_?job+\/?$/iu.test(url.pathname);
-      return !sourcePromo && !sourceRelatedJobLink(link, String(job.sourceUrl || ''));
-    } catch { return false; }
-  });
-  return links.length > 0 && links.every((link) => {
-    try {
-      const url = new URL(link);
-      return url.hostname === 'docs.google.com' && /^\/forms\/.+\/closedform\/?$/u.test(url.pathname);
-    } catch { return false; }
-  });
-}
-
-export function isPublicJobEligible(job, j = jobsState(), now = Date.now()) {
-  return !!(job && job.status === 'approved' && !j.deleted?.[job.id] && job.publicReviewHold?.active !== true && !closedJobApplication(job)
-    && !isApplicationDeadlineExpired(effectiveJobDeadline(job), now)
-    && (normalizeJobLocation(job.location, j) || job.publishedWithoutLocation === true));
-}
-
 export function publicJobs(j = jobsState(), now = Date.now()) {
-  return Object.values(j.published || {}).filter((x) => isPublicJobEligible(x, j, now))
+  return Object.values(j.published || {}).filter((x) => x && x.status === 'approved' && !j.deleted?.[x.id] && !isApplicationDeadlineExpired(x.applicationDeadline, now) && (normalizeJobLocation(x.location, j) || x.publishedWithoutLocation === true))
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)).slice(0, 100)
     .map((x) => {
       const sourceUrl = String(x.sourceUrl || '');
@@ -367,7 +338,7 @@ export function publicJobs(j = jobsState(), now = Date.now()) {
       return {
       id: x.id, title, text, links: safeLinks(x.links || []).filter((link) => !sourceRelatedJobLink(link, sourceUrl)),
       location: normalizeJobLocation(x.location, j) || null,
-      application_deadline: effectiveJobDeadline(x),
+      application_deadline: x.applicationDeadline || null,
       published_at: x.publishedAt || null,
       };
     });
@@ -375,7 +346,7 @@ export function publicJobs(j = jobsState(), now = Date.now()) {
 
 let lastExpiredJobIds = null;
 function expiredJobIds(j = jobsState()) {
-  return Object.values(j.published || {}).filter((job) => job && isApplicationDeadlineExpired(effectiveJobDeadline(job)))
+  return Object.values(j.published || {}).filter((job) => job && isApplicationDeadlineExpired(job.applicationDeadline))
     .map((job) => job.id).sort().join(',');
 }
 function broadcastDeadlineChanges(j = jobsState()) {
@@ -422,33 +393,8 @@ async function sendReview(job, { force = false } = {}) {
   const current = j.pending[job?.id];
   if (!current || (!force && current.notifiedAt)) return false;
   const api = adminApi?.();
-  if (!api) return false;
-  if (current.kind === 'source') {
-    const owners = automaticMonitorRecipientIds();
-    if (!owners.length) return false;
-    current.cards ||= [];
-    const delivered = new Set(force ? [] : current.cards.map(([chat]) => Number(chat)));
-    for (const owner of owners) {
-      if (delivered.has(Number(owner))) continue;
-      try {
-        const sent = await api.sendMessage(owner, reviewText(current, 'ar'), {
-          parse_mode: 'HTML', reply_markup: reviewKeyboard(current, 'ar'),
-          link_preview_options: { is_disabled: true },
-        });
-        if (!sent?.message_id) continue;
-        if (!current.cards.some(([chat, mid]) => Number(chat) === Number(owner) && Number(mid) === Number(sent.message_id))) current.cards.push([Number(owner), Number(sent.message_id)]);
-        delivered.add(Number(owner));
-      } catch (e) {
-        console.warn('[jobs] source review message failed', e.description || e.message);
-      }
-    }
-    const complete = owners.every((owner) => delivered.has(Number(owner)));
-    current.notifiedAt = complete ? Date.now() : 0;
-    saveJobs();
-    return complete;
-  }
   const owner = config.ownerIds?.[0];
-  if (!owner) return false;
+  if (!api || !owner) return false;
   const sent = await api.sendMessage(owner, reviewText(current, 'ar'), {
     parse_mode: 'HTML', reply_markup: reviewKeyboard(current, 'ar'),
     link_preview_options: { is_disabled: true },
@@ -503,13 +449,6 @@ export function mergeJobsFromBackup(snapshot, j = jobsState()) {
     if (!intake || Date.now() - Number(intake.createdAt || 0) > INTAKE_AGE) continue;
     const mine = j.intake[uid];
     if (!mine || Number(intake.createdAt) > Number(mine.createdAt)) { j.intake[uid] = intake; changed = true; }
-  }
-  for (const [id, events] of Object.entries(remote.metadataAudits || {})) {
-    if (!/^[a-f0-9]{14}$/u.test(id) || !Array.isArray(events)) continue;
-    const mine = Array.isArray(j.metadataAudits[id]) ? j.metadataAudits[id] : (j.metadataAudits[id] = []);
-    const known = new Set(mine.map(event => event.id));
-    for (const event of events) if (event?.id && !known.has(event.id)) { mine.push(event); known.add(event.id); changed = true; }
-    mine.sort((a, b) => Number(a.at) - Number(b.at) || String(a.id).localeCompare(String(b.id)));
   }
   for (const [id, row] of Object.entries(remote.published || {})) {
     if (!row) continue;
@@ -601,16 +540,7 @@ export function mergeJobsFromBackup(snapshot, j = jobsState()) {
     }
   }
   for (const [id, row] of Object.entries(remote.pending || {})) {
-    if (!row || j.deleted[id] || j.decisions[id]) continue;
-    const local = j.pending[id];
-    if (local) {
-      if (row.metadataRevision && row.status === 'pending' && row.kind === 'source' && local.kind === 'source'
-        && row.sourceKey === local.sourceKey && row.fingerprint === local.fingerprint
-        && Number(row.updatedAt) > Number(local.updatedAt || local.createdAt || 0)) {
-        j.pending[id] = { ...row, location: normalizeJobLocation(row.location, j) }; changed = true;
-      }
-      continue;
-    }
+    if (!row || j.deleted[id] || j.decisions[id] || j.pending[id]) continue;
     const fp = row.fingerprint && j.fingerprints[row.fingerprint];
     if (fp && fp.id !== id) continue;
     j.pending[id] = { ...row, location: normalizeJobLocation(row.location, j) };
@@ -719,13 +649,6 @@ async function deleteJobCards(ctx, job) {
   if (current?.message_id) cards.push([current.chat.id, current.message_id]);
   const unique = new Set(cards.map(([chat, mid]) => `${chat}:${mid}`));
   await Promise.allSettled([...unique].map((key) => { const [chat, mid] = key.split(':'); return ctx.api.deleteMessage(Number(chat), Number(mid)); }));
-}
-
-export async function closeJobReviewCards(job) {
-  const api = adminApi?.();
-  if (!api) return;
-  const unique = new Set((job.cards || []).map(([chat, mid]) => `${chat}:${mid}`));
-  await Promise.allSettled([...unique].map((key) => { const [chat, mid] = key.split(':'); return api.deleteMessage(Number(chat), Number(mid)); }));
 }
 
 const LOC_PAGE_SIZE = 20;

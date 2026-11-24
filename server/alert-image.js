@@ -3,11 +3,7 @@
 // zoomed on the affected place with category-coloured impact circles / marker, and a short note footer.
 // Pure SVG -> PNG with resvg; map = raster tiles (CARTO Voyager, OSM fallback), cached in memory.
 // Swap the logo by replacing public/img/logo-wordmark.svg (or set ALERT_IMAGE_LOGO to an .svg/.png).
-import { alertLocalityReference } from './reviewed-image-reference.js';
-import { reviewedAlertCopy } from './reviewed-news-copy.js';
-import { approvedPublicCorrection } from './approved-public-correction.js';
 import fs from 'node:fs';
-import { DEFAULT_PUBLIC_URL } from './config.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
@@ -134,12 +130,12 @@ const PROVIDERS = [
   (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
   (z, x, y) => `https://${'abc'[(x + y) % 3]}.tile.openstreetmap.fr/hot/${z}/${x}/${y}.png`,
 ];
-const UA = `RedAlertSyria/1.0 (+${DEFAULT_PUBLIC_URL})`;
+const UA = 'RedAlertSyria/1.0 (+https://red-alert-syria-q6k8.onrender.com)';
 const tileCache = new Map(); // key -> data URI (LRU, ~150 tiles)
-async function fetchTile(z, x, y, timeoutMs, provider) {
-  const key = `${provider}/${z}/${x}/${y}`;
+async function fetchTile(z, x, y, timeoutMs) {
+  const key = `${z}/${x}/${y}`;
   if (tileCache.has(key)) { const v = tileCache.get(key); tileCache.delete(key); tileCache.set(key, v); return v; }
-  for (const url of [PROVIDERS[provider]]) {
+  for (const url of PROVIDERS) {
     try {
       const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeoutMs);
       const r = await fetch(url(z, x, y), { headers: { 'User-Agent': UA }, signal: ctl.signal });
@@ -156,19 +152,10 @@ async function fetchTile(z, x, y, timeoutMs, provider) {
   return null;
 }
 
-async function fetchTileFrame(z,x0,x1,y0,y1,timeoutMs){
-  let tiles=[];
-  for(let provider=0;provider<PROVIDERS.length;provider++){
-    const jobs=[];for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)jobs.push(fetchTile(z,x,y,timeoutMs,provider).then(href=>({x,y,href})));
-    tiles=await Promise.all(jobs);if(tiles.every(q=>q.href))return tiles;
-  }
-  throw new Error(`map tiles unavailable (${tiles.filter(q=>q.href).length}/${tiles.length})`);
-}
-
 // ------------------------------------------------------------------ marker for point alerts
 export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = null) {
   const t = ALERT_TYPES[type] || ALERT_TYPES.breaking;
-  const color = eventVisual(type, alert).color;
+  const color = eventVisual(type).color;
   const incursionKind = alert?.meta?.incursionKind || (Number.isInteger(alert?.meta?.vehicleCount) ? 'vehicles' : null);
   const signalDrone = type === 'signal_sweep' && alert?.meta?.signalPlatform === 'uav';
   const glyphKey = type === 'assassination' ? (assassinationWeaponGlyph(alert) || t.glyph)
@@ -210,20 +197,12 @@ export async function alertImageSvg(alert, opts = {}) {
   const en = lang === 'en';
   const type = ALERT_TYPES[alert.type] ? alert.type : 'breaking';
   const t = ALERT_TYPES[type];
-  const reviewedCopy=reviewedAlertCopy(alert);
-  if(alert.meta?.reviewedNewsCopy && !reviewedCopy) throw new Error('invalid-reviewed-image-copy');
-  const imageReference=alertLocalityReference(alert,reviewedCopy);
-  const imageContext=imageReference || reviewedCopy?.imageContext;
   const loc = alert.location || {};
   const politicalLocation = Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude) && alert.scope !== 'country';
   const country = type === 'political' ? !politicalLocation : alert.scope === 'country' || !Number.isFinite(loc.latitude);
-  const center = imageContext ? {lat:imageContext.latitude,lon:imageContext.longitude} : country ? { lat: 34.85, lon: 38.6 } : { lat: loc.latitude, lon: loc.longitude };
+  const center = country ? { lat: 34.85, lon: 38.6 } : { lat: loc.latitude, lon: loc.longitude };
   // every alert type: a glowing circle over each affected area (main area + extra areas)
-  const geographicReference=alert.location_display==='geographic_reference';
-  if(geographicReference && !approvedPublicCorrection(alert))throw Error('invalid-geographic-reference-image');
-  const villageReference=geographicReference && alert.meta?.geographicReferenceAudit?.featureKind==='village';
-  const approximatePoint = geographicReference || alert.location_display === 'approximate_point';
-  const zoned = !imageContext && !country && !approximatePoint;
+  const zoned = !country;
   let zones = [];
   if (zoned) {
     zones = type === 'political' ? selectedAlertZones({ ...alert, location: loc })
@@ -231,15 +210,18 @@ export async function alertImageSvg(alert, opts = {}) {
     if (!zones.length) zones = [{ lat: center.lat, lon: center.lon, km: 2.2 }];
   }
   const view = chooseView(zoned ? zones : [{ lat: center.lat, lon: center.lon, km: 1.6 }], center);
-  if (imageContext) view.z=imageReference?.approximate&&imageReference.level==='road'?12:imageContext.zoom;
-  else if (country) view.z = 7;
+  if (country) view.z = 7;
   else if (zones.length === 1) view.z = Math.min(view.z, 12);
   const { z } = view;
   const cx = lon2x(view.lon, z); const cy = lat2y(view.lat, z);
   const left = cx - W / 2; const top = cy - MAP_H / 2;
   const x0 = Math.floor(left / TILE); const x1 = Math.floor((left + W) / TILE);
   const y0 = Math.floor(top / TILE); const y1 = Math.floor((top + MAP_H) / TILE);
-  const tiles=await fetchTileFrame(z,x0,x1,y0,y1,timeoutMs);
+  const jobs = [];
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push(fetchTile(z, x, y, timeoutMs).then((href) => ({ x, y, href })));
+  const tiles = await Promise.all(jobs);
+  const okTiles = tiles.filter((q) => q.href).length;
+  if (okTiles < tiles.length * 0.6) throw new Error(`map tiles unavailable (${okTiles}/${tiles.length})`);
 
   const o = [];
   o.push(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`);
@@ -257,7 +239,7 @@ export async function alertImageSvg(alert, opts = {}) {
   const px = (lat, lon) => [lon2x(lon, z) - left, lat2y(lat, z) - top + HEAD];
   if (zoned) {
     const dashed = t.zone === 'dashed';
-    const col = eventVisual(type, alert).color;
+    const col = eventVisual(type).color;
     const fill = col;
     o.push(`<defs><radialGradient id="zglow"><stop offset="0.5" stop-color="${fill}" stop-opacity="0.38"/><stop offset="0.75" stop-color="${fill}" stop-opacity="0.14"/><stop offset="1" stop-color="${fill}" stop-opacity="0"/></radialGradient></defs>`);
     for (const zn of zones) {
@@ -269,14 +251,9 @@ export async function alertImageSvg(alert, opts = {}) {
     // a single area keeps its type icon; several areas show just their glowing circles (the title names the type)
     if (type === 'political') { const [x, y] = px(center.lat, center.lon); o.push(politicalMarkerSvg(x, y)); }
     else if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph, alert)); }
-  } else if (!country && !imageContext) {
+  } else if (!country) {
     const [x, y] = px(center.lat, center.lon);
-    o.push(geographicReference ? `<defs><radialGradient id="referenceGlow"><stop offset="0.35" stop-color="#263445" stop-opacity="0.32"/><stop offset="1" stop-color="#263445" stop-opacity="0"/></radialGradient></defs><circle cx="${x}" cy="${y}" r="145" fill="url(#referenceGlow)"/><circle cx="${x}" cy="${y}" r="72" fill="#263445" fill-opacity="0.20" stroke="#263445" stroke-width="4.5" stroke-dasharray="14 9"/>` : approximatePoint ? `<circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/>` : type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));
-  }
-  if (imageReference) {
-    const [x,y]=px(center.lat,center.lon);
-    if(imageReference.approximate)o.push(`<g id="reviewed-approximate-location" transform="translate(${x} ${y})"><circle r="46" fill="#0284c7" fill-opacity=".16" stroke="#0284c7" stroke-width="4"/><circle r="32" fill="#fff" stroke="#fff" stroke-width="3"/><path d="M-13 -12H13M-13 -2H13M-13 8H5" stroke="#0284c7" stroke-width="5" stroke-linecap="round"/></g>`);
-    else o.push(`<g id="reviewed-geographic-reference"><circle cx="${x}" cy="${y}" r="21" fill="#ef233c" fill-opacity=".05" stroke="#ef233c" stroke-opacity=".25" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="16" fill="none" stroke="#ef233c" stroke-opacity=".5" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/></g>`);
+    o.push(type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));
   }
   // attribution (required by the tile licence)
   o.push(`<rect x="${W - 210}" y="${HEAD + MAP_H - 26}" width="210" height="26" fill="#ffffff" opacity="0.75"/>`);
@@ -286,24 +263,17 @@ export async function alertImageSvg(alert, opts = {}) {
   // ---- header
   o.push(`<rect x="0" y="0" width="${W}" height="${HEAD}" fill="#0f172a"/><rect x="0" y="0" width="${W}" height="6" fill="#f97316"/>`);
   const FF = en ? 'Noto Sans' : 'Noto Kufi Arabic';
-  const lvl = (imageContext || villageReference) ? {ar:'خبر',en:'Report',color:'#7dd3fc'} : LEVELS[alert.type === 'civil' && alert.caution_visual === true ? 'caution' : (type === 'weather' && alert.meta?.level === 2) || (type === 'quake' && (alert.meta?.mag ?? 0) >= 5) ? 'danger' : LEVEL_OF[type] || 'notice'];
+  const lvl = LEVELS[(type === 'weather' && alert.meta?.level === 2) || (type === 'quake' && (alert.meta?.mag ?? 0) >= 5) ? 'danger' : LEVEL_OF[type] || 'notice'];
   let head = type === 'military_incursion' && alert.meta?.incursionKind === 'barrier'
     ? (en ? 'Military checkpoint' : 'حاجز عسكري')
     : (HEADLINE[en ? 'en' : 'ar'][type]) || (en ? t.en : t.ar);
   const mag = type === 'quake' ? (alert.meta?.mag ?? Number((String(alert.title || '').match(/([0-9]+(?:\.[0-9])?)/) || [])[1])) : null;
-  if (reviewedCopy || approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1 || alert.meta?.correctedNewsTitle === true) head = en ? alert.title_en || alert.title : alert.title;
-  if(reviewedCopy?.version===2)head=en?reviewedCopy.imageHeading.en:reviewedCopy.imageHeading.ar;
   if (alert.place?.head_ar) head = en ? alert.place.head_en || head : alert.place.head_ar;
   if (Number.isFinite(mag)) head = en ? `M${mag.toFixed(1)} earthquake` : `زلزال بقوة ${arDigits(mag.toFixed(1))}`;
   if (type === 'signal_sweep' && alert.meta?.signalPlatform === 'uav') head += en ? ' — Drone' : ' — مسيّرة';
   const short = en ? alert.place?.short_en : alert.place?.short_ar;
-  const place = imageContext ? (en ? imageContext.label_en : imageContext.label_ar) : opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
-  let titleSize = head.length > 16 ? 44 : 52;
-  if ((!en || reviewedCopy?.version===2) && (reviewedCopy || approvedPublicCorrection(alert) || alert.meta?.searchNewsTreatment === 1 || alert.meta?.correctedNewsTitle === true)) {
-    const logoWidth = LOGO ? Math.min(220, 50 * (LOGO.ratio || 2.5)) : 0;
-    const titleWidth = W - 72 - (logoWidth ? logoWidth + 24 : 0);
-    while (titleSize > 20 && illustrationTextWidth(head, titleSize, 800) > titleWidth) titleSize--;
-  }
+  const place = opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
+  const titleSize = head.length > 16 ? 44 : 52;
   const hz = type === 'weather' && HAZARD_ICON[alert.meta?.hazard] ? alert.meta.hazard : '';
   const firearm = type === 'assassination' || type === 'shooting';
   const hasSignalGlyph = type === 'signal_sweep';
@@ -323,7 +293,7 @@ export async function alertImageSvg(alert, opts = {}) {
   const placeShort = place.length > placeMax ? place.slice(0, placeMax - 1) + '…' : place;
   o.push(`<text x="${sx}" y="118" font-family="${FF}" font-size="30" font-weight="700" text-anchor="${anchor}"${en ? '' : ' direction="rtl"'}><tspan fill="${lvl.color}">${ttx(sub)}</tspan>${placeShort ? `<tspan fill="#cbd5e1" font-weight="500">${ttx(' · ' + placeShort)}</tspan>` : ''}</text>`);
   // logo + domain on the other side
-  const domain = (process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const domain = (process.env.PUBLIC_URL || 'https://red-alert-syria-q6k8.onrender.com').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   const lh = 50; const lw = LOGO ? Math.min(220, lh * (LOGO.ratio || 2.5)) : 0;
   const lx = en ? W - 36 - lw : 36;
   if (LOGO?.kind === 'svg') o.push(LOGO.body.replace('<svg', `<svg x="${lx}" y="28" width="${lw}" height="${lh}"`));
@@ -335,16 +305,16 @@ export async function alertImageSvg(alert, opts = {}) {
   o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
   // ---- footer: note (multi-circle / aircraft) + time
   const notes = NOTE[en ? 'en' : 'ar'];
-  const note = imageContext ? (en ? imageContext.note_en : imageContext.note_ar) : villageReference ? (en ? 'Approximate village reference, not target location. No danger radius.' : 'مرجع جغرافي تقريبي للقرية، لا موقع النقطة المستهدفة. دون نطاق خطر') : geographicReference ? (en ? 'Approximate hill reference, not troop position. No danger radius.' : 'مرجع جغرافي تقريبي للتل، وليس موقع القوات. دون نطاق خطر') : approximatePoint ? (en ? 'Approximate town location only. No danger radius.' : 'موقع البلدة تقريبي فقط، دون نطاق خطر') : type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
+  const note = type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
   const when = whenText(alert.timestamp || Date.now(), lang);
   const fy = HEAD + MAP_H;
   o.push(`<rect x="0" y="${fy}" width="${W}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${fy}" width="${W}" height="1.5" fill="#e2e8f0"/>`);
   const fx = W / 2;
   if (note) {
-    o.push(`<text x="${fx}" y="${fy + 34}" font-family="${FF}" font-size="21" fill="${imageReference?.approximate?'#475569':'#94a3b8'}" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(note)}</text>`);
+    o.push(`<text x="${fx}" y="${fy + 34}" font-family="${FF}" font-size="21" fill="#94a3b8" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(note)}</text>`);
     o.push(`<text x="${fx}" y="${fy + 66}" font-family="${FF}" font-size="19" fill="#94a3b8" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(when)}</text>`);
   } else {
-    o.push(`<text x="${fx}" y="${fy + 50}" font-family="${FF}" font-size="21" fill="${imageReference?.approximate?'#475569':'#94a3b8'}" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(when)}</text>`);
+    o.push(`<text x="${fx}" y="${fy + 50}" font-family="${FF}" font-size="21" fill="#94a3b8" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(when)}</text>`);
   }
   o.push('</svg>');
   return o.join('');
@@ -503,7 +473,11 @@ export async function borderImageSvg(crossing, status, opts = {}) {
   const x0 = Math.floor(left / TILE); const x1 = Math.floor((left + BW) / TILE);
   const y0 = Math.floor(top / TILE); const y1 = Math.floor((top + MAP_H) / TILE);
   const timeoutMs = Number(opts.timeoutMs) || 6000;
-  const tiles=await fetchTileFrame(z,x0,x1,y0,y1,timeoutMs);
+  const jobs = [];
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push(fetchTile(z, x, y, timeoutMs).then((href) => ({ x, y, href })));
+  const tiles = await Promise.all(jobs);
+  const okTiles = tiles.filter((q) => q.href).length;
+  if (okTiles < tiles.length * 0.6) throw new Error(`border map tiles unavailable (${okTiles}/${tiles.length})`);
 
   const color = /^#[0-9a-f]{6}$/i.test(String(status?.color || '')) ? status.color : '#94a3b8';
   const name = String(crossing.ar || crossing.name_ar || '');
@@ -555,7 +529,11 @@ export async function roadImageSvg(road, status, opts = {}) {
   const x0 = Math.floor(left / TILE); const x1 = Math.floor((left + BW) / TILE);
   const y0 = Math.floor(top / TILE); const y1 = Math.floor((top + MAP_H) / TILE);
   const timeoutMs = Number(opts.timeoutMs) || 6000;
-  const tiles=await fetchTileFrame(z,x0,x1,y0,y1,timeoutMs);
+  const jobs = [];
+  for (let tx = x0; tx <= x1; tx++) for (let ty = y0; ty <= y1; ty++) jobs.push(fetchTile(z, tx, ty, timeoutMs).then((href) => ({ x: tx, y: ty, href })));
+  const tiles = await Promise.all(jobs);
+  const okTiles = tiles.filter((q) => q.href).length;
+  if (okTiles < tiles.length * 0.6) throw new Error(`road map tiles unavailable (${okTiles}/${tiles.length})`);
 
   const color = /^#[0-9a-f]{6}$/i.test(String(status?.color || '')) ? status.color : '#94a3b8';
   const statusLabel = String(status?.ar || 'حالة طريق');

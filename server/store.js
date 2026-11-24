@@ -1,8 +1,3 @@
-import {alertLocalityReference} from './reviewed-image-reference.js';
-import { reviewedAlertCopy } from './reviewed-news-copy.js';
-import { attributedAlertCopy } from './attributed-report.js';
-import { approvedPublicCorrection } from './approved-public-correction.js';
-import { mergeCoordination } from './editor-coordination.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -10,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
 import { alertZones, selectedAlertZones, regionFix } from './places.js';
-import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
+import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
 import { expireAlnabaPhotos, sanitizeAlnabaState, sanitizeAlnabaBatchQueue, mergeAlnabaBatchQueues } from './alnaba.js';
 
@@ -221,8 +216,6 @@ class Store extends EventEmitter {
       ui: s.ui && typeof s.ui === 'object' ? s.ui : {},
       // public reports waiting for a decision (survive restarts/deploys) and decided report ids
       reports: s.reports && typeof s.reports === 'object' ? s.reports : {},
-      reportContacts: s.reportContacts && typeof s.reportContacts === 'object' ? s.reportContacts : {},
-      reportsAudit: s.reportsAudit && typeof s.reportsAudit === 'object' ? s.reportsAudit : {},
       reportsDone: s.reportsDone && typeof s.reportsDone === 'object' ? s.reportsDone : {},
       // ids of alerts removed by hand / auto-delete (so a late copy from an old instance can't bring them back)
       gone: s.gone && typeof s.gone === 'object' ? s.gone : {},
@@ -275,7 +268,7 @@ class Store extends EventEmitter {
     }
     this._backupPending = false; this._backupLazy = false;
     const flight = (async () => {
-      await this.backup.save(JSON.stringify(this.state), { force });
+      await this.backup.save(JSON.stringify(this.state));
       this.lastBackupAt = new Date().toISOString();
       return true;
     })();
@@ -310,9 +303,7 @@ class Store extends EventEmitter {
       title: input.title,
       title_en: input.title_en,
       description: input.description || '',
-      ...(input.body ? { body: String(input.body) } : {}),
       ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
-      ...(input.source === 'news' && input.type === 'breaking' && input.meta?.searchNewsTreatment === 1 && input.location_display === 'approximate_point' ? { location_display: 'approximate_point' } : {}),
       location: input.location?.latitude != null ? { latitude: input.location.latitude, longitude: input.location.longitude } : null,
       place: input.location || null,
       areas: input.areas || [],
@@ -429,27 +420,25 @@ class Store extends EventEmitter {
     this.persist();
   }
   reportGet(rid) { return this.state.reports?.[rid] || null; }
-  reportDone(rid) { return !!this.state.reportsDone?.[rid] || !!this.state.reportsAudit?.[rid]; }
+  reportDone(rid) { return !!this.state.reportsDone?.[rid]; }
   /** Claim a report for a decision: returns it once, then it is gone (no double publishing). */
   reportTake(rid) {
     const rep = this.state.reports?.[rid];
-    if (!rep || rep.reviewOperation || this.state.reportContacts?.[rid]?.outbound?.some(m => ['claimed', 'uncertain', 'backup-unverified'].includes(m.status))) return null;
+    if (!rep) return null;
     delete this.state.reports[rid];
     (this.state.reportsDone ||= {})[rid] = Date.now();
-    (this.state.reportsAudit ||= {})[rid] = { at: Date.now(), result: 'native-claimed', draft: rep.draft };
     this.persist();
     return rep;
   }
   /** Undo a claim when publishing failed, so the reviewer can try again. */
   reportRestore(rid, rep) {
     delete this.state.reportsDone?.[rid];
-    delete this.state.reportsAudit?.[rid];
     this.reportPut(rid, rep);
   }
   reportsPrune(maxAgeMs = 48 * 3600_000) {
     const now = Date.now();
     let n = 0;
-    for (const [k, r] of Object.entries(this.state.reports || {})) if (!r || (!r.reviewOperation && now - (r.created || 0) > maxAgeMs)) { delete this.state.reports[k]; n++; }
+    for (const [k, r] of Object.entries(this.state.reports || {})) if (!r || now - (r.created || 0) > maxAgeMs) { delete this.state.reports[k]; n++; }
     for (const [k, t] of Object.entries(this.state.reportsDone || {})) if (now - t > 4 * 86400_000) { delete this.state.reportsDone[k]; n++; }
     if (n) this.persist({ backupSoon: false });
   }
@@ -471,20 +460,14 @@ class Store extends EventEmitter {
       console.error('[store] merge: backup read failed', e.message); return { reports: 0, alerts: 0, backupLoaded: false };
     }
     let reports = 0, alerts = 0, alnabaBatches = 0;
-    this.state.reportContacts ||= {};
-    for (const [id,c] of Object.entries(o.reportContacts || {})) if (!this.state.reportContacts[id]) this.state.reportContacts[id] = c;
     const st = this.state;
-    if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
-    st.reports ||= {}; st.reportsDone ||= {}; st.reportsAudit ||= {}; st.gone ||= {};
-    for (const [rid, audit] of Object.entries(o.reportsAudit || {})) {
-      if (!st.reportsAudit[rid] || (audit.at || 0) > (st.reportsAudit[rid].at || 0)) st.reportsAudit[rid] = audit;
-    }
+    st.reports ||= {}; st.reportsDone ||= {}; st.gone ||= {};
     for (const [rid, t] of Object.entries(o.reportsDone || {})) {
       if (!st.reportsDone[rid]) st.reportsDone[rid] = t;
       if (st.reports[rid]) { delete st.reports[rid]; reports++; }
     }
     for (const [rid, r] of Object.entries(o.reports || {})) {
-      if (!r || st.reports[rid] || st.reportsDone[rid] || st.reportsAudit[rid]) continue;
+      if (!r || st.reports[rid] || st.reportsDone[rid]) continue;
       st.reports[rid] = r; reports++;
     }
     const beforeBatchCount = st.alnabaBatches?.length || 0;
@@ -845,12 +828,6 @@ function publicSourceInfo(a) {
 /** Strip private fields before sending an alert to browsers. */
 export function publicAlert(a) {
   const p = a.place || {};
-  const reviewed=reviewedAlertCopy(a);
-  if(a.meta?.reviewedNewsCopy && !reviewed) throw new Error('invalid-reviewed-public-copy');
-  const attributed=attributedAlertCopy(a);
-  if (a.meta?.attributedReport && !attributed) throw new Error('invalid-attributed-public-copy');
-  const editorialMode = a.source === 'news' && ['opinion', 'satire'].includes(a.meta?.publicEditorialTone)
-    && isPublicEditorialCopy(a.description, a.meta.publicEditorialTone) ? a.meta.publicEditorialTone : null;
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : a.media;
   const mediaItems = sanitizeAlertMediaItems(rawMediaItems).map((media) => ({
     type: media.type,
@@ -863,19 +840,11 @@ export function publicAlert(a) {
     ...(Array.isArray(a.meta?.political?.sources) ? a.meta.political.sources : []),
   ];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
-  const approvedCorrection = approvedPublicCorrection(a);
-  if(a.location_display==='geographic_reference' && !approvedCorrection)throw Error('invalid-geographic-reference-public');
-  const localityReference=alertLocalityReference(a,reviewed);
-  const approvedValues = new Set(approvedCorrection ? Object.values(approvedCorrection) : []);
   const publicText = (value) => {
-    const selectedEditorialCopy = Boolean(editorialMode && value === a.description && isPublicEditorialCopy(value, editorialMode));
-    if (isPrivateEditorialCopy(value) && !selectedEditorialCopy) return '';
-    if (reviewed && [reviewed.title,reviewed.title_en,reviewed.body].includes(value)) return value;
-    if (attributed && [attributed.title,attributed.title_en,attributed.body].includes(value)) return value;
-    if (approvedCorrection && approvedValues.has(value)) return value;
+    if (isPrivateEditorialCopy(value)) return '';
     const cleaned = a.source === 'news' || ['political', 'breaking'].includes(a.type)
       ? cleanAttributedNewsText(value, privateSourceNames) : cleanAlertText(value);
-    return isPrivateEditorialCopy(cleaned) && !(selectedEditorialCopy && isPublicEditorialCopy(cleaned, editorialMode)) ? '' : cleaned;
+    return isPrivateEditorialCopy(cleaned) ? '' : cleaned;
   };
   const rawFlightTarget = a.type === 'air_movement' ? a.meta?.flightTarget : null;
   const targetScope = ['country', 'governorate'].includes(rawFlightTarget?.scope) ? rawFlightTarget.scope : null;
@@ -895,12 +864,10 @@ export function publicAlert(a) {
   return {
     id: a.id,
     type: a.type,
-    marker_glyph: a.marker_glyph === 'weapon' ? 'weapon' : approvedCorrection && a.caution_visual === true && a.type === 'civil' ? 'urgent_warning' : undefined,
-    ...(approvedCorrection && a.caution_visual === true && a.type === 'civil' ? { caution_visual: true, civil_emoji: 'warning' } : {}),
+    marker_glyph: a.marker_glyph === 'weapon' ? 'weapon' : undefined,
     hazard: a.type === 'weather' ? a.meta?.hazard || undefined : undefined,
     border: BORDER_REGIONS[a.meta?.border] ? a.meta.border : undefined,
     flight_direction: FLIGHT_DIRECTIONS[a.meta?.flightDirection] ? a.meta.flightDirection : undefined,
-    flight_heading: ['uav', 'uav_strike', 'warplane', 'helicopter'].includes(a.type) && a.meta?.flightHeading ? String(a.meta.flightHeading).slice(0, 80) : undefined,
     aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
     ...(a.type === 'air_movement' && a.meta?.flightRouteOrigin === 'israel_approx_reference'
       && flightTarget?.scope === 'governorate' && targetHasCoordinates ? { flight_route_origin: 'israel_approx_reference' } : {}),
@@ -914,18 +881,12 @@ export function publicAlert(a) {
       ? (['soldiers', 'vehicles', 'barrier'].includes(a.meta?.incursionKind) ? a.meta.incursionKind : Number.isInteger(a.meta?.vehicleCount) ? 'vehicles' : undefined)
       : undefined,
     ...(a.type === 'political' && category ? { political_category: category } : {}),
-    ...(editorialMode ? { editorial_tone: editorialMode } : {}),
     title: isPrivateEditorialCopy(a.title) ? '' : a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title) : a.title,
     title_en: isPrivateEditorialCopy(a.title_en) ? '' : a.source === 'news' || ['political', 'breaking'].includes(a.type) ? publicText(a.title_en) : a.title_en,
     description: publicText(a.description) || undefined,
     description_en: publicText(a.description_en) || undefined,
-    ...(a.body ? { body: publicText(a.body) || undefined } : {}),
     ...(media ? { media, media_items: mediaItems } : {}),
-    ...(reviewed?.version===2 ? {presentation:{kind:'reviewed_report'}} : {}),
-    ...(reviewed && a.meta?.reviewedNewsCopy?.draftId==='4f2193d1a9' ? {presentation:{kind:'dated_report',event_date:'2026-11-22'}} : {}),
     location: a.location,
-    ...((approvedCorrection || (a.source === 'news' && a.type === 'breaking' && a.meta?.searchNewsTreatment === 1)) && ['approximate_point','geographic_reference'].includes(a.location_display) ? {location_display:a.location_display} : {}),
-    ...(approvedCorrection && a.location_display==='geographic_reference' ? {geographic_reference_kind:a.meta?.geographicReferenceAudit?.featureKind||'hill'} : {}),
     place: {
       name_ar: p.name_ar, name_en: p.name_en,
       district_ar: p.district_ar, district_en: p.district_en,
@@ -935,7 +896,6 @@ export function publicAlert(a) {
     scope: a.scope,
     // Political rings use only manually/explicitly selected areas; never infer locations from article mentions.
     zones: a.location ? (a.type === 'political' ? selectedAlertZones(a) : alertZones(a)) : undefined,
-    ...(localityReference ? {geographic_reference:{kind:'locality_reference',latitude:localityReference.latitude,longitude:localityReference.longitude,label_ar:localityReference.label_ar,label_en:localityReference.label_en,note_ar:localityReference.note_ar,note_en:localityReference.note_en}} : {}),
     more: (a.extra || []).length ? a.extra.map((x) => ({ name_ar: x.name_ar, name_en: x.name_en, district_ar: x.district_ar, district_en: x.district_en, governorate_ar: x.governorate_ar, governorate_en: x.governorate_en, scope: x.scope })) : undefined,
     timestamp: a.timestamp,
     source_info: publicSourceInfo(a),
@@ -944,7 +904,6 @@ export function publicAlert(a) {
       label: a.source === 'weather' || a.meta?.political?.official ? 'مصدر رسمي' : a.source ? 'منسوب إلى المصدر' : 'غير موثق مستقلًا',
     },
     updates: Array.isArray(a.history) ? a.history.slice(-20).map((h) => ({ at: h.at, kind: h.kind, title: publicText(h.title), description: publicText(h.description), is_active: h.is_active })) : undefined,
-    ...(a.meta?.officialWarningValidity?.onset===a.valid_from ? {valid_from:a.valid_from} : {}),
     expires_at: a.expires_at,
     ended_at: a.ended_at,
     is_active: a.is_active,

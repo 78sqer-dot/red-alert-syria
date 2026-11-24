@@ -175,7 +175,7 @@ function alertInput(w) {
     ttlMin: minutesLeftOf(w.day),
     source: 'weather',
     author: { id: 0, name: 'Open-Meteo' },
-    meta: { hazard: w.hazard, level: w.level, day: w.day, dedupKey: `weather:${w.hazard}:${w.day}` },
+    meta: { hazard: w.hazard, level: w.level, day: w.day },
   };
 }
 async function publish(item, toChannel) {

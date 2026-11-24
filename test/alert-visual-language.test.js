@@ -20,24 +20,24 @@ test('security alert emojis are present and semantically distinct', () => {
   assert.equal(ALERT_TYPES.death.emoji, '🪦');
 });
 
-test('event emojis map onto their own map alert types, one symbol per type', () => {
-  assert.equal(alertEmoji({ type: 'airstrike' }), '☄️', 'an incoming aerial strike, distinct from a ground explosion');
+test('requested event emojis map onto their own map alert types', () => {
+  assert.equal(alertEmoji({ type: 'airstrike' }), '💥');
   assert.equal(alertEmoji({ type: 'explosion' }), '💥');
-  assert.equal(alertEmoji({ type: 'detonation' }), '🧨', 'a detonated device, distinct from a generic explosion');
+  assert.equal(alertEmoji({ type: 'detonation' }), '💥');
   assert.equal(alertEmoji({ type: 'weather' }), '⛈️');
   assert.equal(alertEmoji({ type: 'fire' }), '🔥');
   assert.equal(alertEmoji({ type: 'arrest' }), '🚔');
   assert.equal(alertEmoji({ type: 'civil', civil_emoji: 'medical' }), '🚑');
   assert.equal(alertEmoji({ type: 'artillery' }), '💣');
-  // Map pins never render an emoji (unified symbols, 2026-11-17): the former
-  // emoji-disc types draw their glyph on the pin like every other type, and a
-  // civil medical report keeps its ambulance glyph.
-  assert.doesNotMatch(map, /eventEmoji|map-event-emoji/);
-  assert.match(map, /const pinGlyph = a\.type === 'civil' && alertEmoji\(a\) === '🚑' \? 'ambulance' : glyph;/);
-  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin'/);
+  assert.match(map, /const eventEmoji = \['airstrike', 'artillery', 'explosion', 'detonation', 'weather', 'fire', 'arrest'\]\.includes\(a\.type\)/);
+  assert.match(map, /a\.type === 'civil' && alertEmoji\(a\) === '🚑'/);
+  assert.match(map, /a\.type === 'weather' \? t\.emoji : alertEmoji\(a\)/);
+  assert.match(map, /else if \(eventEmoji\) \{[\s\S]{0,400}else if \(marker === 'icon'\)/);
+  assert.match(map, /class="sai map-event-disc map-event-emoji"/);
+  assert.match(css, /\.sai\.map-event-emoji \{[^}]*font-size: 21px;/);
 });
 
-test('explosion and detonation have distinct Arabic labels and glyphs on the unified pin', () => {
+test('explosion and detonation have distinct Arabic labels and strike-colored SVGs at standard map size', () => {
   assert.equal(ALERT_TYPES.explosion.ar, 'انفجار');
   assert.equal(ALERT_TYPES.explosion.button_ar, 'انفجار');
   assert.equal(ALERT_TYPES.explosion.button_en, 'Explosion');
@@ -58,30 +58,25 @@ test('explosion and detonation have distinct Arabic labels and glyphs on the uni
   assert.equal(ALERT_TYPES.detonation.glyph, 'detonation_burst');
   assert.equal(ALERT_TYPES.detonation.size, 24);
   assert.notEqual(ALERT_TYPES.detonation.glyph, ALERT_TYPES.explosion.glyph);
-  assert.equal(TYPE_ICON.detonation, 'bolt', 'explosion alone keeps the bomb UI icon');
+  assert.equal(TYPE_ICON.detonation, 'bomb');
   assert.match(EXTRA_SVG.detonation_burst, /M256 40v144/);
   assert.equal(eventVisual('detonation').category, 'strikes');
   assert.equal(eventVisual('detonation').color, '#c2410c');
-  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/);
-  assert.match(map, /--ring:\$\{ringColor \|\| t\.color\}/, 'the pin ring carries the type colour');
+  assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
+  assert.match(map, /const iconColor = visual\.color/);
 });
 
-test('warplane follows the climbing-jets flight-trail reference (redalert.com.lb design) while drones keep their orbiting silhouette', () => {
+test('warplane follows the three-aircraft reference pass while drones keep their orbiting silhouette', () => {
   assert.match(map, /marker === 'orbit'/);
   assert.match(map, /t\.marker === 'squad'/);
-  assert.match(map, /a\.flight_direction \|\| a\.meta\?\.flightDirection/);
-  assert.match(map, /<div class="squad squad-directed"><span class="squad-trail" aria-hidden="true"><\/span>\$\{pl\('sq-lead'\)\}\$\{pl\('sq-chase'\)\}<\/div>/);
-  assert.match(map, /<div class="squad">\$\{pl\(22, -8, 1\)\}\$\{pl\(6, 12, 0\.85\)\}\$\{pl\(38, 12, 0\.85\)\}<\/div>/);
+  assert.match(map, /svgTag\(t\.glyph, 24,[\s\S]{0,120}pl\(36, -12, 1\).*pl\(20, 8, 0\.85\).*pl\(52, 8, 0\.85\)/);
   assert.match(css, /\.maplibregl-map \.mk-orbit:not\(\.mk-sat\) \.uav\s*\{\s*animation: uavOrbit 9s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 60px; height: 200px; left: -30px; top: -100px;/);
-  assert.match(css, /\.mk-squad \.squad-trail \{[^}]*border-left: 1\.5px dashed #8b5cf6; opacity: \.45;/);
-  assert.match(css, /\.mk-squad \.squad-directed \.sq \{[^}]*width: 18px; height: 18px;[^}]*animation: squadTrailLead 5s linear infinite;/);
-  assert.match(css, /\.mk-squad \.squad-directed \.sq-chase \{ animation: squadTrailChase 5s linear infinite; \}/);
-  assert.match(css, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq \{ width: 16px; height: 16px; scale: 1; animation: squadFly 7s linear infinite; \}/);
-  assert.match(css, /\.mk-squad \.squad:not\(\.squad-directed\) \.sq:nth-child\(2\), [^}]*width: 14px; height: 14px; \}/);
-  assert.match(css, /@keyframes squadTrailLead \{ 0% \{ transform: translate\(-50%, 150px\); opacity: 0; \}/);
-  assert.match(css, /@keyframes squadTrailChase \{ 0% \{ transform: translate\(calc\(-50% \+ 10px\), 162px\); opacity: 0; \}/);
+  assert.match(css, /\.mk-squad \.squad\s*\{[^}]*width: 84px; height: 200px; left: -42px; top: -100px;/);
+  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*width: 24px; height: 24px; scale: 1; animation: squadFly 7s linear infinite;/);
+  assert.match(css, /\.mk-squad \.squad \.sq:nth-child\(2\)\s*\{ left: 8px !important; top: calc\(50% \+ 16px\) !important; width: 22px; height: 22px; \}/);
+  assert.match(css, /@keyframes squadFly \{ 0% \{ transform: translateY\(110px\); opacity: 0; \} 12% \{ opacity: 1; \} 88% \{ opacity: 1; \} 100% \{ transform: translateY\(-110px\); opacity: 0; \} \}/);
   assert.match(css, /\.maplibregl-map:not\(\.zoom-detail\) \.mk-squad:not\(\.t-warplane\) \.squad \{ visibility: hidden; \}/);
+  assert.match(css, /\.mk-squad \.squad \.sq\s*\{[^}]*animation: squadFly 7s linear infinite;/);
   assert.doesNotMatch(css, /warplaneOrbit|squadFlyZ/);
   assert.match(svgs, /"uav":/);
   assert.match(svgs, /"plane":/);
@@ -99,11 +94,11 @@ test('a signal-sweep drone uses the standard 24px, type-colored orbit marker onl
 });
 
 test('schematic movement uses one compact blue three-aircraft group at the report location without extra rings', () => {
-  assert.match(map, /const color = isHelicopter \? eventVisual\('helicopter'\)\.color : eventVisual\('air_movement'\)\.color;/);
+  assert.match(map, /const color = eventVisual\('air_movement'\)\.color;/);
   assert.match(map, /\[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]/);
   assert.match(map, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
-  assert.match(map, /const heading = isHelicopter \|\| \(isReferenceRoute && Number\.isFinite\(routeBearing\)\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
-  assert.match(map, /is-\$\{isHelicopter \? 'helicopter' : alert\.flight_direction\.replace\(\/_\/g, '-'\)\}/);
+  assert.match(map, /const heading = isReferenceRoute && Number\.isFinite\(routeBearing\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
+  assert.match(map, /is-\$\{alert\.flight_direction\.replace\(\/_\/g, '-'\)\}/);
   assert.match(map, /const movementTrackIds = new Set\(this\.movementTrackAlerts\(\)\.map\(\(a\) => a\.id\)\)/);
   assert.match(map, /movementTrackIds\.has\(a\.id\)/);
   assert.match(map, /visual\.append\(squad\)/);
@@ -144,19 +139,21 @@ test('live alert circles use compositor-safe pulse layers and remain clickable t
   assert.match(css, /\.zp-fill[\s\S]*animation: zfillPulse/);
 });
 
-test('static types share one unified pin and breaking news keeps its red pulse', () => {
-  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin', pinGlyph === t\.glyph/);
-  assert.match(map, /el\.innerHTML = glyphDisc\(a\.type, 32, 20, 'pin'\);/, 'breaking renders the same pin (alert_tri glyph, type-colour ring)');
-  assert.match(css, /\.pin \{[^}]*width: 32px; height: 32px;[^}]*background: transparent; border: 2px solid var\(--ring/);
-  assert.match(css, /\.pin svg \{ display: block; width: 20px; height: 20px; fill: var\(--ring, #64748b\); \}/);
-  assert.match(css, /\.maplibregl-map\.zoom-far \.pin \{ width: 20px; height: 20px; border-width: 1.5px; \}/);
-  assert.match(css, /\.maplibregl-map\.zoom-far \.pin svg \{ width: 13px; height: 13px; \}/);
-  assert.match(css, /\.maplibregl-map\.zoom-detail \.pin \{ width: 38px; height: 38px; border-width: 2.5px; \}/);
-  assert.match(css, /\.mk:hover \.pin, \.mk\.sel \.pin \{ box-shadow: 0 0 0 1px rgba\(6,10,16,\.45\), 0 0 0 5px color-mix\(in srgb, var\(--ring/);
-  assert.match(css, /\.mk-breaking-news \.news-pulse-ring \{ width: 34px; height: 34px; border-color: #ef233c/);
+test('map event glyphs are 24px and urgent news shows its warning category symbol in a red pulsing marker', () => {
+  assert.match(map, /glyphDisc\(a\.type, 34, 24, 'sai map-event-disc'/);
+  assert.match(map, /class="news-marker-category" aria-hidden="true">\$\{visual\.dot\}/);
+  assert.match(css, /\.sai\.map-event-disc\s*\{[^}]*background:\s*#fff !important/);
+  assert.match(css, /\.ic\s*\{[^}]*border-radius:\s*50%;[^}]*background:\s*#fff/);
+  assert.match(css, /\.news-marker-core\s*\{[^}]*width:\s*32px; height:\s*32px;[^}]*border:\s*2px solid #fff;[^}]*background:\s*transparent/);
+  assert.match(css, /\.news-marker-core::after\s*\{[^}]*background:\s*#ef233c/);
+  assert.match(css, /\.mk-breaking-news \.news-marker-core\s*\{[^}]*border-color: #ef233c;[^}]*box-shadow: 0 0 0 1px rgba\(239,35,60,\.34\)/);
+  assert.match(css, /\.mk-breaking-news \.news-marker-core::after\s*\{ border-color: #ef233c; box-shadow: 0 0 0 1px rgba\(239,35,60,\.28\); \}/);
+  assert.match(css, /\.news-marker-category\s*\{[^}]*width:\s*15px; height:\s*15px;[^}]*font:\s*14px\/15px/);
+  assert.match(css, /\.mk-breaking-news \.news-marker-core\s*\{\s*width: 26px; height: 26px; border-width: 1\.7px;/);
+  assert.match(css, /\.mk-breaking-news \.news-pulse-ring\s*\{ width: 34px; height: 34px; border-color: #ef233c/);
   assert.match(css, /@keyframes urgentPulseWave/);
-  assert.doesNotMatch(css, /\.news-marker-core|\.news-marker-category|\.sai\.map-event-disc|\.civ-dot/);
-  assert.doesNotMatch(map, /civ-dot|news-marker-core/);
+  assert.match(css, /\.ic-svg\s*\{[^}]*width:\s*24px; height:\s*24px/);
+  assert.match(css, /\.mk-event-emoji\s*\{[^}]*background:\s*#fff/);
 });
 
 test('urgent marker core, red pulse and glow follow the shared map zoom scale', () => {
@@ -168,20 +165,17 @@ test('urgent marker core, red pulse and glow follow the shared map zoom scale', 
   assert.match(map, /const mks = Math\.max\(0\.42, Math\.min\(0\.56,/);
 });
 
-test('map pins use type colours for the ring while the helicopter keeps its slim military-blue palette', () => {
-  assert.match(map, /--ring:\$\{ringColor \|\| t\.color\}/, 'the pin ring uses the type colour');
-  assert.match(map, /fill="#ffffff"/, 'pin glyphs render white on the dark roundel');
-  assert.match(css, /\.pin \{[^}]*border: 2px solid var\(--ring/);
-  assert.doesNotMatch(map, /const iconColor = visual\.color/);
+test('map SVGs use category colors while the helicopter keeps its dark body, red accents, and blue glow', () => {
+  assert.match(map, /const fg = visual\.color;/, 'static discs use the category color');
+  assert.match(map, /const iconColor = visual\.color/);
+  assert.match(map, /style="--ic:\$\{iconColor\}/);
+  assert.match(map, /fill="\$\{iconColor\}"/);
+  assert.match(css, /\.sai\.map-event-disc \{[^}]*color: var\(--c\) !important/);
+  assert.match(css, /\.sai\.map-event-disc svg \{ fill: var\(--c\) !important; color: var\(--c\) !important; \}/);
+  assert.match(css, /\.ic-pistol \.ic-svg, \.ic-rifle \.ic-svg \{[^}]*fill: var\(--ic\)/);
   assert.match(css, /\.uav-svg \{[^}]*fill: var\(--c, #6b7280\)/);
-  assert.match(css, /\.helicopter-svg \{[^}]*width: 24px; height: 24px;[^}]*fill: #13283d[^}]*drop-shadow\(0 0 1\.4px rgba\(190,207,223,\.55\)\)/);
-  assert.match(css, /\.helicopter-svg \.heli-body \{ fill: #13283d; stroke: #091725;/);
-  assert.match(css, /\.helicopter-svg \.heli-body-highlight \{ fill: #243d56; \}/);
-  assert.match(css, /\.helicopter-svg \.heli-cockpit \{ fill: #0b2034; \}/);
-  assert.match(css, /\.helicopter-svg \.heli-tail-rotor \{ fill: #203851; stroke: #091a29; stroke-width: 8; opacity: 1;/);
-  assert.equal(typeof EXTRA_SVG.helicopter_side, 'string');
-  assert.match(EXTRA_SVG.helicopter_side, /class="heli-body"/);
-  assert.doesNotMatch(EXTRA_SVG.helicopter_side, /#(?:ef4444|e11d48)/i);
+  assert.match(css, /\.helicopter-svg \{[^}]*fill: #17212d[^}]*rgba\(59,142,255,\.78\)/);
+  assert.match(css, /\.helicopter-svg \.heli-cockpit \{ fill: #e11d48; \}/);
   assert.match(css, /html\.dark \.mk\.sel \.uav-svg \{ fill: color-mix\(in srgb, var\(--c, #6b7280\) 72%, #fff\); \}/);
-  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #13283d; \}/);
+  assert.match(css, /\.mk-helicopter \.helicopter-svg, \.mk-helicopter\.sel \.helicopter-svg \{ fill: #17212d; \}/);
 });
