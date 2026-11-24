@@ -36,7 +36,7 @@ test('automatic monitoring neither downloads nor attaches source photos/videos, 
   };
 
   try {
-    const ts = Date.now() - 5 * 60_000; // inside the monitor freshness window: the desk drops older source posts (see news-monitor-freshness.test.js)
+    const ts = Date.parse('2026-11-13T12:00:00Z');
     const text = 'أعلنت الرئاسة السورية اليوم بدء مفاوضات رسمية جديدة مع ممثلي القوى الوطنية بشأن المرحلة المقبلة';
     const headline = 'الرئاسة السورية تعلن بدء مفاوضات جديدة مع ممثلي القوى الوطنية';
     const result = {

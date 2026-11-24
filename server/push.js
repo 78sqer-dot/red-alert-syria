@@ -1,4 +1,3 @@
-import { reviewedAlertCopy } from './reviewed-news-copy.js';
 import webpush from 'web-push';
 import crypto from 'node:crypto';
 import { matchesFollowArea } from '../shared/area-follow.js';
@@ -71,17 +70,15 @@ function matches(alert, sub) {
 
 export async function dispatchPush(store, alert, event = 'new', sendNotification) {
   if (!alert?.id || typeof sendNotification !== 'function') return { sent: 0, skipped: 0 };
-  const proof=reviewedAlertCopy(alert);
-  const report = !!proof && (proof.version===2 || alert.meta?.reviewedNewsCopy?.draftId === '4f2193d1a9');
-  const title = report ? 'ℹ️ خبر — Red Alert Syria' : event === 'update' ? '🔄 تحديث تنبيه — Red Alert Syria' : '🚨 تنبيه جديد — Red Alert Syria';
+  const title = event === 'update' ? '🔄 تحديث تنبيه — Red Alert Syria' : '🚨 تنبيه جديد — Red Alert Syria';
   const body = String(alert.title || alert.description || 'تنبيه جديد').slice(0, 240);
   const url = `/${alert.lang === 'en' ? 'en' : 'ar'}/#${encodeURIComponent(alert.id)}`;
-  const payload = JSON.stringify({ title, body, tag: `ras-${alert.id}`, url, event, alertId: alert.id, ...(report ? {silent:true} : {}) });
+  const payload = JSON.stringify({ title, body, tag: `ras-${alert.id}`, url, event, alertId: alert.id });
   let sent = 0; let skipped = 0;
   for (const [id, sub] of store.pushSubscriptions()) {
     if (!matches(alert, sub)) { skipped++; continue; }
     try {
-      await sendNotification(sub, payload, { TTL: 300, urgency: !report && event === 'new' ? 'high' : 'normal' });
+      await sendNotification(sub, payload, { TTL: 300, urgency: event === 'new' ? 'high' : 'normal' });
       sent++;
     } catch (err) {
       if ([404, 410].includes(err.statusCode)) store.removePushSubscription(id);

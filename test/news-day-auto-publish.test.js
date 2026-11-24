@@ -13,8 +13,6 @@ process.env.CHANNEL_ID = '@mock_news_channel';
 const { store } = await import('../server/store.js');
 await store.init(null);
 const { dayAutoDueAt, dayAutoReady, daytimeAutoEligible, daytimeWindow, nightEligible, newsState, toBotDraft, _test } = await import('../server/news-monitor.js');
-const { NEWS_TYPES } = await import('../server/news-ai.js');
-const { cleanPublicNewsAttribution } = await import('../server/clean-text.js');
 
 test.after(async () => {
   await new Promise((resolve) => setTimeout(resolve, 350));
@@ -22,12 +20,11 @@ test.after(async () => {
 });
 
 const at = (iso) => Date.parse(iso);
-const daytimeStart = at('2026-11-18T05:00:00Z'); // 08:00 in Damascus, after the current expansion checkpoint
+const daytimeStart = at('2026-10-27T05:00:00Z'); // 08:00 in Damascus
 const qualified = (overrides = {}) => ({
   id: 'news-draft',
   type: 'attack',
   status: 'pending',
-  created: Date.parse(newsState().mig.dayAutoAllTypes1) + 1,
   test: false,
   rule: false,
   loc: { scope: 'place', latitude: 33.5, longitude: 36.3 },
@@ -35,79 +32,11 @@ const qualified = (overrides = {}) => ({
   ...overrides,
 });
 
-test('public news copy retains original attribution without appending private source records', () => {
-  const examples = [
-    {
-      raw: 'أفاد مراسل الجزيرة بأن القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
-      clean: 'أفاد مراسل الجزيرة بأن القوات الإسرائيلية استهدفت بقذائف أراضٍ زراعية في حوض اليرموك بريف درعا الجنوبي.',
-    },
-    {
-      raw: 'مصادر العربية: طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
-      clean: 'مصادر العربية: طائرات مسيرة إسرائيلية تستهدف الأراضي الزراعية بين كويا وعابدين ومعرية بريف درعا',
-    },
-    {
-      raw: 'توغل وإطلاق نار يطال منازل وأراضي قرية كويا بريف درعا.. رئيس البلدية يروي لـ سوريا الآن ما جرى',
-      clean: 'توغل وإطلاق نار يطال منازل وأراضي قرية كويا بريف درعا.. رئيس البلدية يروي ما جرى',
-    },
-  ];
-  for (const example of examples) assert.equal(cleanPublicNewsAttribution(example.raw), example.clean);
-  assert.equal(cleanPublicNewsAttribution('قال رئيس البلدية إن التوغل طال منازل قرية كويا'), 'قال رئيس البلدية إن التوغل طال منازل قرية كويا');
-  const institutionAttribution = 'مصادر الدفاع المدني السوري: وقع انفجار وأصيب 3 أشخاص.';
-  assert.equal(cleanPublicNewsAttribution(institutionAttribution, ['الدفاع المدني السوري']), institutionAttribution,
-    'a monitored institution is a speaker, not a media-outlet identity to strip');
-  assert.equal(cleanPublicNewsAttribution(institutionAttribution, ['مصادر الدفاع المدني السوري']), institutionAttribution,
-    'a complete monitored institution source name remains attributed');
-  assert.equal(cleanPublicNewsAttribution('مصادر قناة الرصد: وقع انفجار وأصيب 3 أشخاص.', ['مصادر قناة الرصد']),
-    'مصادر قناة الرصد: وقع انفجار وأصيب 3 أشخاص.', 'source-written channel attribution survives');
-  assert.equal(cleanPublicNewsAttribution('مصادر قناة الدفاع المدني: وقع انفجار.', ['مصادر قناة الدفاع المدني']),
-    'مصادر قناة الدفاع المدني: وقع انفجار.', 'source-written media attribution does not become our assertion');
-
-  const sourceText = examples[0].raw + '\n' + examples[1].raw;
-  const draft = qualified({
-    id: 'private-source-attribution-cleanup', type: 'explosion',
-    headline: examples[0].raw,
-    sourceText,
-    body: examples[1].raw,
-    loc: { scope: 'place', name_ar: 'درعا', governorate_ar: 'درعا', latitude: 32.6, longitude: 36.1 },
-    srcs: [{ u: 'private-monitor-feed', name: 'قناة الرصد الداخلية', url: 'https://t.me/private-monitor-feed/55', ts: Date.now(), local: false }],
-  });
-  const originalHeadline = draft.headline;
-  const publicDraft = toBotDraft(draft);
-  assert.equal(publicDraft.headline, examples[0].clean);
-  assert.equal(publicDraft.details, examples[1].clean);
-  assert.doesNotMatch(`${publicDraft.headline} ${publicDraft.details}`, /سوريا الآن|قناة الرصد الداخلية/);
-  assert.deepEqual(publicDraft.srcs, [{ u: 'private-monitor-feed', name: 'قناة الرصد الداخلية', url: 'https://t.me/private-monitor-feed/55', ts: draft.srcs[0].ts, local: false }]);
-  assert.equal(draft.sourceText, sourceText, 'raw source text remains on the internal draft');
-  assert.equal(draft.headline, originalHeadline, 'pre-existing draft text is not rewritten in place');
-  const publishedCopy = toBotDraft({ ...draft, status: 'published' }, { preservePublishedCopy: true });
-  assert.equal(publishedCopy.headline, examples[0].raw, 'published editor retains the exact published headline');
-  assert.equal(publishedCopy.details, examples[1].raw, 'published editor retains the exact published details');
-  assert.equal(nightEligible(draft), true);
-  assert.equal(daytimeAutoEligible(draft), true, 'cleaning outlet credits does not change automatic-publish eligibility');
-});
-
 test('daytime fallback window follows Damascus time and excludes 22:00–08:00', () => {
   assert.equal(daytimeWindow(at('2026-10-27T04:59:00Z')), false); // 07:59
   assert.equal(daytimeWindow(daytimeStart), true); // 08:00
   assert.equal(daytimeWindow(at('2026-10-27T18:59:00Z')), true); // 21:59
   assert.equal(daytimeWindow(at('2026-10-27T19:00:00Z')), false); // 22:00
-});
-
-test('every monitored type can enter the two-minute daytime queue when its new draft meets the shared gates', () => {
-  for (const type of NEWS_TYPES) {
-    const draft = qualified({ type, ...(type === 'political' ? { politicalCategory: 'statement' } : {}) });
-    assert.equal(daytimeAutoEligible(draft), true, `${type} should qualify after the expansion checkpoint`);
-    assert.equal(dayAutoDueAt(draft, daytimeStart), daytimeStart + 120_000, `${type} should get the same two-minute delay`);
-    assert.equal(dayAutoReady({ ...draft, dayAutoAt: daytimeStart }, daytimeStart + 120_000), true, `${type} should become ready only at its deadline`);
-  }
-});
-
-test('pending drafts created before the daytime expansion checkpoint remain review-only', () => {
-  const cutoff = Date.parse(newsState().mig.dayAutoAllTypes1);
-  const old = qualified({ created: cutoff - 1, dayAutoAt: daytimeStart });
-  assert.equal(daytimeAutoEligible(old), false);
-  assert.equal(dayAutoDueAt(old, daytimeStart), null);
-  assert.equal(dayAutoReady(old, daytimeStart + 120_000), false);
 });
 
 test('a qualifying pending AI news draft gets exactly one two-minute deadline during the day', () => {
@@ -120,34 +49,18 @@ test('test, rules-only, low-confidence, and already handled drafts never qualify
   assert.equal(daytimeAutoEligible(qualified({ test: true })), false);
   assert.equal(daytimeAutoEligible(qualified({ rule: true })), false);
   assert.equal(daytimeAutoEligible(qualified({ srcs: [{ u: 'local-only', local: true }] })), false);
-  assert.equal(daytimeAutoEligible(qualified({ type: 'not-monitored' })), false);
   assert.equal(daytimeAutoEligible(qualified({ status: 'ignored' })), false);
   assert.equal(daytimeAutoEligible(qualified({ status: 'published' })), false);
   assert.equal(daytimeAutoEligible(qualified({ status: 'duplicate' })), false);
   assert.equal(daytimeAutoEligible(qualified({ srcs: [{ u: 'local-one', local: true }, { u: 'local-two', local: true }] })), true);
-  const n = newsState();
-  const previous = n.types.attack;
-  n.types.attack = false;
-  try { assert.equal(daytimeAutoEligible(qualified()), false, 'disabled news types do not enter automatic publishing'); }
-  finally { n.types.attack = previous; }
 });
 
-test('a qualifying ground-incursion draft remains day-eligible when a drone is mentioned', () => {
-  const withDrone = qualified({ type: 'military_incursion', dronePresence: true });
-  assert.equal(withDrone.type, 'military_incursion', 'drone presence does not replace the ground-incursion classification');
-  assert.equal(daytimeAutoEligible(withDrone), true, 'drone mention alone is not an extra daytime hold');
-  assert.equal(nightEligible(withDrone), false, 'the daytime expansion does not change existing night eligibility');
-});
-
-test('nighttime category restrictions remain unchanged while daytime needs a verified map point', () => {
+test('high-risk categories and drafts without a verified map point are held for human review', () => {
   for (const type of ['breaking', 'weather', 'civil']) {
     assert.equal(nightEligible(qualified({ type })), false, `${type} must not auto-publish`);
-    assert.equal(daytimeAutoEligible(qualified({ type })), true, `${type} can use the daytime route when otherwise qualified`);
   }
   assert.equal(nightEligible(qualified({ loc: { scope: 'country', latitude: null, longitude: null } })), false);
   assert.equal(nightEligible(qualified({ loc: { scope: 'place', latitude: null, longitude: null } })), false);
-  assert.equal(daytimeAutoEligible(qualified({ loc: { scope: 'country', latitude: null, longitude: null } })), false);
-  assert.equal(daytimeAutoEligible(qualified({ loc: { scope: 'place', latitude: null, longitude: null } })), false);
 });
 
 test('explosion retains its existing night and daytime auto-publish eligibility when otherwise qualified', () => {
@@ -170,15 +83,14 @@ test('source photo or video keeps a draft in human review instead of automatic p
   }
 });
 
-test('detonation remains outside the auto queue because it is not a monitored news type', () => {
+test('new detonation reports remain outside auto-publishing until explicitly approved', () => {
   const detonation = qualified({ type: 'detonation' });
-  assert.equal(NEWS_TYPES.includes('detonation'), false);
   assert.equal(nightEligible(detonation), false);
   assert.equal(daytimeAutoEligible(detonation), false);
 });
 
-test('qualified political news can auto-publish in either window after its activation checkpoints', () => {
-  const cutoff = Date.parse(newsState().mig.dayAutoAllTypes1);
+test('qualified political news can auto-publish at night but remains excluded from daytime auto-publishing', () => {
+  const cutoff = Date.parse(newsState().mig.politicalNightAuto1);
   const political = qualified({
     type: 'political',
     politicalCategory: 'statement',
@@ -186,19 +98,16 @@ test('qualified political news can auto-publish in either window after its activ
     srcs: [{ u: 'main-a', local: false }],
   });
   assert.equal(nightEligible(political), true, 'real AI political classification with a category, precise Syrian place and trusted source qualifies at night');
-  assert.equal(daytimeAutoEligible(political), true);
-  assert.equal(dayAutoDueAt(political, daytimeStart), daytimeStart + 120_000);
-  assert.equal(dayAutoReady({ ...political, dayAutoAt: daytimeStart }, daytimeStart + 120_000), true);
+  assert.equal(daytimeAutoEligible(political), false);
+  assert.equal(dayAutoDueAt(political, daytimeStart), null);
+  assert.equal(dayAutoReady({ ...political, dayAutoAt: daytimeStart }, daytimeStart + 1), false);
 });
 
-test('political news without a category or created before an activation checkpoint remains held', () => {
-  const nightCutoff = Date.parse(newsState().mig.politicalNightAuto1);
-  const dayCutoff = Date.parse(newsState().mig.dayAutoAllTypes1);
-  const valid = qualified({ type: 'political', politicalCategory: 'statement', created: dayCutoff + 1 });
-  assert.equal(nightEligible({ ...valid, created: nightCutoff - 1 }), false, 'pre-existing political drafts remain held overnight');
-  assert.equal(daytimeAutoEligible({ ...valid, created: dayCutoff - 1 }), false, 'pre-existing political drafts remain held in the expanded daytime route');
+test('political news missing review requirements or predating activation remains held', () => {
+  const cutoff = Date.parse(newsState().mig.politicalNightAuto1);
+  const valid = qualified({ type: 'political', politicalCategory: 'statement', created: cutoff + 1 });
+  assert.equal(nightEligible({ ...valid, created: cutoff - 1 }), false, 'pre-existing pending political drafts do not become auto-publishable');
   assert.equal(nightEligible({ ...valid, politicalCategory: null }), false, 'missing political category remains with a reviewer');
-  assert.equal(daytimeAutoEligible({ ...valid, politicalCategory: null }), false, 'daytime political news needs an explicit category');
   assert.equal(nightEligible({ ...valid, politicalNeedsCategory: true }), false);
   assert.equal(nightEligible({ ...valid, rule: true }), false, 'rules-only classification remains with a reviewer');
   assert.equal(nightEligible({ ...valid, test: true }), false, 'test drafts never qualify');
@@ -211,7 +120,7 @@ test('Syrian political news without a verified place remains a locationless revi
   n.drafts = {};
   n.types.political = true;
   n.stats.drafts = 0;
-  const ts = Date.now() - 5 * 60_000; // inside the monitor freshness window: the desk drops older source posts (see news-monitor-freshness.test.js)
+  const ts = at('2026-10-27T05:00:00Z');
   const item = {
     i: 1,
     src: { u: 'test-syrian-source', name: 'وكالة اختبار', local: false },
@@ -383,150 +292,13 @@ test('opinion and satire remain private, while review diagnostics are held befor
   }
 });
 
-test('daytime publication dispatch accepts a newly qualified type that remains excluded overnight', async () => {
-  const previousHandler = _test.R.H;
-  const previousRewrite = _test.R.rewriteImpl;
-  const state = newsState();
-  const previousPublished = state.stats.published;
-  const previousAuto = state.stats.auto;
-  let publishAttempts = 0;
-  const story = 'رصدت مصادر محلية دورية عسكرية قرب بلدة كودنة في القنيطرة اليوم.';
-  const draft = qualified({
-    id: 'day-auto-patrol-fixture', type: 'patrol', headline: story, sourceText: story,
-    created: Date.parse(state.mig.dayAutoAllTypes1) + 1, ts: Date.now(), autoMode: 'day', dayAutoAt: Date.now() - 1,
-    loc: { scope: 'place', name_ar: 'كودنة', governorate_ar: 'القنيطرة', latitude: 33.0, longitude: 35.9 },
-    srcs: [{ u: 'day-auto-local-test', name: 'قناة اختبار', local: false }], cards: [],
-  });
-  _test.R.H = {
-    apis: () => ({ admin: { sendMessage: async () => ({ message_id: 77 }) } }),
-    publishDraft: async (_api, payload) => { publishAttempts++; return { id: 'synthetic-day-alert', payload }; },
-  };
-  _test.R.rewriteImpl = async (_source, options) => { assert.equal(options.mode, 'news'); return story; };
-  state.drafts[draft.id] = draft;
-  try {
-    assert.equal(nightEligible(draft), false, 'patrol stays excluded from the overnight route');
-    assert.equal(daytimeAutoEligible(draft), true);
-    assert.equal(dayAutoReady(draft, Date.now()), true);
-    assert.equal(await _test.nightPublish(draft), true, 'the day mode must use its expanded daytime eligibility rather than night eligibility');
-    assert.equal(publishAttempts, 1);
-    assert.equal(draft.status, 'published');
-    assert.equal(draft.autoMode, 'day');
-  } finally {
-    _test.R.H = previousHandler;
-    _test.R.rewriteImpl = previousRewrite;
-    state.stats.published = previousPublished;
-    state.stats.auto = previousAuto;
-    delete state.drafts[draft.id];
-  }
-});
-
-test('automatic publication never invokes rewrites and publishes only source text', async () => {
-  const previousHandler = _test.R.H;
-  const previousRewrite = _test.R.rewriteImpl;
-  const state = newsState();
-  const previousPublished = state.stats.published;
-  const previousAuto = state.stats.auto;
-  const calls = [];
-  const modes = [];
-  _test.R.H = {
-    apis: () => ({ admin: { sendMessage: async () => ({ message_id: 77 }) } }),
-    publishDraft: async (_api, draft) => { calls.push(draft); return { id: `synthetic-auto-${calls.length}` }; },
-  };
-  const base = {
-    type: 'explosion', status: 'pending', test: false, rule: false, created: Date.now(), cards: [],
-    headline: 'قالت مصادر محلية: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.',
-    sourceText: 'قالت مصادر محلية: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.',
-    loc: { scope: 'place', name_ar: 'حلب', governorate_ar: 'حلب', latitude: 36.2, longitude: 37.1 },
-    srcs: [{ u: 'trusted-auto-feed', name: 'مصدر اختبار خاص', local: false }],
-  };
-  const rewritten = qualified({ ...base, id: 'auto-neutral-rewrite' });
-  const fallback = qualified({
-    ...base, id: 'auto-neutral-fallback',
-    headline: 'قالت وزارة الطوارئ السورية: وقع انفجار في حمص مساء اليوم وأصاب شخصين.',
-    sourceText: 'قالت وزارة الطوارئ السورية: وقع انفجار في حمص مساء اليوم وأصاب شخصين.',
-    loc: { scope: 'place', name_ar: 'حمص', governorate_ar: 'حمص', latitude: 34.7, longitude: 36.7 },
-  });
-  rewritten.srcs = base.srcs;
-  rewritten.headline = base.headline;
-  rewritten.sourceText = base.sourceText;
-  rewritten.loc = base.loc;
-  fallback.srcs = base.srcs;
-  newsState().drafts[rewritten.id] = rewritten;
-  newsState().drafts[fallback.id] = fallback;
-  try {
-    _test.R.rewriteImpl = async (_source, options) => {
-      modes.push(options.mode);
-      return 'قالت مصادر محلية: وقع انفجار في مدينة حلب مساء اليوم وأُصيب 3 أشخاص.';
-    };
-    assert.equal(nightEligible(rewritten), true);
-    assert.equal(await _test.nightPublish(rewritten), true);
-    assert.deepEqual(modes, [], 'the automatic publisher never calls an abstractive rewriter');
-    assert.equal(calls[0].headline, 'انفجار — حلب');
-    assert.equal(calls[0].body, base.sourceText);
-    assert.doesNotMatch(JSON.stringify(calls[0]), /رأي\/تحليل|محاكاة ساخرة|EDITORIAL_REVIEW_REQUIRED/);
-    assert.equal(rewritten.publishedHeadline, calls[0].headline);
-
-    _test.R.rewriteImpl = async (_source, options) => {
-      modes.push(options.mode);
-      return 'محاكاة ساخرة خيالية (ليست خبراً): في مسرح الخيال تتغير الوقائع.';
-    };
-    assert.equal(nightEligible(fallback), true);
-    assert.equal(await _test.nightPublish(fallback), true, 'a rejected private-tone rewrite does not change eligibility');
-    assert.deepEqual(modes, []);
-    assert.equal(calls[1].headline, 'انفجار — حمص');
-    assert.equal(calls[1].body, fallback.sourceText);
-    assert.doesNotMatch(JSON.stringify(calls[1]), /محاكاة ساخرة|ليست خبراً/);
-  } finally {
-    _test.R.H = previousHandler;
-    _test.R.rewriteImpl = previousRewrite;
-    state.stats.published = previousPublished;
-    state.stats.auto = previousAuto;
-    delete state.drafts[rewritten.id];
-    delete state.drafts[fallback.id];
-  }
-});
-
-test('automatic draft-preparation failures never strand a draft in publishing', async () => {
-  const previousHandler = _test.R.H;
-  const previousRewrite = _test.R.rewriteImpl;
-  const id = 'auto-draft-preparation-failure';
-  const headline = 'قالت مصادر محلية: وقع انفجار في مدينة حلب مساء اليوم وأصاب 3 أشخاص.';
-  const sources = [{ u: 'trusted-auto-feed', name: 'مصدر اختبار خاص', local: false }];
-  sources.map = null;
-  const draft = qualified({
-    id, type: 'explosion', headline, sourceText: headline, srcs: sources,
-    loc: { scope: 'place', name_ar: 'حلب', governorate_ar: 'حلب', latitude: 36.2, longitude: 37.1 },
-    created: Date.now(), cards: [], autoMode: 'day', dayAutoAt: Date.now() - 1,
-  });
-  let publishAttempts = 0;
-  _test.R.H = {
-    apis: () => ({ admin: { sendMessage: async () => ({ message_id: 78 }) } }),
-    publishDraft: async () => { publishAttempts++; return { id: 'must-not-publish' }; },
-  };
-  _test.R.rewriteImpl = async () => { throw new Error('synthetic rewrite failure'); };
-  newsState().drafts[id] = draft;
-  try {
-    assert.equal(nightEligible(draft), true);
-    const attemptedAt = Date.now();
-    assert.equal(await _test.nightPublish(draft), false);
-    assert.equal(draft.status, 'pending');
-    assert.equal(draft.editorialHold, true, 'unusable source metadata requires review instead of a retry loop');
-    assert.equal(publishAttempts, 0);
-  } finally {
-    delete sources.map;
-    _test.R.H = previousHandler;
-    _test.R.rewriteImpl = previousRewrite;
-    delete newsState().drafts[id];
-  }
-});
-
 test('failed editorial gate keeps an eligible draft pending, clears its timer, and never calls publication', async () => {
   const id = 'editorial-hold-synthetic';
   const draft = qualified({
     id,
     type: 'explosion',
     headline: 'قال الدفاع المدني السوري: وقع انفجار في قرية كودنة مساء اليوم وأصيب 4 أشخاص.',
-    sourceText: 'قال الدفاع المدني السوري: وقع انفجار مساء اليوم وأصيب 3 أشخاص ونقلوا إلى مشفى كودنة.',
+    sourceText: 'قال الدفاع المدني السوري: وقع انفجار في قرية كودنة مساء اليوم وأصيب 3 أشخاص.',
     loc: { scope: 'place', name_ar: 'كودنة', governorate_ar: 'القنيطرة', latitude: 33.2, longitude: 35.9 },
     srcs: [{ u: 'trusted-feed', name: 'قناة الرصد الخاصة', local: false }],
     dayAutoAt: daytimeStart,
@@ -559,32 +331,4 @@ test('failed editorial gate keeps an eligible draft pending, clears its timer, a
     _test.R.H = previousHandler;
     delete newsState().drafts[id];
   }
-});
-
-test('source-first reporter cleanup preserves third-party attribution without lifting a held draft', () => {
-  const draft = qualified({
-    type: 'military_incursion',
-    sourceText: 'أفاد مراسل قناة الرصد الخاصة بأن قوة عسكرية توغلت في ريف درعا الغربي اليوم.',
-    sourceTextVersion: 2,
-    loc: { scope: 'governorate', name_ar: 'درعا', governorate_ar: 'درعا', latitude: 32.6, longitude: 36.1 },
-    extra: [],
-    srcs: [{ u: 'synthetic-private-feed', name: 'قناة الرصد الخاصة', local: false }],
-    editorialHold: true,
-    editorialHoldReason: 'operator-review-hold',
-    alertId: null,
-    postId: null,
-  });
-  const original = structuredClone(draft);
-  const candidate = _test.sourceFirstCandidate(draft);
-  assert.equal(candidate.body, 'أفاد مراسل قناة الرصد الخاصة بأن قوة عسكرية توغلت في ريف درعا الغربي اليوم.');
-  assert.doesNotMatch(candidate.body, /مراسلنا|synthetic-private-feed|https?:/u);
-  assert.equal(candidate.editorialHold, true);
-  assert.equal(candidate.editorialHoldReason, 'operator-review-hold');
-  assert.equal(candidate.alertId, null);
-  assert.equal(candidate.postId, null);
-  assert.equal(daytimeAutoEligible(candidate), false);
-  assert.equal(nightEligible(candidate), false);
-  assert.deepEqual(draft, original, 'candidate generation does not mutate the held draft or its private sources');
-  assert.deepEqual(_test.sourceFirstGate(draft, { ...candidate, body: candidate.body.replace('أفاد مراسل قناة الرصد الخاصة بأن ', '') }),
-    { ok: false, reason: 'source-copy-changed' }, 'the source-copy gate is not weakened');
 });

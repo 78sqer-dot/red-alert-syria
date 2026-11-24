@@ -1,8 +1,0 @@
-import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
-process.env.DATA_DIR=fs.mkdtempSync(path.join(os.tmpdir(),'ras-attribution-loss-'));process.env.TELEGRAM_BACKUP='false';process.env.BOT_TOKEN='123456:LOCAL_TEST';
-const {missingNamedReportingAttribution,cleanPublicNewsAttribution}=await import('../server/clean-text.js');const {_test}=await import('../server/news-monitor.js');
-const source='مراسل درعا 24: مقتل طفل في قرية عاسم جراء انفجار جسم من مخلفات الحرب.';
-test('exact source reporter credit loss is detected, retained credit passes',()=>{assert.equal(missingNamedReportingAttribution(source,source.replace('درعا 24',''),['درعا 24']),true);assert.equal(missingNamedReportingAttribution(source,source,['درعا 24']),false);});
-test('built-in reporter/source names and several attribution spans are checked independently',()=>{const s='مراسل الإخبارية: وقع انفجار. وقال مراسل درعا 24: أصيب شخص.';assert.equal(missingNamedReportingAttribution(s,'مراسل الإخبارية: وقع انفجار. وقال مراسل: أصيب شخص.',['درعا 24']),true);});
-test('standalone branding and institutional attribution are not this loss guard',()=>{assert.equal(missingNamedReportingAttribution('وقع انفجار.\nدرعا 24','وقع انفجار.',['درعا 24']),false);assert.equal(missingNamedReportingAttribution('أفادت مصادر الدفاع المدني بأن الطريق مغلق.','أفادت مصادر الدفاع المدني بأن الطريق مغلق.',['مصادر الدفاع المدني']),false);});
-test('source-first candidate retains original named attribution before any write',()=>{const c=_test.sourceFirstCandidate({type:'explosion',sourceText:source,sourceTextVersion:2,srcs:[{name:'درعا 24'}],loc:{scope:'place',name_ar:'عاسم'},extra:[]});assert.equal(c.body,source);});

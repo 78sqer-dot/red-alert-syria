@@ -1,4 +1,3 @@
-import { alertSharePath, alertShareUrl } from './alert-share-url.js';
 // Search & sharing: server-rendered, indexable pages around the live map.
 //   /ar/area/<slug>/  /en/area/<slug>/   "شو صاير بدرعا هلق؟" — recent alerts of one governorate / city
 //   /ar/areas/        /en/areas/         hub linking every area page
@@ -8,13 +7,13 @@ import { alertSharePath, alertShareUrl } from './alert-share-url.js';
 //   /sitemap.xml, /robots.txt, optional Google/Bing verification (env GOOGLE_SITE_VERIFICATION, ...)
 // All times in Damascus time.
 import { store } from './store.js';
-import { config, DEFAULT_PUBLIC_URL } from './config.js';
+import { config } from './config.js';
 import { governorates, places, getGov, getDist } from './places.js';
 import { ALERT_TYPES } from '../shared/types.js';
 import { svgToPng, renderAlertPng, channelBadge, badgeWidth, logoAt } from './alert-image.js';
 
 const TZ = 'Asia/Damascus';
-const SITE = () => (config.publicUrl || process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL).replace(/\/+$/, '');
+const SITE = () => (config.publicUrl || process.env.PUBLIC_URL || 'https://red-alert-syria-q6k8.onrender.com').replace(/\/+$/, '');
 const CHANNEL_URL = 'https://t.me/Red_Alert_Syria';
 const REPORT_URL = 'https://t.me/Rad_Alert_Syria1_bot?start=report';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -147,10 +146,10 @@ h2{font-size:18px;margin:22px 0 10px}
 .hub h3{margin:16px 0 8px;font-size:16px}.faq p{margin:0 0 10px;color:var(--mut)}.faq b{color:var(--fg)}
 footer{max-width:880px;margin:auto;padding:16px;color:var(--mut);font-size:12.5px;border-top:1px solid var(--bd)}`;
 
-function shell({ lang, title, desc, path, canonicalUrl, alt, ogImage, ogW = 1200, ogH = 630, jsonld = [], body, robots = 'index,follow,max-image-preview:large' }) {
+function shell({ lang, title, desc, path, alt, ogImage, ogW = 1200, ogH = 630, jsonld = [], body, robots = 'index,follow,max-image-preview:large' }) {
   const site = SITE();
   const other = lang === 'ar' ? 'en' : 'ar';
-  const url = canonicalUrl || site + path;
+  const url = site + path;
   return `<!doctype html>
 <html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">
 <head>
@@ -289,64 +288,6 @@ function hubPage(lang) {
   return shell({ lang, title, desc, path, alt: `/${en ? 'ar' : 'en'}/areas/`, ogImage: `${site}/og/site-${lang}.png`, jsonld, body });
 }
 
-// ------------------------------------------------------------------ alert archive (day-grouped, from the 35-day statistics log)
-const dayKey = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
-const dayLabel = (k, lang) => new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-SY', { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(k + 'T12:00:00Z'));
-const timeOnly = (ms, lang) => new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-SY', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: lang !== 'en' }).format(new Date(ms));
-
-/** [[ 'YYYY-MM-DD', count ], ...] newest day first, over the statistics log window */
-function archiveDays() {
-  const days = new Map();
-  const log = store.state.log || [];
-  for (let i = log.length - 1; i >= 0; i--) {
-    const t = Date.parse(log[i].ts);
-    if (!t) continue;
-    const k = dayKey(t);
-    days.set(k, (days.get(k) || 0) + 1);
-  }
-  return [...days.entries()];
-}
-
-function archiveIndex(lang) {
-  const en = lang === 'en';
-  const site = SITE();
-  const path = `/${lang}/archive/`;
-  const days = archiveDays();
-  const total = days.reduce((n, [, c]) => n + c, 0);
-  const title = en ? 'Alert archive — every Syria alert, day by day | Red Alert Syria' : 'أرشيف التنبيهات — كل تنبيهات سوريا يوماً بيوم | الإنذار الأحمر سوريا';
-  const desc = en ? `Chronological archive of ${total} recorded alerts across Syria over ${days.length} days: drones, warplanes, shelling, missiles, accidents.` : `أرشيف زمني لـ ${total} تنبيهاً مسجلاً في سوريا خلال ${days.length} يوماً: مسيّرات، طيران حربي، قصف، صواريخ، حوادث.`;
-  const body = `<nav class="crumbs"><a href="/${lang}/">${en ? 'Live map' : 'الخريطة المباشرة'}</a> › ${en ? 'Archive' : 'الأرشيف'}</nav>
-<h1>${en ? 'Alert archive' : 'أرشيف التنبيهات'}</h1><p class="lead">${esc(desc)}</p>
-${days.length ? `<ul class="list">${days.map(([k, c]) => `<li><a class="ev" style="--c:var(--red);text-decoration:none" href="/${lang}/archive/${k}/"><span class="t">${esc(dayLabel(k, lang))}</span><span class="w">${en ? `${c} alert${c === 1 ? '' : 's'}` : `${c} تنبيه`}</span></a></li>`).join('')}</ul>` : `<div class="empty">${en ? 'No alerts recorded yet.' : 'لا تنبيهات مسجلة بعد.'}</div>`}
-<div class="cta"><a class="btn red" href="/${lang}/">${en ? 'Open the live map' : 'افتح الخريطة المباشرة'}</a><a class="btn tg" href="${CHANNEL_URL}" target="_blank" rel="noopener">${en ? 'Follow on Telegram' : 'تابعنا على تيليغرام'}</a></div>`;
-  const jsonld = [{ '@context': 'https://schema.org', '@graph': [ORG(), { '@type': 'CollectionPage', url: site + path, name: title, description: desc, inLanguage: lang }] }];
-  return shell({ lang, title, desc, path, alt: `/${en ? 'ar' : 'en'}/archive/`, ogImage: `${site}/og/site-${lang}.png`, jsonld, body });
-}
-
-function archiveDay(lang, k) {
-  const en = lang === 'en';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return null;
-  const log = store.state.log || [];
-  const evs = [];
-  for (let i = log.length - 1; i >= 0; i--) {
-    const t = Date.parse(log[i].ts);
-    if (t && dayKey(t) === k) evs.push(log[i]);
-  }
-  if (!evs.length) return null;
-  const site = SITE();
-  const lbl = dayLabel(k, lang);
-  const path = `/${lang}/archive/${k}/`;
-  const title = en ? `Syria alerts on ${lbl} | Red Alert Syria archive` : `تنبيهات سوريا يوم ${lbl} | أرشيف الإنذار الأحمر`;
-  const desc = en ? `${evs.length} alerts recorded in Syria on ${lbl}.` : `${evs.length} تنبيه مسجل في سوريا يوم ${lbl}.`;
-  const place = (e) => esc(en ? (e.pe || e.ge || '') : (e.pa || e.ga || ''));
-  const rows = evs.map((e) => `<li class="ev" style="--c:${typeColor(e.ty)}"><span class="t">${esc(typeLabel(e.ty, lang))}</span><span class="p">${place(e)}</span><span class="w">${timeOnly(Date.parse(e.ts), lang)} · <a href="/${lang}/a/${encodeURIComponent(e.id)}">${en ? 'view' : 'عرض'}</a></span></li>`).join('');
-  const body = `<nav class="crumbs"><a href="/${lang}/">${en ? 'Live map' : 'الخريطة المباشرة'}</a> › <a href="/${lang}/archive/">${en ? 'Archive' : 'الأرشيف'}</a> › ${esc(lbl)}</nav>
-<h1>${en ? `Alerts on ${lbl}` : `تنبيهات يوم ${lbl}`}</h1><p class="lead">${esc(desc)}</p>
-<ul class="list">${rows}</ul>
-<div class="cta"><a class="btn" href="/${lang}/archive/">${en ? 'All days' : 'كل الأيام'}</a><a class="btn red" href="/${lang}/">${en ? 'Open the live map' : 'افتح الخريطة المباشرة'}</a></div>`;
-  return shell({ lang, title, desc, path, alt: `/${en ? 'ar' : 'en'}/archive/${k}/`, ogImage: `${site}/og/site-${lang}.png`, body });
-}
-
 // ------------------------------------------------------------------ alert share page
 const BOT_UA = /bot|crawl|spider|facebookexternalhit|facebot|whatsapp|telegram|slack|discord|twitter|linkedin|skype|vkshare|pinterest|embedly|quora|outbrain|viber|snapchat|signal|preview|google|bing|yandex|applebot|iframely/i;
 function alertLastUpdate(a) {
@@ -385,7 +326,7 @@ function alertSharePage(id, lang) {
   const og = info.a ? `${site}/og/a/${encodeURIComponent(id)}-${lang}.png?v=${encodeURIComponent(version)}` : `${site}/og/site-${lang}.png`;
   const body = `<h1>${esc(typeLabel(info.ty, lang))}${placeLine ? ` — ${esc(placeLine)}` : ''}</h1><p class="lead">${en ? 'Reported' : 'وقت البلاغ'}: ${esc(when)}</p>${lastUpdated ? `<p class="lead">${en ? 'Last updated' : 'آخر تحديث'}: ${esc(lastUpdated)}</p>` : ''}
 <div class="cta"><a class="btn red" href="${target}">${en ? 'Open on the live map' : 'افتح على الخريطة المباشرة'}</a><a class="btn tg" href="${CHANNEL_URL}">${en ? 'Follow on Telegram' : 'تابعنا على تيليغرام'}</a></div>`;
-  let html = shell({ lang, title, desc, path: alertSharePath(id, lang), canonicalUrl: alertShareUrl(id, lang), alt: null, ogImage: og, ogW: info.a ? 820 : 1200, ogH: info.a ? 791 : 630, body, robots: 'index,follow,max-image-preview:large' });
+  let html = shell({ lang, title, desc, path: `/${lang}/a/${encodeURIComponent(id)}`, alt: null, ogImage: og, ogW: info.a ? 820 : 1200, ogH: info.a ? 791 : 630, body, robots: 'noindex,follow' });
   html = html.replace('<meta name="robots"', `<meta http-equiv="refresh" content="0;url=${esc(target)}"><meta name="robots"`);
   return html;
 }
@@ -455,8 +396,6 @@ function sitemapXml() {
   const out = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">'];
   for (const l of ['ar', 'en']) out.push(url(`/${l}/`, `/${l === 'ar' ? 'en' : 'ar'}/`, now, 'always', '1.0'));
   for (const l of ['ar', 'en']) out.push(url(`/${l}/areas/`, `/${l === 'ar' ? 'en' : 'ar'}/areas/`, now, 'daily', '0.8'));
-  for (const l of ['ar', 'en']) out.push(url(`/${l}/archive/`, `/${l === 'ar' ? 'en' : 'ar'}/archive/`, now, 'hourly', '0.8'));
-  for (const [k] of archiveDays()) for (const l of ['ar', 'en']) out.push(url(`/${l}/archive/${k}/`, `/${l === 'ar' ? 'en' : 'ar'}/archive/${k}/`, `${k}T00:00:00Z`, 'daily', '0.6'));
   for (const a of AREAS) {
     const ev = areaEvents(a, 30);
     const lm = ev[0] ? new Date(ev[0].ts).toISOString() : new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
@@ -484,14 +423,6 @@ export function mountSeo(app, { limiter } = {}) {
   const slash = (req, res, next) => (req.path.endsWith('/') ? next() : res.redirect(301, req.path + '/'));
   app.get(['/ar/areas', '/en/areas'], slash);
   app.get(['/ar/areas/', '/en/areas/'], ...lim, (req, res) => html(res, hubPage(req.path.startsWith('/en') ? 'en' : 'ar'), 600));
-  app.get(['/ar/archive', '/en/archive'], slash);
-  app.get(['/ar/archive/', '/en/archive/'], ...lim, (req, res) => html(res, archiveIndex(req.path.startsWith('/en') ? 'en' : 'ar'), 600));
-  app.get(['/ar/archive/:day', '/en/archive/:day'], slash);
-  app.get(['/ar/archive/:day/', '/en/archive/:day/'], ...lim, (req, res) => {
-    const page = archiveDay(req.path.startsWith('/en') ? 'en' : 'ar', String(req.params.day).slice(0, 10));
-    if (!page) return res.status(404).type('text').send('Not found');
-    html(res, page, 3600);
-  });
   app.get(['/ar/area/:slug', '/en/area/:slug'], slash);
   app.get(['/ar/area/:slug/', '/en/area/:slug/'], ...lim, (req, res) => {
     const area = BY_SLUG.get(String(req.params.slug).toLowerCase());
@@ -521,4 +452,4 @@ export function mountSeo(app, { limiter } = {}) {
     try { png(res, await cached(`alert:${a.id}:${m[2]}:${alertLastUpdate(a)}`, 24 * 3600_000, () => renderAlertPng(a, { lang: m[2], timeoutMs: 5000 })), 3600); } catch (e) { console.error('[seo] og alert', e.message); res.redirect(302, `/og/site-${m[2]}.png`); }
   });
 }
-export const _test = { AREAS, BY_SLUG, areaPage, hubPage, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary, archiveDays, archiveIndex, archiveDay, dayKey };
+export const _test = { AREAS, BY_SLUG, areaPage, hubPage, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };

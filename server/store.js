@@ -10,7 +10,7 @@ import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { ALERT_TYPES, POLITICAL_CATEGORIES, typeOf, droneLevel, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT } from '../shared/types.js';
 import { alertZones, selectedAlertZones, regionFix } from './places.js';
-import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './clean-text.js';
+import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './public-copy-safety.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
 import { expireAlnabaPhotos, sanitizeAlnabaState, sanitizeAlnabaBatchQueue, mergeAlnabaBatchQueues } from './alnaba.js';
 
@@ -75,7 +75,7 @@ class Store extends EventEmitter {
     this.backup = null; // { save(jsonString), load() -> jsonString|null }
     this._saveTimer = null;
     this._backupTimer = null;
-    this._backupFlight = null; // in-flight backup save promise (serializes flushBackup)
+    this._backupFlight = null;
     this._sweepsStarted = false;
     this._backupWritesPaused = false;
     this.lastBackupAt = null;
@@ -107,6 +107,7 @@ class Store extends EventEmitter {
       }
     }
     this._restoredAt = Date.now();
+    if (!deferSweep) {
     // live alerts that name a whole region in their text ("حوض اليرموك") but were pinned on a same-named
     // neighbourhood: move them onto the region (one wider circle)
     try {
@@ -128,20 +129,19 @@ class Store extends EventEmitter {
       historyMigrated = true;
     }
     if (historyMigrated) this.persist({ backupSoon: false });
+    }
     if (!Array.isArray(this.state.log)) this.state.log = this.state.alerts.map((a) => this._logEntry(a)).reverse();
-    // With a remote backup, the caller may defer the first sweep until after the deploy
-    // hand-off merge + first confirmed save (beginSweeps): sweeping during restore would
-    // silently shrink the restored state before the merge ever sees it, and the deletions
-    // are tombstoned, so the merged backup could never bring those alerts back.
     if (!deferSweep) this.beginSweeps();
-    const expiredPhotos = expireAlnabaPhotos(this);
+    const expiredPhotos = deferSweep ? 0 : expireAlnabaPhotos(this);
     if (expiredPhotos) {
       clearTimeout(this._saveTimer);
       this._writeLocal();
       await this.flushBackup();
       console.log(`[alnaba] removed ${expiredPhotos} expired photo-news item(s) on restore`);
     }
+
     setInterval(() => {
+      if (this._backupWritesPaused || !this._sweepsStarted) return;
       const expired = expireAlnabaPhotos(this);
       if (!expired) return;
       clearTimeout(this._saveTimer);
@@ -153,7 +153,7 @@ class Store extends EventEmitter {
 
   _apply(s) {
     if (!s || typeof s !== 'object') return;
-    const alerts = Array.isArray(s.alerts) ? s.alerts.filter((a) => a && a.id && ALERT_TYPES[a.type]) : [];
+    const alerts = Array.isArray(s.alerts) ? s.alerts.filter((a) => a && a.id) : [];
     for (const alert of alerts) {
       const rawMediaItems = Array.isArray(alert.media_items) && alert.media_items.length ? alert.media_items : alert.media;
       const mediaItems = sanitizeAlertMediaItems(rawMediaItems);
@@ -264,15 +264,16 @@ class Store extends EventEmitter {
   async flushBackup(force = false) {
     clearTimeout(this._backupTimer);
     if (this._backupWritesPaused) return false;
-    if (!this.backup || !(this._backupPending || (force && this._backupLazy && config.telegramBackup))) return false;
     if (this._backupFlight) {
       // A save is already in flight with an older snapshot of the state. Queue behind it
       // and re-run with the latest state: saves must land in snapshot order, otherwise a
       // slow save can finish last and silently roll the pinned backup back.
       this._backupPending = true;
       try { await this._backupFlight; } catch { /* the in-flight pass logs its own failure */ }
+      if (!this._backupPending && !this._backupLazy) return true;
       return this.flushBackup(force);
     }
+    if (!this.backup || !(this._backupPending || (force && this._backupLazy && config.telegramBackup))) return false;
     this._backupPending = false; this._backupLazy = false;
     const flight = (async () => {
       await this.backup.save(JSON.stringify(this.state), { force });
@@ -310,9 +311,7 @@ class Store extends EventEmitter {
       title: input.title,
       title_en: input.title_en,
       description: input.description || '',
-      ...(input.body ? { body: String(input.body) } : {}),
       ...(mediaItems.length ? { media: mediaItems[0], media_items: mediaItems } : {}),
-      ...(input.source === 'news' && input.type === 'breaking' && input.meta?.searchNewsTreatment === 1 && input.location_display === 'approximate_point' ? { location_display: 'approximate_point' } : {}),
       location: input.location?.latitude != null ? { latitude: input.location.latitude, longitude: input.location.longitude } : null,
       place: input.location || null,
       areas: input.areas || [],
@@ -433,10 +432,10 @@ class Store extends EventEmitter {
   /** Claim a report for a decision: returns it once, then it is gone (no double publishing). */
   reportTake(rid) {
     const rep = this.state.reports?.[rid];
-    if (!rep || rep.reviewOperation || this.state.reportContacts?.[rid]?.outbound?.some(m => ['claimed', 'uncertain', 'backup-unverified'].includes(m.status))) return null;
+    if (!rep || this.reportDone(rid) || rep.reviewOperation || this.state.reportContacts?.[rid]?.outbound?.some(m => ['claimed', 'uncertain', 'backup-unverified'].includes(m.status))) return null;
     delete this.state.reports[rid];
     (this.state.reportsDone ||= {})[rid] = Date.now();
-    (this.state.reportsAudit ||= {})[rid] = { at: Date.now(), result: 'native-claimed', draft: rep.draft };
+    (this.state.reportsAudit ||= {})[rid] = {at:Date.now(),result:'native-claimed',draft:rep.draft};
     this.persist();
     return rep;
   }
@@ -471,13 +470,12 @@ class Store extends EventEmitter {
       console.error('[store] merge: backup read failed', e.message); return { reports: 0, alerts: 0, backupLoaded: false };
     }
     let reports = 0, alerts = 0, alnabaBatches = 0;
-    this.state.reportContacts ||= {};
-    for (const [id,c] of Object.entries(o.reportContacts || {})) if (!this.state.reportContacts[id]) this.state.reportContacts[id] = c;
     const st = this.state;
     if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
-    st.reports ||= {}; st.reportsDone ||= {}; st.reportsAudit ||= {}; st.gone ||= {};
-    for (const [rid, audit] of Object.entries(o.reportsAudit || {})) {
-      if (!st.reportsAudit[rid] || (audit.at || 0) > (st.reportsAudit[rid].at || 0)) st.reportsAudit[rid] = audit;
+    st.reports ||= {}; st.reportsDone ||= {}; st.gone ||= {};
+    for (const namespace of ['reportContacts', 'reportsAudit']) {
+      st[namespace] ||= {};
+      for (const [id, value] of Object.entries(o[namespace] || {})) if (!Object.hasOwn(st[namespace], id) || (namespace === 'reportsAudit' && Number(value?.at || 0) > Number(st[namespace][id]?.at || 0))) st[namespace][id] = structuredClone(value);
     }
     for (const [rid, t] of Object.entries(o.reportsDone || {})) {
       if (!st.reportsDone[rid]) st.reportsDone[rid] = t;
@@ -650,12 +648,12 @@ class Store extends EventEmitter {
     return gone;
   }
   activeAlerts() {
-    return this.state.alerts.filter((a) => a.is_active);
+    return this.state.alerts.filter((a) => ALERT_TYPES[a.type] && a.is_active && (!this._backupWritesPaused || !a.expires_at || Date.parse(a.expires_at) > Date.now()));
   }
 
   recentAlerts(hours = this.historyWindow) {
     const since = Date.now() - hours * 3600_000;
-    return this.state.alerts.filter((a) => a.is_active || Date.parse(a.timestamp) >= since);
+    return this.state.alerts.filter((a) => ALERT_TYPES[a.type] && ((a.is_active && (!this._backupWritesPaused || !a.expires_at || Date.parse(a.expires_at) > Date.now())) || Date.parse(a.timestamp) >= since));
   }
 
   /** Run the first expiry sweep and start the periodic one (idempotent). */
@@ -947,7 +945,7 @@ export function publicAlert(a) {
     ...(a.meta?.officialWarningValidity?.onset===a.valid_from ? {valid_from:a.valid_from} : {}),
     expires_at: a.expires_at,
     ended_at: a.ended_at,
-    is_active: a.is_active,
+    is_active: a.is_active && store._backupWritesPaused && a.expires_at && Date.parse(a.expires_at) <= Date.now() ? false : a.is_active,
     telegram_url: a.channel_message_id && config.channel.startsWith('@') ? `https://t.me/${config.channel.slice(1)}/${a.channel_message_id}` : undefined,
   };
 }

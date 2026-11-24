@@ -17,7 +17,7 @@ test('new aircraft reports use the selected direction and governorate for a clea
   assert.match(bot, /A governorate draws an illustrative line from an approximate reference point inside Israel/);
   assert.match(bot, /This is not a live track\./);
   assert.match(map, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
-  assert.match(map, /const route = isHelicopter\s*\?\s*this\.heliTrackPath\(alert\)\s*:\s*isReferenceRoute\s*\?\s*referenceFlightPath\(alert\.flight_direction, alert\.flight_target\)\s*:\s*directFlightPath\(alert\.location, alert\.flight_target\)/);
+  assert.match(map, /const route = isReferenceRoute\s*\?\s*referenceFlightPath\(alert\.flight_direction, alert\.flight_target\)\s*:\s*directFlightPath\(alert\.location, alert\.flight_target\)/);
   assert.match(map, /const point = flightPosition\(track\.path, progress\)/);
   assert.match(map, /illustrative direction, not a live track/);
 });

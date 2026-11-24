@@ -3,7 +3,6 @@
 // Everything here is additive: the alert map keeps working even if this module fails.
 import { WX_ICONS, WX_LABEL } from '/shared/wx-icons.js';
 import { weatherWarningFeatures } from '/shared/weather-map.js?v=1';
-import { normalizeJobApplicationLink } from '/shared/job-links.js?v=1';
 
 const S = {
   ar: {
@@ -17,7 +16,7 @@ const S = {
     updated: 'آخر تحديث', noPrices: 'ما في حالياً نشرة أسعار رسمية موثقة.',
     priceNote: 'نعرض فقط نشرة المركزي الرسمية وقرارات المحروقات الحكومية المنشورة. لا نعرض السوق الموازي أو الذهب. الليرة الجديدة = 100 ليرة قديمة.',
     powerEmpty: 'ما في تحديثات كهرباء من مصدر حكومي رسمي حالياً.', powerSource: 'المصدر الحكومي الرسمي', powerCalc: 'حاسبة فاتورة الكهرباء الرسمية', allSyria: 'عموم سوريا', allGovs: 'كل المحافظات',
-    roadsEmpty: 'ما في حالات طرق مسجّلة حالياً؛ هذا لا يؤكد سلامة الطرق.', roadsSub: 'حالات الطرق يلي نشرها فريق الرصد أو وصلتنا ببلاغات وتأكدنا منها، وبتنشال لحالها لما تخلص مدتها.',
+    roadsEmpty: 'ما في حالات طرق مسجّلة حالياً.', roadsSub: 'حالات الطرق يلي نشرها فريق الرصد أو وصلتنا ببلاغات وتأكدنا منها، وبتنشال لحالها لما تخلص مدتها.',
     showRoads: 'عرض الطرق على الخريطة', showBorders: 'عرض المعابر على الخريطة', bordersSub: 'حالة المعابر الحدودية الرئيسية مع دول الجوار، يحدّثها فريق الرصد. الحالة اللي صار لها أكتر من 3 أيام بلا تحديث بتظهر «غير معروف».', bst: { open: 'مفتوح', busy: 'مفتوح مع ازدحام', partial: 'مفتوح جزئياً', closed: 'مغلق', unknown: 'غير معروف' }, updated: 'آخر تحديث', withC: 'مع', crossing: 'معبر', until: 'لحد', reportRoad: 'بلّغ عن طريق',
     road: { closed: 'طريق مسكّر', danger: 'طريق خطر', open: 'طريق سالك', busy: 'زحمة سير' },
     cats: { health: 'مشافي ومراكز صحية', pharmacy: 'صيدليات', fuel: 'كازيات', bakery: 'أفران' },
@@ -33,7 +32,7 @@ const S = {
     locGo: 'حدّد موقعي', locCancel: 'مو هلق', locWait: 'عم نحدّد موقعك…',
     locDenied: 'إذن الموقع مرفوض', locDeniedTxt: 'فعّل إذن الموقع لهذا الموقع من إعدادات المتصفح (رمز القفل جنب العنوان ← الموقع ← سماح)، وتأكد إن خدمة الموقع (GPS) شغّالة بالجهاز، وبعدين جرّب مرة تانية.',
     locFail: 'ما قدرنا نحدّد موقعك', locFailTxt: 'تأكد إن خدمة الموقع (GPS) شغّالة، وجرّب بمكان مكشوف أو قريب من شباك. إذا كنت فاتح الموقع من داخل تيليغرام أو فيسبوك، افتحه بمتصفح الجهاز (كروم أو سفاري).',
-    locInsecure: 'تحديد الموقع بيحتاج اتصال آمن. افتح الموقع على https://red-alert-syria-q6k8.onrender.com',
+    locInsecure: 'تحديد الموقع بيحتاج اتصال آمن. افتح الموقع على https://red-alert-syria.onrender.com',
     locOutside: 'موقعك برّا سوريا — الخريطة بتعرض سوريا بس.', accuracy: (m) => `الدقة تقريباً ± ${m}`,
     youHere: 'إنت هون', ok: 'تمام', retry: 'جرّب مرة تانية', close: 'إغلاق', ago: 'من',
     jobs: 'وظائف', jobsIntro: 'فرص العمل التي راجعتها الإدارة قبل نشرها.', jobsSwitch: 'اختر الخدمة', findJob: 'أبحث عن عمل', findWorker: 'مطلوب موظف', jobBrowseHint: 'تصفّح إعلانات الوظائف المعتمدة', workerBrowseHint: 'أرسل وظيفة شاغرة للمراجعة', jobListings: 'فرص العمل المعتمدة', workerProfiles: 'أرسل طلب وظيفة', noJobListings: 'ما في فرص عمل منشورة حالياً.', noWorkerProfiles: 'أرسل تفاصيل الوظيفة عبر بوت التبليغ؛ ستظهر بعد موافقة الإدارة.', jobsNote: 'الإعلانات المقبولة تظهر في هذا القسم فقط، ولا تُنشر في قناة الأخبار.', jobApply: 'رابط التقديم', jobDeadline: 'آخر موعد للتقديم', jobAdded: 'أُضيف', jobReadMore: 'قراءة المزيد', jobReadLess: 'عرض أقل', jobShare: 'مشاركة', jobWhatsApp: 'واتساب', jobTelegram: 'تيليغرام', jobShareCopied: 'نُسخت تفاصيل الوظيفة للمشاركة', jobShareCopyFailed: 'تعذّر النسخ؛ حاول المشاركة من واتساب أو تيليغرام.', jobRequestCta: 'إرسال تفاصيل الوظيفة',
@@ -49,7 +48,7 @@ const S = {
     updated: 'Updated', noPrices: 'No verified official price bulletin is available right now.',
     priceNote: 'Only Central Bank bulletins and government fuel-price decisions are shown. Parallel-market rates and gold are excluded. 1 new lira = 100 old lira.',
     powerEmpty: 'No electricity updates from an official government source right now.', powerSource: 'Official government source', powerCalc: 'Official electricity bill calculator', allSyria: 'All Syria', allGovs: 'All governorates',
-    roadsEmpty: 'No road statuses are recorded right now; this does not confirm that roads are safe.', roadsSub: 'Road statuses published by our desk or confirmed from reports; they disappear when their time ends.',
+    roadsEmpty: 'No road statuses right now.', roadsSub: 'Road statuses published by our desk or confirmed from reports; they disappear when their time ends.',
     showRoads: 'Show roads on the map', showBorders: 'Show crossings on the map', bordersSub: 'Status of the main border crossings with neighbouring countries, updated by our desk. A status not updated for 3 days shows as “unknown”.', bst: { open: 'Open', busy: 'Open – heavy traffic', partial: 'Partially open', closed: 'Closed', unknown: 'Unknown' }, updated: 'Updated', withC: 'with', crossing: 'Crossing', until: 'until', reportRoad: 'Report a road',
     road: { closed: 'Road closed', danger: 'Dangerous road', open: 'Road open', busy: 'Traffic congestion' },
     cats: { health: 'Hospitals & clinics', pharmacy: 'Pharmacies', fuel: 'Fuel stations', bakery: 'Bakeries' },
@@ -65,7 +64,7 @@ const S = {
     locGo: 'Find me', locCancel: 'Not now', locWait: 'Finding your location…',
     locDenied: 'Location permission denied', locDeniedTxt: 'Allow location for this site in your browser settings (the lock icon next to the address → Location → Allow), make sure the device location (GPS) is on, then try again.',
     locFail: 'Could not find your location', locFailTxt: 'Make sure device location (GPS) is on and try near a window or outdoors. If you opened the site inside Telegram or Facebook, open it in your phone\'s browser (Chrome or Safari).',
-    locInsecure: 'Location needs a secure connection. Open https://red-alert-syria-q6k8.onrender.com',
+    locInsecure: 'Location needs a secure connection. Open https://red-alert-syria.onrender.com',
     locOutside: 'You are outside Syria — the map covers Syria only.', accuracy: (m) => `Accuracy about ± ${m}`,
     youHere: 'You are here', ok: 'OK', retry: 'Try again', close: 'Close', ago: '',
     jobs: 'Jobs', jobsIntro: 'Job openings reviewed by the team before they are listed.', jobsSwitch: 'Choose a service', findJob: 'Find a job', findWorker: 'Post a vacancy', jobBrowseHint: 'Browse approved job listings', workerBrowseHint: 'Send a vacancy for review', jobListings: 'Approved job openings', workerProfiles: 'Submit a vacancy', noJobListings: 'No job openings have been published yet.', noWorkerProfiles: 'Send the vacancy details through the report bot; it appears after the owner approves it.', jobsNote: 'Approved listings appear here only, never in the news channel.', jobApply: 'Apply / contact', jobDeadline: 'Application deadline', jobAdded: 'Added', jobReadMore: 'Read more', jobReadLess: 'Show less', jobShare: 'Share', jobWhatsApp: 'WhatsApp', jobTelegram: 'Telegram', jobShareCopied: 'Job details copied for sharing', jobShareCopyFailed: 'Could not copy; share using WhatsApp or Telegram.', jobRequestCta: 'Send vacancy details',
@@ -707,7 +706,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const groups = [...new Map(st.borders.map((b) => [b.country, LANG === 'en' ? b.country_en : b.country_ar])).entries()];
     for (const [c, cname] of groups) {
       h += `<div class="dd-sec">${esc(cname)}</div><div class="bd-list">`;
-      h += st.borders.filter((b) => b.country === c).map((b) => `<button class="bd-row" data-bd="${esc(b.id)}"><i class="svc-dot" style="--c:${BD_COLORS[b.status]}"></i><span class="bd-main"><b>${esc(bdName(b))}</b>${b.note ? `<small>${esc(b.note)}</small>` : ''}</span><span class="bd-st" style="--c:${BD_COLORS[b.status]}">${esc(L.bst[b.status])}${b.ts ? `<small>${esc(L.updated)}: ${esc(when(b.ts))}</small>` : `<small>${esc(LANG === 'en' ? 'No dated update' : 'لا يوجد تحديث مؤرّخ')}</small>`}</span></button>`).join('');
+      h += st.borders.filter((b) => b.country === c).map((b) => `<button class="bd-row" data-bd="${esc(b.id)}"><i class="svc-dot" style="--c:${BD_COLORS[b.status]}"></i><span class="bd-main"><b>${esc(bdName(b))}</b>${b.note ? `<small>${esc(b.note)}</small>` : ''}</span><span class="bd-st" style="--c:${BD_COLORS[b.status]}">${esc(L.bst[b.status])}${b.ts && b.status !== 'unknown' ? `<small>${esc(when(b.ts))}</small>` : ''}</span></button>`).join('');
       h += '</div>';
     }
     if (!st.borders.length) h += `<div class="svc-empty">${esc(L.loading)}</div>`;
@@ -743,7 +742,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       .join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
   function jobCard(j) {
-    const links = [...new Set((Array.isArray(j.links) ? j.links : []).map(normalizeJobApplicationLink).filter(Boolean))].slice(0, 8);
+    const links = (Array.isArray(j.links) ? j.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
     const location = j.location ? (LANG === 'en' ? j.location.label_en : j.location.label_ar) : '';
     const id = String(j.id || '');
     const text = cleanJobDisplayText(String(j.text || '').replace(/https?:\/\/\S+/gi, '')).split(/\r?\n/).filter((line) => !/^\s*(?:🔗\s*)?(?:تقدّم(?:\s+الآن)?|قدم(?:\s+الآن)?|apply(?:\s+now)?)\s*:?\s*$/i.test(line)).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();

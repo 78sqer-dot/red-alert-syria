@@ -8,7 +8,6 @@ import {
 } from './jobs.js';
 import { districts, districtsOf, getDist, getGov, governorates, placesOf } from './places.js';
 import { normalizeApplicationDeadline, isApplicationDeadlineExpired } from './application-deadline.js';
-import { operatorJobsStatus } from './jobs-operator.js';
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const LIMIT = 3600;
@@ -42,10 +41,10 @@ const activeItems = (j) => [
 ].sort((a, b) => Number(b.publishedAt || b.createdAt || 0) - Number(a.publishedAt || a.createdAt || 0));
 
 function panelText(ctx, h) {
-  const j = jobsState(); const english = en(ctx, h); const counts = operatorJobsStatus();
+  const j = jobsState(); const english = en(ctx, h);
   return english
-    ? `<b>💼 Job listings control panel</b>\n\nStored approvals: <b>${counts.stored_approved_count}</b> · Eligible: <b>${counts.eligible_approved_count}</b> · Public feed: <b>${counts.public_feed_count}</b>\nTemporarily hidden: <b>${counts.quarantined_approved_count}</b> · Expired: <b>${counts.expired_approved_count}</b> · Closed applications: <b>${counts.closed_application_count}</b>\nWaiting for review: <b>${Object.keys(j.pending).length}</b>\nCustom governorates: <b>${j.customGovernorates.length}</b> · Custom areas: <b>${j.customAreas.length}</b>\n\nListings are shown in the website Jobs section only. They are never sent to the Telegram news channel. An owner confirmation is required before a new listing is approved or a listing is deleted.`
-    : `<b>💼 لوحة إدارة إعلانات الوظائف</b>\n\nالمعتمدة المحفوظة: <b>${counts.stored_approved_count}</b> · المؤهلة للعرض: <b>${counts.eligible_approved_count}</b> · الظاهرة في الموجز: <b>${counts.public_feed_count}</b>\nالمخفية مؤقتاً: <b>${counts.quarantined_approved_count}</b> · المنتهية: <b>${counts.expired_approved_count}</b> · التقديم المغلق: <b>${counts.closed_application_count}</b>\nبانتظار المراجعة: <b>${Object.keys(j.pending).length}</b>\nمحافظات مضافة: <b>${j.customGovernorates.length}</b> · مناطق مضافة: <b>${j.customAreas.length}</b>\n\nالإعلانات تظهر في قسم الوظائف بالموقع فقط، ولا تُنشر في قناة الأخبار. يلزم تأكيد المالك قبل اعتماد إعلان جديد أو حذف إعلان.`;
+    ? `<b>💼 Job listings control panel</b>\n\nApproved on the website: <b>${Object.keys(j.published).length}</b> · Waiting for review: <b>${Object.keys(j.pending).length}</b>\nCustom governorates: <b>${j.customGovernorates.length}</b> · Custom areas: <b>${j.customAreas.length}</b>\n\nListings are shown in the website Jobs section only. They are never sent to the Telegram news channel. An owner confirmation is required before a new listing is approved or a listing is deleted.`
+    : `<b>💼 لوحة إدارة إعلانات الوظائف</b>\n\nالمعتمدة على الموقع: <b>${Object.keys(j.published).length}</b> · بانتظار المراجعة: <b>${Object.keys(j.pending).length}</b>\nمحافظات مضافة: <b>${j.customGovernorates.length}</b> · مناطق مضافة: <b>${j.customAreas.length}</b>\n\nالإعلانات تظهر في قسم الوظائف بالموقع فقط، ولا تُنشر في قناة الأخبار. يلزم تأكيد المالك قبل اعتماد إعلان جديد أو حذف إعلان.`;
 }
 function panelKeyboard(ctx, h) {
   const english = en(ctx, h);

@@ -12,7 +12,7 @@ const frontend = fs.readFileSync(path.join(ROOT, 'public/js/alnaba.js'), 'utf8')
 const bot = fs.readFileSync(path.join(ROOT, 'server/bot.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'public/css/alnaba.css'), 'utf8');
 
-test('the Al-Nabaa source content remains while its public routes and bot-menu entry are detached', () => {
+test('Al-Nabaa exposes only the requested public section links while preserving private nasheed management', () => {
   const nav = page.match(/<nav class="an-nav"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
   assert.ok(nav, 'the public Al-Nabaa navigation exists');
   assert.doesNotMatch(nav, /data-nav="quran"|href="\/alnaba\/quran\//, 'Quran is no longer a top-navigation item');
@@ -25,11 +25,7 @@ test('the Al-Nabaa source content remains while its public routes and bot-menu e
   assert.equal((home.match(/class="an-section-card\b/g) || []).length, 3, 'the homepage presents exactly three section cards');
   assert.doesNotMatch(home, /href="\/alnaba\/nasheed\/"|an-nasheed-card|أناشيد/, 'the homepage does not publicly link or advertise nasheeds');
   assert.match(page, /<section class="an-view" data-view="nasheed"/, 'the existing nasheed page content remains in the template');
-  assert.doesNotMatch(routes, /app\.get\(\[['"]\/alnaba(?:\/|['"])/, 'Al-Nabaa public page routes are not registered');
-  assert.doesNotMatch(routes, /createAlnabaRouter|fetchAlnabaMediaForWeb|app\.use\(['"]\/api\/alnaba/, 'the public Al-Nabaa API is not imported or mounted');
-  assert.doesNotMatch(bot, /📰 إدارة النبأ|📰 Al-Nabaa publishing/, 'the main bot menu no longer exposes Al-Nabaa management');
-  assert.ok(fs.existsSync(path.join(ROOT, 'server/alnaba-page.html')), 'the existing Al-Nabaa page content file is preserved');
-  assert.ok(fs.existsSync(path.join(ROOT, 'server/alnaba.js')), 'the existing Al-Nabaa content/data module is preserved');
+  assert.match(routes, /\/alnaba\/nasheed/, 'the existing nasheed page route remains available by direct URL');
 
   for (const [section, href] of [
     ['home', '/alnaba/'],
@@ -50,18 +46,4 @@ test('the Al-Nabaa source content remains while its public routes and bot-menu e
   assert.match(bot, /\.text\(en \? '📖 Quran' : '📖 القرآن الكريم', 'nb:quran'\)/, 'the owner bot upload control for Quran remains unchanged');
   assert.match(bot, /nb:manage:\(photos\|weekly\|quran\|nasheed\|archive\)/, 'private Quran content management remains available');
   assert.match(bot, /\.text\(en \? '🎵 Nasheeds' : '🎵 أناشيد', 'nb:nasheed'\)/, 'the owner bot upload control for nasheeds remains unchanged');
-});
-
-test('robots and sitemap are served by the dynamic SEO route (no static file may shadow them)', async () => {
-  // 2026-11-21: a stale static public/sitemap.xml (3 URLs) shadowed the dynamic
-  // sitemapXml() route since launch, hiding every area page from crawlers.
-  assert.ok(!fs.existsSync(path.join(ROOT, 'public/sitemap.xml')), 'no static sitemap.xml may shadow the route');
-  assert.ok(!fs.existsSync(path.join(ROOT, 'public/robots.txt')), 'no static robots.txt may shadow the route');
-  const { _test } = await import('../server/seo.js');
-  assert.match(_test.robotsTxt(), /User-agent: \*\nAllow: \/\nDisallow: \/api\//);
-  const locs = [..._test.sitemapXml().matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-  assert.ok(locs.includes('https://red-alert-syria-q6k8.onrender.com/ar/'));
-  assert.ok(locs.includes('https://red-alert-syria-q6k8.onrender.com/en/'));
-  assert.ok(locs.includes('https://red-alert-syria-q6k8.onrender.com/ar/areas/'));
-  assert.ok(locs.includes('https://red-alert-syria-q6k8.onrender.com/ar/archive/'));
 });

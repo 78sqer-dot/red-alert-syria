@@ -30,12 +30,11 @@ test('PWA and module graph request versioned assets for current map and firearm 
   assert.match(map, /type-icons\.js\?v=\d+/);
 });
 
-test('political map marker uses the unified pin without mutating its other display configuration', () => {
+test('political map icon uses the shared 24px map size without mutating its other display configuration', () => {
   const politicalType = types.match(/political:\s*\{([^}]+)\}/)?.[1];
   assert.ok(politicalType, 'political alert type must be defined');
   assert.match(politicalType, /\bsize:\s*25\b/);
-  assert.match(map, /glyphDisc\(a\.type, 32, 20, 'pin'/, 'political renders through the unified pin builder');
-  assert.doesNotMatch(map, /const sz = 24;/, 'the old per-icon size branch is gone');
+  assert.match(map, /const sz = 24;[\s\S]{0,420}svgTag\(glyph, sz,/);
 });
 
 test('map flight selection plays a brief event-colored arrival ripple and respects reduced motion', () => {

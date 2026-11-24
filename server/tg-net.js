@@ -1,4 +1,3 @@
-import { transferCounters } from './transfer-counters.js';
 // Resilient Telegram API calls (both bots).
 //
 // grammY waits up to 500 s for a single API call by default. When Telegram's Bot API is slow or
@@ -22,11 +21,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isPrivate = (chat) => (typeof chat === 'number' ? chat > 0 : /^\d+$/.test(String(chat ?? '')));
 const TRANSIENT = new Set([500, 502, 503, 504]);
 
-// An explicit Telegram refusal (400/401/403) proves Telegram rejected the
-// sendPhoto — it answered and nothing was delivered (e.g. the bot lost its
-// channel admin rights: 403). Only network/5xx/429 failures stay ambiguous:
-// those may have delivered the photo, so no text fallback is allowed there.
-export const isDefinitiveTelegramRejection = (error) => [400, 401, 403].includes(error?.error_code);
+// Only a 400 response proves Telegram rejected sendPhoto; network/5xx failures may have delivered it.
+export const isDefinitiveTelegramRejection = (error) => error?.error_code === 400;
 
 // callMs/uploadMs: deadline of one attempt when a retry is safe. oneShotMs: calls that are never re-sent
 // after an ambiguous failure (channel posts, backup upload) keep a long deadline, so a slow-but-successful
@@ -42,7 +38,7 @@ function ambiguousRetryAllowed(method, payload) {
 
 export function installResilience(api, label = 'bot') {
   api.config.use(async (prev, method, payload, signal) => {
-    if (method === 'getUpdates') { transferCounters.telegramAttempt(method, payload); return prev(method, payload, signal); } // long polling has its own timeout
+    if (method === 'getUpdates') return prev(method, payload, signal); // long polling has its own timeout
     const started = Date.now();
     const retryable = ambiguousRetryAllowed(method, payload);
     const limit = method === 'answerCallbackQuery' ? NET.callbackMs : !retryable ? NET.oneShotMs : UPLOAD.has(method) ? NET.uploadMs : NET.callMs;
@@ -54,7 +50,7 @@ export function installResilience(api, label = 'bot') {
       const onOuter = () => ctl.abort();
       if (signal) { if (signal.aborted) ctl.abort(); else signal.addEventListener('abort', onOuter, { once: true }); }
       let res; let err;
-      try { transferCounters.telegramAttempt(method, payload); res = await prev(method, payload, ctl.signal); } catch (e) { err = e; } finally {
+      try { res = await prev(method, payload, ctl.signal); } catch (e) { err = e; } finally {
         clearTimeout(timer);
         if (signal) signal.removeEventListener('abort', onOuter);
       }

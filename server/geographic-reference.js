@@ -1,7 +1,0 @@
-import crypto from 'node:crypto';
-export const referenceSourceHash=d=>crypto.createHash('sha256').update(JSON.stringify({id:d.id,sourceText:d.sourceText,srcs:d.srcs})).digest('hex');
-// Fixed reviewed features only. This is not an arbitrary caller-coordinate route.
-export function fixedGeographicReferenceRepair(a,c,d,f){
- if(!f||a.id!==f.alertId||a.channel_message_id!==f.postId||a.type!==f.type||a.source!=='news'||d?.id!==f.draftId||d.alertId!==a.id||d.status!=='published'||d.postId!==f.postId||referenceSourceHash(d)!==f.sourceHash||c.geographic_reference!==f.key||c.approved_copy!==true||c.title!==f.title||c.title_en!==f.title_en||c.body!==f.body||c.description!==f.title||c.description_en!==f.title_en||Object.keys(c).some(k=>!['geographic_reference','approved_copy','title','title_en','body','description','description_en'].includes(k)))throw Error('unapproved-geographic-reference-repair');
- return {place:{scope:'place',name_ar:f.name_ar,name_en:f.name_en,latitude:f.latitude,longitude:f.longitude},location:{latitude:f.latitude,longitude:f.longitude},scope:'place',extra:[],areas:[f.name_ar],zones:[],location_display:'geographic_reference',meta:{...a.meta,channelTitle:f.title,geographicReferenceAudit:{at:new Date().toISOString(),featureKey:f.key,featureKind:f.featureKind,evidence:f.evidence,sourceHash:f.sourceHash,priorPlace:structuredClone(a.place),priorLocation:structuredClone(a.location),priorDisplay:a.location_display||null,priorBody:a.body,priorTitle:a.title,geographicReferenceOnly:true,troopPositionVerified:false,targetPositionVerified:false}}};
-}

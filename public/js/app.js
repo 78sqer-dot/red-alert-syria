@@ -1,20 +1,18 @@
 // Red Alert Syria — front-end application
-import {datedReport,neutralReport,reportPublicationLabel,reportEventLabel,reportBadgeLabel} from '/shared/report-presentation.js?v=2';
-import { createServices, GOV_C } from './services.js?v=41';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual, stripTypeLabelPrefix } from '/shared/types.js?v=43';
-import { alertPreviewText } from '/shared/alert-preview.js?v=1';
-import { DICT } from './i18n.js?v=10';
+import { createServices, GOV_C } from './services.js?v=38';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
+import { DICT } from './i18n.js?v=9';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
-import { matchesFollowArea } from '/shared/area-follow.js?v=2';
-import { icon, ICONS } from './icons.js?v=10';
+import { matchesFollowArea } from '/shared/area-follow.js?v=1';
+import { icon } from './icons.js?v=7';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=106';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=84';
 import { disablePushSubscription } from './push-subscription.js?v=1';
 import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
-import { shouldReloadForBuild, reloadOnceForBuild } from './build-guard.js';
+import { normalizeLiveScenePayload, formatLiveSceneTime } from './live-scene.js?v=1';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
 const T = DICT[LANG];
@@ -64,7 +62,6 @@ const state = {
   view: 'list',
   conn: 'connecting',
   firstSnapshot: true,
-  build: new URL(import.meta.url).searchParams.get('v') || null,
   contacts: {},
   support: null,
   search: '',
@@ -124,11 +121,11 @@ const isLive = (a) => a.is_active && (a.expires_at == null || Date.parse(a.expir
 const shareUrl = (a) => `${location.origin}/${LANG}/a/${encodeURIComponent(a.id)}`;
 const siteUrl = () => `${location.origin}/${LANG}/`;
 const fbShare = (u) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`;
-const shareText = (a) => `${neutralReport(a)?'🔵':'🚨'} ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}${a.geographic_reference?'\n'+(LANG==='ar'?a.geographic_reference.note_ar:a.geographic_reference.note_en):''}`;
+const shareText = (a) => `🚨 ${titleOf(a)}${descOf(a) ? '\n' + descOf(a) : ''}`;
 
 // ------------------------------------------------------------------ alerts selection
 const URGENT_TYPES = new Set(['breaking', 'uav_strike', 'airstrike', 'warplane', 'helicopter', 'air_movement', 'missile', 'attack', 'artillery', 'assassination', 'shooting', 'military_incursion']);
-const isUrgent = (a) => !!(a?.is_active && !neutralReport(a) && URGENT_TYPES.has(a.type));
+const isUrgent = (a) => !!(a?.is_active && URGENT_TYPES.has(a.type));
 const searchKey = (value) => String(value || '').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').toLowerCase();
 function matchesSearch(a) {
   const q = searchKey(state.search).trim();
@@ -151,14 +148,14 @@ function visibleAlerts() {
 // ------------------------------------------------------------------ static text & icons
 function hydrateStatic() {
   $$('[data-icon]').forEach((el) => {
-    if (!el.firstChild) el.innerHTML = icon(el.dataset.icon, (ICONS[el.dataset.icon] || {}).size || 18);
+    if (!el.firstChild) el.innerHTML = icon(el.dataset.icon, 18);
   });
   $$('[data-t]').forEach((el) => {
     const v = T[el.dataset.t];
     if (typeof v === 'string') el.textContent = v;
   });
   const search = $('#alertSearch');
-  if (search) { search.placeholder = T.searchAlerts; search.setAttribute('aria-label', T.searchAlerts); }
+  if (search) search.placeholder = T.searchAlerts;
   const other = LANG === 'ar' ? 'en' : 'ar';
   const lb = $('#btnLang');
   lb.querySelector('.lbl').textContent = LANG === 'ar' ? 'EN' : 'ع';
@@ -187,14 +184,11 @@ function hydrateStatic() {
   $('#shareSite').setAttribute('aria-label', T.shareMap);
   $('#zoomOut').title = T.zoomOut;
   $('#zoomOut').setAttribute('aria-label', T.zoomOut);
-  $('#aboutPill').setAttribute('aria-label', T.aboutMap);
-  $('#aboutPill').title = T.aboutMap;
   $('#resetView').title = T.resetView;
   $('#resetView').setAttribute('aria-label', T.resetView);
   $('#locateMe').title = T.myLocation;
   $('#locateMe').setAttribute('aria-label', T.myLocation);
   $('#btnSettingsM').title = T.settings;
-  $('#btnSettingsM').setAttribute('aria-label', T.settings);
   syncNotificationButton();
 }
 
@@ -222,13 +216,12 @@ setInterval(updateConnAge, 15_000);
 
 // ------------------------------------------------------------------ list & detail
 function badge(a, live = false) {
-  if(neutralReport(a))return `<span class="badge" style="--c:#7dd3fc;--symbol-color:#7dd3fc">${icon('clock',13)}${esc(reportBadgeLabel(a,LANG))}</span>`;
-  return `<span class="badge${live ? ' live' : ''}" style="--c:${eventVisual(a.type, a).color};--symbol-color:${eventVisual(a.type, a).color}">${icon(typeIcon(a.type, a), 13)}${esc(typeName(a.type))}</span>`;
+  return `<span class="badge${live ? ' live' : ''}" style="--c:${eventVisual(a.type).color};--symbol-color:${eventVisual(a.type).color}">${icon(typeIcon(a.type), 13)}${esc(typeName(a.type))}</span>`;
 }
 function cardHtml(a, fresh) {
   const hasLoc = a.location && Number.isFinite(a.location.latitude);
-  return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}${isNear(a) ? ' near' : ''}" data-id="${esc(a.id)}" style="--c:${eventVisual(a.type, a).color}" tabindex="0">
-    <div class="card-top">${badge(a)}<span class="time">${datedReport(a)?esc(reportPublicationLabel(a,LANG))+' · ':''}${timeLine(a.timestamp)}</span></div>${datedReport(a)?`<div class="time">${esc(reportEventLabel(a,LANG))}</div>`:''}
+  return `<article class="card${a.is_active ? '' : ' inactive'}${a.id === state.selectedId ? ' sel' : ''}${fresh ? ' fresh' : ''}${isNear(a) ? ' near' : ''}" data-id="${esc(a.id)}" style="--c:${eventVisual(a.type).color}" tabindex="0">
+    <div class="card-top">${badge(a)}<span class="time">${timeLine(a.timestamp)}</span></div>
     <h3 class="card-title">${esc(titleOf(a))}</h3>
     ${distChip(a)}
     ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
@@ -267,8 +260,9 @@ function renderList() {
 }
 
 function detailHtml(a) {
-  const storyText = alertPreviewText(a, LANG);
   const live = a.is_active;
+  const referenceOnly = ['approximate_point','geographic_reference'].includes(a.location_display) || a.geographic_reference?.kind === 'locality_reference';
+  const referenceNote = a.geographic_reference ? (LANG==='en'?a.geographic_reference.note_en:a.geographic_reference.note_ar) : (LANG==='en'?'Approximate geographic reference only, not the precise incident location. No danger radius is implied.':'مرجع جغرافي تقريبي فقط، وليس موقع الحادث الدقيق. لا يدل على نطاق خطر.');
   const political = a.type === 'political';
   const hasLoc = a.location && Number.isFinite(a.location.latitude) && Number.isFinite(a.location.longitude);
   const category = political && Object.hasOwn(POLITICAL_CATEGORIES, a.political_category) ? POLITICAL_CATEGORIES[a.political_category] : null;
@@ -287,8 +281,7 @@ function detailHtml(a) {
   const verificationLabel = a.verification?.status === 'official' ? (LANG === 'ar' ? 'مصدر رسمي' : 'Official source') : a.verification?.status === 'attributed' ? (LANG === 'ar' ? 'منسوب إلى المصدر' : 'Attributed to source') : (LANG === 'ar' ? 'غير موثق مستقلًا' : 'Not independently verified');
   const rows = [
     [T.type, `${badge(a)}`],
-    ...(a.geographic_reference?[[LANG==='ar'?'مرجع جغرافي':'Geographic reference',esc((LANG==='ar'?a.geographic_reference.label_ar:a.geographic_reference.label_en)+' · '+(LANG==='ar'?a.geographic_reference.note_ar:a.geographic_reference.note_en))]]:[]),
-    [T.location, a.geographic_reference ? (LANG==='ar'?'موقع الحدث الدقيق غير محدد؛ المرجع الجغرافي مبيّن أعلاه':'Exact incident location unknown; geographic reference shown above') : political && !hasLoc ? (LANG === 'ar' ? 'موقع غير محدد — بلا دبوس' : 'Location unspecified — no pin') : esc(placeName(a))],
+    [T.location, political && !hasLoc ? (LANG === 'ar' ? 'موقع غير محدد — بلا دبوس' : 'Location unspecified — no pin') : esc(placeName(a))],
     ...(category ? [[LANG === 'ar' ? 'الفئة الفرعية' : 'Subcategory', esc(LANG === 'ar' ? category.ar : category.en)]] : []),
     ...(sources.length ? [[LANG === 'ar' ? 'المصادر' : 'Sources', sources.join('<br>')]] : []),
     ...(sourceTimestamp ? [[LANG === 'ar' ? 'تاريخ المصدر' : 'Source date', esc(sourceTimestamp)]] : []),
@@ -296,24 +289,24 @@ function detailHtml(a) {
     ...(FLIGHT_AIRCRAFT[a.aircraft] ? [[LANG === 'ar' ? 'نوع الطائرة' : 'Aircraft type', esc(LANG === 'ar' ? FLIGHT_AIRCRAFT[a.aircraft].ar : FLIGHT_AIRCRAFT[a.aircraft].en)]] : []),
     ...(FLIGHT_DIRECTIONS[a.flight_direction] ? [[LANG === 'ar' ? 'اتجاه الطيران' : 'Flight direction', esc(LANG === 'ar' ? FLIGHT_DIRECTIONS[a.flight_direction].ar : FLIGHT_DIRECTIONS[a.flight_direction].en)]] : []),
     ...(alertDist(a) ? [[LANG === 'ar' ? 'المسافة عنك' : 'Distance from you', distChip(a)]] : []),
-    [datedReport(a)?reportPublicationLabel(a,LANG):T.time, esc(fmtFull.format(new Date(a.timestamp)))],
-    ...(datedReport(a)?[[LANG==='ar'?'تاريخ الحدث':'Event date',esc(reportEventLabel(a,LANG))]]:[]),
+    [T.time, esc(fmtFull.format(new Date(a.timestamp)))],
     [a.source_info?.kind === 'provider' ? T.dataProvider : T.publisher, sourceInfoUrl ? `<a href="${esc(sourceInfoUrl)}" target="_blank" rel="noopener noreferrer">${esc(a.source_info?.name)}</a>` : esc(a.source_info?.name || 'Red Alert Syria')],
     [LANG === 'ar' ? 'حالة المصدر' : 'Source status', `<span class="verify-pill ${esc(a.verification?.status || 'unverified')}">${esc(verificationLabel)}</span>`],
     live ? [T.expires, a.expires_at ? esc(fmtTime.format(new Date(a.expires_at))) : T.noExpiry] : [T.endedAt, esc(fmtFull.format(new Date(a.ended_at || a.expires_at || a.timestamp)))],
   ];
-  return `<article class="d-card d-story" style="--c:${eventVisual(a.type, a).color}">
-      <div class="d-story-meta">${badge(a, live)}<span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span></div>
+  return `<div class="d-card" style="--c:${eventVisual(a.type).color}">
+      <div class="card-top">${badge(a, live)}<span class="time">${timeLine(a.timestamp)}</span></div>
       <h3 class="card-title">${esc(titleOf(a))}</h3>
-      <time class="d-story-time" datetime="${esc(a.timestamp)}" title="${esc(LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time')}">${icon('clock', 14)}${datedReport(a)?esc(reportPublicationLabel(a,LANG))+' · ':''}${esc(fmtFull.format(new Date(a.timestamp)))}</time>
-      ${datedReport(a)?`<div class="d-story-time">${icon('clock',14)}${esc(reportEventLabel(a,LANG))}</div>`:''}
-      ${storyText ? `<div class="d-story-report"><div class="sec-label">${esc(LANG === 'ar' ? 'نص الخبر' : 'Report')}</div><p class="d-story-text" dir="auto">${esc(storyText)}</p></div>` : ''}
-    </article>
-    <details class="d-card d-meta"><summary>${esc(LANG === 'ar' ? 'معلومات التنبيه' : 'Alert information')}</summary><div class="rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div></details>
+      ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
+      ${a.body ? `<p class="card-desc" style="white-space:pre-line">${esc(a.body)}</p>` : ''}
+      <span class="pill-status${live ? '' : ' off'}">${esc(live ? T.active : T.ended)}</span>
+    </div>
+    <div class="d-card rows">${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}</div>
     <div class="disclaimer" role="note">${esc(political ? (LANG === 'ar' ? 'منسوب للمصدر — لا يعني تحققاً مستقلاً' : 'Attributed to the source — this does not mean independent verification') : T.verificationNotRecorded)}</div>
     ${archivedQuneitraRoute ? `<div class="disclaimer" role="note"><strong>${esc(LANG === 'ar' ? 'مسار أرشيفي توضيحي فقط' : 'Illustrative archive route only')}</strong><br>${esc(LANG === 'ar' ? 'من مرجع تقريبي داخل إسرائيل إلى القنيطرة. يبقى موقع البلاغ الأصلي صيدا، والتنبيه منتهٍ وغير نشط. ليس مسار طيران حقيقيًا أو تتبعًا مباشرًا.' : 'From an approximate reference inside Israel to Quneitra. The original report location remains Sayda (Saida); this alert is expired and inactive. Not a real flight path or live track.')}</div>` : ''}
-    ${updates.length > 1 ? `<details class="d-card d-meta d-history"><summary>${esc(LANG === 'ar' ? 'سجل الخبر والتحديثات' : 'News and update history')}</summary><div class="update-history">${updates.map((u) => `<div class="update-item"><span class="update-dot"></span><div><b>${esc(u.kind === 'published' ? (LANG === 'ar' ? 'نشر الخبر' : 'Published') : u.kind === 'ended' ? (LANG === 'ar' ? 'انتهى التنبيه' : 'Alert ended') : (LANG === 'ar' ? 'تحديث' : 'Update'))}</b><time>${esc(fmtFull.format(new Date(u.at)))}</time>${u.description ? `<p>${esc(u.description)}</p>` : ''}</div></div>`).join('')}</div></details>` : ''}
-    ${hasLoc ? `<div class="sec-label">${esc(T.coordinates)}</div>
+    ${updates.length > 1 ? `<div class="sec-label">${esc(LANG === 'ar' ? 'سجل الخبر والتحديثات' : 'News and update history')}</div><div class="update-history">${updates.map((u) => `<div class="update-item"><span class="update-dot"></span><div><b>${esc(u.kind === 'published' ? (LANG === 'ar' ? 'نشر الخبر' : 'Published') : u.kind === 'ended' ? (LANG === 'ar' ? 'انتهى التنبيه' : 'Alert ended') : (LANG === 'ar' ? 'تحديث' : 'Update'))}</b><time>${esc(fmtFull.format(new Date(u.at)))}</time>${u.description ? `<p>${esc(u.description)}</p>` : ''}</div></div>`).join('')}</div>` : ''}
+    ${referenceOnly ? `<div class="disclaimer" role="note">${esc(referenceNote)}</div>` : ''}
+    ${hasLoc && !referenceOnly ? `<div class="sec-label">${esc(T.coordinates)}</div>
     <div class="coords"><div class="coord"><div class="k">${esc(T.lat)}</div><div class="v">${fmtNum(a.location.latitude)}° N</div></div><div class="coord"><div class="k">${esc(T.lng)}</div><div class="v">${fmtNum(a.location.longitude)}° E</div></div></div>` : ''}
     <button class="btn-dark" data-act="share">${icon('share', 18)}${esc(T.shareAlert)}</button>
     <div class="btn-row">
@@ -371,40 +364,44 @@ function distChip(a) {
   return `<span class="dist-chip${r.near ? ' near' : ''}">${icon('locate', 12)}${esc(txt)}${r.near && !inside ? ` · ${esc(LANG === 'ar' ? 'قريب منك' : 'near you')}` : ''}</span>`;
 }
 function alertMediaFrameHtml(item, alertId) {
-  const url = `/api/alerts/${encodeURIComponent(alertId)}/media?type=${encodeURIComponent(item.type)}${/^[a-f0-9]{12}$/.test(item.version || '') ? `&v=${encodeURIComponent(item.version)}` : ''}`;
+  const illustration = item.illustration === true;
+  const url = illustration
+    ? `/api/alerts/${encodeURIComponent(alertId)}/illustration?lang=${LANG === 'en' ? 'en' : 'ar'}`
+    : `/api/alerts/${encodeURIComponent(alertId)}/media?type=${encodeURIComponent(item.type)}${/^[a-f0-9]{12}$/.test(item.version || '') ? `&v=${encodeURIComponent(item.version)}` : ''}`;
   const viewer = item.type === 'video'
     ? `<video class="pp-media-video" controls playsinline preload="none" aria-label="${esc(T.videoTab)}"><source src="${esc(url)}" type="${esc(item.mime_type || 'video/mp4')}"></video>`
-    : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(T.photoTab)}" loading="eager" decoding="async">`;
-  const label = LANG === 'en' ? 'ATTACHED MEDIA' : 'وسيط مرفق';
-  const note = LANG === 'en'
-    ? 'Attachment as supplied, with its original marks. Display alone does not verify its location or time.'
-    : 'مرفق كما ورد، مع علاماته الأصلية. عرضه وحده لا يثبت مكانه أو توقيته.';
+    : `<img class="pp-media-image" src="${esc(url)}" alt="${esc(illustration ? (LANG === 'en' ? 'Illustrative alert graphic' : 'بطاقة توضيحية للخبر') : T.photoTab)}" loading="eager" decoding="async">`;
+  const label = illustration
+    ? (LANG === 'en' ? 'ILLUSTRATIVE GRAPHIC' : 'بطاقة توضيحية')
+    : (LANG === 'en' ? 'SOURCE MEDIA' : 'وسيط المصدر');
+  const note = illustration
+    ? (LANG === 'en' ? 'Illustrative design based on alert details; not a scene photograph.' : 'تصميم مبني على تفاصيل التنبيه، وليس صورةً للمشهد.')
+    : (LANG === 'en' ? 'Source media; source marks, if present, are left visible.' : 'وسيط المصدر؛ تُترك علاماته كما هي إن وُجدت.');
   return `<div class="ras-media-frame" dir="ltr"><div class="ras-media-frame-head"><img src="/img/logo-wordmark.svg" alt="" loading="lazy"><span class="ras-media-frame-label">${esc(label)}</span></div><div class="ras-media-frame-stage">${viewer}</div><div class="ras-media-frame-note" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}">${esc(note)}</div></div>`;
 }
 function popupHtml(a) {
   const shown = isLive(a) ? a : { ...a, is_active: false };
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : (a.media ? [a.media] : []);
-  const mediaItems = ['photo', 'video'].map((type) => rawMediaItems.find((item) => item?.type === type && item.illustration !== true && item.generated !== true)).filter(Boolean);
-  const fullPreview = alertPreviewText(a, LANG);
-  const newsText = [titleOf(a), fullPreview].filter((value) => String(value || '').trim()).join('\n');
-  const displayModes = availableAlertDisplayModes(newsText, mediaItems);
-  const displayMediaItems = mediaItems;
+  const mediaItems = ['photo', 'video'].map((type) => rawMediaItems.find((item) => item?.type === type)).filter(Boolean);
+  const newsText = [titleOf(a), descOf(a)].filter((value) => String(value || '').trim()).join('\n');
+  const illustrationFallback = mediaItems.length === 0;
+  const displayModes = availableAlertDisplayModes(newsText, mediaItems, { illustrationFallback });
+  const displayMediaItems = mediaItems.length ? mediaItems : illustrationFallback ? [{ type: 'photo', illustration: true }] : [];
   const initialMode = initialAlertDisplayMode(displayModes);
-  const mediaActions = displayModes.length > 1 ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'محتوى التنبيه' : 'Alert content')}">${displayModes.map((mode) => {
+  const mediaActions = displayModes.length ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'محتوى التنبيه' : 'Alert content')}">${displayModes.map((mode) => {
     const item = displayMediaItems.find((candidate) => candidate.type === mode);
     const label = mode === 'news' ? T.alertNewsTab : mode === 'video' ? T.videoTab : T.photoTab;
     const glyph = mode === 'news' ? 'news' : mode === 'video' ? 'mediaVideo' : 'mediaImage';
-    return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}" data-pp-media-mime="${esc(item?.mime_type || '')}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
+    return `<button type="button" class="pp-media-action" aria-pressed="${mode === initialMode}" aria-label="${esc(label)}" data-pp-mode="${mode}" data-pp-media-version="${esc(item?.version || '')}" data-pp-media-mime="${esc(item?.mime_type || '')}" data-pp-illustration="${item?.illustration === true}">${icon(glyph, 14)}<span>${esc(label)}</span></button>`;
   }).join('')}</div>` : '';
   const titleRow = `<div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p></div>`;
-  const eventDate=datedReport(a)?`<div class="pp-date-row">${esc(reportEventLabel(a,LANG))}</div>`:'';
-  const metadata = `${eventDate}<div class="pp-metadata"><div class="pp-category-row">${badge(shown)}${distChip(a)}${Array.isArray(a.more) && a.more.length ? `<span class="pp-areas">${icon('locate', 13)}${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</span>` : ''}</div><div class="pp-date-row" title="${LANG === 'ar' ? 'بتوقيت دمشق' : 'Damascus time'}">${icon('clock', 13)}<time datetime="${esc(a.timestamp)}">${esc(fmtDay.format(new Date(a.timestamp)))} <span aria-hidden="true">·</span> ${esc(fmtTime.format(new Date(a.timestamp)))}</time><span class="pp-age">${esc((datedReport(a)?reportPublicationLabel(a,LANG)+' · ':'')+ago(a.timestamp))}</span></div></div>`;
-  const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}>
-    ${fullPreview ? `<p class="pp-desc" dir="auto">${esc(fullPreview)}</p>` : ''}</section>` : '';
+  const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}><div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
+    ${distChip(a)}
+    ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">${icon('locate', 13)} ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
+    ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}</section>` : '';
   const activeMedia = displayMediaItems.find((item) => item.type === initialMode);
   const mediaViewer = displayMediaItems.length ? `<section class="pp-media-panel" data-pp-media-panel role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"${initialMode === 'news' ? ' hidden' : ''}><div class="pp-media-content" data-pp-media-content>${activeMedia ? alertMediaFrameHtml(activeMedia, a.id) : ''}</div></section>` : '';
-  const referenceNote=a.geographic_reference?`<p class="pp-desc">${esc(LANG==='ar'?a.geographic_reference.note_ar:a.geographic_reference.note_en)}</p>`:'';
-  const content = `${titleRow}${metadata}${referenceNote}${mediaActions}${newsPanel}${mediaViewer}`;
+  const content = `${titleRow}${mediaActions}${newsPanel}${mediaViewer}`;
   return `<div class="pp" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" data-alert-id="${esc(a.id)}">
     ${content}
     <div class="pp-foot"><button class="pp-more" data-pp="more" data-id="${esc(a.id)}">${esc(T.alertDetails)}</button>
@@ -412,7 +409,7 @@ function popupHtml(a) {
 }
 
 // ------------------------------------------------------------------ selection
-function select(id, { fromMap = false, fly = true, popupOnly = false } = {}) {
+function select(id, { fromMap = false, fly = true } = {}) {
   if (id && svc?.mode?.()) svc.exitMode(); // a news item was chosen: leave the services map mode
   if (!id) {
     state.selectedId = null;
@@ -427,13 +424,6 @@ function select(id, { fromMap = false, fly = true, popupOnly = false } = {}) {
   state.selectedId = id;
   if (history.replaceState) history.replaceState(null, '', '#' + encodeURIComponent(id));
   const shown = isLive(a) ? a : { ...a, is_active: false };
-  if (popupOnly) {
-    showList();
-    if (isMobile()) setSheetOpen(false);
-    else toggleSidebar(false, { persist: false });
-    amap && amap.select(shown, { fly, popup: true, allowUnlocatedPopup: true });
-    return;
-  }
   amap && amap.select(shown, { fly: fly, popup: true });
   showDetail();
   if (isMobile()) setSheetOpen(false);
@@ -445,7 +435,7 @@ const directAlertLookups = new Map();
 function openDirectAlert(id) {
   if (!id) return;
   if (state.alerts.has(id)) {
-    select(id, { popupOnly: true });
+    if (state.selectedId !== id) select(id);
     return;
   }
   if (directAlertLookups.has(id)) return;
@@ -456,9 +446,7 @@ function openDirectAlert(id) {
       if (!alert) return;
       state.alerts.set(alert.id, alert);
       refresh();
-      if (location.hash.slice(1) === id) {
-        select(alert.id, { popupOnly: true });
-      }
+      if (location.hash.slice(1) === id) select(alert.id);
     })
     .catch(() => {})
     .finally(() => directAlertLookups.delete(id));
@@ -490,7 +478,7 @@ function renderTicker() {
     const el = document.createElement('div');
     el.className = 'tick';
     el.dataset.id = a.id;
-    el.innerHTML = `${badge(a)}<span class="t-title">${esc(stripTypeLabelPrefix(titleOf(a), a.type))}</span><span class="t-time">${esc((datedReport(a)?reportPublicationLabel(a,LANG)+' · ':'')+ago(a.timestamp))}</span>`;
+    el.innerHTML = `${badge(a)}<span class="t-title">${esc(titleOf(a))}</span><span class="t-time">${esc(ago(a.timestamp))}</span>`;
     box.appendChild(el);
     if (document.hidden) {
       olds.forEach((o) => o.remove());
@@ -526,9 +514,6 @@ function renderFilterBadge() {
   b.hidden = activeFilters === 0;
   b.textContent = activeFilters;
 }
-// Hidden from the map filter UI (owner 2026-11-20): حركة طيران and طائرة مدنية get no
-// checkbox; posted alerts of those types still render normally.
-const FILTER_UI_HIDDEN = new Set(['air_movement', 'civil_plane']);
 function renderFilterPanel() {
   const s = settings.get();
   const selectedGov = GOV_C[s.governorate] ? s.governorate : 'all';
@@ -547,11 +532,9 @@ function renderFilterPanel() {
   html += `<div class="dd-head"><b>${esc(T.showOnly)}</b><button class="link-btn" data-f="clear" ${clearNeeded ? '' : 'disabled'}>${esc(T.clear)}</button></div>`;
   html += `<label class="filter-governorate" for="alertGovFilter"><span>${esc(T.filterGovernorate)}</span><select id="alertGovFilter" class="sel" data-region-filter aria-label="${esc(T.filterGovernorate)}"><option value="all" ${selectedGov === 'all' ? 'selected' : ''}>${esc(T.allGovs)}</option>${govOptions}</select></label>`;
   for (const [g, def] of Object.entries(ALERT_GROUPS)) {
-    const visibleTypes = def.types.filter((t) => !FILTER_UI_HIDDEN.has(t));
-    if (!visibleTypes.length) continue;
-    const on = visibleTypes.filter((t) => s.filter.includes(t)).length;
-    html += `<div class="grp"><label class="chk grp-h"><input type="checkbox" data-g="${g}" ${on === visibleTypes.length ? 'checked' : ''} ${on > 0 && on < visibleTypes.length ? 'data-ind="1"' : ''}/><span class="name">${esc(def[LANG])}</span></label>`;
-    for (const t of visibleTypes) {
+    const on = def.types.filter((t) => s.filter.includes(t)).length;
+    html += `<div class="grp"><label class="chk grp-h"><input type="checkbox" data-g="${g}" ${on === def.types.length ? 'checked' : ''} ${on > 0 && on < def.types.length ? 'data-ind="1"' : ''}/><span class="name">${esc(def[LANG])}</span></label>`;
+    for (const t of def.types) {
       html += `<label class="chk sub"><input type="checkbox" data-t="${t}" ${s.filter.includes(t) ? 'checked' : ''}/><span class="sw" style="--c:${ALERT_TYPES[t].color}"></span><span class="type-ico" style="color:${eventVisual(t).color}">${icon(typeIcon(t), 14)}</span><span class="name">${esc(typeName(t))}</span><span class="cnt">${counts[t] || 0}</span></label>`;
     }
     html += '</div>';
@@ -575,11 +558,7 @@ function renderLayersPanel() {
 function closeDropdowns(except) {
   for (const [btn, panel] of [['#btnFilter', '#filterPanel'], ['#btnLayers', '#layersPanel']]) {
     if (panel === except) continue;
-    const p = $(panel);
-    p.hidden = true;
-    const home = ddHome.get(p);
-    if (home && p.parentElement !== home) home.append(p);
-    p.classList.remove('dd-sheet');
+    $(panel).hidden = true;
     $(btn).setAttribute('aria-expanded', 'false');
   }
   if (!except) { const b = document.getElementById('ddBack'); if (b) b.hidden = true; }
@@ -607,7 +586,6 @@ function toggleDropdown(btnSel, panelSel, render) {
   const p = $(panelSel);
   const open = p.hidden;
   closeDropdowns(panelSel);
-  if (open) dismissInactivePanels('dropdown');
   if (open) render();
   placeDropdown(p, open);
   p.hidden = !open;
@@ -778,7 +756,6 @@ function renderDrawer() {
 }
 function openDrawer() {
   renderDrawer();
-  dismissInactivePanels('drawer');
   $('#drawerBackdrop').hidden = false;
   const d = $('#drawer');
   d.setAttribute('aria-hidden', 'false');
@@ -789,33 +766,10 @@ function closeDrawer() {
   $('#drawer').setAttribute('aria-hidden', 'true');
   $('#drawerBackdrop').hidden = true;
 }
-function dismissInactivePanels(except) {
-  closeDropdowns();
-  const mapPanel = $('#mapCtrlPanel');
-  if (except !== 'mapTools' && except !== 'dropdown') {
-    if (mapPanel) mapPanel.hidden = true;
-    $('#mapControlsToggle')?.setAttribute('aria-expanded', 'false');
-  }
-  if ($('#app').classList.contains('sheet-open')) setSheetOpen(false);
-  if (except !== 'drawer') closeDrawer();
-  if (except !== 'about') closeAbout();
-  if (except !== 'modal' && !$('#modalBackdrop').hidden) closeModal();
-  if (except !== 'tour') $('#tour').hidden = true;
-}
 
 // ------------------------------------------------------------------ about sheet & modals
 function renderAbout() {
-  const legend = TYPE_KEYS.filter((t) => !FILTER_UI_HIDDEN.has(t)).map((t) => `<div class="lg-item"><span class="lg-dot">${glyphDisc(t, 26, 14)}</span>${esc(typeName(t))}</div>`).join('');
-  // Category legend (moved from the old on-map legend card): category colours
-  // plus the cluster badge, civil dot and zone ring the map itself draws.
-  const catRow = (type, key) => `<div class="legend-row"><span class="lg-dot" style="--c:${eventVisual(type).color}"></span><span>${esc(T[key])}</span></div>`;
-  const legendCats =
-    catRow('breaking', 'legendCatBreaking') + catRow('uav', 'legendCatAerial') + catRow('attack', 'legendCatStrikes')
-    + catRow('border', 'legendCatSecurity') + catRow('civil', 'legendCatCivil') + catRow('political', 'legendCatPolitical')
-    + catRow('weather', 'legendCatWeather') + catRow('quake', 'legendCatQuake')
-    + `<div class="legend-row"><span class="lg-cluster">3</span><span>${esc(T.legendCluster)}</span></div>`
-    + `<div class="legend-row"><span class="lg-civdot" style="--c:${eventVisual('civil').color}"></span><span>${esc(T.legendCivilDot)}</span></div>`
-    + `<div class="legend-row"><span class="lg-ring" style="--c:${eventVisual('breaking').color}"></span><span>${esc(T.legendZone)}</span></div>`;
+  const legend = TYPE_KEYS.map((t) => `<div class="lg-item"><span class="lg-dot">${glyphDisc(t, 26, 14)}</span>${esc(typeName(t))}</div>`).join('');
   $('#aboutBody').innerHTML = `<div class="sheet-grab"></div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-top:10px">
       <div><div class="eyebrow"><span class="line"></span>${esc(T.siteName)}</div><h2>${esc(T.aboutTitle)}</h2></div>
@@ -825,7 +779,6 @@ function renderAbout() {
     <div class="disclaimer" role="note">${esc(T.verificationPolicy)}</div>
     <div class="sec-label">${esc(T.legend)}</div>
     <div class="legend">${legend}</div>
-    <div class="legend-extra">${legendCats}</div>
     <div class="disclaimer">${esc(T.disclaimer)}</div>
     ${state.support ? `<section class="support-card"><div class="support-card-head"><span class="support-icon">${icon('heart', 18)}</span><div><h3>${esc(T.supportTitle)}</h3><p>${esc(T.supportTransfer)}</p></div></div><button class="btn-red" data-a="support">${icon('heart', 16)}${esc(T.supportButton)}</button></section>` : ''}
     <div class="about-links" style="margin-bottom:14px"><a class="btn-sm" href="${CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('telegram', 15)}${esc(T.followTelegram)}</a><a class="btn-sm wa-channel-btn" href="${WHATSAPP_CHANNEL}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 15)}${esc(T.followWhatsAppChannel)}</a><a class="btn-sm" href="${BOT}?start=report" target="_blank" rel="noopener noreferrer">${icon('alertO', 15)}${esc(T.reportTitle)}</a><a class="btn-sm" href="/${LANG}/areas/">${icon('mapPin', 15)}${esc(T.byArea)}</a><button class="btn-sm" data-a="terms">${esc(T.terms)}</button><button class="btn-sm" data-a="privacy">${esc(T.privacy)}</button></div>
@@ -835,7 +788,6 @@ function renderAbout() {
 }
 function openAbout() {
   renderAbout();
-  dismissInactivePanels('about');
   $('#aboutBackdrop').hidden = false;
   const s = $('#aboutSheet');
   s.setAttribute('aria-hidden', 'false');
@@ -849,7 +801,6 @@ function closeAbout() {
 function openModal(html, onClose) {
   const b = $('#modalBackdrop');
   $('#modal').innerHTML = html;
-  dismissInactivePanels('modal');
   b.hidden = false;
   b._onClose = onClose;
 }
@@ -862,6 +813,140 @@ function closeModal() {
 }
 function pageModal(title, text) {
   openModal(`<div class="page-modal"><h2>${esc(title)}</h2><p>${esc(text)}</p><p style="font-size:12.5px">${esc(T.disclaimer)}</p><button class="btn-red" data-m="close">${esc(T.close)}</button></div>`);
+}
+function appendLiveSceneFeed(target, items, emptyMessage, kind = 'feed') {
+  target.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement('p');
+    empty.className = 'live-scene-empty';
+    empty.textContent = emptyMessage;
+    target.append(empty);
+    return;
+  }
+  for (const item of items) {
+    const href = safeExternalUrl(item.url);
+    const entry = document.createElement(href ? 'a' : 'article');
+    entry.className = `live-scene-item${kind === 'market' ? ' live-scene-market-item' : ''}`;
+    if (href) { entry.href = href; entry.target = '_blank'; entry.rel = 'noopener noreferrer'; }
+    const heading = document.createElement('b');
+    heading.className = 'live-scene-item-title';
+    heading.textContent = kind === 'market' ? item.name : item.title;
+    entry.append(heading);
+    if (kind === 'market') {
+      const value = document.createElement('span');
+      value.className = 'live-scene-market-value';
+      value.textContent = [item.value, item.unit].filter(Boolean).join(' ');
+      entry.append(value);
+      if (item.stale) {
+        const age = document.createElement('small');
+        age.className = 'live-scene-market-change live-scene-market-stale';
+        age.textContent = T.liveNotRealtime;
+        entry.append(age);
+      }
+      if (item.change) {
+        const change = document.createElement('small');
+        change.className = 'live-scene-market-change';
+        change.textContent = item.change;
+        entry.append(change);
+      }
+    }
+    const metaParts = [item.source, formatLiveSceneTime(item.publishedAt || item.observedAt, LANG, TZ)].filter(Boolean);
+    if (metaParts.length) {
+      const meta = document.createElement('small');
+      meta.className = 'live-scene-item-meta';
+      meta.textContent = metaParts.join(' · ');
+      entry.append(meta);
+    }
+    target.append(entry);
+  }
+}
+function renderLiveSceneTicker(target, items) {
+  target.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement('span');
+    empty.className = 'live-scene-ticker-empty';
+    empty.textContent = T.liveEmptyNews;
+    target.append(empty);
+    return;
+  }
+  const track = document.createElement('div');
+  track.className = 'live-scene-ticker-track';
+  for (let copyIndex = 0; copyIndex < 2; copyIndex++) {
+    const group = document.createElement('div');
+    group.className = 'live-scene-ticker-group';
+    if (copyIndex) group.setAttribute('aria-hidden', 'true');
+    for (const item of items.slice(0, 12)) {
+      const href = safeExternalUrl(item.url);
+      const entry = document.createElement(href ? 'a' : 'span');
+      entry.className = 'live-scene-ticker-item';
+      if (href) { entry.href = href; entry.target = '_blank'; entry.rel = 'noopener noreferrer'; if (copyIndex) entry.tabIndex = -1; }
+      const source = document.createElement('b');
+      source.textContent = item.source || T.liveNews;
+      const title = document.createElement('span');
+      title.textContent = item.title;
+      entry.append(source, title);
+      group.append(entry);
+    }
+    track.append(group);
+  }
+  target.append(track);
+}
+function showLiveScene(onClose) {
+  const modal = $('#modal');
+  const backdrop = $('#modalBackdrop');
+  const controller = new AbortController();
+  backdrop.classList.add('live-scene-backdrop');
+  modal.classList.add('live-scene-shell');
+  openModal(`<div class="live-scene" aria-labelledby="liveSceneTitle">
+    <header class="live-scene-head">
+      <div class="live-scene-heading"><span class="live-scene-indicator" aria-hidden="true"></span><div><h2 id="liveSceneTitle">${esc(T.liveScene)}</h2><p>${esc(T.liveSceneSub)}</p></div></div>
+      <div class="live-scene-actions"><span class="live-scene-status-label">${esc(T.liveStatus)}</span><button class="live-scene-icon-btn" id="liveSceneRefresh" type="button" aria-label="${esc(T.liveRefresh)}" title="${esc(T.liveRefresh)}">${icon('refresh', 17)}</button><button class="live-scene-icon-btn" type="button" data-m="close" aria-label="${esc(T.close)}">${icon('x', 17)}</button></div>
+    </header>
+    <section class="live-scene-ticker-wrap" aria-label="${esc(T.liveTicker)}"><b class="live-scene-ticker-label">${esc(T.liveTicker)}</b><div class="live-scene-ticker" id="liveSceneTicker"></div></section>
+    <div class="live-scene-status" id="liveSceneStatus" role="status" aria-live="polite">${esc(T.liveLoading)}</div>
+    <main class="live-scene-content">
+      <section class="live-scene-panel"><h3><span class="live-scene-panel-mark news-mark" aria-hidden="true"></span>${esc(T.liveNews)}</h3><div class="live-scene-list" id="liveSceneNews"></div></section>
+      <section class="live-scene-panel"><h3><span class="live-scene-panel-mark osint-mark" aria-hidden="true"></span>${esc(T.liveOsint)}</h3><div class="live-scene-list" id="liveSceneOsint"></div></section>
+      <section class="live-scene-panel live-scene-markets"><h3><span class="live-scene-panel-mark market-mark" aria-hidden="true"></span>${esc(T.liveMarkets)}</h3><div class="live-scene-market-grid" id="liveSceneMarkets"></div><p class="live-scene-note">${esc(T.liveMarketsNote)}</p></section>
+    </main>
+    <footer class="live-scene-footer"><span>${esc(T.liveSourcesNote)}</span><time id="liveSceneUpdated"></time></footer>
+  </div>`, () => {
+    controller.abort();
+    backdrop.classList.remove('live-scene-backdrop');
+    modal.classList.remove('live-scene-shell');
+    onClose?.();
+  });
+  const refresh = $('#liveSceneRefresh');
+  refresh.addEventListener('click', () => loadLiveScene(controller), { signal: controller.signal });
+  loadLiveScene(controller);
+}
+async function loadLiveScene(controller) {
+  const refresh = $('#liveSceneRefresh');
+  const status = $('#liveSceneStatus');
+  if (!refresh || !status || controller.signal.aborted) return;
+  refresh.disabled = true;
+  status.hidden = false;
+  status.textContent = T.liveLoading;
+  try {
+    const response = await fetch('/api/live-scene', { headers: { Accept: 'application/json' }, cache: 'no-store', signal: controller.signal });
+    if (!response.ok) throw new Error('Live scene unavailable');
+    const payload = normalizeLiveScenePayload(await response.json(), LANG);
+    if (controller.signal.aborted || !$('#liveSceneNews')) return;
+    renderLiveSceneTicker($('#liveSceneTicker'), payload.news);
+    appendLiveSceneFeed($('#liveSceneNews'), payload.news.slice(0, 12), T.liveEmptyNews);
+    appendLiveSceneFeed($('#liveSceneOsint'), payload.osint.slice(0, 12), T.liveEmptyOsint);
+    appendLiveSceneFeed($('#liveSceneMarkets'), payload.markets.slice(0, 8), T.liveEmptyMarkets, 'market');
+    $('#liveSceneUpdated').textContent = payload.updatedAt ? `${T.liveLastUpdated}: ${formatLiveSceneTime(payload.updatedAt, LANG, TZ)}` : '';
+    status.textContent = payload.degraded ? T.livePartial : '';
+    status.hidden = !payload.degraded;
+  } catch (error) {
+    if (error?.name !== 'AbortError' && !controller.signal.aborted) {
+      status.textContent = T.liveUnavailable;
+      status.hidden = false;
+    }
+  } finally {
+    if (!controller.signal.aborted && refresh.isConnected) refresh.disabled = false;
+  }
 }
 function showWelcome() {
   const f = (ic, t, d) => `<div class="feat"><span class="fi">${icon(ic, 20)}</span><div><b>${esc(t)}</b><span>${esc(d)}</span></div></div>`;
@@ -938,14 +1023,14 @@ function notify(a) {
   const s = settings.get();
   const n = s.notifications;
   if (s.filter.includes(a.type)) alertToast(a);
-  if (a.type === 'breaking' && !neutralReport(a)) showBreaking(a);
+  if (a.type === 'breaking') showBreaking(a);
   if (!n.enabled || !n.types.includes(a.type)) return;
   if (s.followArea && !matchesFollowArea(a, s.followArea)) return;
-  if (n.sound && !neutralReport(a)) playRingtone(n.ringtone, n.volume);
-  if (n.vibration && !neutralReport(a) && navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
+  if (n.sound) playRingtone(n.ringtone, n.volume);
+  if (n.vibration && navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
   if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
     try {
-      const notif = new Notification(`${neutralReport(a)?'ℹ️':alertEmoji(a)} ${reportBadgeLabel(a,LANG)||typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (descOf(a) ? '\n' + descOf(a) : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr', ...(neutralReport(a)?{silent:true}:{}) });
+      const notif = new Notification(`${alertEmoji(a)} ${typeName(a.type)} — ${T.siteName}`, { body: titleOf(a) + (descOf(a) ? '\n' + descOf(a) : ''), icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: a.id, lang: LANG, dir: LANG === 'ar' ? 'rtl' : 'ltr' });
       notif.onclick = () => {
         window.focus();
         select(a.id);
@@ -968,8 +1053,8 @@ function alertToast(a) {
   const t = typeOf(a.type);
   const el = document.createElement('div');
   el.className = 'toast';
-  el.style.setProperty('--c', neutralReport(a)?'#7dd3fc':t.color);
-  el.innerHTML = `<span class="ti">${neutralReport(a)?icon('clock',24):glyphDisc(a.type, 34, 17, 'pin', a.caution_visual ? 'urgent_warning' : null, a.caution_visual ? eventVisual(a.type, a).color : null)}</span><span class="tt"><small>${neutralReport(a)?esc(reportBadgeLabel(a,LANG)):esc(T.newAlert)+' · '+esc(typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
+  el.style.setProperty('--c', t.color);
+  el.innerHTML = `<span class="ti">${glyphDisc(a.type, 34, 17)}</span><span class="tt"><small>${esc(T.newAlert)} · ${esc(typeName(a.type))}</small><b>${esc(titleOf(a))}</b></span>`;
   el.addEventListener('click', () => {
     select(a.id);
     el.remove();
@@ -985,7 +1070,7 @@ function alertToast(a) {
 let breakingTimer = null;
 function showBreaking(a) {
   const b = $('#breaking');
-  $('#breakingText').textContent = stripTypeLabelPrefix(descOf(a) || titleOf(a), a.type);
+  $('#breakingText').textContent = descOf(a) || titleOf(a);
   $('#breakingText').dataset.id = a.id;
   b.hidden = false;
   b.style.animation = 'none';
@@ -999,7 +1084,9 @@ function showBreaking(a) {
 const TOUR_TARGETS = [null, '#status', '#btnFilter', '#btnLayers', '#sidebar', () => (isMobile() ? '#btnSettingsM' : '#btnSettings')];
 let tourStep = 0;
 function startTour() {
-  dismissInactivePanels('tour');
+  closeDrawer();
+  closeAbout();
+  closeDropdowns();
   tourStep = 0;
   $('#tour').hidden = false;
   renderTour();
@@ -1055,12 +1142,12 @@ function renderTour() {
 }
 
 // ------------------------------------------------------------------ sidebar / sheet
-function toggleSidebar(show, { persist = true } = {}) {
+function toggleSidebar(show) {
   const app = $('#app');
   const hidden = show === undefined ? !app.classList.contains('sb-hidden') : !show;
   app.classList.toggle('sb-hidden', hidden);
   $('#listFab').hidden = !hidden;
-  if (persist) settings.set({ sidebarHidden: hidden });
+  settings.set({ sidebarHidden: hidden });
   setTimeout(() => amap && amap.resize(), 320);
 }
 function placeListFab() {
@@ -1127,7 +1214,7 @@ function openShareCard(a) {
   openModal(`<div class="share-card-modal" dir="${LANG === 'ar' ? 'rtl' : 'ltr'}" aria-labelledby="shareCardTitle">
     <div class="share-card-head"><div><h2 id="shareCardTitle">${esc(T.shareCardTitle)}</h2><p>${esc(T.shareCardPreview)}</p></div><button class="sb-x" type="button" data-m="close" aria-label="${esc(T.close)}">${icon('x', 17)}</button></div>
     <div class="share-card-map"><img id="shareCardMapImage" src="${esc(imageUrl)}" alt="${esc(T.shareCardMapAlt)}" loading="eager" decoding="async"/><div id="shareCardMapFallback" class="share-card-fallback" hidden>${esc(T.shareCardMapFallback)}</div></div>
-    <div class="share-card-info"><h3>${esc(titleOf(a))}</h3>${a.geographic_reference?`<p>${esc((LANG==='ar'?a.geographic_reference.label_ar:a.geographic_reference.label_en)+' · '+(LANG==='ar'?a.geographic_reference.note_ar:a.geographic_reference.note_en))}</p>`:''}<div class="share-card-meta">${icon('mapPin', 15)}<span><b>${esc(T.shareCardLocation)}:</b> ${esc(a.geographic_reference?(LANG==='ar'?'موقع الحدث الدقيق غير محدد؛ المرجع الجغرافي مبيّن أعلاه':'Exact incident location unknown; geographic reference shown above'):placeName(a))}</span></div>
+    <div class="share-card-info"><h3>${esc(titleOf(a))}</h3><div class="share-card-meta">${icon('mapPin', 15)}<span><b>${esc(T.shareCardLocation)}:</b> ${esc(placeName(a))}</span></div>
       <div class="share-card-meta">${icon('clock', 15)}<span><b>${esc(T.eventTime)}:</b> ${esc(eventWhen)}</span></div>${lastWhen ? `<div class="share-card-meta">${icon('refresh', 15)}<span><b>${esc(update.label)}:</b> ${esc(lastWhen)}</span></div>` : ''}</div>
     <div class="share-card-link"><label for="shareCardUrl">${esc(T.directAlertLink)}</label><div><input id="shareCardUrl" type="url" value="${esc(url)}" readonly dir="ltr"/><a href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(T.directAlertLink)}">${icon('link', 15)}</a></div></div>
     <div class="share-card-actions"><button class="btn-red" type="button" data-share-act="share">${icon('share', 16)}${esc(T.shareCardOpenShare)}</button><button class="btn-sm" type="button" data-share-act="copy">${icon('copy', 15)}${esc(T.shareCardCopy)}</button></div>
@@ -1174,10 +1261,7 @@ function bindEvents() {
   const mapCtrlToggle = $('#mapControlsToggle');
   const mapCtrlPanel = $('#mapCtrlPanel');
   let returnToToolsAfterService = false;
-  let phoneLayout = PHONE.matches;
   const setMapControlsOpen = (open) => {
-    if (open) dismissInactivePanels('mapTools');
-    else closeDropdowns();
     mapCtrlPanel.hidden = !open;
     mapCtrlToggle.setAttribute('aria-expanded', String(open));
   };
@@ -1190,9 +1274,6 @@ function bindEvents() {
     if (e.target.closest('[data-dd-close]')) { e.preventDefault(); closeDropdowns(); return; }
     if (e.target.closest('.map-control-action')) setMapControlsOpen(false);
   });
-  // map legend: category colours come from the shared event visuals; the cluster
-  // bubble and the civil dot mirror the exact elements the map itself draws.
-  // The on-map legend card was merged into the about sheet (see renderAbout).
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#mapCtrls, .dd-panel')) setMapControlsOpen(false);
   });
@@ -1211,12 +1292,6 @@ function bindEvents() {
   };
   window.addEventListener('pageshow', restoreMapTools);
   restoreMapTools();
-  window.addEventListener('resize', () => {
-    const nextPhoneLayout = PHONE.matches;
-    if (nextPhoneLayout === phoneLayout) return;
-    phoneLayout = nextPhoneLayout;
-    dismissInactivePanels();
-  });
   $('#alertSearch')?.addEventListener('input', (e) => { state.search = e.target.value.slice(0, 80); renderList(); });
   $('#btnSettings').addEventListener('click', openDrawer);
   $('#btnSettingsM').addEventListener('click', openDrawer);
@@ -1232,6 +1307,12 @@ function bindEvents() {
   $('#btnLayers').addEventListener('click', (e) => {
     e.stopPropagation();
     toggleDropdown('#btnLayers', '#layersPanel', renderLayersPanel);
+  });
+  $('#btnLiveScene').addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDropdowns();
+    setMapControlsOpen(false);
+    showLiveScene(() => setMapControlsOpen(true));
   });
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.dd, .dd-panel')) closeDropdowns();
@@ -1268,7 +1349,7 @@ function bindEvents() {
     }
     let f = new Set(s.filter);
     if (i.dataset.g) {
-      const types = ALERT_GROUPS[i.dataset.g].types.filter((t) => !FILTER_UI_HIDDEN.has(t));
+      const types = ALERT_GROUPS[i.dataset.g].types;
       types.forEach((t) => (i.checked ? f.add(t) : f.delete(t)));
     } else if (i.dataset.t) {
       i.checked ? f.add(i.dataset.t) : f.delete(i.dataset.t);
@@ -1372,6 +1453,7 @@ function bindEvents() {
         type: panels.mediaType,
         version: mediaButton.dataset.ppMediaVersion || '',
         mime_type: mediaButton.dataset.ppMediaMime || '',
+        illustration: mediaButton.dataset.ppIllustration === 'true',
       }, root.dataset.alertId || '');
       amap?.schedulePopupFit?.(2);
       return;
@@ -1446,6 +1528,10 @@ function bindEvents() {
         if (!svc?.mode?.()) { setMapControlsOpen(true); returnToToolsAfterService = false; }
       }, 0);
     }
+  });
+  $('#btnNabaa').addEventListener('click', () => {
+    try { sessionStorage.setItem('ras:return-map-tools', '1'); } catch { /* storage can be disabled */ }
+    setMapControlsOpen(false);
   });
   $('#btnNotifications').addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -1559,9 +1645,6 @@ function bindEvents() {
   });
   // modal
   $('#modalBackdrop').addEventListener('click', async (e) => {
-    // a tap on the bare backdrop (outside the card) dismisses: a stuck or half-rendered
-    // overlay must never leave the whole app untappable (owner live report 13:19)
-    if (e.target.id === 'modalBackdrop') return closeModal();
     const shareAction = e.target.closest('[data-share-act]')?.dataset.shareAct;
     if (shareAction) { e.preventDefault(); return shareCardAction(shareAction); }
     const m = e.target.closest('[data-m]')?.dataset.m;
@@ -1631,7 +1714,6 @@ async function poll() {
   try {
     const r = await fetch('/api/alerts?include=inactive', { cache: 'no-store' });
     const j = await r.json();
-    if (shouldReloadForBuild(state.build, j.build) && reloadOnceForBuild(j.build)) return;
     state.lastBeat = Date.now();
     setHistoryHours(j.history_hours);
     setSupport(j.support);
@@ -1667,7 +1749,10 @@ function connect() {
   es.addEventListener('snapshot', (e) => {
     const j = JSON.parse(e.data);
     // a new version of the site was deployed while this page was open: reload to get it
-    if (shouldReloadForBuild(state.build, j.build) && reloadOnceForBuild(j.build)) return;
+    if (j.build) {
+      if (state.build && state.build !== j.build) { location.reload(); return; }
+      state.build = j.build;
+    }
     setHistoryHours(j.history_hours);
     if (j.contacts) setContacts(j.contacts);
     setSupport(j.support);

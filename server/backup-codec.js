@@ -7,8 +7,8 @@ export const BROTLI_BACKUP_NAME = 'red-alert-syria-backup.rasb';
 export const BACKUP_NAME = BROTLI_BACKUP_NAME;
 const MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
 // Version 2 framing: magic, uint32 big-endian raw length, SHA-256 of raw JSON,
-// then one Brotli stream. Reader-only release 82f46d7dad remains the minimum
-// rollback target: it understands this frame and can write the latest state as gzip.
+// then one Brotli stream. A recovery build must include this compatible reader
+// before restoring a pinned .rasb file. An unmodified historical tree is unsafe.
 const BROTLI_MAGIC = Buffer.from('RASB2\r\n\x1a\n', 'ascii');
 const BROTLI_HEADER_BYTES = BROTLI_MAGIC.length + 4 + 32;
 export function isBackupName(name) {

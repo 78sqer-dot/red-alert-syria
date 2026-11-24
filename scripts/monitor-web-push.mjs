@@ -1,4 +1,4 @@
-const BASE_URL = (process.env.PUSH_MONITOR_BASE_URL || 'https://red-alert-syria-q6k8.onrender.com').replace(/\/$/, '');
+const BASE_URL = (process.env.PUSH_MONITOR_BASE_URL || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
 const SAMPLES = 3;
 const MAX_LATENCY_MS = Number(process.env.PUSH_MONITOR_MAX_LATENCY_MS || 10_000);
 

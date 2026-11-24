@@ -171,9 +171,6 @@ export function locationFrom({ placeId, distCode, govCode, lat, lon, label }) {
     return { scope: 'governorate', name_ar: g.ar, name_en: g.en, governorate: g.code, governorate_ar: g.ar, governorate_en: g.en, latitude: g.lat, longitude: g.lon };
   }
   if (Number.isFinite(lat) && Number.isFinite(lon)) {
-    if (lat < 32.3 || lat > 37.4 || lon < 35.6 || lon > 42.45) {
-      console.warn('[places] raw coordinates outside Syria bounds:', lat, lon, label || '');
-    }
     // nearest known place for naming
     let best = null; let bd = Infinity;
     for (const p of places) {
@@ -256,28 +253,8 @@ export function mentionedGovernorates(text) {
   }
   return [...new Map(accepted.sort((a, b) => a.start - b.start).map(({ gov }) => [gov.code, gov])).values()];
 }
-/** A city used only to qualify the adjacent named locality is not another incident. */
-export function localityQualifierOnly(name, primaryName, text) {
-  const key = (v) => normalizeArabic(v).replace(/^ال/u, '');
-  const parent = key(name), child = key(primaryName);
-  if (!parent || !child || parent === child) return false;
-  const escape = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const normalized = normalizeArabic(text);
-  let rest = normalized;
-  if (!child.includes(' ')) {
-    const compound = new RegExp('(^|\\s)(?:ال)?' + escape(child) + '\\s+(?:ال)?' + escape(parent) + '(?=\\s|$)', 'gu');
-    rest = rest.replace(compound, '$1');
-  }
-  // Explicit child + countryside/subdistrict phrase. Do not cross intervening
-  // event words or discard a parent name independently mentioned elsewhere.
-  const administrative = new RegExp('(^|\\s)(?:ال)?' + escape(child) + '\\s+(?:في\\s+)?ب?ريف\\s+(?:(?:ناحيه|منطقه|مدينه|بلده)\\s+)?(?:ال)?' + escape(parent) + '(?=\\s|$)', 'gu');
-  rest = rest.replace(administrative, '$1' + child + ' ');
-  return rest !== normalized && !new RegExp('(^|\\s)(?:ال)?' + escape(parent) + '(?=\\s|$)', 'u').test(rest);
-}
-
 // every circle of an alert: its main area + each extra area picked in the bot (one or more circles each)
 export function alertZones(a) {
-  if (['approximate_point','geographic_reference'].includes(a.location_display)) return [];
   const out = [];
   const add = (loc, scope) => {
     for (const z of zonePoints(loc, scope)) {
@@ -302,9 +279,8 @@ export function alertZones(a) {
     return governorates.find((g) => normalizeArabic(g.ar) === name || normalizeArabic(g.en) === name)?.code || '';
   };
   const covered = new Set([a.place, ...(a.extra || [])].map(codeOf).filter(Boolean));
-  // The translation may use a governorate's city name (for example Damascus
-  // countryside). Do not create a second incident from translated place wording.
-  const text = a.description || a.description_en || a.title || a.title_en || '';
+  const narrative = [a.description, a.description_en].filter(Boolean);
+  const text = (narrative.length ? narrative : [a.title, a.title_en]).filter(Boolean).join(' ');
   for (const gov of mentionedGovernorates(text)) {
     if (covered.has(gov.code)) continue;
     const center = capitalOf(gov.code) || gov;

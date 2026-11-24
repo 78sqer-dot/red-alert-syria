@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NEWS_TYPES } from '../server/news-ai.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,7 +16,7 @@ process.env.NEWS_AI_MIN_GAP_MS = '0';
 
 const { store } = await import('../server/store.js');
 await store.init(null);
-const { newsState, nightEligible, daytimeAutoEligible, FILTER_VER, _test } = await import('../server/news-monitor.js');
+const { newsState, nightEligible, daytimeAutoEligible, _test } = await import('../server/news-monitor.js');
 const originalFetch = globalThis.fetch;
 const originalGeminiKey = process.env.GEMINI_API_KEY;
 const originalModels = process.env.NEWS_AI_MODELS;
@@ -52,18 +51,6 @@ test.after(async () => {
   else process.env.NEWS_AI_MIN_GAP_MS = originalGap;
   await new Promise((resolve) => setTimeout(resolve, 350));
   await fs.promises.rm(dataDir, { recursive: true, force: true });
-});
-
-
-test('monitored types are grouped by the canonical menu (protests inside civil)', () => {
-  // FILTER_VER tracks classification-rule changes for the rescan; the panel
-  // regrouping is display-only (same NEWS_TYPES, same per-type toggles), so
-  // the version stays 11.
-  assert.equal(FILTER_VER, 11);
-  assert.ok(NEWS_TYPES.includes('protest_action'));
-  assert.deepEqual(_test.newsTypeGroups.civil, ['civil', 'accident', 'fire', 'arrest', 'death', 'martyrdom', 'protest', 'protest_action', 'brawl']);
-  assert.equal(_test.newsTypeGroups.protests, undefined, 'there is no separate protests group anymore');
-  assert.deepEqual(Object.keys(_test.newsTypeGroups), ['direct', 'air', 'strikes', 'security', 'civil', 'smuggling', 'nature']);
 });
 
 test('a cross-source repeat of an already-published monitored event is suppressed even beyond 40 newer records', async () => {
@@ -184,76 +171,15 @@ test('helicopter monitoring distinguishes singular reports from an explicitly in
   assert.ok(_test.cardKb(intensive, 'ar').inline_keyboard.flat().some((button) => button.callback_data === `nw:hi:${intensive.id}`));
 });
 
-test('ground-incursion news with drone presence keeps its type and daytime eligibility', () => {
+test('drone presence on a ground-incursion report remains review-only and is never auto-published', () => {
   const eligibleUav = {
     type: 'uav', status: 'pending',
-    created: Date.parse(newsState().mig.dayAutoAllTypes1) + 1,
     loc: { scope: 'place', latitude: 33.0, longitude: 36.0 },
     srcs: [{ u: 'synthetic-source', local: false }],
   };
   assert.equal(nightEligible(eligibleUav), true, 'the synthetic control is otherwise eligible for the auto-publication gate');
   assert.equal(daytimeAutoEligible(eligibleUav), true);
   const withDrone = { ...eligibleUav, type: 'military_incursion', dronePresence: true };
-  assert.equal(withDrone.type, 'military_incursion', 'drone presence does not replace the primary ground-incursion classification');
   assert.equal(nightEligible(withDrone), false, 'a drone-presence report stays out of the night queue');
-  assert.equal(daytimeAutoEligible(withDrone), true, 'drone presence alone does not block a qualifying daytime draft');
-});
-
-test('entity fallback: a retold story with a different place emphasis merges into the pending draft', () => {
-  const n = newsState();
-  const d = {
-    id: 'draft-entity-hamadi', type: 'death', status: 'pending', ts: Date.now(), created: Date.now(),
-    headline: 'وفاة الشاب أنور الحمادي اللجة متأثراً بحروقه إثر انفجار خزان محروقات في بلدة الطيانة',
-    body: '', sourceText: '', loc: null, extra: [], srcs: [],
-  };
-  n.drafts[d.id] = d;
-  try {
-    const retold = _test.entityDuplicateDraft('death', 'وفاة الشاب أنور الحمادي اللجة في مستشفى بدمشق متأثراً بحروقه');
-    assert.ok(retold && retold.draftId === d.id, 'same person name across different places matches the pending draft');
-    const unrelated = _test.entityDuplicateDraft('death', 'وفاة الشاب سامر العلي في حادث سير على طريق حمص');
-    assert.equal(unrelated, null, 'a different person does not match');
-    const wrongType = _test.entityDuplicateDraft('airstrike', 'وفاة الشاب أنور الحمادي اللجة في مستشفى بدمشق');
-    assert.equal(wrongType, null, 'an incompatible type does not match');
-  } finally {
-    delete n.drafts[d.id];
-  }
-});
-
-test('same town and same case but different named people never dedup (رسلان vs زيدان, 2026-11-20)', () => {
-  const zidan = 'هنأ وزير الداخلية أنس خطاب أهالي بلدة العتيبة بريف دمشق بإلقاء القبض على رواد زيدان، المخطط لمجزرة كمين العتيبة عام 2014.';
-  const raslan = 'قوى الأمن الداخلي: إلقاء القبض على المجرم أحمد طلال رسلان، وهو ملازم سابق بقوات النظام البائد وأحد المتورطين في مجزرة «كمين العتيبة» في غوطة دمشق، والتي راح ضحيتها أكثر من 150 شهيداً.';
-  assert.deepEqual(_test.personNameRuns(raslan)[0], ['احمد', 'طلال', 'رسلان']);
-  assert.equal(_test.distinctPersons(raslan, zidan), true, 'different arrested persons are distinct stories');
-  assert.equal(_test.distinctPersons(raslan, 'إلقاء القبض على أحمد طلال رسلان خلال مداهمة في العتيبة'), false, 'the same person still matches');
-  // the publish-time guards must refuse to call Raslan a duplicate of Zidan
-  const n = newsState();
-  n.echoLog = n.echoLog || [];
-  n.echoLog.push({ id: 'alert-zidan', type: 'political', politicalCategory: 'support', ts: Date.now(), text: zidan, geo: { none: false, pts: [{ lat: 33.48506, lon: 36.6086 }], dists: ['170590'], govs: ['08'], coarse: false } });
-  try {
-    const dup = _test.finalPublishDuplicate(
-      { type: 'political', politicalCategory: 'support', ts: Date.now(), headline: 'تطور سياسي — العتيبة', loc: { scope: 'place', latitude: 33.48506, longitude: 36.6086 }, extra: [] },
-      { headline: 'تطور سياسي — العتيبة', body: raslan },
-    );
-    assert.equal(dup, null, 'the Raslan arrest is not a duplicate of the Zidan arrest');
-  } finally {
-    n.echoLog = n.echoLog.filter((e) => e.id !== 'alert-zidan');
-  }
-});
-
-test('entity fallback ignores place/event runs (Daraa explosion regression, 2026-11-20)', () => {
-  const n = newsState();
-  const d = {
-    id: 'draft-entity-daraa', type: 'explosion', status: 'pending', ts: Date.now(), created: Date.now(),
-    headline: 'مقتل شاب جراء انفجار عبوة ناسفة في مدينة درعا البلد أثناء مروره على الطريق الرئيسي',
-    body: '', sourceText: '', loc: null, extra: [], srcs: [],
-  };
-  n.drafts[d.id] = d;
-  try {
-    const other = _test.entityDuplicateDraft('explosion', 'انفجار عبوة ناسفة في درعا وإصابة مدنيين\nانفجار عبوة ناسفة في مدينة درعا البلد أدى إلى إصابة مدنيين اثنين بجروح متفاوتة');
-    assert.equal(other, null, 'shared place/event words (عبوة ناسفة درعا) do not merge two different incidents');
-    const samePerson = _test.entityDuplicateDraft('explosion', 'مقتل أحمد الخطيب جراء انفجار عبوة ناسفة في درعا');
-    assert.equal(samePerson, null, 'a named victim absent from the draft does not match');
-  } finally {
-    delete n.drafts[d.id];
-  }
+  assert.equal(daytimeAutoEligible(withDrone), false, 'a drone-presence report stays out of the daytime queue');
 });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AI_RESPONSE_SCHEMA, buildPrompt, finalizeRewriteOutput, hasExplicitDroneFlight, isGroundIncursionReport, keywordTypes, prefilter, refineType, rewriteArabicNews, rewriteSourceReviewReason, ruleClassify, NEWS_REWRITE_MODEL, NEWS_TYPES } from '../server/news-ai.js';
+import { AI_RESPONSE_SCHEMA, buildPrompt, finalizeRewriteOutput, hasExplicitDroneFlight, isGroundIncursionReport, keywordTypes, prefilter, refineType, rewriteArabicNews, rewriteSourceReviewReason, ruleClassify, NEWS_REWRITE_MODEL } from '../server/news-ai.js';
 import { isPrivateEditorialCopy } from '../server/clean-text.js';
 
 test('Syria-only general feeds reject foreign weather warnings before the weather shortcut', () => {
@@ -19,21 +19,6 @@ test('routine forecast posts do not pass the filter merely because they start wi
   const forecast = prefilter('عاجل: توقعات الطقس لليوم في دمشق ودرجات الحرارة المتوقعة', { general: true, breaking: true });
   assert.equal(forecast.ok, false);
   assert.equal(forecast.why, 'routine-weather');
-});
-
-
-test('explicit demonstrations/marches and other protest actions use separate types', () => {
-  assert.ok(NEWS_TYPES.includes('protest_action'));
-  for (const wording of ['مظاهرة في دمشق', 'مسيرة في حمص', 'demonstration في دمشق', 'march في حمص']) {
-    assert.ok(keywordTypes(wording).includes('protest'), wording);
-    assert.equal(ruleClassify(`${wording} اليوم في سوريا`)?.type, 'protest', wording);
-  }
-  for (const wording of ['احتجاج في دمشق', 'اعتصام في حمص']) {
-    assert.ok(keywordTypes(wording).includes('protest_action'), wording);
-    assert.equal(keywordTypes(wording).includes('protest'), false, wording);
-    assert.equal(ruleClassify(`${wording} اليوم في سوريا`)?.type, 'protest_action', wording);
-  }
-  assert.ok(keywordTypes('sit-in reported in Syria').includes('protest_action'));
 });
 
 test('rules-only news typing follows the lead instead of unrelated event words in the body', () => {
@@ -75,27 +60,6 @@ test('a reported ground incursion stays primary when the same report explicitly 
 
   const strike = 'توغلت قوات الاحتلال إلى قرية حضر في ريف القنيطرة ونفذت استهدافاً بمسيّرة.';
   assert.equal(refineType('uav_strike', strike), 'uav_strike', 'a separately reported drone strike remains a specific violent event');
-});
-
-test('an incident with a follow-up detention is the incident, never an arrest (owner report 2026-11-20)', () => {
-  // the exact misclassified post: a brawl/shooting in karm al-zaytoun drafted as اعتقال
-  const brawlShooting = 'إصابة 6 أشخاص بمشاجرة عائلية تطورت لإطلاق نار في حي كرم الزيتون بحمص والأمن الداخلي يوقف عددًا من المتورطين';
-  assert.equal(refineType('arrest', brawlShooting), 'attack', 'violence told before the detention owns the type');
-  assert.equal(refineType('arrest', 'مقتل شخص وإصابة آخرين بإطلاق نار في حلب والأمن يعتقل الفاعل'), 'attack');
-  // a genuine arrest story that only references an older crime stays an arrest
-  assert.equal(refineType('arrest', 'قيادة الأمن الداخلي في اللاذقية تعلن إلقاء القبض على سبعة أشخاص على خلفية جريمة قتل وقعت إثر مشاجرة'), 'arrest');
-  assert.equal(refineType('arrest', 'الأمن السوري يعتقل العميد رواد زيدان المتهم بالتخطيط لمجزرة كمين العتيبة بريف دمشق'), 'arrest');
-});
-
-test('a state-attributed or aerial مسيّرة is a drone, never a protest march (owner report 2026-11-20)', () => {
-  assert.equal(hasExplicitDroneFlight('مسيرة تركية تحوم فوق ريف الحسكة'), true);
-  assert.equal(hasExplicitDroneFlight('مسيرات تركية تجوب أجواء القامشلي'), true);
-  assert.equal(refineType('protest', 'مسيرة تركية تحوم فوق ريف الحسكة'), 'uav');
-  assert.equal(refineType('protest', 'مسيرات تركية تجوب أجواء القامشلي'), 'uav');
-  assert.equal(refineType('civil', 'تحليق مسيّرة إسرائيلية في أجواء الجنوب السوري'), 'uav');
-  // a real peaceful march stays a protest
-  assert.equal(hasExplicitDroneFlight('خروج مسيرة سلمية في ساحة الأمويين بدمشق'), false);
-  assert.equal(refineType('protest', 'خروج مسيرة سلمية في ساحة الأمويين بدمشق'), 'protest');
 });
 
 test('specific Syrian political developments pass only when political keywords are present', () => {
@@ -166,7 +130,7 @@ test('explicit opinion rewrite is labeled, sharp toward government targets, and 
   });
   assert.match(result, /^رأي\/تحليل:/, 'opinion text is labeled even if the provider omits the label');
   const system = JSON.parse(request.options.body).systemInstruction.parts[0].text;
-  assert.match(system, /بصيغة تقرير استخباري بارد/);
+  assert.match(system, /كاتب رأي\/تحليل عربي حاد وواضح/);
   assert.match(system, /يجوز ذكر الجهة الحكومية أو المسؤول الذي يسميه المصدر فقط/);
   assert.match(system, /لا تشترط وجود صلة سببية/);
   assert.match(system, /لا تنسب مسؤولية أو سبباً أو فعلاً أو قراراً محدداً إلى جهة/);
@@ -269,17 +233,4 @@ test('professional rewrite uses only the fixed fast free-tier model and returns 
   assert.match(request.options.body, /لا تضف نقداً سياسياً حاداً أو مديحاً أو إدانة/);
   assert.match(request.options.body, /لا تحول الادعاء إلى حقيقة/);
   assert.equal(JSON.parse(request.options.body).generationConfig.temperature, 0.1);
-});
-
-test('separated drone flight cues are not protest marches', () => {
-  for (const text of [
-    'تحليق مكثف للطيران المسير فوق قرية في جنوب سوريا',
-    'تحليق مكثف لطائرات الاحتلال الإسرائيلي المسيرة فوق ريف درعا',
-    'الطيران المسيّر في أجواء حلب',
-  ]) {
-    assert.equal(hasExplicitDroneFlight(text), true, text);
-    assert.equal(refineType('protest', text), 'uav', text);
-  }
-  assert.equal(hasExplicitDroneFlight('مسيرة احتجاجية في دمشق'), false);
-  assert.equal(hasExplicitDroneFlight('مظاهرة ضد الطيران في المدينة'), false);
 });

@@ -24,7 +24,7 @@ test('a separate, stale, or malformed map click is not suppressed', () => {
 
 test('map markers and pulse rings explicitly focus the selected alert', () => {
   assert.match(map, /if \(group\?\.alerts\.length > 1\) return this\.zoomToGroupChooser\(group\)/);
-  assert.match(map, /this\.map\.once\('moveend', openIfCurrent\)/);
+  assert.match(map, /this\.map\.once\('moveend', \(\) => this\.openGroupChooser\(group\)\)/);
   assert.match(map, /this\.map\.flyTo\(\{ center, zoom, padding: this\.padding\(\), duration: 800/);
   assert.match(map, /clusterAlertsByScreen\(this\.alerts, this\.map, this\.selectedId\)/);
   assert.match(map, /this\.onSelect\(id, \{ fromMap: true, fly: true \}\)/);
@@ -32,7 +32,7 @@ test('map markers and pulse rings explicitly focus the selected alert', () => {
   assert.match(map, /return this\.onSelect\(hit\.id, \{ fromMap: true, fly: true \}\)/);
   assert.match(css, /\.mk::before\s*\{[^}]*width: 56px; height: 56px;[^}]*pointer-events: auto;/);
   assert.match(css, /\.mk-count\s*\{[^}]*pointer-events: auto;/);
-  assert.match(map, /color: eventVisual\(a\.type, a\)\.color, active:/);
+  assert.match(map, /color: eventVisual\(a\.type\)\.color, active:/);
 });
 
 test('moving aircraft paths are clickable and keyboard accessible, with a visible selected ring', () => {

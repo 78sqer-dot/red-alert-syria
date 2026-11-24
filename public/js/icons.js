@@ -3,7 +3,6 @@ export const ICONS = {
   coin: { filled: false, body: "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0\" /><path d=\"M14.8 9a2 2 0 0 0 -1.8 -1h-2a2 2 0 1 0 0 4h2a2 2 0 1 1 0 4h-2a2 2 0 0 1 -1.8 -1\" /><path d=\"M12 7v10\" />" },
   briefcase: { filled: false, body: "<rect x=\"3\" y=\"7\" width=\"18\" height=\"14\" rx=\"2\" /><path d=\"M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\" /><path d=\"M3 12h18\" /><path d=\"M10 12v2h4v-2\" />" },
   apps: { filled: false, body: "<path d=\"M5 4h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z\" /><path d=\"M15 4h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z\" /><path d=\"M5 14h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z\" /><path d=\"M15 14h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z\" />" },
-  panelStack: { filled: false, body: "<path d=\"M7.5 3.5h9a2 2 0 0 1 2 2V6\" /><path d=\"M5.5 6h11a2 2 0 0 1 2 2\" /><rect x=\"3\" y=\"8.5\" width=\"18\" height=\"12.5\" rx=\"3\" /><path d=\"m8.5 13 3.5 3.5 3.5-3.5\" />" },
   facebook: { filled: false, body: "<path d=\"M7 10v4h3v7h4v-7h3l1 -4h-4v-2a1 1 0 0 1 1 -1h3v-4h-3a5 5 0 0 0 -5 5v2h-3\" />" },
   whatsapp: { filled: false, body: "<path d=\"M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9\" /><path d=\"M9 10a.5 .5 0 0 0 1 0v-1a.5 .5 0 0 0 -1 0v1a5 5 0 0 0 5 5h1a.5 .5 0 0 0 0 -1h-1a.5 .5 0 0 0 0 1\" />" },
   phone: { filled: false, body: "<path d=\"M5 4h4l2 5l-2.5 1.5a11 11 0 0 0 5 5l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a16 16 0 0 1 -15 -15a2 2 0 0 1 2 -2\" />" },
@@ -39,14 +38,14 @@ export const ICONS = {
   mapPin: { filled: false, body: "<path d=\"M9 11a3 3 0 1 0 6 0a3 3 0 0 0 -6 0\" /><path d=\"M17.657 16.657l-4.243 4.243a2 2 0 0 1 -2.827 0l-4.244 -4.243a8 8 0 1 1 11.314 0\" />" },
   share: { filled: false, body: "<path d=\"M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0\" /><path d=\"M15 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0\" /><path d=\"M15 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0\" /><path d=\"M8.7 10.7l6.6 -3.4\" /><path d=\"M8.7 13.3l6.6 3.4\" />" },
   x: { filled: false, body: "<path d=\"M18 6l-12 12\" /><path d=\"M6 6l12 12\" />" },
-  chevUp: { filled: false, stroke: 1.4, size: 14, body: "<path d=\"M6.5 14.6l5.5-5 5.5 5\" />" },
+  chevUp: { filled: false, body: "<path d=\"M6 15l6 -6l6 6\" />" },
   chevDown: { filled: false, body: "<path d=\"M6 9l6 6l6 -6\" />" },
   chevLeft: { filled: false, body: "<path d=\"M15 6l-6 6l6 6\" />" },
   chevRight: { filled: false, body: "<path d=\"M9 6l6 6l-6 6\" />" },
   copy: { filled: false, body: "<path d=\"M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666\" /><path d=\"M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1\" />" },
   bell: { filled: false, body: "<path d=\"M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6\" /><path d=\"M9 17v1a3 3 0 0 0 6 0v-1\" />" },
   volume: { filled: false, body: "<path d=\"M15 8a5 5 0 0 1 0 8\" /><path d=\"M17.7 5a9 9 0 0 1 0 14\" /><path d=\"M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5\" />" },
-  info: { filled: false, stroke: 1.4, size: 14, body: "<circle cx=\"12\" cy=\"7.6\" r=\"1.25\" fill=\"currentColor\" stroke=\"none\" /><path d=\"M12 11v5.6\" />" },
+  info: { filled: false, body: "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 9h.01\" /><path d=\"M11 12h1v4h1\" />" },
   plus: { filled: false, body: "<path d=\"M12 5l0 14\" /><path d=\"M5 12l14 0\" />" },
   minus: { filled: false, body: "<path d=\"M5 12l14 0\" />" },
   list: { filled: false, body: "<path d=\"M9 6l11 0\" /><path d=\"M9 12l11 0\" /><path d=\"M9 18l11 0\" /><path d=\"M5 6l0 .01\" /><path d=\"M5 12l0 .01\" /><path d=\"M5 18l0 .01\" />" },
@@ -54,8 +53,7 @@ export const ICONS = {
   storm: { filled: false, body: "<path d=\"M7 18a4.6 4.4 0 0 1 0 -9a5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7h-1\" /><path d=\"M13 14l-2 4h3l-2 4\" />" },
   door: { filled: false, body: "<path d=\"M14 12v.01\" /><path d=\"M3 21h18\" /><path d=\"M6 21v-16a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v16\" />" },
   clock: { filled: false, body: "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 7v5l3 3\" />" },
-  // Bottom-bar trio: owner-picked hairline symbol set (2026-11-21 13:12 «تمام») — 1.4px strokes, smaller marks.
-  world: { filled: false, stroke: 1.4, size: 15, body: "<circle cx=\"12\" cy=\"12\" r=\"8.2\" /><path d=\"M4.4 13c2.5-1.3 5-1.9 7.6-1.9s5.1.6 7.6 1.9\" />" },
+  world: { filled: false, body: "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M3.6 9h16.8\" /><path d=\"M3.6 15h16.8\" /><path d=\"M11.5 3a17 17 0 0 0 0 18\" /><path d=\"M12.5 3a17 17 0 0 1 0 18\" />" },
   language: { filled: false, body: "<path d=\"M9 6.371c0 4.418 -2.239 6.629 -5 6.629\" /><path d=\"M4 6.371h7\" /><path d=\"M5 9c0 2.144 2.252 3.908 6 4\" /><path d=\"M12 20l4 -9l4 9\" /><path d=\"M19.1 18h-6.2\" /><path d=\"M6.694 3l.793 .582\" />" },
   play: { filled: true, body: "<path d=\"M6 4v16a1 1 0 0 0 1.524 .852l13 -8a1 1 0 0 0 0 -1.704l-13 -8a1 1 0 0 0 -1.524 .852z\" />" },
   check: { filled: false, body: "<path d=\"M5 12l5 5l10 -10\" />" },
@@ -77,7 +75,7 @@ export const ICONS = {
   vibrate: { filled: false, body: "<path d=\"M3 5a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -14\" /><path d=\"M8 4l2 0\" /><path d=\"M9 17l0 .01\" /><path d=\"M21 6l-2 3l2 3l-2 3l2 3\" />" },
   route: { filled: false, body: "<path d=\"M3 19a2 2 0 1 0 4 0a2 2 0 0 0 -4 0\" /><path d=\"M19 7a2 2 0 1 0 0 -4a2 2 0 0 0 0 4\" /><path d=\"M11 19h5.5a3.5 3.5 0 0 0 0 -7h-8a3.5 3.5 0 0 1 0 -7h4.5\" />" },
   shield: { filled: false, body: "<path d=\"M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3\" /><path d=\"M12 3v18\" />" },
-  crate: { filled: false, body: "<path d=\"m3 7 9-4 9 4v10l-9 4-9-4z\"/><path d=\"m3 7 9 4 9-4\"/><circle cx=\"12\" cy=\"15\" r=\"3.5\"/><path d=\"m9.5 12.5 5 5\"/>" },
+  rifle: { filled: false, body: "<path d=\"M2 10h10l2-2h5l1 2h2v3h-2l-2 2h-4l-2-2H2z\"/><path d=\"M5 13v5m8-4 1 4m2-7h3\"/>" },
   pistol: { filled: false, body: "<path d=\"M3 7h15l3 2v4h-6l-2 5h-3l2-5H3z\"/><path d=\"M8 7V5h8v2m-5 6v3\"/>" },
   pills: { filled: false, body: "<path d=\"M5.3 18.7a4.5 4.5 0 0 1 0-6.4l7-7a4.5 4.5 0 0 1 6.4 6.4l-7 7a4.5 4.5 0 0 1-6.4 0z\"/><path d=\"m8.5 9.1 6.4 6.4\"/>" },
   handcuffs: { filled: false, body: "<circle cx=\"7\" cy=\"12\" r=\"4.5\"/><circle cx=\"17\" cy=\"12\" r=\"4.5\"/><path d=\"m11.5 10.5 1.7-1.7m-1.7 4.7 1.7 1.7M4 5V3m16 2V3m-16 16v2m16-2v2\"/>" },
@@ -93,6 +91,6 @@ export const ICONS = {
 export function icon(name, size = 18, extra = '') {
   const i = ICONS[name];
   if (!i) return '';
-  const attrs = i.filled ? 'fill="currentColor" stroke="none"' : `fill="none" stroke="currentColor" stroke-width="${i.stroke || 2}" stroke-linecap="round" stroke-linejoin="round"`;
+  const attrs = i.filled ? 'fill="currentColor" stroke="none"' : 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" ${attrs} aria-hidden="true" ${extra}>${i.body}</svg>`;
 }

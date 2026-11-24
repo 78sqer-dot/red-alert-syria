@@ -1,11 +1,10 @@
 // Official Syrian weather products: CAP warnings and the National Meteorological Center's daily bulletin.
 // Public weather panels and bulletins use these government products only; third-party numeric forecasts are excluded.
 import { governorates } from './places.js';
-import { DEFAULT_PUBLIC_URL } from './config.js';
 
 export const CAP_FEED_URL = 'https://climweb.med.gov.sy/api/cap/rss.xml';
 export const DAILY_BULLETIN_INDEX = 'https://climweb.med.gov.sy/منتجاتنا/النشرة-اليومية/';
-const UA = `RedAlertSyria/1.0 (+${DEFAULT_PUBLIC_URL})`;
+const UA = 'RedAlertSyria/1.0 (+https://red-alert-syria.onrender.com)';
 const TTL = 20 * 60_000;
 const ERROR_RETRY_TTL = 5 * 60_000;
 const cache = { at: 0, warnings: [], busy: null, errAt: 0, metaAt: Date.now(), feedItems: 0, candidates: 0, parsed: 0, settled: 0, itemErrors: 0, err: '' };

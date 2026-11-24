@@ -1,10 +1,3 @@
-import {startEmailRelay,stopEmailRelay,emailRelayStatus} from './email-relay.js';
-import { mountNewsReviewRoutes } from './news-review-routes.js';
-import { reporterContactReview, sendReporterQuestion } from './reporter-contact.js';
-import { operatorReportsStatus, operatorReportReview, operateReport } from './reports-operator.js';
-import { transferCounters } from './transfer-counters.js';
-import { backupTransfer } from './backup-codec.js';
-import { configureCoordination } from './editor-coordination.js';
 import { startTranslations } from './translate.js';
 import express from 'express';
 import helmet from 'helmet';
@@ -16,28 +9,30 @@ import crypto from 'node:crypto';
 import { webhookCallback } from 'grammy';
 import { config } from './config.js';
 import { store, publicAlert } from './store.js';
-import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft, operatorNewsStatus, setOperatorNewsMode, reconcilePublishedNewsDuplicate } from './news-monitor.js';
+import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
-import { reviseJobMetadata } from './jobs-metadata.js';
-import { operatorJobsStatus, operatorJobReview, operateJobDraft } from './jobs-operator.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, refreshChannelInfo, fixPostMarkup, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake, deleteAlertEverywhere, publishInput, repairNewsAlert, channelPost, plainTelegramText } from './bot.js';
+import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile, pauseAlnabaBatchIntake } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
 import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
-import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug, postWxBulletin } from './wx-daily.js';
+import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug } from './wx-daily.js';
 import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
 import { weatherDebug, checkWeather } from './weather.js';
-import { publicBorders, setBorder, CROSSINGS } from './borders.js';
+import { publicBorders } from './borders.js';
 import { renderNewsIllustrationPng } from './alert-image.js';
 import { startServices, publicRoads, publicPower } from './services.js';
 import { pushConfigured, pushPublicKey, saveSubscription, removeSubscription, sendPush } from './push.js';
+import { createAlnabaRouter } from './alnaba.js';
+import { fetchAlnabaMediaForWeb } from './bot.js';
+import { createLiveSceneService } from './live-scene.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
 const SHARED = path.join(ROOT, 'shared');
 const startupMaintenanceEnabled = process.env.RUN_STARTUP_MAINTENANCE === 'true';
+const liveSceneService = createLiveSceneService();
 
 const ADMIN_DESC = '🔒 بوت النشر الخاص بإدارة Red Alert Syria (للمشرفين فقط).';
 const ADMIN_SHORT = 'بوت النشر الخاص — Red Alert Syria';
@@ -50,8 +45,6 @@ const REPORT_SHORT_EN = 'Report an event in Syria — Red Alert Syria';
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
-// Install before compression so these private counters see compressed body chunks.
-app.use(transferCounters.middleware);
 
 // ------------------------------------------------------------------ security headers
 app.use(
@@ -62,9 +55,9 @@ app.use(
         'default-src': ["'self'"],
         'script-src': ["'self'", "'wasm-unsafe-eval'"],
         'style-src': ["'self'", "'unsafe-inline'"],
-        'img-src': ["'self'", 'data:', 'blob:', 'https://tiles.openfreemap.org', 'https://server.arcgisonline.com', 'https://elevation-tiles-prod.s3.amazonaws.com', 'https://tile.openstreetmap.org'],
+        'img-src': ["'self'", 'data:', 'blob:', 'https://tiles.openfreemap.org', 'https://server.arcgisonline.com', 'https://elevation-tiles-prod.s3.amazonaws.com'],
         'font-src': ["'self'", 'data:'],
-        'connect-src': ["'self'", 'https://tiles.openfreemap.org', 'https://server.arcgisonline.com', 'https://elevation-tiles-prod.s3.amazonaws.com', 'https://tile.openstreetmap.org'],
+        'connect-src': ["'self'", 'https://tiles.openfreemap.org', 'https://server.arcgisonline.com', 'https://elevation-tiles-prod.s3.amazonaws.com'],
         'worker-src': ["'self'", 'blob:'],
         'child-src': ["'self'", 'blob:'],
         'media-src': ["'self'", 'data:', 'blob:'],
@@ -126,33 +119,15 @@ app.get('/api/places/search', apiLimiter, (req, res) => {
   res.json({ places: searchFollowPlaces(req.query.q, req.query.gov) });
 });
 
-// Lightweight public page counters (map + shared alert pages) for the owner's growth
-// report. In-memory: resets on redeploy, no cookies, no personal data, static
-// assets and API calls never count. /api/health reports the live numbers.
-const pageStats = { since: new Date().toISOString(), day: new Date().toISOString().slice(0, 10), map: 0, alertPages: 0 };
-app.use((req, res, next) => {
-  if (req.method !== 'GET') return next();
-  const p = req.path;
-  const isMap = p === '/' || p === '/ar' || p === '/en' || p === '/ar/' || p === '/en/';
-  const isAlertPage = /^\/(?:ar|en)\/a\//.test(p);
-  if (!isMap && !isAlertPage) return next();
-  const today = new Date().toISOString().slice(0, 10);
-  if (pageStats.day !== today) { pageStats.day = today; pageStats.map = 0; pageStats.alertPages = 0; }
-  if (isMap) pageStats.map++; else pageStats.alertPages++;
-  next();
-});
+// Public, read-only Al-Nabaa sections; write access exists only through the owner bot.
+app.use('/api/alnaba', createAlnabaRouter({ store, fetchMedia: fetchAlnabaMediaForWeb, limiter: apiLimiter }));
 
-app.get('/api/health', (req, res) => {
-  const latest = store.state.alerts.reduce((best, a) => Number(a.channel_message_id) > Number(best?.channel_message_id || 0) ? a : best, null);
-  res.json({ ok: true, build: BUILD, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size,
-    latest_publication: latest ? { id: latest.id, telegram_post_id: latest.channel_message_id } : null,
-    backup_transfer: { ...backupTransfer }, pageviews: { ...pageStats } });
-});
+app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size }));
 
 app.get('/api/alerts', apiLimiter, (req, res) => {
   const includeInactive = req.query.include === 'inactive' || req.query.all === '1';
   const list = (includeInactive ? store.recentAlerts() : store.activeAlerts()).map(publicAlert);
-  res.json({ alerts: list, history_hours: store.historyWindow, server_time: new Date().toISOString(), support: store.publicSupport, build: BUILD });
+  res.json({ alerts: list, history_hours: store.historyWindow, server_time: new Date().toISOString(), support: store.publicSupport });
 });
 
 app.get('/api/alerts/:id', apiLimiter, (req, res) => {
@@ -274,204 +249,20 @@ app.get('/api/newstest', apiLimiter, async (req, res) => {
   if (!owner) return res.status(400).json({ error: 'no owner' });
   try { res.json(await sendTestDraft(owner)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
-// Operator alert removal (e.g. duplicated stories): same delete path as the admin
-// bot's 🗑 — removes the map alert AND its channel post. Disabled unless an
-// ADMIN_API_KEY env var is set on the service; 404 either way when the key is wrong.
-const adminKeyOk = (req) => {
-  const want = process.env.ADMIN_API_KEY || '';
-  const key = String(req.headers['x-admin-key'] || '');
-  return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
-};
-transferCounters.mountPrivateStatus(app, adminKeyOk, apiLimiter);
-app.get('/api/admin/jobs/status', apiLimiter, (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'no-store');
-  return res.json(operatorJobsStatus());
-});
-app.get('/api/admin/jobs/:id', apiLimiter, (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'no-store');
-  const review = operatorJobReview(req.params.id);
-  return review ? res.json(review) : res.status(404).json({ error: 'unknown-listing' });
-});
-app.post('/api/admin/jobs/:id/review', apiLimiter, express.json({ limit: '2kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'no-store');
+app.get('/api/live-scene', apiLimiter, async (req, res) => {
   try {
-    const result = await operateJobDraft(req.params.id, { action: req.body?.action, revision: req.body?.revision });
-    return res.status(result.ok ? 200 : 409).json(result);
-  } catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
-});
-app.post('/api/admin/jobs/:id/metadata', apiLimiter, (req, res, next) => adminKeyOk(req) ? next() : res.status(404).end(), express.json({ limit: '40kb' }), async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  try {
-    const result = await reviseJobMetadata(req.params.id, req.body);
-    return res.status(result.ok ? 200 : 409).json(result);
-  } catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
-});
-app.get('/api/admin/reports/status', apiLimiter, (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'no-store'); return res.json(operatorReportsStatus());
-});
-app.get('/api/admin/reports/:id/contact', apiLimiter, (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'no-store'); const r = reporterContactReview(req.params.id);
-  return r ? res.json(r) : res.status(404).json({ error: 'unknown-report' });
-});
-app.post('/api/admin/reports/:id/contact', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'no-store');
-  try { const r = await sendReporterQuestion(req.params.id, req.body); return res.status(r.ok ? 200 : 409).json(r); }
-  catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
-});
-app.get('/api/admin/reports/:id', apiLimiter, (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'no-store'); const r = operatorReportReview(req.params.id);
-  return r ? res.json(r) : res.status(404).json({ error: 'unknown-report' });
-});
-app.post('/api/admin/reports/:id/review', apiLimiter, express.json({ limit: '24kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'no-store');
-  try { const r = await operateReport(req.params.id, req.body); return res.status(r.ok ? 200 : 409).json(r); }
-  catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
-});
-app.get('/api/admin/relay/status', apiLimiter, (req,res)=>{if(!adminKeyOk(req))return res.status(404).end();res.set('Cache-Control','no-store');res.json(emailRelayStatus());});
-app.get('/api/admin/news/status', apiLimiter, (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  return res.json(operatorNewsStatus(req.query.include === 'ids'));
-});
-app.post('/api/admin/news/mode', apiLimiter, express.json({ limit: '2kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  try { return res.json(await setOperatorNewsMode(req.body?.mode)); }
-  catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
-});
-app.post('/api/admin/news/:id/reconcile-duplicate', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  try { return res.json(await reconcilePublishedNewsDuplicate(req.params.id, req.body)); }
-  catch (e) { return res.status(409).json({ ok: false, error: e.message }); }
-});
-mountNewsReviewRoutes(app, {adminKeyOk, apiLimiter});
-app.get('/api/admin/editor-coordination', apiLimiter, (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  return res.json(store.state.news?.coordination || { until: null, chats: [], replies: [] });
-});
-app.post('/api/admin/editor-coordination', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  try {
-    const value = configureCoordination(store.state, req.body, [...config.ownerIds, ...store.state.editors]);
-    store.persist(); await store.flushBackup(true);
-    return res.json({ ok: true, until: value.until, chats: value.chats });
-  } catch (error) { return res.status(400).json({ ok: false, error: error.message }); }
-});
-app.post('/api/admin/alerts/:id/delete', apiLimiter, async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  try {
-    const removed = await deleteAlertEverywhere(bots.admin?.api, req.params.id);
-    if (!removed) return res.status(404).json({ ok: false, error: 'alert not found' });
-    return res.json({ ok: true, id: removed.id, channelPost: removed.channel_message_id || null });
-  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
-});
-// Manual publish: map + channel in one shot (owner-driven stories the radar missed).
-// Syria bounding box sanity check (owner 2026-11-20): a transposed latitude once
-// plotted المالكية abroad; raw coordinates must stay inside the country.
-const SYRIA_BBOX = { latMin: 32.3, latMax: 37.4, lonMin: 35.6, lonMax: 42.45 };
-const insideSyria = (lat, lon) => Number.isFinite(lat) && Number.isFinite(lon)
-  && lat >= SYRIA_BBOX.latMin && lat <= SYRIA_BBOX.latMax && lon >= SYRIA_BBOX.lonMin && lon <= SYRIA_BBOX.lonMax;
-
-app.post('/api/admin/alerts/publish', apiLimiter, express.json({ limit: '64kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
-  try {
-    const b = req.body || {};
-    if (!b.type || !b.title) return res.status(400).json({ ok: false, error: 'type and title required' });
-    if (b.location && Number.isFinite(b.location.latitude) && !insideSyria(Number(b.location.latitude), Number(b.location.longitude))) {
-      return res.status(400).json({ ok: false, error: 'location outside Syria bounds' });
-    }
-    const alert = await publishInput(bots.admin.api, {
-      type: b.type, title: b.title, title_en: b.title_en,
-      description: b.description || '', body: b.body || undefined,
-      location: b.location || null, areas: b.areas || [], extra: b.extra || [],
-      meta: b.meta || null, source: b.source || 'telegram', author: b.author || { id: 0, name: 'manual', via: 'admin-api' },
-    });
-    return res.json({ ok: true, id: alert.id, channelPost: alert.channel_message_id || null, url: publicAlert(alert) ? `${(config.publicUrl || '').replace(/\/$/, '')}/ar/a/${alert.id}` : null });
-  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
-});
-// Move a published alert's pin to corrected coordinates (map + alert page update live;
-// the channel post text carries no coordinates, so it stays untouched).
-app.post('/api/admin/alerts/:id/location', apiLimiter, express.json({ limit: '8kb' }), (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  const lat = Number(req.body?.latitude); const lon = Number(req.body?.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(400).json({ ok: false, error: 'latitude/longitude required' });
-  if (!insideSyria(lat, lon)) return res.status(400).json({ ok: false, error: 'outside Syria bounds' });
-  const a = store.getAlert(req.params.id);
-  if (!a) return res.status(404).json({ ok: false, error: 'unknown alert' });
-  store.updateAlert(a.id, { location: { ...(a.location || {}), latitude: lat, longitude: lon } });
-  return res.json({ ok: true, id: a.id });
-});
-
-// Re-render every channel post with the current formatting (e.g. pin first-name rule).
-app.post('/api/admin/alerts/resync', apiLimiter, async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
-  try { const n = await resyncChannelPosts(bots.admin.api); return res.json({ ok: true, resynced: n }); }
-  catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
-});
-// Repair a monitored-news alert after cleaner/classifier fixes: re-runs cleanup, type
-// and place resolution on the stored raw text, updates the record, re-edits the channel
-// post in place (owner-flagged post repairs; never a repost).
-app.post('/api/admin/alerts/:id/repair-news', apiLimiter, express.json({ limit: '16kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
-  try {
-    const r = await repairNewsAlert(bots.admin.api, req.params.id, req.body?.correction, {
-      dryRun: req.body?.dry_run === true, refreshPhoto: req.body?.refresh_photo === true,
-      expectedRevision: req.body?.expected_revision, expectedPostId: req.body?.expected_post_id,
-    });
-    return res.status(r.ok ? 200 : 400).json(r);
-  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
-});
-app.post('/api/admin/channel/delete-message', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
-  const mid = Number(req.body?.message_id);
-  if (!Number.isInteger(mid) || mid <= 0) return res.status(400).json({ ok: false, error: 'message_id required' });
-  try { await bots.admin.api.deleteMessage(config.channel, mid); return res.json({ ok: true, deleted: mid }); }
-  catch (e) { return res.status(500).json({ ok: false, error: e.description || e.message }); }
-});
-app.post('/api/admin/channel/refresh-info', apiLimiter, express.json({ limit: '16kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
-  try {
-    if (req.body?.fix_markup_message_id) return res.json(await fixPostMarkup(req.body.fix_markup_message_id));
-    return res.json(await refreshChannelInfo());
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    res.json(await liveSceneService.getLiveScene());
+  } catch {
+    res.set('Cache-Control', 'no-store');
+    res.status(503).json({ error: 'live scene temporarily unavailable' });
   }
-  catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
 });
 // 💱 prices / 🛣 roads / ⚡ electricity for the website
 app.get('/api/weather', apiLimiter, async (req, res) => {
   try { res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60'); res.json(await publicWeather()); } catch { res.set('Cache-Control', 'no-store'); res.status(503).json({ ok: false, error: 'weather unavailable' }); }
 });
 app.get('/api/weathernow', apiLimiter, (req, res) => res.json(weatherNowDebug()));
-app.get('/api/admin/weather/status', apiLimiter, async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  res.json({ bulletin: wxBulletinDebug(), now: weatherNowDebug() });
-});
-app.post('/api/admin/weather/publish', apiLimiter, async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  if (!bots.admin?.api) return res.status(503).json({ ok: false, error: 'admin bot not up' });
-  try { const r = await postWxBulletin(bots.admin.api, {}); return res.json({ ok: true, result: r || null }); }
-  catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
-});
-app.post('/api/admin/borders/set-all', apiLimiter, express.json({ limit: '8kb' }), async (req, res) => {
-  if (!adminKeyOk(req)) return res.status(404).end();
-  const st = String(req.body?.status || 'open');
-  const note = String(req.body?.note || '').slice(0, 300);
-  try {
-    let n = 0;
-    for (const c of CROSSINGS) if (setBorder(c.id, st, note, 'owner')) n++;
-    return res.json({ ok: true, updated: n });
-  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
-});
 app.get('/api/services', apiLimiter, (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=60');
   res.json({ prices: publicPrices(), roads: publicRoads(), power: publicPower(), borders: publicBorders(), jobs: publicJobs(), army: publicArmy(), server_time: new Date().toISOString() });
@@ -558,6 +349,7 @@ const BUILD = String(process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).s
 // Bust integer app asset versions but preserve semantic vendor versions (e.g. 6.16.0),
 // so modulepreload URLs match the exact imports used by app.js.
 const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8').replace(/\?v=(\d+)(?=["&])/g, `?v=${BUILD}`);
+const alnabaPageTemplate = fs.readFileSync(path.join(ROOT, 'server', 'alnaba-page.html'), 'utf8');
 function renderIndex(lang) {
   const url = config.publicUrl || '';
   const head = `${verifyMetaTags()}<link rel="alternate" hreflang="x-default" href="${url}/ar/" /><meta property="og:locale" content="${lang === 'ar' ? 'ar_SY' : 'en_US'}" />`
@@ -595,6 +387,33 @@ app.get(['/ar', '/en', '/ar/', '/en/'], (req, res) => {
   if (!p.endsWith('/')) return res.redirect(301, p + '/');
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(renderIndex(p.startsWith('/en') ? 'en' : 'ar'));
+});
+app.get(['/alnaba', '/alnaba/', '/alnaba/photos', '/alnaba/photos/', '/alnaba/weekly', '/alnaba/weekly/', '/alnaba/nasheed', '/alnaba/nasheed/', '/alnaba/archive', '/alnaba/archive/'], (req, res) => {
+  const pathname = req.path.replace(/\/+$/, '') || '/alnaba';
+  if (!req.path.endsWith('/')) {
+    const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    return res.redirect(301, `${req.path}/${query}`);
+  }
+  const page = pathname === '/alnaba/photos' ? 'photos' : pathname === '/alnaba/weekly' ? 'weekly' : pathname === '/alnaba/nasheed' ? 'nasheed' : pathname === '/alnaba/archive' ? 'archive' : 'home';
+  const title = page === 'photos' ? 'أخبار مصوّرة — النبأ' : page === 'weekly' ? 'الصحيفة الأسبوعية — النبأ' : page === 'nasheed' ? 'أناشيد — النبأ' : page === 'archive' ? 'الأرشيف — النبأ' : 'النبأ — Red Alert Syria';
+  const description = page === 'photos'
+    ? 'أخبار مصوّرة من Red Alert Syria — الإنذار الأحمر سوريا.'
+    : page === 'weekly'
+      ? 'أعداد الصحيفة الأسبوعية بصيغة PDF من Red Alert Syria.'
+      : page === 'nasheed'
+        ? 'أناشيد ومحتوى صوتي ومرئي من النبأ.'
+        : page === 'archive'
+        ? 'دليل روابط قنوات ومجموعات Telegram المضافة إلى أرشيف النبأ.'
+        : 'النبأ: الأخبار المصوّرة والصحيفة الأسبوعية والأناشيد وأرشيف الروابط من Red Alert Syria.';
+  const base = (config.publicUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
+  const canonical = `${base}${pathname}/`;
+  const html = alnabaPageTemplate
+    .replaceAll('{{PAGE}}', page)
+    .replaceAll('{{TITLE}}', title)
+    .replaceAll('{{DESCRIPTION}}', description)
+    .replaceAll('{{CANONICAL}}', canonical);
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.type('html').send(html);
 });
 mountSeo(app, { limiter: apiLimiter });
 app.use((req, res) => res.status(404).type('text').send('Not found'));
@@ -683,7 +502,7 @@ async function start() {
     store._backupWritesPaused = true;
     pauseAlnabaBatchIntake();
   }
-  await store.init(backup, { deferSweep: !!(backup && config.telegramBackup) });
+  await store.init(backup, { deferSweep: !!backup && config.telegramBackup });
   // 2) apply hand-over overrides saved from the bot (owner / tokens / channel)
   applyProject(store.project);
   // One-time clean start requested by the owner: remove every alert (active and ended) from the map,
@@ -717,7 +536,6 @@ async function start() {
         store.persist();
         const backupSaved = await store.flushBackup(true);
         if (!backupSaved || store._backupPending) throw new Error('merged durable backup save was not confirmed');
-        // The merged state is durably saved; only now may the expiry sweep shrink it.
         store.beginSweeps();
         await runtimeHooks.resumeAlnabaBatches();
         recovered = true;
@@ -731,9 +549,6 @@ async function start() {
       }
     };
     setTimeout(recoverHandoff, 20_000).unref();
-    // Safety net: if hand-off recovery is still stuck after 5 minutes, start the sweeps
-    // anyway so expired alerts do not linger on the map indefinitely.
-    setTimeout(() => store.beginSweeps(), 300_000).unref();
   }
 
   if (!config.botToken) {
@@ -805,8 +620,7 @@ async function start() {
       }).catch((e) => console.warn('[bot] resync failed', e.message)), 20_000).unref();
     }
     }
-    startNewsMonitor();
-    startEmailRelay(a=>plainTelegramText(channelPost(a))); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
+    startNewsMonitor(); // 📡 Syrian news channels -> drafts for the owner (auto-published only in the owner's night window)
     startJobsMonitor(); // 💼 separate Syria jobs source -> owner approval -> website Jobs only
     startArmyMonitor(() => bots.admin?.api); // 🏛 official ministries -> owner approval -> website/map section only
     startTranslations(); // 🌐 English descriptions for /en/
@@ -839,7 +653,6 @@ async function start() {
 }
 
 const shutdown = async () => {
-  stopEmailRelay();
   try { stopNewsMonitor(); } catch { /* ignore */ }
   try { stopJobsMonitor(); } catch { /* ignore */ }
   try { stopArmyMonitor(); } catch { /* ignore */ }

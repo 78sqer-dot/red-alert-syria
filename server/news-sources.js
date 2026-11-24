@@ -33,19 +33,6 @@ export const DEFAULT_SOURCES = [
   { u: 'alkhabour', name: 'الخابور', general: true, local: true },
   { u: 'syriancoast24', name: 'الساحل السوري 24', general: true, local: true },
   { u: 'SweidaGov1', name: 'محافظة السويداء', general: true, local: true },
-  // Expansion batch (verified 2026-11-17: public t.me/s/ preview on, real posts present).
-  // Channels without a public preview cannot be read by the monitor and are NOT listed.
-  { u: 'ShaamNetwork', name: 'شبكة شام الإخبارية', general: true },
-  { u: 'SouriaPost', name: 'سوريا بوست', general: true },
-  { u: 'OrientNewsAR', name: 'أورينت نيوز', general: true },
-  { u: 'Homs_News', name: 'حمص نيوز', general: true, local: true },
-  { u: 'golantimes', name: 'جولان تايمز', general: true, local: true },
-  { u: 'idlibplus', name: 'إدلب بلس', general: true, local: true },
-  { u: 'FuratPost', name: 'فرات بوست', general: true, local: true },
-  // 2026-11-20 expansion batch (verified public previews with fresh posts today).
-  { u: 'SN4HR', name: 'الشبكة السورية لحقوق الإنسان' },
-  { u: 'AlHadath', name: 'الحدث', general: true },
-  { u: 'aleppocitycouncil', name: 'مجلس مدينة حلب', local: true },
 ];
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -149,41 +136,9 @@ const SIGNATURE = /(اشترك|تابعونا|انضموا|لمتابعة|للم
 // A channel's promo block ("🔻لمتابعة زينو🔻 اضغط على الرابط 👇", "تابع قناة التلغرام", "للتواصل مع الإدارة")
 // ends the news: everything from its first line on is dropped.
 const PROMO_START = /^[\s\p{Extended_Pictographic}\uFE0F🔻🔺•▪️*_~-]*(لمتابعة|للمتابعة|تابعونا|تابعوا|تابع قناة|تابع صفحة|تابعو|اشترك|اشتركوا|للاشتراك|انضم|انضموا|للانضمام|للتواصل|للإعلان|للاعلان|لإعلاناتكم|رابط القناة|رابط اليوتيوب|رابط الفيسبوك|رابط الصفحة|قناتنا|صفحتنا|أخبار أكثر|اخبار اكثر|أخــبـــار|ادعم|لدعم القناة|شاركونا|راسلونا)/u;
-const PROMO_LINE = /(اضغط|الرابط|على الرابط|فيسبوك|فيس بوك|يوتيوب|انستغرام|انستقرام|واتساب|واتس اب|تيك توك|بلوسكاي|Bluesky|موقعنا على|لحظة بلحظة|ANHA|Facebook|YouTube|Instagram|WhatsApp|TikTok|تفاصيل أكثر حال ورودها|التفاصيل تباعاً|بالسلامة للجميع|تابعونا)/iu;
-// ANHA-style signature tail glued to the story's last sentence: «…مدينة ديرك. وكالة أنباء هاوار ANHA موقعنا على بلوسكاي…».
-// Cut from the outlet signature to the end ONLY when promo words follow — a plain attribution («…حسب وكالة أنباء هاوار») is kept.
-const OUTLET_TAIL = /\s+وكالة أنباء هاوار(?:\s+ANHA)?(?=[\s\S]{0,220}$)(?=[\s\S]*(?:موقعنا|بلوسكاي|واتس|لحظة بلحظة|ANHA|Bluesky))/iu;
-const PROMO_TAIL = /\s*(?:موقعنا على|لحظة بلحظة عبر)[\s\S]*$/u;
-// Lead duplication: outlets often repeat their lead - a short first sentence, then a
-// fuller restatement («قرار رئاسي تركي يقضي بإغلاق كليات ومعاهد… في ريف حلب. قرار رئاسي
-// تركي يقضي بإغلاق كليات تابعة… في الراعي.», post 1424). Drop the shorter first telling
-// when the two opening sentences clearly say the same thing: a shared opening run of 4+
-// words and 80%+ of the shorter sentence's words present in the longer one.
-const leadWord = (w) => w.replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
-function dedupeLead(t) {
-  const m = String(t).match(/^(.{10,}?[.!؟?])\s+(.{10,}?[.!؟?])([\s\S]*)$/u);
-  if (!m) return t;
-  const [, s1, s2, rest] = m;
-  const w1 = s1.split(/\s+/).map(leadWord).filter(Boolean);
-  const w2 = s2.split(/\s+/).map(leadWord).filter(Boolean);
-  if (w1.length < 4 || w2.length < 4) return t;
-  let run = 0;
-  while (run < w1.length && run < w2.length && w1[run] === w2[run]) run++;
-  const [short, long] = w1.length <= w2.length ? [w1, w2] : [w2, w1];
-  const longSet = new Set(long);
-  const contained = short.filter((w) => longSet.has(w)).length;
-  if (run >= 4 && contained >= Math.ceil(short.length * 0.8)) {
-    const kept = w2.length >= w1.length ? s2 : s1;
-    return kept + rest;
-  }
-  return t;
-}
+const PROMO_LINE = /(اضغط|الرابط|على الرابط|فيسبوك|فيس بوك|يوتيوب|انستغرام|انستقرام|واتساب|تيك توك|Facebook|YouTube|Instagram|WhatsApp|TikTok|تفاصيل أكثر حال ورودها|التفاصيل تباعاً|بالسلامة للجميع|تابعونا)/iu;
 export function cleanPostText(raw) {
-  // Telegram/source text can include its "show more" control followed by the outlet's
-  // site/social footer. It is not part of the reported story. The control can glue to the
-  // preceding sentence with no whitespace («…مدينة ديرك.عرض المزيد وكالة أنباء هاوار…»).
-  const sourceText = String(raw || '').replace(/عرض المزيد(?=[\s.,:;،]|$)[\s\S]*$/iu, '').trim();
-  const lines = sourceText.split('\n').map((l) => l.replace(/https?:\/\/\S+/g, '').trim());
+  const lines = String(raw || '').split('\n').map((l) => l.replace(/https?:\/\/\S+/g, '').trim());
   const keep = [];
   for (const l of lines) {
     if (!l) { keep.push(''); continue; }
@@ -193,11 +148,10 @@ export function cleanPostText(raw) {
     if (SIGNATURE.test(l) && l.length < 160) continue;
     if (/^(https?:\/\/|www\.)\S+$/.test(l)) continue;
     if (/^[-ـ_—=•.]{3,}$/.test(l)) continue;
-    if (/^(#[\p{L}\p{N}_]+\s*)+$/u.test(l) && !/عاجل|متداول|غير_مؤكد|معلومات_أولية|معلومات_اولية/u.test(l)) continue; // hashtag-only line (#سانا, #الإخبارية_السورية)
+    if (/^(#[\p{L}\p{N}_]+\s*)+$/u.test(l) && !/عاجل/.test(l)) continue; // hashtag-only line (#سانا, #الإخبارية_السورية)
     keep.push(l);
   }
   let t = keep.join('\n').replace(/https?:\/\/\S+/g, '').replace(/\n{2,}/g, '\n').trim();
-  t = t.replace(OUTLET_TAIL, '').replace(PROMO_TAIL, '').trim();
   const breaking = /(^|[\s#|])عاجل/.test(t.slice(0, 40));
   t = t.replace(/^[\s#|🔴🚨⚡️⭕️❗️]*عاجل[\s|:：\-–—]*/u, '').trim();
   // "#بصرى_الشام" -> "بصرى الشام", "#درعا" -> "درعا"
@@ -206,6 +160,5 @@ export function cleanPostText(raw) {
   // anti-filter spellings: "الإسـ..ـرائيلي", "مقت.ل", "جثم.ان", "م.ش.ن.و.ق،اً", "حـ.ـ.ـ.ـ،،زب" -> plain words
   t = t.replace(/(\p{Script=Arabic})(?:[.*ـ،]*[.*ـ][.*ـ،]*|،+(?=[اى]|ً))(?=\p{Script=Arabic})/gu, '$1').replace(/ـ+/g, '');
   t = t.replace(/[📌🔹🔸▪️•●◾️✅🔻🔺]+/gu, '•').replace(/[ \t]+/g, ' ').trim();
-  t = dedupeLead(t);
   return { text: t, breaking };
 }

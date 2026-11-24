@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
-import { automaticMonitorRecipientIds, config } from './config.js';
+import { config } from './config.js';
 import { store } from './store.js';
 import { fetchChannel } from './news-sources.js';
 import { normalizeApplicationDeadline, isApplicationDeadlineExpired } from './application-deadline.js';
@@ -165,7 +165,7 @@ function publicArmyLinks(item) {
 }
 function titleFromText(text) {
   const line = String(text || '').split(/\r?\n/).map((x) => x.trim()).find(Boolean) || 'تحديث رسمي';
-  return wordTitle(line.replace(/<[^>]*>/g, ''));
+  return clean(line.replace(/<[^>]*>/g, ''), 120);
 }
 
 export function normalizeArmyChannelLink(kind, raw) {
@@ -223,19 +223,7 @@ export function armyState(root = store.state) {
   return j;
 }
 
-// 'من مرتبات الوزارة' means personnel, not pay. Match salary words as
-// words, and require explicit pay context for the ambiguous مرتبات term.
-const SALARY_TERMS = /(?:^|[\s:،؛.])(?:و|ف|ب|ل|ال)?(?:رواتب|راتب|اجور|تعويضات|علاوات|منحه ماليه|صرف المستحقات|salary|salaries|payroll|wages|pay raise|pay increase)(?=$|[\s:،؛.])/iu;
-const hasSalaryTerms = (text) => SALARY_TERMS.test(text)
-  || /(?:صرف|زياده|رفع|تسديد|دفع|جدول|سلم|تعديل)\s+(?:ال)?مرتبات(?=\s|$)/u.test(text)
-  || /(?:^|\s)(?:ال)?مرتبات\s+(?:شهريه|ماليه)(?=\s|$)/u.test(text);
-const wordTitle = (value, max = 120) => {
-  const text = clean(value, MAX_TEXT);
-  if (text.length <= max) return text;
-  const cut = text.slice(0, max - 1), boundary = cut.lastIndexOf(' ');
-  return (boundary > 0 ? cut.slice(0, boundary) : cut).trimEnd() + '…';
-};
-
+const SALARY_TERMS = /(?:رواتب|راتب|اجور|مرتبات|تعويضات|علاوات|منحه ماليه|صرف المستحقات|salary|salaries|payroll|wages|pay raise|pay increase)/iu;
 const RECRUITMENT_TERMS = /(?:انتساب|التحاق|التجنيد|تجنيد|التطوع|تطوع|متطوع|دوره افراد|recruitment|enlistment|recruiting|recruits?|volunteer(?:ing)?)/iu;
 const CLEAR_RECRUITMENT = /(?:فتح باب الانتساب|دوره افراد|التجنيد|انتساب.{0,55}(?:الجيش|الشرطه|القوات المسلحه|عسكري)|التحاق.{0,55}(?:الجيش|الشرطه|القوات المسلحه|عسكري)|(?:التطوع|تطوع).{0,55}(?:الجيش|الشرطه|القوات المسلحه|عسكري)|(?:army|police|security|armed forces).{0,55}(?:enlistment|recruitment|recruit|volunteer|join))/iu;
 const MILITARY_CONTEXT = /(?:الجيش|القوات المسلحه|وزاره الدفاع|وزاره الداخليه|عسكري|جندي|الشرطه|قوى الامن الداخلي|الامن العام|قوات الامن|المهام الخاصه|القوات الخاصه|army|armed forces|military|police|security forces|soldier)/iu;
@@ -253,7 +241,7 @@ function hasOfficialApplicationLink(text, links, sourceUsername) {
 
 export function salaryNewsKind(text, sourceUsername = '', links = []) {
   const n = norm(text);
-  const salary = hasSalaryTerms(n) && MILITARY_PAY_CONTEXT.test(n);
+  const salary = SALARY_TERMS.test(n) && MILITARY_PAY_CONTEXT.test(n);
   const recruitment = RECRUITMENT_TERMS.test(n) && (MILITARY_CONTEXT.test(n) || CLEAR_RECRUITMENT.test(n));
   if (CIVIL_WORK.test(n) && !CLEAR_RECRUITMENT.test(n)) return false;
   if (CIVIL_ACTIVITY.test(n) && !CLEAR_RECRUITMENT.test(n)) return false;
@@ -269,7 +257,7 @@ export function inferArmyCategory(text, sourceUsername = '', links = []) {
   const units = /(?:فرقه عسكريه|الفرق العسكريه|الفرقه|اللواء|الكتائب|كتيبه|فوج|وحدات عسكريه|military unit|brigade|battalion)/iu.test(n);
   const police = /(?:الشرطه|شرطي|وزاره الداخليه|قوى الامن الداخلي|police)/iu.test(n) || source === 'syrianmoi';
   const security = /(?:الاستخبارات|الامن العام|قوات الامن|الامن الداخلي|security)/iu.test(n);
-  const hasSalary = hasSalaryTerms(n);
+  const hasSalary = SALARY_TERMS.test(n);
   if (special) return 'special';
   if (units) return 'units';
   if (recruitment && hasOfficialApplicationLink(text, links, source)) return 'official_links';
@@ -318,7 +306,7 @@ export function createPendingArmyItem(input, j = armyState(), now = Date.now()) 
   const item = {
     id, kind, sourceKey, fingerprint, category,
     ...(category !== inferredCategory ? { categoryOverride: true } : {}),
-    title: wordTitle(input.title || titleFromText(text)) || 'تحديث رسمي',
+    title: clean(input.title || titleFromText(text), 120) || 'تحديث رسمي',
     text,
     sourceName: clean(input.sourceName || (kind === 'manual' ? 'إضافة الإدارة' : 'مصدر رسمي'), 100),
     sourceUrl,
@@ -356,7 +344,7 @@ export function updateArmyItem(id, patch, j = armyState(), by = null, now = Date
   const item = j.pending[id] || j.published[id];
   if (!item || j.deleted[id]) return { ok: false, error: 'not_found' };
   if (patch.title !== undefined) {
-    const title = wordTitle(patch.title);
+    const title = clean(patch.title, 120);
     if (title.length < 3) return { ok: false, error: 'title_required' };
     item.title = title;
   }
@@ -605,7 +593,7 @@ export async function notifyArmyPending(item, { force = false } = {}) {
   const j = armyState();
   const current = j.pending[item?.id];
   if (!current || (!force && current.notifiedAt)) return false;
-  const ids = automaticMonitorRecipientIds();
+  const ids = [...new Set((config.ownerIds || []).map(Number).filter(Number.isFinite))];
   if (!adminApi || !ids.length) return false;
   let success = 0;
   for (const owner of ids) {

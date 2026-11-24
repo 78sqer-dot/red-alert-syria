@@ -3,7 +3,7 @@
 // (owner card, never auto-published). Shown on the website (services panel tab + map layer).
 import crypto from 'node:crypto';
 import { InlineKeyboard, InputFile } from 'grammy';
-import { automaticMonitorRecipientIds, config, DEFAULT_PUBLIC_URL } from './config.js';
+import { config } from './config.js';
 import { store } from './store.js';
 import { normalizeArabic } from './places.js';
 import { renderBorderPng } from './alert-image.js';
@@ -12,7 +12,7 @@ const N = normalizeArabic;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const rid = () => crypto.randomBytes(4).toString('hex');
 const save = () => store.persist({ backupSoon: true });
-const siteUrl = () => (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
+const siteUrl = () => (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
 const when = (t) => new Intl.DateTimeFormat('ar-SY', { timeZone: config.timezone, weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(t));
 
 export const COUNTRIES = {
@@ -63,11 +63,10 @@ export function publicBorders(now = Date.now()) {
   const b = bstate().borders;
   return CROSSINGS.map((c) => {
     const s = b[c.id];
-    const age = now - Number(s?.ts);
-    const fresh = s && Number.isFinite(age) && Number(s.ts) > 0 && age >= 0 && age < STALE_MS && Object.hasOwn(BORDER_STATUS, s.st);
+    const fresh = s && now - s.ts < STALE_MS;
     return { id: c.id, country: c.country, country_ar: COUNTRIES[c.country].ar, country_en: COUNTRIES[c.country].en,
       name_ar: c.ar, other_ar: c.other, name_en: c.en, lat: c.lat, lon: c.lon,
-      status: fresh ? s.st : 'unknown', note: fresh ? s.note || '' : '', ts: Number.isFinite(Number(s?.ts)) && Number(s.ts) > 0 && age >= 0 ? Number(s.ts) : null, stale: Boolean(s && !fresh) };
+      status: fresh ? s.st : 'unknown', note: fresh ? s.note || '' : '', ts: s?.ts || null };
   });
 }
 const emit = () => store.emit?.('borders', publicBorders());
@@ -157,7 +156,7 @@ function suggText(sg, en) {
 async function sendSuggestion(sg) {
   const api = R.H?.apis().admin; if (!api) return;
   sg.cards = [];
-  for (const uid of automaticMonitorRecipientIds()) {
+  for (const uid of new Set(config.ownerIds)) {
     const en = store.userLang?.(uid) === 'en';
     try { const m = await api.sendMessage(uid, suggText(sg, en), { parse_mode: 'HTML', reply_markup: suggKb(sg, en), _keep: 'c' }); sg.cards.push([uid, m.message_id]); } catch { /* */ }
   }

@@ -6,7 +6,7 @@
 //  - Fuel: SANA's official feed for Ministry of Energy / pricing-committee decisions.
 // Wrong numbers are worse than none: every value is range-checked; with no verified official data, nothing is posted.
 import { InlineKeyboard, InputFile } from 'grammy';
-import { automaticMonitorRecipientIds, config, DEFAULT_PUBLIC_URL } from './config.js';
+import { config } from './config.js';
 import { store } from './store.js';
 import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge, badgeWidth } from './alert-image.js';
@@ -40,7 +40,7 @@ const H_MS = 3600_000;
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const siteUrl = () => (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
+const siteUrl = () => (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
 export const PRICE_TIMES = ['08:00', '08:30', '09:00', '09:30', '10:00', '11:00'];
 
 // ---------------------------------------------------------------- state
@@ -515,7 +515,7 @@ export function pricesSvg(st, now = Date.now()) {
   o.push(text(R, fy - 74, 'المصدر: مصرف سورية المركزي وقرارات المحروقات الحكومية المنشورة عبر سانا', { size: 17, weight: 500, fill: '#6b7280' }));
   o.push(text(R, fy - 48, 'لا تُعرض أسعار السوق الموازي أو الأسعار التجارية غير الرسمية · كل 1 ليرة جديدة تعادل 100 ليرة قديمة', { size: 17, weight: 500, fill: '#6b7280' }));
   o.push(`<rect x="${P}" y="${fy - 32}" width="${W - 2 * P}" height="1" fill="#1f2937"/>`);
-  o.push(text(R, fy + 6, DEFAULT_PUBLIC_URL.replace(/^https?:\/\//, ''), { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
+  o.push(text(R, fy + 6, 'red-alert-syria.onrender.com', { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
   const bh = 40; const bw = badgeWidth(bh);
   o.push(channelBadge(P, fy - bh + 14, { h: bh, dark: true }));
   void bw;
@@ -575,17 +575,7 @@ export async function postBulletin(api, { chatId = config.channel, test = false,
   return { ok: true, message_id: m.message_id, official: r.official };
 }
 async function notifyOwners(api, text) {
-  // bound each send: a stalled connection here must never wedge the scheduler's busy flag
-  for (const id of automaticMonitorRecipientIds()) {
-    try {
-      let cap;
-      await Promise.race([
-        api.sendMessage(id, text, { parse_mode: 'HTML' }),
-        new Promise((_, rej) => { cap = setTimeout(() => rej(new Error('notify timeout')), 15_000); cap.unref?.(); }),
-      ]);
-      clearTimeout(cap);
-    } catch { /* ignore */ }
-  }
+  for (const id of config.ownerIds || []) { try { await api.sendMessage(id, text, { parse_mode: 'HTML' }); } catch { /* ignore */ } }
 }
 let started = false;
 export function startPrices(getApi) {
@@ -607,14 +597,7 @@ export function startPrices(getApi) {
     busy = true;
     c.last = p.date; save(); // mark first: never twice the same day
     try {
-      // Hard cap on the whole post: a stalled upload/fetch must never wedge `busy` and silently
-      // kill every later tick (same failure shape as the missed 2026-11-19/20 weather bulletins).
-      let cap;
-      const r = await Promise.race([
-        postBulletin(api),
-        new Promise((_, rej) => { cap = setTimeout(() => rej(new Error('post timed out after 3 minutes')), 180_000); cap.unref?.(); }),
-      ]);
-      clearTimeout(cap);
+      const r = await postBulletin(api);
       if (!r.ok) {
         console.warn(`[prices] ${p.date}: not posted — ${r.why}`);
         await notifyOwners(api, `⚠️ <b>نشرة الأسعار لم تُنشر اليوم</b>\n\nالسبب: ${esc(r.why)}\nما نشرنا أرقام غير مؤكدة. تقدر تجرب لاحقاً من القائمة ← 💱 نشرة الأسعار ← «انشر الآن».`);
