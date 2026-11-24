@@ -20,7 +20,7 @@ const FONT_FILES = ['NotoKufiArabic-Regular.ttf', 'NotoKufiArabic-Bold.ttf', 'No
 const TZ = 'Asia/Damascus';
 
 const W = 1024;            // layout width (SVG units)
-const OUT_W = Number(process.env.ALERT_IMAGE_WIDTH) || 820; // PNG width: 820 = map tiles at native size (fast, sharp)
+const OUT_W = Number(process.env.ALERT_IMAGE_WIDTH) || 1280; // Higher-resolution channel photo; preserve map labels through Telegram compression.
 const HEAD = 136;          // header height (incl. 6px accent bar)
 const MAP_H = 768;         // map height
 const FOOT = 84;           // footer height
@@ -228,7 +228,7 @@ export async function alertImageSvg(alert, opts = {}) {
   o.push(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`);
   o.push(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
   // ---- map
-  o.push(`<clipPath id="mc"><rect x="0" y="${HEAD}" width="${W}" height="${MAP_H}"/></clipPath><filter id="mute" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0.42"/></filter><g clip-path="url(#mc)"><rect x="0" y="${HEAD}" width="${W}" height="${MAP_H}" fill="#f2efe9"/>`);
+  o.push(`<clipPath id="mc"><rect x="0" y="${HEAD}" width="${W}" height="${MAP_H}"/></clipPath><filter id="mute" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0.85"/></filter><g clip-path="url(#mc)"><rect x="0" y="${HEAD}" width="${W}" height="${MAP_H}" fill="#f2efe9"/>`);
   o.push('<g filter="url(#mute)">');
   for (const q of tiles) {
     if (!q.href) continue;
@@ -236,7 +236,7 @@ export async function alertImageSvg(alert, opts = {}) {
   }
   o.push('</g>');
   // soften the basemap a little so the alert stands out (like the reference)
-  o.push(`<rect x="0" y="${HEAD}" width="${W}" height="${MAP_H}" fill="#ffffff" opacity="0.18"/>`);
+  o.push(`<rect x="0" y="${HEAD}" width="${W}" height="${MAP_H}" fill="#ffffff" opacity="0.03"/>`);
   const px = (lat, lon) => [lon2x(lon, z) - left, lat2y(lat, z) - top + HEAD];
   if (zoned) {
     const dashed = t.zone === 'dashed';
@@ -306,7 +306,7 @@ export async function alertImageSvg(alert, opts = {}) {
   o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
   // ---- footer: note (multi-circle / aircraft) + time
   const notes = NOTE[en ? 'en' : 'ar'];
-  const note = referenceOnly ? (en ? 'Approximate geographic reference only, not incident location. No danger radius.' : 'مرجع جغرافي تقريبي فقط، لا موقع الحادث الدقيق ولا نطاق خطر') : type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
+  const note = country && alert.place?.name_ar ? (en ? 'Reported area only; precise incident point unverified. No location pin.' : 'المنطقة مذكورة في الخبر فقط؛ لم يُتحقق من موقع دقيق، دون دبوس') : referenceOnly ? (en ? 'Approximate geographic reference only, not incident location. No danger radius.' : 'مرجع جغرافي تقريبي فقط، لا موقع الحادث الدقيق ولا نطاق خطر') : type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
   const when = whenText(alert.timestamp || Date.now(), lang);
   const fy = HEAD + MAP_H;
   o.push(`<rect x="0" y="${fy}" width="${W}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${fy}" width="${W}" height="1.5" fill="#e2e8f0"/>`);

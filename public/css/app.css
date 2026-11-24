@@ -1312,7 +1312,7 @@ html.dark .uav-svg {
 .map-tool-grid > .dd > .map-btn > span:not(.badge-count), .map-tool-grid > .map-btn > span:not(.badge-count) { min-width: 0; }
 .map-tool-grid > #btnNotifications { grid-column: 1 / -1; }
 .map-tool-grid .badge-count { margin-inline-start: auto; }
-.map-control-actions { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
+.map-control-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 7px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
 .map-ctrl-panel .map-control-actions .ctrl-btn { width: 42px; height: 42px; flex: none; }
 .map-tools-close-icon { display: none; }
 #mapControlsToggle[aria-expanded='true'] .map-tools-icon { display: none; }
@@ -1455,3 +1455,5 @@ body.pp-docked .map-bottom-controls{display:none;}
 
 /* Credits remain accessible from the existing About circle after startup. */
 .map-credits-in-about:not(.map-credits-required) .maplibregl-ctrl-attrib{display:none;}
+
+.pp-news-panel blockquote.pp-desc{margin:10px 0 0;padding:10px 12px;border-inline-start:3px solid var(--blue);border-radius:8px;background:var(--bg-subtle);color:var(--text-primary);}

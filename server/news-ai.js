@@ -279,6 +279,7 @@ const TYPE_HELP = `- uav: drone (مسيّرة) flight, sighting or surveillance 
 - missile: missiles/rockets launched at, falling on or intercepted over a Syrian area
 - assassination: an explicitly reported completed or attempted targeted killing / assassination (اغتيال), including by gunfire; keep distinct from a generic attack
 - clashes: an explicit armed clash or exchange of fire between opposing groups/forces (اشتباكات مسلحة، مواجهات مسلحة، تبادل إطلاق النار); distinct from a one-sided attack or gunfire with no opposing sides
+- military_incursion with incursionKind=barrier: explicit establishment of a checkpoint (نصب حاجز مؤقت وتفتيش), not ordinary patrols or attacks on checkpoints.
 - patrol: a specifically reported military/security patrol at a Syrian place (دورية عسكرية، دورية إسرائيلية); use only for patrol presence, not a raid, shooting, or armed clash. This category always waits for human review. Keep singular/plural based on the source wording.
 - military_incursion: a clearly reported ground entry/penetration by troops or military vehicles into Syrian territory/a named place (توغل بري، توغلت قوات، دخلت آليات). Use this as the primary type when that is the main incident, even if a drone is also mentioned or explicitly flying; drone flight is secondary. Do NOT use it for a drone/air strike, an armed clash, or a separately reported attack as the main incident; choose that specific type instead. This category always waits for human review.
 - kidnapping: a recent, specific abduction or the rescue/release of a kidnapped person (اختطاف، تحرير مختطف); use this dedicated type when the abduction or rescue is the central event, rather than attack or arrest. A suspect's arrest in an old case alone is not a new kidnapping.
@@ -466,6 +467,14 @@ const nonviolentIsraeliGroundActivity = (text) => {
 const GROUND_INCURSION_ACTIONS = ['توغل', 'توغلت', 'توغلات', 'توغل بري', 'اجتياح بري', 'دخلت قوات', 'دخلت آليات', 'عبرت القوات', 'تسللت قوات', 'ground incursion', 'troops entered', 'forces entered', 'penetrated into'].map(N);
 const GROUND_FORCE_CONTEXT = ['قوات', 'قوة عسكرية', 'الجيش', 'جنود', 'آليات عسكرية', 'دبابات', 'الاحتلال', 'اسرائيلي', 'troops', 'forces', 'army', 'military'].map(N);
 const DIRECT_VIOLENCE_CUES = ['قصف', 'غارة', 'اطلاق نار', 'اطلاق النار', 'اشتباك', 'مقتل', 'اصيب', 'استهداف', 'انفجار', 'صاروخ', 'قذائف', 'هاون', 'اغتيال', 'هجوم مسلح', 'اعتداء مسلح', 'shooting', 'airstrike', 'drone strike'].map(N);
+export function isMineDiscoveryReport(text) {
+ const nt=N(String(text||''));return /(?:العثور|عثر|يعثر|اكتشاف)/.test(nt)&&/(?:لغم|الغام|عبوه|قنبله)/.test(nt)&&!hasActualExplosion(text)&&!hasReportedDirectViolence(text);
+}
+export function isCheckpointReport(text) {
+  const nt = N(String(text || ''));
+  return /(?:نصب|ينصب|تنصب|نصبت|اقامه|اقامت|يقيم|تقيم|انشاء|انشات)\s+(?:حاجز|حاجزا|حواجز)/.test(nt)
+    && !hasReportedDirectViolence(text) && !/(?:ازاله|ازالت|رفع|رفعت|لا تنصب|لم تنصب|لم تقم)/.test(nt);
+}
 export function isGroundIncursionReport(text) {
   const nt = N(String(text || ''));
   return GROUND_INCURSION_ACTIONS.some((word) => nt.includes(word))
@@ -503,9 +512,10 @@ export function ruleClassify(text, { breaking = false } = {}) {
   // mention in the body must not route an unrelated headline to that type's button.
   const kt = keywordTypes(evidence);
   const specificOther = kt.some((k) => !['attack', 'breaking', 'civil', 'weather'].includes(k));
-  const groundIncursion = isGroundIncursionReport(evidence) && !hasReportedDirectViolence(evidence);
+  const groundIncursion = (isCheckpointReport(evidence) || isGroundIncursionReport(evidence)) && !hasReportedDirectViolence(evidence);
   let type = groundIncursion ? 'military_incursion' : nonviolentIsraeliGroundActivity(evidence) && !specificOther ? 'breaking' : RULE_ORDER.find((k) => kt.includes(k));
   const smuggling = detectedSmugglingType(evidence);
+  if (isMineDiscoveryReport(evidence)) type = 'civil';
   if (smuggling && !hasActualExplosion(evidence)) type = smuggling; // ammunition/contraband keywords can overlap the generic explosion list
   if (type === 'helicopter' && HELI_ATTACK_W.some((w) => evidenceNorm.includes(w))) type = 'attack';
   if (type === 'brawl' && (kt.includes('shooting') || kt.includes('attack'))) type = 'attack';
@@ -562,6 +572,8 @@ export function refineType(type, text) {
   const evidenceText = labels.includes(N(firstLabel)) ? lines.slice(1).join('\n') : String(text || '');
   const nt = ' ' + N(evidenceText) + ' ';
   const any = (ws) => ws.some((w) => nt.includes(' ' + N(w) + ' ') || nt.includes(N(w)));
+  if (isMineDiscoveryReport(evidenceText) && ['explosion','attack','breaking','civil','none'].includes(type)) return 'civil';
+  if (isCheckpointReport(evidenceText) && ['patrol','military_incursion','breaking','civil','attack','none'].includes(type)) return 'military_incursion';
   if (any(PATROL_W) && ['breaking', 'civil', 'none'].includes(type) && !any([...CLASH_W, ...GUN_W, ...EXPL_W, ...AIRSTRIKE_W, ...UAV_STRIKE_W])) return 'patrol';
   if (any(CLASH_W) && ['attack', 'brawl', 'shooting', 'breaking', 'civil', 'weather', 'none', 'uav', 'warplane', 'helicopter'].includes(type)) return 'clashes';
   const smuggling = detectedSmugglingType(evidenceText);

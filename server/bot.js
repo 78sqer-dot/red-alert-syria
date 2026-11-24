@@ -1,3 +1,4 @@
+import { rojCorrectionCandidate, ROJ_CORRECTION_KEY, mineCorrectionCandidate, MINE_CORRECTION_KEY } from './roj-photo-correction.js';
 import {createHash} from 'node:crypto';
 import { BACKUP_NAME, isBackupName, encodeBackupAsync, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
 import { randomUUID } from 'node:crypto';
@@ -183,13 +184,15 @@ const nameKey = (x) => String(x || '').normalize('NFKD').replace(/[\u064B-\u065F
   .replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/^ال/, '').replace(/[\s\-'’.]/g, '').toLowerCase();
 function locName(loc, lang) {
   if (!loc) return '—';
+  const short = lang === 'en' ? loc.short_en : loc.short_ar;
+  if (short) return short;
   const n = lang === 'en' ? loc.name_en : loc.name_ar;
   const d = lang === 'en' ? loc.district_en : loc.district_ar;
   const g = lang === 'en' ? loc.governorate_en : loc.governorate_ar;
-  const cand = (loc.scope === 'place' || loc.scope === 'point') ? [n, d, g] : loc.scope === 'district' ? [n, g] : [n];
+  const cand = (loc.scope === 'place' || loc.scope === 'point') ? [n, g] : loc.scope === 'district' ? [n, g] : [n];
   const seen = new Set(); const parts = [];
   for (const x of cand) { const k = nameKey(x); if (!x || seen.has(k)) continue; seen.add(k); parts.push(x); }
-  return parts.join(lang === 'en' ? ', ' : '، ');
+  return parts.join(' - ');
 }
 // ---------------------------------------------------------------- formatting
 
@@ -287,10 +290,10 @@ export function channelPost(alert, { ended = false } = {}) {
   const desc = preserveStoryAttribution
     ? cleanAttributedNewsText(alert.description || '', privateSourceNames)
     : cleanAlertText(alert.description || '');
-  if (alert.type === 'breaking') sections.push(`<b>${esc(desc || alert.title)}</b>`);
+
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
-  if (alert.type !== 'breaking' && desc) sections.push(`<blockquote>${esc(desc)}</blockquote>`);
+  if (desc || alert.type === 'breaking') sections.push(`<blockquote>${esc(desc || alert.title)}</blockquote>`);
   if (alert.type === 'political') {
     const meta = alert.meta?.political || {};
     const category = POLITICAL_CATEGORIES[meta.category];
@@ -1200,6 +1203,31 @@ export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph =
     await new Promise((r) => setTimeout(r, gapMs));
   }
   return out;
+}
+// Photo edit succeeds before the live record changes. Exact baseline guard makes this one-shot.
+export async function correctRojPhotoOnce(api) {
+  if (store.state.maint?.[ROJ_CORRECTION_KEY]?.done) return {skipped:true};
+  const a = store.getAlert('3320c747-0028-45be-b13e-a3c81da25fbf');
+  const b = rojCorrectionCandidate(a);
+  if (!b || sanitizeAlertMedia(a.media)) return {skipped:true, reason:'exact original photo guard'};
+  const png = await withDeadline(alertImage(b, 'ar'), 30000);
+  await api.editMessageMedia(config.channel, a.channel_message_id,
+    InputMediaBuilder.photo(new InputFile(png, 'red-alert-syria-roj-1553.png'), {caption:channelCaption(b,{ended:!b.is_active}),parse_mode:'HTML'}),
+    {reply_markup:channelKeyboard(b)});
+  store.updateAlert(a.id, {title:b.title,title_en:b.title_en,place:b.place,extra:[],zones:null});
+  store.state.maint = {...store.state.maint,[ROJ_CORRECTION_KEY]:{done:new Date().toISOString(),post:1553}};
+  store.persist();
+  if (store.backup && !await store.flushBackup(true)) throw Error('Roj correction backup not confirmed');
+  return {ok:true,post:1553};
+}
+export async function correctMineDiscoveryOnce(api) {
+ if(store.state.maint?.[MINE_CORRECTION_KEY]?.done)return {skipped:true};
+ const a=store.getAlert('d991de89-fc86-409e-9f91-99e365c958aa'),b=mineCorrectionCandidate(a);
+ if(!b||sanitizeAlertMedia(a.media))return {skipped:true,reason:'exact original mine guard'};
+ const png=await withDeadline(alertImage(b,'ar'),30000);
+ await api.editMessageMedia(config.channel,a.channel_message_id,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-mine-1552.png'),{caption:channelCaption(b,{ended:!b.is_active}),parse_mode:'HTML'}),{reply_markup:channelKeyboard(b)});
+ store.updateAlert(a.id,{type:b.type,title:b.title,title_en:b.title_en,place:b.place,location:null,scope:'country',extra:[],zones:null});
+ store._logPatch(a.id,{ty:'civil'});store.state.maint={...store.state.maint,[MINE_CORRECTION_KEY]:{done:new Date().toISOString(),post:1552}};store.persist();if(store.backup&&!await store.flushBackup(true))throw Error('Mine correction backup not confirmed');return {ok:true,post:1552};
 }
 export async function alertImage(alert, lang = 'ar') {
   const p = alert.place || {};

@@ -100,7 +100,7 @@ function tagsOf(a) {
 }
 const hasLoc = (a) => !!(a.location && Number.isFinite(a.location.latitude) && Number.isFinite(a.location.longitude));
 function placeName(a) {
-  if (!hasLoc(a) || a.scope === 'country') return T.noLocation;
+  if (!a.place?.name_ar && (!hasLoc(a) || a.scope === 'country')) return T.noLocation;
   // several areas in one alert: list them all
   if (Array.isArray(a.more) && a.more.length) return [a.place || {}, ...a.more].map((x) => onePlace(x)).join(LANG === 'ar' ? ' · ' : ' · ');
   return onePlace(a.place || {});
@@ -112,8 +112,8 @@ function onePlace(p) {
   const key = (x) => String(x || '').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا')
     .replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/^ال/, '').replace(/[\s\-'’.]/g, '').toLowerCase();
   const seen = new Set(); const out = [];
-  for (const x of [n, d, g]) { const k = key(x); if (!x || seen.has(k)) continue; seen.add(k); out.push(x); }
-  return out.join(LANG === 'ar' ? '، ' : ', ');
+  for (const x of [n, g]) { const k = key(x); if (!x || seen.has(k)) continue; seen.add(k); out.push(x); }
+  return out.join(' - ');
 }
 const isLive = (a) => a.is_active && (a.expires_at == null || Date.parse(a.expires_at) > Date.now());
 // share links go through /<lang>/a/<id>: chat apps get a rich preview (the alert's map card), people land on the map
@@ -385,11 +385,11 @@ function popupHtml(a) {
   const rawMediaItems = Array.isArray(a.media_items) && a.media_items.length ? a.media_items : (a.media ? [a.media] : []);
   const mediaItems = ['photo', 'video'].map((type) => rawMediaItems.find((item) => item?.type === type)).filter(Boolean);
   const newsText = [titleOf(a), descOf(a)].filter((value) => String(value || '').trim()).join('\n');
-  const illustrationFallback = mediaItems.length === 0;
+  const illustrationFallback = false; // Only real attached photo/video creates a media action.
   const displayModes = availableAlertDisplayModes(newsText, mediaItems, { illustrationFallback });
   const displayMediaItems = mediaItems.length ? mediaItems : illustrationFallback ? [{ type: 'photo', illustration: true }] : [];
   const initialMode = initialAlertDisplayMode(displayModes);
-  const mediaActions = displayModes.length ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'محتوى التنبيه' : 'Alert content')}">${displayModes.map((mode) => {
+  const mediaActions = mediaItems.length ? `<div class="pp-media-actions" role="group" aria-label="${esc(LANG === 'ar' ? 'محتوى التنبيه' : 'Alert content')}">${displayModes.map((mode) => {
     const item = displayMediaItems.find((candidate) => candidate.type === mode);
     const label = mode === 'news' ? T.alertNewsTab : mode === 'video' ? T.videoTab : T.photoTab;
     const glyph = mode === 'news' ? 'news' : mode === 'video' ? 'mediaVideo' : 'mediaImage';
@@ -398,8 +398,8 @@ function popupHtml(a) {
   const titleRow = `<div class="pp-title-row"><p class="pp-title">${esc(titleOf(a))}</p></div>`;
   const newsPanel = displayModes.includes('news') ? `<section class="pp-news-panel" data-pp-news-panel role="region" aria-label="${esc(T.alertNewsTab)}"${initialMode !== 'news' ? ' hidden' : ''}><div class="pp-top">${badge(shown)}<span class="time">${timeLine(a.timestamp)}</span></div>
     ${distChip(a)}
-    ${Array.isArray(a.more) && a.more.length ? `<p class="pp-areas">${icon('locate', 13)} ${esc([a.place || {}, ...a.more].map((x) => (LANG === 'ar' ? x.name_ar : x.name_en || x.name_ar)).filter(Boolean).join(LANG === 'ar' ? '، ' : ', '))}</p>` : ''}
-    ${descOf(a) ? `<p class="pp-desc">${esc(descOf(a))}</p>` : ''}</section>` : '';
+    <p class="pp-areas">${icon('locate', 13)} ${esc(placeName(a))}</p>
+    ${descOf(a) ? `<blockquote class="pp-desc">${esc(descOf(a))}</blockquote>` : ''}</section>` : '';
   const activeMedia = displayMediaItems.find((item) => item.type === initialMode);
   const mediaViewer = displayMediaItems.length ? `<section class="pp-media-panel" data-pp-media-panel role="region" aria-label="${esc(LANG === 'ar' ? 'عرض الوسيط المرفق' : 'Attached media viewer')}"${initialMode === 'news' ? ' hidden' : ''}><div class="pp-media-content" data-pp-media-content>${activeMedia ? alertMediaFrameHtml(activeMedia, a.id) : ''}</div></section>` : '';
   const content = `${titleRow}${mediaActions}${newsPanel}${mediaViewer}`;

@@ -21,7 +21,7 @@ import { FUEL_NEWS_RE } from './fuel.js';
 import { fuelRecheckSoon } from './prices.js';
 const FUEL_HOOK = { at: 0 };
 const normalizeFuelText = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/\s+/g, ' ');
-import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight } from './news-ai.js';
+import { NEWS_TYPES, prefilter, buildPrompt, callGemini, rewriteArabicNews, rewriteSourceReviewReason, privateEditorialOutputReviewReason, finalizeRewriteOutput, resolvePlace, nameInText, ruleClassify, scanTextPlaces, aiStats, govCodeOf, mentionsSyria, refineType, weatherWarningInfo, hasNonWeatherSignal, inferPoliticalCategory, hasExplicitDroneFlight, isCheckpointReport } from './news-ai.js';
 import { setKeep } from './ui-clean.js';
 import { setSourceNames, cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy } from './clean-text.js';
 
@@ -1017,6 +1017,8 @@ async function nightSummaryTick() {
 export function toBotDraft(d) {
   newsState();
   if (publicDraftCopyIssue(d)) throw new Error('Private editorial or internal review text cannot be converted to a public alert');
+  const checkpoint = isCheckpointReport(d.sourceText || d.body || d.headline);
+  if (checkpoint && ['patrol','breaking','civil','military_incursion'].includes(d.type)) d = {...d,type:'military_incursion',incursionKind:'barrier'};
   const body = d.headline;
   const patrolText = N(`${d.headline || ''} ${d.body || ''}`);
   const patrolForm = d.type === 'patrol' ? (/دوريات|دوريتين|patrols|multiple patrols/.test(patrolText) ? 'plural' : 'singular') : null;
@@ -1127,7 +1129,7 @@ async function handleResult(it, r, known, pmap) {
   if (!r || !r.event || !NEWS_TYPES.includes(r.type)) { note(it, 'not an event'); return; }
   // ruleClassify already chooses from the primary headline; scanning the whole body
   // again here could let an unrelated secondary mention override that decision.
-  if (!r.rule) { const t2 = refineType(r.type, `${r.headline || ''}\n${it.text}`); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
+  { const t2 = refineType(r.type, `${r.headline || ''}\n${it.text}`); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
   if (r.type === 'weather' && !weatherWarningInfo(it.text)) { note(it, 'not an explicit actionable weather warning'); return; }
   // the AI linked it to a known incident / an earlier post of this batch
   let target = null;
@@ -1159,7 +1161,7 @@ async function handleResult(it, r, known, pmap) {
   if (!locs.length && r.type !== 'political') { note(it, 'no verified Syrian place found'); return; }
   if (capReached()) { note(it, 'hourly cap reached'); return; }
   const d = {
-    id: rid(), type: r.type, ...(r.type === 'helicopter' ? { intense: helicopterAuto(`${headline} ${it.text}`) } : {}), ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
+    id: rid(), type: r.type, ...(r.type === 'military_incursion' && isCheckpointReport(it.text) ? {incursionKind:'barrier'} : {}), ...(r.type === 'helicopter' ? { intense: helicopterAuto(`${headline} ${it.text}`) } : {}), ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
     loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
     droneRuleVersion: 1, dronePresence: hasExplicitDroneFlight(it.text),
@@ -1404,12 +1406,23 @@ export function mergeNewsFromBackup(o) {
 }
 function registerNewsMergeHook(){const hooks=store.mergeHooks ||= [];if(!hooks.includes(mergeNewsFromBackup))hooks.push(mergeNewsFromBackup);}
 registerNewsMergeHook();
+export async function correctPendingCheckpointDrafts() {
+  let changed = 0;
+  for (const d of Object.values(newsState().drafts)) {
+    if (d.status !== 'pending' || d.test || d.type !== 'patrol' || !isCheckpointReport(d.sourceText || d.body || d.headline)) continue;
+    d.type='military_incursion';d.incursionKind='barrier';delete d.patrolForm;
+    changed++;save();await refreshCards(d);
+  }
+  if (changed && store.backup && !await store.flushBackup(true)) throw Error('Checkpoint correction backup not confirmed');
+  return changed;
+}
 export function startNewsMonitor() {
   registerNewsMergeHook();
   if (!recoveryReady()) {setTimeout(startNewsMonitor,5000).unref?.();return;}
   if (R.started) return;
   R.started = true;
   newsState();
+  correctPendingCheckpointDrafts().catch(e => console.warn('[checkpoint correction]',e.message));
   roadMonitorActivationTime();
   for (const a of store.state.alerts || []) { try { rememberAlert({ ...a, place: a.place, more: a.extra, zones: [] }); } catch { /* ignore */ } }
   store.on('alert', (pa) => { try { rememberAlert(pa); } catch (e) { console.warn('[news] remember failed', e.message); } });

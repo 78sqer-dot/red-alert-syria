@@ -12,7 +12,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
+import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
@@ -523,6 +523,7 @@ async function start() {
       }
     };
     upReport();
+    setTimeout(() => correctRojPhotoOnce(bots.admin.api).then(() => correctMineDiscoveryOnce(bots.admin.api)).then(r => console.log('[roj-correction]', JSON.stringify(r))).catch(e => console.error('[roj-correction]', e.description || e.message)), 12000).unref();
     startDailySummary(bots.admin.api);
     startWxBulletin(() => bots.admin?.api); // 🌤 morning weather bulletin (separate post, default 08:00)
     startPrices(() => bots.admin?.api); // 💱 morning prices bulletin (in-app scheduler, Damascus time)
