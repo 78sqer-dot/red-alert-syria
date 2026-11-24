@@ -204,7 +204,7 @@ export class AlertMap {
       cooperativeGestures: false,
       locale: this.opts.lang === 'ar' ? { 'NavigationControl.ZoomIn': 'تكبير', 'NavigationControl.ZoomOut': 'تصغير' } : undefined,
     });
-    this.map.addControl(new M.AttributionControl({ compact: true, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · GeoNames · geoBoundaries' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
+    this.map.addControl(new M.AttributionControl({ compact: false, customAttribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames</a> · <a href="https://www.geoboundaries.org" target="_blank" rel="noopener">geoBoundaries</a>' }), this.opts.lang === 'ar' ? 'bottom-left' : 'bottom-right');
     this.map.addControl(new M.ScaleControl({ maxWidth: 110, unit: 'metric' }), this.opts.lang === 'ar' ? 'bottom-right' : 'bottom-left');
     window.__rasMap = this.map;
     this.map.on('style.load', () => this.addOverlays().catch((e) => console.warn('[map] overlays unavailable', e?.message || e)));

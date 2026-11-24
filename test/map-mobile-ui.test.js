@@ -37,10 +37,12 @@ test('map tools provide a return route from filter, layers, services', () => {
   assert.match(css, /\.dd-panel\.dd-sheet \{ position: fixed;/);
 });
 
-test('map attribution keeps a compact information button and readable credits', () => {
-  assert.match(map, /new M\.AttributionControl\(\{ compact: true, customAttribution:/);
-  assert.match(map, /OpenFreeMap<\/a> © <a href="https:\/\/www\.openstreetmap\.org\/copyright"/);
-  assert.match(map, /classList\.remove\('maplibregl-compact-show'\)/);
+test('map attribution replaces its information icon with visible readable credits', () => {
+  assert.match(map, /new M\.AttributionControl\(\{ compact: false, customAttribution:/);
+  assert.match(map, /OpenFreeMap<\/a>/);
+  assert.match(map, /GeoNames<\/a>/);
+  assert.match(css, /\.map-wrap \.maplibregl-ctrl-attrib-button\{display:none;/);
+  assert.match(css, /\.map-wrap \.maplibregl-ctrl-attrib \.maplibregl-ctrl-attrib-inner\{display:block;white-space:normal/);
   assert.match(css, /\.maplibregl-ctrl-attrib \.maplibregl-ctrl-attrib-inner \{[^}]*white-space: normal/);
   assert.match(css, /\.maplibregl-ctrl-attrib\.maplibregl-compact:not\(\.maplibregl-compact-show\) \{[^}]*width: 24px;[^}]*height: 24px/);
   assert.match(css, /html\[dir='rtl'\] \.maplibregl-ctrl-bottom-left \{[^}]*left: calc\(50% \+ 50px\);[^}]*transform: translateX\(-50%\)/);
@@ -79,9 +81,9 @@ test('alert details stay centered on the map and their popup tip points to the e
   assert.match(css, /\.pp-alert-popup \.pp, \.pp-group-popup \.alert-group-chooser \{[^}]*animation: popupEmergesFromEvent/);
   assert.match(css, /\.maplibregl-popup\.pp-alert-popup \.maplibregl-popup-tip, \.maplibregl-popup\.pp-group-popup \.maplibregl-popup-tip \{[^}]*drop-shadow/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*animation: none !important/);
-  assert.match(app, /from '\.\/map\.js\?v=84'/);
-  assert.match(html, /app\.css\?v=103/);
-  assert.match(html, /app\.js\?v=119/);
+  assert.match(app, /from '\.\/map\.js\?v=85'/);
+  assert.match(html, /app\.css\?v=104/);
+  assert.match(html, /app\.js\?v=120/);
 });
 
 test('changed type and icon modules use fresh cache keys', () => {
