@@ -5,7 +5,8 @@ const contains=(s,n)=>(' '+key(s)+' ').includes(' '+key(n)+' ');
 export function newsIncidentLocations(source,main,extra=[]) {
  const text=String(source||'');
  if(!text)return {location:main,extra};
- const matches=[...text.matchAll(/(?:^|[\s،,:؛])(?:بلدة|قرية|مخيم|مدينة|منطقة|منطقه|حي)\s+["«]?([\p{L}\s]{2,65}?)(?=["»،,:؛.\n]|\s+(?:بريف|ريف|شرقي|غربي|شمالي|جنوبي|شرق|غرب|شمال|جنوب|التابعة|التابعه|بمحافظة|بمحافظه|في محافظة|في محافظه)|$)/gu)].map(m=>m[1].trim());
+ const facility = text.match(/(?:^|[\s،,:؛])معبر\s+([\p{L}\s]{2,45}?)(?=\s+(?:الحدودي|بريف|في|بمحافظة)|[،,:؛.\n]|$)/u);
+ const matches=facility ? ['معبر '+facility[1].trim()] : [...text.matchAll(/(?:^|[\s،,:؛])(?:بلدة|قرية|مخيم|مدينة|منطقة|منطقه|حي)\s+["«]?([\p{L}\s]{2,65}?)(?=["»،,:؛.\n]|\s+(?:بريف|ريف|شرقي|غربي|شمالي|جنوبي|شرق|غرب|شمال|جنوب|التابعة|التابعه|بمحافظة|بمحافظه|في محافظة|في محافظه)|$)/gu)].map(m=>m[1].trim());
  const names=[...new Set(matches.map(key))];
  if(names.length!==1)return {location:main,extra:extra.filter(l=>contains(text,l.name_ar)&&!new RegExp('(?:التابعه|اداريا|ناحيه)\\s+(?:لناحيه\\s+)?'+N(l.name_ar)).test(N(text)))};
  const label=matches[0];

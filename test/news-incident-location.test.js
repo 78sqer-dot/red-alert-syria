@@ -26,3 +26,9 @@ test('named area west of another locality is one incident, not a second anchor s
  const source='لليوم الثلاثين على التوالي... مشاهد توثق تنفيذ قوات الاحتلال الإسرائيلي عمليات حفر وتجريف في منطقة المعكر، غربي صيدا الحانوت بريف القنيطرة';
  const r=newsIncidentLocations(source,maakar,[sayda]);assert.equal(r.location.place_id,31000001);assert.deepEqual(r.extra,[]);assert.equal(r.location.short_ar,'المعكر - القنيطرة');
 });
+
+test('border crossing name never borrows the town centre or danger radius',()=>{
+ const town=locationFrom({placeId:383661});
+ const r=newsIncidentLocations('اعتقال الإعلامي أثناء دخوله الأراضي السورية عبر معبر اليعربية الحدودي بريف الحسكة.',town,[]);
+ assert.equal(r.location.name_ar,'معبر اليعربية');assert.equal(r.location.latitude,undefined);assert.equal(r.location.short_ar,'معبر اليعربية - الحسكة');assert.deepEqual(r.extra,[]);
+});
