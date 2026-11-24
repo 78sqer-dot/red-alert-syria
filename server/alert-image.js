@@ -275,7 +275,8 @@ export async function alertImageSvg(alert, opts = {}) {
   }
   if (imageReference) {
     const [x,y]=px(center.lat,center.lon);
-    o.push(`<g id="reviewed-geographic-reference"><circle cx="${x}" cy="${y}" r="21" fill="#ef233c" fill-opacity=".05" stroke="#ef233c" stroke-opacity=".25" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="16" fill="none" stroke="#ef233c" stroke-opacity=".5" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/></g>`);
+    if(imageReference.approximate)o.push(`<g id="reviewed-approximate-location"><circle cx="${x}" cy="${y}" r="12" fill="#475569" stroke="#fff" stroke-width="4"/></g>`);
+    else o.push(`<g id="reviewed-geographic-reference"><circle cx="${x}" cy="${y}" r="21" fill="#ef233c" fill-opacity=".05" stroke="#ef233c" stroke-opacity=".25" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="16" fill="none" stroke="#ef233c" stroke-opacity=".5" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="10" fill="#475569" stroke="#fff" stroke-width="4"/></g>`);
   }
   // attribution (required by the tile licence)
   o.push(`<rect x="${W - 210}" y="${HEAD + MAP_H - 26}" width="210" height="26" fill="#ffffff" opacity="0.75"/>`);
@@ -340,10 +341,10 @@ export async function alertImageSvg(alert, opts = {}) {
   o.push(`<rect x="0" y="${fy}" width="${W}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${fy}" width="${W}" height="1.5" fill="#e2e8f0"/>`);
   const fx = W / 2;
   if (note) {
-    o.push(`<text x="${fx}" y="${fy + 34}" font-family="${FF}" font-size="21" fill="#94a3b8" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(note)}</text>`);
+    o.push(`<text x="${fx}" y="${fy + 34}" font-family="${FF}" font-size="21" fill="${imageReference?.approximate?'#475569':'#94a3b8'}" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(note)}</text>`);
     o.push(`<text x="${fx}" y="${fy + 66}" font-family="${FF}" font-size="19" fill="#94a3b8" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(when)}</text>`);
   } else {
-    o.push(`<text x="${fx}" y="${fy + 50}" font-family="${FF}" font-size="21" fill="#94a3b8" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(when)}</text>`);
+    o.push(`<text x="${fx}" y="${fy + 50}" font-family="${FF}" font-size="21" fill="${imageReference?.approximate?'#475569':'#94a3b8'}" text-anchor="middle"${en ? '' : ' direction="rtl"'}>${ttx(when)}</text>`);
   }
   o.push('</svg>');
   return o.join('');

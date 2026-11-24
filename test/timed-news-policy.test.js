@@ -47,4 +47,8 @@ test('professional cleanup removes outlet identity, feed footer and promo while 
  const raid=f('قوات الاحتلال الإسرائيلي تتحرك بسبع آليات في القرية التفاصيل',[]);assert.doesNotMatch(raid,/الاحتلال|التفاصيل/);assert.match(raid,/قوات إسرائيلية تتحرك بسبع آليات/);
 });
 test('claim status changed while durable write awaits prevents wire send',async()=>{const d=setup();let calls=0;store.flushBackup=async()=>{if(++calls===2)d.status='ignored';return true;};await mon._test.timedNewsTick();assert.equal(sends,0);});
+test('new Hama card keeps full copy and gets signed approximate locality without changing policy or public incident coordinates',async()=>{
+ const d=setup();d.sourceText='إصابة 5 أشخاص جراء مشاجرة جماعية بالقرب من السكن الجامعي بمدينة حماة.';
+ const prior=structuredClone(mon.newsState().timedPolicy);await mon._test.timedNewsTick();assert.equal(sends,1);const a=store.state.alerts[0];const m=a.meta.reviewedNewsCopy.envelope.manifest;assert.equal(m.localityReference.name_ar,'حماة');assert.match(m.imageContext.label_ar,/موقع تقريبي/);assert.equal(a.location,null);assert.deepEqual(mon.newsState().timedPolicy,prior);assert.ok(a.body.includes(d.sourceText));
+});
 test.after(()=>{store.backup=null;store.flushBackup=flush;mon._test.R.H=null;mon._test.R.rewriteImpl=null;});

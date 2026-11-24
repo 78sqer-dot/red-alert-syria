@@ -1,3 +1,4 @@
+import {sourceCardLocality} from './news-card-locality.js';
 import { timedNewsDue, timedNewsEligible, timedNewsWindow } from './timed-news-policy.js';
 import { alertShareUrl } from './alert-share-url.js';
 import {resolveReviewedLocality} from './reviewed-locality.js';
@@ -1068,6 +1069,8 @@ async function prepareTimedProfessional(d, { native = false } = {}) {
   if (publicSources.some(s => {try {return !['http:','https:'].includes(new URL(s.url).protocol);}catch{return true;}})) throw Error('invalid-professional-source-url');
   const review = {kind:'automatic-source-bound-professional-rewrite',sourceReadBy:'server',independentlyVerified:false,copyMode:'faithful-source-attributed-framing',nativeApproval:native};
   const manifest = {version:2,reviewHash:reviewedCopyHash(review),draftId:d.id,type:'breaking',title,title_en:'News report about Syria',body,location:'سوريا',sourceBinding:reviewedSourceBinding(d),publicSourcesHash:reviewedCopyHash(publicSources),approvalReference:SUMMARY_AUTHORITY_REFERENCE,authorityReference:SUMMARY_AUTHORITY_REFERENCE,singleSourceAcknowledgement:true,verification:'source-attributed-not-independently-verified',imageHeading:{ar:'تقرير إخباري عن سوريا',en:'News report about Syria'},imageContext:{latitude:34.85,longitude:38.6,zoom:5,label_ar:'سياق: سوريا',label_en:'Context: Syria',note_ar:'سياق عام لسوريا، وليس موقع الحادث',note_en:'General Syria context, not an incident location.'}};
+  const cardLocality=sourceCardLocality(source,publicSources.map(s=>s.url));
+  if(cardLocality){manifest.localityReference=cardLocality;manifest.imageContext=cardLocality;}
   const prior = structuredClone(d);
   Object.assign(d,{type:'breaking',headline:title,body,loc:{...locationFrom({}),name_ar:'سوريا',name_en:''},extra:[],politicalCategory:null,politicalNeedsCategory:false,editorialHold:true,editorialHoldReason:'reviewed-summary-needs-separate-publish',dayAutoAt:null});
   delete d.privateEditorial; delete d.aiRewritePreview; delete d.autoMode;
@@ -2412,7 +2415,7 @@ export async function prepareReviewedSummary(id,request={}) {
   if(r.independently_verified&&(d.srcs||[]).every(s=>s.local))throw Error('summary-local-independent-verification-unsupported');
   if(!r.independently_verified&&!/(?:أفاد|أورد|ذكر|نقل|بحسب|وفق|تقرير|مصدر)/u.test(c.body))throw Error('summary-attribution-required');
   if(!r.independently_verified&&!/(?:لم نتحقق|لم يتسن.{0,20}التحقق|لم يُتحقق)/u.test(c.body))throw Error('summary-verification-caveat-required');
-  const localityReference=resolveReviewedLocality(c.locality_reference,{sourceText:d.sourceText,evidenceUrls:r.evidence_urls});
+  const localityReference=resolveReviewedLocality(c.locality_reference,{sourceText:d.sourceText,evidenceUrls:r.evidence_urls})||sourceCardLocality(d.sourceText,r.evidence_urls);
   const sourceRecords=(d.srcs||[]).map(s=>({name:s.name||s.u||'',url:s.url,timestamp:Number.isFinite(s.ts)?new Date(s.ts).toISOString():null}));
   const m={version:2,reviewHash:reviewedCopyHash(r),draftId:id,type:c.type,title:c.title,title_en:c.title_en,body:c.body,location:'سوريا',sourceBinding:reviewedSourceBinding(d),publicSourcesHash:reviewedCopyHash(sourceRecords),approvalReference:SUMMARY_AUTHORITY_REFERENCE,authorityReference:SUMMARY_AUTHORITY_REFERENCE,singleSourceAcknowledgement:r.single_source_acknowledged,verification:r.independently_verified?'operator-source-reviewed':'source-attributed-not-independently-verified',imageHeading:{ar:c.image_heading_ar,en:c.image_heading_en},imageContext:{latitude:34.85,longitude:38.6,zoom:5,label_ar:'سياق: سوريا',label_en:'Context: Syria',note_ar:'تقرير إخباري، الموقع الدقيق غير محدد',note_en:'News report. Exact incident location is unknown.'}};
   if(localityReference){m.localityReference=localityReference;m.imageContext={...localityReference};}

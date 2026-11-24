@@ -1,4 +1,4 @@
-import {getPlace,normalizeArabic} from './places.js';
+import {getPlace,getGov,normalizeArabic} from './places.js';
 const containsPlaceName=(quote,name)=>(' '+normalizeArabic(quote).replace(/[^\p{L}\p{N}]+/gu,' ').trim()+' ').includes(' '+normalizeArabic(name).replace(/[^\p{L}\p{N}]+/gu,' ').trim()+' ');
 export function resolveReviewedLocality(input,{sourceText,evidenceUrls}={}){
  if(input==null)return null;
@@ -9,7 +9,8 @@ export function resolveReviewedLocality(input,{sourceText,evidenceUrls}={}){
 }
 export function validatedManifestLocality(m){
  const ref=m?.localityReference;if(!ref)return null;
+ if(ref.level==='governorate'){const g=getGov(ref.governorateCode);return ref.kind==='locality_reference'&&g&&g.lat===ref.latitude&&g.lon===ref.longitude&&g.ar===ref.name_ar&&ref.label_ar==='موقع تقريبي: محافظة '+g.ar?ref:null;}
  const p=getPlace(ref.placeId);
- if(ref.kind!=='locality_reference'||!p||p.region||p.rank>5||p.lat!==ref.latitude||p.lon!==ref.longitude||p.ar!==ref.name_ar||ref.label_ar!=='مرجع جغرافي: '+p.ar)return null;
+ if(ref.kind!=='locality_reference'||!p||(p.region&&ref.level!=='region')||p.rank>5||p.lat!==ref.latitude||p.lon!==ref.longitude||p.ar!==ref.name_ar||![('مرجع جغرافي: '+p.ar),('موقع تقريبي: '+p.ar)].includes(ref.label_ar))return null;
  return ref;
 }
