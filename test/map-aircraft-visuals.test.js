@@ -163,3 +163,15 @@ test('movement stays anchored to the observed location and draws only the select
   assert.match(mapJs, /&& Number\.isFinite\(a\.location\?\.latitude\) && Number\.isFinite\(a\.location\?\.longitude\)/);
   assert.match(css, /\.map-flight-track-marker\.is-plane \.map-flight-track-svg \{ transform: rotate\(-45deg\); \}/);
 });
+
+test('owner clarification 2026-11-25: the formation is the approved live plane glyph x3, nothing new', async () => {
+  const markerSvgs = await readFile(new URL('../public/js/marker-svgs.js', import.meta.url), 'utf8');
+  const targetSvgs = await readFile(new URL('../public/js/target-svgs.js', import.meta.url), 'utf8');
+  // exactly one plane glyph exists in the map code, and no override shadows it
+  assert.equal((markerSvgs.match(/"plane":/g) || []).length, 1);
+  assert.doesNotMatch(targetSvgs, /"plane":/);
+  // every aircraft rendering goes through the same svgTag() with the same blue
+  assert.match(mapJs, /const iconColor = aircraft === 'uav' \? color : '#3b8eff';/);
+  assert.match(mapJs, /airframe\.innerHTML = svgTag\(aircraft, slot\.size, `fill="\$\{iconColor\}" class="map-flight-track-svg"`\);/);
+  assert.match(mapJs, /svgTag\(aircraftGlyph, size, `fill="\$\{visual\.color\}" class="flight-svg"`\)/);
+});
