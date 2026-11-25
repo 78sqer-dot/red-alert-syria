@@ -7,6 +7,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { ALERT_TYPES, TYPE_KEYS } from '../shared/types.js';
 import { SVG as GLYPHS } from '../public/js/marker-svgs.js';
 import { store } from './store.js';
+import { config, DEFAULT_PUBLIC_URL } from './config.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FONT_DIR = path.join(ROOT, 'assets', 'fonts');
@@ -335,7 +336,7 @@ export function statsSvg(st, lang = 'ar') {
   // ---- footer
   const fy = H - 34;
   out.push(`<rect x="${P}" y="${fy - 40}" width="${W - 2 * P}" height="1" fill="#1f2937"/>`);
-  out.push(text(rtl ? R : P, fy, 'red-alert-syria.onrender.com', { size: 22, weight: 700, fill: '#cbd5e1', anchor: A, family: 'Noto Sans' }));
+  out.push(text(rtl ? R : P, fy, (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/^https?:\/\//, '').replace(/\/$/, ''), { size: 22, weight: 700, fill: '#cbd5e1', anchor: A, family: 'Noto Sans' }));
   const bh = 42; const bw = badgeWidth(bh);
   out.push(channelBadge(rtl ? P : R - bw, fy - bh + 12, { h: bh, dark: true }));
   out.push('</svg>');
