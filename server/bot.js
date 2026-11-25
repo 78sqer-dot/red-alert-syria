@@ -1,5 +1,5 @@
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
-import { ensureDraftCardLocation, MissingCardLocationError } from './publish-location-guard.js';
+import { ensureDraftCardLocation, MissingCardLocationError, LOCATION_TEXT_CONFLICT_REASON } from './publish-location-guard.js';
 import { rojCorrectionCandidate, ROJ_CORRECTION_KEY, mineCorrectionCandidate, MINE_CORRECTION_KEY } from './roj-photo-correction.js';
 import {createHash} from 'node:crypto';
 import { BACKUP_NAME, isBackupName, encodeBackupAsync, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
@@ -1370,7 +1370,16 @@ export async function publishDraft(api, d, author) {
   // Location guard (owner order 2026-11-24): the same bind-or-hold rule at
   // the shared entry — no caller (manual review, report review, reviewed
   // operator) can publish a bare whole-country map card.
-  if (ensureDraftCardLocation(d).action === 'held') throw new MissingCardLocationError();
+  const locGuard = ensureDraftCardLocation(d);
+  if (locGuard.action === 'held') {
+    if (locGuard.reason === LOCATION_TEXT_CONFLICT_REASON) {
+      const e = new Error('النشر متوقف: الموقع المحدد يتعارض مع المكان المذكور في نص الخبر أو مصدره. راجع الموقع أولاً.');
+      e.name = 'MissingCardLocationError';
+      e.code = LOCATION_TEXT_CONFLICT_REASON;
+      throw e;
+    }
+    throw new MissingCardLocationError();
+  }
   return publishInput(api, buildAlertInput(d, author));
 }
 /** Update an existing alert and its existing channel post in place. */

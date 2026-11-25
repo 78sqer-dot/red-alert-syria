@@ -2157,6 +2157,16 @@ export function registerNewsTools(bot, h) {
       await suppressDuplicateDraft(d, duplicate, ctx.from.id);
       return toast(ctx, t(ctx, '✔️ مُنع النشر: هذا الحدث مسجل مسبقاً. لم يُحذف أي منشور.', '✔️ Publishing blocked: this event is already recorded. No post was deleted.'));
     }
+    // Location guard BEFORE the claim (Saqr's correction, 2026-11-25): the
+    // shared publish entry throws on a held draft, and a throw landing after
+    // the claim left a dangling claim mislabelled «uncertain» even though
+    // nothing was ever sent. Check first; claim only a publishable draft.
+    const locGuard = ensureDraftCardLocation(d);
+    if (locGuard.action === 'held') {
+      return toast(ctx, locGuard.reason === 'location-text-conflict'
+        ? t(ctx, '⚠️ الموقع المحدد يتعارض مع المكان المذكور في نص الخبر أو مصدره. راجع الموقع أولاً.', '⚠️ The set location conflicts with the place named in the text/source. Review the location first.')
+        : t(ctx, '⚠️ لا موقع محدداً ولا مكان قابلاً للتحديد في النص — حدّد الموقع أولاً.', '⚠️ No location set and no identifiable place in the text — pick the location first.'), true);
+    }
     // publish: claimed once, so a second tap / a second reviewer can't publish it twice
     if (!await durablePublicationClaim(d)) return toast(ctx, t(ctx,'توقّف النشر لحماية البيانات، تعذّر تثبيت حجز المسودة.','Publishing paused: draft claim could not be confirmed.'),true);
     await toast(ctx, t(ctx, '⏳ جاري النشر…', '⏳ Publishing…'));
@@ -2165,6 +2175,14 @@ export function registerNewsTools(bot, h) {
     try {
       alert = await h.publishDraft(ctx.api, toBotDraft(d), { id: ctx.from.id, name: ctx.from.first_name, via: 'news' });
     } catch (e) {
+      if (e?.name === 'MissingCardLocationError') {
+        // The guard stopped the publish before anything was sent: release
+        // the claim cleanly — this is NOT an uncertain send.
+        d.status = 'pending';
+        delete d.nativeReview;
+        save();
+        return toast(ctx, t(ctx, '⚠️ توقّف النشر: راجع موقع الخبر أولاً.', '⚠️ Publishing stopped: review the alert location first.'), true);
+      }
       await uncertainPublication(d);
       console.error('[news] publish failed', e.description || e.message);
       try { await ctx.editMessageText(cardText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id), link_preview_options: { is_disabled: true } }); } catch { /* ignore */ }

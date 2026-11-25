@@ -88,9 +88,14 @@ test('guard holds when the text names two different incident places (no unique b
   assert.equal(ensureDraftCardLocation(d).action, 'held');
 });
 
-test('guard leaves a draft that already has a location untouched, even if the text names another place', () => {
+test('guard leaves a located draft untouched when its text names no conflicting place', () => {
+  // Superseded expectation (Saqr's correction 2026-11-25): the old version
+  // of this test pinned the bypass he flagged — a located draft passed even
+  // when its text named a different place. Now: no unique text place (or a
+  // matching one) leaves the location untouched; a positive conflict holds
+  // (covered by the corrections tests below).
   const loc = locationFrom({ placeId: 169292 });
-  const d = { type: 'explosion', location: loc, headline: '', sourceText: 'وقع انفجار في مدينة حلب مساء اليوم.' };
+  const d = { type: 'explosion', location: loc, headline: '', sourceText: NO_PLACE_TEXT };
   assert.deepEqual(ensureDraftCardLocation(d), { action: 'present' });
   assert.equal(d.location, loc);
 });
@@ -138,4 +143,36 @@ test('nameInText: the gazetteer primary name matches its ة-form in the text (th
   assert.equal(nameInText('جدوع', JADUA_TEXT), true);
   assert.equal(nameInText('جدوعة', JADUA_TEXT), true);
   assert.equal(nameInText('الصنمين', JADUA_TEXT), false, 'absent places still fail the anti-invention check');
+});
+
+test("Saqr's corrections (2026-11-25): headline and source naming different places is a conflict, never a first-wins bind", () => {
+  // His synthetic, with the project's own live places: the outgoing copy
+  // names جدوعة (binds جدوع, Hama) while the source names رجم العجوز (Raqqa).
+  const d = { type: 'explosion', location: locationFrom({}), headline: JADUA_TEXT, sourceText: RAJM_TEXT };
+  const r = ensureDraftCardLocation(d);
+  assert.equal(r.action, 'held');
+  assert.equal(r.reason, 'location-text-conflict');
+  assert.equal(d.location?.scope, 'country', 'nothing was bound over the conflict');
+  // and the resolver itself reports the disagreement instead of picking one
+  assert.equal(resolveDraftPlaceId(d), null);
+});
+
+test("Saqr's corrections: a pre-existing location is re-verified against the text — a mismatch holds, a match passes", () => {
+  const jaduaLoc = locationFrom({ placeId: 169292 });
+  const matching = { type: 'assassination', location: jaduaLoc, headline: JADUA_TEXT, sourceText: JADUA_TEXT };
+  assert.equal(ensureDraftCardLocation(matching).action, 'present', 'bound place == text place: passes');
+  const mismatched = { type: 'explosion', location: jaduaLoc, headline: RAJM_TEXT, sourceText: RAJM_TEXT };
+  const r = ensureDraftCardLocation(mismatched);
+  assert.equal(r.action, 'held', 'coordinates naming جدوع over a رجم العجوز text no longer sail through');
+  assert.equal(r.reason, 'location-text-conflict');
+});
+
+test("Saqr's corrections: the manual publish path checks the guard before claiming, and a guard throw never becomes «uncertain»", () => {
+  const monitor = fs.readFileSync(new URL('../server/news-monitor.js', import.meta.url), 'utf8');
+  const guardAt = monitor.indexOf('Location guard BEFORE the claim');
+  const claimAt = monitor.indexOf('if (!await durablePublicationClaim(d)) return toast', guardAt);
+  assert.ok(guardAt > 0 && claimAt > guardAt, 'the guard runs before durablePublicationClaim in the manual path');
+  const catchAt = monitor.indexOf("e?.name === 'MissingCardLocationError'", claimAt);
+  const uncertainAt = monitor.indexOf('await uncertainPublication(d);', claimAt);
+  assert.ok(catchAt > claimAt && catchAt < uncertainAt, 'the catch releases a guard-stopped claim instead of marking the send uncertain');
 });

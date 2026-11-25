@@ -23,10 +23,11 @@
 // signed geography and are never the bare-card failure. Political
 // statements, flight movements and weather warnings are likewise exempt —
 // country scope is a designed state for them, not a missing location.
-import { locationFrom, mentionedGovernorates, normalizeArabic } from './places.js';
+import { locationFrom, getPlace, mentionedGovernorates, normalizeArabic } from './places.js';
 import { scanTextPlaces, resolvePlace } from './news-ai.js';
 
 export const MISSING_CARD_LOCATION_REASON = 'missing-location';
+export const LOCATION_TEXT_CONFLICT_REASON = 'location-text-conflict';
 export const CARD_LOCATION_BOUND_CORRECTION = 'location-bound-from-text';
 
 export const CARD_LOCATION_EXEMPT_TYPES = new Set(['political', 'air_movement', 'civil_plane', 'weather']);
@@ -96,19 +97,35 @@ export function placeIdFromText(text) {
   return ids.size === 1 ? [...ids][0] : null;
 }
 
-/** The single identifiable place in the draft's own text, or null. */
-export function resolveDraftPlaceId(d) {
+/** The draft's texts, in desk order: the outgoing copy first, then the source. */
+function draftTexts(d) {
   const texts = [];
   const add = (t) => { const s = String(t || '').trim(); if (s && !texts.includes(s)) texts.push(s); };
   add([d?.headline, d?.body].filter(Boolean).join('\n'));
   add(d?.sourceText);
   add([d?.title, d?.description].filter(Boolean).join('\n'));
   add(d?.searchSourceText);
-  for (const text of texts) {
+  return texts;
+}
+
+/** Cross-checked place resolution (Saqr's correction, 2026-11-25): every
+ * text of the draft that yields a unique place must agree on the SAME
+ * place. The old resolver returned the first text's hit without ever
+ * looking at the others, so a Damascus headline over an Aleppo source
+ * bound Damascus. Disagreement is a conflict — never a silent first-wins. */
+export function resolveDraftPlace(d) {
+  const ids = new Set();
+  for (const text of draftTexts(d)) {
     const id = placeIdFromText(text);
-    if (id != null) return id;
+    if (id != null) ids.add(id);
   }
-  return null;
+  if (ids.size > 1) return { placeId: null, conflict: true };
+  return { placeId: ids.size === 1 ? [...ids][0] : null, conflict: false };
+}
+
+/** The single identifiable place in the draft's own text, or null. */
+export function resolveDraftPlaceId(d) {
+  return resolveDraftPlace(d).placeId;
 }
 
 /** Run the guard on a draft (either location convention: d.location for
@@ -117,13 +134,31 @@ export function resolveDraftPlaceId(d) {
  * recorded reason and means: do not publish. */
 export function ensureDraftCardLocation(d) {
   if (!cardLocationGuardApplies(d)) return { action: 'exempt' };
-  if (draftCardLocationState(d) === 'present') return { action: 'present' };
-  const placeId = resolveDraftPlaceId(d);
-  const loc = placeId == null ? null : locationFrom({ placeId });
+  const resolved = resolveDraftPlace(d);
+  if (resolved.conflict) return { action: 'held', reason: LOCATION_TEXT_CONFLICT_REASON };
+  if (draftCardLocationState(d) === 'present') {
+    // Saqr's correction (2026-11-25): a pre-existing location no longer
+    // bypasses verification. When the draft's own texts uniquely name a
+    // place, it must be the bound one (same place, or at least the same
+    // governorate for district/governorate-scope locations) — a positive
+    // mismatch holds the publish for review instead of shipping a card
+    // pinned somewhere the text never said.
+    const loc = d.location || d.loc || null;
+    if (resolved.placeId != null && loc) {
+      if (loc.place_id != null) {
+        if (Number(loc.place_id) !== Number(resolved.placeId)) return { action: 'held', reason: LOCATION_TEXT_CONFLICT_REASON };
+      } else if (loc.governorate) {
+        const p = getPlace(resolved.placeId);
+        if (p && p.gov !== loc.governorate) return { action: 'held', reason: LOCATION_TEXT_CONFLICT_REASON };
+      }
+    }
+    return { action: 'present' };
+  }
+  const loc = resolved.placeId == null ? null : locationFrom({ placeId: resolved.placeId });
   if (!loc) return { action: 'held', reason: MISSING_CARD_LOCATION_REASON };
   d.location = loc;
   d.loc = loc;
-  return { action: 'bound', placeId, location: loc };
+  return { action: 'bound', placeId: resolved.placeId, location: loc };
 }
 
 /** Thrown by the shared publish entry when the guard holds a draft, so a
