@@ -514,7 +514,15 @@ const STRIKE = new Set(['attack', 'artillery', 'airstrike', 'explosion']);
 const CIVIL = new Set(['civil', 'accident', 'fire', 'civil_plane', 'explosion']);
 const WINDOW_MIN = { uav: 120, uav_strike: 120, warplane: 120, helicopter: 120, airstrike: 180, missile: 180, attack: 360, assassination: 360, artillery: 360, explosion: 360, civil: 360, accident: 360, fire: 360, civil_plane: 240, protest: 480, breaking: 360, weather: 720 };
 const sameFamily = (a, b) => a === b || (AIR.has(a) && AIR.has(b)) || (STRIKE.has(a) && STRIKE.has(b)) || ((a === 'civil' || b === 'civil') && CIVIL.has(a) && CIVIL.has(b));
-const tokens = (s) => new Set(N(s).split(' ').filter((w) => w.length >= 3).map((w) => (w.startsWith('ال') && w.length > 4 ? w.slice(2) : w)));
+// Canonical token form: glued prepositions are orthography, not content —
+// «بالحسكة» and «الحسكة» are the same token, «بمدينة» is «مدينة» (a single
+// clitic strips only when a >=4-char remainder survives, so «كتاب» is safe).
+const canonTok = (w) => {
+  let x = w.replace(/^(وب|وال|بال|لل|فال)/, 'ال');
+  if (x.length >= 5 && 'وبلك'.includes(x[0])) x = x.slice(1);
+  return x.startsWith('ال') && x.length > 4 ? x.slice(2) : x;
+};
+const tokens = (s) => new Set(N(s).split(' ').filter((w) => w.length >= 3).map(canonTok));
 function textSim(a, b) {
   const A = tokens(a), B = tokens(b);
   if (!A.size || !B.size) return 0;
@@ -527,6 +535,62 @@ function near(g1, g2) {
   if ((g1.coarse || g2.coarse) && g1.govs.some((g) => g2.govs.includes(g))) return true;
   return false;
 }
+// --- One event = one channel post (owner order 2026-11-26 00:05, sharpened
+// 00:07: «ينشر واحد ويحذف ٩» — a same-event follow-up is DELETED by the
+// monitor, never published, never held). Tonight's Hasakah/Mushairifa event
+// shipped ~11 posts because the classic matcher demands the same type
+// family and compares sparse headlines only: one attack re-reported as
+// clashes / explosion / attack / martyrdom / breaking could never match.
+// The strong rule judges the EVENT, not the wording: same place (geo near)
+// + inside the window + hard evidence from the full texts — an identical
+// casualty signature, or a shared distinctive token (a named locality or
+// object, not news glue) with real content overlap. A genuinely different
+// incident in the same city shares the place but not the evidence, and
+// still publishes normally: grouping is per-event, never per-city.
+const EVENT_GLUE = new Set(['أمن', 'أمنية', 'الأمن', 'قوات', 'عناصر', 'مصادر', 'محلية', 'أفاد', 'أفادت', 'بأن', 'في', 'من', 'إلى', 'على', 'ريف', 'محافظة', 'مدينة', 'منطقة', 'اليوم', 'مساء', 'صباح', 'سماع', 'أصوات', 'دوي', 'تفيد', 'يفيد', 'قال', 'قالت', 'ذكر', 'ذكرت', 'ورد', 'الآن', 'دون', 'وقوع', 'تسجيل', 'معلومات', 'أنباء', 'عاجل', 'خبر', 'اشتباكات', 'انفجار', 'هجوم', 'قصف', 'استهداف', 'مقتل', 'إصابة', 'جرحى', 'قتلى', 'شهداء', 'شهداء', 'أدى', 'أدت', 'ناجم', 'نتيجة', 'إثر', 'عقب', 'قام', 'قامت', 'تم', 'بين', 'لدى', 'ضد', 'عند', 'لعناصر', 'العناصر', 'للأمن', 'الأمنية', 'الداخلي', 'الداخلية'].map((w) => { const n = N(w); return n.startsWith('ال') && n.length > 4 ? n.slice(2) : n; }));
+const AR_DIGITS = (x) => String(x || '').replace(/[٠-٩]/g, (ch) => '٠١٢٣٤٥٦٧٨٩'.indexOf(ch));
+const NUM_WORDS = { واحد: 1, واحدة: 1, اثنان: 2, اثنين: 2, ثلاثة: 3, أربعة: 4, خمسة: 5, ستة: 6, سبعة: 7, ثمانية: 8, تسعة: 9, عشرة: 10 };
+/** 'k2w5'-style casualty signature of a text, or null when it states none. */
+export function casualtySig(text) {
+  const t = AR_DIGITS(N(text));
+  const find = (dualRe, wordsRe) => {
+    if (dualRe.test(t)) return 2;
+    let m = t.match(new RegExp(`(\\d+)\\s*(?:${wordsRe})`)) || t.match(new RegExp(`(?:${wordsRe})\\s*(\\d+)`));
+    if (m) return Number(m[1]);
+    m = t.match(new RegExp(`(واحد|واحدة|اثنان|اثنين|ثلاثة|أربعة|خمسة|ستة|سبعة|ثمانية|تسعة|عشرة)\\s*(?:${wordsRe})`));
+    if (m) return NUM_WORDS[N(m[1])] ?? null;
+    return null;
+  };
+  const killed = find(/(قتيلان|قتيلين|شهيدان|شهيدين|عنصرين|عنصران|شخصين|شخصان)/, 'قتيل|قتلى|شهيد|شهداء|قتلي')
+    ?? (/(مقتل|استشهاد|قتل)\s+(?:\S+\s+)?(عنصرين|شخصين)/.test(t) ? 2 : null);
+  const wounded = find(/(جريحان|جريحين|مصابان|مصابين)/, 'جريح|جرحى|مصاب|مصابين|جرحي|اصابه|إصابه');
+  if (killed == null && wounded == null) return null;
+  return `k${killed ?? '-'}w${wounded ?? '-'}`;
+}
+const AIR_PRESENCE = new Set(['uav', 'helicopter', 'warplane']);
+export function sameEventStrong(c, k) {
+  if (!c || !k || c.type === 'political' || k.type === 'political') return false;
+  // Presence is not impact: a sighting (تحليق) never swallows a strike, nor
+  // the reverse — that distinction is designed (a pinned dedup test), and a
+  // sighting of a different aircraft kind is a different report stream.
+  if (c.type !== k.type && (AIR_PRESENCE.has(c.type) || AIR_PRESENCE.has(k.type))) return false;
+  if (!c.geo || !k.geo || c.geo.none || k.geo.none || !near(c.geo, k.geo)) return false;
+  const ct = c.text || c.headline || '', kt = k.text || k.headline || '';
+  const cs = casualtySig(ct), ks = casualtySig(kt);
+  if (cs && ks && cs === ks) return true;
+  const sim = textSim(ct, kt);
+  if (sim < 0.10) return false;
+  const A = tokens(ct), B = tokens(kt);
+  // Place anchors: names from either event's place line, minus the
+  // governorate name itself — sharing «الحسكة» proves the city, not the
+  // event; sharing «مشيرفة» proves the locality.
+  const govToks = new Set([...tokens((c.geo.govs || []).join(' ')), ...tokens((k.geo.govs || []).join(' '))]);
+  const placeToks = new Set([...tokens(c.where || ''), ...tokens(k.where || '')].filter((w) => !govToks.has(w)));
+  let sharedPlace = 0, sharedDistinctive = 0;
+  for (const w of A) if (B.has(w)) { if (placeToks.has(w)) sharedPlace++; else if (!EVENT_GLUE.has(w)) sharedDistinctive++; }
+  return (sharedPlace >= 1 && sim >= 0.10) || (sharedDistinctive >= 2 && sim >= 0.12);
+}
+
 /** is candidate `c` the same incident as known event `k`? */
 export function sameIncident(c, k) {
   const win = Math.max(WINDOW_MIN[c.type] || 360, WINDOW_MIN[k.type] || 360) * 60_000;
@@ -539,6 +603,7 @@ export function sameIncident(c, k) {
       && !!c.politicalCategory && c.politicalCategory === k.politicalCategory
       && sim >= 0.82;
   }
+  if (sameEventStrong(c, k)) return true;
   if (c.type === 'breaking' || k.type === 'breaking') {
     if (c.type !== k.type) return (bothKnownAndNear && sim >= 0.25) || (locationMissing && sim >= 0.85);
     return (bothKnownAndNear && sim >= 0.2) || (locationMissing && sim >= 0.85);
@@ -558,18 +623,18 @@ function knownEvents(hours = 12) {
     if (d.test || (d.ts || d.created) < since) continue;
     const locs = locsOf(d.loc, d.extra);
     if (d.alertId) fromDraft.add(d.alertId);
-    out.push({ kind: 'draft', status: d.status, draftId: d.id, alertId: d.alertId, type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: d.headline, where: whereOf(locs), geo: geoOf(locs) });
+    out.push({ kind: 'draft', status: d.status, draftId: d.id, alertId: d.alertId, type: d.type, politicalCategory: d.politicalCategory, ts: d.ts || d.created, headline: d.headline, text: [d.headline, d.sourceText || ''].join('\n'), where: whereOf(locs), geo: geoOf(locs) });
   }
   for (const a of n.alerts) {
     if (a.ts < since || fromDraft.has(a.id)) continue;
     const stored = store.getAlert(a.id);
-    out.push({ kind: 'alert', status: 'published', alertId: a.id, type: a.type, politicalCategory: a.politicalCategory || stored?.meta?.political?.category, ts: a.ts, headline: a.headline, where: a.where, geo: a.geo });
+    out.push({ kind: 'alert', status: 'published', alertId: a.id, type: a.type, politicalCategory: a.politicalCategory || stored?.meta?.political?.category, ts: a.ts, headline: a.headline, text: [a.headline, stored?.description || '', stored?.meta?.sourceText || ''].join('\n'), where: a.where, geo: a.geo });
   }
   for (const rep of Object.values(store.state.reports || {})) {
     const d = rep?.draft;
     if (!d || !ALERT_TYPES[d.type] || (rep.created || 0) < since) continue;
     const locs = locsOf(d.location, d.extra);
-    out.push({ kind: 'report', status: 'pending-report', type: d.type, politicalCategory: d.meta?.political?.category || d.politicalCategory, ts: rep.created, headline: [typeOf(d.type).ar, d.text || d.details || '', whereOf(locs)].join(' '), where: whereOf(locs), geo: geoOf(locs) });
+    out.push({ kind: 'report', status: 'pending-report', type: d.type, politicalCategory: d.meta?.political?.category || d.politicalCategory, ts: rep.created, headline: [typeOf(d.type).ar, d.text || d.details || '', whereOf(locs)].join(' '), text: [d.text || '', d.details || ''].join('\n'), where: whereOf(locs), geo: geoOf(locs) });
   }
   return out.sort((a, b) => b.ts - a.ts);
 }
@@ -1349,7 +1414,7 @@ async function handleResult(it, r, known, pmap) {
   const politicalCategory = r.type === 'political'
     ? (inferPoliticalCategory(it.text) || (POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null))
     : null;
-  const cand = { type: r.type, politicalCategory, ts: it.ts, headline, geo: geoOf(locs) };
+  const cand = { type: r.type, politicalCategory, ts: it.ts, headline, geo: geoOf(locs), text: it.text, where: whereOf(locs) };
   if (target && !sameIncident(cand, target)) {
     note(it, `AI same_as rejected: event type/location/time mismatch (${r.same_as})`);
     target = null;
@@ -1361,7 +1426,7 @@ async function handleResult(it, r, known, pmap) {
     pmap.set(it.i, target);
     const d = target.draftId ? n.drafts[target.draftId] : null;
     if (d && d.status === 'pending') { const added = await mergeInto(d, it, locs); note(it, added ? `merged into draft ${d.id}` : `same source, already in draft ${d.id}`); return; }
-    n.stats.dupes++; note(it, `duplicate of ${target.kind} (${target.status})`); return;
+    n.stats.dupes++; note(it, `same event as ${target.kind} (${target.status}) — deleted unpublished (one event = one post)`); return;
   }
   if (!n.types[r.type]) { note(it, 'type switched off'); return; }
   if (!locs.length && r.type !== 'political') { note(it, 'no verified Syrian place found'); return; }
@@ -1376,7 +1441,7 @@ async function handleResult(it, r, known, pmap) {
   scheduleDayAuto(d, d.created);
   n.drafts[d.id] = d;
   n.stats.drafts++;
-  const ev = { kind: 'draft', status: 'pending', draftId: d.id, type: d.type, ts: d.ts, headline, where: whereOf(locs), geo: cand.geo };
+  const ev = { kind: 'draft', status: 'pending', draftId: d.id, type: d.type, ts: d.ts, headline, text: d.sourceText, where: whereOf(locs), geo: cand.geo };
   known.unshift(ev); pmap.set(it.i, ev);
   save();
   if (nightActive() && nightEligible(d) && await nightPublish(d)) {
