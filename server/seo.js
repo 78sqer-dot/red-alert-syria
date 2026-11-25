@@ -16,6 +16,7 @@ const TZ = 'Asia/Damascus';
 const SITE = () => (config.publicUrl || process.env.PUBLIC_URL || 'https://red-alert-syria-q6k8.onrender.com').replace(/\/+$/, '');
 const CHANNEL_URL = 'https://t.me/Red_Alert_Syria';
 const REPORT_URL = 'https://t.me/Rad_Alert_Syria1_bot?start=report';
+const WA_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const arDigits = (s) => String(s).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[d]);
 const num = (n, lang) => (lang === 'ar' ? arDigits(n) : String(n));
@@ -144,7 +145,17 @@ h2{font-size:18px;margin:22px 0 10px}
 .areas{display:flex;flex-wrap:wrap;gap:8px}.areas a{font-size:13.5px;padding:6px 12px;border-radius:999px;border:1px solid var(--bd);background:var(--card);text-decoration:none}
 .areas a.cur{border-color:var(--red);color:var(--red);font-weight:700}
 .hub h3{margin:16px 0 8px;font-size:16px}.faq p{margin:0 0 10px;color:var(--mut)}.faq b{color:var(--fg)}
-footer{max-width:880px;margin:auto;padding:16px;color:var(--mut);font-size:12.5px;border-top:1px solid var(--bd)}`;
+footer{max-width:880px;margin:auto;padding:16px;color:var(--mut);font-size:12.5px;border-top:1px solid var(--bd)}
+.govs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin:0 0 20px}
+.gov{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px}
+.gov h3{margin:0 0 4px;font-size:17px}.gov .n{color:var(--mut);font-size:13px;margin:0 0 10px}
+.gov .row{display:flex;gap:8px;flex-wrap:wrap}.gov .row a{font-size:13px;padding:6px 12px;border-radius:10px;text-decoration:none;border:1px solid var(--bd);font-weight:700}
+.gov .row a.m{background:var(--red);border-color:var(--red);color:#fff}
+.facts{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden;margin:0 0 18px}
+.facts th,.facts td{padding:10px 12px;border-bottom:1px solid var(--bd);text-align:start;font-size:14px;vertical-align:top}
+.facts tr:last-child th,.facts tr:last-child td{border-bottom:0}.facts th{width:34%;color:var(--mut)}
+.term{background:var(--card);border:1px solid var(--bd);border-inline-start:5px solid var(--c);border-radius:12px;padding:10px 12px;margin:0 0 8px}
+.term b{font-size:15px}.term p{margin:2px 0 0;color:var(--mut);font-size:13.5px}`;
 
 function shell({ lang, title, desc, path, alt, ogImage, ogW = 1200, ogH = 630, jsonld = [], body, robots = 'index,follow,max-image-preview:large' }) {
   const site = SITE();
@@ -176,8 +187,8 @@ ${jsonld.map((j) => `<script type="application/ld+json">${JSON.stringify(j).repl
 <a class="l" href="${esc(alt || `/${other}/`)}" hreflang="${other}">${lang === 'ar' ? 'English' : 'العربية'}</a></div></header>
 <main>${body}</main>
 <footer>${lang === 'ar'
-    ? `الإنذار الأحمر سوريا — خريطة مباشرة مجانية للتنبيهات في سوريا. الأوقات بتوقيت دمشق. تابعنا على <a href="${CHANNEL_URL}">تيليغرام @Red_Alert_Syria</a> · <a href="/ar/areas/">كل المناطق</a> · <a href="/ar/">الخريطة المباشرة</a>`
-    : `Red Alert Syria — free live map of alerts across Syria. Times are Damascus time. Follow on <a href="${CHANNEL_URL}">Telegram @Red_Alert_Syria</a> · <a href="/en/areas/">All areas</a> · <a href="/en/">Live map</a>`}</footer>
+    ? `الإنذار الأحمر سوريا — خريطة مباشرة مجانية للتنبيهات في سوريا. الأوقات بتوقيت دمشق. تابعنا على <a href="${CHANNEL_URL}">تيليغرام @Red_Alert_Syria</a> · <a href="/ar/areas/">كل المناطق</a> · <a href="/ar/about/">عن المشروع</a> · <a href="/ar/glossary/">المصطلحات</a> · <a href="/ar/press/">للصحفيين</a> · <a href="/ar/">الخريطة المباشرة</a>`
+    : `Red Alert Syria — free live map of alerts across Syria. Times are Damascus time. Follow on <a href="${CHANNEL_URL}">Telegram @Red_Alert_Syria</a> · <a href="/en/areas/">All areas</a> · <a href="/en/about/">About</a> · <a href="/en/glossary/">Glossary</a> · <a href="/en/press/">For journalists</a> · <a href="/en/">Live map</a>`}</footer>
 </body></html>`;
 }
 
@@ -281,6 +292,7 @@ function hubPage(lang) {
   const body = `<nav class="crumbs"><a href="/${lang}/">${en ? 'Live map' : 'الخريطة المباشرة'}</a> › ${en ? 'Areas' : 'المناطق'}</nav>
 <h1>${en ? 'Live alerts by area' : 'شو صاير بمنطقتك؟'}</h1><p class="lead">${esc(desc)}</p>
 <div class="cta"><a class="btn red" href="/${lang}/">${en ? 'Open the live map' : 'افتح الخريطة المباشرة'}</a><a class="btn tg" href="${CHANNEL_URL}" target="_blank" rel="noopener">${en ? 'Follow on Telegram' : 'تابعنا على تيليغرام'}</a></div>
+<div class="govs">${AREAS.filter((a) => a.kind === 'gov').map((g) => { const gs = summary(g); return `<div class="gov"><h3>${esc(areaName(g, lang))}</h3><p class="n">${en ? `${gs.active.length} active now · ${gs.d1} in the last 24 hours` : `${num(gs.active.length, lang)} نشط الآن · ${num(gs.d1, lang)} آخر ٢٤ ساعة`}</p><div class="row"><a class="m" href="/${lang}/?at=${g.lat.toFixed(4)},${g.lon.toFixed(4)},${g.zoom}">${en ? 'Open the map on it' : 'افتح الخريطة عليها'}</a><a href="/${lang}/area/${g.slug}/">${en ? 'Its alerts page' : 'صفحتها وتنبيهاتها'}</a></div></div>`; }).join('')}</div>
 <div class="hub">${blocks}</div>`;
   const site = SITE();
   const jsonld = [{ '@context': 'https://schema.org', '@graph': [ORG(), { '@type': 'CollectionPage', url: site + path, name: title, description: desc, inLanguage: lang },
@@ -388,6 +400,166 @@ function siteOgPng(lang) {
   }), OW));
 }
 
+// ------------------------------------------------------------------ content pages (about / glossary / press)
+// Phase 1 of the owner's content-pages order (2026-11-25): original copy
+// from this project's own facts and its real alert-type dictionary —
+// structure follows the reference early-warning site pattern (about+FAQ,
+// glossary, press), text is entirely ours. No paid/data-product pages.
+const crumbsHtml = (lang, items) => `<nav class="crumbs">${items.map(([t, h], i) => (i < items.length - 1 ? `<a href="${h}">${esc(t)}</a> › ` : esc(t))).join('')}</nav>`;
+
+const GLOSS = {
+  breaking: ['تطوّر مهم يُنشر فوراً بصيغة موجزة قبل اكتمال التفاصيل، ويُحدَّث عند ورودها.', 'An important development published immediately in brief form, before the full details are in, and updated as they arrive.'],
+  political: ['قرارات وتصريحات ومواقف رسمية ذات صلة بالشأن السوري.', 'Official decisions, statements and positions related to Syrian affairs.'],
+  uav: ['رصد تحليق أو نشاط طائرة مسيّرة فوق منطقة ما، دون إعلان استهداف.', 'A drone sighted or active over an area, with no strike reported.'],
+  uav_strike: ['ضربة أو استهداف مباشر نفّذته طائرة مسيّرة.', 'A direct strike carried out by a drone.'],
+  targeted_strike: ['ضربة محدّدة ضد هدف بعينه: شخص أو موقع أو آلية.', 'A specific strike against a particular target: a person, a site or a vehicle.'],
+  airstrike: ['قصف نفّذه طيران حربي على هدف ما.', 'A strike carried out by military aircraft.'],
+  warplane: ['رصد تحليق طائرات حربية في الأجواء، دون إعلان قصف.', 'Military jets observed flying overhead, with no strike reported.'],
+  helicopter: ['رصد تحليق مروحيات عسكرية.', 'Military helicopters observed in flight.'],
+  air_movement: ['حركة طيران عامة ملحوظة في الأجواء.', 'Notable general air traffic observed in the skies.'],
+  signal_sweep: ['نشاط رصد أو مسح أو تشويش إشاري ملحوظ في منطقة ما.', 'Observed signal monitoring, sweeping or jamming activity in an area.'],
+  civil_plane: ['حادث أو حدث يخص طيراناً مدنياً، كهبوط اضطراري.', 'An incident involving civil aviation, such as an emergency landing.'],
+  missile: ['إطلاق صواريخ أو قذائف صاروخية أو سقوطها أو اعتراضها.', 'The launch, fall or interception of missiles or rockets.'],
+  artillery: ['قصف بالمدفعية أو قذائف الهاون أو راجمات الصواريخ.', 'Shelling with artillery, mortar rounds or rocket launchers.'],
+  explosion: ['وقوع انفجار في مكان ما، أياً كان سببه المعلن.', 'An explosion occurring at a location, whatever its reported cause.'],
+  detonation: ['تفجير متعمّد لعبوة أو هدف أو مبنى.', 'The deliberate detonation of a device, a target or a building.'],
+  attack: ['هجوم مسلّح أو اعتداء مباشر على هدف أو أشخاص.', 'An armed attack or a direct assault on a target or on people.'],
+  clashes: ['تبادل إطلاق نار أو مواجهة بين طرفين مسلّحين.', 'An exchange of fire or a confrontation between two armed sides.'],
+  assassination: ['قتل مستهدَف لشخص بعينه أو محاولة اغتياله.', 'The targeted killing, or attempted killing, of a specific person.'],
+  shooting: ['سماع إطلاق نار أو رصده، دون اشتباك مؤكد بين طرفين.', 'Shots heard or observed, without a confirmed two-sided clash.'],
+  military_incursion: ['دخول قوات أو آليات عسكرية إلى منطقة ما على الأرض.', 'The ground entry of troops or military vehicles into an area.'],
+  patrol: ['مرور دورية عسكرية أو أمنية في منطقة ما أو انتشارها فيها.', 'A military or security patrol moving through, or deployed in, an area.'],
+  border: ['حدث عند الحدود أو المعابر: إغلاق أو ازدحام أو تطوّر أمني.', 'An event at a border or a crossing: a closure, congestion or a security development.'],
+  kidnapping: ['خطف شخص أو مجموعة، أو تحرير مختطفين.', 'The abduction of a person or a group, or the release of abductees.'],
+  arrest: ['توقيف أشخاص من جهة أمنية في منطقة ما.', 'The detention of people by a security body in an area.'],
+  smuggling_weapons: ['ضبط محاولة تهريب أسلحة أو ذخيرة أو رصدها.', 'An intercepted or reported attempt to smuggle weapons or ammunition.'],
+  smuggling_drugs: ['ضبط محاولة تهريب مواد مخدّرة أو رصدها.', 'An intercepted or reported attempt to smuggle narcotics.'],
+  smuggling_explosives: ['ضبط محاولة تهريب مواد متفجرة أو رصدها.', 'An intercepted or reported attempt to smuggle explosive materials.'],
+  accident: ['حادث مروري: تصادم أو انقلاب أو دهس.', 'A road accident: a collision, a rollover or a run-over.'],
+  fire: ['اندلاع حريق في مبنى أو سوق أو أراضٍ أو محاصيل.', 'A fire breaking out in a building, a market, land or crops.'],
+  protest: ['تجمّع أو مسيرة شعبية في الشارع.', 'A public gathering or a march.'],
+  protest_action: ['وقفة أو فعالية احتجاجية محدودة.', 'A smaller protest action or stand.'],
+  brawl: ['شجار أو عراك بين أشخاص.', 'A fight or a scuffle between people.'],
+  death: ['إعلان وفاة أو العثور على جثة، دون سببٍ حادثٍ محدّد.', 'A reported death or a body found, with no specific incident as its cause.'],
+  martyrdom: ['إعلان استشهاد شخص في سياق الأحداث الجارية.', 'A reported martyrdom in the context of the ongoing events.'],
+  civil: ['تنبيه يخصّ المدنيين والخدمات العامة، دون طابع عسكري مباشر.', 'An alert concerning civilians and public services, with no direct military character.'],
+  quake: ['هزّة أرضية مسجّلة أو محسوسة في المنطقة.', 'A recorded or felt earthquake in the area.'],
+  weather: ['تحذير من أحوال جوية قاسية: عواصف أو سيول أو ثلوج ونحوها.', 'A warning of severe weather: storms, floods, snow and the like.'],
+};
+const GLOSS_GROUPS = [
+  { ar: 'الطيران والرصد', en: 'Aviation & observation', keys: ['uav', 'uav_strike', 'warplane', 'helicopter', 'air_movement', 'signal_sweep', 'civil_plane'] },
+  { ar: 'القصف والضربات', en: 'Strikes & fire', keys: ['airstrike', 'missile', 'artillery', 'explosion', 'detonation', 'targeted_strike'] },
+  { ar: 'أحداث أمنية', en: 'Security incidents', keys: ['breaking', 'attack', 'clashes', 'assassination', 'shooting', 'military_incursion', 'patrol', 'border', 'kidnapping', 'arrest', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },
+  { ar: 'مجتمع وحوادث', en: 'Society & accidents', keys: ['accident', 'fire', 'protest', 'protest_action', 'brawl', 'death', 'martyrdom', 'civil', 'political'] },
+  { ar: 'طبيعة وطقس', en: 'Nature & weather', keys: ['quake', 'weather'] },
+];
+
+function glossaryPage(lang) {
+  const en = lang === 'en';
+  const site = SITE();
+  const path = `/${lang}/glossary/`;
+  const title = en ? 'Alert types glossary — what each alert on the map means | Red Alert Syria' : 'مصطلحات التنبيهات — شو يعني كل نوع تنبيه على الخريطة؟ | الإنذار الأحمر سوريا';
+  const desc = en ? 'Plain-language explanations of every alert type used by Red Alert Syria: drones, warplanes, airstrikes, shelling, explosions, clashes, earthquakes and more.' : 'شرح مبسّط لكل أنواع التنبيهات يلي بيستخدمها الإنذار الأحمر سوريا: مسيّرات، طيران حربي، غارات، قصف، انفجارات، اشتباكات، زلازل وغيرها.';
+  const groups = GLOSS_GROUPS.map((g) => `<h2>${esc(en ? g.en : g.ar)}</h2>${g.keys.map((k) => { const t = ALERT_TYPES[k]; const gl = GLOSS[k]; if (!t || !gl) return ''; return `<div class="term" style="--c:${typeColor(k)}"><b>${esc(typeLabel(k, lang))}</b><p>${esc(en ? gl[1] : gl[0])}</p></div>`; }).join('')}`).join('');
+  const body = `${crumbsHtml(lang, [[en ? 'Live map' : 'الخريطة المباشرة', `/${lang}/`], [en ? 'Glossary' : 'المصطلحات', path]])}
+<h1>${en ? 'What does each alert type mean?' : 'شو يعني كل نوع تنبيه؟'}</h1>
+<p class="lead">${en ? 'Every alert on the map and in the channels carries one of these types. Here is what each one means, in plain language — the same definitions our newsroom works by.' : 'كل تنبيه على الخريطة وبالقنوات بيحمل واحد من هالأنواع. هي شو بيعني كل نوع بلغة بسيطة — نفس التعريفات يلي بتشتغل عليها غرفة أخبارنا.'}</p>
+<div class="cta"><a class="btn red" href="/${lang}/">${en ? 'Open the live map' : 'افتح الخريطة المباشرة'}</a><a class="btn" href="/${lang}/about/">${en ? 'About the project' : 'عن المشروع'}</a></div>
+${groups}`;
+  const jsonld = [{ '@context': 'https://schema.org', '@graph': [ORG(), { '@type': 'WebPage', '@id': site + path, url: site + path, name: title, description: desc, inLanguage: lang, isPartOf: { '@type': 'WebSite', url: `${site}/${lang}/`, name: 'Red Alert Syria' }, publisher: { '@id': `${site}/#org` } }] }];
+  return shell({ lang, title, desc, path, alt: `/${en ? 'ar' : 'en'}/glossary/`, ogImage: `${site}/og/site-${lang}.png`, jsonld, body });
+}
+
+const FAQ = [
+  { q: ['كيف تصلني التنبيهات فوراً؟', 'How do I get alerts instantly?'],
+    a: ['اشترك بقناة تيليغرام أو قناة واتساب، أو فعّل إشعارات المتصفح من الخريطة المباشرة. لا تحتاج أي تسجيل أو حساب.', 'Join the Telegram channel or the WhatsApp channel, or enable browser notifications on the live map. No registration or account is needed.'] },
+  { q: ['من أين تأتي الأخبار؟', 'Where does the news come from?'],
+    a: ['من بلاغات الجمهور عبر بوت البلاغات، ومن رصد قنوات ومصادر الأخبار السورية. كل تنبيه يراجعه فريق التحرير قبل نشره، ويُذكر مصدره معه.', 'From public reports sent through the reporting bot, and from monitoring Syrian news channels and sources. Every alert is reviewed by the editorial team before it is published, and its source is cited with it.'] },
+  { q: ['ما الفرق بين «مؤكد» و«أولي»؟', 'What is the difference between “confirmed” and “preliminary”?'],
+    a: ['«مؤكد» يعني أن الخبر تحقق من أكثر من مصدر أو من مصدر مباشر موثوق. «أولي» يعني أن الخبر وارد من مصدر واحد وما زال بانتظار التأكيد، ويُحدَّث فور توفر معلومات أدق.', '“Confirmed” means the report was verified by more than one source, or by one direct trusted source. “Preliminary” means it arrived from a single source and is still awaiting confirmation; it is updated as soon as firmer information arrives.'] },
+  { q: ['هل الخدمة مجانية؟', 'Is the service free?'],
+    a: ['نعم، مجانية بالكامل: بلا اشتراك وبلا إعلانات وبلا تسجيل.', 'Yes, completely free: no subscription, no ads and no registration.'] },
+  { q: ['هل تغطّون محافظتي؟', 'Do you cover my governorate?'],
+    a: ['نعم، التغطية تشمل كل المحافظات السورية. صفحة كل محافظة ومدينة رئيسية تعرض آخر تنبيهاتها لحظة بلحظة.', 'Yes, coverage spans every Syrian governorate. Each governorate and main town has its own page with its latest alerts, moment by moment.'] },
+  { q: ['كيف أبلّغ عن حدث؟', 'How do I report an event?'],
+    a: ['عبر بوت البلاغات على تيليغرام. بلاغك يصل فريق التحرير للتحقق منه قبل أي نشر.', 'Through the reporting bot on Telegram. Your report reaches the editorial team, which verifies it before anything is published.'] },
+  { q: ['ماذا لو تبيّن أن خبراً غير دقيق؟', 'What happens if a report turns out to be inaccurate?'],
+    a: ['يُحدَّث التنبيه ويُصحَّح في مكانه على الخريطة والقناة عند توفر معلومات أدق، فلا يبقى الخطأ متداولاً بصيغته الأولى.', 'The alert is updated and corrected in place, on the map and in the channel, as soon as firmer information is available, so the first version does not keep circulating.'] },
+];
+
+function aboutPage(lang) {
+  const en = lang === 'en';
+  const site = SITE();
+  const path = `/${lang}/about/`;
+  const title = en ? 'About Red Alert Syria — what it is, how we verify, and FAQ' : 'عن الإنذار الأحمر سوريا — شو هو المشروع، كيف منتحقق، وأسئلة شائعة';
+  const desc = en ? 'Red Alert Syria is a free live map and alert service covering every Syrian governorate: how it works, how reports are verified (confirmed vs preliminary), and who runs it.' : 'الإنذار الأحمر سوريا خدمة خريطة وتنبيهات حية مجانية بتغطي كل المحافظات السورية: كيف بتشتغل، وكيف بيتحقق من الأخبار (مؤكد وأولي)، ومين بيديرها.';
+  const faqHtml = FAQ.map((f) => `<p><b>${esc(en ? f.q[1] : f.q[0])}</b><br>${esc(en ? f.a[1] : f.a[0])}</p>`).join('');
+  const body = `${crumbsHtml(lang, [[en ? 'Live map' : 'الخريطة المباشرة', `/${lang}/`], [en ? 'About' : 'عن المشروع', path]])}
+<h1>${en ? 'About Red Alert Syria' : 'عن الإنذار الأحمر سوريا'}</h1>
+<p class="lead">${en ? 'A free early-warning service for Syria: a live map and instant alerts for security and field developments across every Syrian governorate, around the clock.' : 'خدمة إنذار مبكر مجانية لسوريا: خريطة مباشرة وتنبيهات فورية للتطورات الأمنية والميدانية بكل المحافظات السورية، على مدار الساعة.'}</p>
+<div class="cta"><a class="btn red" href="/${lang}/">${en ? 'Open the live map' : 'افتح الخريطة المباشرة'}</a>
+<a class="btn tg" href="${CHANNEL_URL}" target="_blank" rel="noopener">${en ? 'Telegram channel' : 'قناة تيليغرام'}</a>
+<a class="btn" href="${WA_CHANNEL_URL}" target="_blank" rel="noopener">${en ? 'WhatsApp channel' : 'قناة واتساب'}</a>
+<a class="btn" href="${REPORT_URL}" target="_blank" rel="noopener">${en ? 'Report an event' : 'بلّغ عن حدث'}</a></div>
+<h2>${en ? 'What is the project?' : 'شو هو المشروع؟'}</h2>
+<p>${en ? 'Red Alert Syria brings the events that matter to people in Syria into one place: a live map that updates by itself, a Telegram channel and a WhatsApp channel. It tracks drones, warplanes, shelling, explosions, clashes, road accidents, fires and earthquakes — and the everyday developments around them — in every Syrian governorate, in Arabic and English.' : 'الإنذار الأحمر سوريا بيجمع الأحداث يلي بتهمّ الناس بسوريا بمكان واحد: خريطة مباشرة بتتحدّث لحالها، وقناة تيليغرام وقناة واتساب. بيرصد المسيّرات والطيران الحربي والقصف والانفجارات والاشتباكات وحوادث السير والحرائق والزلازل — والتطورات اليومية حولها — بكل المحافظات السورية، بالعربية والإنجليزية.'}</p>
+<h2>${en ? 'How we work: sources and verification' : 'كيف منشتغل: المصادر والتحقق'}</h2>
+<div class="faq">
+<p><b>${en ? 'Two doors for every report.' : 'لكل خبر بابان.'}</b> ${en ? 'Reports reach us from the public through the reporting bot, and from continuous monitoring of Syrian news channels and sources.' : 'الأخبار بتوصلنا من الجمهور عبر بوت البلاغات، ومن رصد مستمر لقنوات ومصادر الأخبار السورية.'}</p>
+<p><b>${en ? 'Nothing is published unverified.' : 'ما بينتشر شي بلا تحقق.'}</b> ${en ? 'The editorial team reviews every alert before publication. When verification is still under way, the alert is labelled “preliminary”; once it is established by more than one source or a direct trusted source, it is labelled “confirmed”.' : 'فريق التحرير بيراجع كل تنبيه قبل النشر. وإذا كان التحقق لسه جاري، بيحمل التنبيه وسم «أولي»؛ ولما يثبت بأكتر من مصدر أو بمصدر مباشر موثوق، بيصير «مؤكد».'}</p>
+<p><b>${en ? 'Sources are cited, corrections are in place.' : 'المصدر مذكور، والتصحيح بمحله.'}</b> ${en ? 'Every alert names its source. If firmer information arrives, the alert is updated and corrected where it stands — on the map and in the channel — rather than left to circulate in its first form.' : 'كل تنبيه بيذكر مصدره. وإذا وصلت معلومات أدق، بيتم تحديث التنبيه وتصحيحه بمكانه — على الخريطة وبالقناة — بدل ما يضل متداول بصيغته الأولى.'}</p>
+</div>
+<h2>${en ? 'Why is it free?' : 'ليش مجاني؟'}</h2>
+<p>${en ? 'Because a warning that arrives late, or sits behind a paywall, does not protect anyone. The service is completely free: no subscription, no ads and no registration — open the map or join a channel and the alerts reach you.' : 'لأن التحذير يلي بيوصل متأخر، أو يلي ورا جدار دفع، ما بيحمي حدا. الخدمة مجانية بالكامل: بلا اشتراك وبلا إعلانات وبلا تسجيل — افتح الخريطة أو اشترك بقناة وبيوصلك التنبيه.'}</p>
+<h2>${en ? 'Who runs it?' : 'مين بيدير المشروع؟'}</h2>
+<p>${en ? 'Red Alert Syria is an independent Syrian media project, founded and run by its owner together with a small editorial team working around the clock. It has no affiliation with any official body, and its only commitment is to the accuracy of what it publishes.' : 'الإنذار الأحمر سوريا مشروع إعلامي سوري مستقل، أسّسه ويديره صاحبه مع فريق تحرير صغير بيشتغل على مدار الساعة. ما إلو تبعية لأي جهة رسمية، والتزامه الوحيد هو دقة يلي بينشره.'}</p>
+<h2>${en ? 'Frequently asked questions' : 'الأسئلة الشائعة'}</h2>
+<div class="faq">${faqHtml}</div>`;
+  const jsonld = [{ '@context': 'https://schema.org', '@graph': [ORG(),
+    { '@type': 'AboutPage', '@id': site + path, url: site + path, name: title, description: desc, inLanguage: lang, isPartOf: { '@type': 'WebSite', url: `${site}/${lang}/`, name: 'Red Alert Syria' }, publisher: { '@id': `${site}/#org` } },
+    { '@type': 'FAQPage', mainEntity: FAQ.map((f) => ({ '@type': 'Question', name: en ? f.q[1] : f.q[0], acceptedAnswer: { '@type': 'Answer', text: en ? f.a[1] : f.a[0] } })) }] }];
+  return shell({ lang, title, desc, path, alt: `/${en ? 'ar' : 'en'}/about/`, ogImage: `${site}/og/site-${lang}.png`, jsonld, body });
+}
+
+function pressPage(lang) {
+  const en = lang === 'en';
+  const site = SITE();
+  const path = `/${lang}/press/`;
+  const title = en ? 'For journalists — fact sheet, assets and press contact | Red Alert Syria' : 'للصحفيين — بطاقة وقائع وأصول للتنزيل وتواصل | الإنذار الأحمر سوريا';
+  const desc = en ? 'The Red Alert Syria fact sheet for media: what it is, its coverage of all Syrian governorates, its alert types, downloadable logos and share images, and how to reach the team.' : 'بطاقة وقائع الإنذار الأحمر سوريا للإعلام: شو هو المشروع، وتغطيته لكل المحافظات السورية، وأنواع تنبيهاته، وشعارات وصور قابلة للتنزيل، وكيف تتواصلوا مع الفريق.';
+  const typeCount = Object.keys(ALERT_TYPES).length;
+  const govCount = AREAS.filter((a) => a.kind === 'gov').length;
+  const fact = (k, v) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`;
+  const facts = [
+    fact(en ? 'Name' : 'الاسم', en ? 'Red Alert Syria (الإنذار الأحمر سوريا)' : 'الإنذار الأحمر سوريا (Red Alert Syria)'),
+    fact(en ? 'What it is' : 'شو هو', en ? 'A live alert map with Telegram and WhatsApp channels' : 'خريطة تنبيهات مباشرة مع قناتي تيليغرام وواتساب'),
+    fact(en ? 'Coverage' : 'التغطية', en ? `All ${govCount} Syrian governorates` : `كل المحافظات السورية (${govCount} محافظة)`),
+    fact(en ? 'Alert types' : 'أنواع التنبيهات', en ? `${typeCount} types — see the <a href="/en/glossary/">glossary</a>` : `${typeCount} نوعاً — راجع <a href="/ar/glossary/">المصطلحات</a>`),
+    fact(en ? 'Languages' : 'اللغات', en ? 'Arabic and English' : 'العربية والإنجليزية'),
+    fact(en ? 'Price' : 'السعر', en ? 'Completely free' : 'مجاني بالكامل'),
+    fact(en ? 'Ads' : 'الإعلانات', en ? 'None' : 'لا إعلانات'),
+    fact(en ? 'Registration' : 'التسجيل', en ? 'Not required' : 'غير مطلوب'),
+    fact(en ? 'Updates' : 'التحديث', en ? 'Around the clock, as events are verified' : 'على مدار الساعة، عند التحقق من الأحداث'),
+  ].join('');
+  const dl = (href, label, note) => `<a class="btn" href="${href}" download>${esc(label)}</a>`;
+  const body = `${crumbsHtml(lang, [[en ? 'Live map' : 'الخريطة المباشرة', `/${lang}/`], [en ? 'For journalists' : 'للصحفيين', path]])}
+<h1>${en ? 'For journalists' : 'للصحفيين'}</h1>
+<p class="lead">${en ? 'Everything a newsroom needs about Red Alert Syria in one page: the fact sheet, downloadable brand assets, and how to reach us.' : 'كل شي بيحتاجه الصحفي عن الإنذار الأحمر سوريا بصفحة واحدة: بطاقة الوقائع، والأصول القابلة للتنزيل، وكيف تتواصلوا معنا.'}</p>
+<h2>${en ? 'Fact sheet' : 'بطاقة وقائع'}</h2>
+<table class="facts">${facts}</table>
+<h2>${en ? 'Downloadable assets' : 'أصول قابلة للتنزيل'}</h2>
+<div class="cta">${dl('/img/icon.svg', en ? 'Logo (SVG)' : 'الشعار (SVG)', '')}${dl('/img/logo-wordmark.svg', en ? 'Wordmark (SVG)' : 'الشعار الكتابي (SVG)', '')}${dl('/img/icon-512.png', en ? 'App icon 512px (PNG)' : 'أيقونة التطبيق ٥١٢ (PNG)', '')}${dl('/img/icon-192.png', en ? 'App icon 192px (PNG)' : 'أيقونة التطبيق ١٩٢ (PNG)', '')}${dl(`/og/site-${lang}.png`, en ? 'Share image (PNG)' : 'صورة المشاركة (PNG)', '')}</div>
+<h2>${en ? 'Using our material' : 'استخدام موادنا'}</h2>
+<p>${en ? 'Journalists may quote the map and the alerts with attribution to “Red Alert Syria” and a link to the live map or the Telegram channel. Times shown are Damascus time, and every alert cites its source.' : 'فين الصحفيين يقتبسوا من الخريطة والتنبيهات مع الإشارة إلى «الإنذار الأحمر سوريا» وربط الخريطة المباشرة أو قناة تيليغرام. الأوقات المعروضة بتوقيت دمشق، وكل تنبيه بيذكر مصدره.'}</p>
+<h2>${en ? 'Press contact' : 'تواصل للصحافة'}</h2>
+<p>${en ? 'The project’s working contact channel is the reporting bot on Telegram — press inquiries sent there reach the editorial team directly. You can also follow and message via the Telegram channel.' : 'قناة التواصل العاملة للمشروع هي بوت البلاغات على تيليغرام — الاستفسارات الصحفية المرسلة هناك بتوصل فريق التحرير مباشرة. وفينكم تتابعوا وتتواصلوا عبر قناة تيليغرام كمان.'}</p>
+<div class="cta"><a class="btn tg" href="${REPORT_URL}" target="_blank" rel="noopener">${en ? 'Contact via the reporting bot' : 'تواصل عبر بوت البلاغات'}</a>
+<a class="btn" href="${CHANNEL_URL}" target="_blank" rel="noopener">${en ? 'Telegram channel' : 'قناة تيليغرام'}</a>
+<a class="btn" href="/${lang}/about/">${en ? 'About the project' : 'عن المشروع'}</a></div>`;
+  const jsonld = [{ '@context': 'https://schema.org', '@graph': [ORG(), { '@type': 'WebPage', '@id': site + path, url: site + path, name: title, description: desc, inLanguage: lang, isPartOf: { '@type': 'WebSite', url: `${site}/${lang}/`, name: 'Red Alert Syria' }, publisher: { '@id': `${site}/#org` } }] }];
+  return shell({ lang, title, desc, path, alt: `/${en ? 'ar' : 'en'}/press/`, ogImage: `${site}/og/site-${lang}.png`, jsonld, body });
+}
+
 // ------------------------------------------------------------------ sitemap / robots
 function sitemapXml() {
   const site = SITE();
@@ -396,6 +568,7 @@ function sitemapXml() {
   const out = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">'];
   for (const l of ['ar', 'en']) out.push(url(`/${l}/`, `/${l === 'ar' ? 'en' : 'ar'}/`, now, 'always', '1.0'));
   for (const l of ['ar', 'en']) out.push(url(`/${l}/areas/`, `/${l === 'ar' ? 'en' : 'ar'}/areas/`, now, 'daily', '0.8'));
+  for (const pg of ['about', 'glossary', 'press']) for (const l of ['ar', 'en']) out.push(url(`/${l}/${pg}/`, `/${l === 'ar' ? 'en' : 'ar'}/${pg}/`, now, 'monthly', '0.6'));
   for (const a of AREAS) {
     const ev = areaEvents(a, 30);
     const lm = ev[0] ? new Date(ev[0].ts).toISOString() : new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
@@ -421,6 +594,13 @@ export function mountSeo(app, { limiter } = {}) {
     next();
   });
   const slash = (req, res, next) => (req.path.endsWith('/') ? next() : res.redirect(301, req.path + '/'));
+  for (const pg of ['about', 'glossary', 'press']) {
+    app.get([`/ar/${pg}`, `/en/${pg}`], slash);
+    app.get([`/ar/${pg}/`, `/en/${pg}/`], ...lim, (req, res) => {
+      const lang = req.path.startsWith('/en') ? 'en' : 'ar';
+      html(res, pg === 'about' ? aboutPage(lang) : pg === 'glossary' ? glossaryPage(lang) : pressPage(lang), 600);
+    });
+  }
   app.get(['/ar/areas', '/en/areas'], slash);
   app.get(['/ar/areas/', '/en/areas/'], ...lim, (req, res) => html(res, hubPage(req.path.startsWith('/en') ? 'en' : 'ar'), 600));
   app.get(['/ar/area/:slug', '/en/area/:slug'], slash);
@@ -452,4 +632,4 @@ export function mountSeo(app, { limiter } = {}) {
     try { png(res, await cached(`alert:${a.id}:${m[2]}:${alertLastUpdate(a)}`, 24 * 3600_000, () => renderAlertPng(a, { lang: m[2], timeoutMs: 5000 })), 3600); } catch (e) { console.error('[seo] og alert', e.message); res.redirect(302, `/og/site-${m[2]}.png`); }
   });
 }
-export const _test = { AREAS, BY_SLUG, areaPage, hubPage, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };
+export const _test = { AREAS, BY_SLUG, areaPage, hubPage, aboutPage, glossaryPage, pressPage, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };
