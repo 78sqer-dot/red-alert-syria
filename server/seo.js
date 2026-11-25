@@ -291,7 +291,7 @@ function hubPage(lang) {
   const blocks = AREAS.filter((a) => a.kind === 'gov').map((g) => `<h3><a href="/${lang}/area/${g.slug}/">${esc(areaName(g, lang))}</a></h3><div class="areas">${citiesOf(g.code).map((c) => `<a href="/${lang}/area/${c.slug}/">${esc(areaName(c, lang))}</a>`).join('') || ''}</div>`).join('');
   const body = `<nav class="crumbs"><a href="/${lang}/">${en ? 'Live map' : 'الخريطة المباشرة'}</a> › ${en ? 'Areas' : 'المناطق'}</nav>
 <h1>${en ? 'Live alerts by area' : 'شو صاير بمنطقتك؟'}</h1><p class="lead">${esc(desc)}</p>
-<div class="cta"><a class="btn red" href="/${lang}/">${en ? 'Open the live map' : 'افتح الخريطة المباشرة'}</a><a class="btn tg" href="${CHANNEL_URL}" target="_blank" rel="noopener">${en ? 'Follow on Telegram' : 'تابعنا على تيليغرام'}</a></div>
+<div class="cta"><a class="btn red" href="/${lang}/">${en ? 'Open the live map' : 'افتح الخريطة المباشرة'}</a><a class="btn" href="/${lang}/archive/">${en ? 'Alert archive' : 'أرشيف التنبيهات'}</a><a class="btn tg" href="${CHANNEL_URL}" target="_blank" rel="noopener">${en ? 'Follow on Telegram' : 'تابعنا على تيليغرام'}</a></div>
 <div class="govs">${AREAS.filter((a) => a.kind === 'gov').map((g) => { const gs = summary(g); return `<div class="gov"><h3>${esc(areaName(g, lang))}</h3><p class="n">${en ? `${gs.active.length} active now · ${gs.d1} in the last 24 hours` : `${num(gs.active.length, lang)} نشط الآن · ${num(gs.d1, lang)} آخر ٢٤ ساعة`}</p><div class="row"><a class="m" href="/${lang}/?at=${g.lat.toFixed(4)},${g.lon.toFixed(4)},${g.zoom}">${en ? 'Open the map on it' : 'افتح الخريطة عليها'}</a><a href="/${lang}/area/${g.slug}/">${en ? 'Its alerts page' : 'صفحتها وتنبيهاتها'}</a></div></div>`; }).join('')}</div>
 <div class="hub">${blocks}</div>`;
   const site = SITE();
@@ -560,8 +560,69 @@ function pressPage(lang) {
   return shell({ lang, title, desc, path, alt: `/${en ? 'ar' : 'en'}/press/`, ogImage: `${site}/og/site-${lang}.png`, jsonld, body });
 }
 
+// ------------------------------------------------------- public alert archive
+// Browsable/searchable index of the project's own alert log (owner gap-closure
+// programme, item 3): filter by type, governorate and day. Free, no tiers.
+// The store log retains ~35 days, and the page says so honestly.
+const ARCHIVE_DAYS = 35;
+function archivePage(lang, q = {}) {
+  const en = lang === 'en';
+  const site = SITE();
+  const path = `/${lang}/archive/`;
+  const title = en ? 'Alert archive — search past alerts by type, governorate and day | Red Alert Syria' : 'أرشيف التنبيهات — ابحث بالتنبيهات السابقة حسب النوع والمحافظة واليوم | الإنذار الأحمر سوريا';
+  const desc = en ? 'Browse and search the Red Alert Syria alert archive: filter past alerts by type, governorate and day, and open any alert on the live map.' : 'تصفّح وابحث بأرشيف تنبيهات الإنذار الأحمر سوريا: رشّح التنبيهات السابقة حسب النوع والمحافظة واليوم، وافتح أي تنبيه على الخريطة المباشرة.';
+  const type = ALERT_TYPES[q.type] ? q.type : '';
+  const gov = AREAS.find((a) => a.kind === 'gov' && a.code === q.gov) || null;
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(q.day || '') ? q.day : '';
+  const PER = 50;
+  const page = Math.max(1, Math.min(500, parseInt(q.page, 10) || 1));
+  const dayOf = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+  const since = Date.now() - ARCHIVE_DAYS * 86400_000;
+  const titles = new Map((store.state.alerts || []).map((a) => [a.id, en ? (a.title_en || a.title) : a.title]));
+  const matched = [];
+  const log = store.state.log || [];
+  for (let i = log.length - 1; i >= 0; i--) {
+    const e = log[i]; const t = Date.parse(e.ts);
+    if (!(t >= since)) break;
+    if (type && e.ty !== type) continue;
+    if (gov && !(e.g === gov.code || (e.xg || []).includes(gov.code))) continue;
+    if (day && dayOf(t) !== day) continue;
+    matched.push(e);
+  }
+  const total = matched.length;
+  const pages = Math.max(1, Math.ceil(total / PER));
+  const cur = Math.min(page, pages);
+  const rows = matched.slice((cur - 1) * PER, cur * PER).map((e) => {
+    const place = en ? (e.pe || e.pa) : e.pa;
+    const govName = en ? (e.ge || e.ga) : e.ga;
+    const placeLine = [place, govName].filter(Boolean).join(' - ');
+    const ttl = titles.get(e.id);
+    return `<li class="ev" style="--c:${typeColor(e.ty)}"><div><div class="t">${esc(typeLabel(e.ty, lang))}${ttl ? ` — ${esc(String(ttl).slice(0, 90))}` : ''}</div>${placeLine ? `<div class="p">📍 ${esc(placeLine)}</div>` : ''}</div><div class="w">${esc(fmtWhen(Date.parse(e.ts), lang))}<br><a href="/${lang}/a/${encodeURIComponent(e.id)}">${en ? 'On the map' : 'على الخريطة'}</a></div></li>`;
+  }).join('');
+  const qs = (patch) => { const u = new URLSearchParams({ ...(type ? { type } : {}), ...(gov ? { gov: gov.code } : {}), ...(day ? { day } : {}), ...patch }); const str = u.toString(); return str ? `${path}?${str}` : path; };
+  const typeOpts = ['', ...Object.keys(ALERT_TYPES)].map((k) => `<option value="${k}"${k === type ? ' selected' : ''}>${k ? esc(typeLabel(k, lang)) : (en ? 'All types' : 'كل الأنواع')}</option>`).join('');
+  const govOpts = ['', ...AREAS.filter((a) => a.kind === 'gov').map((a) => a.code)].map((c) => { const a = AREAS.find((x) => x.kind === 'gov' && x.code === c); return `<option value="${c}"${gov && c === gov.code ? ' selected' : ''}>${c ? esc(areaName(a, lang)) : (en ? 'All governorates' : 'كل المحافظات')}</option>`; }).join('');
+  const sel = 'style="padding:8px 10px;border-radius:10px;border:1px solid #2b3f5c;background:#0d1a2c;color:#e8eef6;font:inherit"';
+  const body = `${crumbsHtml(lang, [[en ? 'Live map' : 'الخريطة المباشرة', `/${lang}/`], [en ? 'Alert archive' : 'أرشيف التنبيهات', path]])}
+<h1>${en ? 'Alert archive' : 'أرشيف التنبيهات'}</h1>
+<p class="lead">${en ? `Every alert the project published, searchable by type, governorate and day. The archive covers the last ${ARCHIVE_DAYS} days.` : `كل تنبيه نشره المشروع، قابل للبحث حسب النوع والمحافظة واليوم. الأرشيف بيغطي آخر ${num(ARCHIVE_DAYS, lang)} يوم.`}</p>
+<form method="get" action="${path}" style="display:flex;flex-wrap:wrap;gap:8px;margin:14px 0">
+<label>${en ? 'Type' : 'النوع'} <select name="type" ${sel}>${typeOpts}</select></label>
+<label>${en ? 'Governorate' : 'المحافظة'} <select name="gov" ${sel}>${govOpts}</select></label>
+<label>${en ? 'Day' : 'اليوم'} <input type="date" name="day" value="${esc(day)}" ${sel}></label>
+<button class="btn red" type="submit" style="border:0;cursor:pointer">${en ? 'Search' : 'ابحث'}</button>
+${type || gov || day ? `<a class="btn" href="${path}">${en ? 'Clear filters' : 'مسح المرشحات'}</a>` : ''}
+</form>
+<p>${en ? `${total} matching alert${total === 1 ? '' : 's'}` : `${num(total, lang)} تنبيه مطابق`}${pages > 1 ? (en ? ` · page ${cur} of ${pages}` : ` · صفحة ${num(cur, lang)} من ${num(pages, lang)}`) : ''}</p>
+${rows ? `<ul class="evs">${rows}</ul>` : `<p>${en ? 'No alerts match these filters in the archive window.' : 'ما في تنبيهات مطابقة لهالمرشحات ضمن فترة الأرشيف.'}</p>`}
+${pages > 1 ? `<div class="cta">${cur > 1 ? `<a class="btn" href="${qs({ page: String(cur - 1) })}">${en ? '← Newer' : '→ الأحدث'}</a>` : ''}${cur < pages ? `<a class="btn" href="${qs({ page: String(cur + 1) })}">${en ? 'Older →' : 'الأقدم ←'}</a>` : ''}</div>` : ''}`;
+  const jsonld = [{ '@context': 'https://schema.org', '@graph': [ORG(), { '@type': 'CollectionPage', '@id': site + path, url: site + path, name: title, description: desc, inLanguage: lang, isPartOf: { '@type': 'WebSite', url: `${site}/${lang}/`, name: 'Red Alert Syria' }, publisher: { '@id': `${site}/#org` } }] }];
+  return shell({ lang, title, desc, path, alt: `/${en ? 'ar' : 'en'}/archive/`, ogImage: `${site}/og/site-${lang}.png`, jsonld, body });
+}
+
 // ------------------------------------------------------------------ sitemap / robots
 function sitemapXml() {
+
   const site = SITE();
   const now = new Date().toISOString();
   const url = (p, alt, lastmod, freq, pri) => `<url><loc>${site}${p}</loc>${alt ? `<xhtml:link rel="alternate" hreflang="${p.startsWith('/ar') ? 'ar' : 'en'}" href="${site}${p}"/><xhtml:link rel="alternate" hreflang="${alt.startsWith('/ar') ? 'ar' : 'en'}" href="${site}${alt}"/>` : ''}<lastmod>${lastmod}</lastmod><changefreq>${freq}</changefreq><priority>${pri}</priority></url>`;
@@ -569,6 +630,7 @@ function sitemapXml() {
   for (const l of ['ar', 'en']) out.push(url(`/${l}/`, `/${l === 'ar' ? 'en' : 'ar'}/`, now, 'always', '1.0'));
   for (const l of ['ar', 'en']) out.push(url(`/${l}/areas/`, `/${l === 'ar' ? 'en' : 'ar'}/areas/`, now, 'daily', '0.8'));
   for (const pg of ['about', 'glossary', 'press']) for (const l of ['ar', 'en']) out.push(url(`/${l}/${pg}/`, `/${l === 'ar' ? 'en' : 'ar'}/${pg}/`, now, 'monthly', '0.6'));
+  for (const l of ['ar', 'en']) out.push(url(`/${l}/archive/`, `/${l === 'ar' ? 'en' : 'ar'}/archive/`, now, 'daily', '0.7'));
   for (const a of AREAS) {
     const ev = areaEvents(a, 30);
     const lm = ev[0] ? new Date(ev[0].ts).toISOString() : new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
@@ -601,6 +663,11 @@ export function mountSeo(app, { limiter } = {}) {
       html(res, pg === 'about' ? aboutPage(lang) : pg === 'glossary' ? glossaryPage(lang) : pressPage(lang), 600);
     });
   }
+  app.get(['/ar/archive', '/en/archive'], slash);
+  app.get(['/ar/archive/', '/en/archive/'], ...lim, (req, res) => {
+    const lang = req.path.startsWith('/en') ? 'en' : 'ar';
+    html(res, archivePage(lang, { type: String(req.query.type || ''), gov: String(req.query.gov || ''), day: String(req.query.day || ''), page: String(req.query.page || '') }), 120);
+  });
   app.get(['/ar/areas', '/en/areas'], slash);
   app.get(['/ar/areas/', '/en/areas/'], ...lim, (req, res) => html(res, hubPage(req.path.startsWith('/en') ? 'en' : 'ar'), 600));
   app.get(['/ar/area/:slug', '/en/area/:slug'], slash);
@@ -632,4 +699,4 @@ export function mountSeo(app, { limiter } = {}) {
     try { png(res, await cached(`alert:${a.id}:${m[2]}:${alertLastUpdate(a)}`, 24 * 3600_000, () => renderAlertPng(a, { lang: m[2], timeoutMs: 5000 })), 3600); } catch (e) { console.error('[seo] og alert', e.message); res.redirect(302, `/og/site-${m[2]}.png`); }
   });
 }
-export const _test = { AREAS, BY_SLUG, areaPage, hubPage, aboutPage, glossaryPage, pressPage, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };
+export const _test = { AREAS, BY_SLUG, areaPage, hubPage, aboutPage, glossaryPage, pressPage, archivePage, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };
