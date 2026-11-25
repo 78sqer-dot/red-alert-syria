@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import fs from 'node:fs';
 
 const css = await readFile(new URL('../public/css/app.css', import.meta.url), 'utf8');
 const mapJs = await readFile(new URL('../public/js/map.js', import.meta.url), 'utf8');
@@ -176,19 +177,18 @@ test('owner clarification 2026-11-25: the formation is the approved live plane g
   assert.match(mapJs, /svgTag\(aircraftGlyph, size, `fill="\$\{visual\.color\}" class="flight-svg"`\)/);
 });
 
-test('helicopter treatment (owner decision 2026-11-25): blue side-profile glyph, centred hover, single-glyph toward travel', () => {
-  assert.match(targetSvgs, /helicopter_blue:/, 'the new glyph exists in the catalogue');
-  const heli = targetSvgs.slice(targetSvgs.indexOf('helicopter_blue:'));
-  assert.ok(heli.slice(0, 1200).includes('fill="#35a9f2"'), 'bright sky-blue body (the owner rejected a dark body)');
-  assert.ok(heli.slice(0, 1200).includes('fill="#ef4444" class="heli-beacon"'), 'red beacon dot');
+test('helicopter treatment (owner decision 2026-11-25): owner-picked silhouette glyph, centred hover, single-glyph toward travel', () => {
+  const glyphData = fs.readFileSync(new URL('../public/js/heli-glyph-data.js', import.meta.url), 'utf8');
+  assert.match(glyphData, /export const HELI_GLYPH_DATA = 'data:image\/png;base64,/, 'the owner-picked glyph ships as a data URI (text-only write path)');
   assert.match(mapJs, /marker === 'helicopter'\) \{\s*\/\/ Owner decision 2026-11-25/, 'the static heli marker is the hover treatment');
   assert.match(mapJs, /heli-hover/, 'hover container');
-  assert.match(mapJs, /svgTag\('helicopter_blue', 30\)/, 'the marker renders the blue glyph');
+  assert.match(mapJs, /<img class="heli-glyph-img" src="\$\{HELI_GLYPH_DATA\}"/, 'the marker renders the extracted owner glyph');
+  assert.doesNotMatch(mapJs, /helicopter_blue/, 'the interim hand-drawn SVG glyph is gone');
   assert.match(mapJs, /if \(marker === 'orbit'\) \{\s*\/\/ Orbiting markers follow/, 'helicopters are no longer registered for perimeter orbit (drones still are)');
   assert.match(mapJs, /alert\.type === 'helicopter' \? 'helicopter'/, 'toward helicopters form their own track kind');
-  assert.match(mapJs, /if \(aircraft === 'helicopter'\) \{[\s\S]{0,650}svgTag\('helicopter_blue', 28,/, 'the toward track is a single blue glyph, never a formation');
+  assert.match(mapJs, /if \(aircraft === 'helicopter'\) \{[\s\S]{0,340}heli-glyph-img/, 'the toward track is a single owner glyph, never a formation');
   assert.match(mapJs, /if \(aircraft !== 'helicopter'\) track\.marker\.setRotation\(point\.bearing\)/, 'the side-profile glyph stays upright while travelling');
   assert.match(css, /\.heli-hover \{[^}]*animation: heliHoverRock/, 'gentle rotor-rock');
   assert.match(css, /\.heli-hover::after \{[^}]*animation: heliHoverPulse/, 'soft pulsing ring');
-  assert.match(css, /@keyframes heliHoverRock/, 'rock keyframes present');
+  assert.match(css, /\.heli-glyph-img \{[^}]*width: 46px/, 'glyph display size');
 });

@@ -66,7 +66,7 @@ test('helicopter keeps its dedicated marker — now the owner-approved blue hove
   assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
   // Owner decision 2026-11-25 supersedes the old 24px dark top-down marker:
   // the map renders the sky-blue side-profile glyph in a centred hover.
-  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,420}svgTag\('helicopter_blue', 30\)/);
+  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,420}heli-glyph-img/);
   assert.match(mapSource, /a\.helicopters > 1/);
   assert.match(mapSource, /heli-craft-h2/);
   assert.doesNotMatch(mapSource, /helicopterScale|--heli-scale/);

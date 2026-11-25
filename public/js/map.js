@@ -3,7 +3,8 @@ import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, al
 import { BADGE_PNG } from '/shared/badge-data.js?v=2';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=21';
+import { EXTRA_SVG } from './target-svgs.js?v=22';
+import { HELI_GLYPH_DATA } from './heli-glyph-data.js?v=1';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=7';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
@@ -708,7 +709,7 @@ export class AlertMap {
           // blue glyph on the dotted line — never a formation.
           const airframe = document.createElement('span');
           airframe.className = 'map-flight-track-airframe is-lead';
-          airframe.innerHTML = svgTag('helicopter_blue', 28, 'class="map-flight-track-svg"');
+          airframe.innerHTML = `<img class="heli-glyph-img" src="${HELI_GLYPH_DATA}" alt="">`;
           formation.append(airframe);
         } else for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
           const airframe = document.createElement('span');
@@ -1137,8 +1138,8 @@ export class AlertMap {
       // centre — new sky-blue side-profile glyph with a red beacon, a gentle
       // rotor-rock and a soft pulsing ring; no more perimeter orbit. The
       // drone's orbit rendering is untouched.
-      const craft = `<span class="heli-craft-h">${svgTag('helicopter_blue', 30)}</span>`;
-      const second = a.helicopters > 1 ? `<span class="heli-craft-h heli-craft-h2">${svgTag('helicopter_blue', 30)}</span>` : '';
+      const craft = `<span class="heli-craft-h"><img class="heli-glyph-img" src="${HELI_GLYPH_DATA}" alt=""></span>`;
+      const second = a.helicopters > 1 ? `<span class="heli-craft-h heli-craft-h2"><img class="heli-glyph-img" src="${HELI_GLYPH_DATA}" alt=""></span>` : '';
       el.innerHTML = `<div class="heli-hover${second ? ' heli-intensive' : ''}">${craft}${second}</div>`;
     } else if (marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
