@@ -224,7 +224,18 @@ export async function alertImageSvg(alert, opts = {}) {
       : Array.isArray(alert.zones) && alert.zones.length ? alert.zones : alertZones({ ...alert, location: loc });
     if (!zones.length) zones = [{ lat: center.lat, lon: center.lon, km: 2.2 }];
   }
-  const view = chooseView(zoned ? zones : [{ lat: center.lat, lon: center.lon, km: 1.6 }], center);
+  // «باتجاه» reports (owner order 2026-11-25): when the record carries a
+  // named flight_target with coordinates, the card draws the heading —
+  // a dashed route from the report location toward the target plus the
+  // «نحو X» phrase. Data-only: no name or no coordinates, no heading.
+  // Reference-route departures are excluded (their target is the origin).
+  const ft = alert.flight_target;
+  const headingName = ft ? (en ? (ft.name_en || ft.name_ar) : (ft.name_ar || ft.name_en)) : null;
+  const headingTo = headingName && Number.isFinite(ft.latitude) && Number.isFinite(ft.longitude)
+    && !(alert.flight_route_origin === 'israel_approx_reference' && alert.flight_direction === 'leaving_syria')
+    ? { name: headingName, lat: ft.latitude, lon: ft.longitude } : null;
+  const basePts = zoned ? zones : [{ lat: center.lat, lon: center.lon, km: 1.6 }];
+  const view = chooseView(headingTo && !country ? [...basePts, { lat: headingTo.lat, lon: headingTo.lon, km: 1.6 }] : basePts, center);
   if (country) view.z = 7;
   else if (zones.length === 1) view.z = Math.min(view.z, 12);
   const { z } = view;
@@ -252,6 +263,13 @@ export async function alertImageSvg(alert, opts = {}) {
   // soften the basemap a little so the alert stands out (like the reference)
   o.push(`<rect x="0" y="${HEAD}" width="${W}" height="${MAP_H}" fill="#ffffff" opacity="0.03"/>`);
   const px = (lat, lon) => [lon2x(lon, z) - left, lat2y(lat, z) - top + HEAD];
+  if (headingTo && !country) {
+    const [hx1, hy1] = px(center.lat, center.lon);
+    const [hx2, hy2] = px(headingTo.lat, headingTo.lon);
+    const hcol = eventVisual(type).color;
+    o.push(`<line x1="${hx1.toFixed(1)}" y1="${hy1.toFixed(1)}" x2="${hx2.toFixed(1)}" y2="${hy2.toFixed(1)}" stroke="${hcol}" stroke-width="5" stroke-dasharray="16 12" stroke-linecap="round" opacity="0.85"/>`);
+    o.push(`<circle cx="${hx2.toFixed(1)}" cy="${hy2.toFixed(1)}" r="9" fill="${hcol}" stroke="#ffffff" stroke-width="3"/>`);
+  }
   if (zoned) {
     const dashed = t.zone === 'dashed';
     const col = eventVisual(type).color;
@@ -288,6 +306,7 @@ export async function alertImageSvg(alert, opts = {}) {
   if (type === 'signal_sweep' && alert.meta?.signalPlatform === 'uav') head += en ? ' — Drone' : ' — مسيّرة';
   const short = en ? alert.place?.short_en : alert.place?.short_ar;
   const place = opts.placeLabel != null ? opts.placeLabel : short || (country ? (en ? 'Syria' : 'سوريا') : placeText(alert, lang));
+  const placeDisplay = headingTo ? `${place}${en ? ' · To ' : ' · نحو '}${headingTo.name}` : place;
   const titleSize = head.length > 16 ? 44 : 52;
   const hz = type === 'weather' && HAZARD_ICON[alert.meta?.hazard] ? alert.meta.hazard : '';
   const firearm = type === 'assassination' || type === 'shooting';
@@ -304,8 +323,8 @@ export async function alertImageSvg(alert, opts = {}) {
   const dotX = en ? 50 : W - 50;
   o.push(`<circle cx="${dotX}" cy="107" r="13" fill="${lvl.color}"/>`);
   const sx = en ? 74 : W - 74;
-  const placeMax = 34;
-  const placeShort = place.length > placeMax ? place.slice(0, placeMax - 1) + '…' : place;
+  const placeMax = headingTo ? 48 : 34;
+  const placeShort = placeDisplay.length > placeMax ? placeDisplay.slice(0, placeMax - 1) + '…' : placeDisplay;
   o.push(`<text x="${sx}" y="118" font-family="${FF}" font-size="30" font-weight="700" text-anchor="${anchor}"${en ? '' : ' direction="rtl"'}><tspan fill="${lvl.color}">${ttx(sub)}</tspan>${placeShort ? `<tspan fill="#cbd5e1" font-weight="500">${ttx(' · ' + placeShort)}</tspan>` : ''}</text>`);
   // logo + domain on the other side
   const domain = (process.env.PUBLIC_URL || 'https://red-alert-syria-q6k8.onrender.com').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
@@ -320,7 +339,7 @@ export async function alertImageSvg(alert, opts = {}) {
   o.push(channelBadge(16, HEAD + MAP_H - 16 - 46));
   // ---- footer: note (multi-circle / aircraft) + time
   const notes = NOTE[en ? 'en' : 'ar'];
-  const note = country && alert.place?.name_ar ? (en ? 'Reported area only; precise incident point unverified. No location pin.' : 'المنطقة مذكورة في الخبر فقط؛ لم يُتحقق من موقع دقيق، دون دبوس') : referenceOnly ? (en ? 'Approximate geographic reference only, not incident location. No danger radius.' : 'مرجع جغرافي تقريبي فقط، لا موقع الحادث الدقيق ولا نطاق خطر') : type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
+  const note = headingTo ? (en ? 'Note: the dashed line shows the approximate heading toward the named area' : 'ملاحظة: الخط المتقطع يدلّ على اتجاه التحليق التقريبي نحو المنطقة المذكورة') : country && alert.place?.name_ar ? (en ? 'Reported area only; precise incident point unverified. No location pin.' : 'المنطقة مذكورة في الخبر فقط؛ لم يُتحقق من موقع دقيق، دون دبوس') : referenceOnly ? (en ? 'Approximate geographic reference only, not incident location. No danger radius.' : 'مرجع جغرافي تقريبي فقط، لا موقع الحادث الدقيق ولا نطاق خطر') : type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
   const when = whenText(alert.timestamp || Date.now(), lang);
   const fy = HEAD + MAP_H;
   o.push(`<rect x="0" y="${fy}" width="${W}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${fy}" width="${W}" height="1.5" fill="#e2e8f0"/>`);
