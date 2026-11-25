@@ -65,3 +65,15 @@ test('plane area uses blue dashed geographic circles without DOM pulses and plan
   assert.match(css, /map-flight-track-marker\.is-plane\.is-toward-syria \.map-flight-track-visual::before/);
   assert.match(css, /height: 135px; border-left: 1\.5px dashed rgba\(59,142,255,\.45\)/);
 });
+
+test('owner order 2026-11-25: the direction arrowhead renders on every route, plane routes included', () => {
+  assert.match(map, /id: 'ras-flight-direction-arrow'[^;]*filter: \['has', 'arrow'\]/);
+});
+
+test('owner order 2026-11-25: destination label comes only from the stored flight_target name', () => {
+  assert.match(map, /const targetName = lang === 'en'\s*\? \(alert\.flight_target\?\.name_en \|\| alert\.flight_target\?\.name_ar\)\s*: \(alert\.flight_target\?\.name_ar \|\| alert\.flight_target\?\.name_en\);/);
+  assert.match(map, /if \(targetName && !\(isReferenceRoute && alert\.flight_direction === 'leaving_syria'\)\)/);
+  assert.match(map, /targetLabel: lang === 'en' \? `To \$\{targetName\}` : `نحو \$\{targetName\}`/);
+  assert.match(map, /geometry: \{ type: 'Point', coordinates: route\[route\.length - 1\] \}/);
+  assert.match(map, /id: 'ras-flight-target-label'[^;]*'text-field': \['get', 'targetLabel'\]/);
+});

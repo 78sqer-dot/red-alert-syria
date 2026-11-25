@@ -369,9 +369,10 @@ export class AlertMap {
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.58, 0.22), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1.3] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['get', 'planeArea'], true], 1.5, 1.8], 'line-opacity': ['case', ['==', ['get', 'planeArea'], true], 0.7, A(0.85, 0.3)], 'line-dasharray': [3, 4] } });
     add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'referenceRoute'], 0.92, ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'referenceRoute'], 2.4, ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'referenceRoute'], 3.2, ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'referenceRoute'], ['literal', [4, 2]], ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
-    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', filter: ['any', ['==', ['get', 'referenceRoute'], true], ['!=', ['get', 'planeRoute'], true]], layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
+    add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', filter: ['has', 'arrow'], layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
     add({ id: 'ras-flight-reference-point', type: 'circle', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], paint: { 'circle-radius': 4, 'circle-color': ['get', 'color'], 'circle-stroke-color': dark ? '#111827' : '#ffffff', 'circle-stroke-width': 1.6 } });
     add({ id: 'ras-flight-reference-label', type: 'symbol', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], layout: { 'text-field': ['get', 'label'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 10, 12], 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.96 } });
+    add({ id: 'ras-flight-target-label', type: 'symbol', source: 'ras-flight-paths', filter: ['==', ['get', 'targetPoint'], true], layout: { 'text-field': ['get', 'targetLabel'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 11, 10, 14], 'text-anchor': 'bottom', 'text-offset': [0, -1.1], 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.97 } });
     this._startGlow();
     this.applyToggles();
     this.updateZones();
@@ -553,6 +554,22 @@ export class AlertMap {
           properties: { color: routeColor, arrow: '➤', alertId: alert.id, illustrative: true, planeRoute: aircraft !== 'uav', referenceRoute: isReferenceRoute },
           geometry: { type: 'LineString', coordinates: route },
         });
+        // Destination label (owner order 2026-11-25): name the area the
+        // flight is heading to, taken ONLY from the alert's stored
+        // flight_target name — no name in the data, no label. On a leaving
+        // reference route the target is the departure area and the Israel
+        // reference label already marks the destination, so skip it there.
+        const targetName = lang === 'en'
+          ? (alert.flight_target?.name_en || alert.flight_target?.name_ar)
+          : (alert.flight_target?.name_ar || alert.flight_target?.name_en);
+        if (targetName && !(isReferenceRoute && alert.flight_direction === 'leaving_syria')) {
+          routeFeatures.push({
+            type: 'Feature',
+            id: `target-${alert.id}`,
+            properties: { color: routeColor, targetPoint: true, alertId: alert.id, targetLabel: lang === 'en' ? `To ${targetName}` : `نحو ${targetName}` },
+            geometry: { type: 'Point', coordinates: route[route.length - 1] },
+          });
+        }
       }
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
       const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${heading}|${position.join(',')}|${route.join(';')}`;
