@@ -262,6 +262,9 @@ function channelEventSymbol(alert) {
 //
 //   (no footer; map and channel links remain on the inline buttons)
 export function channelPost(alert, { ended = false } = {}) {
+  // One canonical time source for post + card (owner order 2026-11-25): the
+  // alert's own instant, whichever field the caller's object shape carries.
+  const postTimeIso = alert.timestamp || (Number.isFinite(alert.ts) ? new Date(alert.ts).toISOString() : alert.created_at || alert.created || undefined);
   assertPublicCopySafe(alert?.title, alert?.title_en, alert?.description, alert?.description_en, alert?.meta?.channelTitle);
   const t = typeOf(alert.type);
   let title = alert.meta?.channelTitle || (TITLES[alert.type] || {}).ar || t.ar;
@@ -293,7 +296,10 @@ export function channelPost(alert, { ended = false } = {}) {
     ? cleanAttributedNewsText(alert.description || '', privateSourceNames)
     : cleanAlertText(alert.description || '');
 
-  if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
+  // Owner rule (2026-11-25, from the live Dardara post): the post carries ONE
+  // short place line — the primary affected place. Reference/district mentions
+  // bound as extra areas stay on the record and draw card circles only.
+  if (hasPlace) sections.push(`📍<b>${esc(locName(p, 'ar'))}</b>`);
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (desc || alert.type === 'breaking') sections.push(`<blockquote>${esc(desc || alert.title)}</blockquote>`);
   // Quote block (owner order 2026-11-25): short verbatim quote from the
@@ -311,11 +317,11 @@ export function channelPost(alert, { ended = false } = {}) {
     }
   }
   if (alert.type === 'political') {
-    sections.push(`📅 <b>التاريخ:</b> ${esc(fmtDate(alert.timestamp))}`);
-    sections.push(`🕒 <b>الوقت:</b> ${esc(fmtClock(alert.timestamp))}`);
+    sections.push(`📅 <b>التاريخ:</b> ${esc(fmtDate(postTimeIso))}`);
+    sections.push(`🕒 <b>الوقت:</b> ${esc(fmtClock(postTimeIso))}`);
   } else {
-    sections.push(`تاريخ :  ${esc(fmtDate(alert.timestamp))}`);
-    sections.push(`الساعة :  ${esc(fmtClock(alert.timestamp))}`);
+    sections.push(`تاريخ :  ${esc(fmtDate(postTimeIso))}`);
+    sections.push(`الساعة :  ${esc(fmtClock(postTimeIso))}`);
   }
   if (ended) sections.push(`انتهى :  ${esc(fmtClock(alert.ended_at || new Date().toISOString()))}`);
   return sections.join('\n\n');

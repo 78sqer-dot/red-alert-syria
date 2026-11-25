@@ -66,3 +66,30 @@ test('publish retains the source text and the channel post quotes it verbatim wi
   assert.match(post, /💬 <b>اقتباس من المصدر:<\/b> «أفاد مراسلنا في درعا/);
   assert.doesNotMatch(post, /قناة رصد خاصة|private_watch/);
 });
+
+test('post place lines: ONE primary place only — extra areas never print as place lines (owner order 2026-11-25, Dardara post)', () => {
+  const post = channelPost({
+    type: 'explosion', title: 'انفجار في الدردارة', description: 'انفجار في بلدة الدردارة بريف الحسكة',
+    place: { scope: 'place', name_ar: 'الدردارة', name_en: 'Al-Dardara', governorate_ar: 'الحسكة', governorate_en: 'Al-Hasakah', latitude: 36.4, longitude: 40.9 },
+    extra: [{ scope: 'place', name_ar: 'تل تمر', name_en: 'Tal Tamr', governorate_ar: 'الحسكة', latitude: 36.65, longitude: 40.37 }],
+    location: { latitude: 36.4, longitude: 40.9 }, timestamp: new Date(Date.UTC(2026, 10, 25, 17, 18)).toISOString(),
+  });
+  assert.equal((post.match(/📍/g) || []).length, 1, 'exactly one place line in the post');
+  assert.ok(post.includes('الدردارة - الحسكة'), 'the primary affected place, short form');
+  assert.ok(!post.includes('تل تمر'), 'the reference town is not a place line (it stays on the record for card circles)');
+});
+
+test('one canonical time source: post clock and card footer agree for any alert object shape', async () => {
+  const { alertImageSvg, alertTimeMs } = await import('../server/alert-image.js');
+  const ms = Date.UTC(2026, 10, 25, 17, 18); // 20:18 Damascus
+  const base = { type: 'explosion', title: 'انفجار', location: { latitude: 36.4, longitude: 40.9 }, place: { scope: 'place', name_ar: 'الدردارة', governorate_ar: 'الحسكة', latitude: 36.4, longitude: 40.9 } };
+  assert.equal(alertTimeMs({ ts: ms }), ms);
+  assert.equal(alertTimeMs({ timestamp: new Date(ms).toISOString() }), ms);
+  const footer = (svg) => svg.match(/الساعة ([^<]+)/)?.[1];
+  const svgTs = await alertImageSvg({ ...base, ts: ms }, { lang: 'ar' });
+  const svgIso = await alertImageSvg({ ...base, timestamp: new Date(ms).toISOString() }, { lang: 'ar' });
+  assert.equal(footer(svgTs), footer(svgIso), 'card footer is identical whether the object carries ts or timestamp');
+  const post = channelPost({ ...base, place: { ...base.place, name_en: 'Al-Dardara' }, extra: [], ts: ms, description: 'x' });
+  assert.ok(!post.includes('Invalid'), 'post renders a real time from ts');
+  assert.ok(post.includes('٨:١٨') || post.includes('8:18'), 'post clock shows the same 20:18 Damascus instant');
+});

@@ -88,6 +88,16 @@ const NOTE = {
 };
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// One canonical time source for card + post (owner order 2026-11-25): the
+// alert's own instant, whichever field the caller's object shape carries —
+// never a silent fall back to render time when a real instant exists.
+export function alertTimeMs(alert) {
+  for (const v of [alert?.timestamp, alert?.ts, alert?.created_at, alert?.created]) {
+    const ms = typeof v === 'number' ? v : Date.parse(v || '');
+    if (Number.isFinite(ms) && ms > 0) return ms;
+  }
+  return Date.now();
+}
 function whenText(ms, lang) {
   const f = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const o = Object.fromEntries(f.formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
@@ -342,7 +352,7 @@ export async function alertImageSvg(alert, opts = {}) {
   // ---- footer: note (multi-circle / aircraft) + time
   const notes = NOTE[en ? 'en' : 'ar'];
   const note = headingTo ? (en ? 'Note: the dashed line shows the approximate heading toward the named area' : 'ملاحظة: الخط المتقطع يدلّ على اتجاه التحليق التقريبي نحو المنطقة المذكورة') : country && alert.place?.name_ar ? (en ? 'Reported area only; precise incident point unverified. No location pin.' : 'المنطقة مذكورة في الخبر فقط؛ لم يُتحقق من موقع دقيق، دون دبوس') : referenceOnly ? (en ? 'Approximate geographic reference only, not incident location. No danger radius.' : 'مرجع جغرافي تقريبي فقط، لا موقع الحادث الدقيق ولا نطاق خطر') : type === 'uav' ? notes.uav : (type === 'quake' || type === 'weather' || type === 'airstrike') ? notes[type] : (zoned && zones.length > 1 ? notes.multi : ['warplane', 'helicopter'].includes(type) ? notes.warplane : '');
-  const when = whenText(alert.timestamp || Date.now(), lang);
+  const when = whenText(alertTimeMs(alert), lang);
   const fy = HEAD + MAP_H;
   o.push(`<rect x="0" y="${fy}" width="${W}" height="${FOOT}" fill="#ffffff"/><rect x="0" y="${fy}" width="${W}" height="1.5" fill="#e2e8f0"/>`);
   const fx = W / 2;
@@ -470,7 +480,7 @@ export function newsIllustrationSvg(alert, lang = 'ar') {
   const logo = logoAt(52, 28, 50);
   const category = en ? t.en : t.ar;
   const disclosure = en ? 'ILLUSTRATIVE GRAPHIC · NOT A SCENE PHOTOGRAPH' : 'تصميم توضيحي · ليس صورة للمشهد';
-  const timestamp = Number.isFinite(Date.parse(alert?.timestamp || '')) ? Date.parse(alert.timestamp) : Date.now();
+  const timestamp = alertTimeMs(alert);
   const when = whenText(timestamp, en ? 'en' : 'ar');
   const o = [];
   o.push('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="600" viewBox="0 0 1024 600">');
