@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ARMY_CATEGORIES, ARMY_SOURCES, ARMY_MONITOR_ONLY_SOURCES, initialArmyState, salaryNewsKind, inferArmyCategory,
+  ARMY_CATEGORIES, ARMY_SOURCES, ARMY_MONITOR_ONLY_SOURCES, initialArmyState, salaryNewsKind, armySectionKind, inferArmyCategory,
   normalizeArmyTelegramUsername, normalizeManualArmySource, armyMonitorSources,
   addManualArmySource, updateManualArmySource, removeManualArmySource,
   createPendingArmyItem, decideArmyItem, updateArmyItem, deleteArmyItem,
@@ -191,7 +191,7 @@ test('salary and recruitment screening covers requested groups without matching 
   assert.equal(inferArmyCategory('إعلان حكومي تجريبي عن صرف الرواتب', 'sana_gov'), null);
   const rejected = createPendingArmyItem({ kind: 'official_source', sourceKey: 'test:civil-vacancy', sourceUrl: 'https://t.me/sana_gov/999', title: 'شواغر وظيفية', text: 'إعلان عن شواغر وظيفية في وزارة الإعلام.' }, initialArmyState(), NOW);
   assert.equal(rejected.error, 'not_army_related');
-  assert.deepEqual(Object.keys(ARMY_CATEGORIES), ['recruitment', 'army', 'police', 'security', 'units', 'special', 'official_links', 'judicial', 'government']);
+  assert.deepEqual(Object.keys(ARMY_CATEGORIES), ['recruitment', 'army', 'police', 'security', 'news', 'units', 'special', 'official_links', 'judicial', 'government']);
   assert.equal(ARMY_CATEGORIES.government.public, false);
   assert.ok(ARMY_SOURCES.some((source) => source.u === 'sana_gov' && source.url === 'https://t.me/sana_gov'));
 });
@@ -273,4 +273,23 @@ test('newer edits win over an older backup and channels accept only safe HTTPS c
   assert.equal(normalizeArmyChannelLink('tg', 'https://example.com/not-telegram'), '');
   assert.equal(publicArmy(j).channels.tg, 'https://t.me/MyPublicChannel');
   assert.equal(adminTest.secureUrl('http://example.test/unsafe'), '');
+});
+
+test('widened army scope (owner order 2026-11-25): units, missions, military justice and army affairs reach the section; civil noise stays out', () => {
+  // Before this widening every sample below returned gate=false / null:
+  // the shared gate admitted only pay and enlistment.
+  assert.equal(inferArmyCategory('الفرقة 25 مهام خاصة تنفذ انتشاراً في ريف حلب الشرقي'), 'special');
+  assert.equal(inferArmyCategory('اللواء 42 في الجيش يبدأ تدريبات عسكرية في المنطقة الجنوبية'), 'units');
+  assert.equal(inferArmyCategory('وحدات من القوات الخاصة تنفذ مهمة خاصة في البادية السورية'), 'special');
+  assert.equal(inferArmyCategory('حُكم بالسجن لمدة خمس سنوات على جندي بتهمة الفرار من الخدمة العسكرية'), 'judicial');
+  assert.equal(inferArmyCategory('وزارة الدفاع: نفذت وحدات من الجيش العربي السوري مناورات بالذخيرة الحية في المنطقة الوسطى'), 'news');
+  assert.equal(inferArmyCategory('مرسوم بتعيين العميد الركن قائداً للفرقة الحادية عشرة في الجيش العربي السوري'), 'news');
+  assert.equal(armySectionKind('الفرقة 25 مهام خاصة تنفذ انتشاراً في ريف حلب الشرقي'), true, 'the monitor loop gate admits units items too (one shared section gate)');
+  assert.equal(salaryNewsKind('الفرقة 25 مهام خاصة تنفذ انتشاراً في ريف حلب الشرقي'), false, 'salaryNewsKind keeps its narrow pay/enlistment meaning');
+  // Civil lookalikes stay out:
+  assert.equal(inferArmyCategory('فرقة الإطفاء تخمد حريقاً في مستودع بحي الميدان'), null);
+  assert.equal(inferArmyCategory('الفرقة الموسيقية تحيي حفلاً في دار الأوبرا بدمشق'), null);
+  assert.equal(inferArmyCategory('أصدرت المحكمة حكماً بالسجن على موظف بتهمة الاختلاس'), null);
+  assert.equal(inferArmyCategory('وزارة الدفاع تجري اجتماعاً دورياً'), null, 'a strong-context mention without an army-affairs topic is not news');
+  assert.equal(ARMY_CATEGORIES.news.ar, 'أخبار الجيش');
 });

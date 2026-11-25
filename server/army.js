@@ -10,6 +10,7 @@ export const ARMY_CATEGORIES = Object.freeze({
   army: Object.freeze({ ar: 'رواتب الجيش', en: 'Army salaries', icon: '💰', iconKey: 'coin' }),
   police: Object.freeze({ ar: 'رواتب الشرطة', en: 'Police salaries', icon: '👮', iconKey: 'patrol' }),
   security: Object.freeze({ ar: 'رواتب الأمن', en: 'Security salaries', icon: '🛡️', iconKey: 'shield' }),
+  news: Object.freeze({ ar: 'أخبار الجيش', en: 'Army news', icon: '🪖', iconKey: 'shield' }),
   units: Object.freeze({ ar: 'الفرق العسكرية', en: 'Military units', icon: '🎖️', iconKey: 'swords' }),
   special: Object.freeze({ ar: 'المهام الخاصة', en: 'Special missions', icon: '🎯', iconKey: 'target' }),
   official_links: Object.freeze({ ar: 'روابط الانتساب الرسمية', en: 'Official enlistment links', icon: '🔗', iconKey: 'link' }),
@@ -227,7 +228,7 @@ export function armyState(root = store.state) {
 const SALARY_TERMS = /(?:رواتب|راتب|اجور|تعويضات|علاوات|منحه ماليه|صرف المستحقات|salary|salaries|payroll|wages|pay raise|pay increase)/iu;
 const RECRUITMENT_TERMS = /(?:انتساب|التحاق|التجنيد|تجنيد|التطوع|تطوع|متطوع|دوره افراد|recruitment|enlistment|recruiting|recruits?|volunteer(?:ing)?)/iu;
 const CLEAR_RECRUITMENT = /(?:فتح باب الانتساب|دوره افراد|التجنيد|انتساب.{0,55}(?:الجيش|الشرطه|القوات المسلحه|عسكري)|التحاق.{0,55}(?:الجيش|الشرطه|القوات المسلحه|عسكري)|(?:التطوع|تطوع).{0,55}(?:الجيش|الشرطه|القوات المسلحه|عسكري)|(?:army|police|security|armed forces).{0,55}(?:enlistment|recruitment|recruit|volunteer|join))/iu;
-const MILITARY_CONTEXT = /(?:الجيش|القوات المسلحه|وزاره الدفاع|وزاره الداخليه|عسكري|جندي|الشرطه|قوى الامن الداخلي|الامن العام|قوات الامن|المهام الخاصه|القوات الخاصه|army|armed forces|military|police|security forces|soldier)/iu;
+const MILITARY_CONTEXT = /(?:الجيش|القوات المسلحه|وزاره الدفاع|وزاره الداخليه|عسكري|جندي|الشرطه|قوى الامن الداخلي|الامن العام|قوات الامن|المهام الخاصه|مهام خاصه|القوات الخاصه|army|armed forces|military|police|security forces|soldier)/iu;
 const MILITARY_PAY_CONTEXT = /(?:الجيش|القوات المسلحه|عسكري|جندي|الشرطه|شرطي|قوى الامن الداخلي|الامن العام|قوات الامن|القوات الخاصه|الامن|army|armed forces|military personnel|military|police|security forces|soldier)/iu;
 const CIVIL_WORK = /(?:شواغر|وظائف|وظيفه|فرص عمل|vacanc(?:y|ies)|job openings|hiring|employment|positions?)/iu;
 const CIVIL_ACTIVITY = /(?:حمله|مبادره|حديقه|تشجير|تنظيف|صيانة|صيانه|تجميل|community campaign|park cleanup|civil volunteer)/iu;
@@ -241,6 +242,34 @@ function hasOfficialApplicationLink(text, links, sourceUsername) {
 }
 
 const JUDICIAL_TERMS = /(?:المحكمه العسكريه|القضاء العسكري|حكم.{0,35}(?:بالسجن|بالحبس|بالاعدام)|احكام قضائيه|military court|court.{0,30}(?:sentence|judgment))/iu;
+const JUDICIAL_ANCHOR = /(?:المحكمه العسكريه|المحاكم العسكريه|القضاء العسكري|النيابه العسكريه|military court|military judiciary)/iu;
+const JUDICIAL_SERVICE_CUE = /(?:عسكري|الخدمه العسكريه|الفرار|التخلف عن الخدمه|جندي|ضابط|soldier|officer|desertion)/iu;
+const SPECIAL_TERMS = /(?:المهام الخاصه|مهام خاصه|العمليات الخاصه|القوات الخاصه|قوات خاصه|وحدات خاصه|special forces|special mission)/iu;
+const UNITS_TERMS = /(?:فرقه عسكريه|الفرق العسكريه|الفرقه|اللواء|الكتائب|كتيبه|فوج|وحدات عسكريه|military unit|brigade|battalion)/iu;
+// Owner order 2026-11-25: the army section takes ALL army affairs, not only
+// pay and enlistment. Strong context = the defence establishment itself, in
+// the text or as the publishing source; affairs = an army-affairs topic.
+const STRONG_ARMY_CONTEXT = /(?:وزاره الدفاع|الجيش العربي السوري|القوات المسلحه|القياده العامه للجيش|هيئه الاركان|رئاسه الاركان|وزير الدفاع|الناطق باسم الجيش|اداره التجنيد|الخدمه العسكريه|ministry of defence|syrian arab army|armed forces command)/iu;
+const ARMY_AFFAIRS_TERMS = /(?:بيان|قرار|مرسوم|تعيين|ترقيه|ترفيع|اوسمه|مناوره|مناورات|تدريب عسكري|تدريبات عسكريه|تسريح|معاشات|تقاعد العسكريين|الكليه الحربيه|دوره ضباط|تشكيل|اعاده هيكله|استشهاد|تشييع عسكري|تسليح|خدمه العلم|دفتر خدمه|تاجيل الخدمه|استدعاء الاحتياط|statement|decree|promotion|maneuver|military exercise|demobilization|military academy)/iu;
+const ARMY_CHANNEL_SOURCES = new Set(['sy_defense', 'syrararmy']);
+
+export function isMilitaryJudicial(n) {
+  return JUDICIAL_TERMS.test(n) && (JUDICIAL_ANCHOR.test(n) || JUDICIAL_SERVICE_CUE.test(n));
+}
+
+// The widened admission for army affairs beyond pay/enlistment. Deterministic
+// and shared: the monitor loop gate (salaryNewsKind) and inferArmyCategory
+// both consult it, so capture and classification can never drift apart.
+export function armyAffairsKind(text, sourceUsername = '', links = []) {
+  const n = norm(text);
+  if (isMilitaryJudicial(n)) return true;
+  const source = String(sourceUsername || '').toLowerCase();
+  const militarySelf = MILITARY_CONTEXT.test(n) || STRONG_ARMY_CONTEXT.test(n) || ARMY_CHANNEL_SOURCES.has(source);
+  if ((SPECIAL_TERMS.test(n) || UNITS_TERMS.test(n)) && militarySelf) return true;
+  const strong = STRONG_ARMY_CONTEXT.test(n) || ARMY_CHANNEL_SOURCES.has(source);
+  if (strong && ARMY_AFFAIRS_TERMS.test(n) && !CIVIL_WORK.test(n) && !CIVIL_ACTIVITY.test(n)) return true;
+  return false;
+}
 const PERSONNEL_RANKS = /(?:من مرتبات|ضمن مرتبات|احد مرتبات|منتسب.{0,20}مرتبات)/iu;
 function hasSalaryMeaning(n) {
   return SALARY_TERMS.test(n) || (!PERSONNEL_RANKS.test(n) && /(?:صرف|دفع|زياده|رفع|تسديد).{0,25}مرتبات|مرتبات.{0,25}(?:شهريه|ماليه|المتقاعدين)/iu.test(n));
@@ -255,14 +284,22 @@ export function salaryNewsKind(text, sourceUsername = '', links = []) {
   return salary || recruitment || (RECRUITMENT_TERMS.test(n) && hasOfficialApplicationLink(text, links, sourceUsername) && MILITARY_CONTEXT.test(n));
 }
 
+// THE section capture gate (owner order 2026-11-25): pay/enlistment kind OR
+// any army-affairs kind. This single predicate is what the monitor loop and
+// the classifier consult, so capture and classification cannot drift apart.
+// salaryNewsKind above keeps its narrower pay/enlistment meaning.
+export function armySectionKind(text, sourceUsername = '', links = []) {
+  return salaryNewsKind(text, sourceUsername, links) || armyAffairsKind(text, sourceUsername, links);
+}
+
 export function inferArmyCategory(text, sourceUsername = '', links = []) {
   const n = norm(text);
-  if (JUDICIAL_TERMS.test(n) && /(?:المحكمه العسكريه|القضاء العسكري|military court)/iu.test(n)) return 'judicial';
-  if (!salaryNewsKind(text, sourceUsername, links)) return null;
+  if (isMilitaryJudicial(n)) return 'judicial';
+  if (!armySectionKind(text, sourceUsername, links)) return null;
   const source = String(sourceUsername || '').toLowerCase();
   const recruitment = RECRUITMENT_TERMS.test(n) && (MILITARY_CONTEXT.test(n) || CLEAR_RECRUITMENT.test(n));
-  const special = /(?:المهام الخاصه|العمليات الخاصه|قوات خاصه|وحدات خاصه|special forces|special mission)/iu.test(n);
-  const units = /(?:فرقه عسكريه|الفرق العسكريه|الفرقه|اللواء|الكتائب|كتيبه|فوج|وحدات عسكريه|military unit|brigade|battalion)/iu.test(n);
+  const special = SPECIAL_TERMS.test(n);
+  const units = UNITS_TERMS.test(n);
   const police = /(?:الشرطه|شرطي|وزاره الداخليه|قوى الامن الداخلي|police)/iu.test(n) || source === 'syrianmoi';
   const security = /(?:الاستخبارات|الامن العام|قوات الامن|الامن الداخلي|security)/iu.test(n);
   const hasSalary = hasSalaryMeaning(n);
@@ -273,6 +310,7 @@ export function inferArmyCategory(text, sourceUsername = '', links = []) {
   if (police) return 'police';
   if (security) return 'security';
   if (hasSalary && MILITARY_PAY_CONTEXT.test(n)) return 'army';
+  if (armyAffairsKind(text, sourceUsername, links)) return 'news';
   return null;
 }
 
@@ -554,7 +592,7 @@ export async function pollArmyOnce({ j = armyState(), fetcher = fetchChannel, no
     for (const post of fresh) {
       const text = String(post.text || '').trim();
       const key = `telegram:${source.u}:${post.id}`;
-      if (text && salaryNewsKind(text, source.u, post.links || []) && post.ts && now - Number(post.ts) <= MAX_SOURCE_AGE) {
+      if (text && armySectionKind(text, source.u, post.links || []) && post.ts && now - Number(post.ts) <= MAX_SOURCE_AGE) {
         const made = createPendingArmyItem({
           kind: source.type === 'media' ? 'media_source' : 'official_source', sourceKey: key, sourceUsername: source.u,
           category: inferArmyCategory(text, source.u, post.links || []), title: titleFromText(text), text,
