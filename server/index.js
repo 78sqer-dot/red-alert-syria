@@ -18,7 +18,7 @@ import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
 import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
-import { mountSeo, homeJsonLd, verifyMetaTags, umamiScriptTag } from './seo.js';
+import { mountSeo, homeJsonLd, verifyMetaTags, umamiScriptTag, notFoundPage } from './seo.js';
 import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
 import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug } from './wx-daily.js';
 import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
@@ -392,7 +392,10 @@ app.get(['/ar', '/en', '/ar/', '/en/'], (req, res) => {
   res.type('html').send(renderIndex(p.startsWith('/en') ? 'en' : 'ar'));
 });
 mountSeo(app, { limiter: apiLimiter });
-app.use((req, res) => res.status(404).type('text').send('Not found'));
+app.use((req, res) => {
+  if (req.method !== 'GET' || req.path.startsWith('/api/')) return res.status(404).type('text').send('Not found');
+  return res.status(404).type('html').send(notFoundPage(req.path.startsWith('/en') ? 'en' : 'ar'));
+});
 
 // ------------------------------------------------------------------ start
 const UPD = ['message', 'callback_query', 'edited_channel_post'];

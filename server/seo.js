@@ -711,4 +711,17 @@ export function mountSeo(app, { limiter } = {}) {
     try { png(res, await cached(`alert:${a.id}:${m[2]}:${alertLastUpdate(a)}`, 24 * 3600_000, () => renderAlertPng(a, { lang: m[2], timeoutMs: 5000 })), 3600); } catch (e) { console.error('[seo] og alert', e.message); res.redirect(302, `/og/site-${m[2]}.png`); }
   });
 }
-export const _test = { AREAS, BY_SLUG, areaPage, hubPage, aboutPage, glossaryPage, pressPage, archivePage, umamiScriptTag, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };
+export function notFoundPage(lang) {
+  const en = lang === 'en';
+  const body = `<section class="card"><h1>${en ? 'Page not found' : 'الصفحة غير موجودة'}</h1>`
+    + `<p>${en ? 'The page you are looking for does not exist or has moved.' : 'الصفحة التي تبحث عنها غير موجودة أو نُقلت.'}</p>`
+    + `<p><a href="${en ? '/en/' : '/ar/'}">${en ? 'Live map' : 'الخريطة الحية'}</a> · <a href="${en ? '/en/archive/' : '/ar/archive/'}">${en ? 'Alert archive' : 'أرشيف التنبيهات'}</a> · <a href="https://t.me/Red_Alert_Syria">Telegram</a></p></section>`;
+  return shell({
+    lang: en ? 'en' : 'ar',
+    title: en ? 'Page not found | Red Alert Syria' : 'الصفحة غير موجودة | ريد ألرت سوريا',
+    desc: en ? 'The requested page does not exist.' : 'الصفحة المطلوبة غير موجودة.',
+    path: en ? '/en/404' : '/ar/404', alt: '', body, robots: 'noindex,follow',
+  });
+}
+
+export const _test = { AREAS, BY_SLUG, areaPage, hubPage, aboutPage, glossaryPage, pressPage, archivePage, notFoundPage, umamiScriptTag, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };
