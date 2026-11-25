@@ -4,7 +4,7 @@ import { transferCounters } from './transfer-counters.js';
 import { startTranslations } from './translate.js';
 import express from 'express';
 import helmet from 'helmet';
-import compression from 'compression';
+import { streamingCompression } from './streaming-compression.js';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -80,7 +80,7 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(), microphone=(), payment=(), usb=()');
   next();
 });
-app.use(compression({ filter: (req, res) => (req.path === '/api/stream' ? false : compression.filter(req, res)) }));
+app.use(streamingCompression());
 
 // ------------------------------------------------------------------ telegram webhook
 // Bot 1 (admin): private publishing panel for the owner + editors.
@@ -311,7 +311,7 @@ app.get('/api/stream', streamLimiter, (req, res) => {
   if (clients.size >= MAX_CLIENTS) return res.status(503).end();
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
-    'Cache-Control': 'no-cache, no-transform',
+    'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
   });
