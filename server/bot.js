@@ -302,13 +302,9 @@ export function channelPost(alert, { ended = false } = {}) {
   if (hasPlace) sections.push(`📍<b>${esc(locName(p, 'ar'))}</b>`);
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (desc || alert.type === 'breaking') sections.push(`<blockquote>${esc(desc || alert.title)}</blockquote>`);
-  // Quote block (owner order 2026-11-25): short verbatim quote from the
-  // source's own words (retained on the alert at publish), attributed.
-  const quoteText = String(alert.meta?.sourceText || '').replace(/\s+/g, ' ').trim();
-  if (quoteText && quoteText !== String(alert.title || '').replace(/\s+/g, ' ').trim()) {
-    const q = quoteText.length > 160 ? quoteText.slice(0, 160).replace(/\s+\S*$/, '') + '…' : quoteText;
-    sections.push(`💬 <b>اقتباس من المصدر:</b> «${esc(q)}»`);
-  }
+  // NO quote block: the owner cancelled it 2026-11-25 («بدي بس نص الخبر»)
+  // after a live post's quote proved to be a trimmed copy of its own
+  // headline. Posts carry the news text only — do not re-add a quote block.
   if (alert.type === 'political') {
     const meta = alert.meta?.political || {};
     const category = POLITICAL_CATEGORIES[meta.category];

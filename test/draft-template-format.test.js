@@ -29,12 +29,13 @@ test('place line is short «place - governorate» with no administrative chain (
   assert.doesNotMatch(card, /الصنمين/);
 });
 
-test('draft card carries a verbatim attributed quote block (owner order 2026-11-25)', () => {
+test('NO quote block anywhere (owner cancellation 2026-11-25: news text only)', () => {
+  // The block was cancelled the same evening it shipped, after a live post's
+  // quote proved to be a trimmed copy of its own headline (Hasakah clashes).
   const card = _test.cardText(draft, 'ar');
-  assert.match(card, /💬 <b>اقتباس:<\/b> «أفاد مراسلنا في درعا بأن انفجاراً وقع في بلدة صور صباح اليوم/);
-  assert.match(card, /» — وكالة الأنباء/);
-  const bare = _test.cardText({ ...draft, sourceText: '' }, 'ar');
-  assert.doesNotMatch(bare, /اقتباس/);
+  assert.doesNotMatch(card, /اقتباس|💬/);
+  const hasakah = _test.cardText({ ...draft, headline: 'سماع أصوات اشتباكات مسلحة في مدينة الحسكة', sourceText: 'أصوات اشتباكات في مدينة الحسكة' }, 'ar');
+  assert.doesNotMatch(hasakah, /اقتباس|💬/);
 });
 
 test('place format rule: card place line and record areas are short (place - governorate, no district)', async () => {
@@ -63,7 +64,7 @@ test('publish retains the source text and the channel post quotes it verbatim wi
     meta: { sourceText: draft.sourceText, newsSources: [{ name: 'قناة رصد خاصة', u: 'private_watch' }] },
   };
   const post = channelPost(alert);
-  assert.match(post, /💬 <b>اقتباس من المصدر:<\/b> «أفاد مراسلنا في درعا/);
+  assert.doesNotMatch(post, /اقتباس من المصدر|💬/, 'the channel post carries the news text only — no quote block (owner cancellation 2026-11-25)');
   assert.doesNotMatch(post, /قناة رصد خاصة|private_watch/);
 });
 

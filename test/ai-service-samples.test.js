@@ -55,8 +55,7 @@ test('sample Sour: Gemini down -> backup classifies instantly; draft is short-pl
   const sourLine = card.split('\n').find((l) => l.includes('المكان'));
   assert.match(sourLine, /صور.* - درعا/, 'short place line on the draft card (place - governorate)');
   assert.ok(!sourLine.includes('ازرع') && !sourLine.includes('منطقة'), 'no district chain in the place line');
-  assert.ok(card.includes('اقتباس'), 'quote block present');
-  assert.ok(card.includes('الانفجار وقع بعبوة مزروعة'), 'the quote is the source’s own words, verbatim');
+  assert.ok(!card.includes('اقتباس'), 'no quote block — cancelled by the owner 2026-11-25 (news text only)');
   assert.ok(!card.includes('غير متاح'), 'no AI-unavailable note');
 });
 
