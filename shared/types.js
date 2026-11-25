@@ -348,3 +348,19 @@ export function droneLevel(a) {
   if (a.meta && a.meta.intense === false) return Math.max(1, auto);
   return auto;
 }
+
+const TYPE_LABEL_SEPARATOR = /^\s*[—–\-:|·•/：]\s*/;
+export function stripTypeLabelPrefix(title, typeKey) {
+  const s = String(title ?? '').trim();
+  if (!s || !ALERT_TYPES[typeKey]) return s;
+  const t = ALERT_TYPES[typeKey];
+  const labels = [...new Set([t.ar, t.en, t.button_ar, t.button_en, t.tag_ar, t.tag_en].filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  for (const label of labels) {
+    if (!s.startsWith(label)) continue;
+    const rest = s.slice(label.length);
+    const m = rest.match(TYPE_LABEL_SEPARATOR);
+    if (m && rest.length > m[0].length) return rest.slice(m[0].length).trim();
+  }
+  return s;
+}

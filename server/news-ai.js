@@ -635,3 +635,59 @@ export function refineType(type, text) {
   if (type === 'attack' && any(EXPL_W) && !any(GUN_W)) return 'explosion';
   return type;
 }
+
+// --- place-scan helpers kept with the PR #15 audit exception ---
+const PLACE_INTRODUCERS = new Set(['في', 'من', 'الى', 'على', 'عند', 'قرب', 'بلده', 'قريه', 'مدينه', 'حي', 'ريف', 'منطقه', 'ناحيه', 'شمال', 'جنوب', 'شرق', 'غرب', 'وسط', 'داخل', 'باتجاه', 'نحو', 'اطراف', 'ضواحي'].map(N));
+const nameEq = (x, q, qs) => { const n = N(x); return n === q || stripAl(n) === qs || n.replace(/\s/g, '') === q.replace(/\s/g, ''); };
+export function isAltOnlyMatch(cand, hits) {
+  const q = N(cand);
+  if (!q || !hits?.length) return false;
+  const qs = stripAl(q);
+  return !hits.some((p) => nameEq(p.ar, q, qs)) && hits.some((p) => (p.alt || []).some((a) => nameEq(a, q, qs)));
+}
+export function hasPlaceIntroducer(words, i, rawFirst = '') {
+  const prev = i > 0 ? N(words[i - 1]) : '';
+  if (prev && (PLACE_INTRODUCERS.has(prev) || PLACE_INTRODUCERS.has(stripAl(prev)))) return true;
+  return /^[بل](?=\S{3,})/u.test(String(rawFirst || '')); // a joined preposition on the candidate itself («بالمزرعة»)
+}
+
+// --- pre-publish audit helpers (kept with the PR #15 audit exception) ---
+const SHARP_TONE_GROUPS = [
+  ['satirical-tone', ['سخرية', 'استهزاء', 'يستهزئ', 'تهكم', 'كوميديا سوداء', 'مسخرة', 'ضحك هستيري']],
+  ['slogan-tone', ['يسقط', 'فلتسقط', 'الموت ل', 'بالروح بالدم', 'الشعب يريد إسقاط', 'ثورة حتى النصر', 'ارحل يا']],
+  ['loaded-label', ['الطاغية', 'الخائن', 'الخونة', 'العملاء', 'العصابات الحاكمة', 'نظام الإجرام', 'المرتزقة', 'الحثالة', 'الجبناء', 'كلاب السلطة', 'المافيا الحاكمة']],
+  ['opinion-tone', ['برأيي', 'في رأيي', 'من وجهة نظري', 'أرى أن', 'لا شك أن', 'بكل صراحة', 'للأسف الشديد', 'يا للعار', 'من العار', 'إلى متى', 'حتى متى', 'أين أنتم يا']],
+].map(([reason, phrases]) => [reason, phrases.map(N)]);
+
+const DANGLING_END_WORDS = new Set(['في', 'من', 'الى', 'علي', 'عن', 'ان', 'ما', 'لا', 'لم', 'لن', 'و', 'او', 'ثم', 'بين', 'لدي', 'حتي', 'اذا', 'لكن', 'بل', 'غير', 'ذو', 'ذات', 'كل', 'بعد', 'قبل', 'عند'].map(N));
+
+export function truncateAtWordBoundary(text, max = 240) {
+  const s = String(text || '');
+  if (!Number.isFinite(max) || max <= 0 || s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd();
+}
+
+export function sharpToneReason(text) {
+  const raw = String(text || '');
+  if (!raw.trim()) return null;
+  if (/😂|🤣/.test(raw) || /هههه/.test(raw)) return 'satirical-tone';
+  const nt = N(raw);
+  for (const [reason, phrases] of SHARP_TONE_GROUPS) {
+    if (phrases.some((phrase) => nt.includes(phrase))) return reason;
+  }
+  return null;
+}
+
+export function truncatedPrefixCut(headline, sourceText) {
+  const h = String(headline || '').replace(/\s+/g, ' ').trim().replace(/[.!؟?…]+$/u, '');
+  const s = String(sourceText || '').replace(/\s+/g, ' ').trim();
+  if (!h || !s || s.length <= h.length || !s.startsWith(h)) return null;
+  const next = s[h.length];
+  if (next && !/[\s.,;:!?؟…»"']/u.test(next)) return 'mid-word';
+  const last = h.split(' ').pop();
+  if (last && DANGLING_END_WORDS.has(N(last))) return 'dangling-function-word';
+  return null;
+}
+

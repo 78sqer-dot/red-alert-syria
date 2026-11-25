@@ -1383,9 +1383,26 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
   // Persist the new public template version; alerts already present in storage keep their legacy headers.
   alert.channel_format = 2;
   store.persist();
-  const text = channelPost(alert);
+  const posted = await postAlertToChannel(api, alert, { renderSnapshot });
+  if (posted.messageId) {
+    store.updateAlert(alert.id, { channel_message_id: posted.messageId, channel_media: posted.media });
+  } else {
+    // Never silent: the alert is live on the map but missing from the channel.
+    // The flag drives the publisher's warning and the automatic retry sweep.
+    store.updateAlert(alert.id, { channel_post_failed: { why: String(posted.failure || 'unknown error').slice(0, 200), at: Date.now(), tries: 1 } });
+    console.error(`[bot] alert ${alert.id} reached the map WITHOUT a channel post: ${posted.failure}`);
+  }
+  return store.getAlert(alert.id);
+}
+/** Post an existing alert to the channel: the rendered map snapshot as a photo
+ * when enabled, otherwise text. An explicit Telegram refusal of the photo
+ * (400/401/403) falls back to a text post; an ambiguous photo failure does not
+ * (the photo may have been delivered). Returns { messageId, media } on success
+ * or { failure } with the reason. */
+async function postAlertToChannel(api, alert, { renderSnapshot = null, ended = false } = {}) {
+  const text = channelPost(alert, { ended });
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
-  let m = null; let media = 'text'; let uncertainMediaSend = false;
+  let m = null; let media = 'text'; let uncertainMediaSend = false; let failure = '';
   // Attached source media stays on the public map; channel posts use the rendered map snapshot only.
   const snapshotRenderer = typeof renderSnapshot === 'function' ? renderSnapshot : null;
   if ((snapshotRenderer || config.alertImages) && visibleLen(text) <= CAPTION_MAX) {
@@ -1398,9 +1415,11 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
         console.log(`[img] channel image sent in ${Date.now() - t0} ms (${Math.round(png.length / 1024)} KB)`);
       } catch (e) {
         uncertainMediaSend = !isDefinitiveTelegramRejection(e);
+        failure = e.description || e.message || 'photo post failed';
         console.error(`[img] channel image post failed after ${Date.now() - t0} ms:`, e.description || e.message);
       }
     } catch (e) {
+      failure = e.description || e.message || 'image generation failed';
       console.error(`[img] image generation failed after ${Date.now() - t0} ms:`, e.description || e.message);
     }
   }
@@ -1408,13 +1427,29 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
     try {
       m = await api.sendMessage(config.channel, text, { ...extra, link_preview_options: { is_disabled: true } });
     } catch (e) {
+      failure = e.description || e.message || failure || 'channel post failed';
       console.error('[bot] channel post failed:', e.description || e.message);
     }
   } else if (!m) {
     console.warn('[bot] photo delivery is uncertain; skipping text fallback to prevent a duplicate channel post');
+    if (!failure) failure = 'photo delivery uncertain';
   }
-  if (m) store.updateAlert(alert.id, { channel_message_id: m.message_id, channel_media: media });
-  return store.getAlert(alert.id);
+  return m ? { messageId: m.message_id, media } : { failure: failure || 'channel post failed' };
+}
+/** Re-post an alert that reached the map but not the channel. Idempotent: an
+ * alert whose post already landed is never posted twice by this path. */
+export async function retryChannelPost(api, alertId) {
+  const alert = store.getAlert(alertId);
+  if (!alert || alert.channel_message_id || !config.channel) return false;
+  const posted = await postAlertToChannel(api, alert, { ended: !alert.is_active });
+  if (posted.messageId) {
+    store.updateAlert(alert.id, { channel_message_id: posted.messageId, channel_media: posted.media, channel_post_failed: null });
+    console.log(`[bot] channel post recovered for alert ${alert.id} (post ${posted.messageId})`);
+    return true;
+  }
+  const prev = alert.channel_post_failed || { tries: 0 };
+  store.updateAlert(alert.id, { channel_post_failed: { why: String(posted.failure || 'unknown error').slice(0, 200), at: Date.now(), tries: (prev.tries || 0) + 1 } });
+  return false;
 }
 
 function resultKeyboard(ctx, alert) {
@@ -1423,6 +1458,7 @@ function resultKeyboard(ctx, alert) {
   if (config.publicUrl) kb.url(l.btnOpenMap, mapUrl(alert.id, langOf(ctx)));
   const pa = publicAlert(alert);
   if (pa.telegram_url) kb.url(l.btnOpenPost, pa.telegram_url);
+  if (alert.channel_post_failed) kb.row().text(langOf(ctx) === 'en' ? 'Retry channel post' : 'إعادة النشر في القناة', 'retrypost:' + alert.id);
   if (staff(ctx) && alert.is_active) kb.row().text(alert.media ? l.btnReplaceMedia : l.btnAddMedia, 'alertmedia:' + alert.id);
   kb.row().text(l.btnEnd, 'end:' + alert.id);
   if (alert.expires_at) kb.text(l.btnExtend, 'ext:' + alert.id);
@@ -1707,6 +1743,7 @@ const OH = {
   resync: () => resyncChannelPosts(APIS.admin).catch(() => {}),
   sendTransient: (api, chat, text, o) => sendTransient(api, chat, text, o),
   publishDraft: (api, d, author) => publishDraft(api, d, author),
+  retryChannelPost: (api, id) => retryChannelPost(api, id),
   editPublishedAlert: (api, id, d, author) => editPublishedAlert(api, id, d, author),
   getAlert: (id) => store.getAlert(id),
   mapUrl: (id, lang) => mapUrl(id, lang),
@@ -2519,7 +2556,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (config.alertImages) { try { await show(ctx, L(ctx).publishing, new InlineKeyboard()); } catch { /* ignore */ } }
     const alert = await publishDraft(ctx.api, d, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
     if (d.fromReport) await sendTransient(APIS[d.notifyVia] || APIS.report || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
-    await show(ctx, `${L(ctx).published}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
+    const chWarn = alert.channel_post_failed ? `\n\n⚠️ ${langOf(ctx) === 'en' ? 'Published to the map only — the channel post failed. Re-post it with the “Retry channel post” button.' : 'نُشر على الخريطة فقط — فشل النشر في القناة. أعد النشر من زر «إعادة النشر في القناة».'}` : '';
+    await show(ctx, `${L(ctx).published}${chWarn}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
   }));
 
   bot.callbackQuery('submit', needDraft(async (ctx, d) => {
@@ -2841,6 +2879,15 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (a.is_active && a.channel_message_id) kb.row().text(langOf(ctx) === 'en' ? '✏️ Edit channel post' : '✏️ تعديل المنشور', 'editpost:' + a.id);
     kb.row().text(L(ctx).btnBack, 'active');
     await show(ctx, manageText(ctx, a), kb);
+  });
+bot.callbackQuery(/^retrypost:([\w-]{36})$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const a = store.getAlert(ctx.match[1]);
+    if (!a) return vanish(ctx, L(ctx).notFound);
+    const ok = await retryChannelPost(ctx.api, a.id);
+    const updated = store.getAlert(a.id);
+    await ctx.answerCallbackQuery(ok ? (langOf(ctx) === 'en' ? 'Channel post published.' : 'نُشر في القناة.') : (langOf(ctx) === 'en' ? 'Channel post still failing.' : 'ما زال النشر في القناة يفشل.'));
+    return show(ctx, manageText(ctx, updated), resultKeyboard(ctx, updated));
   });
   bot.callbackQuery(/^(end|del|ext):([\w-]{36})$/, async (ctx) => {
     if (!staff(ctx)) return ctx.answerCallbackQuery();
