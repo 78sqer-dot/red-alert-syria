@@ -568,7 +568,10 @@ function rememberAlert(pa) {
 }
 
 // ---------------------------------------------------------------- drafts & cards
-const fmtLoc = (l) => (l.scope === 'governorate' ? `محافظة ${l.name_ar}` : l.scope === 'district' ? `منطقة ${l.name_ar}، ${l.governorate_ar}` : [l.name_ar, l.district_ar && l.district_ar !== l.name_ar ? l.district_ar : '', l.governorate_ar].filter(Boolean).join('، '));
+// Place line stays SHORT by the owner's order (2026-11-25): «المكان - المحافظة»
+// only — no administrative chains (بلدة/منطقة/ريف). Full precision stays in
+// the alert record and the map pin, never in the draft/post place line.
+const fmtLoc = (l) => (l.scope === 'governorate' ? `محافظة ${l.name_ar}` : [l.name_ar, l.governorate_ar].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(' - '));
 function cardText(d, lang = 'ar') {
   const locs = locsOf(d.loc, d.extra);
   const lines = [];
@@ -603,6 +606,15 @@ function cardText(d, lang = 'ar') {
     lines.push(tr(lang, 'ℹ️ <i>صياغة منسوبة لما نشرته المصادر — ليست تحققاً مستقلاً، وتحتاج مراجعة بشرية.</i>', 'ℹ️ <i>Attributed to the cited sources; this is not independent verification and needs human review.</i>'));
   } else if ((d.srcs || []).length >= 2) lines.push(tr(lang, `📡 <i>ورد الخبر في ${((k) => (k === 2 ? 'مصدرين' : k <= 10 ? `${k} مصادر` : `${k} مصدراً`))((d.srcs || []).length)}؛ وهذا لا يثبت تحققاً مستقلاً.</i>`, `📡 <i>Reported in ${(d.srcs || []).length} feeds; this alone is not independent verification.</i>`));
   else if (!nMain) lines.push(tr(lang, '⚠️ <i>مصدر محلي/ناشط واحد — غير مؤكد بعد، تأكد قبل النشر.</i>', '⚠️ <i>Single local/activist source — not confirmed yet, check before publishing.</i>'));
+  // Quote block (owner order 2026-11-25): a short VERBATIM quote from the
+  // source's own words, attributed to the primary source. Never rewritten;
+  // a long text is cut at a word boundary and marked with an ellipsis.
+  const quoteRaw = String(d.sourceText || '').replace(/\s+/g, ' ').trim();
+  const quoteName = (d.srcs || [])[0]?.name || '';
+  if (quoteRaw && quoteName && quoteRaw !== String(d.headline || '').replace(/\s+/g, ' ').trim()) {
+    const q = quoteRaw.length > 160 ? quoteRaw.slice(0, 160).replace(/\s+\S*$/, '') + '…' : quoteRaw;
+    lines.push('', lang === 'en' ? `💬 <b>Quote:</b> "${esc(q)}" — ${esc(quoteName)}` : `💬 <b>اقتباس:</b> «${esc(q)}» — ${esc(quoteName)}`);
+  }
   if (d.editorialHold) {
     const reason = d.editorialHoldReason === 'private-editorial-copy-not-public'
       ? tr(lang, 'النص يتضمن مادة رأي/سخرية خاصة أو تشخيصاً داخلياً، لذلك لم يُدرج في الخبر العام.', 'The text contains private opinion/satire or an internal diagnostic, so it was excluded from public news.')

@@ -296,6 +296,13 @@ export function channelPost(alert, { ended = false } = {}) {
   if (hasPlace) sections.push([p, ...(alert.extra || [])].map((x) => `📍<b>${esc(locName(x, 'ar'))}</b>`).join('\n'));
   else if (alert.type === 'political') sections.push('📍 <b>الموقع:</b> غير محدد — دون دبوس');
   if (desc || alert.type === 'breaking') sections.push(`<blockquote>${esc(desc || alert.title)}</blockquote>`);
+  // Quote block (owner order 2026-11-25): short verbatim quote from the
+  // source's own words (retained on the alert at publish), attributed.
+  const quoteText = String(alert.meta?.sourceText || '').replace(/\s+/g, ' ').trim();
+  if (quoteText && quoteText !== String(alert.title || '').replace(/\s+/g, ' ').trim()) {
+    const q = quoteText.length > 160 ? quoteText.slice(0, 160).replace(/\s+\S*$/, '') + '…' : quoteText;
+    sections.push(`💬 <b>اقتباس من المصدر:</b> «${esc(q)}»`);
+  }
   if (alert.type === 'political') {
     const meta = alert.meta?.political || {};
     const category = POLITICAL_CATEGORIES[meta.category];
@@ -1032,7 +1039,7 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length ? {
+    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || d.sourceText ? {
       meta: {
         ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
@@ -1049,6 +1056,7 @@ export function buildAlertInput(d, author) {
         ...(dronePresence ? { dronePresence: true } : {}),
         ...(politicalMeta ? { political: politicalMeta } : {}),
         ...(monitoredSources.length ? { newsSources: monitoredSources } : {}),
+        ...(d.sourceText ? { sourceText: String(d.sourceText).slice(0, 500) } : {}),
       },
     } : {}),
   };
