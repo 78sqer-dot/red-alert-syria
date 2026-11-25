@@ -33,3 +33,20 @@ test('second pass flips the edit kind when the recorded channel_media mismatches
   assert.equal(r.kind, 'text');
   assert.deepEqual(calls, ['caption', 'text']);
 });
+
+test('full-state targeting finds ended alerts that the recent window drops', async () => {
+  const { alertsByChannelMessageIds, QUOTE_BLOCK_RETRY_IDS } = await import('../server/bot.js');
+  const { store } = await import('../server/store.js');
+  const before = store.state.alerts.length;
+  store.state.alerts.push(
+    { id: 'qs-ended-1', channel_message_id: 1591, is_active: false },
+    { id: 'qs-ended-2', channel_message_id: 1599, is_active: false },
+  );
+  try {
+    const found = alertsByChannelMessageIds(QUOTE_BLOCK_RETRY_IDS).map((a) => a.channel_message_id);
+    assert.ok(found.includes(1591));
+    assert.ok(!found.includes(1599));
+  } finally {
+    store.state.alerts.length = before;
+  }
+});

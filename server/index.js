@@ -15,7 +15,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, stripQuoteBlockRetry, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
+import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, stripQuoteBlockRetry, stripQuoteBlockFinal, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags, umamiScriptTag, notFoundPage } from './seo.js';
@@ -560,6 +560,21 @@ async function start() {
       }
     };
     setTimeout(runOwnerPostCorrections, 25000).unref();
+    // Third quote-strip pass (2026-11-25): full-state targeting (the
+    // recentAlerts window dropped the ended alerts' records).
+    {
+      const QB3_ID = 'strip-quote-block-2026-11-25-c';
+      setTimeout(async () => {
+        if (store.state.maint?.[QB3_ID]?.done) return;
+        try {
+          const res = await stripQuoteBlockFinal(bots.admin.api);
+          store.state.maint = { ...(store.state.maint || {}), [QB3_ID]: { done: new Date().toISOString(), res } };
+          console.log('[quote-strip-c] done', JSON.stringify(res));
+        } catch (e) { console.error('[quote-strip-c] failed', e.message); }
+        store.persist();
+        try { await store.flushBackup(true); } catch { /* ignore */ }
+      }, 210_000).unref();
+    }
     // Second quote-strip pass (2026-11-25): the three posts whose records'
     // channel_media mismatched the real message kind get a kind-flipping
     // retry. Own flag; runs after the first pass's window.

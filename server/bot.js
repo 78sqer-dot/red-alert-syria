@@ -1562,6 +1562,23 @@ export async function stripQuoteBlockRetry(api) {
   }
   return out;
 }
+// Third pass (2026-11-25): the first two passes iterated
+// store.recentAlerts(), whose window quietly drops ENDED alerts — the
+// three holdout posts belong to alerts that had already ended, so both
+// passes silently targeted an empty set. This pass resolves the records
+// from the full alert state by channel_message_id.
+export function alertsByChannelMessageIds(ids) {
+  const want = new Set(ids);
+  return (store.state?.alerts || []).filter((a) => want.has(a?.channel_message_id));
+}
+export async function stripQuoteBlockFinal(api) {
+  const out = [];
+  for (const a of alertsByChannelMessageIds(QUOTE_BLOCK_RETRY_IDS)) {
+    out.push({ post: a.channel_message_id, ...(await editAlertPostFlipping(api, a)) });
+    await new Promise((r) => setTimeout(r, 4000));
+  }
+  return out;
+}
 export async function resyncChannelPosts(api) {
   const list = store.recentAlerts().filter((a) => a.channel_message_id);
   for (const a of list) {
