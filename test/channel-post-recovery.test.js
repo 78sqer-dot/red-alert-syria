@@ -85,3 +85,40 @@ test('retry refuses alerts that are not in a definitive-failure state', async ()
 });
 
 after(() => { clearTimeout(store._backupTimer); clearTimeout(store._saveTimer); fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }); });
+
+test("Saqr's correction: an expired retry claim goes to reconciliation — never a second send", async () => {
+  reset();
+  const a = await publishInput({ sendMessage: async () => reject(403) }, input);
+  store.updateAlert(a.id, { channel_retry_claim: { at: Date.now() - 121_000 } });
+  let sends = 0;
+  const api = { sendMessage: async () => { sends++; return { message_id: 55 }; } };
+  assert.equal(await retryChannelPost(api, a.id), 'uncertain');
+  assert.equal(sends, 0, 'no send may follow an expired claim');
+  const after = store.getAlert(a.id);
+  assert.equal(after.channel_delivery.status, 'uncertain');
+  assert.equal(after.channel_retry_claim, null);
+  assert.equal(after.channel_message_id, null);
+});
+
+test("Saqr's correction: the retry claim is flushed to the durable backup before any send", async () => {
+  reset();
+  const a = await publishInput({ sendMessage: async () => reject(403) }, input);
+  let sends = 0;
+  const api = { sendMessage: async () => { sends++; return { message_id: 56 }; } };
+  const origFlush = store.flushBackup;
+  store.backup = {};
+  store.flushBackup = async () => false; // backup cannot confirm the claim
+  try {
+    assert.equal(await retryChannelPost(api, a.id), 'blocked');
+    assert.equal(sends, 0, 'an undurable claim means nothing is sent');
+    assert.equal(store.getAlert(a.id).channel_retry_claim, null, 'the undurable claim is released');
+  } finally {
+    store.flushBackup = origFlush;
+    store.backup = null;
+  }
+});
+
+test("Saqr's correction: the retrypost button route actually reaches its handler", () => {
+  const bot = fs.readFileSync(new URL('../server/bot.js', import.meta.url), 'utf8');
+  assert.match(bot, /callbackQuery\(\/\^\(end\|del\|ext\|retrypost\):/, 'the route regex admits retrypost (it previously accepted only end|del|ext, leaving the handler dead)');
+});

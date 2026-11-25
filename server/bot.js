@@ -1452,9 +1452,28 @@ export async function retryChannelPost(api, alertId) {
   if (!alert || !config.channel || alert.channel_message_id) return false;
   if (alert.channel_delivery?.status !== 'failed') return alert.channel_delivery?.status === 'uncertain' ? 'uncertain' : false;
   const claim = alert.channel_retry_claim;
-  if (claim && Date.now() - claim.at < CHANNEL_RETRY_CLAIM_MS) return 'claimed';
+  if (claim) {
+    if (Date.now() - claim.at < CHANNEL_RETRY_CLAIM_MS) return 'claimed';
+    // Saqr's correction (2026-11-25): an expired claim is NOT a free pass to
+    // send again — the original send may still be in flight past the window
+    // (the network layer retries timeouts) or may have landed before a
+    // restart. The alert moves to reconciliation instead of a second send.
+    store.updateAlert(alert.id, { channel_delivery: { status: 'uncertain', at: new Date().toISOString() }, channel_retry_claim: null });
+    store.persist();
+    return 'uncertain';
+  }
+  // Claim DURABLY before sending (Saqr's correction): the claim was only in
+  // the local store, so a restart could lose it while the send was still
+  // hanging and a second retry would duplicate the post. Same idiom as the
+  // data corrections in this file: persist, then await the backup flush;
+  // if the claim cannot be made durable, send nothing.
   store.updateAlert(alert.id, { channel_retry_claim: { at: Date.now() } });
   store.persist();
+  if (store.backup && !await store.flushBackup(true)) {
+    store.updateAlert(alert.id, { channel_retry_claim: null });
+    store.persist();
+    return 'blocked';
+  }
   const outcome = await postAlertToChannel(api, alert);
   if (outcome.messageId) {
     store.updateAlert(alert.id, { channel_message_id: outcome.messageId, channel_media: outcome.media, channel_delivery: { status: 'confirmed', at: new Date().toISOString() }, channel_post_failed: false, channel_failure: null, channel_retry_claim: null });
@@ -2897,7 +2916,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     kb.row().text(L(ctx).btnBack, 'active');
     await show(ctx, manageText(ctx, a), kb);
   });
-  bot.callbackQuery(/^(end|del|ext):([\w-]{36})$/, async (ctx) => {
+  bot.callbackQuery(/^(end|del|ext|retrypost):([\w-]{36})$/, async (ctx) => {
     if (!staff(ctx)) return ctx.answerCallbackQuery();
     const [, action, id] = ctx.match;
     const a = store.getAlert(id);
@@ -2910,6 +2929,7 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
         return show(ctx, manageText(ctx, after), resultKeyboard(ctx, after));
       }
       if (r === 'claimed') await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'A repost is already in progress.' : 'إعادة نشر أخرى جارية الآن.');
+      else if (r === 'blocked') await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Could not secure the repost claim — nothing was sent.' : 'تعذّر تثبيت حجز إعادة النشر بأمان — لم يُرسَل شيء.');
       else if (r === 'uncertain') await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Delivery is unconfirmed — do not repost before review.' : 'الوصول غير مؤكد — لا إعادة قبل المراجعة.');
       else await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Repost failed again — the alert stays flagged.' : 'فشلت إعادة النشر — التنبيه ما زال معلّماً.');
       return show(ctx, manageText(ctx, after), resultKeyboard(ctx, after));
