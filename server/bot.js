@@ -1409,9 +1409,25 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
   // Persist the new public template version; alerts already present in storage keep their legacy headers.
   alert.channel_format = 2;
   store.persist();
+  const outcome = await postAlertToChannel(api, alert, renderSnapshot);
+  if (outcome.messageId) store.updateAlert(alert.id, { channel_message_id: outcome.messageId, channel_media: outcome.media, channel_delivery: { status: 'confirmed', at: new Date().toISOString() }, channel_post_failed: false, channel_failure: null, channel_retry_claim: null });
+  else if (outcome.failure) store.updateAlert(alert.id, { channel_delivery: { status: 'failed', at: new Date().toISOString() }, channel_post_failed: true, channel_failure: { why: String(outcome.failure).slice(0, 200), at: Date.now(), tries: (alert.channel_failure?.tries || 0) + 1 } });
+  else store.updateAlert(alert.id, { channel_delivery: { status: 'uncertain', at: new Date().toISOString() }, channel_post_failed: false });
+  return store.getAlert(alert.id);
+}
+
+/**
+ * One channel-send attempt for an alert already on the map. Delivery semantics are
+ * the channel-delivery-state contract: an explicit Telegram refusal (400/401/403)
+ * is a DEFINITIVE failure; anything else (network, timeout, 5xx, malformed reply)
+ * is UNCERTAIN — the post may already be in the channel. Text fallback follows the
+ * pinned policy: only a 400-class photo refusal falls back to text.
+ * Returns { messageId, media } | { failure: why } | { uncertain: why }.
+ */
+async function postAlertToChannel(api, alert, renderSnapshot = null) {
   const text = channelPost(alert);
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
-  let m = null; let media = 'text'; let uncertainMediaSend = false; let channelOutcome = 'uncertain';
+  let m = null; let media = 'text'; let uncertainMediaSend = false; let channelOutcome = 'uncertain'; let why = '';
   // Attached source media stays on the public map; channel posts use the rendered map snapshot only.
   const snapshotRenderer = typeof renderSnapshot === 'function' ? renderSnapshot : null;
   if ((snapshotRenderer || config.alertImages) && visibleLen(text) <= CAPTION_MAX) {
@@ -1424,7 +1440,8 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
         console.log(`[img] channel image sent in ${Date.now() - t0} ms (${Math.round(png.length / 1024)} KB)`);
       } catch (e) {
         uncertainMediaSend = !isDefinitiveTelegramRejection(e);
-        channelOutcome = [400,401,403].includes(e?.error_code) ? 'failed' : 'uncertain';
+        channelOutcome = [400, 401, 403].includes(e?.error_code) ? 'failed' : 'uncertain';
+        why = e.description || e.message || 'channel image post failed';
         console.error(`[img] channel image post failed after ${Date.now() - t0} ms:`, e.description || e.message);
       }
     } catch (e) {
@@ -1435,15 +1452,65 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
     try {
       m = await api.sendMessage(config.channel, text, { ...extra, link_preview_options: { is_disabled: true } });
     } catch (e) {
-      channelOutcome = [400,401,403].includes(e?.error_code) ? 'failed' : 'uncertain';
+      channelOutcome = [400, 401, 403].includes(e?.error_code) ? 'failed' : 'uncertain';
+      why = e.description || e.message || 'channel post failed';
       console.error('[bot] channel post failed:', e.description || e.message);
     }
   } else if (!m) {
     console.warn('[bot] photo delivery is uncertain; skipping text fallback to prevent a duplicate channel post');
   }
-  if (m?.message_id) store.updateAlert(alert.id, { channel_message_id: m.message_id, channel_media: media, channel_delivery: { status:'confirmed', at:new Date().toISOString() }, channel_post_failed:false });
-  else store.updateAlert(alert.id, { channel_delivery: { status:channelOutcome, at:new Date().toISOString() }, channel_post_failed:channelOutcome === 'failed' });
-  return store.getAlert(alert.id);
+  if (m?.message_id) return { messageId: m.message_id, media };
+  if (channelOutcome === 'failed') return { failure: why || 'channel post failed' };
+  return { uncertain: why || 'channel delivery uncertain' };
+}
+
+const CHANNEL_RETRY_CLAIM_MS = 120_000;
+/**
+ * Manual recovery for a DEFINITIVELY failed channel post (PR #19). The owner's stop
+ * order stands: nothing ever re-posts automatically — this runs only from the
+ * publisher's button. An UNCERTAIN delivery is never retried here (the post may
+ * already be in the channel). A durable claim (persisted before sending, 2-minute
+ * TTL) makes two simultaneous retries mutually exclusive: the second is refused.
+ * Returns true (posted) | false (failed again / not retryable) | 'claimed' | 'uncertain'.
+ */
+export async function retryChannelPost(api, alertId) {
+  const alert = store.getAlert(alertId);
+  if (!alert || !config.channel || alert.channel_message_id) return false;
+  if (alert.channel_delivery?.status !== 'failed') return alert.channel_delivery?.status === 'uncertain' ? 'uncertain' : false;
+  const claim = alert.channel_retry_claim;
+  if (claim) {
+    if (Date.now() - claim.at < CHANNEL_RETRY_CLAIM_MS) return 'claimed';
+    // Saqr's correction (2026-11-25): an expired claim is NOT a free pass to
+    // send again — the original send may still be in flight past the window
+    // (the network layer retries timeouts) or may have landed before a
+    // restart. The alert moves to reconciliation instead of a second send.
+    store.updateAlert(alert.id, { channel_delivery: { status: 'uncertain', at: new Date().toISOString() }, channel_retry_claim: null });
+    store.persist();
+    return 'uncertain';
+  }
+  // Claim DURABLY before sending (Saqr's correction): the claim was only in
+  // the local store, so a restart could lose it while the send was still
+  // hanging and a second retry would duplicate the post. Same idiom as the
+  // data corrections in this file: persist, then await the backup flush;
+  // if the claim cannot be made durable, send nothing.
+  store.updateAlert(alert.id, { channel_retry_claim: { at: Date.now() } });
+  store.persist();
+  if (store.backup && !await store.flushBackup(true)) {
+    store.updateAlert(alert.id, { channel_retry_claim: null });
+    store.persist();
+    return 'blocked';
+  }
+  const outcome = await postAlertToChannel(api, alert);
+  if (outcome.messageId) {
+    store.updateAlert(alert.id, { channel_message_id: outcome.messageId, channel_media: outcome.media, channel_delivery: { status: 'confirmed', at: new Date().toISOString() }, channel_post_failed: false, channel_failure: null, channel_retry_claim: null });
+    return true;
+  }
+  if (outcome.failure) {
+    store.updateAlert(alert.id, { channel_failure: { why: String(outcome.failure).slice(0, 200), at: Date.now(), tries: (alert.channel_failure?.tries || 0) + 1 }, channel_retry_claim: null });
+    return false;
+  }
+  store.updateAlert(alert.id, { channel_delivery: { status: 'uncertain', at: new Date().toISOString() }, channel_post_failed: false, channel_retry_claim: null });
+  return 'uncertain';
 }
 
 function resultKeyboard(ctx, alert) {
@@ -1452,6 +1519,7 @@ function resultKeyboard(ctx, alert) {
   if (config.publicUrl) kb.url(l.btnOpenMap, mapUrl(alert.id, langOf(ctx)));
   const pa = publicAlert(alert);
   if (pa.telegram_url) kb.url(l.btnOpenPost, pa.telegram_url);
+  if (alert.channel_delivery?.status === 'failed' && !alert.channel_message_id) kb.row().text(langOf(ctx) === 'en' ? '🔁 Repost to channel' : '🔁 إعادة النشر في القناة', 'retrypost:' + alert.id);
   if (staff(ctx) && alert.is_active) kb.row().text(alert.media ? l.btnReplaceMedia : l.btnAddMedia, 'alertmedia:' + alert.id);
   kb.row().text(l.btnEnd, 'end:' + alert.id);
   if (alert.expires_at) kb.text(l.btnExtend, 'ext:' + alert.id);
@@ -1764,6 +1832,7 @@ const OH = {
   resync: () => resyncChannelPosts(APIS.admin).catch(() => {}),
   sendTransient: (api, chat, text, o) => sendTransient(api, chat, text, o),
   publishDraft: (api, d, author) => publishDraft(api, d, author),
+  retryChannelPost: (api, id) => retryChannelPost(api, id),
   editPublishedAlert: (api, id, d, author) => editPublishedAlert(api, id, d, author),
   getAlert: (id) => store.getAlert(id),
   mapUrl: (id, lang) => mapUrl(id, lang),
@@ -2905,11 +2974,24 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     kb.row().text(L(ctx).btnBack, 'active');
     await show(ctx, manageText(ctx, a), kb);
   });
-  bot.callbackQuery(/^(end|del|ext):([\w-]{36})$/, async (ctx) => {
+  bot.callbackQuery(/^(end|del|ext|retrypost):([\w-]{36})$/, async (ctx) => {
     if (!staff(ctx)) return ctx.answerCallbackQuery();
     const [, action, id] = ctx.match;
     const a = store.getAlert(id);
     if (!a) return vanish(ctx, L(ctx).notFound);
+    if (action === 'retrypost') {
+      const r = await retryChannelPost(ctx.api, id);
+      const after = store.getAlert(id);
+      if (r === true) {
+        await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Posted to the channel.' : 'نُشر في القناة.');
+        return show(ctx, manageText(ctx, after), resultKeyboard(ctx, after));
+      }
+      if (r === 'claimed') await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'A repost is already in progress.' : 'إعادة نشر أخرى جارية الآن.');
+      else if (r === 'blocked') await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Could not secure the repost claim — nothing was sent.' : 'تعذّر تثبيت حجز إعادة النشر بأمان — لم يُرسَل شيء.');
+      else if (r === 'uncertain') await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Delivery is unconfirmed — do not repost before review.' : 'الوصول غير مؤكد — لا إعادة قبل المراجعة.');
+      else await ctx.answerCallbackQuery(langOf(ctx) === 'en' ? 'Repost failed again — the alert stays flagged.' : 'فشلت إعادة النشر — التنبيه ما زال معلّماً.');
+      return show(ctx, manageText(ctx, after), resultKeyboard(ctx, after));
+    }
     if (action === 'end') {
       store.endAlert(id);
       await refreshChannelPost(ctx.api, store.getAlert(id), true);
