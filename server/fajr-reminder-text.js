@@ -1,0 +1,1 @@
+export const FAJR_REMINDER_TEXT = "🔴 Red alert Syria 🔴\n\n⚪ تذكير — صلاة الفجر\n\nالصلاة خيرٌ من النوم.\nقوموا إلى صلاة الفجر، واستقبلوا يومكم بالصلاة والدعاء.\n\nاللهم اجعل لنا في هذا الصباح فرجًا من كل همّ، ويسّر أمورنا، واحفظ أهلنا.\n\nالقناة https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k";

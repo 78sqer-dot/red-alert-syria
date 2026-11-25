@@ -451,6 +451,20 @@ class Store extends EventEmitter {
     const beforeMerge = JSON.stringify(this.state);
     const st = this.state;
     if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
+    // A deploy can restore before the old process makes its final Fajr claim.
+    // Merge those durable claims before starting the replacement scheduler.
+    if (o.svc?.fajrReminder) {
+      st.svc ||= {};
+      const local = st.svc.fajrReminder;
+      const remote = o.svc.fajrReminder;
+      st.svc.fajrReminder = !local ? structuredClone(remote) : {
+        ...local,
+        ...(String(remote.calendarVerifiedAt || '') > String(local.calendarVerifiedAt || '') ? {
+          calendar: remote.calendar, calendarVerifiedAt: remote.calendarVerifiedAt,
+        } : {}),
+        days: { ...(local.days || {}), ...(remote.days || {}) },
+      };
+    }
     st.reports ||= {}; st.reportsDone ||= {}; st.gone ||= {};
     for (const namespace of ['reportContacts', 'reportsAudit']) {
       st[namespace] ||= {};

@@ -1,3 +1,5 @@
+import { createFajrReminder } from './fajr-reminder.js';
+import { FAJR_REMINDER_TEXT } from './fajr-reminder-text.js';
 import { transferCounters } from './transfer-counters.js';
 import { startTranslations } from './translate.js';
 import express from 'express';
@@ -30,6 +32,7 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const PUBLIC = path.join(ROOT, 'public');
 const SHARED = path.join(ROOT, 'shared');
 const startupMaintenanceEnabled = process.env.RUN_STARTUP_MAINTENANCE === 'true';
+let fajrReminder = null;
 
 const ADMIN_DESC = '🔒 بوت النشر الخاص بإدارة Red Alert Syria (للمشرفين فقط).';
 const ADMIN_SHORT = 'بوت النشر الخاص — Red Alert Syria';
@@ -118,6 +121,12 @@ app.get('/api/places/search', apiLimiter, (req, res) => {
   res.json({ places: searchFollowPlaces(req.query.q, req.query.gov) });
 });
 
+
+app.get('/api/admin/fajr-status', (req,res) => {
+  res.setHeader('Cache-Control','no-store');
+  if (!process.env.ADMIN_API_KEY || req.get('x-admin-key') !== process.env.ADMIN_API_KEY) return res.status(404).end();
+  res.json(fajrReminder?.status() || {enabled:false,starting:true});
+});
 
 app.get('/api/health', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()), active: store.activeAlerts().length, clients: clients.size }));
 
@@ -548,6 +557,11 @@ async function start() {
       }
     };
     setTimeout(runOwnerPostCorrections, 25000).unref();
+    if (!fajrReminder) {
+      fajrReminder = createFajrReminder({store,getApi:()=>bots.admin?.api,channel:config.channel,text:FAJR_REMINDER_TEXT,initialCalendar:JSON.parse(fs.readFileSync(path.join(ROOT,'data','damascus-fajr-ministry.json'),'utf8'))});
+      // Respect deployment handoff before enabling the one in-process timer.
+      setTimeout(()=>{fajrReminder.tick().catch(e=>console.error('[fajr]',e.message));setInterval(()=>fajrReminder.tick().catch(e=>console.error('[fajr]',e.message)),1000).unref();},100000).unref();
+    }
     startDailySummary(bots.admin.api);
     startWxBulletin(() => bots.admin?.api); // 🌤 morning weather bulletin (separate post, default 08:00)
     startPrices(() => bots.admin?.api); // 💱 morning prices bulletin (in-app scheduler, Damascus time)
