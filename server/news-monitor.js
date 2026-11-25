@@ -656,7 +656,7 @@ function cardKb(d, lang = 'ar', chatId = null) {
 }
 function rewritePreviewText(d, lang = 'ar') {
   const preview = d.aiRewritePreview || {};
-  let source = String(preview.sourceText || d.sourceText || d.headline || '').slice(0, 500);
+  let source = cutText(preview.sourceText || d.sourceText || d.headline || '', 500);
   const original = String(preview.originalHeadline || d.originalHeadline || d.headline || '');
   const render = (excerpt) => [
     preview.mode === 'opinion'
@@ -1241,6 +1241,32 @@ function aiBudgetOk() {
   if (aiStats.day !== today) { aiStats.day = today; aiStats.today = 0; }
   return aiStats.today < NEWS_CFG.aiDailyCap;
 }
+// Periodic provider health check (owner spec 2026-11-25): while an outage is
+// flagged or items sit held, probe the distributor with one minimal item at
+// most every 5 minutes; a successful probe flips the state back, re-queues the
+// held items and kicks the queue — recovery never waits for new posts.
+async function aiHealthTick() {
+  if (R.stopped || !recoveryReady()) return;
+  const n = newsState();
+  const heldCount = Object.keys(n.aiHeld || {}).length;
+  if (!heldCount && R.aiOk !== false) return;
+  if (R.aiHealthAt && Date.now() - R.aiHealthAt < 5 * 60_000) return;
+  if (!NEWS_CFG.aiKey() && !NEWS_CFG.backupKey()) return;
+  R.aiHealthAt = Date.now();
+  try {
+    const prompt = buildPrompt([{ i: 1, source: 'healthcheck', local: false, ago: '0 min ago', text: 'نشرة جوية عادية عن أحوال الطقس في دمشق اليوم' }], [], nowDamascus());
+    const geminiUsable = !!NEWS_CFG.aiKey() && aiBudgetOk();
+    const out = await classifyBatchAI(prompt, { key: geminiUsable ? NEWS_CFG.aiKey() : '', models: NEWS_CFG.models(), backupKey: NEWS_CFG.backupKey(), backupBaseUrl: NEWS_CFG.backupBaseUrl(), backupModel: NEWS_CFG.backupModel() });
+    R.aiOk = true;
+    R.aiProvider = out.provider;
+    if (heldCount) { recoverAiHeldItems(out.provider); processQueue().catch(() => {}); }
+    console.log(`[news] AI health probe OK via ${out.provider}${heldCount ? ` — ${heldCount} held item(s) re-queued` : ''}`);
+  } catch (e) {
+    R.aiOk = false;
+    console.warn('[news] AI health probe failed:', String(e.message || e).slice(0, 160));
+  }
+}
+
 // ------------------------------------------------- AI outage: hold, never degrade
 // Owner order 2026-11-25: when every AI provider is down, items are HELD with a
 // clear flag — never rule-classified, never published — and automatically
@@ -1264,7 +1290,7 @@ async function notifyAiHeld(items, total, added) {
   const a = api(); if (!a) return;
   if (R.aiHeldNoticeAt && Date.now() - R.aiHeldNoticeAt < 30 * 60_000) return;
   R.aiHeldNoticeAt = Date.now();
-  const lines = ['⛔ <b>الذكاء الاصطناعي متعذّر — كل المزوّدين</b>', `احتُجز ${added} خبراً جديداً (المحتجَز الآن: ${total}) <b>بلا تصنيف وبلا نشر</b>؛ ستُعاد محاولتها تلقائياً فور عودة أي مزوّد. لا تصنيف بسيط بعد اليوم.`];
+  const lines = ['⛔ <b>الذكاء الاصطناعي متعذّر — كل المزوّدين</b>', `احتُجز ${added} خبراً جديداً (المحتجَز الآن: ${total}) بعلم <b>«بانتظار التصنيف»</b> — لا تصنيف بسيط ولا نشر؛ ستُعاد محاولتها تلقائياً فور عودة أي مزوّد.`];
   for (const it of items.slice(0, 3)) lines.push(`• ${esc(cutText(it.text, 110))} — ${esc(it.src.name)}`);
   for (const uid of reviewerIds()) { try { await a.sendMessage(uid, lines.join('\n'), { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }); } catch { /* reviewer unreachable */ } }
 }
@@ -1548,10 +1574,11 @@ export function startNewsMonitor() {
   const first = async () => {
     if(!recoveryReady()){setTimeout(first,5000).unref?.();return;}
     const n=newsState();
-    console.log(`[news] monitor started: ${n.on ? 'ON' : 'paused'} · ${n.sources.filter((s) => s.on).length} sources · AI ${NEWS_CFG.aiKey() ? NEWS_CFG.models()[0] : 'OFF (rules only)'} · every ${NEWS_CFG.pollSec}s`);
+    console.log(`[news] monitor started: ${n.on ? 'ON' : 'paused'} · ${n.sources.filter((s) => s.on).length} sources · AI ${NEWS_CFG.aiKey() ? NEWS_CFG.models()[0] : NEWS_CFG.backupKey() ? NEWS_CFG.backupModel() + ' (backup only)' : 'OFF (items held awaiting classification)'} · every ${NEWS_CFG.pollSec}s`);
     loop();
   };
   setInterval(() => { nightSummaryTick().catch((e) => console.warn('[news] night summary', e.message)); }, 60_000).unref?.();
+  setInterval(() => { aiHealthTick().catch((e) => console.warn('[news] ai health', e.message)); }, 60_000).unref?.();
   R.dayAutoTimer = setInterval(() => { dayAutoTick().catch((e) => console.warn('[news] daytime auto-publish', e.message)); }, 5_000);
   R.dayAutoTimer.unref?.();
   const t = setTimeout(first, NEWS_CFG.startDelaySec * 1000);
@@ -2118,7 +2145,7 @@ export function registerNewsTools(bot, h) {
     const pending = Object.values(n.drafts).filter((d) => d.status === 'pending' && !d.test).length;
     const heldCount = Object.keys(n.aiHeld || {}).length;
     const ai = (!NEWS_CFG.aiKey() && !NEWS_CFG.backupKey()) ? t(ctx, '⛔ لا مزوّد ذكاء مهيأ — الأخبار تُحتجَز بلا تصنيف', '⛔ no AI provider configured — items are held unclassified')
-      : R.aiOk === false ? t(ctx, `⚠️ الذكاء الاصطناعي متعذّر (كل المزوّدين) — ${heldCount} خبراً محتجَزاً بلا تصنيف`, `⚠️ AI down (all providers) — ${heldCount} item(s) held unclassified`)
+      : R.aiOk === false ? t(ctx, `⚠️ الذكاء الاصطناعي متعذّر (كل المزوّدين) — ${heldCount} خبراً بانتظار التصنيف`, `⚠️ AI down (all providers) — ${heldCount} item(s) awaiting classification`)
         : t(ctx, R.aiProvider === 'backup' ? '🧠 المزوّد الاحتياطي ✅' : '🧠 Gemini ✅', R.aiProvider === 'backup' ? '🧠 backup AI ✅' : '🧠 Gemini ✅');
     const bad = n.sources.filter((s) => s.on && R.src[s.u] && !R.src[s.u].ok).length;
     return [
@@ -2429,4 +2456,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { durablePublicationClaim, uncertainPublication, nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, holdAiDownItems, recoverAiHeldItems };
+export const _test = { durablePublicationClaim, uncertainPublication, nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, holdAiDownItems, recoverAiHeldItems, aiHealthTick };

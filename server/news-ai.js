@@ -422,12 +422,16 @@ export async function callBackupAI({ sys, user }, { key, baseUrl = 'https://api.
 
 export async function classifyBatchAI(prompt, { key = '', models, backupKey = '', backupBaseUrl, backupModel, fetchImpl } = {}) {
   const errors = [];
+  // Failure detection (fed by the 2026-11-25 outage diagnosis): a provider that
+  // answers with an EMPTY result set for a non-empty batch is malfunctioning,
+  // not "finding nothing" — every batch item always gets a result entry.
+  const sane = (r) => { if (!Array.isArray(r) || !r.length) throw new Error('provider returned an empty result set'); return r; };
   if (key) {
-    try { const results = await callGemini(prompt, { key, models, fetchImpl }); aiStats.lastProvider = 'gemini'; return { results, provider: 'gemini' }; }
+    try { const results = sane(await callGemini(prompt, { key, models, fetchImpl })); aiStats.lastProvider = 'gemini'; return { results, provider: 'gemini' }; }
     catch (e) { errors.push(e); aiStats.lastError = String(e.message || e).slice(0, 200); }
   }
   if (backupKey) {
-    try { const results = await callBackupAI(prompt, { key: backupKey, baseUrl: backupBaseUrl, model: backupModel, fetchImpl }); return { results, provider: 'backup' }; }
+    try { const results = sane(await callBackupAI(prompt, { key: backupKey, baseUrl: backupBaseUrl, model: backupModel, fetchImpl })); return { results, provider: 'backup' }; }
     catch (e) { errors.push(e); aiStats.lastError = String(e.message || e).slice(0, 200); }
   }
   const err = new Error(`all AI providers down (${errors.map((e) => String(e.message || e)).join(' | ').slice(0, 200) || 'none configured'})`);

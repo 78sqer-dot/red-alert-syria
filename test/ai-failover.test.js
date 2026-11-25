@@ -43,6 +43,12 @@ test('failover: every provider down -> typed AI_PROVIDERS_DOWN (no silent degrad
   );
 });
 
+test('an empty result set counts as provider failure and fails over (outage-diagnosis rule)', async () => {
+  const geminiEmpty = async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '[]' }] } }] }) });
+  const out = await classifyBatchAI(prompt, { key: 'g', models: ['m1'], backupKey: 'b', fetchImpl: router(geminiEmpty, backupOk) });
+  assert.equal(out.provider, 'backup');
+});
+
 test('cutText never slices mid-word', () => {
   const out = cutText('انفجار كبير في مدينة حلب الشهباء اليوم', 20);
   assert.ok(out.endsWith('…'));
