@@ -18,7 +18,7 @@ import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
 import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
-import { mountSeo, homeJsonLd, verifyMetaTags } from './seo.js';
+import { mountSeo, homeJsonLd, verifyMetaTags, umamiScriptTag } from './seo.js';
 import { startPrices, publicPrices, postBulletin, pricesDebug, refreshPrices } from './prices.js';
 import { publicWeather, startWxBulletin, weatherNowDebug, wxBulletinDebug } from './wx-daily.js';
 import { startQuakes, quakesDebug, pollQuakes } from './quakes.js';
@@ -355,7 +355,7 @@ const BUILD = String(process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).s
 const indexHtml = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8').replace(/\?v=(\d+)(?=["&])/g, `?v=${BUILD}`);
 function renderIndex(lang) {
   const url = config.publicUrl || '';
-  const head = `${verifyMetaTags()}<link rel="alternate" hreflang="x-default" href="${url}/ar/" /><meta property="og:locale" content="${lang === 'ar' ? 'ar_SY' : 'en_US'}" />`
+  const head = `${verifyMetaTags()}${umamiScriptTag()}<link rel="alternate" hreflang="x-default" href="${url}/ar/" /><meta property="og:locale" content="${lang === 'ar' ? 'ar_SY' : 'en_US'}" />`
     + homeJsonLd(lang).map((j) => `<script type="application/ld+json">${JSON.stringify(j).replace(/</g, '\\u003c')}</script>`).join('');
   return indexHtml
     .replace('</head>', `${head}\n</head>`)

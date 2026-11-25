@@ -111,6 +111,17 @@ const verifyMeta = () => [
   process.env.YANDEX_VERIFICATION ? `<meta name="yandex-verification" content="${esc(process.env.YANDEX_VERIFICATION)}">` : '',
 ].join('');
 export const verifyMetaTags = verifyMeta;
+// Umami analytics (gap-closure item 7): the tracker is served ONLY when the
+// operator configures a public Umami route via env — UMAMI_SCRIPT_URL is the
+// full https URL of the instance's script.js; UMAMI_WEBSITE_ID defaults to
+// this project's own Umami website. Unset or non-https → no tag, no tracking.
+export function umamiScriptTag() {
+  const src = String(process.env.UMAMI_SCRIPT_URL || '').trim();
+  if (!/^https:\/\/[^\s"'<>]+$/.test(src)) return '';
+  const id = String(process.env.UMAMI_WEBSITE_ID || '1ed966cb-bc49-4bee-8543-3ccffcd62330').trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return '';
+  return `<script defer src="${src}" data-website-id="${id}"></script>`;
+}
 
 const CSS = `@font-face{font-family:Kufi;src:url(/fonts/noto-kufi-arabic-arabic-400-normal.woff2) format('woff2');font-weight:400;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFF}
 @font-face{font-family:Kufi;src:url(/fonts/noto-kufi-arabic-arabic-700-normal.woff2) format('woff2');font-weight:700;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFF}
@@ -169,6 +180,7 @@ function shell({ lang, title, desc, path, alt, ogImage, ogW = 1200, ogH = 630, j
 <meta name="description" content="${esc(desc)}">
 <meta name="robots" content="${robots}">
 <meta name="theme-color" content="#ff3b4e">
+${umamiScriptTag()}
 <link rel="canonical" href="${esc(url)}">
 ${alt ? `<link rel="alternate" hreflang="${lang}" href="${esc(url)}"><link rel="alternate" hreflang="${other}" href="${esc(site + alt)}"><link rel="alternate" hreflang="x-default" href="${esc(site + (lang === 'ar' ? path : alt))}">` : ''}
 <meta property="og:type" content="website"><meta property="og:site_name" content="Red Alert Syria">
@@ -699,4 +711,4 @@ export function mountSeo(app, { limiter } = {}) {
     try { png(res, await cached(`alert:${a.id}:${m[2]}:${alertLastUpdate(a)}`, 24 * 3600_000, () => renderAlertPng(a, { lang: m[2], timeoutMs: 5000 })), 3600); } catch (e) { console.error('[seo] og alert', e.message); res.redirect(302, `/og/site-${m[2]}.png`); }
   });
 }
-export const _test = { AREAS, BY_SLUG, areaPage, hubPage, aboutPage, glossaryPage, pressPage, archivePage, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };
+export const _test = { AREAS, BY_SLUG, areaPage, hubPage, aboutPage, glossaryPage, pressPage, archivePage, umamiScriptTag, alertInfo, alertLastUpdate, alertSharePage, sitemapXml, robotsTxt, areaOgPng, siteOgPng, summary };
