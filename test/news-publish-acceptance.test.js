@@ -1171,7 +1171,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
     editorialHoldReason: 'synthetic-test',
     headline: 'خبر محاكاة محلي',
     body: 'تفاصيل محاكاة محلية',
-    loc: { scope: 'place', name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib' },
+    loc: { scope: 'place', place_id: 169866, name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib', latitude: 36.21176, longitude: 36.52078 },
     extra: [],
     ttlMin: 360,
     srcs: [{ u: 'mock-source', local: false }],
@@ -1499,7 +1499,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   const editorDraft = newsState().drafts[editorDraftId] = {
     id: editorDraftId, type: 'assassination', status: 'pending',
     headline: 'اعتقال تجريبي في حارم', body: 'تفاصيل محاكاة: أعلنت جهة عامة عن توقيف شخص في حارم.',
-    loc: { scope: 'place', name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib' },
+    loc: { scope: 'place', place_id: 169866, name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib', latitude: 36.21176, longitude: 36.52078 },
     extra: [], ttlMin: 360, srcs: [{ u: 'mock-source', local: false }], cards: [], created: Date.now(),
   };
   await store.addEditor(editorId);
@@ -1542,7 +1542,7 @@ test('news draft ignore action marks the draft ignored without publishing it', a
     status: 'pending',
     headline: 'مسودة محلية لاختبار التجاهل',
     body: '',
-    loc: { scope: 'place', name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib' },
+    loc: { scope: 'place', place_id: 169866, name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib', latitude: 36.21176, longitude: 36.52078 },
     extra: [],
     ttlMin: 360,
     srcs: [{ u: 'mock-source', local: false }],
@@ -1576,7 +1576,7 @@ test('professional rewrite is a comparison preview, requires a separate apply ac
   newsMonitorTest.R.rewriteImpl = async (source) => { receivedSource = source; return rewritten; };
   newsState().drafts[draftId] = {
     id: draftId, type: 'attack', status: 'pending', headline: 'اشتباك قرب حارم', sourceText: original,
-    loc: { scope: 'place', name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib' },
+    loc: { scope: 'place', place_id: 169866, name_ar: 'حارم', name_en: 'Harem', governorate_ar: 'إدلب', governorate_en: 'Idlib', latitude: 36.21176, longitude: 36.52078 },
     extra: [], ttlMin: 180, srcs: [{ u: 'mock-source', name: 'مصدر محلي', local: false }],
     cards: [[ownerId, 745]], created: Date.now(),
   };

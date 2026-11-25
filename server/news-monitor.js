@@ -1,4 +1,5 @@
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
+import { ensureDraftCardLocation } from './publish-location-guard.js';
 // 📡 News monitor: the server (Render, 24/7) reads public Syrian news channels every minute, turns
 // each NEW incident into a ready-made alert draft and sends it to the owner + editors in the private
 // publishing bot with ✅ Publish / ❌ Ignore; only qualified AI news has an automatic fallback.
@@ -12,7 +13,7 @@ import { InlineKeyboard } from 'grammy';
 import { config, isOwner } from './config.js';
 import { store } from './store.js';
 import { ALERT_TYPES, ALERT_GROUPS, POLITICAL_CATEGORIES, typeOf, droneAuto, alertEmoji, alertButtonLabel } from '../shared/types.js';
-import { locationFrom, normalizeArabic, governorates, getGov } from './places.js';
+import { locationFrom, normalizeArabic, governorates, getGov, mentionedGovernorates } from './places.js';
 import { DEFAULT_SOURCES, fetchChannel, cleanPostText,
  parseUsername } from './news-sources.js';
 import { onRoadNewsPost, roadMonitorDebug, roadMonitorActivationTime, parseRoadText } from './road-monitor.js';
@@ -932,7 +933,24 @@ async function holdUnconfirmedChannelDelivery(d, alert) {
 async function nightPublish(d) {
   if (!recoveryReady()) return false;
   const a = api();
-  if (!a || !R.H?.publishDraft || d.status !== 'pending' || !nightEligible(d)) return false;
+  if (!a || !R.H?.publishDraft || d.status !== 'pending') return false;
+  // Location guard (owner order 2026-11-24): bind the one identifiable place
+  // in the draft's text from the gazetteer, or hold it for manual review
+  // with the reason recorded — a bare whole-country card never auto-publishes.
+  const locGuard = ensureDraftCardLocation(d);
+  if (locGuard.action === 'held') {
+    d.status = 'pending';
+    d.editorialHold = true;
+    d.editorialHoldReason = locGuard.reason;
+    d.editorialHoldAt = Date.now();
+    d.dayAutoAt = null;
+    delete d.autoMode;
+    save();
+    await refreshCards(d);
+    console.warn(`[news] automatic publication held: ${d.id} (${locGuard.reason})`);
+    return false;
+  }
+  if (!nightEligible(d)) return false;
   const n = newsState();
   const mode = d.autoMode === 'day' ? 'day' : 'night';
   const editorial = editorialGate(d);
@@ -1080,8 +1098,13 @@ function buildLocations(r, it) {
     const l = out[i];
     if (cityLikeGov(l) && out.some((o) => o !== l && !cityLikeGov(o) && (o.scope === 'place' || o.scope === 'district') && o.governorate === l.governorate)) out.splice(i, 1);
   }
-  // only a governorate: look for an exact village/town of it in the text
+  // only a governorate: look for an exact village/town of it in the text.
+  // The scan's governorates come from the resolved places AND from the
+  // governorates the text itself mentions — otherwise a draft whose AI
+  // places failed to resolve gets no scan at all and publishes country-wide
+  // (the جدوعة / رجم العجوز failure, 2026-11-25).
   if (!out.some((l) => l.scope === 'place' || l.scope === 'district')) {
+    for (const g of mentionedGovernorates(it.text)) govs.add(g.code);
     for (const g of govs) for (const id of scanTextPlaces(it.text, g, 2)) add(locationFrom({ placeId: id }));
   }
   // "طريق درعا - دمشق" / "أوتوستراد حمص حماة": the two cities are the ends of the road, not the place

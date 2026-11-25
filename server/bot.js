@@ -1,4 +1,5 @@
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
+import { ensureDraftCardLocation, MissingCardLocationError } from './publish-location-guard.js';
 import { rojCorrectionCandidate, ROJ_CORRECTION_KEY, mineCorrectionCandidate, MINE_CORRECTION_KEY } from './roj-photo-correction.js';
 import {createHash} from 'node:crypto';
 import { BACKUP_NAME, isBackupName, encodeBackupAsync, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
@@ -1350,6 +1351,10 @@ export async function publishDraft(api, d, author) {
     if (d.toChannel) { try { await postRoadToChannel(api, r); } catch (e) { console.error('[road] channel post failed:', e.description || e.message); } }
     return r;
   }
+  // Location guard (owner order 2026-11-24): the same bind-or-hold rule at
+  // the shared entry — no caller (manual review, report review, reviewed
+  // operator) can publish a bare whole-country map card.
+  if (ensureDraftCardLocation(d).action === 'held') throw new MissingCardLocationError();
   return publishInput(api, buildAlertInput(d, author));
 }
 /** Update an existing alert and its existing channel post in place. */
@@ -2518,6 +2523,10 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (!staff(ctx)) return;
     if (d.type === 'road') return publishRoadDraft(ctx, d, false);
     if (d.type === 'breaking' && !d.text) return askLocation(ctx, d);
+    if (ensureDraftCardLocation(d).action === 'held') {
+      try { await ctx.answerCallbackQuery({ text: langOf(ctx) === 'en' ? 'No location set and no identifiable place in the text — pick the location first.' : 'لا موقع محدداً ولا مكان قابلاً للتحديد في النص — حدّد الموقع أولاً.', show_alert: true }); } catch { /* ignore */ }
+      return askLocation(ctx, d);
+    }
     sessions.delete(sk(ctx));
     if (config.alertImages) { try { await show(ctx, L(ctx).publishing, new InlineKeyboard()); } catch { /* ignore */ } }
     const alert = await publishDraft(ctx.api, d, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });

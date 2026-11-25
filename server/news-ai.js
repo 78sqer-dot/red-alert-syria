@@ -230,7 +230,7 @@ export function resolvePlace({ name, gov } = {}) {
   return g ? { kind: 'governorate', govCode: g } : null;
 }
 // generic words that are also village names somewhere: never matched from free text
-const GENERIC = new Set(['الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'المدينه', 'البلده', 'القريه', 'الطريق', 'المركز', 'الحاجز', 'السوق', 'المشفي', 'المستشفي', 'الجسر', 'الدوار', 'المنطقه', 'الريف', 'الحدود', 'الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'اليوم', 'مساء', 'صباح', 'عنصر', 'عناصر', 'الامن', 'قوات', 'الجيش', 'الاحتلال', 'مسلحين', 'مدنيين', 'اصابه', 'مقتل', 'حادث', 'سير', 'هجوم', 'قصف', 'انفجار'].map(N));
+const GENERIC = new Set(['الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'المدينه', 'البلده', 'القريه', 'الطريق', 'المركز', 'الحاجز', 'السوق', 'المشفي', 'المستشفي', 'الجسر', 'الدوار', 'المنطقه', 'الريف', 'الحدود', 'مدينه', 'بلده', 'قريه', 'منطقه', 'سوق', 'جسر', 'دوار', 'مشفي', 'مستشفي', 'مركز', 'طريق', 'حاجز', 'ريف', 'حدود', 'الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'اليوم', 'مساء', 'صباح', 'عنصر', 'عناصر', 'الامن', 'قوات', 'الجيش', 'الاحتلال', 'مسلحين', 'مدنيين', 'اصابه', 'مقتل', 'حادث', 'سير', 'هجوم', 'قصف', 'انفجار'].map(N));
 /** exact names of villages/towns of one governorate that appear as words in the text (most specific first) */
 export function scanTextPlaces(text, govCode, max = 3) {
   if (!govCode) return [];
@@ -270,7 +270,11 @@ export function nameInText(name, text) {
   };
   return words.some((_, start) => wanted.every((part, offset) => {
     const actual = words[start + offset];
-    return Boolean(actual) && [...variants(actual, offset === 0)].some((v) => v === part || v === stripAl(part));
+    // a trailing ة written in the text vs the bare gazetteer name (جدوعة in
+    // the post, جدوع in the AI's answer) must not fail the anti-invention
+    // check — final-ه equivalence only, nothing looser.
+    return Boolean(actual) && [...variants(actual, offset === 0)].some((v) => v === part || v === stripAl(part)
+      || v === part + 'ه' || v + 'ه' === part || stripAl(v) === stripAl(part) + 'ه' || stripAl(v) + 'ه' === stripAl(part));
   }));
 }
 
