@@ -55,7 +55,7 @@ test('aircraft movement is separate from unchanged hovering markers', () => {
   assert.equal(Array.from(NEWS_TYPES).includes('air_movement'), false, 'manual movement reports are not auto-classified from news');
 });
 
-test('helicopter keeps its dedicated marker at fixed 24px with shared alert-circle pulses', () => {
+test('helicopter keeps its dedicated marker — now the owner-approved blue hover glyph (2026-11-25)', () => {
   const warplane = ALERT_TYPES.warplane;
   const helicopter = ALERT_TYPES.helicopter;
   assert.ok(TYPE_KEYS.includes('helicopter'));
@@ -64,13 +64,13 @@ test('helicopter keeps its dedicated marker at fixed 24px with shared alert-circ
   assert.equal(helicopter.marker, 'helicopter', 'helicopters use a dedicated, single-airframe flight marker');
   assert.equal(helicopter.glyph, 'helicopter_simple');
   assert.equal(ALERT_TYPES.uav.marker, 'orbit', 'the helicopter change must not alter drone targeting');
-  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,180}svgTag\(t\.glyph, 24,/);
+  // Owner decision 2026-11-25 supersedes the old 24px dark top-down marker:
+  // the map renders the sky-blue side-profile glyph in a centred hover.
+  assert.match(mapSource, /marker === 'helicopter'[\s\S]{0,420}svgTag\('helicopter_blue', 30\)/);
   assert.match(mapSource, /a\.helicopters > 1/);
-  assert.match(mapSource, /heli-craft-second/);
-  assert.match(mapCss, /\.heli-craft-second \{ top: 100%; transform: translate\(-50%, -50%\) rotate\(270deg\); \}/);
+  assert.match(mapSource, /heli-craft-h2/);
   assert.doesNotMatch(mapSource, /helicopterScale|--heli-scale/);
-  assert.match(mapCss, /\.helicopter-svg \{[^}]*width: 24px; height: 24px/);
-  assert.match(mapCss, /\.heli-craft \{[^}]*width: 24px; height: 24px;[^}]*rotate\(90deg\)/);
+  assert.match(mapCss, /\.heli-hover \{[^}]*animation: heliHoverRock/);
   assert.match(mapCss, /\.uav \{[^}]*animation: uavOrbit 9s linear infinite/);
   assert.match(mapCss, /\.heli-orbit \{[^}]*animation: heliOrbit 9s linear infinite/);
   assert.match(mapCss, /\.helicopter-svg \.heli-main-rotor[^\n]*animation: heliRotor/);

@@ -34,7 +34,7 @@ test('formation preserves exactly three 24px blue aircraft and does not alter ro
   assert.match(map, /const formation = document\.createElement\('span'\); formation\.className = 'map-flight-track-formation';/);
   assert.match(map, /for \(const slot of \[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]\)/);
   assert.match(map, /formation\.append\(airframe\);[\s\S]{0,100}squad\.append\(formation\);/);
-  assert.match(map, /const iconColor = aircraft === 'uav' \? color : '#3b8eff';/);
+  assert.match(map, /const iconColor = aircraft === 'helicopter' \? '' : \(aircraft === 'uav' \? color : '#3b8eff'\);/);
   assert.match(map, /const route = isReferenceRoute[\s\S]{0,160}referenceFlightPath\(alert\.flight_direction, alert\.flight_target\)[\s\S]{0,100}directFlightPath\(alert\.location, alert\.flight_target\)/);
   assert.match(map, /directFlightBearing\(alert\.location, alert\.flight_target\)/);
   assert.match(map, /const heading = isReferenceRoute && Number\.isFinite\(routeBearing\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
@@ -54,7 +54,7 @@ test('entering plane keeps right-to-left travel and faces left; cache versions r
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
   assert.match(html, /app\.css\?v=107/);
   assert.match(html, /app\.js\?v=124/);
-  assert.match(app, /map\.js\?v=88/);
+  assert.match(app, /map\.js\?v=89/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {
@@ -93,7 +93,7 @@ test('spec refinement 2026-11-25: alert details carry a data-only heading-to row
 
 test('toward reports (bot contract with رشيد, 2026-11-25): uav/warplane alerts with aerial_mode toward become movement tracks', () => {
   assert.match(map, /a\.aerial_mode === 'toward' && Number\.isFinite\(a\.flight_target\?\.latitude\)/);
-  assert.match(map, /const aircraft = alert\.aircraft === 'uav' \|\| alert\.type === 'uav' \? 'uav' : 'plane';/);
+  assert.match(map, /const aircraft = alert\.type === 'helicopter' \? 'helicopter' : \(alert\.aircraft === 'uav' \|\| alert\.type === 'uav' \? 'uav' : 'plane'\);/);
   assert.match(map, /FLIGHT_DIRECTIONS\[alert\.flight_direction\]\?\.\[lang\]/);
   assert.match(map, /is-\$\{\(alert\.flight_direction \|\| 'toward'\)\.replace\(\/_\/g, '-'\)\}/);
   assert.match(map, /\(aircraft === 'plane' \|\| alert\.aerial_mode === 'toward'\) && route\.length === 2/);

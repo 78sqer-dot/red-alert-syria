@@ -3,7 +3,7 @@ import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, al
 import { BADGE_PNG } from '/shared/badge-data.js?v=2';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=20';
+import { EXTRA_SVG } from './target-svgs.js?v=21';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=7';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
@@ -622,9 +622,9 @@ export class AlertMap {
       const routeBearing = flightPathBearing(route);
       const heading = isReferenceRoute && Number.isFinite(routeBearing) ? routeBearing : aircraftHeading(alert, savedBearing);
       keep.add(alert.id);
-      const aircraft = alert.aircraft === 'uav' || alert.type === 'uav' ? 'uav' : 'plane';
+      const aircraft = alert.type === 'helicopter' ? 'helicopter' : (alert.aircraft === 'uav' || alert.type === 'uav' ? 'uav' : 'plane');
       const color = eventVisual('air_movement').color;
-      const iconColor = aircraft === 'uav' ? color : '#3b8eff';
+      const iconColor = aircraft === 'helicopter' ? '' : (aircraft === 'uav' ? color : '#3b8eff');
       const routeColor = aircraft === 'uav' ? '#e5484d' : '#2476c9';
       const lang = this.opts.lang === 'en' ? 'en' : 'ar';
       const targetName = lang === 'en'
@@ -695,7 +695,7 @@ export class AlertMap {
       }
       if (!track) {
         const el = document.createElement('div');
-        el.className = `maplibregl-marker map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'} is-${(alert.flight_direction || 'toward').replace(/_/g, '-')}`;
+        el.className = `maplibregl-marker map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : aircraft === 'helicopter' ? 'is-helicopter' : 'is-plane'} is-${(alert.flight_direction || 'toward').replace(/_/g, '-')}`;
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
         el.setAttribute('aria-label', `${movementTitle} · ${direction}`);
@@ -703,7 +703,14 @@ export class AlertMap {
         const visual = document.createElement('span'); visual.className = 'map-flight-track-visual';
         const squad = document.createElement('span'); squad.className = 'map-flight-track-squad';
         const formation = document.createElement('span'); formation.className = 'map-flight-track-formation';
-        for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
+        if (aircraft === 'helicopter') {
+          // Owner decision 2026-11-25: a toward helicopter travels as ONE
+          // blue glyph on the dotted line — never a formation.
+          const airframe = document.createElement('span');
+          airframe.className = 'map-flight-track-airframe is-lead';
+          airframe.innerHTML = svgTag('helicopter_blue', 28, 'class="map-flight-track-svg"');
+          formation.append(airframe);
+        } else for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
           const airframe = document.createElement('span');
           airframe.className = `map-flight-track-airframe ${slot.name}`;
           airframe.innerHTML = svgTag(aircraft, slot.size, `fill="${iconColor}" class="map-flight-track-svg"`);
@@ -724,7 +731,7 @@ export class AlertMap {
             if (this.movementTracks.get(alert.id) !== track) return;
             if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
               track.marker.setLngLat(position);
-              track.marker.setRotation(heading);
+              if (aircraft !== 'helicopter') track.marker.setRotation(heading);
               track.frame = null;
               return;
             }
@@ -732,7 +739,9 @@ export class AlertMap {
             const point = flightPosition(track.path, progress);
             if (point) {
               track.marker.setLngLat([point.lon, point.lat]);
-              track.marker.setRotation(point.bearing);
+              // The side-profile helicopter glyph stays upright; top-down
+              // glyphs (plane/uav) rotate to their bearing.
+              if (aircraft !== 'helicopter') track.marker.setRotation(point.bearing);
             }
             track.frame = requestAnimationFrame(animate);
           };
@@ -740,7 +749,7 @@ export class AlertMap {
         }
       } else {
         track.marker.setLngLat(position);
-        track.marker.setRotation(heading);
+        if (aircraft !== 'helicopter') track.marker.setRotation(heading);
       }
       track.element.dataset.flightDirection = alert.flight_direction || (alert.aerial_mode === 'toward' ? 'toward' : '');
     });
@@ -1124,9 +1133,13 @@ export class AlertMap {
       const svg = signalDrone ? svgTag(glyph, 36, `class="${svgClass}"`) : svgTag(glyph, 24, `class="${svgClass}"`);
       el.innerHTML = `<div class="uav-box"><div class="uav">${svg}</div></div>`;
     } else if (marker === 'helicopter') {
-      const craft = `<span class="heli-craft">${svgTag(t.glyph, 24, `fill="${visual.color}" class="helicopter-svg"`)}</span>`;
-      const second = a.helicopters > 1 ? `<span class="heli-craft heli-craft-second">${svgTag(t.glyph, 24, `fill="${visual.color}" class="helicopter-svg"`)}</span>` : '';
-      el.innerHTML = `<div class="heli-orbit${second ? ' heli-intensive' : ''}">${craft}${second}</div>`;
+      // Owner decision 2026-11-25: a «تحليق» helicopter HOVERS over its area
+      // centre — new sky-blue side-profile glyph with a red beacon, a gentle
+      // rotor-rock and a soft pulsing ring; no more perimeter orbit. The
+      // drone's orbit rendering is untouched.
+      const craft = `<span class="heli-craft-h">${svgTag('helicopter_blue', 30)}</span>`;
+      const second = a.helicopters > 1 ? `<span class="heli-craft-h heli-craft-h2">${svgTag('helicopter_blue', 30)}</span>` : '';
+      el.innerHTML = `<div class="heli-hover${second ? ' heli-intensive' : ''}">${craft}${second}</div>`;
     } else if (marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
       el.innerHTML = `<div class="squad">${pl(36, -12, 1)}${pl(20, 8, 0.85)}${pl(52, 8, 0.85)}</div>`;
@@ -1210,11 +1223,12 @@ export class AlertMap {
       const props = planeArea ? { color: '#3b8eff', active: !!a.is_active, dashed: true, planeArea: true } : { color: eventVisual(a.type).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
       // one circle per affected locality (server-computed), like the original map
       const zs = Array.isArray(a.zones) && a.zones.length ? a.zones : [{ lat: a.location.latitude, lon: a.location.longitude, km: ZONE_KM[a.scope] || ZONE_KM.place }];
-      if (marker === 'orbit' || marker === 'helicopter') {
+      if (marker === 'orbit') {
         // Orbiting markers follow the ring nearest to their own position (the alert's main place).
+        // Helicopters are NOT registered here any more: they hover at the centre (see the marker builder).
         let best = zs[0], bd = Infinity;
         for (const z of zs) { const d = (z.lat - a.location.latitude) ** 2 + (z.lon - a.location.longitude) ** 2; if (d < bd) { bd = d; best = z; } }
-        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, helicopter: marker === 'helicopter' });
+        orb.set(a.id, { km: this._screenKm(best.km, best.lat), lat: best.lat, helicopter: false });
       }
       zs.forEach((z) => {
         // Aircraft areas keep the reference's geographic radius at every zoom; this does not

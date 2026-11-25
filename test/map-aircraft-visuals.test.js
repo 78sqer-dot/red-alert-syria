@@ -153,7 +153,7 @@ test('movement stays anchored to the observed location and draws only the select
   assert.match(mapJs, /directFlightPath\(alert\.location, alert\.flight_target\)/);
   assert.match(mapJs, /geometry: \{ type: 'LineString', coordinates: route \}/);
   assert.match(mapJs, /const routeColor = aircraft === 'uav' \? '#e5484d' : '#2476c9'/);
-  assert.match(mapJs, /const iconColor = aircraft === 'uav' \? color : '#3b8eff'/);
+  assert.match(mapJs, /const iconColor = aircraft === 'helicopter' \? '' : \(aircraft === 'uav' \? color : '#3b8eff'\)/);
   assert.match(mapJs, /properties: \{ color: routeColor, arrow: '➤'/);
   assert.match(mapJs, /'symbol-placement': 'line-center'/);
   assert.match(mapJs, /'text-rotation-alignment': 'map', 'text-keep-upright': false/);
@@ -171,7 +171,24 @@ test('owner clarification 2026-11-25: the formation is the approved live plane g
   assert.equal((markerSvgs.match(/"plane":/g) || []).length, 1);
   assert.doesNotMatch(targetSvgs, /"plane":/);
   // every aircraft rendering goes through the same svgTag() with the same blue
-  assert.match(mapJs, /const iconColor = aircraft === 'uav' \? color : '#3b8eff';/);
+  assert.match(mapJs, /const iconColor = aircraft === 'helicopter' \? '' : \(aircraft === 'uav' \? color : '#3b8eff'\);/);
   assert.match(mapJs, /airframe\.innerHTML = svgTag\(aircraft, slot\.size, `fill="\$\{iconColor\}" class="map-flight-track-svg"`\);/);
   assert.match(mapJs, /svgTag\(aircraftGlyph, size, `fill="\$\{visual\.color\}" class="flight-svg"`\)/);
+});
+
+test('helicopter treatment (owner decision 2026-11-25): blue side-profile glyph, centred hover, single-glyph toward travel', () => {
+  assert.match(targetSvgs, /helicopter_blue:/, 'the new glyph exists in the catalogue');
+  const heli = targetSvgs.slice(targetSvgs.indexOf('helicopter_blue:'));
+  assert.ok(heli.slice(0, 1200).includes('fill="#35a9f2"'), 'bright sky-blue body (the owner rejected a dark body)');
+  assert.ok(heli.slice(0, 1200).includes('fill="#ef4444" class="heli-beacon"'), 'red beacon dot');
+  assert.match(mapJs, /marker === 'helicopter'\) \{\s*\/\/ Owner decision 2026-11-25/, 'the static heli marker is the hover treatment');
+  assert.match(mapJs, /heli-hover/, 'hover container');
+  assert.match(mapJs, /svgTag\('helicopter_blue', 30\)/, 'the marker renders the blue glyph');
+  assert.match(mapJs, /if \(marker === 'orbit'\) \{\s*\/\/ Orbiting markers follow/, 'helicopters are no longer registered for perimeter orbit (drones still are)');
+  assert.match(mapJs, /alert\.type === 'helicopter' \? 'helicopter'/, 'toward helicopters form their own track kind');
+  assert.match(mapJs, /if \(aircraft === 'helicopter'\) \{[\s\S]{0,650}svgTag\('helicopter_blue', 28,/, 'the toward track is a single blue glyph, never a formation');
+  assert.match(mapJs, /if \(aircraft !== 'helicopter'\) track\.marker\.setRotation\(point\.bearing\)/, 'the side-profile glyph stays upright while travelling');
+  assert.match(css, /\.heli-hover \{[^}]*animation: heliHoverRock/, 'gentle rotor-rock');
+  assert.match(css, /\.heli-hover::after \{[^}]*animation: heliHoverPulse/, 'soft pulsing ring');
+  assert.match(css, /@keyframes heliHoverRock/, 'rock keyframes present');
 });
