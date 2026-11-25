@@ -1385,7 +1385,7 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
   store.persist();
   const text = channelPost(alert);
   const extra = { parse_mode: 'HTML', reply_markup: channelKeyboard(alert) };
-  let m = null; let media = 'text'; let uncertainMediaSend = false;
+  let m = null; let media = 'text'; let uncertainMediaSend = false; let channelOutcome = 'uncertain';
   // Attached source media stays on the public map; channel posts use the rendered map snapshot only.
   const snapshotRenderer = typeof renderSnapshot === 'function' ? renderSnapshot : null;
   if ((snapshotRenderer || config.alertImages) && visibleLen(text) <= CAPTION_MAX) {
@@ -1398,6 +1398,7 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
         console.log(`[img] channel image sent in ${Date.now() - t0} ms (${Math.round(png.length / 1024)} KB)`);
       } catch (e) {
         uncertainMediaSend = !isDefinitiveTelegramRejection(e);
+        channelOutcome = [400,401,403].includes(e?.error_code) ? 'failed' : 'uncertain';
         console.error(`[img] channel image post failed after ${Date.now() - t0} ms:`, e.description || e.message);
       }
     } catch (e) {
@@ -1408,12 +1409,14 @@ export async function publishInput(api, input, { toChannel = true, renderSnapsho
     try {
       m = await api.sendMessage(config.channel, text, { ...extra, link_preview_options: { is_disabled: true } });
     } catch (e) {
+      channelOutcome = [400,401,403].includes(e?.error_code) ? 'failed' : 'uncertain';
       console.error('[bot] channel post failed:', e.description || e.message);
     }
   } else if (!m) {
     console.warn('[bot] photo delivery is uncertain; skipping text fallback to prevent a duplicate channel post');
   }
-  if (m) store.updateAlert(alert.id, { channel_message_id: m.message_id, channel_media: media });
+  if (m?.message_id) store.updateAlert(alert.id, { channel_message_id: m.message_id, channel_media: media, channel_delivery: { status:'confirmed', at:new Date().toISOString() }, channel_post_failed:false });
+  else store.updateAlert(alert.id, { channel_delivery: { status:channelOutcome, at:new Date().toISOString() }, channel_post_failed:channelOutcome === 'failed' });
   return store.getAlert(alert.id);
 }
 
@@ -2519,7 +2522,9 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     if (config.alertImages) { try { await show(ctx, L(ctx).publishing, new InlineKeyboard()); } catch { /* ignore */ } }
     const alert = await publishDraft(ctx.api, d, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
     if (d.fromReport) await sendTransient(APIS[d.notifyVia] || APIS.report || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
-    await show(ctx, `${L(ctx).published}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
+    const outcome = alert.channel_delivery?.status;
+    const resultText = outcome && outcome !== 'confirmed' ? (langOf(ctx) === 'en' ? 'Saved on the map. Channel delivery ' + (outcome === 'failed' ? 'failed.' : 'is unconfirmed. Do not resend before review.') : (outcome === 'failed' ? 'حُفظ التنبيه على الخريطة، وفشل إرساله للقناة.' : 'حُفظ التنبيه على الخريطة، ووصوله للقناة غير محسوم. لا تعِد الإرسال قبل المراجعة.')) : L(ctx).published;
+    await show(ctx, `${resultText}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
   }));
 
   bot.callbackQuery('submit', needDraft(async (ctx, d) => {

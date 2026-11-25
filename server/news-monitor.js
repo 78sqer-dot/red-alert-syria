@@ -921,6 +921,14 @@ async function uncertainPublication(d) {
   d.editorialHold=true;d.editorialHoldReason='send-needs-reconciliation';save();
   if(store.backup && config.telegramBackup)await store.flushBackup(true);
 }
+async function holdUnconfirmedChannelDelivery(d, alert) {
+  d.alertId = alert.id; d.postId = null;
+  d.status = 'publishing';
+  d.nativeReview = { at: Date.now(), result: alert.channel_delivery?.status === 'failed' ? 'channel-send-failed' : 'uncertain' };
+  d.editorialHold = true; d.editorialHoldReason = 'channel-delivery-needs-reconciliation';
+  save();
+  if (store.backup && config.telegramBackup) await store.flushBackup(true);
+}
 async function nightPublish(d) {
   if (!recoveryReady()) return false;
   const a = api();
@@ -952,6 +960,7 @@ async function nightPublish(d) {
     return false;
   }
   if (!alert?.id) {await uncertainPublication(d);return false;}
+  if (!alert.channel_message_id) { await holdUnconfirmedChannelDelivery(d, alert); return false; }
   d.status = 'published'; d.nativeReview={at:Date.now(),result:'published'}; d.auto = true; d.autoMode = mode; d.autoAt = Date.now(); d.alertId = alert?.id; d.postId = alert?.channel_message_id || null;
   n.stats.published++; n.stats.auto = (n.stats.auto || 0) + 1;
   save();
@@ -1888,6 +1897,10 @@ export function registerNewsTools(bot, h) {
       return toast(ctx, t(ctx, '⚠️ نتيجة النشر غير مؤكدة. أوقفنا إعادة المحاولة حتى المراجعة.', '⚠️ Publication outcome is uncertain. Retry is blocked until reviewed.'), true);
     }
     if (!alert?.id) {await uncertainPublication(d);return;}
+    if (!alert.channel_message_id) {
+      await holdUnconfirmedChannelDelivery(d, alert);
+      return toast(ctx, t(ctx, 'حُفظ التنبيه على الخريطة لكن وصوله للقناة غير مؤكّد. أوقفنا إعادة المحاولة للمراجعة.', 'Saved on the map, but channel delivery is unconfirmed. Retry is blocked until reviewed.'), true);
+    }
     d.status = 'published'; d.nativeReview={at:Date.now(),result:'published'}; d.alertId = alert?.id; d.postId = alert?.channel_message_id || null; d.by = ctx.from.id;
     await unlinkCapturedMedia(d.sourceMedia);
     d.approvedBy = { id: ctx.from.id, name: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' '), username: ctx.from.username || null };
