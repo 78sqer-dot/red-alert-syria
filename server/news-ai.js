@@ -379,6 +379,62 @@ export async function callGemini({ sys, user }, { key, models, timeoutMs = 40_00
   throw lastErr || new Error('AI failed');
 }
 
+// ------------------------------------------------------- provider failover
+// In-house classification service (owner order 2026-11-25): Gemini stays the
+// primary text provider; an OpenAI-compatible BACKUP text provider (env:
+// AI_BACKUP_API_KEY / AI_BACKUP_BASE_URL / AI_BACKUP_MODEL, DeepSeek by
+// default) takes over automatically when Gemini fails. If EVERY provider is
+// down the caller gets a typed AI_PROVIDERS_DOWN error — classification never
+// silently degrades to simple rules. Gemini also remains the prices-bulletin
+// image OCR provider; that path is separate and untouched here.
+
+/** Truncation-safe cut: never slices mid-word; marks the cut with an ellipsis. */
+export function cutText(text, max = 160) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  return t.slice(0, max).replace(/\s+\S*$/, '') + '…';
+}
+
+export async function callBackupAI({ sys, user }, { key, baseUrl = 'https://api.deepseek.com/v1', model = 'deepseek-chat', timeoutMs = 40_000, fetchImpl = fetch } = {}) {
+  if (!key) throw new Error('no AI_BACKUP_API_KEY');
+  const res = await fetchImpl(`${String(baseUrl).replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model, temperature: 0.1, response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: sys },
+        { role: 'user', content: `${user}\n\nIMPORTANT: respond with ONE JSON object of the form {"results": [ ...the result array described above... ]} and nothing else.` },
+      ],
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`backup ${model}: HTTP ${res.status} ${(j.error?.message || '').slice(0, 120)}`);
+  const txt = j.choices?.[0]?.message?.content || '';
+  let parsed;
+  try { parsed = JSON.parse(txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); } catch { throw new Error(`backup ${model}: unparseable JSON`); }
+  const arr = Array.isArray(parsed) ? parsed : (parsed.results || parsed.items || parsed.data);
+  if (!Array.isArray(arr)) throw new Error(`backup ${model}: no result array`);
+  aiStats.calls++; aiStats.lastModel = model; aiStats.lastProvider = 'backup';
+  return arr;
+}
+
+export async function classifyBatchAI(prompt, { key = '', models, backupKey = '', backupBaseUrl, backupModel, fetchImpl } = {}) {
+  const errors = [];
+  if (key) {
+    try { const results = await callGemini(prompt, { key, models, fetchImpl }); aiStats.lastProvider = 'gemini'; return { results, provider: 'gemini' }; }
+    catch (e) { errors.push(e); aiStats.lastError = String(e.message || e).slice(0, 200); }
+  }
+  if (backupKey) {
+    try { const results = await callBackupAI(prompt, { key: backupKey, baseUrl: backupBaseUrl, model: backupModel, fetchImpl }); return { results, provider: 'backup' }; }
+    catch (e) { errors.push(e); aiStats.lastError = String(e.message || e).slice(0, 200); }
+  }
+  const err = new Error(`all AI providers down (${errors.map((e) => String(e.message || e)).join(' | ').slice(0, 200) || 'none configured'})`);
+  err.code = 'AI_PROVIDERS_DOWN';
+  throw err;
+}
+
 // Separate, opt-in provider for the human-requested rewrite button. Never falls back
 // to GEMINI_API_KEY or another model: the dedicated key must belong to a free-tier
 // Google AI Studio project with billing disabled.
