@@ -100,15 +100,17 @@ function placeText(a, lang) {
   const en = lang === 'en';
   const name = en ? (l.name_en || l.name_ar) : (l.name_ar || l.name_en);
   const parts = [name];
-  const dist = en ? l.district_en : l.district_ar;
+  // Owner format rule (2026-11-25): the card's place line is SHORT —
+  // «place - governorate» only, never the administrative chain (district).
+  // Full precision stays on the alert record and the map pin.
   const gov = en ? l.governorate_en : l.governorate_ar;
-  for (const p of [dist, gov]) {
+  for (const p of [gov]) {
     if (!p) continue;
     const norm = (s) => String(s).replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/^(محافظة|منطقة|ناحية)\s+/, '').trim().toLowerCase();
     if (parts.some((q) => q && (norm(q) === norm(p) || norm(q).includes(norm(p)) || norm(p).includes(norm(q))))) continue;
     parts.push(p);
   }
-  return parts.filter(Boolean).join(en ? ', ' : '، ');
+  return parts.filter(Boolean).join(' - ');
 }
 
 // ------------------------------------------------------------------ geometry

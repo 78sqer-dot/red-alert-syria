@@ -991,8 +991,10 @@ export function buildAlertInput(d, author) {
   const named = loc.scope !== 'country';
   const areas = [];
   if (named) {
+    // Owner format rule (2026-11-25): areas carry the SHORT place form
+    // (place + governorate) — no district chain; precision lives on the
+    // place object itself (district/coords stay on the record untouched).
     if (loc.name_ar) areas.push(loc.name_ar);
-    if (loc.district_ar && loc.district_ar !== loc.name_ar) areas.push(loc.district_ar);
     if (loc.governorate_ar && !areas.includes(loc.governorate_ar)) areas.push(loc.governorate_ar);
   }
   const extra = named && Array.isArray(d.extra) ? d.extra.filter((x) => x && x.scope !== 'country') : [];

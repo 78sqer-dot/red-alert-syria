@@ -37,6 +37,16 @@ test('draft card carries a verbatim attributed quote block (owner order 2026-11-
   assert.doesNotMatch(bare, /اقتباس/);
 });
 
+test('place format rule: card place line and record areas are short (place - governorate, no district)', async () => {
+  const { alertImageSvg } = await import('../server/alert-image.js');
+  const svg = await alertImageSvg({ type: 'explosion', title: 'انفجار', location: { latitude: 32.6, longitude: 36.1 }, place: { scope: 'place', name_ar: 'صور', name_en: 'Sour', district_ar: 'الصنمين', governorate_ar: 'درعا', governorate_en: 'Daraa', latitude: 32.6, longitude: 36.1 } }, { lang: 'ar' });
+  assert.ok(svg.includes('صور - درعا'), 'card subtitle uses the short place form');
+  assert.ok(!svg.includes('الصنمين'), 'the district never appears on the card');
+  const built = buildAlertInput({ type: 'explosion', headline: draft.headline, location: { scope: 'place', name_ar: 'صور', district_ar: 'الصنمين', governorate_ar: 'درعا', latitude: 33.06, longitude: 36.19 }, extra: [] });
+  assert.deepEqual(built.areas, ['صور', 'درعا'], 'record areas are the short form; district stays only on the place object');
+  assert.equal(built.location.district_ar, 'الصنمين', 'full precision is preserved on the record');
+});
+
 test('publish retains the source text and the channel post quotes it verbatim without feed names', () => {
   const built = buildAlertInput({
     type: 'explosion', ttlMin: 120,
