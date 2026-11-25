@@ -15,7 +15,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
+import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, stripQuoteBlockRetry, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags, umamiScriptTag, notFoundPage } from './seo.js';
@@ -560,6 +560,22 @@ async function start() {
       }
     };
     setTimeout(runOwnerPostCorrections, 25000).unref();
+    // Second quote-strip pass (2026-11-25): the three posts whose records'
+    // channel_media mismatched the real message kind get a kind-flipping
+    // retry. Own flag; runs after the first pass's window.
+    {
+      const QB2_ID = 'strip-quote-block-2026-11-25-b';
+      setTimeout(async () => {
+        if (store.state.maint?.[QB2_ID]?.done) return;
+        try {
+          const res = await stripQuoteBlockRetry(bots.admin.api);
+          store.state.maint = { ...(store.state.maint || {}), [QB2_ID]: { done: new Date().toISOString(), res } };
+          console.log('[quote-strip-b] done', JSON.stringify(res));
+        } catch (e) { console.error('[quote-strip-b] failed', e.message); }
+        store.persist();
+        try { await store.flushBackup(true); } catch { /* ignore */ }
+      }, 150_000).unref();
+    }
     // One-shot (owner order 2026-11-25): strip the cancelled quote block from
     // tonight's five published channel posts, editing in place only.
     // Deliberately OUTSIDE the startupMaintenanceEnabled gate: the owner's
