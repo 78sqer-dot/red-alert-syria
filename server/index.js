@@ -15,7 +15,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, imageTest, resyncChannelPosts, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
+import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags, umamiScriptTag, notFoundPage } from './seo.js';
@@ -587,6 +587,21 @@ async function start() {
         store.persist();
         try { await store.flushBackup(); } catch { /* ignore */ }
       }, 200_000).unref();
+    }
+    // One-shot (owner order 2026-11-25): strip the cancelled quote block from
+    // tonight's five published channel posts, editing in place only.
+    {
+      const QB_ID = 'strip-quote-block-2026-11-25';
+      setTimeout(async () => {
+        if (store.state.maint?.[QB_ID]?.done) return;
+        try {
+          const res = await stripQuoteBlockOnce(bots.admin.api);
+          store.state.maint = { ...(store.state.maint || {}), [QB_ID]: { done: new Date().toISOString(), res } };
+          console.log('[quote-strip] done', JSON.stringify(res));
+        } catch (e) { console.error('[quote-strip] failed', e.message); }
+        store.persist();
+        try { await store.flushBackup(true); } catch { /* ignore */ }
+      }, 90_000).unref();
     }
     // One-time owner-approved icon correction: change only this attack's map glyph and existing channel photo.
     {

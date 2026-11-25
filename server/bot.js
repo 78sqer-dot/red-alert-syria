@@ -1499,6 +1499,34 @@ function who(u) {
 
 // Re-apply the current post layout and buttons to the channel posts of recent alerts (runs once per
 // start; Telegram answers "not modified" for posts that are already up to date). Throttled for limits.
+// One-shot owner correction (2026-11-25): the five channel posts published
+// while the short-lived quote block existed (channel_message_id 1591-1595,
+// verified against the live channel) get the block stripped by EDITING them
+// in place with the current quote-free renderer. Never delete/repost.
+export const QUOTE_BLOCK_POST_IDS = Object.freeze([1591, 1592, 1593, 1594, 1595]);
+export function quoteBlockTargets(alerts) {
+  return (alerts || []).filter((a) => QUOTE_BLOCK_POST_IDS.includes(a?.channel_message_id) && String(a?.meta?.sourceText || '').trim());
+}
+export async function stripQuoteBlockOnce(api) {
+  const out = [];
+  for (const a of quoteBlockTargets(store.recentAlerts())) {
+    const opts = { ended: !a.is_active };
+    try {
+      if (['photo', 'video'].includes(a.channel_media)) {
+        await api.editMessageCaption(config.channel, a.channel_message_id, { caption: channelCaption(a, opts), parse_mode: 'HTML', reply_markup: channelKeyboard(a) });
+      } else {
+        await api.editMessageText(config.channel, a.channel_message_id, channelPost(a, opts), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(a) });
+      }
+      out.push({ post: a.channel_message_id, ok: true, result: 'edited' });
+    } catch (e) {
+      const msg = String(e.description || e.message || '');
+      if (msg.includes('not modified')) out.push({ post: a.channel_message_id, ok: true, result: 'already-clean' });
+      else out.push({ post: a.channel_message_id, ok: false, why: msg });
+    }
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  return out;
+}
 export async function resyncChannelPosts(api) {
   const list = store.recentAlerts().filter((a) => a.channel_message_id);
   for (const a of list) {
