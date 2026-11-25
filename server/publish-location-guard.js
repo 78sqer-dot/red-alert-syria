@@ -55,6 +55,11 @@ export function draftCardLocationState(d) {
 }
 
 const stripAlWord = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : w);
+// Arabic proclitics (و ف ب ل ك) glued to the next word: «بالحسكة» is the city
+// mentioned with a preposition, and the 2026-11-25 المشيرفة failure turned on
+// exactly that («المشيرفة بالحسكة» never matched the bare city name).
+const stripClitic = (w) => (w.length > 3 && 'وفبلك'.includes(w[0]) ? w.slice(1) : w);
+const bareToken = (w) => stripAlWord(stripClitic(w));
 
 /** True when a governorate is mentioned as its capital CITY (bare name or
  * «مدينة X»), not as its countryside («ريف X») or as a province reference
@@ -66,9 +71,9 @@ function govMentionedAsCity(text, gov) {
   for (const words of forms) {
     for (let i = 0; i + words.length <= tokens.length; i++) {
       const slice = tokens.slice(i, i + words.length);
-      if (!slice.every((t, k) => t === words[k] || stripAlWord(t) === words[k])) continue;
-      const before = i > 0 ? stripAlWord(tokens[i - 1]) : '';
-      if (before === 'ريف' || before === 'بريف' || before === 'محافظه' || before === 'بمحافظه') continue;
+      if (!slice.every((t, k) => t === words[k] || bareToken(t) === words[k] || stripAlWord(t) === words[k])) continue;
+      const before = i > 0 ? bareToken(tokens[i - 1]) : '';
+      if (before === 'ريف' || before === 'محافظه') continue;
       return true;
     }
   }
@@ -81,11 +86,24 @@ function govMentionedAsCity(text, gov) {
  * as its capital city binds that city (resolvePlace's own city/governorate
  * disambiguation). Binds only when the whole text yields exactly ONE
  * place — ambiguity fails closed. */
-export function placeIdFromText(text) {
+export function placeIdFromText(text, districtNames = new Set()) {
   const ids = new Set();
   const govs = mentionedGovernorates(text);
   for (const g of govs) {
     for (const id of scanTextPlaces(text, g.code, 3)) ids.add(id);
+  }
+  // «حي X» frame: a text of this draft declares X a DISTRICT of a city, so
+  // a same-named gazetteer village is a name collision, not the place —
+  // the live trap is المشيرفة (a Hasakah-city neighbourhood) vs the
+  // gazetteer's same-named village at 42.13E near the Iraqi border;
+  // binding it would pin the news ~130 km from the event. Drop scan hits
+  // whose name is district-framed anywhere in the draft; the city
+  // fallback below then binds the parent city the text itself names.
+  if (ids.size && districtNames.size) {
+    for (const id of [...ids]) {
+      const place = getPlace(id);
+      if (place && districtNames.has(normalizeArabic(place.ar))) ids.delete(id);
+    }
   }
   if (!ids.size) {
     for (const g of govs) {
@@ -95,6 +113,22 @@ export function placeIdFromText(text) {
     }
   }
   return ids.size === 1 ? [...ids][0] : null;
+}
+
+/** Names the draft's texts frame as a city district: the token(s) right
+ * after «حي», up to two, stopping at a glued preposition («حي المشيرفة
+ * بالحسكة» -> {المشيرفة}). */
+export function districtFramedNames(text) {
+  const toks = normalizeArabic(String(text || '')).split(/\s+/).filter(Boolean);
+  const out = new Set();
+  for (let i = 0; i + 1 < toks.length; i++) {
+    if (bareToken(toks[i]) !== 'حي') continue;
+    const first = bareToken(toks[i + 1]);
+    if (first) { out.add(first); out.add(toks[i + 1]); }
+    const second = toks[i + 2] ? bareToken(toks[i + 2]) : '';
+    if (second && !'وفبلك'.includes(String(toks[i + 2])[0])) { out.add(`${first} ${second}`); out.add(`${toks[i + 1]} ${toks[i + 2]}`); }
+  }
+  return out;
 }
 
 /** The draft's texts, in desk order: the outgoing copy first, then the source. */
@@ -115,8 +149,11 @@ function draftTexts(d) {
  * bound Damascus. Disagreement is a conflict — never a silent first-wins. */
 export function resolveDraftPlace(d) {
   const ids = new Set();
-  for (const text of draftTexts(d)) {
-    const id = placeIdFromText(text);
+  const texts = draftTexts(d);
+  const districtNames = new Set();
+  for (const text of texts) for (const n of districtFramedNames(text)) districtNames.add(n);
+  for (const text of texts) {
+    const id = placeIdFromText(text, districtNames);
     if (id != null) ids.add(id);
   }
   if (ids.size > 1) return { placeId: null, conflict: true };
@@ -136,6 +173,24 @@ export function ensureDraftCardLocation(d) {
   if (!cardLocationGuardApplies(d)) return { action: 'exempt' };
   const resolved = resolveDraftPlace(d);
   if (resolved.conflict) return { action: 'held', reason: LOCATION_TEXT_CONFLICT_REASON };
+  // Governorate scope alone is NOT a card location when the report named a
+  // more specific place that failed to resolve (the 2026-11-25 المشيرفة
+  // failure: «المشيرفة» is a Hasakah-city neighbourhood absent from the
+  // gazetteer; classification degraded to governorate scope and the old
+  // 'present' check waved the bare governorate card through). Bind the one
+  // identifiable place the text itself names — for a neighbourhood that is
+  // its parent city, named in the same text («المشيرفة بالحسكة» -> the city
+  // of Hasakah, not a guess) — or HOLD. Genuine governorate-wide news (no
+  // unresolved named place) keeps passing as before.
+  const loc0 = d.location || d.loc || null;
+  if (loc0 && loc0.scope === 'governorate' && !hasAreas(d)) {
+    if (resolved.placeId != null) {
+      const loc = locationFrom({ placeId: resolved.placeId });
+      if (loc) { d.location = loc; d.loc = loc; return { action: 'bound', placeId: resolved.placeId, location: loc, upgradedFromGovernorate: true }; }
+    }
+    if (String(d.unresolvedPlaceName || '').trim()) return { action: 'held', reason: MISSING_CARD_LOCATION_REASON };
+    return { action: 'present' };
+  }
   if (draftCardLocationState(d) === 'present') {
     // Saqr's correction (2026-11-25): a pre-existing location no longer
     // bypasses verification. When the draft's own texts uniquely name a

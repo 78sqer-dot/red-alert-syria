@@ -1230,11 +1230,18 @@ function buildLocations(r, it) {
   const out = [];
   const add = (loc) => { if (loc && !out.some((x) => x.scope === loc.scope && x.name_ar === loc.name_ar && x.governorate === loc.governorate)) out.push(loc); };
   const govs = new Set();
+  let unresolvedPlaceName = '';
   for (const p of (r.places || []).slice(0, 4)) {
     if (!p?.name) continue;
     if (!nameInText(p.name, it.text) && !(p.gov && nameInText(p.gov, it.text))) continue; // invented by the AI
     const x = resolvePlace(p);
     if (!x) continue;
+    // A place the report itself names, degraded by the resolver to plain
+    // governorate scope (e.g. a city neighbourhood absent from the
+    // gazetteer): the publish-location guard needs to know a specific
+    // place was named, so it can bind the parent city from the text or
+    // hold the draft — never wave a bare governorate card through.
+    if (x.kind === 'governorate' && !unresolvedPlaceName && N(p.name) !== N(getGov(x.govCode)?.ar || '')) unresolvedPlaceName = String(p.name).trim();
     if (x.govCode) govs.add(x.govCode);
     let loc = locationFrom(x);
     // "بريف القنيطرة" -> the countryside, not the city of the same name
@@ -1275,7 +1282,11 @@ function buildLocations(r, it) {
     fine = rest.length ? rest : fine.slice(0, 1);
   }
   const list = fine.length ? fine : out.slice(0, 1);
-  return list.slice(0, 4);
+  const locs = list.slice(0, 4);
+  // The named-place degradation only matters when nothing more specific
+  // than the governorate survived.
+  if (unresolvedPlaceName && !locs.some((l) => l.scope === 'place' || l.scope === 'district')) locs.unresolvedPlaceName = unresolvedPlaceName;
+  return locs;
 }
 function capReached() {
   const n = newsState();
@@ -1357,7 +1368,7 @@ async function handleResult(it, r, known, pmap) {
   if (capReached()) { note(it, 'hourly cap reached'); return; }
   const d = {
     id: rid(), type: r.type, ...(r.type === 'military_incursion' && isCheckpointReport(it.text) ? {incursionKind:'barrier'} : {}), ...(r.type === 'helicopter' ? { intense: helicopterAuto(`${headline} ${it.text}`) } : {}), ...(r.type === 'political' ? { politicalCategory, politicalNeedsCategory: !politicalCategory } : {}),
-    loc: locs[0] || locationFrom({}), extra: locs.slice(1), headline,
+    loc: locs[0] || locationFrom({}), extra: locs.slice(1), ...(locs.unresolvedPlaceName ? { unresolvedPlaceName: locs.unresolvedPlaceName } : {}), headline,
     srcs: [{ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local }], ts: it.ts, created: Date.now(), status: 'pending', cards: [], rule: !!r.rule,
     droneRuleVersion: 1, dronePresence: hasExplicitDroneFlight(it.text),
     sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),

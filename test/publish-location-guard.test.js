@@ -176,3 +176,36 @@ test("Saqr's corrections: the manual publish path checks the guard before claimi
   const uncertainAt = monitor.indexOf('await uncertainPublication(d);', claimAt);
   assert.ok(catchAt > claimAt && catchAt < uncertainAt, 'the catch releases a guard-stopped claim instead of marking the send uncertain');
 });
+
+// LIVE REGRESSION 2026-11-25 (evening): «المشيرفة» — a Hasakah-city
+// neighbourhood absent from the gazetteer. Classification degraded the
+// named place to governorate scope; the old 'present' check counted
+// governorate scope as a real location and two alerts (breaking 41d6f520,
+// clashes b182d7a5) auto-published with location:null and a bare
+// governorate card. The city fallback also could not see «بالحسكة»
+// (preposition glued to the city name).
+const MUSHAIRIFA_TEXT = 'سماع أصوات اشتباكات في حي المشيرفة بالحسكة مساء اليوم';
+const govLoc = () => locationFrom({ govCode: '01' });
+
+test('LIVE REGRESSION 2026-11-25: a neighbourhood draft degraded to governorate scope binds its parent city named in the text', () => {
+  const d = { type: 'clashes', loc: govLoc(), location: govLoc(), headline: 'اشتباكات مسلحة — المشيرفة بالحسكة', sourceText: MUSHAIRIFA_TEXT, unresolvedPlaceName: 'المشيرفة' };
+  const r = ensureDraftCardLocation(d);
+  assert.equal(r.action, 'bound');
+  assert.equal(r.upgradedFromGovernorate, true);
+  assert.equal(d.location.scope, 'place');
+  assert.equal(d.location.name_ar, 'الحسكة');
+});
+
+test('an unresolved named place with NO resolvable city in the text is HELD, never published bare', () => {
+  const d = { type: 'clashes', loc: govLoc(), location: govLoc(), headline: 'اشتباكات في حي المشيرفة بريف الحسكة', sourceText: 'اشتباكات في حي المشيرفة بريف الحسكة مساء اليوم', unresolvedPlaceName: 'المشيرفة' };
+  const r = ensureDraftCardLocation(d);
+  assert.equal(r.action, 'held');
+  assert.equal(r.reason, MISSING_CARD_LOCATION_REASON);
+});
+
+test('genuine governorate-wide news (no unresolved named place) still passes with governorate scope', () => {
+  const d = { type: 'breaking', loc: govLoc(), location: govLoc(), headline: 'انقطاع الكهرباء عن محافظة الحسكة', sourceText: 'انقطاع التيار الكهربائي عن عموم محافظة الحسكة' };
+  const r = ensureDraftCardLocation(d);
+  assert.equal(r.action, 'present');
+  assert.equal(d.location.scope, 'governorate');
+});
