@@ -34,5 +34,5 @@ jobs:
       - name: Probe live Web Push readiness and latency
         run: npm run monitor:web-push
         env:
-          PUSH_MONITOR_BASE_URL: https://red-alert-syria.onrender.com
+          PUSH_MONITOR_BASE_URL: https://red-alert-syria-q6k8.onrender.com
           PUSH_MONITOR_MAX_LATENCY_MS: '10000'
