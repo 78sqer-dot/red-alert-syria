@@ -46,6 +46,14 @@ export function glyphDisc(type, size = 34, iconSize = 24, cls = 'sai', glyphOver
 
 const styleCache = {};
 const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
+// Background recovery from the local fallback style to the detailed basemap:
+// gradual backoff between probe attempts (Saqr's recovery spec, 2026-11-22,
+// rebuilt for this tree's style loader in the gap-closure programme).
+const RECOVERY_BACKOFF_MS = [45000, 90000, 180000, 300000];
+const isFallbackStyle = (style) => {
+  const srcs = Object.values(style?.sources || {});
+  return !srcs.some((src) => src && (src.type === 'vector' || String(src.url || '').includes('openfreemap') || (src.tiles || []).some((t) => String(t).includes('openfreemap'))));
+};
 function fallbackStyle(kind) {
   // Minimal offline-safe style: used when the basemap server is slow or unreachable,
   // so the Syria overlays and alert markers always render.
@@ -178,6 +186,11 @@ export class AlertMap {
     this.popupHtml = opts.popupHtml || (() => '');
     this.ready = false;
     this._styleEpoch = 0;
+    this._recoveryTimer = null;
+    this._recovering = false;
+    this._recoveryStep = 0;
+    this._recoveryVisBound = false;
+    this._onFallback = false;
     this._overviewCamera = true;
   }
 
@@ -231,8 +244,8 @@ export class AlertMap {
       this.addOverlays().catch((e) => console.warn('[map] overlays unavailable', e?.message || e));
     });
     stylePromise.then((style) => {
-      if (this.map) { this._styleEpoch++; this.map.setStyle(style, { diff: false }); }
-    }).catch((e) => console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e));
+      if (this.map) { this._styleEpoch++; this.map.setStyle(style, { diff: false }); this._noteStyleApplied(style); }
+    }).catch((e) => { console.warn('[map] basemap style unavailable; continuing with local fallback', e?.message || e); this._noteStyleApplied(null); });
     let lastOrbitUpdate = 0;
     const zoomTier = (forceOrbit = false) => {
       const z = this.map.getZoom();
@@ -322,6 +335,81 @@ export class AlertMap {
     return mobile ? { top: 70, bottom: 120, left: 30, right: 30 } : { top: 70, bottom: 70, left: 60, right: 60 };
   }
 
+  // The detailed basemap is the product — the local fallback style is a
+  // temporary refuge only, never a resting state. While it is active, probe
+  // the detailed basemap in the background with gradual backoff (45s, 90s,
+  // 180s, then a 300s cap). A probe counts only when a REAL tile arrives
+  // with a real payload — metadata or JSON alone proves nothing. Probing
+  // defers while the page is hidden or the network is offline (without
+  // consuming a backoff step) and resumes promptly when the page becomes
+  // visible again. Recovery re-applies the detailed style through the same
+  // setStyle path as startup/options: the camera does not move, and
+  // overlays re-attach on style.load.
+  _noteStyleApplied(style) {
+    this._onFallback = isFallbackStyle(style);
+    if (this._onFallback) this._scheduleBasemapRecovery();
+    else this._stopBasemapRecovery();
+  }
+  _scheduleBasemapRecovery() {
+    this._stopBasemapRecovery(false);
+    if (!this._onFallback) return;
+    this._bindRecoveryVisibility();
+    const delay = RECOVERY_BACKOFF_MS[Math.min(this._recoveryStep, RECOVERY_BACKOFF_MS.length - 1)];
+    this._recoveryTimer = setTimeout(() => { this._recoveryTimer = null; this._tryRecoverBasemap().catch(() => {}); }, delay);
+  }
+  _stopBasemapRecovery(resetStep = true) {
+    if (this._recoveryTimer) { clearTimeout(this._recoveryTimer); this._recoveryTimer = null; }
+    if (resetStep) this._recoveryStep = 0;
+  }
+  _bindRecoveryVisibility() {
+    if (this._recoveryVisBound || typeof document === 'undefined' || !document.addEventListener) return;
+    this._recoveryVisBound = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible' || !this._onFallback || !this._recoveryTimer) return;
+      clearTimeout(this._recoveryTimer);
+      this._recoveryTimer = null;
+      this._tryRecoverBasemap().catch(() => {});
+    });
+  }
+  async _probeDetailedBasemap() {
+    try {
+      const ctl = new AbortController();
+      const to = setTimeout(() => ctl.abort(), 8000);
+      const meta = await fetch('https://tiles.openfreemap.org/planet', { signal: ctl.signal, cache: 'no-store' });
+      if (!meta.ok) { clearTimeout(to); return false; }
+      const tpl = (await meta.json())?.tiles?.[0];
+      if (!tpl) { clearTimeout(to); return false; }
+      const tile = await fetch(tpl.replace('{z}', '6').replace('{x}', '39').replace('{y}', '25'), { signal: ctl.signal, cache: 'no-store' });
+      if (!tile.ok) { clearTimeout(to); return false; }
+      const bytes = await tile.arrayBuffer();
+      clearTimeout(to);
+      return bytes.byteLength >= 1024; // a real tile payload, not an error page or an empty reply
+    } catch { return false; }
+  }
+  async _tryRecoverBasemap() {
+    if (!this.map || !this._onFallback || this._recovering) return;
+    // Paused, not failed: a hidden page or an offline network defers the
+    // attempt without consuming a backoff step.
+    const hidden = typeof document !== 'undefined' && document.visibilityState && document.visibilityState !== 'visible';
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (hidden || offline) { this._scheduleBasemapRecovery(); return; }
+    this._recovering = true;
+    const epoch = this._styleEpoch;
+    try {
+      if (!(await this._probeDetailedBasemap())) {
+        this._recoveryStep++;
+        this._scheduleBasemapRecovery();
+        return;
+      }
+      const style = await buildStyle(this.opts);
+      if (!this.map || !this._onFallback || this._styleEpoch !== epoch || isFallbackStyle(style)) return; // options changed meanwhile, or still degraded
+      this._styleEpoch++;
+      this.map.setStyle(style, { diff: false });
+      this._noteStyleApplied(style);
+      console.info('[map] detailed basemap reachable again; leaving local fallback');
+    } finally { this._recovering = false; }
+  }
+
   async setOptions(patch) {
     const prev = this.opts;
     this.opts = { ...this.opts, ...patch };
@@ -332,6 +420,7 @@ export class AlertMap {
       const style = await buildStyle(this.opts);
       this._styleEpoch++;
       this.map.setStyle(style, { diff: false });
+      this._noteStyleApplied(style);
     } else {
       this.applyToggles();
     }

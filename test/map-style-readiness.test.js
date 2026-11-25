@@ -40,3 +40,24 @@ test('an overlay load cannot modify a replacement map instance', async () => {
   release({ border: {}, govs: {} });
   await pending;
 });
+
+test('local fallback recovers to the detailed basemap in the background (Saqr spec, rebuilt for this tree)', () => {
+  // both style-application paths report what they applied
+  assert.match(source, /this\.map\.setStyle\(style, \{ diff: false \}\); this\._noteStyleApplied\(style\);/);
+  assert.match(source, /this\.map\.setStyle\(style, \{ diff: false \}\);\n      this\._noteStyleApplied\(style\);/);
+  assert.match(source, /this\._noteStyleApplied\(null\);/, 'a failed style load arms recovery');
+  // fallback detection: no vector/openfreemap source means we are on the refuge style
+  assert.match(source, /const isFallbackStyle = \(style\) =>/);
+  assert.match(source, /src\.type === 'vector'/);
+  // gradual backoff, capped — not an open-ended fixed timer
+  assert.match(source, /RECOVERY_BACKOFF_MS = \[45000, 90000, 180000, 300000\]/);
+  // recovery counts only a REAL tile with a real payload — never JSON alone
+  assert.match(source, /_probeDetailedBasemap\(\)/);
+  assert.match(source, /bytes\.byteLength >= 1024/);
+  // probing defers while the page is hidden or the network is offline, and resumes on visibility
+  assert.match(source, /document\.visibilityState && document\.visibilityState !== 'visible'/);
+  assert.match(source, /navigator\.onLine === false/);
+  assert.match(source, /visibilitychange/);
+  // a mid-probe options change aborts the recovery (epoch guard)
+  assert.match(source, /this\._styleEpoch !== epoch \|\| isFallbackStyle\(style\)\) return;/);
+});
