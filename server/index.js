@@ -560,6 +560,24 @@ async function start() {
       }
     };
     setTimeout(runOwnerPostCorrections, 25000).unref();
+    // One-shot (owner order 2026-11-25): strip the cancelled quote block from
+    // tonight's five published channel posts, editing in place only.
+    // Deliberately OUTSIDE the startupMaintenanceEnabled gate: the owner's
+    // correction must run even when routine maintenance one-shots are off
+    // (the gated placement silently never fired, 2026-11-25).
+    {
+      const QB_ID = 'strip-quote-block-2026-11-25';
+      setTimeout(async () => {
+        if (store.state.maint?.[QB_ID]?.done) return;
+        try {
+          const res = await stripQuoteBlockOnce(bots.admin.api);
+          store.state.maint = { ...(store.state.maint || {}), [QB_ID]: { done: new Date().toISOString(), res } };
+          console.log('[quote-strip] done', JSON.stringify(res));
+        } catch (e) { console.error('[quote-strip] failed', e.message); }
+        store.persist();
+        try { await store.flushBackup(true); } catch { /* ignore */ }
+      }, 90_000).unref();
+    }
     if (!fajrReminder) {
       fajrReminder = createFajrReminder({store,getApi:()=>bots.admin?.api,channel:config.channel,text:FAJR_REMINDER_TEXT,initialCalendar:JSON.parse(fs.readFileSync(path.join(ROOT,'data','damascus-fajr-ministry.json'),'utf8'))});
       // Respect deployment handoff before enabling the one in-process timer.
@@ -587,21 +605,6 @@ async function start() {
         store.persist();
         try { await store.flushBackup(); } catch { /* ignore */ }
       }, 200_000).unref();
-    }
-    // One-shot (owner order 2026-11-25): strip the cancelled quote block from
-    // tonight's five published channel posts, editing in place only.
-    {
-      const QB_ID = 'strip-quote-block-2026-11-25';
-      setTimeout(async () => {
-        if (store.state.maint?.[QB_ID]?.done) return;
-        try {
-          const res = await stripQuoteBlockOnce(bots.admin.api);
-          store.state.maint = { ...(store.state.maint || {}), [QB_ID]: { done: new Date().toISOString(), res } };
-          console.log('[quote-strip] done', JSON.stringify(res));
-        } catch (e) { console.error('[quote-strip] failed', e.message); }
-        store.persist();
-        try { await store.flushBackup(true); } catch { /* ignore */ }
-      }, 90_000).unref();
     }
     // One-time owner-approved icon correction: change only this attack's map glyph and existing channel photo.
     {
