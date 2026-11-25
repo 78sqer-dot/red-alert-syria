@@ -94,7 +94,7 @@ function tagsOf(a) {
   if (!a) return [];
   const t = typeOf(a.type);
   const p = a.place || {};
-  const areas = LANG === 'ar' ? a.areas || [] : [p.name_en, p.district_en, p.governorate_en].filter(Boolean);
+  const areas = LANG === 'ar' ? a.areas || [] : [p.name_en, p.governorate_en].filter(Boolean);
   const uniq = [...new Set(areas.filter(Boolean))].slice(0, 3);
   return [LANG === 'ar' ? t.tag_ar : t.tag_en, ...uniq].map((x) => '#' + String(x).replace(/\s+/g, '_'));
 }
