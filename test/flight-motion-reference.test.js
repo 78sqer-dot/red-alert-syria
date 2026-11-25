@@ -77,3 +77,16 @@ test('owner order 2026-11-25: destination label comes only from the stored fligh
   assert.match(map, /geometry: \{ type: 'Point', coordinates: route\[route\.length - 1\] \}/);
   assert.match(map, /id: 'ras-flight-target-label'[^;]*'text-field': \['get', 'targetLabel'\]/);
 });
+
+test('spec refinement 2026-11-25: dotted projection extends past the stored target, plane routes only', () => {
+  assert.match(map, /if \(aircraft !== 'uav'\) \{\s*const \[p1, p2\] = route;/);
+  assert.match(map, /const ext = Math\.min\(0\.35, Math\.max\(0\.08, len \* 0\.3\)\);/);
+  assert.match(map, /id: `projection-\$\{alert\.id\}`,\s*properties: \{ color: routeColor, projection: true, planeRoute: true, illustrative: true, alertId: alert\.id \}/);
+  assert.match(map, /'line-opacity': \['case', \['get', 'projection'\], 0\.28,/);
+});
+
+test('spec refinement 2026-11-25: alert details carry a data-only heading-to row', () => {
+  assert.match(app, /a\.flight_target\?\.name_ar \|\| a\.flight_target\?\.name_en/);
+  assert.match(app, /`نحو \$\{a\.flight_target\?\.name_ar \|\| a\.flight_target\?\.name_en\}`/);
+  assert.match(app, /!\(a\.flight_route_origin === 'israel_approx_reference' && a\.flight_direction === 'leaving_syria'\)/);
+});

@@ -289,6 +289,7 @@ function detailHtml(a) {
     ...(BORDER_REGIONS[a.border] ? [[LANG === 'ar' ? 'الحدود' : 'Border', esc(LANG === 'ar' ? BORDER_REGIONS[a.border].ar : BORDER_REGIONS[a.border].en)]] : []),
     ...(FLIGHT_AIRCRAFT[a.aircraft] ? [[LANG === 'ar' ? 'نوع الطائرة' : 'Aircraft type', esc(LANG === 'ar' ? FLIGHT_AIRCRAFT[a.aircraft].ar : FLIGHT_AIRCRAFT[a.aircraft].en)]] : []),
     ...(FLIGHT_DIRECTIONS[a.flight_direction] ? [[LANG === 'ar' ? 'اتجاه الطيران' : 'Flight direction', esc(LANG === 'ar' ? FLIGHT_DIRECTIONS[a.flight_direction].ar : FLIGHT_DIRECTIONS[a.flight_direction].en)]] : []),
+    ...((a.flight_target?.name_ar || a.flight_target?.name_en) && !(a.flight_route_origin === 'israel_approx_reference' && a.flight_direction === 'leaving_syria') ? [[LANG === 'ar' ? 'الوجهة' : 'Heading to', esc(LANG === 'ar' ? `نحو ${a.flight_target?.name_ar || a.flight_target?.name_en}` : `To ${a.flight_target?.name_en || a.flight_target?.name_ar}`)]] : []),
     ...(alertDist(a) ? [[LANG === 'ar' ? 'المسافة عنك' : 'Distance from you', distChip(a)]] : []),
     [T.time, esc(fmtFull.format(new Date(a.timestamp)))],
     [a.source_info?.kind === 'provider' ? T.dataProvider : T.publisher, sourceInfoUrl ? `<a href="${esc(sourceInfoUrl)}" target="_blank" rel="noopener noreferrer">${esc(a.source_info?.name)}</a>` : esc(a.source_info?.name || 'Red Alert Syria')],

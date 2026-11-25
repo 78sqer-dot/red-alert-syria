@@ -368,7 +368,7 @@ export class AlertMap {
     add({ id: 'ras-zones-fill', type: 'fill', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': A(dark ? 0.11 : 0.08, 0.025) } });
     add({ id: 'ras-zones-line', type: 'line', source: 'ras-zones', filter: ['!', ['get', 'dashed']], paint: { 'line-color': ['get', 'color'], 'line-opacity': A(0.58, 0.22), 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1.3] } });
     add({ id: 'ras-zones-dash', type: 'line', source: 'ras-zones', filter: ['get', 'dashed'], paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['get', 'planeArea'], true], 1.5, 1.8], 'line-opacity': ['case', ['==', ['get', 'planeArea'], true], 0.7, A(0.85, 0.3)], 'line-dasharray': [3, 4] } });
-    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'referenceRoute'], 0.92, ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'referenceRoute'], 2.4, ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'referenceRoute'], 3.2, ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'referenceRoute'], ['literal', [4, 2]], ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
+    add({ id: 'ras-flight-path-line', type: 'line', source: 'ras-flight-paths', paint: { 'line-color': ['get', 'color'], 'line-opacity': ['case', ['get', 'projection'], 0.28, ['get', 'referenceRoute'], 0.92, ['get', 'planeRoute'], 0.45, 0.9], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['get', 'referenceRoute'], 2.4, ['get', 'planeRoute'], 1.5, 1.35], 10, ['case', ['get', 'referenceRoute'], 3.2, ['get', 'planeRoute'], 1.5, 2.1]], 'line-dasharray': ['case', ['get', 'referenceRoute'], ['literal', [4, 2]], ['get', 'planeRoute'], ['literal', [3, 4]], ['literal', [2, 2]]] } });
     add({ id: 'ras-flight-direction-arrow', type: 'symbol', source: 'ras-flight-paths', filter: ['has', 'arrow'], layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'arrow'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12, 10, 16], 'text-rotation-alignment': 'map', 'text-keep-upright': false, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.92 } });
     add({ id: 'ras-flight-reference-point', type: 'circle', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], paint: { 'circle-radius': 4, 'circle-color': ['get', 'color'], 'circle-stroke-color': dark ? '#111827' : '#ffffff', 'circle-stroke-width': 1.6 } });
     add({ id: 'ras-flight-reference-label', type: 'symbol', source: 'ras-flight-paths', filter: ['==', ['get', 'referenceOrigin'], true], layout: { 'text-field': ['get', 'label'], 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 10, 10, 12], 'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': dark ? '#111827' : '#ffffff', 'text-halo-width': 2, 'text-opacity': 0.96 } });
@@ -562,6 +562,28 @@ export class AlertMap {
         const targetName = lang === 'en'
           ? (alert.flight_target?.name_en || alert.flight_target?.name_ar)
           : (alert.flight_target?.name_ar || alert.flight_target?.name_en);
+        // Directional projection (owner spec refinement 2026-11-25, from the
+        // Lebanese reference): the dotted route line continues a short,
+        // bounded distance PAST the stored target along the final bearing —
+        // pure heading language in the same dashed style at lower opacity,
+        // never a claimed track. Plane routes only; the UAV line is untouched.
+        if (aircraft !== 'uav') {
+          const [p1, p2] = route;
+          const cosLat = Math.cos(((p1[1] + p2[1]) / 2) * Math.PI / 180);
+          const dx = (p2[0] - p1[0]) * cosLat;
+          const dy = p2[1] - p1[1];
+          const len = Math.hypot(dx, dy);
+          if (len > 0) {
+            const ext = Math.min(0.35, Math.max(0.08, len * 0.3));
+            const tip = [p2[0] + (dx / len * ext) / Math.cos(p2[1] * Math.PI / 180), p2[1] + dy / len * ext];
+            routeFeatures.push({
+              type: 'Feature',
+              id: `projection-${alert.id}`,
+              properties: { color: routeColor, projection: true, planeRoute: true, illustrative: true, alertId: alert.id },
+              geometry: { type: 'LineString', coordinates: [p2, tip] },
+            });
+          }
+        }
         if (targetName && !(isReferenceRoute && alert.flight_direction === 'leaving_syria')) {
           routeFeatures.push({
             type: 'Feature',
