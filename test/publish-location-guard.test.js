@@ -209,3 +209,39 @@ test('genuine governorate-wide news (no unresolved named place) still passes wit
   assert.equal(r.action, 'present');
   assert.equal(d.location.scope, 'governorate');
 });
+
+// LIVE REGRESSION 2026-11-25 (late): the draft-stage guard was not the last
+// word — buildAlertInput's incident-location derivation runs after it and
+// (a) fabricated a coordinate-less governorate label for e2aac81d
+// («مشيرفة بمدينة الحسكة», 22:53, published bare), (b) kept the
+// name-collision village for post 1599. The funnel check on the built
+// input is now the last word.
+test('funnel: a coordinate-less governorate label binds the parent city from the outgoing copy', async () => {
+  const { ensureBuiltAlertLocation } = await import('../server/publish-location-guard.js');
+  const input = {
+    type: 'martyrdom',
+    title: 'استشهاد — مشيرفة بمدينة الحسكة',
+    description: 'إعلان مقتل عنصري أمن داخلي وإصابة 5 آخرين في الهجوم على مقر عسكري بحي مشيرفة في الحسكة',
+    location: { scope: 'governorate', name_ar: 'مشيرفة بمدينة الحسكة', governorate: '01', governorate_ar: 'الحسكة', governorate_en: 'Al Hasakah' },
+    meta: { sourceText: 'إعلان مقتل عنصرين في الهجوم على مقر عسكري بحي مشيرفة في الحسكة' },
+  };
+  const r = ensureBuiltAlertLocation(input, {});
+  assert.equal(r.action, 'bound');
+  assert.equal(input.location.scope, 'place');
+  assert.equal(input.location.name_ar, 'الحسكة');
+  assert.equal(input.place, input.location);
+});
+
+test('funnel: a name-collision village is held when the outgoing copy frames it as a city district (post 1599)', async () => {
+  const { ensureBuiltAlertLocation } = await import('../server/publish-location-guard.js');
+  const input = {
+    type: 'explosion',
+    title: 'انفجار — المشيرفة',
+    description: 'صوت الانفجار الذي سُمِع في حي المشيرفة بالحسكة ناجم عن تفجير دراجة نارية مفخخة عند مدخل نقطة أمنية',
+    location: locationFrom({ placeId: 383659 }),
+    meta: { sourceText: 'صوت انفجار سُمِع في حي المشيرفة بالحسكة' },
+  };
+  const r = ensureBuiltAlertLocation(input, {});
+  assert.equal(r.action, 'held');
+  assert.equal(r.reason, 'location-text-conflict');
+});

@@ -58,7 +58,7 @@ const stripAlWord = (w) => (w.startsWith('ال') && w.length > 3 ? w.slice(2) : 
 // Arabic proclitics (و ف ب ل ك) glued to the next word: «بالحسكة» is the city
 // mentioned with a preposition, and the 2026-11-25 المشيرفة failure turned on
 // exactly that («المشيرفة بالحسكة» never matched the bare city name).
-const stripClitic = (w) => (w.length > 3 && 'وفبلك'.includes(w[0]) ? w.slice(1) : w);
+const stripClitic = (w) => (w.length >= 3 && w.length - 1 >= 2 && 'وفبلك'.includes(w[0]) ? w.slice(1) : w);
 const bareToken = (w) => stripAlWord(stripClitic(w));
 
 /** True when a governorate is mentioned as its capital CITY (bare name or
@@ -102,7 +102,7 @@ export function placeIdFromText(text, districtNames = new Set()) {
   if (ids.size && districtNames.size) {
     for (const id of [...ids]) {
       const place = getPlace(id);
-      if (place && districtNames.has(normalizeArabic(place.ar))) ids.delete(id);
+      if (place && (districtNames.has(normalizeArabic(place.ar)) || districtNames.has(bareToken(normalizeArabic(place.ar))))) ids.delete(id);
     }
   }
   if (!ids.size) {
@@ -214,6 +214,37 @@ export function ensureDraftCardLocation(d) {
   d.location = loc;
   d.loc = loc;
   return { action: 'bound', placeId: resolved.placeId, location: loc };
+}
+
+/** Final funnel check on the BUILT alert input — the guard gets the last
+ * word on location. buildAlertInput re-derives locations through
+ * newsIncidentLocations AFTER the draft-stage guard ran, and that
+ * derivation can (a) replace a bound location with a coordinate-less
+ * governorate LABEL location («مشيرفة بمدينة الحسكة», live alert e2aac81d,
+ * 2026-11-25 22:53 — published bare although the draft-stage guard had
+ * bound the city), or (b) keep a name-collision village the outgoing copy
+ * frames as a city district (live post 1599). A coordinate-less location
+ * is treated as missing here; a coordinated one goes through the usual
+ * cross-check against the outgoing texts. `src` is the caller's draft
+ * (exemption flags + unresolved-place marking). */
+export function ensureBuiltAlertLocation(input, src = {}) {
+  if (!input || typeof input !== 'object') return { action: 'exempt' };
+  const hasCoords = Number.isFinite(input.location?.latitude) && Number.isFinite(input.location?.longitude);
+  const view = {
+    type: input.type,
+    location: hasCoords ? input.location : null,
+    headline: input.title || '',
+    body: input.description || '',
+    sourceText: input.meta?.sourceText || src.sourceText || '',
+    unresolvedPlaceName: src.unresolvedPlaceName || '',
+    reviewedNewsCopy: src.reviewedNewsCopy, reviewedCopy: src.reviewedCopy,
+    attributedReport: src.attributedReport, timedNews: src.timedNews,
+    localityReference: src.localityReference, imageContext: src.imageContext,
+    location_display: src.location_display, channel_media: src.channel_media,
+  };
+  const r = ensureDraftCardLocation(view);
+  if (r.action === 'bound') { input.location = view.location; input.place = view.location; }
+  return r;
 }
 
 /** Thrown by the shared publish entry when the guard holds a draft, so a

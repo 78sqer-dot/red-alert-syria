@@ -1,5 +1,5 @@
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
-import { ensureDraftCardLocation, MissingCardLocationError, LOCATION_TEXT_CONFLICT_REASON } from './publish-location-guard.js';
+import { ensureDraftCardLocation, ensureBuiltAlertLocation, MissingCardLocationError, LOCATION_TEXT_CONFLICT_REASON } from './publish-location-guard.js';
 import { rojCorrectionCandidate, ROJ_CORRECTION_KEY, mineCorrectionCandidate, MINE_CORRECTION_KEY } from './roj-photo-correction.js';
 import {createHash} from 'node:crypto';
 import { BACKUP_NAME, isBackupName, encodeBackupAsync, decodeBackup, recordBackupTransfer, recordIdenticalBackupSkip } from './backup-codec.js';
@@ -1376,13 +1376,29 @@ export async function publishDraft(api, d, author) {
     }
     throw new MissingCardLocationError();
   }
-  return publishInput(api, buildAlertInput(d, author));
+  const input = buildAlertInput(d, author);
+  // Funnel check (2026-11-25, e2aac81d/1599): buildAlertInput re-derives the
+  // location after the draft-stage guard — the guard re-runs on the built
+  // input so its bind-or-hold verdict is the one that actually publishes.
+  const funnel = ensureBuiltAlertLocation(input, d);
+  if (funnel.action === 'held') {
+    if (funnel.reason === LOCATION_TEXT_CONFLICT_REASON) {
+      const e = new Error('النشر متوقف: الموقع المحدد يتعارض مع المكان المذكور في نص الخبر أو مصدره. راجع الموقع أولاً.');
+      e.name = 'MissingCardLocationError';
+      e.code = LOCATION_TEXT_CONFLICT_REASON;
+      throw e;
+    }
+    throw new MissingCardLocationError();
+  }
+  return publishInput(api, input);
 }
 /** Update an existing alert and its existing channel post in place. */
 export async function editPublishedAlert(api, id, d, author) {
   const current = store.getAlert(id);
   if (!current) throw new Error('published alert not found');
   const input = buildAlertInput(d, author);
+  const funnel = ensureBuiltAlertLocation(input, d);
+  if (funnel.action === 'held') throw new MissingCardLocationError();
   const patch = {
     type: input.type,
     title: input.title,
