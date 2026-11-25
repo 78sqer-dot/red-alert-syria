@@ -215,7 +215,8 @@ test('signal sweep is a distinct non-jamming type; a drone glyph appears only wh
   assert.equal(NEWS_TYPES.includes('signal_sweep'), false, 'signal reports do not enter automatic news classification');
   const generic = markerSvg('signal_sweep', 100, 100, 1, null, { type: 'signal_sweep' });
   const drone = markerSvg('signal_sweep', 100, 100, 1, null, { type: 'signal_sweep', meta: { signalPlatform: 'uav' } });
-  assert.ok(generic.includes(EXTRA_SVG.signal_sweep), 'an unspecified platform keeps the signal radar glyph');
+  assert.ok(generic.includes('data:image/png;base64,'), 'an unspecified platform shows the approved Style-1 signal badge (owner order 2026-11-25)');
+  assert.ok(!generic.includes(SVG.uav), 'an unspecified platform never shows the drone glyph');
   assert.ok(drone.includes(SVG.uav), 'the selected platform reuses the existing drone silhouette');
   assert.equal(nightEligible({ type: 'signal_sweep', status: 'pending', loc: { scope: 'place', latitude: 33, longitude: 35 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] }), false, 'signal-sweep reports always require human review');
   assert.equal(dayAutoReady({ type: 'signal_sweep', status: 'pending', dayAutoAt: 0, loc: { scope: 'place', latitude: 33, longitude: 35 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] }), false, 'signal-sweep reports never auto-publish during daytime');

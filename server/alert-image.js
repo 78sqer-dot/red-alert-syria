@@ -8,12 +8,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
 import { ALERT_TYPES, assassinationWeaponGlyph, shootingWeaponGlyph, eventVisual } from '../shared/types.js';
+import { BADGE_PNG } from '../shared/badge-data.js';
 import { SVG as BASE_GLYPHS } from '../public/js/marker-svgs.js';
 import { EXTRA_SVG } from '../public/js/target-svgs.js';
 import { alertZones, selectedAlertZones } from './places.js';
 
 const GLYPHS = { ...BASE_GLYPHS, ...EXTRA_SVG };
+
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+
+// Style-1 category badges (owner-approved transparent glyph PNGs, shared/badge-data.js);
+// a missing entry simply falls back to the classic glyph marker below.
+const badgeImageSvg = (name, cx, cy, w) => BADGE_PNG[name]
+  ? `<image x="${(cx - w / 2).toFixed(1)}" y="${(cy - w / 2).toFixed(1)}" width="${w}" height="${w}" href="data:image/png;base64,${BADGE_PNG[name]}"/>` : null;
 const FONT_DIR = path.join(ROOT, 'assets', 'fonts');
 // only the faces this card uses (fewer fonts = less CPU per render on the small Render instance)
 const FONT_FILES = ['NotoKufiArabic-Regular.ttf', 'NotoKufiArabic-Bold.ttf', 'NotoKufiArabic-ExtraBold.ttf', 'NotoSans-Regular.ttf', 'NotoSans-Bold.ttf'].map((f) => path.join(FONT_DIR, f)).filter((f) => fs.existsSync(f));
@@ -166,11 +173,17 @@ export function markerSvg(type, cx, cy, k = 1, glyphOverride = null, alert = nul
   const r = 30 * k; const s = r * 1.2;
   const bg = '#f8fafc';
   if (type === 'breaking') {
+    const badge = badgeImageSvg(t.badge, cx, cy, (r + 22) * 2);
+    if (badge) return badge;
     const triX = cx - s / 2; const triY = cy - s / 2;
     const triangle = `<svg x="${triX}" y="${triY}" width="${s}" height="${s}" viewBox="0 0 24 24"><path d="M12 1.3 23.2 21H.8Z" fill="#ef233c"/><path d="m12 6.1-7.2 12.7h14.4Z" fill="#000000"/><path d="M11 9h2v5h-2zm0 6h2v2h-2z" fill="#ef233c"/></svg>`;
     return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${color}" opacity="0.16"/>`
       + `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="#ffffff" opacity="0.95"/>`
       + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${bg}"/>${triangle}`;
+  }
+  if (t.badge && !signalDrone && !(type === 'military_incursion' && incursionKind)) {
+    const badge = badgeImageSvg(t.badge, cx, cy, (r + 22) * 2);
+    if (badge) return badge;
   }
   return `<circle cx="${cx}" cy="${cy}" r="${r + 22}" fill="${color}" opacity="0.16"/>`
     + `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="#ffffff" opacity="0.95"/>`
@@ -185,6 +198,7 @@ function politicalMarkerSvg(cx, cy) {
     + `<svg x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}" viewBox="0 0 512 512"><g fill="#ffffff">${g}</g></svg>`;
 }
 function eventGlyphHeaderSvg(key, cx, cy) {
+  if (key === 'signal_sweep') { const badge = badgeImageSvg('signal', cx, cy, 62); if (badge) return badge; }
   const g = GLYPHS[key] || GLYPHS.gunfire || '';
   const s = 42;
   return `<circle cx="${cx}" cy="${cy}" r="27" fill="#f8fafc" stroke="#ffffff" stroke-width="3"/>`
@@ -251,7 +265,7 @@ export async function alertImageSvg(alert, opts = {}) {
     }
     // a single area keeps its type icon; several areas show just their glowing circles (the title names the type)
     if (type === 'political') { const [x, y] = px(center.lat, center.lon); o.push(politicalMarkerSvg(x, y)); }
-    else if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph, alert)); }
+    else if ((type === 'breaking' || type === 'quake' || type === 'weather' || !t.zone || t.badge) && zones.length === 1) { const [x, y] = px(center.lat, center.lon); o.push(markerSvg(type, x, y, 1, alert.marker_glyph, alert)); }
   } else if (!country) {
     const [x, y] = px(center.lat, center.lon);
     o.push(type === 'political' ? politicalMarkerSvg(x, y) : markerSvg(type, x, y, 1, alert.marker_glyph, alert));

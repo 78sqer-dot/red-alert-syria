@@ -369,6 +369,10 @@ html[lang='ar'] .time { font-family: var(--font-arabic); direction: rtl; }
 @keyframes urgentPulseWave { 0% { transform: scale(.7); opacity: .72; } 100% { transform: scale(1.5); opacity: 0; } }
 .mk:hover .news-marker-core, .mk.sel .news-marker-core { transform: translate(-50%, -50%) scale(1.12); }
 .mk.inactive .news-pulse-ring { animation: none; opacity: .55; }
+.mk-badge { display: block; pointer-events: none; }
+.mk-badge-c { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); }
+.mk.pulse-calm .news-pulse-ring { animation-duration: 5s; opacity: .55; }
+.mk.pulse-calm .news-pulse-ring::after { animation-duration: 5s; }
 .is-moving .news-pulse-ring, .is-zooming .news-pulse-ring { animation-play-state: paused; }
 @keyframes newsPulseWave { 0%, 100% { transform: scale(1); opacity: 0; } 35% { opacity: .28; } }
 @keyframes newsPulseGlow { 0%, 100% { box-shadow: 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 20%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 8%, transparent); } 50% { box-shadow: 0 0 4px color-mix(in srgb, var(--c, #e11d2e) 38%, transparent), inset 0 0 2px color-mix(in srgb, var(--c, #e11d2e) 15%, transparent); } }

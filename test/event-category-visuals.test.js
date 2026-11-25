@@ -40,15 +40,14 @@ test('live map icons, markers and impact-zone pulses use the same category color
   assert.match(alertImage, /const col = eventVisual\(type\)\.color/);
 });
 
-test('server-rendered map markers use category colors and keep urgent black inside a red triangle', () => {
+test('server-rendered map markers use category colors; breaking uses the approved Style-1 badge (owner order 2026-11-25)', () => {
   const aerial = markerSvg('uav', 100, 100);
   assert.ok(aerial.includes(`fill="${eventVisual('uav').color}"`));
   const weather = markerSvg('weather', 100, 100);
   assert.ok(weather.includes(`fill="${eventVisual('weather').color}"`));
   const urgent = markerSvg('breaking', 100, 100);
-  assert.ok(urgent.includes('d="M12 1.3 23.2 21H.8Z" fill="#ef233c"'));
-  assert.ok(urgent.includes('d="m12 6.1-7.2 12.7h14.4Z" fill="#000000"'));
-  assert.equal((urgent.match(/fill="#000000"/g) || []).length, 1, 'black is used only for the triangle interior');
+  assert.ok(urgent.includes('data:image/png;base64,'), 'breaking marker embeds the transparent Style-1 badge');
+  assert.ok(!urgent.includes('d="M12 1.3 23.2 21H.8Z"'), 'the old hand-drawn triangle no longer renders for breaking');
 });
 
 test('category recoloring preserves readable light/dark markers and approved sizes', () => {

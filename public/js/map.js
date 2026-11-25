@@ -1,5 +1,6 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
 import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=41';
+import { BADGE_PNG } from '/shared/badge-data.js?v=1';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
 import { EXTRA_SVG } from './target-svgs.js?v=20';
@@ -32,6 +33,7 @@ const STYLE_URL = { light: 'https://tiles.openfreemap.org/styles/liberty', dark:
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const DEM = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 export { typeIcon };
+const badgeImg = (name, size) => BADGE_PNG[name] ? `<img class="mk-badge mk-badge-c" src="data:image/png;base64,${BADGE_PNG[name]}" width="${size}" height="${size}" alt="" aria-hidden="true">` : '';
 const svgTag = (glyph, size, extra = '') => `<svg viewBox="0 0 512 512" width="${size}" height="${size}" ${extra} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${EXTRA_SVG[glyph] || SVG[glyph] || SVG.other}</svg>`;
 // White disc with a professional category-coloured glyph and edge.
 export function glyphDisc(type, size = 34, iconSize = 24, cls = 'sai', glyphOverride = null) {
@@ -1010,7 +1012,7 @@ export class AlertMap {
       el.classList.add('mk-breaking-news');
       el.innerHTML = `<span class="news-marker-core"><span class="news-marker-category" aria-hidden="true">${visual.dot}</span></span>`;
     } else if (eventEmoji) {
-      el.innerHTML = `<span class="sai map-event-disc map-event-emoji" style="width:34px;height:34px;border-color:${visual.color};--c:${visual.color}" aria-hidden="true">${eventEmoji}</span>`;
+      el.innerHTML = t.badge ? badgeImg(t.badge, 46) : `<span class="sai map-event-disc map-event-emoji" style="width:34px;height:34px;border-color:${visual.color};--c:${visual.color}" aria-hidden="true">${eventEmoji}</span>`;
     } else if (marker === 'icon') {
       const iconColor = visual.color;
       const sz = 24;
@@ -1019,11 +1021,13 @@ export class AlertMap {
       } else {
         el.innerHTML = `<div class="ic ic-${glyph}" style="--ic:${iconColor};width:${sz}px;height:${sz}px">${svgTag(glyph, sz, `class="ic-svg" fill="${iconColor}" color="${iconColor}"`)}</div>`;
       }
+      if (t.badge && glyph === t.glyph && !a.marker_glyph) el.innerHTML = badgeImg(t.badge, a.type === 'signal_sweep' ? 52 : 38);
     } else {
-      el.innerHTML = glyphDisc(a.type, 34, 24, 'sai map-event-disc', a.marker_glyph);
+      el.innerHTML = t.badge && !a.marker_glyph ? badgeImg(t.badge, 46) : glyphDisc(a.type, 34, 24, 'sai map-event-disc', a.marker_glyph);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
     if (!['squad', 'movement', 'fly'].includes(marker)) el.insertAdjacentHTML('afterbegin', '<span class="news-pulse-ring" aria-hidden="true"></span>');
+    if (a.is_active && t.ttlMin) { const ts = Date.parse(a.timestamp || a.created_at || ''); if (Number.isFinite(ts) && (Date.now() - ts) / (t.ttlMin * 60000) >= 0.5) el.classList.add('pulse-calm'); }
     // civil family: pinned to its exact place; a small tidy dot at country view, the icon from zoom 7.5 up
     if (t.group === 'civil') {
       el.classList.add('mk-civ');

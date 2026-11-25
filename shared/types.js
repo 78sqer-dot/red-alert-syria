@@ -2,7 +2,7 @@
 // Colours follow the original Red Alert palette.
 
 export const ALERT_TYPES = {
-  breaking: {
+  breaking: { badge: 'breaking',
     ar: 'خبر عاجل', en: 'Breaking news', button_ar: 'خبر عاجل', button_en: 'Breaking',
     emoji: '🚨', color: '#ff3b4e', ring: '#c81e2f', group: 'other', ttlMin: 120,
     marker: 'icon', glyph: 'alert_tri', icon: '#111827', disc: '#000000', zone: true, tag_ar: 'عاجل', tag_en: 'Breaking',
@@ -28,7 +28,7 @@ export const ALERT_TYPES = {
     marker: 'icon', glyph: 'target_reticle', icon: '#c2410c', size: 28, zone: false,
     tag_ar: 'استهداف', tag_en: 'Targeted_strike',
   },
-  airstrike: {
+  airstrike: { badge: 'airstrike',
     ar: 'غارة جوية', en: 'Airstrike', button_ar: 'غارة جوية', button_en: 'Airstrike',
     emoji: '💥', color: '#ef233c', ring: '#b42332', group: 'strikes', ttlMin: 180,
     marker: 'static', glyph: 'airstrike', disc: '#dc2626', zone: true, tag_ar: 'غارة_جوية', tag_en: 'Airstrike',
@@ -48,12 +48,12 @@ export const ALERT_TYPES = {
     emoji: '✈️', color: '#3b8eff', ring: '#1d4ed8', group: 'aerial', ttlMin: 60,
     marker: 'movement', glyph: 'plane', icon: '#3b8eff', zone: false, tag_ar: 'حركة_طيران', tag_en: 'Aircraft_movement',
   },
-  border: {
+  border: { badge: 'border',
     ar: 'تنبيه حدودي', en: 'Border alert', button_ar: 'الحدود', button_en: 'Border',
     emoji: '🚧', color: '#7c3aed', ring: '#5b21b6', group: 'other', ttlMin: 120,
     marker: 'icon', glyph: 'alert_tri', icon: '#7c3aed', zone: false, tag_ar: 'حدود', tag_en: 'Border',
   },
-  military_incursion: {
+  military_incursion: { badge: 'military',
     ar: 'توغل عسكري', en: 'Military incursion',
     button_ar: 'توغل عسكري', button_en: 'Military incursion',
     emoji: '🪖', color: '#71834a', ring: '#4b5c2f', group: 'other', ttlMin: 180,
@@ -72,7 +72,7 @@ export const ALERT_TYPES = {
     marker: 'icon', glyph: 'handcuffs', icon: '#7c2d12', disc: '#451a03', size: 32, zone: false,
     tag_ar: 'اختطاف', tag_en: 'Kidnapping',
   },
-  signal_sweep: {
+  signal_sweep: { badge: 'signal',
     ar: 'رصد/مسح الإشارة', en: 'Signal sweep', button_ar: 'رصد/مسح الإشارة', button_en: 'Signal sweep',
     emoji: '📡', color: '#475569', ring: '#334155', group: 'other', ttlMin: 180,
     marker: 'icon', glyph: 'signal_sweep', icon: '#475569', size: 24, zone: false,
@@ -96,7 +96,7 @@ export const ALERT_TYPES = {
     marker: 'icon', glyph: 'smuggling_explosives', icon: '#d97706', disc: '#78350f', size: 34, zone: false,
     tag_ar: 'تهريب_متفجرات', tag_en: 'Explosives_smuggling',
   },
-  missile: {
+  missile: { badge: 'missile',
     ar: 'صواريخ', en: 'Missiles', button_ar: 'صواريخ', button_en: 'Missiles',
     emoji: '🚀', color: '#7f1d1d', ring: '#450a0a', group: 'aerial', ttlMin: 180,
     marker: 'icon', glyph: 'missile_ic', icon: '#c0262d', disc: '#000000', zone: false, tag_ar: 'صواريخ', tag_en: 'Missiles',
@@ -116,12 +116,12 @@ export const ALERT_TYPES = {
     emoji: '', color: '#b91c1c', ring: '#7f1d1d', group: 'strikes', ttlMin: 360,
     marker: 'icon', glyph: 'pistol', icon: '#111827', size: 32, zone: false, tag_ar: 'اغتيال', tag_en: 'Assassination',
   },
-  artillery: {
+  artillery: { badge: 'artillery',
     ar: 'قصف مدفعي', en: 'Artillery shelling', button_ar: 'قصف مدفعي', button_en: 'Artillery',
     emoji: '💣', color: '#f97316', ring: '#f97316', group: 'strikes', ttlMin: 360,
     marker: 'static', glyph: 'artillery', disc: '#f97316', zone: false, tag_ar: 'قصف_مدفعي', tag_en: 'Artillery',
   },
-  explosion: {
+  explosion: { badge: 'explosion',
     ar: 'انفجار', en: 'Explosion', button_ar: 'انفجار', button_en: 'Explosion',
     emoji: '💥', color: '#f04452', ring: '#b42332', group: 'strikes', ttlMin: 240,
     marker: 'icon', glyph: 'explosion_modern', icon: '#f04452', size: 36, zone: false, tag_ar: 'انفجار', tag_en: 'Explosion',
