@@ -1025,8 +1025,7 @@ async function holdUnconfirmedChannelDelivery(d, alert) {
 // ---------------------------------------------------------------- pre-publish audit (owner request 2026-11-17: «نشر تلقائي … مع تدقيق الخبر وتصحيحه»)
 /** The editorial hold reason used when the pre-publish audit stops an auto-publish.
  * cardText already renders any editorialHold as a «held for editorial review» status
- * line, so the reviewer sees the hold on the card with no card changes. mergeInto
- * clears ONLY this reason, when a genuinely new source joins the draft. */
+ * line, so the reviewer sees the hold on the card with no card changes.  * clears ONLY this reason, when a genuinely new source joins the draft. */
 export const AUTO_AUDIT_HOLD_REASON = 'auto-audit-failed';
 const auditTidy = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/\s+/g, ' ').trim();
 const auditTidyBody = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).trim();
@@ -1087,7 +1086,7 @@ function auditPlaceSuspect(d) {
  * word boundaries — so what publishes is the corrected version, never the raw draft text.
  * A failed audit NEVER publishes: the caller holds the draft for manual review with
  * d.autoAudit.reason recorded; the hold is lifted only by new corroborating input
- * (see mergeInto), so a failed draft is never re-audited in a timer loop. */
+ * so a failed draft is never re-audited in a timer loop. */
 export function auditDraftForAutoPublish(d, mode = 'night') {
   if (!d) return { ok: false, reason: 'missing-draft' };
   if (!isFreshSourceTs(draftSourceTs(d))) return { ok: false, reason: 'stale-source' };
@@ -1152,7 +1151,9 @@ async function nightPublish(d) {
   // Pre-publish audit (owner policy 2026-11-17, gap-closure item 6): verify +
   // correct BEFORE anything auto-publishes, on both routes. A failed audit
   // holds the draft for manual review with the reason recorded — it never
-  // publishes, and the hold lifts only on new corroborating input (mergeInto).
+  // publishes. Same-event corroboration no longer lifts the hold: by the
+  // owner's 2026-11-26 order such follow-ups are deleted, so a held draft
+  // awaits manual review.
   const audit = auditDraftForAutoPublish(d, mode);
   if (!audit.ok) {
     d.status = 'pending';
@@ -1358,34 +1359,6 @@ function capReached() {
   const since = Date.now() - H_MS;
   return Object.values(n.drafts).filter((d) => !d.test && d.created > since).length >= NEWS_CFG.maxPerHour;
 }
-async function mergeInto(d, it, locs = []) {
-  const n = newsState();
-  if ((d.srcs || []).some((s) => s.u === it.src.u)) return false;
-  if (d.droneRuleVersion === 1 && hasExplicitDroneFlight(it.text)) d.dronePresence = true;
-  d.srcs.push({ u: it.src.u, name: it.src.name, url: it.url, ts: it.ts, local: !!it.src.local });
-  // new corroborating input is the ONE event that earns an audit-held draft a re-audit:
-  // lift the audit hold (only that hold) so the eligibility + audit gates judge it afresh
-  if (d.editorialHold && d.editorialHoldReason === AUTO_AUDIT_HOLD_REASON) {
-    delete d.editorialHold; delete d.editorialHoldReason; delete d.editorialHoldAt;
-  }
-  scheduleDayAuto(d);
-  // another channel names a more precise nearby place (e.g. "المعكر" next to "مزرعة الحانوت"): add it as an extra area
-  const main = d.loc && Number.isFinite(d.loc.latitude) ? { lat: d.loc.latitude, lon: d.loc.longitude } : null;
-  for (const l of locs) {
-    if (!l || l.scope !== 'place' || !Number.isFinite(l.latitude) || (d.extra || []).length >= 3) continue;
-    const same = (x) => x && x.scope === 'place' && x.place_id === l.place_id;
-    if (same(d.loc) || (d.extra || []).some(same)) continue;
-    if (d.loc?.scope === 'place' && main && km(main, { lat: l.latitude, lon: l.longitude }) > 20) continue;
-    if (d.loc?.scope !== 'place' && d.loc?.governorate && l.governorate !== d.loc.governorate) continue;
-    if (d.loc?.scope !== 'place') { d.extra = [...(d.extra || []), ...(d.loc?.scope === 'country' ? [] : [d.loc])].filter(Boolean).slice(0, 3); d.loc = l; }
-    else (d.extra ||= []).push(l);
-  }
-  n.stats.merged++;
-  save();
-  await refreshCards(d);
-  if (d.status === 'pending' && nightActive() && nightEligible(d)) await nightPublish(d); // confirmed by a 2nd source at night
-  return true;
-}
 function explicitWeatherResult(it) {
   const info = weatherWarningInfo(it.text);
   if (!info || hasNonWeatherSignal(it.text)) return null;
@@ -1423,9 +1396,11 @@ async function handleResult(it, r, known, pmap) {
   if (!target) target = known.find((k) => sameIncident(cand, k)) || null;
   if (!target && r.new_incident === false && !rejectedSameAs && !(r.type === 'political' && (!politicalCategory || r.political_category === 'none'))) { pmap.set(it.i, null); n.stats.dupes++; note(it, `follow-up of an older incident (${r.same_as || '?'})`); return; }
   if (target) {
+    // Owner's sharpening (2026-11-26 00:07): a same-event follow-up is
+    // DELETED — never published, never held, never merged into the original
+    // as a follow-up («ينشر واحد ويحذف ٩ — شو بدي بيهن»). The first report
+    // stands exactly as it is; this item leaves no trace.
     pmap.set(it.i, target);
-    const d = target.draftId ? n.drafts[target.draftId] : null;
-    if (d && d.status === 'pending') { const added = await mergeInto(d, it, locs); note(it, added ? `merged into draft ${d.id}` : `same source, already in draft ${d.id}`); return; }
     n.stats.dupes++; note(it, `same event as ${target.kind} (${target.status}) — deleted unpublished (one event = one post)`); return;
   }
   if (!n.types[r.type]) { note(it, 'type switched off'); return; }

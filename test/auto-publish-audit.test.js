@@ -10,7 +10,8 @@ import path from 'node:path';
 // through nightPublish) first passes auditDraftForAutoPublish: freshness,
 // corroboration, place sanity, and in-place correction of the outgoing copy.
 // A failed audit NEVER publishes: the draft is held with the reason recorded,
-// and only new corroborating input (mergeInto) earns it a re-audit.
+// (Since the owner's 2026-11-26 one-event order, same-event follow-ups are
+// deleted rather than merged, so nothing re-audits a held draft but a human.)
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ras-audit-gate-'));
 process.env.DATA_DIR = dataDir;
 process.env.TELEGRAM_BACKUP = 'false';

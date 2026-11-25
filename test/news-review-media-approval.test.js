@@ -69,8 +69,11 @@ test('automatic monitoring neither downloads nor attaches source photos/videos, 
       media: [{ type: 'video', url: 'https://example.invalid/not-a-video' }],
     };
     await _test.handleResult(secondItem, { ...result, i: 2, same_as: 'E1' }, known, new Map());
-    assert.equal(draft.srcs.length, 2, 'source merging still works');
-    assert.equal(Object.hasOwn(draft, 'sourceMedia'), false, 'merged sources do not fetch or store their media');
+    // Owner's one-event order (2026-11-26): a same-event follow-up is DELETED
+    // by the monitor — not merged into the original, not held. The first
+    // draft stands untouched; the second item leaves no trace.
+    assert.equal(draft.srcs.length, 1, 'same-event follow-ups are deleted, never merged');
+    assert.equal(Object.hasOwn(draft, 'sourceMedia'), false, 'deleted follow-ups do not fetch or store their media');
 
     const legacyDraft = {
       ...draft,
@@ -82,7 +85,7 @@ test('automatic monitoring neither downloads nor attaches source photos/videos, 
     const publicDraft = toBotDraft(legacyDraft);
     assert.equal(Object.hasOwn(publicDraft, 'media'), false, 'legacy source photos are not attached to public alerts');
     assert.equal(Object.hasOwn(publicDraft, 'media_items'), false, 'legacy source videos are not attached to public alerts');
-    assert.equal(fetchCalls, 0, 'neither new nor merged monitored media triggers a network download');
+    assert.equal(fetchCalls, 0, 'neither new nor deleted-follow-up monitored media triggers a network download');
   } finally {
     globalThis.fetch = originalFetch;
   }
