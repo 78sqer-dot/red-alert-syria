@@ -504,8 +504,9 @@ export class AlertMap {
   movementTrackAlerts() {
     if (this.newsHidden) return [];
     return this.alerts
-      .filter((a) => a.type === 'air_movement' && a.is_active && FLIGHT_DIRECTIONS[a.flight_direction]
-        && Number.isFinite(a.location?.latitude) && Number.isFinite(a.location?.longitude))
+      .filter((a) => a.is_active && Number.isFinite(a.location?.latitude) && Number.isFinite(a.location?.longitude)
+        && ((a.type === 'air_movement' && FLIGHT_DIRECTIONS[a.flight_direction])
+          || (a.aerial_mode === 'toward' && Number.isFinite(a.flight_target?.latitude) && Number.isFinite(a.flight_target?.longitude))))
       .sort((a, b) => (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0))
       .slice(0, 3);
   }
@@ -532,12 +533,16 @@ export class AlertMap {
       const routeBearing = flightPathBearing(route);
       const heading = isReferenceRoute && Number.isFinite(routeBearing) ? routeBearing : aircraftHeading(alert, savedBearing);
       keep.add(alert.id);
-      const aircraft = alert.aircraft === 'uav' ? 'uav' : 'plane';
+      const aircraft = alert.aircraft === 'uav' || alert.type === 'uav' ? 'uav' : 'plane';
       const color = eventVisual('air_movement').color;
       const iconColor = aircraft === 'uav' ? color : '#3b8eff';
       const routeColor = aircraft === 'uav' ? '#e5484d' : '#2476c9';
       const lang = this.opts.lang === 'en' ? 'en' : 'ar';
-      const direction = FLIGHT_DIRECTIONS[alert.flight_direction][lang];
+      const targetName = lang === 'en'
+        ? (alert.flight_target?.name_en || alert.flight_target?.name_ar)
+        : (alert.flight_target?.name_ar || alert.flight_target?.name_en);
+      const direction = FLIGHT_DIRECTIONS[alert.flight_direction]?.[lang]
+        || (targetName ? (lang === 'en' ? `To ${targetName}` : `نحو ${targetName}`) : '');
       const reportedPlace = lang === 'en'
         ? (alert.place?.name_en || alert.location?.name_en || 'the original report location')
         : (alert.place?.name_ar || alert.location?.name_ar || 'الموقع الأصلي للبلاغ');
@@ -559,15 +564,12 @@ export class AlertMap {
         // flight_target name — no name in the data, no label. On a leaving
         // reference route the target is the departure area and the Israel
         // reference label already marks the destination, so skip it there.
-        const targetName = lang === 'en'
-          ? (alert.flight_target?.name_en || alert.flight_target?.name_ar)
-          : (alert.flight_target?.name_ar || alert.flight_target?.name_en);
         // Directional projection (owner spec refinement 2026-11-25, from the
         // Lebanese reference): the dotted route line continues a short,
         // bounded distance PAST the stored target along the final bearing —
         // pure heading language in the same dashed style at lower opacity,
         // never a claimed track. Plane routes only; the UAV line is untouched.
-        if (aircraft !== 'uav') {
+        if (aircraft !== 'uav' || alert.aerial_mode === 'toward') {
           const [p1, p2] = route;
           const cosLat = Math.cos(((p1[1] + p2[1]) / 2) * Math.PI / 180);
           const dx = (p2[0] - p1[0]) * cosLat;
@@ -579,7 +581,7 @@ export class AlertMap {
             routeFeatures.push({
               type: 'Feature',
               id: `projection-${alert.id}`,
-              properties: { color: routeColor, projection: true, planeRoute: true, illustrative: true, alertId: alert.id },
+              properties: { color: routeColor, projection: true, planeRoute: aircraft !== 'uav', illustrative: true, alertId: alert.id },
               geometry: { type: 'LineString', coordinates: [p2, tip] },
             });
           }
@@ -604,7 +606,7 @@ export class AlertMap {
       }
       if (!track) {
         const el = document.createElement('div');
-        el.className = `maplibregl-marker map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'} is-${alert.flight_direction.replace(/_/g, '-')}`;
+        el.className = `maplibregl-marker map-flight-track-marker ${aircraft === 'uav' ? 'is-uav' : 'is-plane'} is-${(alert.flight_direction || 'toward').replace(/_/g, '-')}`;
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
         el.setAttribute('aria-label', `${movementTitle} · ${direction}`);
@@ -627,7 +629,7 @@ export class AlertMap {
         this.movementTracks.set(alert.id, track);
       }
       track.path = route;
-      if (aircraft === 'plane' && route.length === 2) {
+      if ((aircraft === 'plane' || alert.aerial_mode === 'toward') && route.length === 2) {
         if (track.frame == null) {
           const animate = (now) => {
             if (this.movementTracks.get(alert.id) !== track) return;
@@ -651,7 +653,7 @@ export class AlertMap {
         track.marker.setLngLat(position);
         track.marker.setRotation(heading);
       }
-      track.element.dataset.flightDirection = alert.flight_direction;
+      track.element.dataset.flightDirection = alert.flight_direction || (alert.aerial_mode === 'toward' ? 'toward' : '');
     });
     const archivedAlert = !this.newsHidden && this.selectedAlert?.id === this.selectedId
       && isLegacyQuneitraArchiveAlert(this.selectedAlert) ? this.selectedAlert : null;
@@ -947,7 +949,7 @@ export class AlertMap {
     let satN = 0;
     for (const a of this.alerts) {
       const secondaryDrone = hasSecondaryDrone(a) && typeOf(a.type).marker !== 'orbit';
-      if ((typeOf(a.type).marker !== 'orbit' && !secondaryDrone) || !a.location || a.scope === 'country') continue;
+      if (movementTrackIds.has(a.id) || (typeOf(a.type).marker !== 'orbit' && !secondaryDrone) || !a.location || a.scope === 'country') continue;
       const per = secondaryDrone ? 1 : mapDroneCount(a);
       const areaZones = Array.isArray(a.zones) && a.zones.length ? a.zones : [];
       let mi = -1, bd = Infinity;

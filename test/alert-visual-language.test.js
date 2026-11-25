@@ -98,7 +98,7 @@ test('schematic movement uses one compact blue three-aircraft group at the repor
   assert.match(map, /\[\{ name: 'is-lead', size: 24 \}, \{ name: 'is-left', size: 24 \}, \{ name: 'is-right', size: 24 \}\]/);
   assert.match(map, /const position = \[alert\.location\.longitude, alert\.location\.latitude\]/);
   assert.match(map, /const heading = isReferenceRoute && Number\.isFinite\(routeBearing\) \? routeBearing : aircraftHeading\(alert, savedBearing\)/);
-  assert.match(map, /is-\$\{alert\.flight_direction\.replace\(\/_\/g, '-'\)\}/);
+  assert.match(map, /is-\$\{\(alert\.flight_direction \|\| 'toward'\)\.replace\(\/_\/g, '-'\)\}/);
   assert.match(map, /const movementTrackIds = new Set\(this\.movementTrackAlerts\(\)\.map\(\(a\) => a\.id\)\)/);
   assert.match(map, /movementTrackIds\.has\(a\.id\)/);
   assert.match(map, /visual\.append\(squad\)/);

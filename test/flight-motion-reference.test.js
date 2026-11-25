@@ -79,9 +79,9 @@ test('owner order 2026-11-25: destination label comes only from the stored fligh
 });
 
 test('spec refinement 2026-11-25: dotted projection extends past the stored target, plane routes only', () => {
-  assert.match(map, /if \(aircraft !== 'uav'\) \{\s*const \[p1, p2\] = route;/);
+  assert.match(map, /if \(aircraft !== 'uav' \|\| alert\.aerial_mode === 'toward'\) \{\s*const \[p1, p2\] = route;/);
   assert.match(map, /const ext = Math\.min\(0\.35, Math\.max\(0\.08, len \* 0\.3\)\);/);
-  assert.match(map, /id: `projection-\$\{alert\.id\}`,\s*properties: \{ color: routeColor, projection: true, planeRoute: true, illustrative: true, alertId: alert\.id \}/);
+  assert.match(map, /id: `projection-\$\{alert\.id\}`,\s*properties: \{ color: routeColor, projection: true, planeRoute: aircraft !== 'uav', illustrative: true, alertId: alert\.id \}/);
   assert.match(map, /'line-opacity': \['case', \['get', 'projection'\], 0\.28,/);
 });
 
@@ -89,4 +89,18 @@ test('spec refinement 2026-11-25: alert details carry a data-only heading-to row
   assert.match(app, /a\.flight_target\?\.name_ar \|\| a\.flight_target\?\.name_en/);
   assert.match(app, /`نحو \$\{a\.flight_target\?\.name_ar \|\| a\.flight_target\?\.name_en\}`/);
   assert.match(app, /!\(a\.flight_route_origin === 'israel_approx_reference' && a\.flight_direction === 'leaving_syria'\)/);
+});
+
+test('toward reports (bot contract with رشيد, 2026-11-25): uav/warplane alerts with aerial_mode toward become movement tracks', () => {
+  assert.match(map, /a\.aerial_mode === 'toward' && Number\.isFinite\(a\.flight_target\?\.latitude\)/);
+  assert.match(map, /const aircraft = alert\.aircraft === 'uav' \|\| alert\.type === 'uav' \? 'uav' : 'plane';/);
+  assert.match(map, /FLIGHT_DIRECTIONS\[alert\.flight_direction\]\?\.\[lang\]/);
+  assert.match(map, /is-\$\{\(alert\.flight_direction \|\| 'toward'\)\.replace\(\/_\/g, '-'\)\}/);
+  assert.match(map, /\(aircraft === 'plane' \|\| alert\.aerial_mode === 'toward'\) && route\.length === 2/);
+  assert.match(map, /movementTrackIds\.has\(a\.id\) \|\| \(typeOf\(a\.type\)\.marker !== 'orbit'/);
+});
+
+test('card reads the bot meta.flightTarget shape as well as top-level flight_target', async () => {
+  const img = await readFile(new URL('../server/alert-image.js', import.meta.url), 'utf8');
+  assert.match(img, /const ft = alert\.flight_target \|\| alert\.meta\?\.flightTarget;/);
 });

@@ -229,7 +229,7 @@ export async function alertImageSvg(alert, opts = {}) {
   // a dashed route from the report location toward the target plus the
   // «نحو X» phrase. Data-only: no name or no coordinates, no heading.
   // Reference-route departures are excluded (their target is the origin).
-  const ft = alert.flight_target;
+  const ft = alert.flight_target || alert.meta?.flightTarget;
   const headingName = ft ? (en ? (ft.name_en || ft.name_ar) : (ft.name_ar || ft.name_en)) : null;
   const headingTo = headingName && Number.isFinite(ft.latitude) && Number.isFinite(ft.longitude)
     && !(alert.flight_route_origin === 'israel_approx_reference' && alert.flight_direction === 'leaving_syria')
