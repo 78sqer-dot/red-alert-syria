@@ -380,7 +380,7 @@ test('political developments use the category color and marker only for explicit
   assert.match(mapSource, /color: eventVisual\(a\.type\)\.color, active:/, 'political rings use the shared category color');
   assert.doesNotMatch(mapSource, /a\.type === 'political' \|\| t\.marker === 'movement'/);
   assert.match(mapSource, /a\.scope === 'country' \|\| !a\.location/);
-  assert.match(mapSource, /const km = planeArea \? z\.km : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\);/, 'political and other non-warplane circles retain the original display cap');
+  assert.match(mapSource, /const km = planeArea \? Math\.max\(z\.km, PLANE_AREA_MIN_KM\) : this\._screenKm\(z\.km, z\.lat, marker === 'squad' \? 0\.28 : 0\.18\);/, 'political and other non-warplane circles retain the original display cap');
   assert.match(alertImageSource, /zones = type === 'political' \? selectedAlertZones/);
   assert.match(alertImageSource, /if \(type === 'political'\) \{ const \[x, y\] = px\(center\.lat, center\.lon\); o\.push\(politicalMarkerSvg\(x, y\)\); \}/);
   assert.deepEqual(Object.keys(POLITICAL_CATEGORIES), ['agreement', 'signing', 'treaty', 'circular', 'support', 'military_cooperation', 'statement', 'position', 'decision', 'appointment', 'official_announcement', 'government_announcement', 'official_entity', 'negotiation', 'meeting', 'visit', 'election']);

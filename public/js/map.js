@@ -12,6 +12,11 @@ import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=3';
 import { zoneHitAt } from '/shared/zone-hit-test.js?v=1';
 import { directFlightPath, directFlightBearing, referenceFlightPath, flightPathBearing, flightPosition, ISRAEL_APPROX_REFERENCE, LEGACY_QUNEITRA_ALERT_ID, isLegacyQuneitraArchiveAlert, legacyQuneitraArchivePath } from '/shared/flight-path.js?v=6';
+// Owner order 2026-11-26 (Lebanese reference): a warplane area is a LARGE
+// dashed circle, and the 3-plane formation moves continuously inside it.
+// Display-only floor for aircraft-area zone radii; saved zone data is
+// never changed.
+const PLANE_AREA_MIN_KM = 10;
 const ml = () => window.maplibregl;
 const aircraftHeading = (alert, bearing) => alert.aircraft === 'uav'
   ? (alert.flight_direction === 'leaving_syria' ? 180 : 0)
@@ -596,7 +601,13 @@ export class AlertMap {
     return this.alerts
       .filter((a) => a.is_active && Number.isFinite(a.location?.latitude) && Number.isFinite(a.location?.longitude)
         && ((a.type === 'air_movement' && FLIGHT_DIRECTIONS[a.flight_direction])
-          || (a.aerial_mode === 'toward' && Number.isFinite(a.flight_target?.latitude) && Number.isFinite(a.flight_target?.longitude))))
+          || (a.aerial_mode === 'toward' && Number.isFinite(a.flight_target?.latitude) && Number.isFinite(a.flight_target?.longitude))
+          // Area mode (owner order 2026-11-26): a warplane reported OVER an
+          // area has no route — its formation orbits inside the dashed area
+          // circle instead of sitting static. Reference/location-only
+          // displays keep their designed rendering.
+          || ((a.type === 'warplane' || (a.type === 'air_movement' && a.aircraft === 'plane'))
+            && !['approximate_point', 'geographic_reference', 'locality_reference'].includes(a.location_display))))
       .sort((a, b) => (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0))
       .slice(0, 3);
   }
@@ -624,6 +635,22 @@ export class AlertMap {
       const heading = isReferenceRoute && Number.isFinite(routeBearing) ? routeBearing : aircraftHeading(alert, savedBearing);
       keep.add(alert.id);
       const aircraft = alert.type === 'helicopter' ? 'helicopter' : (alert.aircraft === 'uav' || alert.type === 'uav' ? 'uav' : 'plane');
+      // Area mode: no route exists, so the formation flies a smooth closed
+      // orbit inside the dashed area circle (radius from the alert's own
+      // zone, floored like the rendered circle, flown at 55% of it).
+      const isOrbit = aircraft === 'plane' && !isReferenceRoute && route.length !== 2 && !alert.flight_direction && alert.aerial_mode !== 'toward';
+      let orbitPath = null;
+      if (isOrbit) {
+        const zoneKm = Math.max(Number(alert.zones?.[0]?.km) || 0, PLANE_AREA_MIN_KM);
+        const rKm = Math.max(1.2, zoneKm * 0.55);
+        const dLat = rKm / 110.57;
+        const dLon = rKm / (111.32 * Math.cos((position[1] * Math.PI) / 180));
+        orbitPath = [];
+        for (let i = 0; i <= 28; i++) {
+          const t = (i / 28) * Math.PI * 2;
+          orbitPath.push([position[0] + dLon * Math.sin(t), position[1] + dLat * Math.cos(t)]);
+        }
+      }
       const color = eventVisual('air_movement').color;
       const iconColor = aircraft === 'helicopter' ? '' : (aircraft === 'uav' ? color : '#3b8eff');
       const routeColor = aircraft === 'uav' ? '#e5484d' : '#2476c9';
@@ -686,7 +713,7 @@ export class AlertMap {
         }
       }
       const movementTitle = lang === 'en' ? `Open alert: ${alert.title}` : `افتح التنبيه: ${alert.title}`;
-      const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${heading}|${position.join(',')}|${route.join(';')}`;
+      const signature = `${lang}|${aircraft}|${iconColor}|${routeColor}|${alert.flight_direction}|${heading}|${position.join(',')}|${(isOrbit ? orbitPath : route).join(';')}`;
       let track = this.movementTracks.get(alert.id);
       if (track && track.signature !== signature) {
         if (track.frame) cancelAnimationFrame(track.frame);
@@ -725,8 +752,9 @@ export class AlertMap {
         track = { marker, element: el, signature, startedAt: performance.now(), frame: null };
         this.movementTracks.set(alert.id, track);
       }
-      track.path = route;
-      if ((aircraft === 'plane' || alert.aerial_mode === 'toward') && route.length === 2) {
+      track.path = isOrbit ? orbitPath : route;
+      track.periodMs = isOrbit ? 26000 : 7000;
+      if ((aircraft === 'plane' || alert.aerial_mode === 'toward') && track.path.length >= 2) {
         if (track.frame == null) {
           const animate = (now) => {
             if (this.movementTracks.get(alert.id) !== track) return;
@@ -736,7 +764,7 @@ export class AlertMap {
               track.frame = null;
               return;
             }
-            const progress = ((now - track.startedAt) % 7000) / 7000;
+            const progress = ((now - track.startedAt) % (track.periodMs || 7000)) / (track.periodMs || 7000);
             const point = flightPosition(track.path, progress);
             if (point) {
               track.marker.setLngLat([point.lon, point.lat]);
@@ -1234,7 +1262,7 @@ export class AlertMap {
       zs.forEach((z) => {
         // Aircraft areas keep the reference's geographic radius at every zoom; this does not
         // change the saved z.km, circle centers or locality count. Other categories retain their cap.
-        const km = planeArea ? z.km : this._screenKm(z.km, z.lat, marker === 'squad' ? 0.28 : 0.18);
+        const km = planeArea ? Math.max(z.km, PLANE_AREA_MIN_KM) : this._screenKm(z.km, z.lat, marker === 'squad' ? 0.28 : 0.18);
         const mpp = (40075016.686 * Math.cos((z.lat * Math.PI) / 180)) / (512 * Math.pow(2, this.map.getZoom()));
         const radiusPx = Math.max(5, (km * 1000) / mpp);
         hits.push({ id: a.id, lon: z.lon, lat: z.lat, km, radiusPx, ts: Date.parse(a.timestamp) || 0, live: !!a.is_active });

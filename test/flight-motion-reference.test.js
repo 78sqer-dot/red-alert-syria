@@ -54,12 +54,12 @@ test('entering plane keeps right-to-left travel and faces left; cache versions r
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
   assert.match(html, /app\.css\?v=107/);
   assert.match(html, /app\.js\?v=124/);
-  assert.match(app, /map\.js\?v=90/);
+  assert.match(app, /map\.js\?v=91/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {
   assert.match(map, /planeArea = a\.type === 'warplane' \\|\\| \(a\.type === 'air_movement' && a\.aircraft !== 'uav'\)/);
-  assert.match(map, /planeArea \? z\.km : this\._screenKm/);
+  assert.match(map, /planeArea \? Math\.max\(z\.km, PLANE_AREA_MIN_KM\) : this\._screenKm/);
   assert.match(map, /if \(a\.is_active && !planeArea\)/);
   assert.match(map, /planeArea: true/);
   assert.match(css, /map-flight-track-marker\.is-plane\.is-toward-syria \.map-flight-track-visual::before/);
@@ -96,7 +96,7 @@ test('toward reports (bot contract with رشيد, 2026-11-25): uav/warplane aler
   assert.match(map, /const aircraft = alert\.type === 'helicopter' \? 'helicopter' : \(alert\.aircraft === 'uav' \|\| alert\.type === 'uav' \? 'uav' : 'plane'\);/);
   assert.match(map, /FLIGHT_DIRECTIONS\[alert\.flight_direction\]\?\.\[lang\]/);
   assert.match(map, /is-\$\{\(alert\.flight_direction \|\| 'toward'\)\.replace\(\/_\/g, '-'\)\}/);
-  assert.match(map, /\(aircraft === 'plane' \|\| alert\.aerial_mode === 'toward'\) && route\.length === 2/);
+  assert.match(map, /\(aircraft === 'plane' \|\| alert\.aerial_mode === 'toward'\) && track\.path\.length >= 2/);
   assert.match(map, /movementTrackIds\.has\(a\.id\) \|\| \(typeOf\(a\.type\)\.marker !== 'orbit'/);
 });
 
