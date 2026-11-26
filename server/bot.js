@@ -2965,65 +2965,56 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await vanish(ctx, L(ctx).reportRejected(ctx.from.first_name || '') + (action === 'bn' ? ' · 🚫' : ''));
     }
   });
-  // Pending inbox (owner orders 2026-11-26): an aggregation entry point over
-  // the SAME stores the individual cards use — public reports awaiting a
-  // decision (store.reports) and monitor drafts held for a human decision
-  // (store.state.news.drafts with editorialHold) in ONE list, oldest first,
-  // every entry carrying its waiting age; reports also carry one-tap
-  // approve/reject, and any entry opens its own existing card unchanged.
-  // The per-report review cards and per-draft monitor cards keep arriving
+  // Pending inbox (owner orders 2026-11-26, additions approved 17:27): an
+  // aggregation entry point over the SAME stores the individual cards use —
+  // public reports awaiting a decision (store.reports) and monitor drafts
+  // held for a human decision (store.state.news.drafts with editorialHold) —
+  // in ONE list merged chronologically, oldest first, every entry carrying
+  // its waiting age. Reports carry one-tap approve/reject right in the list
+  // (same reportTake claim semantics as the card) or open their own review
+  // card; held drafts carry their recorded hold reason and open their own
+  // monitor card, whose publish/ignore buttons ARE the monitor's real path
+  // (the monitor's nw: handlers consume the message they are tapped from,
+  // so they are deliberately NOT wired into the list itself — design note
+  // returned to Nasher/Sadeq 2026-11-26). The per-item cards keep arriving
   // exactly as before; this is an additional front door, not a replacement.
   const showPendingInbox = async (ctx) => {
     const lang = langOf(ctx);
     const en = lang === 'en';
     const reports = store.reportsList();
     const held = heldNewsDrafts();
-    const total = reports.length + held.length;
-    if (!total) {
+    const items = [
+      ...reports.map(([rid, rep]) => ({ kind: 'report', ts: rep.created || 0, rid, rep })),
+      ...held.map((d) => ({ kind: 'held', ts: d.editorialHoldAt || d.created || d.ts || 0, d })),
+    ].sort((a, b) => a.ts - b.ts);
+    if (!items.length) {
       return show(ctx, en ? '📥 <b>Pending reports</b>\n\nNothing is waiting for a decision.' : '📥 <b>البلاغات المعلّقة</b>\n\nلا شيء ينتظر قراراً.', new InlineKeyboard().text(en ? '🏠 Menu' : '🏠 القائمة', 'home'));
     }
     const kb = new InlineKeyboard();
-    const lines = [en ? `📥 <b>Pending reports (${total})</b>` : `📥 <b>البلاغات المعلّقة (${total})</b>`];
-    if (reports.length) {
-      lines.push('', en ? `<b>Public reports (${reports.length})</b> — tap a report for its card, or decide right here:` : `<b>بلاغات الجمهور (${reports.length})</b> — اكبس البلاغ لبطاقته، أو قرّر من هنا مباشرة:`);
-      for (const [rid, rep] of reports.slice(0, 10)) {
-        const type = alertButtonLabel(rep.draft?.type, lang).replace(/«|»/g, '');
-        const place = rep.draft?.location ? locName(rep.draft.location, lang) : (en ? 'No location' : 'بلا موقع');
-        kb.text(`${type} — ${place} — ${waitingAge(rep.created, lang)}`, 'rpo:' + rid).row();
-        kb.text(en ? '✅ Approve & publish' : '✅ اعتماد ونشر', 'rqa:' + rid).text(en ? '❌ Reject' : '❌ رفض', 'rqr:' + rid).row();
+    for (const item of items.slice(0, 12)) {
+      if (item.kind === 'report') {
+        const type = alertButtonLabel(item.rep.draft?.type, lang).replace(/«|»/g, '');
+        const place = item.rep.draft?.location ? locName(item.rep.draft.location, lang) : (en ? 'No location' : 'بلا موقع');
+        kb.text(`${type} — ${place} — ${waitingAge(item.rep.created, lang)}`, 'rpo:' + item.rid).row();
+        kb.text(en ? '✅ Approve & publish' : '✅ اعتماد ونشر', 'rqa:' + item.rid).text(en ? '❌ Reject' : '❌ رفض', 'rqr:' + item.rid).row();
+      } else {
+        const headline = String(item.d.headline || '').trim().slice(0, 34) || (en ? '(no headline)' : '(بلا عنوان)');
+        kb.text(`📰 ${headline} — ⛔ ${holdReasonLabel(item.d.editorialHoldReason, lang)} — ${waitingAge(item.ts, lang)}`, 'nhd:' + item.d.id).row();
       }
-      if (reports.length > 10) lines.push(en ? `<i>… and ${reports.length - 10} more reports (oldest shown first).</i>` : `<i>… و${reports.length - 10} بلاغات أخرى (الأقدم معروضة أولاً).</i>`);
-    }
-    if (held.length) {
-      lines.push('', en ? `<b>Held monitor drafts (${held.length})</b> — tap one for its card:` : `<b>مسودات رصد محبوسة (${held.length})</b> — اكبس أي وحدة لبطاقتها:`);
-      for (const d of held.slice(0, 10)) {
-        const headline = String(d.headline || '').trim().slice(0, 34) || (en ? '(no headline)' : '(بلا عنوان)');
-        kb.text(`📰 ${headline} — ⛔ ${holdReasonLabel(d.editorialHoldReason, lang)} — ${waitingAge(d.editorialHoldAt || d.created, lang)}`, 'nhd:' + d.id).row();
-      }
-      if (held.length > 10) lines.push(en ? `<i>… and ${held.length - 10} more held drafts (oldest shown first).</i>` : `<i>… و${held.length - 10} مسودات محبوسة أخرى (الأقدم معروضة أولاً).</i>`);
     }
     kb.text(en ? '🏠 Menu' : '🏠 القائمة', 'home');
+    const lines = [
+      en ? `📥 <b>Pending reports (${items.length})</b>` : `📥 <b>البلاغات المعلّقة (${items.length})</b>`,
+      en ? `Public reports: ${reports.length} · Held monitor drafts: ${held.length}` : `بلاغات الجمهور: ${reports.length} · مسودات رصد محبوسة: ${held.length}`,
+      en ? 'Oldest first. Tap an item for its card; reports can also be decided right here.' : 'الأقدم أولاً. اكبس أي عنصر لبطاقته؛ وبلاغات الجمهور تُحسم من هنا مباشرة أيضاً.',
+    ];
+    if (items.length > 12) lines.push(en ? `<i>… and ${items.length - 12} more (oldest shown first).</i>` : `<i>… و${items.length - 12} عناصر أخرى (الأقدم معروضة أولاً).</i>`);
     return show(ctx, lines.join('\n'), kb);
   };
   bot.callbackQuery('rpend', async (ctx) => {
     if (!staff(ctx)) return ctx.answerCallbackQuery();
     await ctx.answerCallbackQuery();
     return showPendingInbox(ctx);
-  });
-  bot.callbackQuery(/^rpo:(\w+)$/, async (ctx) => {
-    if (!staff(ctx)) return ctx.answerCallbackQuery();
-    const rid = ctx.match[1];
-    if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
-    const rep = store.reportGet(rid);
-    if (!rep) {
-      try { await ctx.answerCallbackQuery({ text: langOf(ctx) === 'en' ? 'This report is no longer available.' : 'هذا البلاغ لم يعد متاحاً.', show_alert: true }); } catch { /* ignore */ }
-      return;
-    }
-    await ctx.answerCallbackQuery();
-    const lang = langOf(ctx);
-    const kb = reportReviewKeyboard(lang, rid);
-    kb.row().text(lang === 'en' ? '↩️ All pending reports' : '↩️ كل البلاغات المعلّقة', 'rpend').text(lang === 'en' ? '🏠 Menu' : '🏠 القائمة', 'home');
-    await show(ctx, reportCardText(rep, lang), kb);
   });
   // One-tap decisions from the list itself (same claim/publish/close core as
   // the review card's rap:/rrj: buttons; the list then redraws in place).
@@ -3068,6 +3059,21 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const kb = newsCardKb(d, lang, ctx.chat.id);
     kb.row().text(lang === 'en' ? '↩️ All pending reports' : '↩️ كل البلاغات المعلّقة', 'rpend').text(lang === 'en' ? '🏠 Menu' : '🏠 القائمة', 'home');
     await show(ctx, newsCardText(d, lang), kb);
+  });
+  bot.callbackQuery(/^rpo:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const rid = ctx.match[1];
+    if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
+    const rep = store.reportGet(rid);
+    if (!rep) {
+      try { await ctx.answerCallbackQuery({ text: langOf(ctx) === 'en' ? 'This report is no longer available.' : 'هذا البلاغ لم يعد متاحاً.', show_alert: true }); } catch { /* ignore */ }
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    const lang = langOf(ctx);
+    const kb = reportReviewKeyboard(lang, rid);
+    kb.row().text(lang === 'en' ? '↩️ All pending reports' : '↩️ كل البلاغات المعلّقة', 'rpend').text(lang === 'en' ? '🏠 Menu' : '🏠 القائمة', 'home');
+    await show(ctx, reportCardText(rep, lang), kb);
   });
   const activeEditKeyboard = (ctx, d = null) => {
     const en = langOf(ctx) === 'en';

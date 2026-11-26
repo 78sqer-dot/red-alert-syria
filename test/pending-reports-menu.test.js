@@ -72,7 +72,6 @@ test('full flow: Rad submission appears in the inbox, opens its own review card,
 
   await tap('rpend');
   assert.match(lastText(), /البلاغات المعلّقة \(1\)/, 'list header carries the count');
-  assert.match(lastText(), /بلاغات الجمهور \(1\)/, 'reports section header');
   const entry = buttons().find((b) => b.callback_data === 'rpo:' + rid);
   assert.ok(entry, 'the waiting report is a button in the list');
   assert.match(entry.text, /دمشق/, `entry names the place: ${entry.text}`);
@@ -124,31 +123,33 @@ test('quick approve and quick reject decide straight from the list', async () =>
   await tap('rqa:' + ridA);
   assert.equal(store.reportGet(ridA), null, 'quick-approved report leaves the queue');
   assert.ok(store.activeAlerts().length > alertsBefore, 'quick approve published the alert');
-  assert.match(lastText(), /بلاغات الجمهور \(1\)/, 'list redraws with the remaining report');
+  assert.match(lastText(), /البلاغات المعلّقة \(1\)/, 'list redraws with the remaining item');
 
   await tap('rqr:' + ridB);
   assert.equal(store.reportGet(ridB), null, 'quick-rejected report leaves the queue');
   assert.match(lastText(), /لا شيء ينتظر قراراً/, 'queue empty after both decisions');
 });
 
-test('held monitor drafts share the inbox with their hold reason, oldest first, and open their own card', async () => {
+test('held monitor drafts merge into the same list chronologically, with reason and age, and open their own card', async () => {
   const now = Date.now();
+  const { locationFrom } = await import('../server/places.js');
+  store.reportPut('oldreport1', { draft: { type: 'uav', location: locationFrom({ govCode: '13' }) }, from: { id: 4242, first_name: 'Old reporter' }, messages: [], created: now - 30 * 60000, via: 'report' });
   store.state.news = { drafts: {
-    heldnew: { id: 'heldnew', type: 'shelling', headline: 'قصف مدفعي على أطراف مدينة إدلب', body: 'قصف مدفعي على أطراف مدينة إدلب', status: 'pending', editorialHold: true, editorialHoldReason: 'auto-audit-failed', editorialHoldAt: now - 10 * 60000, created: now - 12 * 60000, ts: now - 12 * 60000, srcs: [{ name: 'Test feed', local: false }] },
     heldold: { id: 'heldold', type: 'attack', headline: 'هجوم مسلح قرب بصرى الشام', body: 'هجوم مسلح قرب بصرى الشام', status: 'pending', editorialHold: true, editorialHoldReason: 'location-text-conflict', editorialHoldAt: now - 90 * 60000, created: now - 95 * 60000, ts: now - 95 * 60000, srcs: [{ name: 'Test feed', local: false }] },
+    heldnew: { id: 'heldnew', type: 'shelling', headline: 'قصف مدفعي على أطراف مدينة إدلب', body: 'قصف مدفعي على أطراف مدينة إدلب', status: 'pending', editorialHold: true, editorialHoldReason: 'auto-audit-failed', editorialHoldAt: now - 10 * 60000, created: now - 12 * 60000, ts: now - 12 * 60000, srcs: [{ name: 'Test feed', local: false }] },
     notheld: { id: 'notheld', type: 'attack', headline: 'مسودة عادية بلا حبس', body: 'x', status: 'pending', created: now - 5000, ts: now - 5000, srcs: [] },
   } };
   await tap('home');
-  assert.match(menuButton().text, /البلاغات المعلّقة \(2\)/, `counter counts held drafts too: ${menuButton().text}`);
+  assert.match(menuButton().text, /البلاغات المعلّقة \(3\)/, `counter merges both sources: ${menuButton().text}`);
   await tap('rpend');
-  assert.match(lastText(), /مسودات رصد محبوسة \(2\)/, 'held section header with its count');
-  const heldButtons = buttons().filter((b) => b.callback_data.startsWith('nhd:'));
-  assert.equal(heldButtons.length, 2, 'only editorially held drafts are listed');
-  assert.equal(heldButtons[0].callback_data, 'nhd:heldold', 'oldest hold first');
-  assert.match(heldButtons[0].text, /تعارض الموقع مع النص/, `entry carries the hold reason: ${heldButtons[0].text}`);
-  assert.match(heldButtons[0].text, /ناطر من/, 'entry carries its waiting age');
+  assert.match(lastText(), /مسودات رصد محبوسة: 2/, 'header breaks down the held count');
+  const entries = buttons().filter((b) => b.callback_data.startsWith('nhd:') || b.callback_data.startsWith('rpo:'));
+  assert.deepEqual(entries.map((b) => b.callback_data), ['nhd:heldold', 'rpo:oldreport1', 'nhd:heldnew'], 'one merged oldest-first timeline across both sources');
+  assert.match(entries[0].text, /تعارض الموقع مع النص/, 'held entry carries its recorded hold reason');
+  assert.match(entries[0].text, /ناطر من/, 'held entry carries its waiting age');
   await tap('nhd:heldold');
   assert.match(lastText(), /هجوم مسلح قرب بصرى الشام/, 'the draft opens its own monitor card');
-  assert.ok(buttons().some((b) => b.callback_data === 'nw:p:heldold'), 'the opened card keeps the monitor publish button');
+  assert.ok(buttons().some((b) => b.callback_data === 'nw:p:heldold'), 'the opened card keeps the monitor publish button (the real monitor path)');
   store.state.news = { drafts: {} };
+  store.reportTake('oldreport1');
 });
