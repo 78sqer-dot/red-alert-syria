@@ -147,6 +147,27 @@ function draftTexts(d) {
  * place. The old resolver returned the first text's hit without ever
  * looking at the others, so a Damascus headline over an Aleppo source
  * bound Damascus. Disagreement is a conflict — never a silent first-wins. */
+/** Toward flight reports (aerialMode 'toward', owner order 2026-11-25) name
+ * TWO places by design: the observed area (the bound location) and the
+ * destination (meta.flightTarget, picked from the same gazetteer). The
+ * outgoing copy itself carries the destination («— نحو X» in the built
+ * title, and reporters naturally name it in the details), so a text place
+ * that IS the destination — or lies inside the destination's district /
+ * governorate scope — is not a location conflict and must not hold or
+ * rebind the publish. Live failure 2026-11-26: a drone report Aleppo city
+ * -> As-Safira was held at approval with location-text-conflict on every
+ * attempt, because this guard had no knowledge of flightTarget. */
+export function flightTargetExempts(d, placeId) {
+  if (!d || d.aerialMode !== 'toward' || !d.flightTarget) return false;
+  const p = getPlace(placeId);
+  if (!p) return false;
+  const t = d.flightTarget;
+  if (t.scope === 'place') return Number(t.place_id) === Number(p.id);
+  if (t.scope === 'district') return String(t.district) === String(p.dist);
+  if (t.scope === 'governorate') return String(t.governorate) === String(p.gov);
+  return false;
+}
+
 export function resolveDraftPlace(d) {
   const ids = new Set();
   const texts = draftTexts(d);
@@ -154,7 +175,7 @@ export function resolveDraftPlace(d) {
   for (const text of texts) for (const n of districtFramedNames(text)) districtNames.add(n);
   for (const text of texts) {
     const id = placeIdFromText(text, districtNames);
-    if (id != null) ids.add(id);
+    if (id != null && !flightTargetExempts(d, id)) ids.add(id);
   }
   if (ids.size > 1) return { placeId: null, conflict: true };
   return { placeId: ids.size === 1 ? [...ids][0] : null, conflict: false };
@@ -241,6 +262,8 @@ export function ensureBuiltAlertLocation(input, src = {}) {
     attributedReport: src.attributedReport, timedNews: src.timedNews,
     localityReference: src.localityReference, imageContext: src.imageContext,
     location_display: src.location_display, channel_media: src.channel_media,
+    aerialMode: input.meta?.aerialMode || src.aerialMode || null,
+    flightTarget: input.meta?.flightTarget || src.flightTarget || null,
   };
   const r = ensureDraftCardLocation(view);
   if (r.action === 'bound') { input.location = view.location; input.place = view.location; }
