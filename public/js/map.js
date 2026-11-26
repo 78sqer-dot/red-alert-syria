@@ -614,6 +614,27 @@ export class AlertMap {
 
   // Warplane icons may travel along the selected illustrative route; this is not live tracking and
   // never changes the saved report location. Reports without coordinates retain the location notice.
+  //
+  // Owner order 2026-11-26: ONE calm, unified movement rhythm for every
+  // aircraft type and mode — a constant ground speed, not a fixed cycle
+  // time. Before, every toward track crossed its whole route in 7 s (the
+  // Aleppo -> Kuweires drone, ~33.5 km, flew at ~4.8 km/s) while the
+  // warplane's area orbit cruised at ~1.33 km/s (26 s around the ~34.6 km
+  // minimum circle), so the drone read as frantic next to the warplane.
+  // The period now derives from the path length at the orbit's own speed:
+  // period = length / 1.33 km/s, clamped to [8 s, 180 s].
+  flightPeriodMs(path) {
+    let km = 0;
+    for (let i = 0; i + 1 < (path || []).length; i++) {
+      const [lon1, lat1] = path[i];
+      const [lon2, lat2] = path[i + 1];
+      const dx = (lon2 - lon1) * Math.cos(((lat1 + lat2) / 2) * Math.PI / 180) * 111.32;
+      const dy = (lat2 - lat1) * 110.57;
+      km += Math.hypot(dx, dy);
+    }
+    return Math.round(Math.min(180000, Math.max(8000, (km / 1.33) * 1000)));
+  }
+
   syncMovementTracks() {
     const map = this.map;
     const source = map?.getSource('ras-flight-paths');
@@ -763,7 +784,7 @@ export class AlertMap {
         this.movementTracks.set(alert.id, track);
       }
       track.path = isOrbit ? orbitPath : route;
-      track.periodMs = isOrbit ? 26000 : 7000;
+      track.periodMs = this.flightPeriodMs(track.path);
       if ((aircraft === 'plane' || alert.aerial_mode === 'toward') && track.path.length >= 2) {
         if (track.frame == null) {
           const animate = (now) => {
@@ -774,7 +795,7 @@ export class AlertMap {
               track.frame = null;
               return;
             }
-            const progress = ((now - track.startedAt) % (track.periodMs || 7000)) / (track.periodMs || 7000);
+            const progress = ((now - track.startedAt) % (track.periodMs || 26000)) / (track.periodMs || 26000);
             const point = flightPosition(track.path, progress);
             if (point) {
               track.marker.setLngLat([point.lon, point.lat]);

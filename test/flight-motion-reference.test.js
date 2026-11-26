@@ -54,7 +54,7 @@ test('entering plane keeps right-to-left travel and faces left; cache versions r
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
   assert.match(html, /app\.css\?v=107/);
   assert.match(html, /app\.js\?v=124/);
-  assert.match(app, /map\.js\?v=92/);
+  assert.match(app, /map\.js\?v=93/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {
@@ -109,4 +109,11 @@ test('toward drone renders ONE glyph — the three-airframe formation is plane-o
   assert.match(map, /else if \(aircraft === 'uav'\) \{/, 'uav track markers take the single-glyph branch');
   assert.match(map, /aircraft === 'uav'\) \{[\s\S]{0,700}map-flight-track-airframe is-lead/, 'the uav branch appends exactly one lead airframe');
   assert.equal((map.match(/for \(const slot of \[\{ name: 'is-lead', size: 24 \}/g) || []).length, 1, 'the formation slot loop exists once, on the plane-only path');
+});
+
+test('one calm unified flight rhythm: period derives from path length at a constant ground speed (owner, 2026-11-26)', () => {
+  assert.match(map, /flightPeriodMs\(path\) \{/, 'tracks compute their period from the path');
+  assert.match(map, /\(km \/ 1\.33\) \* 1000/, 'the shared ground speed is the area-orbit speed (~1.33 km/s)');
+  assert.match(map, /track\.periodMs = this\.flightPeriodMs\(track\.path\);/, 'every track — toward and orbit, every type — uses it');
+  assert.doesNotMatch(map, /track\.periodMs = isOrbit \? 26000 : 7000;/, 'the fixed 7 s dash is gone');
 });
