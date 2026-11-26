@@ -852,8 +852,12 @@ export function publicAlert(a) {
       ? cleanAttributedNewsText(value, privateSourceNames) : cleanAlertText(value);
     return isPrivateEditorialCopy(cleaned) && !(selectedEditorialCopy && isPublicEditorialCopy(cleaned, editorialMode)) ? '' : cleaned;
   };
-  const rawFlightTarget = a.type === 'air_movement' ? a.meta?.flightTarget : null;
-  const targetScope = ['country', 'governorate'].includes(rawFlightTarget?.scope) ? rawFlightTarget.scope : null;
+  const towardFlight = ['uav', 'warplane'].includes(a.type) && a.meta?.aerialMode === 'toward';
+  const overFlight = ['uav', 'warplane'].includes(a.type) && a.meta?.aerialMode === 'over';
+  const rawFlightTarget = a.type === 'air_movement' || towardFlight ? a.meta?.flightTarget : null;
+  const targetScope = (towardFlight
+    ? ['country', 'governorate', 'district', 'place'].includes(rawFlightTarget?.scope)
+    : ['country', 'governorate'].includes(rawFlightTarget?.scope)) ? rawFlightTarget.scope : null;
   const targetHasCoordinates = Number.isFinite(rawFlightTarget?.latitude) && Number.isFinite(rawFlightTarget?.longitude)
     && rawFlightTarget.latitude >= -90 && rawFlightTarget.latitude <= 90
     && rawFlightTarget.longitude >= -180 && rawFlightTarget.longitude <= 180;
@@ -861,9 +865,10 @@ export function publicAlert(a) {
     scope: targetScope,
     name_ar: String(rawFlightTarget.name_ar || (targetScope === 'country' ? 'سوريا' : '')).slice(0, 100),
     name_en: String(rawFlightTarget.name_en || (targetScope === 'country' ? 'Syria' : '')).slice(0, 100),
-    ...(targetScope === 'governorate' && targetHasCoordinates
+    ...((towardFlight ? targetScope !== 'country' : targetScope === 'governorate') && targetHasCoordinates
       ? { latitude: rawFlightTarget.latitude, longitude: rawFlightTarget.longitude }
       : {}),
+    ...(towardFlight && rawFlightTarget.place_id ? { place_id: String(rawFlightTarget.place_id).slice(0, 64) } : {}),
   } : null;
   const political = a.type === 'political' ? a.meta?.political : null;
   const category = political && Object.hasOwn(POLITICAL_CATEGORIES, political.category) ? political.category : undefined;
@@ -876,6 +881,7 @@ export function publicAlert(a) {
     border: BORDER_REGIONS[a.meta?.border] ? a.meta.border : undefined,
     flight_direction: FLIGHT_DIRECTIONS[a.meta?.flightDirection] ? a.meta.flightDirection : undefined,
     flight_heading: ['uav', 'uav_strike', 'warplane', 'helicopter'].includes(a.type) && a.meta?.flightHeading ? String(a.meta.flightHeading).slice(0, 80) : undefined,
+    aerial_mode: towardFlight ? 'toward' : overFlight ? 'over' : undefined,
     aircraft: a.type === 'air_movement' && FLIGHT_AIRCRAFT[a.meta?.aircraft] ? a.meta.aircraft : undefined,
     ...(a.type === 'air_movement' && a.meta?.flightRouteOrigin === 'israel_approx_reference'
       && flightTarget?.scope === 'governorate' && targetHasCoordinates ? { flight_route_origin: 'israel_approx_reference' } : {}),

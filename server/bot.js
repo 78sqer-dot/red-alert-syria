@@ -385,6 +385,12 @@ function draftSummary(d, lang) {
     lines.push(lang === 'en'
       ? 'Illustrative direction only — not live tracking.'
       : 'اتجاه توضيحي فقط — وليس تتبعاً مباشراً.');
+  } else if ((d.type === 'uav' || d.type === 'warplane') && d.aerialMode === 'toward' && d.flightTarget) {
+    lines.push('', `📍 <b>${lang === 'en' ? 'Observed area' : 'منطقة الرصد'}:</b> ${esc(locName(loc, lang))}`);
+    lines.push(`🎯 <b>${lang === 'en' ? 'Destination' : 'الوجهة'}:</b> ${esc(locName(d.flightTarget, lang))}`);
+    lines.push(lang === 'en'
+      ? 'Illustrative direction only — not live tracking.'
+      : 'اتجاه توضيحي فقط — وليس تتبعاً مباشراً.');
   } else if (d.type === 'political' && (!loc || loc.scope === 'country')) {
     lines.push('', lang === 'en' ? '📍 No verified location — no map pin' : '📍 موقع غير محدد — دون دبوس');
   } else if (d.extra?.length) {
@@ -533,7 +539,7 @@ function govKeyboard(ctx, d) {
   });
   kb.row();
   if (d.adding) return kb.text(langOf(ctx) === 'en' ? '↩️ Back to preview' : '↩️ رجوع للمعاينة', 'addback');
-  if (d.selectingFlightTarget) kb.text(lang === 'en' ? '➡️ Keep direction only' : '➡️ اتجاه عام بلا منطقة', 'flightdest:none').row();
+  if (d.selectingFlightTarget && d.type === 'air_movement') kb.text(lang === 'en' ? '➡️ Keep direction only' : '➡️ اتجاه عام بلا منطقة', 'flightdest:none').row();
   if (d.type === 'breaking') kb.text(l.btnNoLocation, 'noloc').row();
   if (d.type === 'political') kb.text(lang === 'en' ? '📍 No verified location — no map pin' : '📍 موقع غير محدد — دون دبوس', 'pol:nopin').row();
   kb.text(l.btnCancel, 'cancel');
@@ -802,7 +808,8 @@ async function askAerialMode(ctx, d) {
   const en = langOf(ctx) === 'en';
   const aircraft = d.type === 'uav' ? ALERT_TYPES.uav.emoji : ALERT_TYPES.warplane.emoji;
   const kb = new InlineKeyboard()
-    .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row();
+    .text(en ? `${aircraft} Hovering over the area` : `${aircraft} تحليق فوق المنطقة`, 'airmode:over').row()
+    .text(en ? `${aircraft} Heading to a specific area` : `${aircraft} باتجاه منطقة معينة`, 'airmode:toward').row();
   kb.text(L(ctx).btnCancel, 'cancel');
   const prompt = en ? 'Choose the reported aerial activity.' : 'اختر نوع النشاط الجوي المرصود.';
   await show(ctx, prompt, kb);
@@ -915,6 +922,9 @@ async function pickLocation(ctx, d, loc) {
   if (d.selectingFlightTarget) {
     d.selectingFlightTarget = false;
     d.flightTarget = loc;
+    // 'toward' reports keep the observed area as the alert location; the picked
+    // place is only the destination saved for the route.
+    if (d.aerialMode === 'toward') return afterLocation(ctx, d);
     d.location = loc;
     d.extra = [];
     return afterLocation(ctx, d);
@@ -928,6 +938,12 @@ async function pickLocation(ctx, d, loc) {
   }
   d.location = loc;
   if (loc.scope === 'country') d.extra = [];
+  // 'toward' reports: the first pick is the observed area; chain straight into
+  // the destination pick from the same gazetteer before asking for details.
+  if (d.mode !== 'active_edit' && d.aerialMode === 'toward' && !d.flightTarget && !d.selectingFlightTarget) {
+    d.selectingFlightTarget = true;
+    return askLocation(ctx, d);
+  }
   return afterLocation(ctx, d);
 }
 
@@ -1005,7 +1021,9 @@ export function buildAlertInput(d, author) {
   const border = BORDER_REGIONS[d.border];
   const flight = d.type === 'air_movement' ? FLIGHT_DIRECTIONS[d.flightDirection] : null;
   const aircraft = d.type === 'air_movement' ? FLIGHT_AIRCRAFT[d.aircraft] : null;
-  const flightTarget = d.type === 'air_movement' && d.flightTarget?.scope !== 'country' ? d.flightTarget : null;
+  const towardTarget = (d.type === 'uav' || d.type === 'warplane') && d.aerialMode === 'toward' && d.flightTarget?.scope !== 'country' ? d.flightTarget : null;
+  const overMode = (d.type === 'uav' || d.type === 'warplane') && d.aerialMode === 'over';
+  const flightTarget = d.type === 'air_movement' && d.flightTarget?.scope !== 'country' ? d.flightTarget : towardTarget;
   const flightRouteOrigin = d.type === 'air_movement' && d.flightRouteOrigin === 'israel_approx_reference'
     && flightTarget?.scope === 'governorate' && Number.isFinite(flightTarget.latitude) && Number.isFinite(flightTarget.longitude)
     ? 'israel_approx_reference' : null;
@@ -1043,7 +1061,7 @@ export function buildAlertInput(d, author) {
     ttlMin: d.ttlMin,
     source: d.source === 'news' ? 'news' : 'telegram',
     author,
-    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || d.sourceText ? {
+    ...(((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean') || (d.type === 'weather' && d.meta?.hazard) || border || flight || aircraft || (d.type === 'air_movement' && d.flightTarget) || towardTarget || overMode || civilEmoji || vehicleCount || incursionKind || patrolForm || signalPlatform || dronePresence || politicalMeta || monitoredSources.length || d.sourceText ? {
       meta: {
         ...((d.type === 'uav' || d.type === 'helicopter') && typeof d.intense === 'boolean' ? { intense: d.intense } : {}),
         ...(d.type === 'weather' && d.meta?.hazard ? { hazard: d.meta.hazard } : {}),
@@ -1051,6 +1069,8 @@ export function buildAlertInput(d, author) {
         ...(flight ? { flightDirection: d.flightDirection } : {}),
         ...(aircraft ? { aircraft: d.aircraft } : {}),
         ...(d.type === 'air_movement' && d.flightTarget ? { flightTarget: d.flightTarget } : {}),
+        ...(towardTarget ? { flightTarget: d.flightTarget, aerialMode: 'toward' } : {}),
+        ...(overMode ? { aerialMode: 'over' } : {}),
         ...(flightRouteOrigin ? { flightRouteOrigin } : {}),
         ...(civilEmoji ? { civilEmoji } : {}),
         ...(vehicleCount ? { vehicleCount } : {}),
@@ -2476,6 +2496,12 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     d.aerialMode = 'over';
     await askLocation(ctx, d);
   }));
+  bot.callbackQuery(/^airmode:toward$/, needDraft(async (ctx, d) => {
+    if (d.type !== 'uav' && d.type !== 'warplane') return;
+    d.aerialMode = 'toward';
+    d.flightTarget = null;
+    await askLocation(ctx, d);
+  }));
   bot.callbackQuery(/^flightair:(warplane|uav)$/, needDraft(async (ctx, d) => {
     if (d.type !== 'air_movement') return;
     d.aircraft = ctx.match[1];
@@ -2892,6 +2918,8 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     mode: 'active_edit', alertId: a.id, type: a.type, step: 'edit_menu',
     editTitle: a.meta?.channelTitle || a.title || '', details: a.description || '',
     location: a.place || locationFrom({}), extra: Array.isArray(a.extra) ? [...a.extra] : [],
+    ...((a.type === 'uav' || a.type === 'warplane') && a.meta?.aerialMode === 'toward' && a.meta?.flightTarget
+      ? { aerialMode: 'toward', flightTarget: a.meta.flightTarget } : {}),
   });
   bot.callbackQuery(/^editpost:([\w-]{36})$/, async (ctx) => {
     await ctx.answerCallbackQuery();
