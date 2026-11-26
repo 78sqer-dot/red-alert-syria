@@ -738,6 +738,16 @@ export class AlertMap {
           airframe.className = 'map-flight-track-airframe is-lead';
           airframe.innerHTML = `<img class="heli-glyph-img" src="${HELI_GLYPH_DATA}" alt="">`;
           formation.append(airframe);
+        } else if (aircraft === 'uav') {
+          // Owner design (confirmed again 2026-11-26): a toward drone also
+          // travels as ONE glyph on the route — the three-airframe
+          // formation belongs to the warplane only. The drone previously
+          // fell into the formation loop below and rendered three drones
+          // (live alert e2f72273, Aleppo -> Kuweires Sharqi).
+          const airframe = document.createElement('span');
+          airframe.className = 'map-flight-track-airframe is-lead';
+          airframe.innerHTML = svgTag(aircraft, 24, `fill="${iconColor}" class="map-flight-track-svg"`);
+          formation.append(airframe);
         } else for (const slot of [{ name: 'is-lead', size: 24 }, { name: 'is-left', size: 24 }, { name: 'is-right', size: 24 }]) {
           const airframe = document.createElement('span');
           airframe.className = `map-flight-track-airframe ${slot.name}`;

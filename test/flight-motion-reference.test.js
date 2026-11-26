@@ -54,7 +54,7 @@ test('entering plane keeps right-to-left travel and faces left; cache versions r
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
   assert.match(html, /app\.css\?v=107/);
   assert.match(html, /app\.js\?v=124/);
-  assert.match(app, /map\.js\?v=91/);
+  assert.match(app, /map\.js\?v=92/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {
@@ -103,4 +103,10 @@ test('toward reports (bot contract with رشيد, 2026-11-25): uav/warplane aler
 test('card reads the bot meta.flightTarget shape as well as top-level flight_target', async () => {
   const img = await readFile(new URL('../server/alert-image.js', import.meta.url), 'utf8');
   assert.match(img, /const ft = alert\.flight_target \|\| alert\.meta\?\.flightTarget;/);
+});
+
+test('toward drone renders ONE glyph — the three-airframe formation is plane-only (owner, live alert e2f72273, 2026-11-26)', () => {
+  assert.match(map, /else if \(aircraft === 'uav'\) \{/, 'uav track markers take the single-glyph branch');
+  assert.match(map, /aircraft === 'uav'\) \{[\s\S]{0,700}map-flight-track-airframe is-lead/, 'the uav branch appends exactly one lead airframe');
+  assert.equal((map.match(/for \(const slot of \[\{ name: 'is-lead', size: 24 \}/g) || []).length, 1, 'the formation slot loop exists once, on the plane-only path');
 });
