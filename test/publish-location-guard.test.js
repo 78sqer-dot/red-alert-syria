@@ -245,3 +245,24 @@ test('funnel: a name-collision village is held when the outgoing copy frames it 
   assert.equal(r.action, 'held');
   assert.equal(r.reason, 'location-text-conflict');
 });
+
+// LIVE REGRESSION, end-to-end (post 1599, 2026-11-25): a news draft bound to
+// the name-collision village المشيرفة (383659, at 42.13E) whose OUTGOING
+// body frames it as a Hasakah-city district must be refused by the shared
+// publish entry — the funnel check is the last word.
+test('publishDraft refuses the post-1599 shape end-to-end (village pin vs حي framing)', async () => {
+  const { config } = await import('../server/config.js');
+  config.alertImages = false; config.channel = '@synthetic';
+  const BODY = 'صوت الانفجار الذي سُمِع في حي المشيرفة بالحسكة ناجم عن تفجير دراجة نارية مفخخة عند مدخل نقطة أمنية';
+  const d = {
+    source: 'news', type: 'explosion',
+    location: locationFrom({ placeId: 383659 }), extra: [],
+    headline: 'انفجار — المشيرفة', details: BODY, text: BODY,
+    sourceText: 'انفجار دراجة نارية مفخخة عند نقطة أمنية في المشيرفة بالحسكة',
+  };
+  const api = { sendMessage: async () => ({ message_id: 999 }), sendPhoto: async () => ({ message_id: 999 }) };
+  await assert.rejects(
+    publishDraft(api, d, { id: 1, name: 'test' }),
+    (e) => e.name === 'MissingCardLocationError' && e.code === 'location-text-conflict',
+  );
+});
