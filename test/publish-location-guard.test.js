@@ -19,6 +19,7 @@ process.env.CHANNEL_ID = '@mock_news_channel';
 const {
   ensureDraftCardLocation, cardLocationGuardApplies, draftCardLocationState,
   resolveDraftPlaceId, MissingCardLocationError, MISSING_CARD_LOCATION_REASON,
+  districtFramedNames, ensureBuiltAlertLocation,
 } = await import('../server/publish-location-guard.js');
 const { locationFrom, getPlace } = await import('../server/places.js');
 const { store } = await import('../server/store.js');
@@ -341,4 +342,28 @@ test('publishDraft publishes the owner-shape toward report for a warplane (city 
   assert.equal(alert.meta?.flightTarget?.place_id, 172503);
   assert.equal(alert.location?.latitude, 36.20124);
   assert.equal(alert.location?.longitude, 37.16117);
+});
+
+// LIVE REGRESSION 2026-11-26 (post 1632, alert e166a6c4): «دوار الصالحية»
+// is a roundabout INSIDE Hasakah city; the gazetteer also holds a village
+// named الصالحية in Al-Malikiyah countryside (id 8595805, 37.0132/41.9823).
+// The frame set recognised only «حي», so the resolver bound the village
+// and the alert published with a false 1.8 km zone ~55 km from the event.
+const SALIHIYA_TEXT = 'مقتل شخص برصاص طائش جراء الاشتباك الذي وقع قرب دوار الصالحية في الحسكة.';
+
+test('LIVE REGRESSION 2026-11-26: a roundabout-framed name binds the named city, not the same-named village', () => {
+  const d = { type: 'death', location: locationFrom({ govCode: '01' }), headline: 'وفاة — الصالحية', sourceText: SALIHIYA_TEXT };
+  assert.equal(resolveDraftPlaceId(d), 173811, 'Hasakah city, not the Al-Malikiyah village 8595805');
+  assert.deepEqual([...districtFramedNames(SALIHIYA_TEXT)].some((n) => n.includes('صالحي')), true);
+});
+
+test('LIVE REGRESSION 2026-11-26: a square-framed name binds the named city too', () => {
+  const d = { type: 'death', location: locationFrom({ govCode: '01' }), headline: '', sourceText: 'إصابة شخص جراء حادث سير في ساحة الصالحية في الحسكة.' };
+  assert.equal(resolveDraftPlaceId(d), 173811);
+});
+
+test('LIVE REGRESSION 2026-11-26: a village-built alert whose text frames the name as a roundabout is held, not passed', () => {
+  const village = locationFrom(getPlace(8595805));
+  const built = { type: 'death', location: village, loc: village, title: 'وفاة — الصالحية', description: SALIHIYA_TEXT, place: village };
+  assert.deepEqual(ensureBuiltAlertLocation(built, {}), { action: 'held', reason: 'location-text-conflict' });
 });

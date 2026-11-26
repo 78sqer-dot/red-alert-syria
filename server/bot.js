@@ -1351,6 +1351,40 @@ export async function correctNewLocalityPostsOnce(api) {
   }
   return results;
 }
+export async function correctSalihiyaRoundaboutOnce(api) {
+  // LIVE CORRECTION 2026-11-26 (owner order via صادق, post 1632): «دوار
+  // الصالحية» is a roundabout inside Hasakah city, but the alert bound the
+  // same-named village in Al-Malikiyah countryside (37.0132, 41.9823) with
+  // a false 1.8 km zone. Rebind the geography to the Hasakah CITY reference
+  // (gazetteer 173811) — no invented roundabout coordinates — preserving
+  // the news text, timestamp and expiry. Strict identity guards: only this
+  // exact record, only while it still carries the village pin.
+  const key = 'owner-salihiya-roundabout-1632-2026-11-26';
+  if (store.state.maint?.[key]?.done) return { skipped: true };
+  const a = store.getAlert('e166a6c4-0e6f-4d9c-a168-f8652b5665be');
+  if (!a || a.channel_message_id !== 1632
+    || Math.abs(Number(a.location?.latitude) - 37.0132) > 1e-6
+    || Math.abs(Number(a.location?.longitude) - 41.9823) > 1e-6) return { skipped: true, reason: 'exact original pin guard' };
+  const loc = locationFrom(getPlace(173811));
+  const title = `${typeOf(a.type).ar} — الحسكة`;
+  const title_en = `${typeOf(a.type).en} — Al Hasakah`;
+  const areas = ['الحسكة'];
+  const b = { ...a, title, title_en, place: loc, scope: loc.scope, location: { latitude: loc.latitude, longitude: loc.longitude }, zones: null, areas };
+  let media = 'none';
+  if (a.channel_media === 'photo') {
+    const png = await withDeadline(alertImage(b, 'ar'), 30000);
+    await api.editMessageMedia(config.channel, 1632, InputMediaBuilder.photo(new InputFile(png, 'red-alert-syria-corrected-1632.png'), { caption: channelCaption(b, { ended: !b.is_active }), parse_mode: 'HTML' }), { reply_markup: channelKeyboard(b) });
+    media = 'photo';
+  }
+  store.updateAlert(a.id, { title, title_en, place: loc, scope: loc.scope, location: b.location, zones: null, areas });
+  store._logPatch(a.id, { g: loc.governorate, ga: loc.governorate_ar, ge: loc.governorate_en, p: loc.place_id, d: loc.district, pa: loc.name_ar, pe: loc.name_en, xd: undefined });
+  const d = Object.values(store.state.news?.drafts || {}).find((x) => x?.alertId === a.id && x?.status === 'published');
+  if (d) d.loc = loc;
+  store.state.maint = { ...store.state.maint, [key]: { done: new Date().toISOString(), post: 1632, media } };
+  store.persist();
+  if (store.backup) { store._backupPending = true; if (!await store.flushBackup(true)) throw Error('Salihiya roundabout correction backup not confirmed'); }
+  return { ok: true, post: 1632, media };
+}
 export async function correctRojPhotoOnce(api) {
   if (store.state.maint?.[ROJ_CORRECTION_KEY]?.done) return {skipped:true};
   const a = store.getAlert('3320c747-0028-45be-b13e-a3c81da25fbf');

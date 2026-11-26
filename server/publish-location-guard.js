@@ -92,8 +92,9 @@ export function placeIdFromText(text, districtNames = new Set()) {
   for (const g of govs) {
     for (const id of scanTextPlaces(text, g.code, 3)) ids.add(id);
   }
-  // «حي X» frame: a text of this draft declares X a DISTRICT of a city, so
-  // a same-named gazetteer village is a name collision, not the place —
+  // Urban-feature frame («حي X» / «دوار X» / «ساحة X»): a text of this draft
+  // declares X a feature inside a city, so a same-named gazetteer village
+  // is a name collision, not the place —
   // the live trap is المشيرفة (a Hasakah-city neighbourhood) vs the
   // gazetteer's same-named village at 42.13E near the Iraqi border;
   // binding it would pin the news ~130 km from the event. Drop scan hits
@@ -115,14 +116,21 @@ export function placeIdFromText(text, districtNames = new Set()) {
   return ids.size === 1 ? [...ids][0] : null;
 }
 
-/** Names the draft's texts frame as a city district: the token(s) right
- * after «حي», up to two, stopping at a glued preposition («حي المشيرفة
- * بالحسكة» -> {المشيرفة}). */
+/** Urban-feature frame words: a name right after one of these is a feature
+ * INSIDE a city (a neighbourhood, a roundabout, a square), never a
+ * standalone gazetteer place. «دوار» was missing until live post 1632
+ * (2026-11-26): «دوار الصالحية في الحسكة» bound the same-named village in
+ * Al-Malikiyah countryside (id 8595805) with a false 1.8 km zone. */
+const URBAN_FEATURE_FRAMES = new Set(['حي', 'دوار', 'ساحة'].map((w) => bareToken(normalizeArabic(w))));
+
+/** Names the draft's texts frame as an intra-city feature: the token(s)
+ * right after «حي» / «دوار» / «ساحة», up to two, stopping at a glued
+ * preposition («حي المشيرفة بالحسكة» -> {المشيرفة}). */
 export function districtFramedNames(text) {
   const toks = normalizeArabic(String(text || '')).split(/\s+/).filter(Boolean);
   const out = new Set();
   for (let i = 0; i + 1 < toks.length; i++) {
-    if (bareToken(toks[i]) !== 'حي') continue;
+    if (!URBAN_FEATURE_FRAMES.has(bareToken(toks[i]))) continue;
     const first = bareToken(toks[i + 1]);
     if (first) { out.add(first); out.add(toks[i + 1]); }
     const second = toks[i + 2] ? bareToken(toks[i + 2]) : '';
