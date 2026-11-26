@@ -17,7 +17,7 @@ import { collectStats, renderStatsPng, damascusParts } from './stats-image.js';
 import { renderAlertPng } from './alert-image.js';
 import { registerContactTools } from './contact-tools.js';
 import { registerSupportTools } from './support-tools.js';
-import { registerNewsTools, verifyReportSources } from './news-monitor.js';
+import { registerNewsTools, verifyReportSources, newsState, cardText as newsCardText, cardKb as newsCardKb } from './news-monitor.js';
 import { registerJobsTools } from './jobs.js';
 import { registerJobsAdminTools } from './jobs-admin-tools.js';
 import { registerArmyAdminTools } from './army-admin-tools.js';
@@ -466,17 +466,48 @@ function reportVerificationBlock(v, lang) {
   return lines.join('\n');
 }
 
-/** Damascus wall-clock for the pending-reports list: «HH:MM», prefixed with
- * «dd/MM » when the report arrived on an earlier day. */
-function reportListTime(ts, lang) {
+/** «Waiting since …» age label for inbox entries (owner order 2026-11-26:
+ * the age of every waiting item is written next to it). */
+function waitingAge(ts, lang) {
   if (!ts) return '';
-  try {
-    const tz = 'Asia/Damascus';
-    const day = new Intl.DateTimeFormat('en-GB', { timeZone: tz, day: '2-digit', month: '2-digit' });
-    const hm = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
-    const d = day.format(ts);
-    return (d === day.format(Date.now()) ? '' : `${d} `) + hm.format(ts);
-  } catch { return ''; }
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  if (lang === 'en') {
+    if (s < 60) return 'waiting just now';
+    if (m < 60) return `waiting ${m}m`;
+    if (h < 24) return `waiting ${h}h`;
+    return `waiting ${d}d`;
+  }
+  if (s < 60) return 'ناطر من لحظات';
+  if (m < 60) return m === 1 ? 'ناطر من دقيقة' : m === 2 ? 'ناطر من دقيقتين' : m <= 10 ? `ناطر من ${m} دقائق` : `ناطر من ${m} دقيقة`;
+  if (h < 24) return h === 1 ? 'ناطر من ساعة' : h === 2 ? 'ناطر من ساعتين' : h <= 10 ? `ناطر من ${h} ساعات` : `ناطر من ${h} ساعة`;
+  return d === 1 ? 'ناطر من يوم' : d === 2 ? 'ناطر من يومين' : d <= 10 ? `ناطر من ${d} أيام` : `ناطر من ${d} يوماً`;
+}
+
+/** Short human label for a monitor draft's editorial-hold reason code. */
+function holdReasonLabel(code, lang) {
+  const en = lang === 'en';
+  switch (code) {
+    case 'missing-location': return en ? 'no identifiable location' : 'لا موقع قابل للتحديد';
+    case 'location-text-conflict': return en ? 'location conflicts with the text' : 'تعارض الموقع مع النص';
+    case 'auto-audit-failed': return en ? 'automatic audit failed' : 'فشل التدقيق الآلي';
+    case 'opinion-analysis-requires-explicit-owner-publish': return en ? 'opinion/analysis — owner publish only' : 'رأي/تحليل — نشر المالك فقط';
+    case 'private-editorial-copy-not-public': return en ? 'private material, not public copy' : 'مادة خاصة غير عامة';
+    case 'owner-private-editorial-note': return en ? 'owner’s private editorial note' : 'ملاحظة تحريرية خاصة بالمالك';
+    case 'claim-not-durable':
+    case 'send-needs-reconciliation':
+    case 'channel-delivery-needs-reconciliation': return en ? 'channel delivery needs reconciliation' : 'تسليم القناة يحتاج تسوية';
+    default: return en ? 'held for manual review' : 'محبوسة لمراجعة يدوية';
+  }
+}
+
+/** Monitor drafts currently held for a human decision, oldest hold first. */
+function heldNewsDrafts() {
+  return Object.values(store.state.news?.drafts || {})
+    .filter((d) => d && !d.test && d.status === 'pending' && d.editorialHold)
+    .sort((a, b) => (a.editorialHoldAt || a.created || 0) - (b.editorialHoldAt || b.created || 0));
 }
 
 function reportCardText(rep, lang) {
@@ -523,7 +554,7 @@ function mainKeyboard(ctx) {
       .text(lang === 'en' ? '💼 Post a vacancy' : '💼 مطلوب موظف', 'j:new').row();
   }
   if (staff(ctx)) {
-    const pendingCount = store.reportsList().length;
+    const pendingCount = store.reportsList().length + heldNewsDrafts().length;
     kb.text(lang === 'en' ? `📥 Pending reports (${pendingCount})` : `📥 البلاغات المعلّقة (${pendingCount})`, 'rpend').row();
   }
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
@@ -2934,29 +2965,50 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await vanish(ctx, L(ctx).reportRejected(ctx.from.first_name || '') + (action === 'bn' ? ' · 🚫' : ''));
     }
   });
-  // Pending-reports inbox (owner order 2026-11-26): an aggregation entry point
-  // over the SAME reports store the individual review cards use — the cards
-  // keep arriving per report; this menu button (with its waiting count) opens
-  // the queue, and any entry opens that report's own review card unchanged.
+  // Pending inbox (owner orders 2026-11-26): an aggregation entry point over
+  // the SAME stores the individual cards use — public reports awaiting a
+  // decision (store.reports) and monitor drafts held for a human decision
+  // (store.state.news.drafts with editorialHold) in ONE list, oldest first,
+  // every entry carrying its waiting age; reports also carry one-tap
+  // approve/reject, and any entry opens its own existing card unchanged.
+  // The per-report review cards and per-draft monitor cards keep arriving
+  // exactly as before; this is an additional front door, not a replacement.
+  const showPendingInbox = async (ctx) => {
+    const lang = langOf(ctx);
+    const en = lang === 'en';
+    const reports = store.reportsList();
+    const held = heldNewsDrafts();
+    const total = reports.length + held.length;
+    if (!total) {
+      return show(ctx, en ? '📥 <b>Pending reports</b>\n\nNothing is waiting for a decision.' : '📥 <b>البلاغات المعلّقة</b>\n\nلا شيء ينتظر قراراً.', new InlineKeyboard().text(en ? '🏠 Menu' : '🏠 القائمة', 'home'));
+    }
+    const kb = new InlineKeyboard();
+    const lines = [en ? `📥 <b>Pending reports (${total})</b>` : `📥 <b>البلاغات المعلّقة (${total})</b>`];
+    if (reports.length) {
+      lines.push('', en ? `<b>Public reports (${reports.length})</b> — tap a report for its card, or decide right here:` : `<b>بلاغات الجمهور (${reports.length})</b> — اكبس البلاغ لبطاقته، أو قرّر من هنا مباشرة:`);
+      for (const [rid, rep] of reports.slice(0, 10)) {
+        const type = alertButtonLabel(rep.draft?.type, lang).replace(/«|»/g, '');
+        const place = rep.draft?.location ? locName(rep.draft.location, lang) : (en ? 'No location' : 'بلا موقع');
+        kb.text(`${type} — ${place} — ${waitingAge(rep.created, lang)}`, 'rpo:' + rid).row();
+        kb.text(en ? '✅ Approve & publish' : '✅ اعتماد ونشر', 'rqa:' + rid).text(en ? '❌ Reject' : '❌ رفض', 'rqr:' + rid).row();
+      }
+      if (reports.length > 10) lines.push(en ? `<i>… and ${reports.length - 10} more reports (oldest shown first).</i>` : `<i>… و${reports.length - 10} بلاغات أخرى (الأقدم معروضة أولاً).</i>`);
+    }
+    if (held.length) {
+      lines.push('', en ? `<b>Held monitor drafts (${held.length})</b> — tap one for its card:` : `<b>مسودات رصد محبوسة (${held.length})</b> — اكبس أي وحدة لبطاقتها:`);
+      for (const d of held.slice(0, 10)) {
+        const headline = String(d.headline || '').trim().slice(0, 34) || (en ? '(no headline)' : '(بلا عنوان)');
+        kb.text(`📰 ${headline} — ⛔ ${holdReasonLabel(d.editorialHoldReason, lang)} — ${waitingAge(d.editorialHoldAt || d.created, lang)}`, 'nhd:' + d.id).row();
+      }
+      if (held.length > 10) lines.push(en ? `<i>… and ${held.length - 10} more held drafts (oldest shown first).</i>` : `<i>… و${held.length - 10} مسودات محبوسة أخرى (الأقدم معروضة أولاً).</i>`);
+    }
+    kb.text(en ? '🏠 Menu' : '🏠 القائمة', 'home');
+    return show(ctx, lines.join('\n'), kb);
+  };
   bot.callbackQuery('rpend', async (ctx) => {
     if (!staff(ctx)) return ctx.answerCallbackQuery();
     await ctx.answerCallbackQuery();
-    const lang = langOf(ctx);
-    const en = lang === 'en';
-    const list = store.reportsList();
-    if (!list.length) {
-      return show(ctx, en ? '📥 <b>Pending reports</b>\n\nNo reports are waiting for a decision.' : '📥 <b>البلاغات المعلّقة</b>\n\nلا بلاغات تنتظر قراراً.', new InlineKeyboard().text(en ? '🏠 Menu' : '🏠 القائمة', 'home'));
-    }
-    const kb = new InlineKeyboard();
-    for (const [rid, rep] of list.slice(0, 15)) {
-      const type = alertButtonLabel(rep.draft?.type, lang).replace(/«|»/g, '');
-      const place = rep.draft?.location ? locName(rep.draft.location, lang) : (en ? 'No location' : 'بلا موقع');
-      const time = reportListTime(rep.created, lang);
-      kb.text(`${type} — ${place}${time ? ` — ${time}` : ''}`, 'rpo:' + rid).row();
-    }
-    if (list.length > 15) kb.text(en ? `… and ${list.length - 15} more` : `… و${list.length - 15} أخرى`, 'rpend').row();
-    kb.text(en ? '🏠 Menu' : '🏠 القائمة', 'home');
-    return show(ctx, en ? `📥 <b>Pending reports (${list.length})</b>\n\nTap a report to open its review card.` : `📥 <b>البلاغات المعلّقة (${list.length})</b>\n\nاكبس أي بلاغ لفتح بطاقة مراجعته.`, kb);
+    return showPendingInbox(ctx);
   });
   bot.callbackQuery(/^rpo:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return ctx.answerCallbackQuery();
@@ -2972,6 +3024,50 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     const kb = reportReviewKeyboard(lang, rid);
     kb.row().text(lang === 'en' ? '↩️ All pending reports' : '↩️ كل البلاغات المعلّقة', 'rpend').text(lang === 'en' ? '🏠 Menu' : '🏠 القائمة', 'home');
     await show(ctx, reportCardText(rep, lang), kb);
+  });
+  // One-tap decisions from the list itself (same claim/publish/close core as
+  // the review card's rap:/rrj: buttons; the list then redraws in place).
+  bot.callbackQuery(/^rq(a|r):(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const [, kind, rid] = ctx.match;
+    const en = langOf(ctx) === 'en';
+    if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
+    const rep = store.reportTake(rid);
+    if (!rep) {
+      try { await ctx.answerCallbackQuery({ text: en ? 'This report was already handled ✔️' : 'تمت معالجة هذا البلاغ مسبقاً ✔️', show_alert: true }); } catch { /* ignore */ }
+      return showPendingInbox(ctx);
+    }
+    const notify = APIS[rep.via] || APIS.report || ctx.api;
+    if (kind === 'a') {
+      try {
+        await publishDraft(ctx.api, rep.draft, { id: rep.from.id, name: rep.from.first_name, approvedBy: ctx.from.id });
+      } catch (e) {
+        store.reportRestore(rid, rep); // nothing lost: it stays in the list
+        console.error('[bot] quick report publish failed', e.description || e.message);
+        try { await ctx.answerCallbackQuery({ text: en ? `⚠️ Publishing failed: ${String(e.message || '').slice(0, 120)}` : `⚠️ تعذّر النشر: ${String(e.message || '').slice(0, 120)}`, show_alert: true }); } catch { /* ignore */ }
+        return showPendingInbox(ctx);
+      }
+      await closeReport(ctx, rep, true);
+      await sendTransient(notify, rep.from.id, T[store.userLang(rep.from.id)].reportApprovedUser);
+      try { await ctx.answerCallbackQuery({ text: en ? '✅ Approved & published' : '✅ اعتُمد ونُشر' }); } catch { /* ignore */ }
+    } else {
+      await closeReport(ctx, rep, true);
+      try { await ctx.answerCallbackQuery({ text: en ? '❌ Rejected' : '❌ رُفض' }); } catch { /* ignore */ }
+    }
+    return showPendingInbox(ctx);
+  });
+  bot.callbackQuery(/^nhd:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const d = (newsState().drafts || {})[ctx.match[1]];
+    if (!d || !d.editorialHold) {
+      try { await ctx.answerCallbackQuery({ text: langOf(ctx) === 'en' ? 'This draft is no longer held.' : 'هذه المسودة لم تعد محبوسة.', show_alert: true }); } catch { /* ignore */ }
+      return showPendingInbox(ctx);
+    }
+    await ctx.answerCallbackQuery();
+    const lang = langOf(ctx);
+    const kb = newsCardKb(d, lang, ctx.chat.id);
+    kb.row().text(lang === 'en' ? '↩️ All pending reports' : '↩️ كل البلاغات المعلّقة', 'rpend').text(lang === 'en' ? '🏠 Menu' : '🏠 القائمة', 'home');
+    await show(ctx, newsCardText(d, lang), kb);
   });
   const activeEditKeyboard = (ctx, d = null) => {
     const en = langOf(ctx) === 'en';

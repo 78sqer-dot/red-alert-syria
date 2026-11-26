@@ -52,7 +52,7 @@ test('main menu shows the pending-reports button with a live counter; empty queu
   assert.ok(menuButton(), 'pending-reports button present in the admin main menu');
   assert.match(menuButton().text, /البلاغات المعلّقة \(0\)/, `counter starts at 0: ${menuButton().text}`);
   await tap('rpend');
-  assert.match(lastText(), /لا بلاغات تنتظر قراراً/, 'empty state text');
+  assert.match(lastText(), /لا شيء ينتظر قراراً/, 'empty state text');
 });
 
 test('full flow: Rad submission appears in the inbox, opens its own review card, approves and publishes', async () => {
@@ -72,9 +72,13 @@ test('full flow: Rad submission appears in the inbox, opens its own review card,
 
   await tap('rpend');
   assert.match(lastText(), /البلاغات المعلّقة \(1\)/, 'list header carries the count');
+  assert.match(lastText(), /بلاغات الجمهور \(1\)/, 'reports section header');
   const entry = buttons().find((b) => b.callback_data === 'rpo:' + rid);
   assert.ok(entry, 'the waiting report is a button in the list');
   assert.match(entry.text, /دمشق/, `entry names the place: ${entry.text}`);
+  assert.match(entry.text, /ناطر من/, `entry carries its waiting age: ${entry.text}`);
+  assert.ok(buttons().some((b) => b.callback_data === 'rqa:' + rid), 'quick approve offered in the list');
+  assert.ok(buttons().some((b) => b.callback_data === 'rqr:' + rid), 'quick reject offered in the list');
 
   await tap('rpo:' + rid);
   const cardButtons = buttons().map((b) => b.callback_data);
@@ -97,4 +101,54 @@ test('the inbox is staff-only: a public user tapping it on the admin bot gets no
   calls.length = 0;
   await tap('rpend', stranger, bot);
   assert.ok(!calls.some((c) => String(c.payload?.text || '').includes('البلاغات المعلّقة')), 'no inbox screen for non-staff');
+});
+
+test('quick approve and quick reject decide straight from the list', async () => {
+  const mk = async (uid) => {
+    const reporter = { id: uid, is_bot: false, first_name: 'Quick reporter', language_code: 'ar' };
+    const before = new Set(Object.keys(store.state.reports || {}));
+    await tap('t:uav', reporter, reportBot);
+    await tap('airmode:over', reporter, reportBot);
+    await tap('g:13', reporter, reportBot);
+    await tap('wg:13', reporter, reportBot);
+    await tap('skip', reporter, reportBot);
+    await tap('submit', reporter, reportBot);
+    return Object.keys(store.state.reports || {}).find((id) => !before.has(id));
+  };
+  const ridA = await mk(8270709682);
+  const ridB = await mk(8270709683);
+  assert.ok(ridA && ridB, 'two reports pending');
+  const alertsBefore = store.activeAlerts().length;
+
+  await tap('rpend');
+  await tap('rqa:' + ridA);
+  assert.equal(store.reportGet(ridA), null, 'quick-approved report leaves the queue');
+  assert.ok(store.activeAlerts().length > alertsBefore, 'quick approve published the alert');
+  assert.match(lastText(), /بلاغات الجمهور \(1\)/, 'list redraws with the remaining report');
+
+  await tap('rqr:' + ridB);
+  assert.equal(store.reportGet(ridB), null, 'quick-rejected report leaves the queue');
+  assert.match(lastText(), /لا شيء ينتظر قراراً/, 'queue empty after both decisions');
+});
+
+test('held monitor drafts share the inbox with their hold reason, oldest first, and open their own card', async () => {
+  const now = Date.now();
+  store.state.news = { drafts: {
+    heldnew: { id: 'heldnew', type: 'shelling', headline: 'قصف مدفعي على أطراف مدينة إدلب', body: 'قصف مدفعي على أطراف مدينة إدلب', status: 'pending', editorialHold: true, editorialHoldReason: 'auto-audit-failed', editorialHoldAt: now - 10 * 60000, created: now - 12 * 60000, ts: now - 12 * 60000, srcs: [{ name: 'Test feed', local: false }] },
+    heldold: { id: 'heldold', type: 'attack', headline: 'هجوم مسلح قرب بصرى الشام', body: 'هجوم مسلح قرب بصرى الشام', status: 'pending', editorialHold: true, editorialHoldReason: 'location-text-conflict', editorialHoldAt: now - 90 * 60000, created: now - 95 * 60000, ts: now - 95 * 60000, srcs: [{ name: 'Test feed', local: false }] },
+    notheld: { id: 'notheld', type: 'attack', headline: 'مسودة عادية بلا حبس', body: 'x', status: 'pending', created: now - 5000, ts: now - 5000, srcs: [] },
+  } };
+  await tap('home');
+  assert.match(menuButton().text, /البلاغات المعلّقة \(2\)/, `counter counts held drafts too: ${menuButton().text}`);
+  await tap('rpend');
+  assert.match(lastText(), /مسودات رصد محبوسة \(2\)/, 'held section header with its count');
+  const heldButtons = buttons().filter((b) => b.callback_data.startsWith('nhd:'));
+  assert.equal(heldButtons.length, 2, 'only editorially held drafts are listed');
+  assert.equal(heldButtons[0].callback_data, 'nhd:heldold', 'oldest hold first');
+  assert.match(heldButtons[0].text, /تعارض الموقع مع النص/, `entry carries the hold reason: ${heldButtons[0].text}`);
+  assert.match(heldButtons[0].text, /ناطر من/, 'entry carries its waiting age');
+  await tap('nhd:heldold');
+  assert.match(lastText(), /هجوم مسلح قرب بصرى الشام/, 'the draft opens its own monitor card');
+  assert.ok(buttons().some((b) => b.callback_data === 'nw:p:heldold'), 'the opened card keeps the monitor publish button');
+  store.state.news = { drafts: {} };
 });

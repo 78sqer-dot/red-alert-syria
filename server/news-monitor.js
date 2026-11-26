@@ -659,7 +659,7 @@ function rememberAlert(pa) {
 // only — no administrative chains (بلدة/منطقة/ريف). Full precision stays in
 // the alert record and the map pin, never in the draft/post place line.
 const fmtLoc = (l) => (l.scope === 'governorate' ? `محافظة ${l.name_ar}` : [l.name_ar, l.governorate_ar].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(' - '));
-function cardText(d, lang = 'ar') {
+export function cardText(d, lang = 'ar') {
   const locs = locsOf(d.loc, d.extra);
   const lines = [];
   lines.push(d.test
@@ -709,7 +709,7 @@ function cardText(d, lang = 'ar') {
   if (d.rule) lines.push(tr(lang, '⚙️ <i>تصنيف آلي بسيط (الذكاء الاصطناعي غير متاح حالياً) — راجع النوع والمكان.</i>', '⚙️ <i>Simple automatic classification (AI unavailable) — check type and place.</i>'));
   return lines.join('\n');
 }
-function cardKb(d, lang = 'ar', chatId = null) {
+export function cardKb(d, lang = 'ar', chatId = null) {
   const kb = new InlineKeyboard()
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
     .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id).row()
