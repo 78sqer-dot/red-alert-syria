@@ -321,3 +321,24 @@ test('publishDraft publishes the owner-shape toward report (city origin, place t
   assert.equal(alert.location?.latitude, 36.20124);
   assert.equal(alert.location?.longitude, 37.16117);
 });
+
+// Same owner-shape regression for the warplane (owner order 2026-11-26:
+// «شوف كمان الحربي والمروحية»): a toward warplane report with a city origin
+// died on the same funnel conflict before f0dbaee and must publish.
+test('publishDraft publishes the owner-shape toward report for a warplane (city origin, place target)', async () => {
+  const { config } = await import('../server/config.js');
+  config.alertImages = false; config.channel = '@synthetic';
+  const d = {
+    source: 'telegram', type: 'warplane', aerialMode: 'toward',
+    location: locationFrom({ placeId: 170063 }), extra: [],
+    flightTarget: locationFrom({ placeId: 172503 }),
+    details: '', text: '',
+  };
+  const api = { sendMessage: async () => ({ message_id: 999 }), sendPhoto: async () => ({ message_id: 999 }) };
+  const alert = await publishDraft(api, d, { id: 1, name: 'test' });
+  assert.ok(alert && alert.id, 'the toward warplane report published instead of being held');
+  assert.equal(alert.meta?.aerialMode, 'toward');
+  assert.equal(alert.meta?.flightTarget?.place_id, 172503);
+  assert.equal(alert.location?.latitude, 36.20124);
+  assert.equal(alert.location?.longitude, 37.16117);
+});
