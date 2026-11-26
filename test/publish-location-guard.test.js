@@ -266,3 +266,58 @@ test('publishDraft refuses the post-1599 shape end-to-end (village pin vs حي f
     (e) => e.name === 'MissingCardLocationError' && e.code === 'location-text-conflict',
   );
 });
+
+// LIVE REGRESSION (owner's own report, 2026-11-26): a 'toward' drone report
+// whose ORIGIN is a specific city place (Aleppo city) and whose generated
+// title names the destination (Safira) was held by the funnel as a
+// 'location-text-conflict' — the cross-check read the alert's own heading
+// phrase as a rival location claim. The governorate-origin variant passed
+// (bind/upgrade branch), which is why the bot-side flow tests stayed green
+// while the owner's real report vanished. The target naming its own
+// destination is not a contradiction; a third place still is.
+test('funnel: a toward alert naming its flight target in the title is not a location conflict', async () => {
+  const { ensureBuiltAlertLocation } = await import('../server/publish-location-guard.js');
+  const input = {
+    type: 'uav',
+    title: 'تحليق مسيّرة — حلب — نحو السفيرة - حلب',
+    description: '',
+    location: locationFrom({ placeId: 170063 }), // Aleppo city (origin)
+    meta: { flightTarget: locationFrom({ placeId: 172503 }) }, // Safira (target)
+  };
+  const r = ensureBuiltAlertLocation(input, {});
+  assert.equal(r.action, 'present');
+  assert.equal(r.flightTargetNamed, true);
+});
+
+test('funnel: a flight target does not forgive a genuinely conflicting third place', async () => {
+  const { ensureBuiltAlertLocation } = await import('../server/publish-location-guard.js');
+  const input = {
+    type: 'uav',
+    title: 'تحليق مسيّرة — حلب — نحو السفيرة - حلب',
+    description: '',
+    location: locationFrom({ placeId: 170063 }),
+    meta: { flightTarget: locationFrom({ placeId: 172503 }), sourceText: 'تحليق مسيّرة فوق حمص' },
+  };
+  const r = ensureBuiltAlertLocation(input, {});
+  assert.equal(r.action, 'held');
+  assert.equal(r.reason, 'location-text-conflict');
+});
+
+test('publishDraft publishes the owner-shape toward report (city origin, place target)', async () => {
+  const { config } = await import('../server/config.js');
+  config.alertImages = false; config.channel = '@synthetic';
+  const d = {
+    source: 'telegram', type: 'uav', aerialMode: 'toward',
+    location: locationFrom({ placeId: 170063 }), extra: [],
+    flightTarget: locationFrom({ placeId: 172503 }),
+    details: '', text: '',
+  };
+  const api = { sendMessage: async () => ({ message_id: 999 }), sendPhoto: async () => ({ message_id: 999 }) };
+  const alert = await publishDraft(api, d, { id: 1, name: 'test' });
+  assert.ok(alert && alert.id, 'the toward report published instead of being held');
+  assert.equal(alert.meta?.aerialMode, 'toward');
+  assert.equal(alert.meta?.flightTarget?.place_id, 172503);
+  // the stored alert location is the ORIGIN (Aleppo city), coordinates only
+  assert.equal(alert.location?.latitude, 36.20124);
+  assert.equal(alert.location?.longitude, 37.16117);
+});

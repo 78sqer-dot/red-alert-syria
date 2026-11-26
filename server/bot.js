@@ -2721,9 +2721,19 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
   const publishRoadDraft = async (ctx, d, toChannel) => {
     if (!staff(ctx)) return;
     if (!d.location) return askLocation(ctx, d);
-    sessions.delete(sk(ctx));
     const en = langOf(ctx) === 'en';
-    const r = await publishDraft(ctx.api, { ...d, toChannel }, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
+    // Same no-silent-drop rule as the main publish button: keep the session
+    // until publishDraft succeeds; on a hold/failure, toast and reopen the
+    // preview instead of losing the draft.
+    let r;
+    try {
+      r = await publishDraft(ctx.api, { ...d, toChannel }, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
+    } catch (e) {
+      console.error('[bot] road publish failed', e.description || e.message);
+      try { await ctx.answerCallbackQuery({ text: e.name === 'MissingCardLocationError' ? e.message : (en ? '⚠️ Publishing failed — the draft is still open; try again.' : '⚠️ تعذّر النشر — المسودة ما زالت مفتوحة؛ حاول مجدداً.'), show_alert: true }); } catch { /* ignore */ }
+      return showPreview(ctx, d);
+    }
+    sessions.delete(sk(ctx));
     if (d.fromReport) await sendTransient(APIS[d.notifyVia] || APIS.report || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
     const kb = new InlineKeyboard();
     if (config.publicUrl) kb.url(en ? '🗺 Open the map' : '🗺 افتح الخريطة', `${config.publicUrl}/${en ? 'en' : 'ar'}/#roads`).row();
@@ -2739,9 +2749,23 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       try { await ctx.answerCallbackQuery({ text: langOf(ctx) === 'en' ? 'No location set and no identifiable place in the text — pick the location first.' : 'لا موقع محدداً ولا مكان قابلاً للتحديد في النص — حدّد الموقع أولاً.', show_alert: true }); } catch { /* ignore */ }
       return askLocation(ctx, d);
     }
-    sessions.delete(sk(ctx));
     if (config.alertImages) { try { await show(ctx, L(ctx).publishing, new InlineKeyboard()); } catch { /* ignore */ } }
-    const alert = await publishDraft(ctx.api, d, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
+    // The session is deleted only AFTER a successful publish: publishDraft
+    // can hold the draft (e.g. the card-location guard) by throwing, and an
+    // uncaught throw here used to drop the report silently — no alert, no
+    // toast, draft gone (the owner's Aleppo -> Safira drone report,
+    // 2026-11-26). Mirror the review-approval path: surface the reason and
+    // keep the draft open so it can be fixed and published again.
+    let alert;
+    try {
+      alert = await publishDraft(ctx.api, d, d.fromReport ? { id: d.fromReport.id, name: d.fromReport.first_name, approvedBy: ctx.from.id } : { id: ctx.from.id, name: ctx.from.first_name });
+    } catch (e) {
+      console.error('[bot] publish failed', e.description || e.message);
+      const held = e.name === 'MissingCardLocationError';
+      try { await ctx.answerCallbackQuery({ text: held ? e.message : (langOf(ctx) === 'en' ? '⚠️ Publishing failed — the draft is still open; try again.' : '⚠️ تعذّر النشر — المسودة ما زالت مفتوحة؛ حاول مجدداً.'), show_alert: true }); } catch { /* ignore */ }
+      return showPreview(ctx, d);
+    }
+    sessions.delete(sk(ctx));
     if (d.fromReport) await sendTransient(APIS[d.notifyVia] || APIS.report || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
     const outcome = alert.channel_delivery?.status;
     const resultText = outcome && outcome !== 'confirmed' ? (langOf(ctx) === 'en' ? 'Saved on the map. Channel delivery ' + (outcome === 'failed' ? 'failed.' : 'is unconfirmed. Do not resend before review.') : (outcome === 'failed' ? 'حُفظ التنبيه على الخريطة، وفشل إرساله للقناة.' : 'حُفظ التنبيه على الخريطة، ووصوله للقناة غير محسوم. لا تعِد الإرسال قبل المراجعة.')) : L(ctx).published;

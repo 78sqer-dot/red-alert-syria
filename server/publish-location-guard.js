@@ -244,6 +244,26 @@ export function ensureBuiltAlertLocation(input, src = {}) {
   };
   const r = ensureDraftCardLocation(view);
   if (r.action === 'bound') { input.location = view.location; input.place = view.location; }
+  if (r.action === 'held' && r.reason === LOCATION_TEXT_CONFLICT_REASON) {
+    // A 'toward' flight alert legitimately names a SECOND place in its own
+    // outgoing copy: the destination. buildAlertInput generates the title
+    // itself («origin — نحو target») and the reporter's details describe
+    // the same heading, so the cross-check's winning place can be exactly
+    // the flight target — that is the copy naming its own destination, not
+    // a contradiction of the origin pin. Forgive ONLY that exact case: a
+    // single, conflict-free resolution that lands on the target place. A
+    // winner that is a third place, or genuinely conflicting texts, still
+    // holds. (Owner's own Aleppo-city -> Safira drone report was held by
+    // this check on 2026-11-26 while the governorate-origin variant —
+    // which takes the bind/upgrade branch instead — passed.)
+    const targetId = input.meta?.flightTarget?.place_id ?? src.flightTarget?.place_id ?? null;
+    if (targetId != null) {
+      const resolved = resolveDraftPlace(view);
+      if (!resolved.conflict && resolved.placeId != null && Number(resolved.placeId) === Number(targetId)) {
+        return { action: 'present', flightTargetNamed: true };
+      }
+    }
+  }
   return r;
 }
 
