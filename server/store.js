@@ -405,6 +405,12 @@ class Store extends EventEmitter {
     this.persist();
   }
   reportGet(rid) { return this.state.reports?.[rid] || null; }
+  /** Pending reports awaiting a decision, oldest first: [rid, rep] pairs. */
+  reportsList() {
+    return Object.entries(this.state.reports || {})
+      .filter(([rid, rep]) => rep && !this.reportDone(rid))
+      .sort((a, b) => (a[1].created || 0) - (b[1].created || 0));
+  }
   reportDone(rid) { return !!this.state.reportsDone?.[rid] || !!this.state.reportsAudit?.[rid]; }
   /** Claim a report for a decision: returns it once, then it is gone (no double publishing). */
   reportTake(rid) {

@@ -466,6 +466,19 @@ function reportVerificationBlock(v, lang) {
   return lines.join('\n');
 }
 
+/** Damascus wall-clock for the pending-reports list: «HH:MM», prefixed with
+ * «dd/MM » when the report arrived on an earlier day. */
+function reportListTime(ts, lang) {
+  if (!ts) return '';
+  try {
+    const tz = 'Asia/Damascus';
+    const day = new Intl.DateTimeFormat('en-GB', { timeZone: tz, day: '2-digit', month: '2-digit' });
+    const hm = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+    const d = day.format(ts);
+    return (d === day.format(Date.now()) ? '' : `${d} `) + hm.format(ts);
+  } catch { return ''; }
+}
+
 function reportCardText(rep, lang) {
   const hint = lang === 'en' ? '<i>↩️ Reply to this message to talk to the reporter.</i>' : '<i>↩️ لمراسلة صاحب البلاغ: اعمل «رد» على هذه الرسالة واكتب.</i>';
   return [T[lang].reportNew(who(rep.from)), draftSummary(rep.draft, lang), reportVerificationBlock(rep.verification, lang), hint].filter(Boolean).join('\n\n');
@@ -508,6 +521,10 @@ function mainKeyboard(ctx) {
     const site = (config.publicUrl || 'https://red-alert-syria-q6k8.onrender.com').replace(/\/$/, '');
     kb.url(lang === 'en' ? '🔎 Find a job' : '🔎 أبحث عن عمل', `${site}/${lang === 'en' ? 'en' : 'ar'}/#jobs`)
       .text(lang === 'en' ? '💼 Post a vacancy' : '💼 مطلوب موظف', 'j:new').row();
+  }
+  if (staff(ctx)) {
+    const pendingCount = store.reportsList().length;
+    kb.text(lang === 'en' ? `📥 Pending reports (${pendingCount})` : `📥 البلاغات المعلّقة (${pendingCount})`, 'rpend').row();
   }
   if (staff(ctx)) kb.text(l.btnActive, 'active').text(l.btnClear, 'clr').row().text(l.btnLang, 'lang').row();
   else kb.text(l.btnLang, 'lang').row();
@@ -2916,6 +2933,45 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
       await closeReport(ctx, rep, true);
       await vanish(ctx, L(ctx).reportRejected(ctx.from.first_name || '') + (action === 'bn' ? ' · 🚫' : ''));
     }
+  });
+  // Pending-reports inbox (owner order 2026-11-26): an aggregation entry point
+  // over the SAME reports store the individual review cards use — the cards
+  // keep arriving per report; this menu button (with its waiting count) opens
+  // the queue, and any entry opens that report's own review card unchanged.
+  bot.callbackQuery('rpend', async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery();
+    const lang = langOf(ctx);
+    const en = lang === 'en';
+    const list = store.reportsList();
+    if (!list.length) {
+      return show(ctx, en ? '📥 <b>Pending reports</b>\n\nNo reports are waiting for a decision.' : '📥 <b>البلاغات المعلّقة</b>\n\nلا بلاغات تنتظر قراراً.', new InlineKeyboard().text(en ? '🏠 Menu' : '🏠 القائمة', 'home'));
+    }
+    const kb = new InlineKeyboard();
+    for (const [rid, rep] of list.slice(0, 15)) {
+      const type = alertButtonLabel(rep.draft?.type, lang).replace(/«|»/g, '');
+      const place = rep.draft?.location ? locName(rep.draft.location, lang) : (en ? 'No location' : 'بلا موقع');
+      const time = reportListTime(rep.created, lang);
+      kb.text(`${type} — ${place}${time ? ` — ${time}` : ''}`, 'rpo:' + rid).row();
+    }
+    if (list.length > 15) kb.text(en ? `… and ${list.length - 15} more` : `… و${list.length - 15} أخرى`, 'rpend').row();
+    kb.text(en ? '🏠 Menu' : '🏠 القائمة', 'home');
+    return show(ctx, en ? `📥 <b>Pending reports (${list.length})</b>\n\nTap a report to open its review card.` : `📥 <b>البلاغات المعلّقة (${list.length})</b>\n\nاكبس أي بلاغ لفتح بطاقة مراجعته.`, kb);
+  });
+  bot.callbackQuery(/^rpo:(\w+)$/, async (ctx) => {
+    if (!staff(ctx)) return ctx.answerCallbackQuery();
+    const rid = ctx.match[1];
+    if (!store.reportGet(rid) && !store.reportDone(rid)) await store.mergeFromBackup();
+    const rep = store.reportGet(rid);
+    if (!rep) {
+      try { await ctx.answerCallbackQuery({ text: langOf(ctx) === 'en' ? 'This report is no longer available.' : 'هذا البلاغ لم يعد متاحاً.', show_alert: true }); } catch { /* ignore */ }
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    const lang = langOf(ctx);
+    const kb = reportReviewKeyboard(lang, rid);
+    kb.row().text(lang === 'en' ? '↩️ All pending reports' : '↩️ كل البلاغات المعلّقة', 'rpend').text(lang === 'en' ? '🏠 Menu' : '🏠 القائمة', 'home');
+    await show(ctx, reportCardText(rep, lang), kb);
   });
   const activeEditKeyboard = (ctx, d = null) => {
     const en = langOf(ctx) === 'en';
