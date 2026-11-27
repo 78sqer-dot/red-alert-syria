@@ -1385,6 +1385,30 @@ export async function correctSalihiyaRoundaboutOnce(api) {
   if (store.backup) { store._backupPending = true; if (!await store.flushBackup(true)) throw Error('Salihiya roundabout correction backup not confirmed'); }
   return { ok: true, post: 1632, media };
 }
+export async function correctRaqadWadiOnce() {
+  // LIVE CORRECTION 2026-11-27 (owner order via صادق, post 1645): the
+  // alert «أطراف وادي الرقاد بريف درعا» (176c3b25) carries the Daraa
+  // GOVERNORATE reference point (the capital's coordinates 32.61889,
+  // 36.10213), which the API serves with a 4.5 km representative circle
+  // over Daraa city — geometry the text does not support: the wadi is a
+  // countryside feature absent from the gazetteer and its location is
+  // unproven. Remove the unsupported geometry from the record (location
+  // + zones), keeping the place label, the news text, the timestamps and
+  // the channel post exactly as they are. Strict identity guards: only
+  // this exact record, only while it still carries the capital point.
+  const key = 'owner-raqad-wadi-1645-2026-11-27';
+  if (store.state.maint?.[key]?.done) return { skipped: true };
+  const a = store.getAlert('176c3b25-5697-4450-b5b2-b4adf35845a2');
+  if (!a || a.channel_message_id !== 1645
+    || Math.abs(Number(a.location?.latitude) - 32.61889) > 1e-6
+    || Math.abs(Number(a.location?.longitude) - 36.10213) > 1e-6) return { skipped: true, reason: 'exact original geometry guard' };
+  store.updateAlert(a.id, { location: null, zones: null });
+  store._logPatch(a.id, { g: '06', ga: 'درعا', ge: 'Daraa', p: undefined, d: undefined, pa: undefined, pe: undefined, xd: undefined });
+  store.state.maint = { ...store.state.maint, [key]: { done: new Date().toISOString(), post: 1645 } };
+  store.persist();
+  if (store.backup) { store._backupPending = true; if (!await store.flushBackup(true)) throw Error('Raqad wadi correction backup not confirmed'); }
+  return { ok: true, post: 1645 };
+}
 export async function correctRojPhotoOnce(api) {
   if (store.state.maint?.[ROJ_CORRECTION_KEY]?.done) return {skipped:true};
   const a = store.getAlert('3320c747-0028-45be-b13e-a3c81da25fbf');

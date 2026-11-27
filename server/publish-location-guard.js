@@ -23,7 +23,7 @@
 // signed geography and are never the bare-card failure. Political
 // statements, flight movements and weather warnings are likewise exempt —
 // country scope is a designed state for them, not a missing location.
-import { locationFrom, getPlace, mentionedGovernorates, normalizeArabic } from './places.js';
+import { locationFrom, getPlace, mentionedGovernorates, normalizeArabic, governorates } from './places.js';
 import { scanTextPlaces, resolvePlace } from './news-ai.js';
 
 export const MISSING_CARD_LOCATION_REASON = 'missing-location';
@@ -123,6 +123,46 @@ export function placeIdFromText(text, districtNames = new Set()) {
  * Al-Malikiyah countryside (id 8595805) with a false 1.8 km zone. */
 const URBAN_FEATURE_FRAMES = new Set(['حي', 'دوار', 'ساحة'].map((w) => bareToken(normalizeArabic(w))));
 
+/** Frames that name a SPECIFIC locality or geographic feature: a name
+ * right after one of these is a concrete place the text pins the event to
+ * (a town, a neighbourhood, a crossing, a wadi, a hill…). Used by the
+ * governorate-scope branch: when classification left no unresolved-place
+ * marking (its own hole, closed in buildLocations for AI-named places),
+ * a framed specific name in the draft's texts that the gazetteer scan
+ * could not resolve is still a named place with unproven coordinates —
+ * the draft must hold, not publish a bare governorate card (live post
+ * 1645, 2026-11-27: «أطراف وادي الرقاد بريف درعا»). */
+const SPECIFIC_PLACE_FRAMES = new Set(['بلدة', 'قرية', 'مخيم', 'مدينة', 'منطقة', 'منطقه', 'حي', 'دوار', 'ساحة', 'وادي', 'نهر', 'جبل', 'تلة', 'تل', 'سهل', 'معبر', 'أطراف', 'اطراف'].map((w) => bareToken(normalizeArabic(w))));
+
+/** Specific place names framed in a text (token(s) right after a frame
+ * word, up to two, stopping at a glued preposition — same walk as
+ * districtFramedNames). */
+export function framedSpecificNames(text) {
+  const toks = normalizeArabic(String(text || '')).split(/\s+/).filter(Boolean);
+  const out = new Set();
+  for (let i = 0; i + 1 < toks.length; i++) {
+    if (!SPECIFIC_PLACE_FRAMES.has(bareToken(toks[i]))) continue;
+    const first = bareToken(toks[i + 1]);
+    if (first) { out.add(first); out.add(toks[i + 1]); }
+    const second = toks[i + 2] ? bareToken(toks[i + 2]) : '';
+    if (second && !'وفبلك'.includes(String(toks[i + 2])[0])) { out.add(`${first} ${second}`); out.add(`${toks[i + 1]} ${toks[i + 2]}`); }
+  }
+  return out;
+}
+
+/** True when the draft's texts frame a specific place name that is not a
+ * governorate's own name — i.e. the report pins its event to a concrete
+ * locality/feature, whether or not classification marked it. */
+function textsFrameSpecificPlace(d) {
+  const govNames = new Set(governorates.flatMap((g) => [normalizeArabic(g.ar), bareToken(normalizeArabic(g.ar))]));
+  for (const text of draftTexts(d)) {
+    for (const n of framedSpecificNames(text)) {
+      if (!govNames.has(normalizeArabic(n)) && !govNames.has(bareToken(normalizeArabic(n)))) return true;
+    }
+  }
+  return false;
+}
+
 /** Names the draft's texts frame as an intra-city feature: the token(s)
  * right after «حي» / «دوار» / «ساحة», up to two, stopping at a glued
  * preposition («حي المشيرفة بالحسكة» -> {المشيرفة}). */
@@ -218,6 +258,15 @@ export function ensureDraftCardLocation(d) {
       if (loc) { d.location = loc; d.loc = loc; return { action: 'bound', placeId: resolved.placeId, location: loc, upgradedFromGovernorate: true }; }
     }
     if (String(d.unresolvedPlaceName || '').trim()) return { action: 'held', reason: MISSING_CARD_LOCATION_REASON };
+    // Safety net for the marking's own gaps (live post 1645, 2026-11-27):
+    // classification may leave no unresolved-place marking at all — e.g.
+    // the named feature never reached its places list — while the text
+    // itself frames a specific locality/feature («أطراف وادي الرقاد»).
+    // A framed specific name the scan could not resolve (this branch is
+    // only reached with resolved.placeId == null) means the event's place
+    // is named but unproven: hold for review, never a bare governorate
+    // card with a representative circle on the capital.
+    if (textsFrameSpecificPlace(d)) return { action: 'held', reason: MISSING_CARD_LOCATION_REASON };
     return { action: 'present' };
   }
   if (draftCardLocationState(d) === 'present') {

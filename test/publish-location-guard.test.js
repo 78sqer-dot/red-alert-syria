@@ -367,3 +367,29 @@ test('LIVE REGRESSION 2026-11-26: a village-built alert whose text frames the na
   const built = { type: 'death', location: village, loc: village, title: 'وفاة — الصالحية', description: SALIHIYA_TEXT, place: village };
   assert.deepEqual(ensureBuiltAlertLocation(built, {}), { action: 'held', reason: 'location-text-conflict' });
 });
+
+// LIVE REGRESSION 2026-11-27 (post 1645, alert 176c3b25): «أطراف وادي
+// الرقاد بريف درعا» — a specific wadi absent from the gazetteer. The
+// draft reached the guard at governorate scope with NO unresolved-place
+// marking (classification never marked a place the resolver cannot find
+// at all), so the governorate branch waved a bare governorate card
+// through and the API served the capital's point with a 4.5 km circle.
+const RAQAD_TEXT = 'توغل ثماني آليات عسكرية إسرائيلية على أطراف وادي الرقاد بريف درعا';
+const govLoc06 = () => locationFrom({ govCode: '06' });
+
+test('LIVE REGRESSION 2026-11-27: a governorate draft whose text frames an unresolvable specific place is held, marking or not', () => {
+  const d = { type: 'military_incursion', loc: govLoc06(), location: govLoc06(), headline: 'توغل عسكري — وادي الرقاد', sourceText: RAQAD_TEXT };
+  assert.deepEqual(ensureDraftCardLocation(d), { action: 'held', reason: MISSING_CARD_LOCATION_REASON });
+});
+
+test('LIVE REGRESSION 2026-11-27: genuine governorate-wide news still passes at governorate scope', () => {
+  const d = { type: 'clashes', loc: govLoc06(), location: govLoc06(), headline: '', sourceText: 'اشتباكات عنيفة بريف درعا الشمالي وقصف متبادل على عدة محاور' };
+  assert.equal(ensureDraftCardLocation(d).action, 'present');
+});
+
+test('LIVE REGRESSION 2026-11-27: a framed village the gazetteer knows still binds from the governorate branch', () => {
+  const d = { type: 'clashes', loc: govLoc06(), location: govLoc06(), headline: '', sourceText: 'اشتباكات في بلدة القنية بريف درعا' };
+  const r = ensureDraftCardLocation(d);
+  assert.equal(r.action, 'bound');
+  assert.equal(r.placeId, 166139);
+});

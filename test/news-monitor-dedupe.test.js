@@ -183,3 +183,13 @@ test('drone presence on a ground-incursion report remains review-only and is nev
   assert.equal(nightEligible(withDrone), false, 'a drone-presence report stays out of the night queue');
   assert.equal(daytimeAutoEligible(withDrone), false, 'a drone-presence report stays out of the daytime queue');
 });
+
+test('LIVE REGRESSION 2026-11-27 (post 1645): a named place the gazetteer cannot find at all is marked unresolved', () => {
+  const locs = _test.buildLocations({ places: [{ name: 'وادي الرقاد', gov: 'درعا' }] }, { text: 'توغل ثماني آليات عسكرية إسرائيلية على أطراف وادي الرقاد بريف درعا' });
+  assert.equal(locs.unresolvedPlaceName, 'وادي الرقاد');
+});
+
+test('LIVE REGRESSION 2026-11-27: a governorate named as itself is not marked unresolved', () => {
+  const locs = _test.buildLocations({ places: [{ name: 'درعا', gov: 'درعا' }] }, { text: 'بيان رسمي في درعا' });
+  assert.equal(locs.unresolvedPlaceName, undefined);
+});

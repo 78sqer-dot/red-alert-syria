@@ -15,7 +15,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, correctSalihiyaRoundaboutOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, stripQuoteBlockRetry, stripQuoteBlockFinal, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
+import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, correctSalihiyaRoundaboutOnce, correctRaqadWadiOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, stripQuoteBlockRetry, stripQuoteBlockFinal, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags, umamiScriptTag, notFoundPage } from './seo.js';
@@ -555,6 +555,8 @@ async function start() {
         console.log('[owner-correction] localities',JSON.stringify(localities));
         const salihiya = await correctSalihiyaRoundaboutOnce(bots.admin.api);
         console.log('[owner-correction] salihiya-roundabout',JSON.stringify(salihiya));
+        const raqad = await correctRaqadWadiOnce();
+        console.log('[owner-correction] raqad-wadi',JSON.stringify(raqad));
         console.log('[owner-post-corrections]', JSON.stringify({roj,mine}));
       } catch(e) {
         console.error('[owner-post-corrections]', e.description || e.message);

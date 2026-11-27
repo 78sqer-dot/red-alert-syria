@@ -1301,7 +1301,17 @@ function buildLocations(r, it) {
     if (!p?.name) continue;
     if (!nameInText(p.name, it.text) && !(p.gov && nameInText(p.gov, it.text))) continue; // invented by the AI
     const x = resolvePlace(p);
-    if (!x) continue;
+    if (!x) {
+      // A place the report itself names that the gazetteer cannot find AT
+      // ALL (live post 1645, 2026-11-27: «وادي الرقاد», a wadi in Daraa
+      // countryside absent from the gazetteer) is the same degradation as
+      // the governorate-kind case below, one step further: mark it, so the
+      // publish-location guard binds a text-named place or holds — a bare
+      // governorate card must not wave a specific unlocatable event
+      // through. A governorate's own name is not a specific place.
+      if (!unresolvedPlaceName && !governorates.some((g) => N(g.ar) === N(p.name))) unresolvedPlaceName = String(p.name).trim();
+      continue;
+    }
     // A place the report itself names, degraded by the resolver to plain
     // governorate scope (e.g. a city neighbourhood absent from the
     // gazetteer): the publish-location guard needs to know a specific
