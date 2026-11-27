@@ -1,3 +1,4 @@
+import { finalizeConfirmedPrivatePublication } from './private-publication-cleanup.js';
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
 import { ensureDraftCardLocation, ensureBuiltAlertLocation, MissingCardLocationError, LOCATION_TEXT_CONFLICT_REASON } from './publish-location-guard.js';
 import { rojCorrectionCandidate, ROJ_CORRECTION_KEY, mineCorrectionCandidate, MINE_CORRECTION_KEY } from './roj-photo-correction.js';
@@ -2874,6 +2875,11 @@ export function createBot({ role = 'admin', token = config.botToken, reviewApi =
     sessions.delete(sk(ctx));
     if (d.fromReport) await sendTransient(APIS[d.notifyVia] || APIS.report || ctx.api, d.fromReport.id, T[store.userLang(d.fromReport.id)].reportApprovedUser);
     const outcome = alert.channel_delivery?.status;
+    if (outcome === 'confirmed' && alert.channel_message_id) {
+      const finalization = await finalizeConfirmedPrivatePublication(ctx.api, ctx.chat.id, ctx.callbackQuery?.message?.message_id, alert);
+      if (!finalization.backupConfirmed) return show(ctx, langOf(ctx) === 'en' ? 'Published, but backup is unconfirmed. Do not resend.' : 'نُشر الخبر، لكن حفظ القرار غير مؤكد. لا تعِد النشر.', resultKeyboard(ctx, alert));
+      return;
+    }
     const resultText = outcome && outcome !== 'confirmed' ? (langOf(ctx) === 'en' ? 'Saved on the map. Channel delivery ' + (outcome === 'failed' ? 'failed.' : 'is unconfirmed. Do not resend before review.') : (outcome === 'failed' ? 'حُفظ التنبيه على الخريطة، وفشل إرساله للقناة.' : 'حُفظ التنبيه على الخريطة، ووصوله للقناة غير محسوم. لا تعِد الإرسال قبل المراجعة.')) : L(ctx).published;
     await show(ctx, `${resultText}\n\n${draftSummary(d, langOf(ctx))}`, resultKeyboard(ctx, alert));
   }));

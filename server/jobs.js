@@ -1,3 +1,4 @@
+import { deletePrivatePublicationCard } from './private-publication-cleanup.js';
 import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
 import { config } from './config.js';
@@ -25,7 +26,7 @@ export function initialJobsState() {
   return {
     source: { u: JOB_SOURCE.u, name: JOB_SOURCE.name, on: true, initialized: false, lastId: null, updatedAt: 0, lastCheck: null, lastError: null },
     pending: {}, published: {}, decisions: {}, deleted: {}, seen: {}, fingerprints: {}, intake: {},
-    customGovernorates: [], customAreas: [], adminDrafts: {},
+    cleanupCards: [], customGovernorates: [], customAreas: [], adminDrafts: {},
   };
 }
 
@@ -353,7 +354,7 @@ export function closedJobApplication(job) {
 }
 
 export function isPublicJobEligible(job, j = jobsState(), now = Date.now()) {
-  return !!(job && job.status === 'approved' && !j.deleted?.[job.id] && job.publicReviewHold?.active !== true && !closedJobApplication(job)
+  return !!(job && (!job.autoSource || sourceJobIsReady(job)) && job.status === 'approved' && !j.deleted?.[job.id] && job.publicReviewHold?.active !== true && !closedJobApplication(job)
     && !isApplicationDeadlineExpired(effectiveJobDeadline(job), now)
     && (normalizeJobLocation(job.location, j) || job.publishedWithoutLocation === true));
 }
@@ -440,7 +441,7 @@ async function sendReview(job, { force = false } = {}) {
 export async function notifyPending(j = jobsState(), { forceId = null } = {}) {
   const api = adminApi?.();
   if (!api || !config.ownerIds?.[0]) return 0;
-  const rows = (forceId ? [j.pending[forceId]].filter(Boolean) : Object.values(j.pending).filter((x) => !x.notifiedAt))
+  const rows = (forceId ? [j.pending[forceId]].filter(Boolean) : Object.values(j.pending).filter((x) => x.kind !== 'source' && !x.notifiedAt))
     .sort((a, b) => a.createdAt - b.createdAt).slice(0, forceId ? 1 : 10);
   let n = 0;
   for (const row of rows) {
@@ -601,6 +602,75 @@ export function mergeJobsFromBackup(snapshot, j = jobsState()) {
   }
 }
 
+let sourceJobReady = new WeakMap();
+const sourceJobVersion = (job) => JSON.stringify([job.id, job.text, job.title, job.location, job.applicationDeadline, job.updatedAt, job.status, job.publishedAt, job.sourceKey, job.fingerprint]);
+const sourceJobIsReady = (job) => sourceJobReady.get(job) === sourceJobVersion(job); // Runtime exposure gate: rebuilt only after a confirmed backup on each boot.
+/** Conservative source-only vacancy checks. Missing/ambiguous facts stay private. */
+export function sourceJobEligibility(job, j = jobsState(), now = Date.now()) {
+  if (job?.kind !== 'source') return { ok: false, reason: 'not-source' };
+  const text = normalizeArabic(job.text || '');
+  if (!/(?:فرصه عمل|فرص عمل|شاغر|شواغر|توظيف|نبحث عن|مطلوب (?:موظف|موظفه|محاسب|مهندس|عامل|سائق|مدير|مندوب|ممرض|طبيب|مدرس)|vacanc|hiring|job opening)/iu.test(text)) return { ok: false, reason: 'not-vacancy' };
+  if (/(?:دفع رسوم|رسوم تسجيل|ارسل مبلغ|تحويل مالي|ربح مضمون|ارباح مضمونه|registration fee|pay to apply)/iu.test(text)) return { ok: false, reason: 'payment-or-scam-review' };
+  if (/(?:التقديم مغلق|انتهي التقديم|انتهت (?:فتره|مهله|مده) التقديم|اغلاق باب التقديم|تم اغلاق|لم يعد التقديم|applications? closed|vacancy closed)/iu.test(text)) return { ok: false, reason: 'applications-closed' };
+  const deadline = labelledApplicationDeadline(job.text);
+  if (!deadline && /(?:اخر (?:موعد|مهله|مده)|تاريخ انتهاء التقديم|موعد انتهاء التقديم|موعد اغلاق|الموعد النهائي|ينتهي التقديم|نهايه الاعلان|فتره تقديم الطلبات|موعد تقديم الطلبات|deadline|applications? close)/iu.test(text)) return { ok: false, reason: 'ambiguous-deadline' };
+  if (isApplicationDeadlineExpired(deadline, now)) return { ok: false, reason: 'expired-deadline' };
+  const workplaceClauses = String(job.text || '').split(/[\n.!؛]+/u).map(normalizeArabic).filter((line) => /(?:مكان العمل|موقع العمل|للعمل في|للعمل ب|وظيفه في|شاغر في|فرصه عمل.{0,65} في|مطلوب.{0,65} في|work(?:place| location)|based in)/iu.test(line) && !/(?:مقر الشركه|يقيم في|من مواليد|headquarters|residen)/iu.test(line));
+  const namedWorkplaces = places.filter((p) => p.rank <= 5 && workplaceClauses.some((line) => [p.ar, p.en, ...(p.alt || [])].some((name) => [` ${normalizeArabic(name)} `, ` و${normalizeArabic(name)} `].some((phrase) => (` ${line} `).includes(phrase)))));
+  if (new Set(namedWorkplaces.map((p) => p.id)).size > 1) return { ok: false, reason: 'multiple-workplaces-review' };
+  const govs = governorates.filter((g) => workplaceClauses.some((line) => [g.ar, g.en].some((name) => [` ${normalizeArabic(name)} `, ` و${normalizeArabic(name)} `].some((phrase) => (` ${line} `).includes(phrase)))));
+  if (govs.length !== 1) return { ok: false, reason: govs.length ? 'multiple-workplaces-review' : 'workplace-unverified' };
+  const links = safeLinks([...(job.links || []), ...linksFromText(job.text)]).filter((url) => url !== job.sourceUrl && !url.startsWith(JOB_SOURCE.url));
+  const hasContact = /(?:للتقديم|للتواصل|ارسل.{0,20}(?:السيره|cv)|apply|contact)/iu.test(text) && (links.length || /[\w.+-]+@[\w.-]+\.[a-z]{2,}/iu.test(job.text) || /(?:\+?963|09)[\d\s-]{7,}/u.test(job.text));
+  if (!hasContact || closedJobApplication(job)) return { ok: false, reason: 'application-route-unverified' };
+  return { ok: true, location: locationForGovernorate(govs[0].code, j), applicationDeadline: deadline };
+}
+export async function publishSourceJob(job, j = jobsState(), now = Date.now()) {
+  if (!job || job.kind !== 'source') return false;
+  const recovering = job.status === 'approved' && job.autoSource && j.published[job.id] === job && !sourceJobIsReady(job);
+  if (!recovering && (job.status !== 'pending' || j.pending[job.id] !== job)) return false;
+  if (j.deleted[job.id] || j.decisions[job.id]?.action === 'ignored') return false;
+  const check = recovering ? { ok: true } : sourceJobEligibility(job, j, now);
+  if (!check.ok) { job.sourceReviewHold = { reason: check.reason, at: now }; saveJobs(); return false; }
+  if (!recovering) {
+    job.location = check.location;
+    if (check.applicationDeadline) job.applicationDeadline = check.applicationDeadline;
+    const result = decideJob(job.id, 'approve', j, 0, now);
+    if (!result.ok) return false;
+    job.autoSource = true;
+  }
+  // The runtime gate stays closed while the final durable state is being saved.
+  // A restart fails closed and repeats this idempotent checkpoint, never another listing.
+  delete job.publicReviewHold;
+  delete job.sourceReviewHold;
+  saveJobs({ broadcast: false });
+  if (store.backup && config.telegramBackup && !await store.flushBackup(true)) {
+    job.publicReviewHold = { active: true, reason: 'backup-unverified', at: now };
+    saveJobs({ broadcast: false }); return false;
+  }
+  sourceJobReady.set(job, sourceJobVersion(job));
+  saveJobs({ broadcast: true });
+  const remaining = [];
+  for (const [chat, mid] of job.cards || []) if (!await deletePrivatePublicationCard(adminApi?.(), chat, mid)) remaining.push([chat, mid]);
+  job.cards = remaining;
+  saveJobs();
+  return true;
+}
+export async function recoverSourceJobs(j = jobsState(), now = Date.now()) {
+  const cleanup = [];
+  for (const [chat, mid] of j.cleanupCards || []) if (!await deletePrivatePublicationCard(adminApi?.(), chat, mid)) cleanup.push([chat, mid]);
+  j.cleanupCards = cleanup;
+  if (cleanup.length) saveJobs();
+  for (const job of Object.values(j.published).filter((row) => row.autoSource && sourceJobIsReady(row) && row.cards?.length)) {
+    const left = []; for (const [chat, mid] of job.cards) if (!await deletePrivatePublicationCard(adminApi?.(), chat, mid)) left.push([chat, mid]); job.cards = left;
+  }
+  const rows = [...Object.values(j.pending), ...Object.values(j.published).filter((job) => job.autoSource && !sourceJobIsReady(job))];
+  for (const job of rows) {
+    if (job.kind !== 'source' || (job.status === 'pending' && now - Number(job.createdAt || 0) > MAX_SOURCE_AGE)) continue;
+    await publishSourceJob(job, j, now);
+  }
+}
+
 export async function pollJobsOnce({ j = jobsState(), fetcher = fetchChannel, notify = async () => {}, now = Date.now() } = {}) {
   const src = j.source;
   if (!src.on) return { skipped: true, newJobs: 0, checkedPosts: 0 };
@@ -686,7 +756,12 @@ async function deleteJobCards(ctx, job) {
   const cards = [...(job.cards || [])];
   if (current?.message_id) cards.push([current.chat.id, current.message_id]);
   const unique = new Set(cards.map(([chat, mid]) => `${chat}:${mid}`));
-  await Promise.allSettled([...unique].map((key) => { const [chat, mid] = key.split(':'); return ctx.api.deleteMessage(Number(chat), Number(mid)); }));
+  const remaining = [];
+  for (const key of unique) { const [chat, mid] = key.split(':').map(Number); if (!await deletePrivatePublicationCard(ctx.api, chat, mid)) remaining.push([chat, mid]); }
+  job.cards = remaining;
+  const j = jobsState(); j.cleanupCards ||= [];
+  for (const card of remaining) if (!j.cleanupCards.some(([chat, mid]) => chat === card[0] && mid === card[1])) j.cleanupCards.push(card);
+  saveJobs();
 }
 
 const LOC_PAGE_SIZE = 20;
@@ -918,11 +993,7 @@ export function registerJobsTools(bot, h, role = 'admin') {
       const approved = action !== 'ignore';
       await toast(ctx, approved ? (hLang(ctx) === 'en' ? 'Approved for the website only' : 'تمت الموافقة للموقع فقط') : (hLang(ctx) === 'en' ? 'Ignored; it will not be shown' : 'تم التجاهل ولن يظهر'));
       await deleteJobCards(ctx, result.job);
-      await h.sendTransient(ctx.api, ctx.chat.id, approved
-        ? (action === 'approve-unlocated'
-          ? (hLang(ctx) === 'en' ? '✅ Published in the website Jobs section without a location.' : '✅ نُشر الإعلان في قسم الوظائف بالموقع دون تحديد موقع.')
-          : (hLang(ctx) === 'en' ? '✅ Approved and added to the website Jobs section only — not the news channel.' : '✅ أُضيف الإعلان لقسم الوظائف في الموقع فقط؛ لم يُنشر في قناة الأخبار.'))
-        : (hLang(ctx) === 'en' ? 'The job post was ignored and will not be listed.' : 'تم تجاهل إعلان الوظيفة ولن يُعرض.'));
+
     }));
   } else if (role === 'report') {
     bot.command('start', async (ctx, next) => {
@@ -1084,9 +1155,10 @@ export function startJobsMonitor({ everyMs = POLL_MS } = {}) {
         startJobsMonitor.lastMergeAt = Date.now();
       }
       const j = jobsState();
-      const result = await pollJobsOnce({ j, notify: async (job) => { saveJobs(); await sendReview(job); } });
+      const result = await pollJobsOnce({ j, notify: async (job) => { saveJobs(); await publishSourceJob(job, j); } });
       if (result.baseline || result.newJobs || result.error || result.incomplete) saveJobs({ backupSoon: !!(result.baseline || result.newJobs), broadcast: result.newJobs > 0 });
       else if (result.checkedPosts) saveJobs({ backupSoon: false });
+      await recoverSourceJobs(j);
       await notifyPending(j);
       broadcastDeadlineChanges(j);
     } catch (e) { console.error('[jobs] monitor failed', e.message); }
@@ -1097,4 +1169,4 @@ export function startJobsMonitor({ everyMs = POLL_MS } = {}) {
 }
 export function stopJobsMonitor() { active = false; clearTimeout(timer); timer = null; }
 
-export const _test = { JOB_TERMS, safeLinks, linksFromText, cleanJobText, titleFromText, reviewText, reviewKeyboard, mergeJobsFromBackup, sourceScreenText, pendingText };
+export const _test = { setAdminApi: (fn) => { adminApi = fn; }, resetSourceJobReady: () => { sourceJobReady = new WeakMap(); }, JOB_TERMS, safeLinks, linksFromText, cleanJobText, titleFromText, reviewText, reviewKeyboard, mergeJobsFromBackup, sourceScreenText, pendingText };

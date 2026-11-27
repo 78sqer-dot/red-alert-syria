@@ -13,6 +13,21 @@ import { alertZones, selectedAlertZones, regionFix } from './places.js';
 import { cleanAlertText, cleanAttributedNewsText, isPrivateEditorialCopy, isPublicEditorialCopy } from './public-copy-safety.js';
 import { publicSupportSettings, sanitizeSupportSettings } from './support-config.js';
 
+// At-least-once private-card cleanup intents. Merge by card identity; a stale
+// intent is safe to retry because deletion rechecks the current pin every time.
+export function sanitizePublicationCleanup(value) {
+  const rows = new Map();
+  for (const row of Array.isArray(value) ? value : []) {
+    if (!row || typeof row !== 'object' || !['number', 'string'].includes(typeof row.chat) || !['number', 'string'].includes(typeof row.mid)) continue;
+    const chat = Number(row.chat), mid = Number(row.mid);
+    if (!Number.isSafeInteger(chat) || chat <= 0 || !Number.isSafeInteger(mid) || mid <= 0) continue;
+    const at = Number.isFinite(row.at) && row.at >= 0 ? row.at : 0;
+    const key = `${chat}:${mid}`;
+    if (!rows.has(key)) rows.set(key, { chat, mid, at });
+  }
+  return [...rows.values()];
+}
+
 export const ALERT_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
 export function sanitizeAlertMedia(media) {
   if (!media || typeof media !== 'object' || !['photo', 'video'].includes(media.type)) return null;
@@ -68,7 +83,7 @@ export function mergeAlertMediaItems(existing, incoming, { replaceSameType = fal
 class Store extends EventEmitter {
   constructor() {
     super();
-    this.state = { version: 1, alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 1, autoDel1h: true, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null }, support: sanitizeSupportSettings() }, push: { subscriptions: {} }, log: [], relay: {}, threads: {} };
+    this.state = { version: 1, publicationCleanup: [], alerts: [], editors: [], banned: [], users: {}, stats: { published: 0 }, settings: { autoDeleteHours: 1, autoDel1h: true, daily: { on: true, time: '23:00', last: null }, weekly: { on: true, day: 5, time: '23:00', last: null }, support: sanitizeSupportSettings() }, push: { subscriptions: {} }, log: [], relay: {}, threads: {} };
     this.file = path.join(config.dataDir, 'state.json');
     this.backup = null; // { save(jsonString), load() -> jsonString|null }
     this._saveTimer = null;
@@ -148,6 +163,7 @@ class Store extends EventEmitter {
     }
     this.state = {
       version: 1,
+      publicationCleanup: sanitizePublicationCleanup(s.publicationCleanup),
       alerts,
       editors: Array.isArray(s.editors) ? s.editors.map(Number).filter(Number.isFinite) : [],
       banned: Array.isArray(s.banned) ? s.banned.map(Number).filter(Number.isFinite) : [],
@@ -456,6 +472,12 @@ class Store extends EventEmitter {
     // Include merge hooks and decision-only changes, not only new report/alert counts.
     const beforeMerge = JSON.stringify(this.state);
     const st = this.state;
+    // Keep both instances' outstanding intents. A completed intent reintroduced
+    // by an older snapshot is an idempotent not-found retry, never a resend.
+    if (Array.isArray(st.publicationCleanup) || Array.isArray(o.publicationCleanup)) st.publicationCleanup = sanitizePublicationCleanup([
+      ...(Array.isArray(st.publicationCleanup) ? st.publicationCleanup : []),
+      ...(Array.isArray(o.publicationCleanup) ? o.publicationCleanup : []),
+    ]);
     if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
     // A deploy can restore before the old process makes its final Fajr claim.
     // Merge those durable claims before starting the replacement scheduler.

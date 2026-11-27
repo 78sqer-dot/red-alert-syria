@@ -39,10 +39,10 @@ test('daytime fallback window follows Damascus time and excludes 22:00–08:00',
   assert.equal(daytimeWindow(at('2026-10-27T19:00:00Z')), false); // 22:00
 });
 
-test('a qualifying pending AI news draft gets exactly one two-minute deadline during the day', () => {
-  assert.equal(dayAutoDueAt(qualified(), daytimeStart), daytimeStart + 120_000);
+test('a qualifying pending AI news draft gets one immediate eligibility timestamp without a daytime delay', () => {
+  assert.equal(dayAutoDueAt(qualified(), daytimeStart), daytimeStart);
   assert.equal(dayAutoDueAt(qualified({ dayAutoAt: daytimeStart + 30_000 }), daytimeStart), null);
-  assert.equal(dayAutoDueAt(qualified(), at('2026-10-27T19:00:00Z')), null);
+  assert.equal(dayAutoDueAt(qualified(), at('2026-10-27T19:00:00Z')), at('2026-10-27T19:00:00Z'));
 });
 
 test('test, rules-only, low-confidence, and already handled drafts never qualify', () => {

@@ -1193,16 +1193,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.equal(newsState().drafts[draftId].status, 'published');
   assert.ok(calls.slice(publishStart).some((call) => call.method === 'deleteMessage' && call.payload.message_id === checkMessageId), 'publishing from the check result removes its stale buttons');
   assert.equal(newsState().drafts[draftId].cards.some(([, id]) => id === checkMessageId), false, 'the deleted result is also removed from persisted card tracking');
-  const shareMessage = calls.slice(publishStart).find((call) => call.method === 'sendMessage' && call.chatId === ownerId
-    && call.payload.reply_markup?.inline_keyboard?.flat().some((button) => button.url?.startsWith('https://wa.me/?text=')));
-  assert.ok(shareMessage, 'manual publication offers a WhatsApp share link to the owner');
-  const shareButtons = shareMessage.payload.reply_markup.inline_keyboard.flat();
-  const whatsAppButton = shareButtons.find((button) => button.url?.startsWith('https://wa.me/?text='));
-  const mapButton = shareButtons.find((button) => button.text?.includes('على الخريطة') || button.text?.includes('On the map'));
-  assert.ok(mapButton?.url, 'the published alert has a map link');
-  const whatsAppText = new URL(whatsAppButton.url).searchParams.get('text');
-  assert.ok(whatsAppText.includes(newsState().drafts[draftId].headline), 'share text contains the story headline');
-  assert.ok(whatsAppText.includes(mapButton.url), 'share text contains the public map link');
+  assert.equal(calls.slice(publishStart).some((call) => call.method === 'sendMessage' && call.chatId > 0), false, 'confirmed publication removes review cards without a private success/share notice');
   assert.equal(calls.slice(publishStart).some((call) => /whatsapp/i.test(call.method)), false, 'the bot only opens WhatsApp with a prepared link; it never sends a message');
 
   await tap(callback);
@@ -1509,17 +1500,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   try {
     await tap(`nw:p:${editorDraftId}`, editor);
     assert.equal(editorDraft.status, 'published');
-    const ownerNotice = calls.slice(editorPublishStart).find((call) => call.method === 'sendMessage' && call.chatId === ownerId && /نُشر تنبيه جديد على الخريطة/.test(call.payload.text));
-    assert.ok(ownerNotice, 'successful publication by an editor sends a separate private notice to the owner');
-    const buttons = ownerNotice.payload.reply_markup.inline_keyboard.flat();
-    const whatsapp = buttons.find((button) => button.url?.startsWith('https://wa.me/?text='));
-    const map = buttons.find((button) => button.text?.includes('على الخريطة'));
-    assert.ok(map?.url, 'the owner notice contains a direct map link for this alert');
-    assert.ok(whatsapp, 'the owner notice contains a WhatsApp manual-share button');
-    const shareText = new URL(whatsapp.url).searchParams.get('text');
-    assert.ok(shareText.includes(editorDraft.headline), 'WhatsApp share text contains the published headline');
-    assert.ok(shareText.includes(editorDraft.body), 'WhatsApp share text contains the story details');
-    assert.ok(shareText.includes(map.url), 'WhatsApp share text contains the direct map link');
+    assert.equal(calls.slice(editorPublishStart).some((call) => call.method === 'sendMessage' && call.chatId > 0), false, 'editor publication does not leave private success notices');
     assert.equal(calls.slice(editorPublishStart).some((call) => /whatsapp/i.test(call.method)), false, 'the bot never sends a WhatsApp message automatically');
     const editorNewAlerts = store.state.alerts.filter((alert) => !editorBeforeAlerts.has(alert.id));
     assert.equal(editorNewAlerts.length, 1, 'the local editor approval creates exactly one mock map alert');

@@ -1,3 +1,4 @@
+import { deletePrivatePublicationCard, retryPrivatePublicationCleanup } from './private-publication-cleanup.js';
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
 import { ensureDraftCardLocation } from './publish-location-guard.js';
 // 📡 News monitor: the server (Render, 24/7) reads public Syrian news channels every minute, turns
@@ -142,7 +143,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rid = () => crypto.randomBytes(5).toString('hex');
 const N = normalizeArabic;
 const H_MS = 3600_000;
-const DAY_AUTO_DELAY_MS = 2 * 60_000;
+const DAY_AUTO_DELAY_MS = 0; // Eligible editorial news no longer waits for a daytime timeout.
 const WEATHER_NAME_AR = { rain: 'أمطار غزيرة', snow: 'ثلوج', wind: 'رياح قوية', storm: 'عواصف رعدية', heat: 'موجة حر', frost: 'صقيع', dust: 'غبار' };
 const weatherHeadline = (hazard, govs) => `تحذير جوي: ${WEATHER_NAME_AR[hazard] || 'أحوال جوية خطرة'} — ${govs.map((g) => g.ar).join('، ')}`;
 const dayKey = (t = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: config.timezone }).format(new Date(t));
@@ -475,7 +476,7 @@ function editorialGate(d) {
 /** Daytime uses the same AI and source-confidence gate as overnight auto-publishing. */
 export function daytimeAutoEligible(d) { return Boolean(d && d.type !== 'political' && d.status === 'pending' && nightEligible(d)); }
 export function dayAutoDueAt(d, now = Date.now()) {
-  return daytimeWindow(now) && daytimeAutoEligible(d) && !Number.isFinite(d.dayAutoAt) ? now + DAY_AUTO_DELAY_MS : null;
+  return daytimeAutoEligible(d) && !Number.isFinite(d.dayAutoAt) ? now + DAY_AUTO_DELAY_MS : null;
 }
 export function dayAutoReady(d, now = Date.now()) {
   return daytimeAutoEligible(d) && Number.isFinite(d.dayAutoAt) && d.dayAutoAt <= now;
@@ -899,19 +900,23 @@ export async function refreshPendingCardKeyboards() {
 }
 async function closeCards(d, keep = null, closeMedia = false) {
   const a = api();
+  const remaining = [];
   for (const [chat, mid] of d.cards || []) {
-    setKeep('admin', chat, mid, false);
-    if (keep && keep[0] === chat && keep[1] === mid) continue;
-    if (!a) continue;
-    try { await a.deleteMessage(chat, mid); } catch {
-      try { await a.editMessageText(chat, mid, '✔️', {}); } catch { /* ignore */ }
-    }
+    if (keep && keep[0] === chat && keep[1] === mid) { remaining.push([chat, mid]); continue; }
+    if (await deletePrivatePublicationCard(a, chat, mid)) setKeep('admin', chat, mid, false);
+    else remaining.push([chat, mid]);
   }
+  d.cards = remaining;
+  d.cardCleanupPending = remaining.length > 0;
   if (closeMedia) {
-    for (const [chat, mid] of d.mediaCards || []) { setKeep('admin', chat, mid, false); if (a) try { await a.deleteMessage(chat, mid); } catch { /* best effort */ } }
-    d.mediaCards = [];
+    const mediaRemaining = [];
+    for (const [chat, mid] of d.mediaCards || []) {
+      if (await deletePrivatePublicationCard(a, chat, mid)) setKeep('admin', chat, mid, false);
+      else mediaRemaining.push([chat, mid]);
+    }
+    d.mediaCards = mediaRemaining;
+    d.cardCleanupPending ||= mediaRemaining.length > 0;
   }
-  d.cards = keep ? (d.cards || []).filter(([c, m]) => c === keep[0] && m === keep[1]) : [];
 }
 // ---------------------------------------------------------------- 🌙 night auto-publish + owner notice (undo)
 const postUrl = (mid) => (mid && String(config.channel || '').startsWith('@') ? `https://t.me/${config.channel.slice(1)}/${mid}` : '');
@@ -1204,23 +1209,40 @@ async function nightPublish(d) {
   save();
   if(store.backup && config.telegramBackup && !await store.flushBackup(true)){d.nativeReview.result='published-backup-unverified';d.editorialHold=true;save();return false;}
   await closeCards(d, null, true); await unlinkCapturedMedia(d.sourceMedia); // a draft that was waiting (single local source, then confirmed) leaves the chat
-  d.notices = [];
-  for (const uid of ownerIdsU()) {
-    const lang = langOfId(uid);
-    try {
-      const m = await a.sendMessage(uid, noticeText(d, lang), { parse_mode: 'HTML', reply_markup: noticeKb(d, lang), link_preview_options: { is_disabled: true }, disable_notification: true, _keep: 'c' });
-      d.notices.push([uid, m.message_id]);
-    } catch (e) { console.warn('[news] night notice not delivered to', uid, e.description || e.message); }
-  }
+  await cleanupPublishedNotices(d, a);
   save();
   console.log(`[news] ${mode.toUpperCase()} auto-published ${d.id}: ${d.type} -> alert ${d.alertId} post ${d.postId}`);
   return true;
+}
+// Remove only recorded private success notices after confirmed publication and durable decision.
+// Never delete channel posts, source history, uncertain outcomes or backup pins.
+export async function cleanupPublishedNotices(d, telegramApi = api()) {
+  if (!telegramApi || d?.status !== 'published' || !d.postId || !d.alertId || d.editorialHold || d.nativeReview?.result === 'published-backup-unverified') return false;
+  if (store.backup && config.telegramBackup && !await store.flushBackup(true)) return false;
+  const remaining = [];
+  for (const [chat, mid] of d.notices || []) {
+    if (!(Number(chat) > 0) || !Number.isInteger(Number(mid))) { remaining.push([chat, mid]); continue; }
+    try {
+      const info = await telegramApi.getChat(Number(chat));
+      if (!info || info.pinned_message?.message_id === Number(mid)) { remaining.push([chat, mid]); continue; }
+      if (await telegramApi.deleteMessage(Number(chat), Number(mid)) !== true) remaining.push([chat, mid]);
+    }
+    catch (e) { if (!/message to delete not found|message not found/i.test(String(e.description || e.message || ''))) remaining.push([chat, mid]); }
+  }
+  d.notices = remaining;
+  d.successCleanupPending = !!remaining.length;
+  save();
+  return !remaining.length;
 }
 async function dayAutoTick(now = Date.now()) {
   if (!recoveryReady()) return;
   const n = newsState();
   if (!api() || !R.H?.publishDraft) return;
+  await retryPrivatePublicationCleanup(api());
   for (const d of Object.values(n.drafts)) {
+    if (d.status === 'published' && d.cardCleanupPending && d.postId && !d.editorialHold && (!store.backup || !config.telegramBackup || await store.flushBackup(true))) await closeCards(d, null, true);
+    if (d.status === 'published' && d.successCleanupPending && d.notices?.length) await cleanupPublishedNotices(d);
+    if (daytimeAutoEligible(d) && isFreshSourceTs(draftSourceTs(d), now)) d.dayAutoAt = now;
     if (!dayAutoReady(d, now)) continue;
     d.autoMode = 'day';
     await nightPublish(d);
@@ -1410,6 +1432,7 @@ async function handleResult(it, r, known, pmap) {
     // DELETED — never published, never held, never merged into the original
     // as a follow-up («ينشر واحد ويحذف ٩ — شو بدي بيهن»). The first report
     // stands exactly as it is; this item leaves no trace.
+    retainDuplicateProvenance(target, it);
     pmap.set(it.i, target);
     n.stats.dupes++; note(it, `same event as ${target.kind} (${target.status}) — deleted unpublished (one event = one post)`); return;
   }
@@ -1429,7 +1452,8 @@ async function handleResult(it, r, known, pmap) {
   const ev = { kind: 'draft', status: 'pending', draftId: d.id, type: d.type, ts: d.ts, headline, text: d.sourceText, where: whereOf(locs), geo: cand.geo };
   known.unshift(ev); pmap.set(it.i, ev);
   save();
-  if (nightActive() && nightEligible(d) && await nightPublish(d)) {
+  if (daytimeAutoEligible(d)) d.autoMode = 'day';
+  if ((daytimeAutoEligible(d) || (nightActive() && nightEligible(d))) && await nightPublish(d)) {
     note(it, `NIGHT auto-published ${d.id} (${d.type} @ ${ev.where})`);
     ev.status = 'published';
     return;
@@ -1727,6 +1751,16 @@ function mergeNewsDecision(mine, remote) {
   for (const field of NEWS_DECISION_PROOF) if (Object.hasOwn(remote, field)) mine[field] = structuredClone(remote[field]);
   // Working copy, source text, source list and inferred geography stay local
   // audit data. A decision merge is never an editorial rewrite or public edit.
+}
+function retainDuplicateProvenance(target, it) {
+  const draft = target?.draftId ? newsState().drafts[target.draftId] : null;
+  const record = draft || (target?.kind === 'alert' || target?.status === 'published' ? ((newsState().eventProvenance ||= {})[target.alertId || target.id || target.headline] ||= {}) : null);
+  if (!record) return;
+  const sources = record.duplicateSources ||= [];
+  const key = `${it.src?.u || ''}:${it.url || ''}`;
+  if (!sources.some((source) => source.key === key)) sources.push({ key, u: it.src?.u || '', url: it.url || '', ts: it.ts || null });
+  record.duplicateSources = sources.slice(-40);
+  save();
 }
 export function mergeNewsFromBackup(o) {
   const on = o?.news;
@@ -2253,21 +2287,11 @@ export function registerNewsTools(bot, h) {
     d.approvedAt = new Date().toISOString(); n.stats.published++;
     save();
     if(store.backup && config.telegramBackup && !await store.flushBackup(true)){d.nativeReview.result='published-backup-unverified';d.editorialHold=true;save();return toast(ctx,t(ctx,'نُشر الخبر لكن تعذّر تأكيد حفظ القرار. لا تعِد النشر.','Published, but saving the final decision is unconfirmed. Do not retry.'),true);}
-    const reviewer = d.approvedBy.username ? `@${d.approvedBy.username}` : d.approvedBy.name;
-    for (const ownerId of ownerIdsU()) {
-      if (Number(ownerId) === Number(ctx.from.id)) continue;
-      const ownerLang = langOfId(ownerId);
-      const ownerText = tr(ownerLang, `<b>✅ نُشر تنبيه جديد على الخريطة</b>\n${esc(d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nالمشرف: ${esc(reviewer || String(ctx.from.id))}\nالوقت: ${esc(new Date(d.approvedAt).toLocaleString('ar-SY', { timeZone: 'Asia/Damascus' }))}`, `<b>✅ New alert published to the map</b>\n${esc(d.headline || d.title || '')}\n📍 ${esc(whereOf(locsOf(d.loc, d.extra)))}\nApproved by: ${esc(reviewer || String(ctx.from.id))}\n${esc(new Date(d.approvedAt).toLocaleString('en-GB', { timeZone: 'Asia/Damascus' }))}`);
-      try { await ctx.api.sendMessage(ownerId, ownerText, { parse_mode: 'HTML', reply_markup: publishedLinksKb(d, alert, ownerLang, true), link_preview_options: { is_disabled: true }, _keep: 'c' }); } catch (e) { console.warn('[news] owner approval notification failed', e.message); }
-    }
     await closeCards(d, cur(ctx), true);
     await unlinkCapturedMedia(d.sourceMedia);
-    try { await ctx.deleteMessage(); } catch { /* ignore */ }
-    forgetCurrentCard(d, ctx); save();
-    const isOwner = ownerIdsU().includes(Number(ctx.from.id));
-    const kb = publishedLinksKb(d, alert, h.langOf(ctx), isOwner);
-    const publishedType = editableDraftTypeLabel(d, h.langOf(ctx));
-    await h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ تم النشر: ${typeOf(d.type).emoji} ${esc(publishedType)} — ${esc(whereOf(locsOf(d.loc, d.extra)))}`, `✅ Published: ${typeOf(d.type).emoji} ${esc(publishedType)}`), { parse_mode: 'HTML', reply_markup: kb });
+    if (await deletePrivatePublicationCard(ctx.api, ctx.chat.id, ctx.callbackQuery?.message?.message_id)) forgetCurrentCard(d, ctx);
+    save();
+    await cleanupPublishedNotices(d, ctx.api);
   });
   bot.callbackQuery(/^nw:pc:(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
@@ -2677,4 +2701,4 @@ export function registerNewsTools(bot, h) {
     return h.sendTransient(ctx.api, ctx.chat.id, t(ctx, `✅ أُضيف «${esc(r.title || u)}» — يبدأ رصده من الآن${general ? ' (قناة عامة: أخبار سوريا فقط)' : ''}.`, `✅ Added “${esc(r.title || u)}” — monitored from now on.`), { parse_mode: 'HTML' });
   });
 }
-export const _test = { auditDraftForAutoPublish, AUTO_AUDIT_HOLD_REASON, isFreshSourceTs, draftSourceTs, durablePublicationClaim, uncertainPublication, nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, holdAiDownItems, recoverAiHeldItems, aiHealthTick };
+export const _test = { closeCards, retainDuplicateProvenance, dayAutoTick, auditDraftForAutoPublish, AUTO_AUDIT_HOLD_REASON, isFreshSourceTs, draftSourceTs, durablePublicationClaim, uncertainPublication, nightPublish, editorialGate, privateEditorialModeApplicable, applyPrivateOpinionReplacements, knownDuplicateDraft, channelPublishedDuplicateDraft, channelCheckText, helicopterAuto, helicopterOn, helicopterLabel, channelCheckKeyboard, suppressDuplicateDraft, nightSummaryTick, noticeText, noticeKb, rescanIfFilterChanged, refreshPendingCardKeyboards, R, knownEvents, handleResult, processQueue, pollOnce, sweep, buildLocations, sameIncident, rememberAlert, cardText, cardKb, typeKb, typeGroupKb, editableTypeGroups: EDIT_TYPE_GROUPS, editableTypeDirectTypes: EDIT_TYPE_DIRECT_TYPES, editTypeMenu: EDIT_TYPE_MENU, incursionTypeChoices: INCURSION_TYPE_CHOICES, govCodeOf, explicitWeatherResult, holdAiDownItems, recoverAiHeldItems, aiHealthTick };
