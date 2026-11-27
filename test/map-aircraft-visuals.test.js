@@ -96,7 +96,7 @@ test('signal-sweep map markers are enlarged for phone visibility', () => {
 
 test('opening UAV and helicopter alerts forces detail zoom for governorate-scoped reports', () => {
   assert.match(mapJs, /const marker = alertMarkerKind\(alert\);[\s\S]{0,120}const orbiting = marker === 'orbit' \|\| marker === 'helicopter';/);
-  assert.match(mapJs, /alertFocusZoom\(alert\.scope, this\.map\.getZoom\(\), orbiting \? 11\.5 : 0\)/);
+  assert.match(mapJs, /alertFocusZoom\(alert\.scope, this\.map\.getZoom\(\), orbiting \|\| alert\.type === 'signal_sweep' \? 11\.5 : 0\)/);
 });
 
 test('warplane formation keeps the reference pass with bounded medium-sized, bright-blue airframes', () => {

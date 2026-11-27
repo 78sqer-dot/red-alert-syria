@@ -38,8 +38,8 @@ const NEWS_TYPE_GROUPS = Object.freeze(Object.fromEntries(
 // separate from NEWS_TYPE_GROUPS, which controls automatic news monitoring only.
 const EDIT_TYPE_GROUPS = Object.freeze({
   aerial: Object.freeze(ALERT_GROUPS.aerial.types.filter((type) => type !== 'uav_strike')),
-  targeting: Object.freeze(['uav_strike', 'assassination']),
-  strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination')),
+  targeting: Object.freeze(['targeted_strike', 'uav_strike', 'assassination']),
+  strikes: Object.freeze(ALERT_GROUPS.strikes.types.filter((type) => type !== 'assassination' && type !== 'targeted_strike')),
   incursion: Object.freeze(['military_incursion']),
   patrol: Object.freeze(['patrol']),
   protests: Object.freeze(['protest_action', 'protest']),
@@ -1383,7 +1383,7 @@ async function handleResult(it, r, known, pmap) {
   if (!r || !r.event || !NEWS_TYPES.includes(r.type)) { note(it, 'not an event'); return; }
   // ruleClassify already chooses from the primary headline; scanning the whole body
   // again here could let an unrelated secondary mention override that decision.
-  if (!r.rule || isCheckpointReport(it.text) || isMineDiscoveryReport(it.text)) { const t2 = refineType(r.type, `${r.headline || ''}\n${it.text}`); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
+  if (!r.rule || isCheckpointReport(it.text) || isMineDiscoveryReport(it.text)) { const t2 = refineType(r.type, it.text); if (t2 !== r.type) { note(it, `type ${r.type} -> ${t2}`); r.type = t2; } }
   if (r.type === 'weather' && !weatherWarningInfo(it.text)) { note(it, 'not an explicit actionable weather warning'); return; }
   // the AI linked it to a known incident / an earlier post of this batch
   let target = null;

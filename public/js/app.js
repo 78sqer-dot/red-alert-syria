@@ -1,6 +1,6 @@
 // Red Alert Syria — front-end application
-import { createServices, GOV_C } from './services.js?v=40';
-import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=41';
+import { createServices, GOV_C } from './services.js?v=41';
+import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=42';
 import { DICT } from './i18n.js?v=10';
 import { availableAlertDisplayModes, initialAlertDisplayMode, alertDisplayPanelState } from '/shared/alert-display-modes.js?v=1';
 import { matchesGovernorate } from './alert-region-filter.js';
@@ -8,9 +8,9 @@ import { matchesFollowArea } from '/shared/area-follow.js?v=1';
 import { icon } from './icons.js?v=7';
 import { settings } from './settings.js?v=14';
 import { playRingtone, unlockAudio, RINGTONES } from './sound.js';
-import { AlertMap, typeIcon, glyphDisc } from './map.js?v=94';
+import { AlertMap, typeIcon, glyphDisc } from './map.js?v=95';
 import { disablePushSubscription } from './push-subscription.js?v=1';
-import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js';
+import { initInstall, scheduleInstallCard, showInstallCard, installMode, promptInstall, onInstallChange, stepsHtml } from './install.js?v=2';
 import { isLegacyQuneitraArchiveAlert } from '/shared/flight-path.js?v=6';
 
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ar';
@@ -587,7 +587,11 @@ function toggleDropdown(btnSel, panelSel, render) {
   const p = $(panelSel);
   const open = p.hidden;
   closeDropdowns(panelSel);
-  if (open) render();
+  if (open) {
+    render();
+    const tools = $('#mapCtrlPanel');
+    if (PHONE.matches && tools) { tools.hidden = true; $('#mapControlsToggle').setAttribute('aria-expanded', 'false'); }
+  }
   placeDropdown(p, open);
   p.hidden = !open;
   $(btnSel).setAttribute('aria-expanded', String(open));
@@ -1719,10 +1723,25 @@ async function boot() {
     isBusy: () => !$('#modalBackdrop').hidden || !$('#tour').hidden || $('#drawer').classList.contains('open')
       || $('#aboutSheet').classList.contains('open') || document.hidden || Date.now() - (state.lastAlertAt || 0) < 20_000,
   });
-  onInstallChange(() => { if ($('#drawer').classList.contains('open')) renderDrawer(); });
+  const refreshInstallButton = () => {
+    const button = $('#btnInstallApp');
+    button.hidden = !installMode(); button.title = T.instTitle; button.setAttribute('aria-label', T.instTitle);
+  };
+  $('#btnInstallApp').addEventListener('click', async () => {
+    closeDropdowns(); closeDrawer(); svc?.close?.();
+    $('#mapCtrlPanel').hidden = true; $('#mapControlsToggle').setAttribute('aria-expanded','false');
+    if (installMode() === 'prompt') {
+      const result = await promptInstall();
+      if (result === 'accepted') toast(T.instDone);
+      if (result === 'unavailable') showInstallCard(true);
+    } else showInstallCard(true);
+    refreshInstallButton();
+  });
+  refreshInstallButton();
+  onInstallChange(() => { refreshInstallButton(); if ($('#drawer').classList.contains('open')) renderDrawer(); });
   if (!s.hasSeenWelcome) showWelcome();
   else if (!s.hasSeenTour) setTimeout(startTour, 800);
-  else scheduleInstallCard(8000);
+  // Installation is visitor-initiated through the visible button.
   window.__rasInstall = { show: () => showInstallCard(true), mode: installMode };
 
   // Let the lightweight interface paint before parsing MapLibre's large module on the main thread.

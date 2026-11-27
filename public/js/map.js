@@ -1,11 +1,11 @@
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
-import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=41';
+import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=42';
 import { BADGE_PNG } from '/shared/badge-data.js?v=2';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=23';
+import { EXTRA_SVG } from './target-svgs.js?v=24';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
-import { typeIcon } from './type-icons.js?v=7';
+import { typeIcon } from './type-icons.js?v=8';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
 import { markerTapMatchesMapClick } from './map-click-guard.js?v=1';
 import { zoneVisualKey, pulseVisualKey } from '/shared/zone-visuals.js?v=3';
@@ -276,6 +276,8 @@ export class AlertMap {
       this.el.classList.remove('is-zooming');
       zoomTier(true);
       this._queueZones();
+      this.syncMovementTracks();
+      this.render();
       this.refreshMarkerGroups();
     });
     // pulse rings are re-sized when the zoom settles; hidden meanwhile so they never look out of scale
@@ -300,6 +302,7 @@ export class AlertMap {
       if (this.newsHidden) return; // services map mode: the news is hidden
       // a tap inside any circle of an alert (main or extra affected area) opens that same alert
       const hit = this.zoneAt(e.lngLat, e.point);
+      if (this.popup && (!hit || hit.id === this.selectedId)) return this.onSelect(null, { fromMap: true });
       if (hit) { this._popupAt = { id: hit.id, ll: [hit.lon, hit.lat] }; return this.onSelect(hit.id, { fromMap: true, fly: true }); }
       this.onSelect(null, { fromMap: true });
     });
@@ -598,7 +601,8 @@ export class AlertMap {
   movementTrackAlerts() {
     if (this.newsHidden) return [];
     return this.alerts
-      .filter((a) => a.is_active && Number.isFinite(a.location?.latitude) && Number.isFinite(a.location?.longitude)
+      .filter((a) => (!(a.type === 'helicopter' || a.type === 'uav' || a.aircraft === 'uav') || this.map.getZoom() >= 10.5)
+        && a.is_active && Number.isFinite(a.location?.latitude) && Number.isFinite(a.location?.longitude)
         && ((a.type === 'air_movement' && FLIGHT_DIRECTIONS[a.flight_direction])
           || (a.aerial_mode === 'toward' && Number.isFinite(a.flight_target?.latitude) && Number.isFinite(a.flight_target?.longitude))
           // Area mode (owner order 2026-11-26): a warplane reported OVER an
@@ -662,7 +666,11 @@ export class AlertMap {
       let orbitPath = null;
       if (isOrbit) {
         const zoneKm = Math.max(Number(alert.zones?.[0]?.km) || 0, PLANE_AREA_MIN_KM);
-        const rKm = Math.max(1.2, zoneKm * 0.55);
+        // Keep the close-up helicopter's illustrative orbit on screen. This does
+        // not change the stored geographic zone or pretend the orbit is telemetry.
+        const metersPerPixel = 156543.03392 * Math.cos(position[1] * Math.PI / 180) / (2 ** map.getZoom());
+        const visibleKm = Math.min(map.getContainer().clientWidth, map.getContainer().clientHeight) * 0.18 * metersPerPixel / 1000;
+        const rKm = aircraft === 'helicopter' ? Math.min(Math.max(1.2, zoneKm * 0.55), Math.max(0.05, visibleKm)) : Math.max(1.2, zoneKm * 0.55);
         const dLat = rKm / 110.57;
         const dLon = rKm / (111.32 * Math.cos((position[1] * Math.PI) / 180));
         orbitPath = [];
@@ -1183,6 +1191,7 @@ export class AlertMap {
       el.setAttribute('aria-label',this.opts.lang === 'en' ? 'Approximate geographic reference, not incident location' : 'مرجع جغرافي تقريبي، لا موقع الحادث الدقيق');return el;
     }
     el.className = `mk t-${a.type}${a.is_active ? '' : ' inactive'} mk-${marker}`;
+    if (['helicopter', 'uav', 'uav_strike', 'signal_sweep'].includes(a.type) || a.aircraft === 'uav') el.classList.add('mk-zoom-activity');
     el.style.setProperty('--c', visual.color);
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
@@ -1224,6 +1233,7 @@ export class AlertMap {
       el.innerHTML = t.badge && !a.marker_glyph ? badgeImg(t.badge, 46) : glyphDisc(a.type, 34, 24, 'sai map-event-disc', a.marker_glyph);
     }
     el.innerHTML = `<div class="mk-s">${el.innerHTML}</div>`;
+    if (el.classList.contains('mk-zoom-activity')) el.insertAdjacentHTML('beforeend', '<span class="activity-point" aria-hidden="true"></span>');
     if (!['squad', 'movement', 'fly'].includes(marker)) el.insertAdjacentHTML('afterbegin', '<span class="news-pulse-ring" aria-hidden="true"></span>');
     if (a.is_active && t.ttlMin) { const ts = Date.parse(a.timestamp || a.created_at || ''); if (Number.isFinite(ts) && (Date.now() - ts) / (t.ttlMin * 60000) >= 0.5) el.classList.add('pulse-calm'); }
     // civil family: pinned to its exact place; a small tidy dot at country view, the icon from zoom 7.5 up
@@ -1417,11 +1427,7 @@ export class AlertMap {
     const archiveRoute = isLegacyQuneitraArchiveAlert(alert) ? legacyQuneitraArchivePath(alert) : [];
     const marker = alertMarkerKind(alert);
     const orbiting = marker === 'orbit' || marker === 'helicopter';
-    if (alert.type === 'helicopter' && alert.is_active && fly && alert.aerial_mode !== 'toward' && !alert.flight_direction && !['approximate_point', 'geographic_reference', 'locality_reference'].includes(alert.location_display)) {
-      const radiusKm = Math.max(Number(zs[0]?.km) || 0, PLANE_AREA_MIN_KM);
-      const dy = radiusKm / 110.57, dx = radiusKm / (111.32 * Math.cos(ll[1] * Math.PI / 180));
-      this.map.fitBounds([[ll[0] - dx, ll[1] - dy], [ll[0] + dx, ll[1] + dy]], { padding: this.padding(), maxZoom: 10, duration: 950, essential: true });
-    } else if (archiveRoute.length === 2 && fly) {
+    if (archiveRoute.length === 2 && fly) {
       this.closePopup();
       const longitudes = archiveRoute.map(([lon]) => lon);
       const latitudes = archiveRoute.map(([, lat]) => lat);
@@ -1436,7 +1442,7 @@ export class AlertMap {
     } else if (fly) {
       const center = this.map.getCenter();
       const duration = alertTransitionDuration(distanceKm([center.lng, center.lat], target));
-      this.map.flyTo({ center: target, zoom: alertFocusZoom(alert.scope, this.map.getZoom(), orbiting ? 11.5 : 0), padding: this.padding(), curve: 1.18, duration, essential: true });
+      this.map.flyTo({ center: target, zoom: alertFocusZoom(alert.scope, this.map.getZoom(), orbiting || alert.type === 'signal_sweep' ? 11.5 : 0), padding: this.padding(), curve: 1.18, duration, essential: true });
     }
     if (popup && archiveRoute.length !== 2) this.openPopup(alert);
     else if (archiveRoute.length === 2) this.closePopup();

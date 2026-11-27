@@ -293,3 +293,16 @@ test('widened army scope (owner order 2026-11-25): units, missions, military jus
   assert.equal(inferArmyCategory('وزارة الدفاع تجري اجتماعاً دورياً'), null, 'a strong-context mention without an army-affairs topic is not news');
   assert.equal(ARMY_CATEGORIES.news.ar, 'أخبار الجيش');
 });
+
+test('same personnel incident cannot become separate army-news and unit cards', async () => {
+ const { sameArmyPersonnelIncident } = await import('../server/army.js');
+ const official = {text:'استشهاد جنديين من الجيش العربي السوري إثر استهدافهما على طريق القنية - الصنمين بريف درعا الشمالي.',publishedAt:'2026-11-27T09:47:39Z'};
+ const media = {text:'مقتل عنصرين من وزارة الدفاع جراء استهدافهما بإطلاق نار عند تلة الكتيبة جنوب بلدة القنية.',publishedAt:'2026-11-27T09:06:54Z'};
+ assert.equal(inferArmyCategory(media.text),'news','a locality named battalion hill is not a unit-development event');
+ assert.equal(sameArmyPersonnelIncident(official,media),true);
+ assert.equal(sameArmyPersonnelIncident(official,{...media,text:media.text.replace('القنية','الصورة')}),false);
+ assert.equal(sameArmyPersonnelIncident(official,{...media,publishedAt:'2026-11-26T09:06:54Z'}),false);
+ const j=initialArmyState();j.published={a:{...official,id:'a',status:'approved',category:'news'},b:{...media,id:'b',status:'approved',category:'units',categoryOverride:true}};
+ assert.equal(publicArmy(j).items.length,1);
+ assert.equal(Object.keys(j.published).length,2,'stored source evidence is never deleted');
+});

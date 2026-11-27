@@ -173,6 +173,8 @@ test('private critique and satire work on unrelated reports without inventing go
     'an unrelated event does not invite an invented government target');
   assert.match(prompts[0], /لا تنسب مسؤولية أو سبباً أو فعلاً أو قراراً محدداً/,
     'opinion can be sharp without stating unsupported responsibility or causation');
+  assert.match(prompts[0], /وضوح الحجة وقصر الجمل/);
+  assert.match(prompts[1], /مفارقة لغوية خفيفة/);
   assert.match(prompts[1], /لا تقدّم واقعة مختلقة أو اتهاماً واقعياً/,
     'satire remains clearly fictional and cannot present an invented allegation as fact');
   const ministryCondolence = 'وزارة الصحة السورية تتقدم بالتعازي إلى أسر ضحايا الحادث في حمص، وفق بيانها المنشور اليوم.';

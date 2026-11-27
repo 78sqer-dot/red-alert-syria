@@ -161,6 +161,11 @@ export const ALERT_TYPES = {
     emoji: '🛫', color: '#0284c7', ring: '#075985', group: 'civil', parent: 'civil', ttlMin: 60,
     marker: 'icon', glyph: 'airliner', icon: '#0284c7', zone: false, tag_ar: 'طائرة_مدنية', tag_en: 'Civil_aircraft',
   },
+  raid: {
+    ar: 'مداهمة / اقتحام', en: 'Raid / storming', button_ar: 'مداهمة / اقتحام', button_en: 'Raid / storming',
+    emoji: '🚔', color: '#b45309', ring: '#78350f', group: 'civil', ttlMin: 240,
+    marker: 'icon', glyph: 'military_vehicle', icon: '#b45309', size: 30, zone: false, tag_ar: 'مداهمة', tag_en: 'Raid',
+  },
   arrest: {
     ar: 'اعتقال', en: 'Arrest', button_ar: 'اعتقال', button_en: 'Arrest',
     emoji: '🚔', color: '#d97706', ring: '#92400e', group: 'civil', parent: 'civil', ttlMin: 240,
@@ -225,7 +230,7 @@ export const POLITICAL_CATEGORIES = Object.freeze({
 export const ALERT_GROUPS = {
   aerial: { ar: 'نشاط جوّي', en: 'Aerial activity', types: ['uav', 'uav_strike', 'warplane', 'helicopter', 'air_movement', 'missile'] },
   strikes: { ar: 'هجمات وقصف', en: 'Attacks & shelling', types: ['attack', 'clashes', 'targeted_strike', 'assassination', 'artillery', 'airstrike', 'explosion', 'detonation'] },
-  civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'protest_action', 'fire', 'civil_plane', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'] },
+  civil: { ar: 'مدني', en: 'Civil', types: ['civil', 'accident', 'protest', 'protest_action', 'fire', 'civil_plane', 'raid', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting'] },
   nature: { ar: 'زلازل وطقس', en: 'Quakes & weather', types: ['quake', 'weather'] },
   political: { ar: 'تطورات سياسية', en: 'Political developments', types: ['political'] },
   smuggling: { ar: 'تهريب', en: 'Smuggling', types: ['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },

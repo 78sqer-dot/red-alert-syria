@@ -72,14 +72,14 @@ const S = {
 };
 const ARMY_TEXT = {
   ar: {
-    tab: 'الجيش السوري', title: 'الجيش والانتساب والأخبار الرسمية', intro: 'رواتب وانتساب وروابط تقديم وأحكام قضائية عسكرية، مع مصدر كل خبر. لا تُعرض الوظائف العامة أو الحملات المدنية ضمن هذا القسم.',
+    tab: 'الجيش السوري', title: 'الجيش والانتساب والأخبار الرسمية', intro: 'رواتب وانتساب وروابط تقديم وأخبار وأحكام قضائية عسكرية راجعتها الإدارة. لا تُعرض الوظائف العامة أو الحملات المدنية ضمن هذا القسم.',
     all: 'الكل', empty: 'لا توجد حالياً أخبار عسكرية معتمدة. يقتصر هذا القسم على الانتساب والرواتب والروابط الرسمية ذات الصلة العسكرية.',
     sources: 'مصادر رسمية للتحقق والانتساب', sourceNote: 'روابط التقديم لا تُعرض إلا إذا وردت في إعلان رسمي وافقت عليه الإدارة. تحقّق دائماً من شروط وموعد الإعلان في المصدر الأصلي.',
     source: 'المصدر الأصلي', apply: 'روابط التقديم المنشورة رسمياً', deadline: 'آخر موعد للتقديم', category: 'الفئة', updated: 'آخر رصد', follow: 'تابع التحديثات', telegram: 'تيليغرام', whatsapp: 'واتساب', noChannels: 'روابط قنوات المتابعة ستظهر هنا بعد إعدادها من لوحة الإدارة.',
     verified: 'مصدر رسمي', reviewOnly: 'النشر بعد مراجعة الإدارة فقط',
   },
   en: {
-    tab: 'Syrian Army', title: 'Army, Enlistment & Official Updates', intro: 'Military salaries, enlistment, application notices and military justice updates, with the source of each item. General vacancies and civil campaigns are excluded.',
+    tab: 'Syrian Army', title: 'Army, Enlistment & Official Updates', intro: 'Military salaries, enlistment, application notices, news and military justice updates reviewed by the team. General vacancies and civil campaigns are excluded.',
     all: 'All', empty: 'No approved military updates yet. This section is limited to relevant enlistment, salary and official application notices.',
     sources: 'Official sources for verification and recruitment', sourceNote: 'Application links appear only when included in an official announcement approved by the owner. Always confirm requirements and deadlines in the original source.',
     source: 'Original source', apply: 'Application links in official post', deadline: 'Application deadline', category: 'Category', updated: 'Last checked', follow: 'Follow updates', telegram: 'Telegram', whatsapp: 'WhatsApp', noChannels: 'Follow-channel links will appear here after the owner configures them.',
@@ -597,6 +597,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     ensureSheet();
     if (tab) st.tab = tab;
     render();
+    sheet.scrollTop = 0;
     back.hidden = false; sheet.setAttribute('aria-hidden', 'false');
     requestAnimationFrame(() => sheet.classList.add('open'));
     if (st.tab === 'nearby') loadPoi().then(() => isOpen() && st.tab === 'nearby' && renderResults()).catch(() => renderResults(true));
@@ -772,7 +773,8 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   }
   function armyHtml() {
     const A = ARMY_TEXT[LANG === 'en' ? 'en' : 'ar'];
-    const data = st.army || {}; const categories = Array.isArray(data.categories) ? data.categories : [];
+    const data = st.army || {}; const order = ['army','police','recruitment','security','news','units','special','official_links','judicial'];
+    const categories = (Array.isArray(data.categories) ? [...data.categories] : []).sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
     const items = Array.isArray(data.items) ? data.items : [];
     const filtered = st.armyCat === 'all' ? items : items.filter((item) => item.category === st.armyCat);
     const categoryGlyph = (category) => category?.iconKey
@@ -789,7 +791,16 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       const links = (Array.isArray(item.links) ? item.links : []).filter((u) => /^https:\/\//i.test(String(u || ''))).slice(0, 8);
       const deadline = deadlineLabel(item.application_deadline);
       const label = LANG === 'en' ? category?.en || A.title : category?.ar || A.title;
-      return `<article class="army-card"><div class="army-card-top"><span class="army-badge">${categoryGlyph(category || { iconKey: 'shield' })}<span>${esc(label)}</span></span><small>${item.published_at ? esc(when(item.published_at)) : ''}</small></div><h3>${esc(item.title || A.title)}</h3>${deadline ? `<small class="army-deadline"><b>${esc(A.deadline)}:</b> ${esc(deadline)}</small>` : ''}<p>${esc(item.text || '').replace(/\r?\n/g, '<br>')}</p>${/^https:\/\//i.test(String(item.source_url || '')) ? `<div class="army-source"><a class="btn-sm" href="${esc(item.source_url)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(item.source_name || A.source)} · ${esc(A.source)}</a></div>` : ''}${links.length ? `<div class="army-card-links"><b>${esc(A.apply)}</b>${links.map((url, i) => `<a class="btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${A.apply} ${i + 1}` : A.apply)}</a>`).join('')}</div>` : ''}</article>`;
+      const cleanDisplay = (value) => String(value || '').split(/\r?\n/).filter((line)=>!/(?:اشترك|تابعونا|تابعوا).{0,35}(?:قنا|تلغرام|تيليجرام|telegram)/iu.test(line)).join('\n').replace(/^#?عاجل\s*[|:：-]?\s*/u,'').replace(/(?:مراسلنا|مراسل القناه)\s*[:：]\s*/gu,'').replace(/\s+ل[ـ]?\s*(?:وكاله\s+)?(?:سانا|SANA)\s*[:：]/giu, ':').trim();
+      const fullText = cleanDisplay(item.text);
+      const title = cleanDisplay(item.title || A.title);
+      // A monitor-generated 120-character title is often just a cut-off first
+      // line. Show the complete source paragraph once, rather than a broken
+      // fragment immediately followed by the same words again.
+      const duplicateLead = title.length >= 90 && fullText.startsWith(title.replace(/…$/, ''));
+      const body = !duplicateLead && fullText.startsWith(title) ? fullText.slice(title.length).trim() : fullText;
+
+      return `<article class="army-card"><div class="army-card-top"><span class="army-badge">${categoryGlyph(category || { iconKey: 'shield' })}<span>${esc(label)}</span></span><small>${item.published_at ? esc(when(item.published_at)) : ''}</small></div>${duplicateLead ? '' : `<h3>${esc(title)}</h3>`}${deadline ? `<small class="army-deadline"><b>${esc(A.deadline)}:</b> ${esc(deadline)}</small>` : ''}${body ? `<p>${esc(body).replace(/\r?\n/g, '<br>')}</p>` : ''}${links.length ? `<div class="army-card-links"><b>${esc(A.apply)}</b>${links.map((url, i) => `<a class="btn-sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${icon('link', 14)}${esc(links.length > 1 ? `${A.apply} ${i + 1}` : A.apply)}</a>`).join('')}</div>` : ''}</article>`;
     };
     return `<section class="army-intro"><span class="army-icon">${icon('shield', 22)}</span><div><h3>${esc(A.title)}</h3><p>${esc(A.intro)}</p></div></section>
       <div class="army-follow"><b>${esc(A.follow)}</b><div class="army-follow-links">${followLinks || `<span class="army-no-channels">${icon('telegram', 16)} ${icon('whatsapp', 16)} ${esc(A.noChannels)}</span>`}</div></div>

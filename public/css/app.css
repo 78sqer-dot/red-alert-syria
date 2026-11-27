@@ -479,6 +479,7 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 .heli-glyph-img { display: block; width: 46px; height: auto; }
 .map-flight-track-marker.is-helicopter .heli-glyph-img { width: 48px; }
 .heli-map-symbol { display: block; width: 30px; height: 30px; color: #3b8eff; fill: currentColor; filter: none; }
+.heli-map-symbol .heli-map-rotor { transform-box: view-box; transform-origin: 256px 238px; animation: heliRotor .32s linear infinite; }
 .heli-intensive .heli-craft-h { position: absolute; left: 0; top: -6px; width: 24px; height: 30px; }
 .heli-intensive .heli-craft-h2 { left: 24px; top: 6px; opacity: .92; }
 @keyframes heliHoverRock { 0%, 100% { transform: rotate(-3.5deg) translateY(0); } 50% { transform: rotate(3.5deg) translateY(-2px); } }
@@ -1490,3 +1491,25 @@ body.pp-docked .map-bottom-controls{display:none;}
 .map-flight-track-marker.is-helicopter .map-flight-track-formation { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: none; animation: none; }
 .map-flight-track-marker.is-helicopter .map-flight-track-airframe.is-lead { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; transform: none; filter: none; }
 .heli-track-second { position: absolute; left: 20px; top: 14px; opacity: .85; }
+
+/* Detailed activity survives closing the card; zoom alone controls collapse. */
+.activity-point { display: none; position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 5px 2px var(--c); }
+.maplibregl-map:not(.zoom-detail) .mk-zoom-activity .mk-s { visibility: hidden; }
+.maplibregl-map:not(.zoom-detail) .mk-zoom-activity .activity-point { display: block; }
+.maplibregl-map:not(.zoom-detail) .map-flight-track-marker.is-helicopter,
+.maplibregl-map:not(.zoom-detail) .map-flight-track-marker.is-uav { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .heli-map-symbol .heli-map-rotor { animation: none; } }
+
+/* Phone dropdowns must sit above their backdrop, including ID-specific styles. */
+#filterPanel.dd-sheet, #layersPanel.dd-sheet { z-index: 63; width: 100%; max-height: min(80dvh, calc(100dvh - 72px)); }
+.army-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.army-chips .army-chip { min-width: 0; justify-content: center; white-space: normal; line-height: 1.5; min-height: 40px; padding: 7px 9px; text-align: center; }
+.army-chips .army-chip:first-child { grid-column: 1 / -1; }
+
+/* Visitor-triggered install card stays readable above sheets and their backdrops. */
+.inst-card { z-index: 86; }
+.install-btn { color: var(--red); flex: none; }
+
+@media (max-width: 420px) { .topbar .status-age { display: none; } .topbar .install-btn { width: 32px; min-width: 32px; padding-inline: 5px; } .topbar .status { min-width: 0; gap: 4px; padding-inline: 6px; } }
+
+.svc-sheet .svc-head > .sb-x { position: sticky; top: 4px; z-index: 4; flex: none; background: var(--bg-elevated); }

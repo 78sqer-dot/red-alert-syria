@@ -443,6 +443,7 @@ const GLOSS = {
   patrol: ['مرور دورية عسكرية أو أمنية في منطقة ما أو انتشارها فيها.', 'A military or security patrol moving through, or deployed in, an area.'],
   border: ['حدث عند الحدود أو المعابر: إغلاق أو ازدحام أو تطوّر أمني.', 'An event at a border or a crossing: a closure, congestion or a security development.'],
   kidnapping: ['خطف شخص أو مجموعة، أو تحرير مختطفين.', 'The abduction of a person or a group, or the release of abductees.'],
+  raid: ['مداهمة أو اقتحام مكان من قبل قوة أمنية أو عسكرية؛ يختلف عن التوغل البري أو الاعتقال المنفرد.', 'A security or military raid or storming of a location, distinct from ground incursion or a standalone arrest.'],
   arrest: ['توقيف أشخاص من جهة أمنية في منطقة ما.', 'The detention of people by a security body in an area.'],
   smuggling_weapons: ['ضبط محاولة تهريب أسلحة أو ذخيرة أو رصدها.', 'An intercepted or reported attempt to smuggle weapons or ammunition.'],
   smuggling_drugs: ['ضبط محاولة تهريب مواد مخدّرة أو رصدها.', 'An intercepted or reported attempt to smuggle narcotics.'],
@@ -461,7 +462,7 @@ const GLOSS = {
 const GLOSS_GROUPS = [
   { ar: 'الطيران والرصد', en: 'Aviation & observation', keys: ['uav', 'uav_strike', 'warplane', 'helicopter', 'air_movement', 'signal_sweep', 'civil_plane'] },
   { ar: 'القصف والضربات', en: 'Strikes & fire', keys: ['airstrike', 'missile', 'artillery', 'explosion', 'detonation', 'targeted_strike'] },
-  { ar: 'أحداث أمنية', en: 'Security incidents', keys: ['breaking', 'attack', 'clashes', 'assassination', 'shooting', 'military_incursion', 'patrol', 'border', 'kidnapping', 'arrest', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },
+  { ar: 'أحداث أمنية', en: 'Security incidents', keys: ['breaking', 'attack', 'clashes', 'assassination', 'shooting', 'military_incursion', 'patrol', 'border', 'kidnapping', 'raid', 'arrest', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'] },
   { ar: 'مجتمع وحوادث', en: 'Society & accidents', keys: ['accident', 'fire', 'protest', 'protest_action', 'brawl', 'death', 'martyrdom', 'civil', 'political'] },
   { ar: 'طبيعة وطقس', en: 'Nature & weather', keys: ['quake', 'weather'] },
 ];

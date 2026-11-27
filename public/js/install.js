@@ -43,6 +43,7 @@ export function installMode() {
   if (INAPP_UA.test(ua)) return null;
   if (p === 'ios') return 'ios';
   if (p === 'android') return 'android-menu';
+  if (p === 'desktop') return 'desktop-menu';
   return null;
 }
 export function onInstallChange(fn) { listeners.add(fn); }
@@ -82,6 +83,7 @@ export function stepsHtml(mode, { T, icon, esc }) {
       <div class="inst-step"><span class="si red">${icon('squarePlus', 18)}</span><div><b>${esc(T.instIosAddT)}</b><span>${esc(T.instIosAddD)}</span></div></div></div>`;
   }
   if (mode === 'android-menu') return `<p class="inst-hint">${esc(T.instAndroidNoPrompt)}</p>`;
+  if (mode === 'desktop-menu') return `<p class="inst-hint">${document.documentElement.lang === 'en' ? 'Open your browser menu and choose Install app or Create shortcut when offered. If neither is available, use Chrome or Edge, or bookmark this website.' : 'افتح قائمة المتصفح واختر تثبيت التطبيق أو إنشاء اختصار إن ظهر الخيار. إذا لم يتوفر، افتح الموقع في كروم أو إيدج أو أضفه إلى المفضلة.'}</p>`;
   return '';
 }
 export function showInstallCard(force = false) {

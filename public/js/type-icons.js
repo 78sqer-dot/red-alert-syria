@@ -30,6 +30,7 @@ export const TYPE_ICON = Object.freeze({
   protest_action: 'speaker',
   fire: 'flame',
   civil_plane: 'planeDep',
+  raid: 'militaryVehicle',
   arrest: 'handcuffs',
   death: 'grave',
   martyrdom: 'dove',
