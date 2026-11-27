@@ -2,7 +2,7 @@
 // (hospitals, pharmacies, fuel stations, bakeries from OpenStreetMap) · 📍 better "my location".
 // Everything here is additive: the alert map keeps working even if this module fails.
 import { WX_ICONS, WX_LABEL } from '/shared/wx-icons.js';
-import { weatherWarningFeatures } from '/shared/weather-map.js?v=1';
+import { weatherWarningFeatures } from '/shared/weather-map.js?v=2';
 
 const S = {
   ar: {

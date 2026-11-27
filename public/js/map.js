@@ -3,8 +3,7 @@ import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, al
 import { BADGE_PNG } from '/shared/badge-data.js?v=2';
 import { mapDroneCount, hasSecondaryDrone } from '/shared/map-drone-visuals.js?v=2';
 import { SVG } from './marker-svgs.js?v=19';
-import { EXTRA_SVG } from './target-svgs.js?v=22';
-import { HELI_GLYPH_DATA } from './heli-glyph-data.js?v=2';
+import { EXTRA_SVG } from './target-svgs.js?v=23';
 import { alertFocusZoom, alertTransitionDuration, distanceKm } from '/shared/map-motion.js?v=1';
 import { typeIcon } from './type-icons.js?v=7';
 import { clusterAlertsByScreen } from './marker-layout.js?v=3';
@@ -606,7 +605,7 @@ export class AlertMap {
           // area has no route — its formation orbits inside the dashed area
           // circle instead of sitting static. Reference/location-only
           // displays keep their designed rendering.
-          || ((a.type === 'warplane' || (a.type === 'air_movement' && a.aircraft === 'plane'))
+          || ((a.type === 'warplane' || a.type === 'helicopter' || (a.type === 'air_movement' && a.aircraft === 'plane'))
             && !['approximate_point', 'geographic_reference', 'locality_reference'].includes(a.location_display))))
       .sort((a, b) => (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0))
       .slice(0, 3);
@@ -659,7 +658,7 @@ export class AlertMap {
       // Area mode: no route exists, so the formation flies a smooth closed
       // orbit inside the dashed area circle (radius from the alert's own
       // zone, floored like the rendered circle, flown at 55% of it).
-      const isOrbit = aircraft === 'plane' && !isReferenceRoute && route.length !== 2 && !alert.flight_direction && alert.aerial_mode !== 'toward';
+      const isOrbit = (aircraft === 'plane' || aircraft === 'helicopter') && !isReferenceRoute && route.length !== 2 && !alert.flight_direction && alert.aerial_mode !== 'toward';
       let orbitPath = null;
       if (isOrbit) {
         const zoneKm = Math.max(Number(alert.zones?.[0]?.km) || 0, PLANE_AREA_MIN_KM);
@@ -753,11 +752,11 @@ export class AlertMap {
         const squad = document.createElement('span'); squad.className = 'map-flight-track-squad';
         const formation = document.createElement('span'); formation.className = 'map-flight-track-formation';
         if (aircraft === 'helicopter') {
-          // Owner decision 2026-11-25: a toward helicopter travels as ONE
-          // blue glyph on the dotted line — never a formation.
+          // A top-view symbol follows the aircraft path.
           const airframe = document.createElement('span');
           airframe.className = 'map-flight-track-airframe is-lead';
-          airframe.innerHTML = `<img class="heli-glyph-img" src="${HELI_GLYPH_DATA}" alt="">`;
+          airframe.innerHTML = svgTag('helicopter_map', 30, 'class="heli-map-symbol"');
+          if (alert.helicopters > 1) airframe.innerHTML += svgTag('helicopter_map', 24, 'class="heli-map-symbol heli-track-second"');
           formation.append(airframe);
         } else if (aircraft === 'uav') {
           // Owner design (confirmed again 2026-11-26): a toward drone also
@@ -785,7 +784,7 @@ export class AlertMap {
       }
       track.path = isOrbit ? orbitPath : route;
       track.periodMs = this.flightPeriodMs(track.path);
-      if ((aircraft === 'plane' || alert.aerial_mode === 'toward') && track.path.length >= 2) {
+      if ((aircraft === 'plane' || aircraft === 'helicopter' || alert.aerial_mode === 'toward') && track.path.length >= 2) {
         if (track.frame == null) {
           const animate = (now) => {
             if (this.movementTracks.get(alert.id) !== track) return;
@@ -799,9 +798,8 @@ export class AlertMap {
             const point = flightPosition(track.path, progress);
             if (point) {
               track.marker.setLngLat([point.lon, point.lat]);
-              // The side-profile helicopter glyph stays upright; top-down
-              // glyphs (plane/uav) rotate to their bearing.
-              if (aircraft !== 'helicopter') track.marker.setRotation(point.bearing);
+              // Drawn top-view aircraft symbols rotate along the illustrative path.
+              track.marker.setRotation(point.bearing);
             }
             track.frame = requestAnimationFrame(animate);
           };
@@ -1193,12 +1191,9 @@ export class AlertMap {
       const svg = signalDrone ? svgTag(glyph, 36, `class="${svgClass}"`) : svgTag(glyph, 24, `class="${svgClass}"`);
       el.innerHTML = `<div class="uav-box"><div class="uav">${svg}</div></div>`;
     } else if (marker === 'helicopter') {
-      // Owner decision 2026-11-25: a «تحليق» helicopter HOVERS over its area
-      // centre — new sky-blue side-profile glyph with a red beacon, a gentle
-      // rotor-rock and a soft pulsing ring; no more perimeter orbit. The
-      // drone's orbit rendering is untouched.
-      const craft = `<span class="heli-craft-h"><img class="heli-glyph-img" src="${HELI_GLYPH_DATA}" alt=""></span>`;
-      const second = a.helicopters > 1 ? `<span class="heli-craft-h heli-craft-h2"><img class="heli-glyph-img" src="${HELI_GLYPH_DATA}" alt=""></span>` : '';
+      // Static fallback for inactive or reference-only helicopter reports.
+      const craft = `<span class="heli-craft-h">${svgTag('helicopter_map', 30, 'class="heli-map-symbol"')}</span>`;
+      const second = a.helicopters > 1 ? `<span class="heli-craft-h heli-craft-h2">${svgTag('helicopter_map', 30, 'class="heli-map-symbol"')}</span>` : '';
       el.innerHTML = `<div class="heli-hover${second ? ' heli-intensive' : ''}">${craft}${second}</div>`;
     } else if (marker === 'squad') {
       const pl = (x, y, op) => `<div class="sq" style="left:${x}px;top:calc(50% + ${y}px);opacity:${op}">${svgTag(t.glyph, 24, `fill="${visual.color}" class="sq-svg"`)}</div>`;
@@ -1277,7 +1272,7 @@ export class AlertMap {
       if (['approximate_point','geographic_reference','locality_reference'].includes(a.location_display)) continue;
       const t = ALERT_TYPES[a.type];
       // Political reports get a muted editorial ring only around explicitly supplied coordinates.
-      const planeArea = a.type === 'warplane' || (a.type === 'air_movement' && a.aircraft !== 'uav');
+      const planeArea = a.type === 'warplane' || a.type === 'helicopter' || (a.type === 'air_movement' && a.aircraft !== 'uav');
       if (!t || (t.marker === 'movement' && !(planeArea && a.is_active)) || a.scope === 'country' || !a.location || !Number.isFinite(a.location.latitude) || !Number.isFinite(a.location.longitude)) continue;
       const marker = alertMarkerKind(a);
       const props = planeArea ? { color: '#3b8eff', active: !!a.is_active, dashed: true, planeArea: true } : { color: eventVisual(a.type).color, active: !!a.is_active, dashed: t.zone === 'dashed' };
@@ -1422,7 +1417,11 @@ export class AlertMap {
     const archiveRoute = isLegacyQuneitraArchiveAlert(alert) ? legacyQuneitraArchivePath(alert) : [];
     const marker = alertMarkerKind(alert);
     const orbiting = marker === 'orbit' || marker === 'helicopter';
-    if (archiveRoute.length === 2 && fly) {
+    if (alert.type === 'helicopter' && alert.is_active && fly && alert.aerial_mode !== 'toward' && !alert.flight_direction && !['approximate_point', 'geographic_reference', 'locality_reference'].includes(alert.location_display)) {
+      const radiusKm = Math.max(Number(zs[0]?.km) || 0, PLANE_AREA_MIN_KM);
+      const dy = radiusKm / 110.57, dx = radiusKm / (111.32 * Math.cos(ll[1] * Math.PI / 180));
+      this.map.fitBounds([[ll[0] - dx, ll[1] - dy], [ll[0] + dx, ll[1] + dy]], { padding: this.padding(), maxZoom: 10, duration: 950, essential: true });
+    } else if (archiveRoute.length === 2 && fly) {
       this.closePopup();
       const longitudes = archiveRoute.map(([lon]) => lon);
       const latitudes = archiveRoute.map(([, lat]) => lat);
@@ -1535,6 +1534,7 @@ export class AlertMap {
     this._popupAt = null;
     const M = ml();
     const contentNode = htmlToNode(this.popupHtml(alert));
+    if (alert.type === 'helicopter') { const note = document.createElement('p'); note.className = 'pp-no-location'; note.textContent = this.opts.lang === 'en' ? 'Illustrative flight animation over the reported area, not live aircraft tracking.' : 'حركة تحليق توضيحية فوق المنطقة المذكورة، وليست تتبعاً حقيقياً للطيران.'; contentNode.querySelector('.pp')?.prepend(note); }
     if (['approximate_point','geographic_reference','locality_reference'].includes(alert.location_display)) {const note=document.createElement('p');note.className='pp-no-location';note.textContent=(alert.geographic_reference ? (this.opts.lang==='en'?alert.geographic_reference.note_en:alert.geographic_reference.note_ar) : null) || (this.opts.lang==='en'?'Approximate geographic reference only, not the precise incident location. No danger radius is implied.':'مرجع جغرافي تقريبي فقط، وليس موقع الحادث الدقيق. لا يدل على نطاق خطر.');contentNode.querySelector('.pp')?.prepend(note);}
     if (groupNav) {
       const root = contentNode.querySelector('.pp');

@@ -177,18 +177,23 @@ test('owner clarification 2026-11-25: the formation is the approved live plane g
   assert.match(mapJs, /svgTag\(aircraftGlyph, size, `fill="\$\{visual\.color\}" class="flight-svg"`\)/);
 });
 
-test('helicopter treatment (owner decision 2026-11-25): owner-picked silhouette glyph, centred hover, single-glyph toward travel', () => {
-  const glyphData = fs.readFileSync(new URL('../public/js/heli-glyph-data.js', import.meta.url), 'utf8');
-  assert.match(glyphData, /export const HELI_GLYPH_DATA = 'data:image\/png;base64,/, 'the owner-picked glyph ships as a data URI (text-only write path)');
-  assert.match(mapJs, /marker === 'helicopter'\) \{\s*\/\/ Owner decision 2026-11-25/, 'the static heli marker is the hover treatment');
-  assert.match(mapJs, /heli-hover/, 'hover container');
-  assert.match(mapJs, /<img class="heli-glyph-img" src="\$\{HELI_GLYPH_DATA\}"/, 'the marker renders the extracted owner glyph');
-  assert.doesNotMatch(mapJs, /helicopter_blue/, 'the interim hand-drawn SVG glyph is gone');
-  assert.match(mapJs, /if \(marker === 'orbit'\) \{\s*\/\/ Orbiting markers follow/, 'helicopters are no longer registered for perimeter orbit (drones still are)');
-  assert.match(mapJs, /alert\.type === 'helicopter' \? 'helicopter'/, 'toward helicopters form their own track kind');
-  assert.match(mapJs, /if \(aircraft === 'helicopter'\) \{[\s\S]{0,340}heli-glyph-img/, 'the toward track is a single owner glyph, never a formation');
-  assert.match(mapJs, /if \(aircraft !== 'helicopter'\) track\.marker\.setRotation\(point\.bearing\)/, 'the side-profile glyph stays upright while travelling');
-  assert.match(css, /\.heli-hover \{[^}]*animation: heliHoverRock/, 'gentle rotor-rock');
-  assert.match(css, /\.heli-hover::after \{[^}]*animation: heliHoverPulse/, 'soft pulsing ring');
-  assert.match(css, /\.heli-glyph-img \{[^}]*width: 46px/, 'glyph display size');
+test('helicopter uses a drawn flat-blue map symbol for hover and toward modes', () => {
+  assert.doesNotMatch(mapJs, /HELI_GLYPH_DATA/);
+  assert.match(mapJs, /svgTag\('helicopter_map', 30, 'class="heli-map-symbol"'\)/);
+  assert.match(css, /\.heli-map-symbol \{[^}]*color: #3b8eff;[^}]*filter: none/);
+  assert.match(css, /\.heli-hover \{[^}]*animation: heliHoverRock/);
+  assert.match(css, /\.heli-hover::after \{[^}]*animation: heliHoverPulse/);
+});
+
+// Center the non-animated box, leaving the existing rotor-rock transform untouched.
+test('helicopter hover box is centered on its zero-size geographic anchor in RTL and LTR', () => {
+  const rule = css.match(/\.heli-hover \{[^}]+\}/)?.[0] || '';
+  for (const part of ['position: absolute', 'left: 0', 'top: 0', 'margin-left: -24px', 'margin-top: -15px', 'width: 48px', 'height: 30px', 'animation: heliHoverRock']) assert.ok(rule.includes(part), part);
+  assert.doesNotMatch(rule, /transform:/);
+});
+
+test('helicopter area mode reuses the geographic plane orbit engine', () => {
+ assert.match(mapJs, /const isOrbit = \(aircraft === 'plane' \|\| aircraft === 'helicopter'\)/);
+ assert.match(mapJs, /a.type === 'warplane' \|\| a.type === 'helicopter'/);
+ assert.match(css, /\.map-flight-track-marker\.is-helicopter \.map-flight-track-airframe\.is-lead \{[^}]*left: -15px; top: -15px; width: 30px; height: 30px/);
 });

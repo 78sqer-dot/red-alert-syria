@@ -52,9 +52,9 @@ test('UAV animation declarations and reduced-motion/gesture pause behavior remai
 test('entering plane keeps right-to-left travel and faces left; cache versions refresh assets', () => {
   assert.match(css, /\.map-flight-track-marker\.is-plane\.is-entering-syria \.map-flight-track-squad \{ animation-name: flightTrackPlaneApproach; \}/);
   assert.doesNotMatch(css, /is-entering-syria \.map-flight-track-svg \{ transform: rotate\(-135deg\)/);
-  assert.match(html, /app\.css\?v=107/);
-  assert.match(html, /app\.js\?v=124/);
-  assert.match(app, /map\.js\?v=93/);
+  assert.match(html, /app\.css\?v=108/);
+  assert.match(html, /app\.js\?v=125/);
+  assert.match(app, /map\.js\?v=94/);
 });
 
 test('plane area uses blue dashed geographic circles without DOM pulses and plane-only trail while UAV remains unscaled', () => {
@@ -96,7 +96,7 @@ test('toward reports (bot contract with رشيد, 2026-11-25): uav/warplane aler
   assert.match(map, /const aircraft = alert\.type === 'helicopter' \? 'helicopter' : \(alert\.aircraft === 'uav' \|\| alert\.type === 'uav' \? 'uav' : 'plane'\);/);
   assert.match(map, /FLIGHT_DIRECTIONS\[alert\.flight_direction\]\?\.\[lang\]/);
   assert.match(map, /is-\$\{\(alert\.flight_direction \|\| 'toward'\)\.replace\(\/_\/g, '-'\)\}/);
-  assert.match(map, /\(aircraft === 'plane' \|\| alert\.aerial_mode === 'toward'\) && track\.path\.length >= 2/);
+  assert.match(map, /\(aircraft === 'plane' \|\| aircraft === 'helicopter' \|\| alert\.aerial_mode === 'toward'\) && track\.path\.length >= 2/);
   assert.match(map, /movementTrackIds\.has\(a\.id\) \|\| \(typeOf\(a\.type\)\.marker !== 'orbit'/);
 });
 

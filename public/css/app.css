@@ -472,14 +472,15 @@ html.dark .fly-svg { filter: drop-shadow(0 0 1px rgba(255,255,255,.5)) drop-shad
 .heli-orbit { --heli-orb: calc(var(--orb, 14px) + 4px); position: absolute; left: calc(0px - var(--heli-orb)); top: calc(0px - var(--heli-orb)); width: calc(var(--heli-orb) + var(--heli-orb)); height: calc(var(--heli-orb) + var(--heli-orb)); pointer-events: none; animation: heliOrbit 9s linear infinite; }
 .maplibregl-map:not(.zoom-detail) .mk-helicopter .heli-orbit { visibility: hidden; }
 .maplibregl-map.zoom-detail .mk-helicopter .heli-orbit { visibility: visible; }
-/* Owner decision 2026-11-25: «تحليق» helicopters hover at the area centre —
-   gentle rotor-rock, soft pulsing ring, new sky-blue glyph. */
-.heli-hover { position: relative; width: 48px; height: 30px; display: grid; place-items: center; animation: heliHoverRock 3.6s ease-in-out infinite; pointer-events: none; }
+/* Centered helicopter fallback; active area reports use the geographic flight path. */
+.heli-hover { position: absolute; left: 0; top: 0; margin-left: -24px; margin-top: -15px; width: 48px; height: 30px; display: grid; place-items: center; animation: heliHoverRock 3.6s ease-in-out infinite; pointer-events: none; }
 .heli-hover::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid rgba(53,169,242,.55); animation: heliHoverPulse 2.8s ease-out infinite; }
 .heli-craft-h { display: grid; place-items: center; pointer-events: auto; }
 .heli-glyph-img { display: block; width: 46px; height: auto; }
 .map-flight-track-marker.is-helicopter .heli-glyph-img { width: 48px; }
-.heli-craft-h2 { position: absolute; left: 24px; top: 12px; opacity: .92; }
+.heli-map-symbol { display: block; width: 30px; height: 30px; color: #3b8eff; fill: currentColor; filter: none; }
+.heli-intensive .heli-craft-h { position: absolute; left: 0; top: -6px; width: 24px; height: 30px; }
+.heli-intensive .heli-craft-h2 { left: 24px; top: 6px; opacity: .92; }
 @keyframes heliHoverRock { 0%, 100% { transform: rotate(-3.5deg) translateY(0); } 50% { transform: rotate(3.5deg) translateY(-2px); } }
 @keyframes heliHoverPulse { 0% { transform: scale(.7); opacity: .85; } 100% { transform: scale(1.3); opacity: 0; } }
 .heli-craft { position: absolute; left: 50%; top: 0; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%) rotate(90deg); transform-origin: center; pointer-events: auto; filter: drop-shadow(0 0 1px rgba(15,23,42,.84)) drop-shadow(0 1px 1.5px rgba(255,255,255,.42)); }
@@ -1482,3 +1483,10 @@ body.pp-docked .map-bottom-controls{display:none;}
 .pp-time-row>.time{display:inline-flex;align-items:center;gap:5px;}
 .pp-time-row .dist-chip{margin:0;}
 .pp-news-panel blockquote.pp-desc{margin-top:9px;}
+
+/* Center the drawn helicopter on the same geographic animation engine as overflight planes. */
+.map-flight-track-marker.is-helicopter .map-flight-track-visual,
+.map-flight-track-marker.is-helicopter .map-flight-track-squad,
+.map-flight-track-marker.is-helicopter .map-flight-track-formation { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: none; animation: none; }
+.map-flight-track-marker.is-helicopter .map-flight-track-airframe.is-lead { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; transform: none; filter: none; }
+.heli-track-second { position: absolute; left: 20px; top: 14px; opacity: .85; }
