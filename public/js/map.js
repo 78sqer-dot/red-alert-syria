@@ -1,3 +1,4 @@
+import { mapLabelExpression } from './map-labels.js?v=1';
 // Map module — MapLibre GL with OpenFreeMap vector tiles, Esri imagery and AWS terrain.
 import { ALERT_TYPES, ZONE_KM, assassinationWeaponGlyph, shootingWeaponGlyph, alertEmoji, alertMarkerKind, typeOf, FLIGHT_DIRECTIONS, eventVisual } from '/shared/types.js?v=42';
 import { BADGE_PNG } from '/shared/badge-data.js?v=2';
@@ -102,17 +103,12 @@ async function loadData() {
   return { border, govs };
 }
 
-function labelExpr(lang) {
-  return lang === 'ar'
-    ? ['coalesce', ['get', 'name:ar'], ['get', 'name'], ['get', 'name:latin']]
-    : ['coalesce', ['get', 'name:en'], ['get', 'name:latin'], ['get', 'name']];
-}
 function localize(style, lang) {
   for (const l of style.layers) {
     if (l.type !== 'symbol' || !l.layout || !l.layout['text-field']) continue;
     const s = JSON.stringify(l.layout['text-field']);
     if (!s.includes('name') || s.includes('ref') || s.includes('housenumber')) continue;
-    l.layout['text-field'] = labelExpr(lang);
+    l.layout['text-field'] = mapLabelExpression(lang);
   }
   return style;
 }
