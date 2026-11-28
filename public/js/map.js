@@ -1163,6 +1163,7 @@ export class AlertMap {
       if (!ids.length || ids.some((id) => !liveIds.has(String(id)))) this.closePopup();
     }
     if (this.popup && this.popup._alertId && !seen.has(this.popup._alertId)) this.closePopup();
+    this.refreshOpenPopup();
   }
 
   markerEl(a) {
@@ -1521,6 +1522,35 @@ export class AlertMap {
     };
     if (this.map.isMoving()) this.map.once('moveend', () => setTimeout(go, 30)); else go();
   }
+  popupContent(alert, groupNav = this.groupPopupNavigation(alert.id)) {
+    const contentNode = htmlToNode(this.popupHtml(alert));
+    if (alert.type === 'helicopter') { const note = document.createElement('p'); note.className = 'pp-no-location'; note.textContent = this.opts.lang === 'en' ? 'Illustrative flight animation over the reported area, not live aircraft tracking.' : 'حركة تحليق توضيحية فوق المنطقة المذكورة، وليست تتبعاً حقيقياً للطيران.'; contentNode.querySelector('.pp')?.prepend(note); }
+    if (['approximate_point','geographic_reference','locality_reference'].includes(alert.location_display)) {const note=document.createElement('p');note.className='pp-no-location';note.textContent=(alert.geographic_reference ? (this.opts.lang==='en'?alert.geographic_reference.note_en:alert.geographic_reference.note_ar) : null) || (this.opts.lang==='en'?'Approximate geographic reference only, not the precise incident location. No danger radius is implied.':'مرجع جغرافي تقريبي فقط، وليس موقع الحادث الدقيق. لا يدل على نطاق خطر.');contentNode.querySelector('.pp')?.prepend(note);}
+    if (groupNav) {
+      const root = contentNode.querySelector('.pp');
+      const navNode = this.groupPopupNavigationNode(groupNav);
+      const title = root?.querySelector('.pp-title');
+      if (title) title.before(navNode); else root?.append(navNode);
+    }
+    return contentNode;
+  }
+  refreshOpenPopup() {
+    const popup = this.popup;
+    if (!popup?._alertId) return;
+    const alert = this.alerts.find(a => a.id === popup._alertId);
+    if (!alert) return;
+    const signature = JSON.stringify(alert);
+    if (signature === popup._alertSnapshot) return;
+    const contentNode = this.popupContent(alert);
+    const scroll = popup.getElement()?.querySelector('.maplibregl-popup-content');
+    const scrollTop = scroll?.scrollTop || 0;
+    // Replace only the content. Keep the same popup, anchor, camera and close handler.
+    popup.setDOMContent(contentNode);
+    popup._alertSnapshot = signature;
+    const updated = popup.getElement()?.querySelector('.maplibregl-popup-content');
+    if (updated) updated.scrollTop = scrollTop;
+    this.schedulePopupFit(2);
+  }
   openPopup(alert) {
     const controlPanel = document.querySelector('#mapCtrlPanel');
     if (controlPanel) {
@@ -1535,21 +1565,14 @@ export class AlertMap {
     const at = this._popupAt && this._popupAt.id === alert.id ? this._popupAt.ll : null;
     this._popupAt = null;
     const M = ml();
-    const contentNode = htmlToNode(this.popupHtml(alert));
-    if (alert.type === 'helicopter') { const note = document.createElement('p'); note.className = 'pp-no-location'; note.textContent = this.opts.lang === 'en' ? 'Illustrative flight animation over the reported area, not live aircraft tracking.' : 'حركة تحليق توضيحية فوق المنطقة المذكورة، وليست تتبعاً حقيقياً للطيران.'; contentNode.querySelector('.pp')?.prepend(note); }
-    if (['approximate_point','geographic_reference','locality_reference'].includes(alert.location_display)) {const note=document.createElement('p');note.className='pp-no-location';note.textContent=(alert.geographic_reference ? (this.opts.lang==='en'?alert.geographic_reference.note_en:alert.geographic_reference.note_ar) : null) || (this.opts.lang==='en'?'Approximate geographic reference only, not the precise incident location. No danger radius is implied.':'مرجع جغرافي تقريبي فقط، وليس موقع الحادث الدقيق. لا يدل على نطاق خطر.');contentNode.querySelector('.pp')?.prepend(note);}
-    if (groupNav) {
-      const root = contentNode.querySelector('.pp');
-      const navNode = this.groupPopupNavigationNode(groupNav);
-      const title = root?.querySelector('.pp-title');
-      if (title) title.before(navNode); else root?.append(navNode);
-    }
+    const contentNode = this.popupContent(alert, groupNav);
     // Keep the tip endpoint on the exact marker / circle coordinate, without a visual gap.
     this.popup = new M.Popup({ className: 'pp-alert-popup', anchor: 'bottom', closeButton: true, closeOnClick: false, maxWidth: 'min(420px, calc(100vw - 28px))', offset: [0, 0], focusAfterOpen: false })
       .setLngLat(at || [alert.location.longitude, alert.location.latitude])
       .setDOMContent(contentNode)
       .addTo(this.map);
     this.popup._alertId = alert.id;
+    this.popup._alertSnapshot = JSON.stringify(alert);
     this.bindClamp();
     // put the card inside the map's gesture layer (like the markers): pinch / drag that start on the card
     // now zoom and pan the map instead of being swallowed (on phones the card covers the middle of the map)
