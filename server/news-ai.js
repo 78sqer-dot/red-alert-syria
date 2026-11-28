@@ -96,8 +96,26 @@ const POLITICAL_CATEGORY_CUES = [
   ['statement', ['صرح', 'تصريح', 'قال الرئيس', 'قال الوزير', 'أفاد الوزير']],
   ['position', ['موقف رسمي', 'موقف الحكومة', 'أكدت الحكومة موقف', 'رفضت الحكومة']],
 ];
+/** Narrow speech-act lead, not a search for violence words inside an attributed claim.
+ * Deliberately requires an issuing institution and an explicit statement act.
+ * Reclassified statements are held by ingestion for human review, never auto-published.
+ */
+export function isPrimaryStatement(text) {
+  const lead = N(primaryRuleEvidence(text));
+  const issuer = '(?:قياده|قوات|وزاره|رئاسه|حكومه|مجلس|هييه|متحدث|ناطق)';
+  const name = '[\\p{L}\\p{N} ]{2,90}?';
+  const issued = '(?:تصدر|يصدر|اصدرت|اصدر|تنشر|نشر|نشرت)';
+  const issuing = new RegExp(`^(?:${issued} ${issuer}${name} بيانا|${issuer}${name} ${issued} بيانا)(?: |$)`, 'u').test(lead)
+    || new RegExp(`^بيان (?:صادر )?(?:عن |ل)${issuer}${name}(?: حول| بشان| يتهم| تتهم|$)`, 'u').test(lead);
+  // Do not turn a fresh operational update, service notice or commentary into
+  // politics. Only the narrow retrospective/accusatory lead is resolved here.
+  const retrospective = /(?:حول|بشان) (?:الاشتباكات|المواجهات|الاحداث) (?:الاخيره|السابقه|التي وقعت)|(?:تتهم|يتهم|تندد|يندد)/.test(lead);
+  const live = /(?:^| )(?:الان|حاليا|متواصله|مستمره|اندلاع|اندلعت|تجدد|عاجل)(?: |$)/.test(lead);
+  return issuing && retrospective && !live;
+}
 /** Infer a narrow political category from source wording; null leaves the supplied category for review. */
 export function inferPoliticalCategory(text) {
+  if (isPrimaryStatement(text)) return 'statement';
   const source = N(String(text || ''));
   // Discussing an existing convention at a side event is not a new treaty.
   const discussionEvent = /(?:تنظم|نظمت|عقدت|اقامت|تنظيم) (?:فعاليه|ندوه)|(?:الفعاليه|الندوه) (?:ناقشت|تناولت)/.test(source);
@@ -572,6 +590,7 @@ export function hasExplicitDroneFlight(text) {
 // A strong event in the source lead wins over an unrelated aircraft mention or an AI label.
 // Do not manufacture a weapon or promote construction/patrol presence to an incursion.
 export function primarySourceType(text) {
+  if (isPrimaryStatement(text)) return 'political';
   const lead = primaryRuleEvidence(text);
   const nt = N(lead);
   const kt = keywordTypes(lead);

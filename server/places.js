@@ -233,7 +233,7 @@ const mentionToken = (token, first) => {
   return stripAl(value);
 };
 /** Governorates explicitly named in a report; longer names win when they contain another name (ريف دمشق). */
-export function mentionedGovernorates(text) {
+export function mentionedGovernorates(text, { inferred = false } = {}) {
   const tokens = normalizeArabic(text).split(/\s+/).filter(Boolean);
   const matches = [];
   for (const gov of governorates) {
@@ -249,6 +249,16 @@ export function mentionedGovernorates(text) {
   const accepted = [];
   for (const m of matches) {
     if (accepted.some((x) => m.start < x.end && m.end > x.start)) continue;
+    // Institutional labels are not affected areas. Filter each occurrence, not
+    // each governorate, so a later genuine location mention still contributes.
+    // Keep this narrow: a police station/council in a city may be the event site.
+    const before = tokens.slice(Math.max(0, m.start - 2), m.start).join(' ');
+    const after = tokens.slice(m.end, m.end + 2).join(' ');
+    const institution = /(?:^| )(?:[وبفل]?حكومه|government of)$/.test(before)
+      || /^(?:government|based government)(?: |$)/.test(after);
+    const venue = /(?:^| )(?:مقر|مبني|مبنيي) [وبفل]?حكومه$/.test(before)
+      || /^(?:government|based government) (?:headquarters|building|offices)(?: |$)/.test(after);
+    if (inferred && institution && !venue) continue;
     accepted.push(m);
   }
   return [...new Map(accepted.sort((a, b) => a.start - b.start).map(({ gov }) => [gov.code, gov])).values()];
@@ -281,7 +291,7 @@ export function alertZones(a) {
   const covered = new Set([a.place, ...(a.extra || [])].map(codeOf).filter(Boolean));
   const narrative = [a.description, a.description_en].filter(Boolean);
   const text = (narrative.length ? narrative : [a.title, a.title_en]).filter(Boolean).join(' ');
-  for (const gov of mentionedGovernorates(text)) {
+  for (const gov of mentionedGovernorates(text, { inferred: true })) {
     if (covered.has(gov.code)) continue;
     const center = capitalOf(gov.code) || gov;
     if (!Number.isFinite(center.lat) || !Number.isFinite(center.lon)) continue;
