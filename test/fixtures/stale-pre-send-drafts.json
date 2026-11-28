@@ -1,0 +1,168 @@
+[
+  {
+    "id": "dd4d1b6d08",
+    "type": "fire",
+    "loc": {
+      "scope": "place",
+      "place_id": 7753543,
+      "rank": 6,
+      "district": "169326",
+      "name_ar": "حي بستان القصر",
+      "name_en": "Hayy Bustan al Qasr",
+      "district_ar": "جبل سمعان",
+      "district_en": "Mount Simeon",
+      "governorate": "09",
+      "governorate_ar": "حلب",
+      "governorate_en": "Aleppo",
+      "latitude": 36.19569,
+      "longitude": 37.14229
+    },
+    "extra": [],
+    "headline": "اندلاع حريق في منزل بحي بستان القصر في حلب وفرق الإطفاء تتمكن من السيطرة عليه دون تسجيل إصابات.",
+    "srcs": [
+      {
+        "u": "AlarabyTvSy",
+        "name": "التلفزيون العربي - سوريا",
+        "url": "https://t.me/AlarabyTvSy/65823",
+        "ts": 1795854817000,
+        "local": false
+      }
+    ],
+    "ts": 1795854817000,
+    "created": 1795854902764,
+    "status": "pending",
+    "cards": [
+      [
+        8270709633,
+        13062
+      ],
+      [
+        8808894711,
+        13063
+      ]
+    ],
+    "rule": false,
+    "droneRuleVersion": 1,
+    "dronePresence": false,
+    "sourceText": "أظهرت مقاطع فيديو اليوم، اندلاع حريق في أحد المنازل بحي بستان القصر في مدينة حلب ، وبيّنت المشاهد تصاعد ألسنة اللهب وأعمدة الدخان.\nوأفادت مصادر محلية، أن فرق الدفاع المدني توجهت للمكان وعملت على تطويق النيران، قبل تمدده إلى باقي المنازل المجاورة ومحل تجاري أسفل منه، قبل أن تتم السيطرة عليه دون تسجيل إصابات.",
+    "dayAutoAt": null,
+    "editorialHold": true,
+    "editorialHoldReason": "date-or-time-omitted",
+    "editorialHoldAt": 1795854910063
+  },
+  {
+    "id": "9733cb49c9",
+    "type": "attack",
+    "loc": {
+      "scope": "place",
+      "place_id": 20008318,
+      "rank": 5,
+      "district": "173378",
+      "name_ar": "ذبانة",
+      "name_en": "Thabanah",
+      "district_ar": "القامشلي",
+      "district_en": "Al-Qamishli",
+      "governorate": "01",
+      "governorate_ar": "الحسكة",
+      "governorate_en": "Al-Hasakah",
+      "latitude": 36.99628,
+      "longitude": 41.26312
+    },
+    "extra": [],
+    "headline": "مقتل شاب إثر تعرضه لإطلاق نار من قبل مسلحين داخل مزرعته على الطريق الدولي بريف القامشلي قرب قرية ذبّانة.",
+    "srcs": [
+      {
+        "u": "suhebb0",
+        "name": "صهيب اليعربي",
+        "url": "https://t.me/suhebb0/48503",
+        "ts": 1795856980000,
+        "local": true
+      }
+    ],
+    "ts": 1795856980000,
+    "created": 1795857090952,
+    "status": "pending",
+    "cards": [
+      [
+        8270709633,
+        13064
+      ],
+      [
+        8808894711,
+        13065
+      ]
+    ],
+    "rule": false,
+    "droneRuleVersion": 1,
+    "dronePresence": false,
+    "sourceText": "مقتل الشاب حسين التركي من حي زنود إثر تعرضه لإطلاق نار على يد أربعة مس.«لحين كانوا يستقلون سيارة من نوع «كيا سورينتو» داخل مزرعته الواقعة على الطريق الدولي بريف القامشلي على بُعد نحو 300 متر من قرية ذبّانة."
+  },
+  {
+    "id": "bd22f3326c",
+    "type": "breaking",
+    "loc": {
+      "scope": "governorate",
+      "name_ar": "القنيطرة",
+      "name_en": "Quneitra",
+      "governorate": "03",
+      "governorate_ar": "القنيطرة",
+      "governorate_en": "Quneitra",
+      "latitude": 33.12595,
+      "longitude": 35.82461
+    },
+    "extra": [],
+    "headline": "قوات الاحتلال تغلق بأسلاك شائكة الطرق المؤدية إلى طريق سد المنطرة بريف القنيطرة الأوسط.",
+    "srcs": [
+      {
+        "u": "ajasyr",
+        "name": "الجزيرة سوريا",
+        "url": "https://t.me/ajasyr/125896",
+        "ts": 1795857546000,
+        "local": false
+      }
+    ],
+    "ts": 1795857546000,
+    "created": 1795857592690,
+    "status": "pending",
+    "cards": [
+      [
+        8270709633,
+        13070
+      ],
+      [
+        8808894711,
+        13071
+      ]
+    ],
+    "rule": false,
+    "droneRuleVersion": 1,
+    "dronePresence": false,
+    "sourceText": "مصادر محلية:\nقوات الاحتلال تغلق بأسلاك شائكة نهاية الطرق المؤدية إلى طريق سد المنطرة بريف القنيطرة الأوسط\nعاجل",
+    "duplicateSources": [
+      {
+        "key": "QasiounAr1:https://t.me/QasiounAr1/44357",
+        "u": "QasiounAr1",
+        "url": "https://t.me/QasiounAr1/44357",
+        "ts": 1795857692000
+      },
+      {
+        "key": "ajasyr:https://t.me/ajasyr/125898",
+        "u": "ajasyr",
+        "url": "https://t.me/ajasyr/125898",
+        "ts": 1795858053000
+      },
+      {
+        "key": "AlarabyTvSy:https://t.me/AlarabyTvSy/65825",
+        "u": "AlarabyTvSy",
+        "url": "https://t.me/AlarabyTvSy/65825",
+        "ts": 1795858440000
+      },
+      {
+        "key": "TelevisionSyria:https://t.me/TelevisionSyria/98992",
+        "u": "TelevisionSyria",
+        "url": "https://t.me/TelevisionSyria/98992",
+        "ts": 1795859692000
+      }
+    ]
+  }
+]

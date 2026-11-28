@@ -15,6 +15,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
+import { repairKnownPreSendReviewCards } from './news-monitor.js';
 import { createBot, correctStatement1658Once, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, correctSalihiyaRoundaboutOnce, correctRaqadWadiOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, stripQuoteBlockRetry, stripQuoteBlockFinal, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
@@ -565,6 +566,13 @@ async function start() {
       }
     };
     setTimeout(runOwnerPostCorrections, 25000).unref();
+    // Isolated exact private-card recovery. Never joins/retries historical repairs.
+    const runPrivateReviewRecovery = async () => {
+      if (store._backupWritesPaused) { setTimeout(runPrivateReviewRecovery, 5000).unref(); return; }
+      try { console.log('[private-review-recovery]', JSON.stringify(await repairKnownPreSendReviewCards(bots.admin.api))); }
+      catch (error) { console.error('[private-review-recovery] inspection required', error?.message || error); }
+    };
+    setTimeout(runPrivateReviewRecovery, 45000).unref();
     // Third quote-strip pass (2026-11-25): full-state targeting (the
     // recentAlerts window dropped the ended alerts' records).
     {

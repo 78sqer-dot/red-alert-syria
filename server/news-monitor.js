@@ -890,6 +890,19 @@ async function refreshCards(d) {
     try { await a.editMessageText(chat, mid, cardText(d, lang), { parse_mode: 'HTML', reply_markup: cardKb(d, lang, chat), link_preview_options: { is_disabled: true } }); } catch { /* not modified / gone */ }
   }
 }
+// Exact owner-private stale-card recovery, guarded and scheduled separately.
+export async function repairKnownPreSendReviewCards(telegramApi) {
+  const {repairStalePreSendReview}=await import('./stale-pre-send-review-repair.js');
+  const {preSendLocationRejection}=await import('./pre-send-location-validator.js');
+  const {buildAlertInput}=await import('./bot.js');
+  return repairStalePreSendReview({store,backupEnabled:config.telegramBackup,
+    validatePreSend: draft=>preSendLocationRejection(draft,{convert:toBotDraft,build:buildAlertInput}),
+    editExisting:async(chat,mid,draft)=>{
+      const lang=langOfId(chat);
+      try { await telegramApi.editMessageText(chat,mid,cardText(draft,lang),{parse_mode:'HTML',reply_markup:cardKb(draft,lang,chat),link_preview_options:{is_disabled:true}}); }
+      catch(error){if(!String(error?.description||'').includes('message is not modified'))throw error;}
+    }});
+}
 /** Add current review controls to existing pending cards without changing their text or creating messages. */
 export async function refreshPendingCardKeyboards() {
   const a = api();

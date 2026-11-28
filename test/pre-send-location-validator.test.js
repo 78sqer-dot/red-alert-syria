@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+import {preSendLocationRejection} from '../server/pre-send-location-validator.js';
+import {toBotDraft,newsState,cardText,cardKb} from '../server/news-monitor.js';
+import {buildAlertInput} from '../server/bot.js';import {store} from '../server/store.js';
+const f=JSON.parse(fs.readFileSync(new URL('./fixtures/stale-pre-send-drafts.json',import.meta.url)));
+test('all exact real cloned drafts fail before send through actual conversion and both applicable guards',()=>{const before=structuredClone(f);store.persist=()=>{};newsState();for(const d of f)assert.equal(preSendLocationRejection(d,{convert:toBotDraft,build:buildAlertInput}),'missing-location');assert.deepEqual(f,before);});
+test('validator explicitly reaches final funnel when draft stage has location',()=>{let builds=0;assert.equal(preSendLocationRejection({},{convert:()=>({type:'breaking',location:{scope:'governorate',latitude:33,longitude:36},text:'موقع غير معروف'}),build:()=>{builds++;return {type:'breaking',source:'news',description:'خبر دون مكان',scope:'country'};}}),'missing-location');assert.equal(builds,1);});
+test('canonical Arabic held review rendering is truthful and actionable, not publishing indicator',()=>{for(const source of f){const d={...source,editorialHold:true,editorialHoldReason:'missing-location'};const text=cardText(d,'ar'),kb=cardKb(d,'ar',8270709633);assert.ok(text.includes('لم يبدأ الإرسال'));assert.ok(text.includes('راجع الموقع'));assert.ok(kb.inline_keyboard.flat().some(b=>b.callback_data==='nw:e:'+d.id));assert.ok(!kb.inline_keyboard.flat().some(b=>b.callback_data==='noop'));}});
