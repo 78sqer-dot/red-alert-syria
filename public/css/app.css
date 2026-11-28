@@ -1558,3 +1558,14 @@ html:not(.dark) .floating-nav:not(.floating-selected):not(.on):not([aria-expande
 /* Bottom-map controls remain circles, per the owner's follow-up. */
 .map-bottom-controls #aboutPill,.map-bottom-controls #resetView,.map-bottom-controls #aboutPill.floating-selected,.map-bottom-controls #resetView.floating-selected{width:52px!important;min-width:52px!important;height:52px!important;padding:0!important;gap:0;border-radius:50%!important;}
 .map-bottom-controls #aboutPill .floating-control-label,.map-bottom-controls #resetView .floating-control-label{display:none!important;}
+/* Tool names stay readable before activation; only surfaces are translucent. */
+.map-ctrls .floating-nav,.svc-tabs .floating-nav{width:auto;gap:8px;padding-inline:13px;background:rgba(20,31,54,.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+.map-ctrls .floating-nav > .floating-nav-label,.svc-tabs .floating-nav > .floating-nav-label{max-width:190px;opacity:1;white-space:normal;overflow:visible;}
+.map-tool-grid > .dd > .floating-nav,.map-tool-grid > .floating-nav{width:100%;height:auto;min-height:48px;justify-content:flex-start;}
+.map-control-actions .floating-nav{width:auto;height:auto;min-height:46px;flex:1 1 calc(50% - 7px);font-size:11px;}
+.svc-tabs{gap:8px;}
+.svc-tabs .floating-nav{width:auto;min-height:48px;height:auto;flex:0 1 auto;padding-block:8px;}
+.svc-tabs .floating-nav > .floating-nav-label{white-space:nowrap;}
+.svc-tab.on .floating-nav-label{animation:none;}
+html:not(.dark) .map-ctrls .floating-nav:not(.floating-selected):not([aria-expanded=true]):not([aria-pressed=true]),html:not(.dark) .svc-tabs .floating-nav:not(.on){background:rgba(255,255,255,.88);color:#334155;}
+.map-ctrl-panel .map-control-actions .ctrl-btn.floating-nav{width:auto;min-width:0;min-height:48px;height:auto;flex:1 1 calc(50% - 7px);padding:8px 12px;justify-content:flex-start;}

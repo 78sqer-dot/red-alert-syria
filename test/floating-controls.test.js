@@ -37,3 +37,9 @@ test('bottom map controls stay round with hidden visual labels after owner follo
  assert.ok(css.includes('width:52px!important;min-width:52px!important;height:52px!important;padding:0!important;gap:0;border-radius:50%!important;'));
  assert.ok(css.includes('.floating-control-label{display:none!important;}'));
 });
+
+test('tool and service names remain opaque and visible before selection',()=>{
+ const css=readFileSync(new URL('../public/css/app.css',import.meta.url),'utf8').split('/* Tool names stay readable')[1];
+ assert.ok(css.includes('.map-ctrls .floating-nav > .floating-nav-label,.svc-tabs .floating-nav > .floating-nav-label{max-width:190px;opacity:1;'));
+ assert.ok(css.includes('background:rgba(20,31,54,.88)'));
+});
