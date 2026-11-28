@@ -39,10 +39,10 @@ test('daytime fallback window follows Damascus time and excludes 22:00–08:00',
   assert.equal(daytimeWindow(at('2026-10-27T19:00:00Z')), false); // 22:00
 });
 
-test('a qualifying pending AI news draft gets one immediate eligibility timestamp without a daytime delay', () => {
-  assert.equal(dayAutoDueAt(qualified(), daytimeStart), daytimeStart);
+test('a qualifying pending AI news draft gets one two-minute deadline day and night', () => {
+  assert.equal(dayAutoDueAt(qualified(), daytimeStart), daytimeStart+120000);
   assert.equal(dayAutoDueAt(qualified({ dayAutoAt: daytimeStart + 30_000 }), daytimeStart), null);
-  assert.equal(dayAutoDueAt(qualified(), at('2026-10-27T19:00:00Z')), at('2026-10-27T19:00:00Z'));
+  assert.equal(dayAutoDueAt(qualified(), at('2026-10-27T19:00:00Z')), at('2026-10-27T19:00:00Z')+120000);
 });
 
 test('test, rules-only, low-confidence, and already handled drafts never qualify', () => {
@@ -55,9 +55,9 @@ test('test, rules-only, low-confidence, and already handled drafts never qualify
   assert.equal(daytimeAutoEligible(qualified({ srcs: [{ u: 'local-one', local: true }, { u: 'local-two', local: true }] })), true);
 });
 
-test('high-risk categories and drafts without a verified map point are held for human review', () => {
+test('category alone does not block, but drafts without verified map point are held', () => {
   for (const type of ['breaking', 'weather', 'civil']) {
-    assert.equal(nightEligible(qualified({ type })), false, `${type} must not auto-publish`);
+    assert.equal(nightEligible(qualified({ type })), true, `${type} uses same safety gates`);
   }
   assert.equal(nightEligible(qualified({ loc: { scope: 'country', latitude: null, longitude: null } })), false);
   assert.equal(nightEligible(qualified({ loc: { scope: 'place', latitude: null, longitude: null } })), false);
@@ -83,13 +83,13 @@ test('source photo or video keeps a draft in human review instead of automatic p
   }
 });
 
-test('new detonation reports remain outside auto-publishing until explicitly approved', () => {
+test('detonation uses owner-approved24/7 permission and existing factual checks', () => {
   const detonation = qualified({ type: 'detonation' });
-  assert.equal(nightEligible(detonation), false);
-  assert.equal(daytimeAutoEligible(detonation), false);
+  assert.equal(nightEligible(detonation), true);
+  assert.equal(daytimeAutoEligible(detonation), true);
 });
 
-test('qualified political news can auto-publish at night but remains excluded from daytime auto-publishing', () => {
+test('qualified political news uses same two-minute fallback24/7', () => {
   const cutoff = Date.parse(newsState().mig.politicalNightAuto1);
   const political = qualified({
     type: 'political',
@@ -98,9 +98,9 @@ test('qualified political news can auto-publish at night but remains excluded fr
     srcs: [{ u: 'main-a', local: false }],
   });
   assert.equal(nightEligible(political), true, 'real AI political classification with a category, precise Syrian place and trusted source qualifies at night');
-  assert.equal(daytimeAutoEligible(political), false);
-  assert.equal(dayAutoDueAt(political, daytimeStart), null);
-  assert.equal(dayAutoReady({ ...political, dayAutoAt: daytimeStart }, daytimeStart + 1), false);
+  assert.equal(daytimeAutoEligible(political), true);
+  assert.equal(dayAutoDueAt(political, daytimeStart), daytimeStart+120000);
+  assert.equal(dayAutoReady({ ...political, autoPolicy:1, dayAutoAt: daytimeStart+120000 }, daytimeStart + 1), false);
 });
 
 test('political news missing review requirements or predating activation remains held', () => {
@@ -181,7 +181,7 @@ test('published political alerts and pending reports retain their category for d
 
 test('the scheduler considers only still-pending eligible drafts whose saved deadline has elapsed', () => {
   const due = daytimeStart + 120_000;
-  const draft = qualified({ dayAutoAt: due });
+  const draft = qualified({ autoPolicy:1, dayAutoAt: due });
   assert.equal(dayAutoReady(draft, due - 1), false);
   assert.equal(dayAutoReady(draft, due), true);
   assert.equal(dayAutoReady({ ...draft, status: 'ignored' }, due), false);
@@ -269,7 +269,7 @@ test('opinion and satire remain private, while review diagnostics are held befor
   ];
   const diagnostic = qualified({
     ...shared, id: 'auto-review-diagnostic', headline: 'لا تقدم المادة وقائع موثقة كافية',
-    dayAutoAt: daytimeStart, autoMode: 'day',
+    autoPolicy:1, dayAutoAt: daytimeStart, autoMode: 'day',
   });
   for (const draft of [...privateDrafts, diagnostic]) newsState().drafts[draft.id] = draft;
   try {
@@ -301,7 +301,7 @@ test('failed editorial gate keeps an eligible draft pending, clears its timer, a
     sourceText: 'قال الدفاع المدني السوري: وقع انفجار في قرية كودنة مساء اليوم وأصيب 3 أشخاص.',
     loc: { scope: 'place', name_ar: 'كودنة', governorate_ar: 'القنيطرة', latitude: 33.2, longitude: 35.9 },
     srcs: [{ u: 'trusted-feed', name: 'قناة الرصد الخاصة', local: false }],
-    dayAutoAt: daytimeStart,
+    autoPolicy:1, dayAutoAt: daytimeStart,
     autoMode: 'day',
     created: Date.now(),
     cards: [],
@@ -332,3 +332,7 @@ test('failed editorial gate keeps an eligible draft pending, clears its timer, a
     delete newsState().drafts[id];
   }
 });
+
+test('two-minute policy rejects historical queue and preserves exact deadline through restart',()=>{const now=Date.now();const d=qualified({created:now,autoPolicy:1,dayAutoAt:now+120000});assert.equal(dayAutoReady(d,now+119999),false);const restored=JSON.parse(JSON.stringify(d));assert.equal(dayAutoReady(restored,now+120000),true);assert.equal(dayAutoReady({...restored,autoPolicy:undefined},now+120001),false);for(const patch of [{manualAutoHold:{at:now}},{editorialHold:true},{status:'editing'},{status:'ignored'},{status:'duplicate'},{test:true}])assert.equal(dayAutoReady({...restored,...patch},now+130000),false);});
+test('creation cannot bypass two-minute deadline, tick never resets it to immediate',()=>{const s=fs.readFileSync(new URL('../server/news-monitor.js',import.meta.url),'utf8');assert.doesNotMatch(s.slice(s.indexOf('async function handleResult'),s.indexOf('function aiBudgetOk')),/await nightPublish/);assert.doesNotMatch(s,/d\.dayAutoAt = now/);assert.match(s,/if\(sent>0 && newPolicySource\).*scheduleDayAuto\(d,d\.autoCardAt\)/);});
+test('historical source queue cannot receive new deployment policy even when processed later',()=>{const s=fs.readFileSync(new URL('../server/news-monitor.js',import.meta.url),'utf8');assert.match(s,/it\.ts>=Date\.parse\(n\.mig\.twoMinuteAuto1\)/);assert.match(s,/if\(sent>0 && newPolicySource\)/);const n=newsState();const boundary=n.mig.twoMinuteAuto1;assert.ok(Number.isFinite(Date.parse(boundary)));assert.equal(newsState().mig.twoMinuteAuto1,boundary);});

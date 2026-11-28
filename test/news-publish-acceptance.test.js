@@ -549,7 +549,7 @@ test('news-monitor type editor covers every bot alert type while settings stay m
   const kidnappingDraft = newsState().drafts[id];
   assert.equal(kidnappingDraft.type, 'kidnapping', 'the editor stores the dedicated automatic-news category');
   assert.equal(kidnappingDraft.status, 'pending', 'reclassifying a kidnapping story keeps it for human review');
-  assert.equal(nightEligible(kidnappingDraft), false, 'kidnapping cannot be auto-published at night');
+  assert.equal(nightEligible(kidnappingDraft), false, 'rules-only kidnapping cannot be auto-published at night');
   assert.equal(dayAutoReady({ ...kidnappingDraft, dayAutoAt: Date.now() - 1 }), false, 'kidnapping cannot be auto-published in daytime');
   assert.equal(calls.slice(start).some(({ method, chatId }) => method === 'sendMessage' && chatId === '@mock_news_channel'), false, 'reclassifying a kidnapping draft does not post it');
 
@@ -648,7 +648,7 @@ test('every monitored alert type builds, and accepting the same mock draft twice
   assert.ok(ALERT_GROUPS.other.types.includes('military_incursion'), 'the new type is filterable on the map');
   assert.equal(NEWS_TYPES.includes('military_incursion'), true, 'ground-incursion reports are now automatically classified');
   const incursionDraft = { type: 'military_incursion', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
-  assert.equal(nightEligible(incursionDraft), false, 'automatic classification still stops for human review');
+  assert.equal(nightEligible(incursionDraft), true, 'automatic classification still stops for owner-approved24/7 policy');
   assert.equal(dayAutoReady({ ...incursionDraft, dayAutoAt: Date.now() - 1 }), false, 'a ground-incursion draft is not auto-published');
   const shootingAlert = store.addAlert(buildAlertInput({ type: 'shooting', location: { scope: 'country' }, extra: [], ttlMin: 60 }, { id: ownerId, name: 'test' }));
   addedAlertIds.push(shootingAlert.id);

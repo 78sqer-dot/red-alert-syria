@@ -12,7 +12,7 @@ const now=Date.parse('2026-11-28T10:00:00Z');
 const text='فرصة عمل محاسب في دمشق\nللتقديم أرسل السيرة الذاتية: https://example.org/apply\nآخر موعد: 2026-12-15';
 const make=(body=text,j=initialJobsState())=>({j,job:createPendingJob({kind:'source',sourceKey:'source:'+body,text:body,sourceUrl:'https://t.me/syrian_jobb/100'},j,now).job});
 test('qualified ordinary news has no clock gap at four Damascus boundaries',()=>{
- for(const time of ['04:59','05:00','18:59','19:00']){const at=Date.parse(`2026-11-28T${time}:00Z`);assert.equal(dayAutoDueAt({type:'attack',status:'pending',loc:{scope:'place',latitude:33.5,longitude:36.3},srcs:[{u:'main',local:false}]},at),at);}
+ for(const time of ['04:59','05:00','18:59','19:00']){const at=Date.parse(`2026-11-28T${time}:00Z`);assert.equal(dayAutoDueAt({type:'attack',status:'pending',loc:{scope:'place',latitude:33.5,longitude:36.3},srcs:[{u:'main',local:false}]},at),at+120000);}
 });
 test('source vacancy extracts supported workplace and future deadline, saves once without notices',async()=>{
  const {job,j}=make();const check=sourceJobEligibility(job,j,now);assert.equal(check.ok,true);assert.equal(check.applicationDeadline,'2026-12-15');assert.equal(await publishSourceJob(job,j,now),true);assert.equal(publicJobs(j,now).length,1);assert.equal(job.cards.length,0);assert.equal(await publishSourceJob(job,j,now),false);assert.equal(publicJobs(j,now).length,1);
@@ -71,7 +71,7 @@ test('generic confirmed callback cleanup queues failure and retries without touc
 
 test('guarded news publication has one send under concurrent offers and restored state',async()=>{
  const { _test,newsState }=await import('../server/news-monitor.js');const old=_test.R.H;const n=newsState();let sends=0;
- const d={id:'race-next',type:'attack',status:'pending',headline:'وقع هجوم في مدينة دمشق مساء اليوم.',sourceText:'وقع هجوم في مدينة دمشق مساء اليوم.',loc:{scope:'place',name_ar:'دمشق',governorate_ar:'دمشق',latitude:33.5,longitude:36.3},srcs:[{u:'main-news',local:false}],created:Date.now(),ts:Date.now(),cards:[]};
+ const d={id:'race-next',autoPolicy:1,dayAutoAt:Date.now()-1,type:'attack',status:'pending',headline:'وقع هجوم في مدينة دمشق مساء اليوم.',sourceText:'وقع هجوم في مدينة دمشق مساء اليوم.',loc:{scope:'place',name_ar:'دمشق',governorate_ar:'دمشق',latitude:33.5,longitude:36.3},srcs:[{u:'main-news',local:false}],created:Date.now(),ts:Date.now(),cards:[]};
  _test.R.H={apis:()=>({admin:{getChat:async()=>({}),deleteMessage:async()=>true}}),publishDraft:async()=>{sends++;await new Promise(r=>setTimeout(r,15));return {id:'race-alert',channel_message_id:700};}};
  n.drafts[d.id]=d;
  try{await Promise.all([_test.nightPublish(d),_test.nightPublish(d)]);assert.equal(sends,1);assert.equal(d.status,'published');const restored=structuredClone(d);assert.equal(await _test.nightPublish(restored),false);assert.equal(sends,1);

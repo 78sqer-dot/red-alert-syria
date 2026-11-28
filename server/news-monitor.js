@@ -146,7 +146,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rid = () => crypto.randomBytes(5).toString('hex');
 const N = normalizeArabic;
 const H_MS = 3600_000;
-const DAY_AUTO_DELAY_MS = 0; // Eligible editorial news no longer waits for a daytime timeout.
+const DAY_AUTO_DELAY_MS = 120000; // Owner: two-minute eligible-news fallback, day and night.
+const TWO_MINUTE_POLICY = 1;
 const WEATHER_NAME_AR = { rain: 'أمطار غزيرة', snow: 'ثلوج', wind: 'رياح قوية', storm: 'عواصف رعدية', heat: 'موجة حر', frost: 'صقيع', dust: 'غبار' };
 const weatherHeadline = (hazard, govs) => `تحذير جوي: ${WEATHER_NAME_AR[hazard] || 'أحوال جوية خطرة'} — ${govs.map((g) => g.ar).join('، ')}`;
 const dayKey = (t = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: config.timezone }).format(new Date(t));
@@ -241,6 +242,8 @@ export function newsState() {
     n.mig.nightStart22 = new Date().toISOString();
     save();
   }
+  // Deployment boundary: a queued older source post must never gain the new grant.
+  n.mig.twoMinuteAuto1 ||= new Date().toISOString();
   if (!n.stats || n.stats.day !== dayKey()) n.stats = { day: dayKey(), posts: 0, drafts: 0, merged: 0, dupes: 0, published: 0, ignored: 0 };
   return n;
 }
@@ -373,8 +376,7 @@ export function daytimeWindow(t = Date.now()) { const hm = hmNow(t); return hm >
 const isLocalSrc = (s) => Boolean(s.local || (newsState().sources.find((x) => x.u === s.u) || {}).local);
 /** auto-publishable at night: a real (non-test) AI classification, backed by a main source or by 2+ sources */
 export function nightEligible(d) {
-  if (!d || d.test || d.rule || d.editorialHold || Object.keys(d.privateEditorial || {}).length > 0 || (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) || d.dronePresence === true || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
-  if (['breaking', 'weather', 'civil', 'arrest', 'death', 'martyrdom', 'brawl', 'shooting', 'helicopter', 'airstrike', 'detonation', 'smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives', 'patrol', 'military_incursion', 'kidnapping', 'signal_sweep'].includes(d.type)) return false;
+  if (!d || !ALERT_TYPES[d.type] || d.manualAutoHold || d.test || d.rule || d.editorialHold || Object.keys(d.privateEditorial || {}).length > 0 || (d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode)) || (Array.isArray(d.sourceMedia) && d.sourceMedia.length)) return false;
   if (d.type === 'political') {
     const activatedAt = Date.parse(newsState().mig.politicalNightAuto1);
     if (!POLITICAL_CATEGORIES[d.politicalCategory] || d.politicalNeedsCategory || !Number.isFinite(d.created) || !Number.isFinite(activatedAt) || d.created <= activatedAt) return false;
@@ -478,17 +480,17 @@ function editorialGate(d) {
   return { ok: true, reason: null };
 }
 /** Daytime uses the same AI and source-confidence gate as overnight auto-publishing. */
-export function daytimeAutoEligible(d) { return Boolean(d && d.type !== 'political' && d.status === 'pending' && nightEligible(d)); }
+export function daytimeAutoEligible(d) { return Boolean(d && d.status === 'pending' && nightEligible(d)); }
 export function dayAutoDueAt(d, now = Date.now()) {
   return daytimeAutoEligible(d) && !Number.isFinite(d.dayAutoAt) ? now + DAY_AUTO_DELAY_MS : null;
 }
 export function dayAutoReady(d, now = Date.now()) {
-  return daytimeAutoEligible(d) && Number.isFinite(d.dayAutoAt) && d.dayAutoAt <= now;
+  return daytimeAutoEligible(d) && d.autoPolicy===TWO_MINUTE_POLICY && Number.isFinite(d.dayAutoAt) && d.dayAutoAt <= now;
 }
 function scheduleDayAuto(d, now = Date.now()) {
   const dueAt = dayAutoDueAt(d, now);
   if (dueAt == null) return false;
-  d.dayAutoAt = dueAt;
+  d.dayAutoAt = dueAt;d.autoPolicy=TWO_MINUTE_POLICY;
   return true;
 }
 const langOfId = (id) => (store.userLang(id) === 'en' ? 'en' : 'ar');
@@ -695,11 +697,13 @@ export function cardText(d, lang = 'ar') {
   lines.push('', `🗞 <b>${tr(lang, `المصادر (${srcs.length})`, `Sources (${srcs.length})`)}:</b> ${srcs.join(' · ')}`);
   const nMain = (d.srcs || []).filter((s) => !isLocal(s)).length;
   if (d.type === 'political') {
-    lines.push(tr(lang, 'ℹ️ <i>صياغة منسوبة لما نشرته المصادر — ليست تحققاً مستقلاً، وتحتاج مراجعة بشرية.</i>', 'ℹ️ <i>Attributed to the cited sources; this is not independent verification and needs human review.</i>'));
+    lines.push(tr(lang, 'ℹ️ <i>صياغة منسوبة لما نشرته المصادر؛ ليست تحققاً مستقلاً.</i>', 'ℹ️ <i>Attributed to the cited sources; this is not independent verification.</i>'));
   } else if ((d.srcs || []).length >= 2) lines.push(tr(lang, `📡 <i>ورد الخبر في ${((k) => (k === 2 ? 'مصدرين' : k <= 10 ? `${k} مصادر` : `${k} مصدراً`))((d.srcs || []).length)}؛ وهذا لا يثبت تحققاً مستقلاً.</i>`, `📡 <i>Reported in ${(d.srcs || []).length} feeds; this alone is not independent verification.</i>`));
   else if (!nMain) lines.push(tr(lang, '⚠️ <i>مصدر محلي/ناشط واحد — غير مؤكد بعد، تأكد قبل النشر.</i>', '⚠️ <i>Single local/activist source — not confirmed yet, check before publishing.</i>'));
   // NO quote block in the draft card either: cancelled by the owner
   // 2026-11-25 together with the channel-post block («بدي بس نص الخبر»).
+  if(d.manualAutoHold)lines.push('',tr(lang,'⏸ أوقف التعديل النشر التلقائي لهذه المسودة.','⏸ Editing stopped automatic publication for this draft.'));
+  else if(d.status==='pending' && (d.autoCardPreparing || (d.autoPolicy===TWO_MINUTE_POLICY && Number.isFinite(d.dayAutoAt))))lines.push('',tr(lang,'⏳ نشر تلقائي بعد دقيقتين من إرسال البطاقة، ما لم تُرفض أو تُفتح للتعديل. القراءة وحدها لا توقفه.','⏳ Auto-publish two minutes after card delivery unless rejected or opened for editing. Reading alone does not stop it.'));
   if (d.editorialHold) {
     const reason = ['missing-location', 'location-text-conflict'].includes(d.editorialHoldReason)
       ? tr(lang, 'لم يبدأ الإرسال: تعذّر تثبيت موقع مطابق لمكان الحادث. راجع الموقع والمصدر قبل النشر.', 'Sending did not start: a location matching the incident could not be confirmed. Review location and source before publishing.')
@@ -1026,6 +1030,7 @@ async function suppressDuplicateDraft(d, duplicate, by = 0) {
   return true;
 }
 
+async function holdAutoForEdit(d,ctx,action){if(d?.status!=='pending')return;d.manualAutoHold={at:Date.now(),by:ctx.from.id,action};d.dayAutoAt=null;save();if(store.backup&&config.telegramBackup)await store.flushBackup(true);}
 const recoveryReady = () => !store._backupWritesPaused && (!store.backup || !config.telegramBackup || store._sweepsStarted);
 // Restoration compatibility: publication claims must survive restart before any send.
 async function durablePublicationClaim(d) {
@@ -1102,8 +1107,7 @@ function auditPlaceSuspect(d) {
   return placeFramed ? null : 'place-person-name-suspect';
 }
 /** The single pre-publish audit every automatic publication must pass (owner request
- * 2026-11-17). Called by nightPublish for BOTH routes (night immediate + the daytime
- * 2-minute fallback) after eligibility and before the editorial gate.
+ * 2026-11-17). Called by nightPublish for BOTH routes (24/7 two-minute fallback) after eligibility and before the editorial gate.
  * VERIFY: source freshness, corroboration as it stands NOW, place sanity on the final text.
  * CORRECT: the outgoing copy is cleaned in place — duplicated type-label prefix stripped,
  * sharp-tone headlines replaced by a factual type + place line, truncated-copy headlines
@@ -1153,7 +1157,7 @@ export function auditDraftForAutoPublish(d, mode = 'night') {
 async function nightPublish(d) {
   if (!recoveryReady()) return false;
   const a = api();
-  if (!a || !R.H?.publishDraft || d.status !== 'pending') return false;
+  if (!a || !R.H?.publishDraft || !dayAutoReady(d)) return false;
   // Location guard (owner order 2026-11-24): bind the one identifiable place
   // in the draft's text from the gazetteer, or hold it for manual review
   // with the reason recorded — a bare whole-country card never auto-publishes.
@@ -1213,7 +1217,7 @@ async function nightPublish(d) {
   }
   const duplicate = knownDuplicateDraft(d);
   if (duplicate) { await suppressDuplicateDraft(d, duplicate); return false; }
-  if (!await durablePublicationClaim(d)) return false;
+  if (!dayAutoReady(d) || !await durablePublicationClaim(d)) return false;
   let alert;
   try {
     alert = await R.H.publishDraft(a, toBotDraft(d), { id: 0, name: 'رصد تلقائي', via: mode === 'day' ? 'news-day-fallback' : 'news-night' });
@@ -1257,12 +1261,13 @@ export async function cleanupPublishedNotices(d, telegramApi = api()) {
 async function dayAutoTick(now = Date.now()) {
   if (!recoveryReady()) return;
   const n = newsState();
-  if (!api() || !R.H?.publishDraft) return;
+  if (!n.on || !api() || !R.H?.publishDraft) return;
   await retryPrivatePublicationCleanup(api());
   for (const d of Object.values(n.drafts)) {
     if (d.status === 'published' && d.cardCleanupPending && d.postId && !d.editorialHold && (!store.backup || !config.telegramBackup || await store.flushBackup(true))) await closeCards(d, null, true);
     if (d.status === 'published' && d.successCleanupPending && d.notices?.length) await cleanupPublishedNotices(d);
-    if (daytimeAutoEligible(d) && isFreshSourceTs(draftSourceTs(d), now)) d.dayAutoAt = now;
+    // Never arm old pending drafts on startup; only newly delivered policy-stamped cards.
+    if (!isFreshSourceTs(draftSourceTs(d),now)) continue;
     if (!dayAutoReady(d, now)) continue;
     d.autoMode = 'day';
     await nightPublish(d);
@@ -1467,20 +1472,20 @@ async function handleResult(it, r, known, pmap) {
     ...(isPrimaryStatement(it.text) ? { editorialHold: true, editorialHoldReason: 'primary-statement-review' } : {}),
     sourceText: String(it.text || '').slice(0, 1200), ...(r.type === 'weather' ? { hazard: r.hazard || weatherWarningInfo(it.text)?.hazard } : {}),
   };
-  scheduleDayAuto(d, d.created);
+  // Deadline is armed only after successful reviewer-card delivery.
   n.drafts[d.id] = d;
   n.stats.drafts++;
   const ev = { kind: 'draft', status: 'pending', draftId: d.id, type: d.type, ts: d.ts, headline, text: d.sourceText, where: whereOf(locs), geo: cand.geo };
   known.unshift(ev); pmap.set(it.i, ev);
   save();
   if (daytimeAutoEligible(d)) d.autoMode = 'day';
-  if ((daytimeAutoEligible(d) || (nightActive() && nightEligible(d))) && await nightPublish(d)) {
-    note(it, `NIGHT auto-published ${d.id} (${d.type} @ ${ev.where})`);
-    ev.status = 'published';
-    return;
-  }
+  const newPolicySource=Number.isFinite(it.ts) && it.ts>=Date.parse(n.mig.twoMinuteAuto1);
+  d.autoCardPreparing=newPolicySource && daytimeAutoEligible(d);
   const sent = await sendCards(d);
+  delete d.autoCardPreparing;
+  if(sent>0 && newPolicySource){d.autoPolicy=TWO_MINUTE_POLICY;d.autoCardAt=Date.now();scheduleDayAuto(d,d.autoCardAt);}else{delete d.autoPolicy;d.dayAutoAt=null;}
   save();
+  if(store.backup && config.telegramBackup)await store.flushBackup(true);
   note(it, `NEW draft ${d.id} (${d.type} @ ${ev.where}) -> ${sent} reviewer(s)`);
   console.log(`[news] draft ${d.id}: ${d.type} @ ${ev.where} · ${it.src.u}`);
 }
@@ -1748,10 +1753,10 @@ async function sweep() {
 }
 
 // ---------------------------------------------------------------- start / stop / hand-off
-const NEWS_DECISION_FLAGS = ['nativeReview','timedNews', 'editorialHold', 'editorialHoldReason', 'dayAutoAt', 'autoMode', 'operatorReview'];
+const NEWS_DECISION_FLAGS = ['manualAutoHold','autoCardAt','autoPolicy','nativeReview','timedNews', 'editorialHold', 'editorialHoldReason', 'dayAutoAt', 'autoMode', 'operatorReview'];
 const NEWS_DECISION_PROOF = ['alertId', 'postId', 'publishedHeadline', 'publishedBody', 'approvedBy', 'approvedAt', 'by', 'auto', 'autoAt', 'duplicateOf', 'duplicateMarkedAt', 'reconciliation', 'editorialUpdates'];
 function newsDecisionAt(d) {
-  return Math.max(Number(d.nativeReview?.at) || 0, Number(d.operatorReview?.at) || 0, Number(d.duplicateMarkedAt) || 0,
+  return Math.max(Number(d.manualAutoHold?.at)||0, Number(d.nativeReview?.at) || 0, Number(d.operatorReview?.at) || 0, Number(d.duplicateMarkedAt) || 0,
     Number(d.autoAt) || 0, Date.parse(d.approvedAt || '') || 0,
     Number(d.reconciliation?.at) || 0,
     ...(Array.isArray(d.editorialUpdates) ? d.editorialUpdates : []).map((item) => Number(item?.at) || 0));
@@ -2007,6 +2012,7 @@ export function registerNewsTools(bot, h) {
     if (!staff(ctx)) return toast(ctx, '');
     const d = await findDraft(ctx.match[1]);
     if (!d || d.type !== 'helicopter' || d.status !== 'pending') return toast(ctx, '');
+    await holdAutoForEdit(d,ctx,'change');
     d.intense = !helicopterOn(d); save();
     await toast(ctx, d.intense ? t(ctx, 'تحليق مكثف: مروحيتان', 'Intensive flight: two helicopters') : t(ctx, 'مروحية واحدة', 'One helicopter'));
     await refreshCards(d);
@@ -2015,6 +2021,7 @@ export function registerNewsTools(bot, h) {
     if (!staff(ctx)) return toast(ctx, '');
     const d = await findDraft(ctx.match[1]);
     if (!d || d.type !== 'uav' || (d.status !== 'pending' && !d.test)) return toast(ctx, '');
+    await holdAutoForEdit(d,ctx,'change');
     d.intense = !intenseOn(d); save();
     await toast(ctx, t(ctx, d.intense ? 'مكثف: 2-3 مسيّرات فوق كل منطقة' : 'عادي: مسيّرة وحدة فوق كل منطقة', d.intense ? 'Intensive: 2-3 drones per area' : 'Normal: one drone per area'));
     try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id) }); } catch { /* ignore */ }
@@ -2050,6 +2057,7 @@ export function registerNewsTools(bot, h) {
         'External rewrite is not configured; no text changed or data was sent.'), true);
     }
     if (d.aiRewriteBusy) return toast(ctx, t(ctx, 'إعادة الصياغة قيد التنفيذ', 'Rewrite is already running'));
+    await holdAutoForEdit(d,ctx,'rewrite');
     d.aiRewriteBusy = true;
     await toast(ctx, t(ctx, '🪄 جارٍ إعداد معاينة فقط…', '🪄 Preparing a preview only…'));
     try {
@@ -2133,6 +2141,7 @@ export function registerNewsTools(bot, h) {
       'This draft is no longer eligible for critique or satire; its factual story remains unchanged.'), true);
     if (preview.mode === 'news') {
       if (preview.applied && d.headline === preview.text) return toast(ctx, t(ctx, 'الصياغة مطبقة بالفعل؛ لم يُنشر شيء', 'Wording already applied; nothing was published'));
+      await holdAutoForEdit(d,ctx,'rewrite-apply');
       d.originalHeadline ||= d.headline;
       d.headline = preview.text;
     } else if (['opinion', 'satire'].includes(preview.mode)) {
@@ -2177,6 +2186,7 @@ export function registerNewsTools(bot, h) {
       return toast(ctx, t(ctx, 'حُذفت الملاحظة الخاصة؛ لم يتغير الخبر الوقائعي.', 'Private note deleted; the factual story is unchanged.'));
     }
     if (!d.originalHeadline || d.headline === d.originalHeadline) return toast(ctx, t(ctx, 'النص الحالي هو الصياغة الأصلية', 'The current wording is already the original'));
+    await holdAutoForEdit(d,ctx,'rewrite-revert');
     d.headline = d.originalHeadline;
     d.originalHeadline = null;
     if (d.aiRewritePreview) d.aiRewritePreview.applied = false;
@@ -2222,6 +2232,7 @@ export function registerNewsTools(bot, h) {
       forgetCurrentCard(d, ctx); save();
       return;
     }
+    if(['t','e','l'].includes(act))await holdAutoForEdit(d,ctx,act);
     if (act === 't') { await toast(ctx, ''); try { await ctx.editMessageReplyMarkup({ reply_markup: typeKb(d, h.langOf(ctx)) }); } catch { /* ignore */ } return; }
     if (act === 'b') { await toast(ctx, ''); try { await ctx.editMessageReplyMarkup({ reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id) }); } catch { /* ignore */ } return; }
     if (d.status !== 'pending') {
@@ -2243,8 +2254,9 @@ export function registerNewsTools(bot, h) {
     }
     const n = newsState();
     if (act === 'x') {
+      d.manualAutoHold={at:Date.now(),by:ctx.from.id,action:'reject'};d.dayAutoAt=null;
       d.status = 'ignored'; d.by = ctx.from.id; n.stats.ignored++;
-      save();
+      save();if(store.backup&&config.telegramBackup)await store.flushBackup(true);
       await closeCards(d, cur(ctx), true);
       await unlinkCapturedMedia(d.sourceMedia);
       await vanish(ctx, t(ctx, 'تم التجاهل — لن يصلك هذا الحدث مرة ثانية', 'Ignored — this incident will not come back'));
@@ -2332,6 +2344,7 @@ export function registerNewsTools(bot, h) {
     const [, id, category] = ctx.match;
     const d = await findDraft(id);
     if (!d || d.type !== 'political' || d.status !== 'pending' || !POLITICAL_CATEGORIES[category]) return toast(ctx, '');
+    await holdAutoForEdit(d,ctx,'change');
     d.politicalCategory = category;
     d.politicalNeedsCategory = false;
     save();
@@ -2359,6 +2372,7 @@ export function registerNewsTools(bot, h) {
     const [, id, kind] = ctx.match;
     const d = await findDraft(id);
     if (!d || d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجة هذه المسودة مسبقاً ✔️', 'This draft has already been handled ✔️'));
+    await holdAutoForEdit(d,ctx,'change');
     d.type = 'military_incursion';
     if (kind === 'general') delete d.incursionKind;
     else d.incursionKind = kind;
@@ -2373,6 +2387,7 @@ export function registerNewsTools(bot, h) {
     const d = await findDraft(id);
     if (!d || !ALERT_TYPES[type]) return vanish(ctx, t(ctx, 'هذه المسودة لم تعد متاحة', 'This draft is no longer available'));
     if (d.status !== 'pending') return vanish(ctx, t(ctx, 'تمت معالجتها مسبقاً ✔️', 'already handled ✔️'));
+    await holdAutoForEdit(d,ctx,'change');
     d.type = type;
     delete d.incursionKind;
     delete d.vehicleCount;
@@ -2423,12 +2438,12 @@ export function registerNewsTools(bot, h) {
     return [
       t(ctx, '📡 <b>الرصد الإخباري التلقائي</b>', '📡 <b>Automatic news monitor</b>'),
       '',
-      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>بالنهار، الخبر المؤهل غير السياسي يُنشر تلقائياً بعد دقيقتين إذا ما راجعته؛ وبالليل قد يُنشر السياسي فقط إذا كان تصنيف Gemini حقيقياً، وفئته محددة، ومكانه السوري واضح، ومصدره مستوفياً للشروط. غير ذلك يبقى للمراجعة البشرية.</b> والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
-        'The server watches Syrian news channels around the clock; each new incident arrives as a ready draft (type, place, sources). <b>By day, eligible non-political news may auto-publish after 2 minutes if you have not reviewed it. At night, political news may publish only with a real Gemini classification, a valid category, a specific Syrian place, and the existing source checks; otherwise it stays for human review.</b> Repeated incidents never come twice.'),
+      t(ctx, 'السيرفر يتابع قنوات الأخبار السورية على مدار الساعة، وكل حدث جديد في سوريا يصلك هنا كمسودة جاهزة فيها النوع والمكان والمصادر. <b>الخبر المؤهل يُنشر تلقائياً ليل نهار بعد دقيقتين من إرسال بطاقته، إلا إذا رفضته أو فتحته للتعديل. القراءة وحدها لا توقف النشر. تبقى فحوص المصدر والمكان والوقائع والتكرار والخصوصية؛ وما يفشل فيها يبقى موقوفاً.</b> والحدث المكرر (نُشر، أو وصلك، أو تجاهلته) لا يصلك مرة ثانية.',
+        'The server watches Syrian news channels around the clock; each new incident arrives as a ready draft (type, place, sources). <b>Eligible new news auto-publishes24/7 two minutes after card delivery unless rejected or opened for editing. Reading alone does not stop it. Source, location, factual, duplicate and privacy checks still apply; failed checks remain held.</b> Repeated incidents never come twice.'),
       '',
       `${t(ctx, 'الحالة', 'Status')}: ${n.on ? t(ctx, '✅ يعمل', '✅ running') : t(ctx, '⏸ متوقف', '⏸ paused')}${n.on ? ` · ${t(ctx, 'آخر فحص', 'last check')} ${ago(R.lastPollAt, ctx)}` : ''}`,
       `${t(ctx, 'التصنيف', 'Classification')}: ${ai}`,
-      `🌙 ${t(ctx, 'النشر الليلي', 'Night auto-publish')}: ${n.night.on ? `✅ ${n.night.from}–${n.night.to}${nightActive() ? t(ctx, ' (فعّال الآن)', ' (active now)') : ''}` : t(ctx, '⏸ متوقف', '⏸ off')}`,
+      t(ctx,'⏳ النشر التلقائي: 24 ساعة، بعد دقيقتين للأخبار المؤهلة الجديدة.','⏳ Automatic publication:24/7, two minutes for eligible new news.'),
       `📰 ${t(ctx, 'المصادر المفعّلة', 'Active sources')}: ${on} / ${n.sources.length}${bad ? t(ctx, ` (⚠️ ${bad} لا يُقرأ حالياً)`, ` (⚠️ ${bad} unreadable now)`) : ''}`,
       `🏷 ${t(ctx, 'الأنواع المرصودة', 'Watched types')}: ${ty} / ${NEWS_TYPES.length}`,
       `📊 ${t(ctx, 'اليوم (بتوقيت دمشق)', 'Today (Damascus time)')}: ${t(ctx, 'مسودات', 'drafts')} ${n.stats.drafts} · ${t(ctx, 'نُشر', 'published')} ${n.stats.published} · ${t(ctx, 'تُجوهل', 'ignored')} ${n.stats.ignored} · ${t(ctx, 'تكرار مُنع', 'duplicates stopped')} ${n.stats.merged + n.stats.dupes}${pending ? ` · ${t(ctx, 'بانتظارك', 'waiting')} ${pending}` : ''}`,
@@ -2441,7 +2456,7 @@ export function registerNewsTools(bot, h) {
       .text(t(ctx, '📰 المصادر', '📰 Sources'), 'nws:src').text(t(ctx, '🏷 الأنواع', '🏷 Types'), 'nws:ty').row()
       .text(t(ctx, '💼 رصد الوظائف', '💼 Jobs monitor'), 'j:menu').row()
       .text(t(ctx, '➕ إضافة مصدر', '➕ Add a source'), 'nws:sa:main').row()
-      .text(`🌙 ${t(ctx, 'النشر الليلي', 'Night auto-publish')}: ${n.night.on ? `✅ ${n.night.from}–${n.night.to}` : '⏸'}`, 'nws:ng').row()
+      .text(`🌙 ${t(ctx, 'هدوء الليل والملخص', 'Quiet hours and summary')}: ${n.night.on ? `✅ ${n.night.from}–${n.night.to}` : '⏸'}`, 'nws:ng').row()
       .text(t(ctx, '🧪 إرسال مسودة تجريبية', '🧪 Send a test draft'), 'nws:test').row()
       .text(t(ctx, '🔄 تحديث', '🔄 Refresh'), 'nws').text(t(ctx, '🏠 القائمة', '🏠 Menu'), 'home');
   };
@@ -2496,10 +2511,9 @@ export function registerNewsTools(bot, h) {
   const ngText = (ctx) => {
     const g = newsState().night;
     return [
-      t(ctx, '🌙 <b>النشر الليلي التلقائي</b>', '🌙 <b>Night auto-publish</b>'),
+      t(ctx, '🌙 <b>هدوء الإشعارات والملخص الليلي</b>', '🌙 <b>Quiet notifications and night summary</b>'),
       '',
-      t(ctx, 'بهالساعات (بتوقيت دمشق) المسودات المؤهلة بتنزل لحالها عالقناة والخريطة بنفس القالب وصورة الخريطة. الخبر السياسي ما بينزل تلقائياً بالنهار؛ بالليل ممكن ينزل فقط إذا كان تصنيف Gemini حقيقياً وفئته ومكانه السوري المحدد ومصدره مستوفية الشروط، وإلا بيبقى للمراجعة.',
-        'During these hours (Damascus time), eligible drafts publish to the channel and map with the usual template. Political news is not auto-published during the day; at night it qualifies only with a real Gemini classification, valid category, specific Syrian place, and the existing source checks. Otherwise it stays for review.'),
+      t(ctx,'هذه إعدادات هدوء الإشعارات والملخص الليلي فقط. النشر التلقائي للأخبار الجديدة المؤهلة يعمل 24 ساعة بعد دقيقتين من إرسال البطاقة.','These settings control quiet notifications and the night summary only. Eligible new news auto-publishes24/7 two minutes after card delivery.'),
       '',
       t(ctx, '• بينشر الخبر المؤهل فقط؛ خبر من مصدر محلي/ناشط وحيد أو تصنيف بسيط بدون Gemini بيضل مسودة. الخبر السياسي غير المحدد الفئة أو الموقع، أو اللي ما استوفى شروط المصدر، بيضل للمراجعة.', '• Only eligible drafts auto-publish. A single local/activist source or rules-only classification stays a draft; political news with a missing category or place, or that fails the source checks, stays for review.'),
       t(ctx, '• كل منشور تلقائي بيوصلك إشعار صامت فيه زر ↩️ تراجع (بيحذفه من القناة والخريطة).', '• Each auto-post sends you a silent notice with ↩️ Undo (removes it from the channel and map).'),

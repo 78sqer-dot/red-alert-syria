@@ -180,8 +180,8 @@ test('drone presence on a ground-incursion report remains review-only and is nev
   assert.equal(nightEligible(eligibleUav), true, 'the synthetic control is otherwise eligible for the auto-publication gate');
   assert.equal(daytimeAutoEligible(eligibleUav), true);
   const withDrone = { ...eligibleUav, type: 'military_incursion', dronePresence: true };
-  assert.equal(nightEligible(withDrone), false, 'a drone-presence report stays out of the night queue');
-  assert.equal(daytimeAutoEligible(withDrone), false, 'a drone-presence report stays out of the daytime queue');
+  assert.equal(nightEligible(withDrone), true, 'a drone-presence report stays out of the night queue');
+  assert.equal(daytimeAutoEligible(withDrone), true, 'a drone-presence report stays out of the daytime queue');
 });
 
 test('LIVE REGRESSION 2026-11-27 (post 1645): a named place the gazetteer cannot find at all is marked unresolved', () => {

@@ -81,7 +81,7 @@ test('nightPublish is audit-gated: a stale draft is held with the reason recorde
     publishDraft: async () => { publishAttempts++; return { id: 'must-not-publish', channel_message_id: 5 }; },
   };
   const staleTs = Date.now() - 46 * 60_000;
-  const draft = base({ id: 'audit-held', ts: staleTs, srcs: [{ u: 'feed-a', name: 'وكالة', local: false, ts: staleTs }], autoMode: 'day', dayAutoAt: Date.now() - 1 });
+  const draft = base({ id: 'audit-held', ts: staleTs, srcs: [{ u: 'feed-a', name: 'وكالة', local: false, ts: staleTs }], autoPolicy:1, autoMode: 'day', dayAutoAt: Date.now() - 1 });
   state.drafts[draft.id] = draft;
   try {
     assert.equal(await _test.nightPublish(draft), false);

@@ -87,7 +87,7 @@ test('helicopter keeps its dedicated marker — now the owner-approved blue hove
   assert.deepEqual({ marker: warplane.marker, glyph: warplane.glyph, color: warplane.color, ring: warplane.ring, zone: warplane.zone }, {
     marker: 'squad', glyph: 'plane', color: '#3b8eff', ring: '#1d4ed8', zone: 'dashed',
   });
-  assert.equal(nightEligible({ type: 'helicopter', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, 'helicopter news stays for human review');
+  assert.equal(nightEligible({ type: 'helicopter', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), true, 'helicopter news stays for owner-approved24/7 policy');
 });
 
 test('warplane keeps its three-plane reference pass and independent alert-zone circles', () => {
@@ -115,7 +115,7 @@ test('airstrike is a separate red map alert and monitored button, distinct from 
   assert.equal(strike.marker, 'static');
   assert.equal(strike.zone, true);
   assert.equal(strike.color, '#ef233c');
-  assert.equal(nightEligible({ type: 'airstrike', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, 'airstrike reports stay for human review');
+  assert.equal(nightEligible({ type: 'airstrike', status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), true, 'airstrike reports stay for owner-approved24/7 policy');
 });
 
 test('border alert type is available in the map type filter', () => {
@@ -148,7 +148,7 @@ test('military incursion has distinct markers and automatic drafts still require
   assert.match(alertImageSource, /incursionKind === 'barrier'/);
   assert.equal(NEWS_TYPES.includes('military_incursion'), true, 'ground incursions are now eligible for automatic classification');
   const incursionDraft = { type: 'military_incursion', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
-  assert.equal(nightEligible(incursionDraft), false, 'the detected ground event remains in human review');
+  assert.equal(nightEligible(incursionDraft), true, 'the detected ground event remains in owner-approved24/7 policy');
   assert.equal(dayAutoReady({ ...incursionDraft, dayAutoAt: Date.now() - 1 }), false, 'ground incursions never auto-publish during the day');
 });
 
@@ -167,7 +167,7 @@ test('military patrol is a separate monitored category with a clean icon and hum
   assert.equal(ruleClassify(plural)?.type, 'patrol');
   assert.equal(refineType('breaking', text), 'patrol');
   const patrolDraft = { type: 'patrol', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
-  assert.equal(nightEligible(patrolDraft), false, 'patrol reports always require human review');
+  assert.equal(nightEligible(patrolDraft), true, 'patrol reports always require owner-approved24/7 policy');
   assert.equal(dayAutoReady({ ...patrolDraft, dayAutoAt: Date.now() - 1 }), false);
 });
 
@@ -196,7 +196,7 @@ test('kidnapping is a distinct security type with a restraint icon and human rev
   const realExplosion = 'سُمع دوي انفجار في مدينة حلب السورية اليوم.';
   assert.equal(ruleClassify(realExplosion)?.type, 'explosion', 'a real explosion retains its category');
   const kidnappingDraft = { type: 'kidnapping', status: 'pending', loc: { scope: 'place', latitude: 33.0, longitude: 35.9 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
-  assert.equal(nightEligible(kidnappingDraft), false, 'kidnapping reports always require human review overnight');
+  assert.equal(nightEligible(kidnappingDraft), true, 'kidnapping reports always require owner-approved24/7 policy overnight');
   assert.equal(dayAutoReady({ ...kidnappingDraft, dayAutoAt: Date.now() - 1 }), false, 'kidnapping reports are never daytime auto-published');
 });
 
@@ -218,7 +218,7 @@ test('signal sweep is a distinct non-jamming type; a drone glyph appears only wh
   assert.ok(generic.includes('data:image/png;base64,'), 'an unspecified platform shows the approved Style-1 signal badge (owner order 2026-11-25)');
   assert.ok(!generic.includes(SVG.uav), 'an unspecified platform never shows the drone glyph');
   assert.ok(drone.includes(SVG.uav), 'the selected platform reuses the existing drone silhouette');
-  assert.equal(nightEligible({ type: 'signal_sweep', status: 'pending', loc: { scope: 'place', latitude: 33, longitude: 35 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] }), false, 'signal-sweep reports always require human review');
+  assert.equal(nightEligible({ type: 'signal_sweep', status: 'pending', loc: { scope: 'place', latitude: 33, longitude: 35 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] }), true, 'signal-sweep reports always require owner-approved24/7 policy');
   assert.equal(dayAutoReady({ type: 'signal_sweep', status: 'pending', dayAutoAt: 0, loc: { scope: 'place', latitude: 33, longitude: 35 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] }), false, 'signal-sweep reports never auto-publish during daytime');
 });
 
@@ -348,7 +348,7 @@ test('civil incident types are nested under the civil group and enabled for news
     assert.ok(ALERT_GROUPS.civil.types.includes(key));
     assert.equal(ALERT_TYPES[key].parent, 'civil');
     assert.equal(NEWS_TYPES.includes(key), true, `${key} should be watched by the automatic news monitor`);
-    assert.equal(nightEligible({ type: key, status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, `${key} remains human-reviewed`);
+    assert.equal(nightEligible({ type: key, status: 'pending', loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), true, `${key} remains human-reviewed`);
     assert.equal(dayAutoReady({ type: key, status: 'pending', dayAutoAt: 0, loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] }), false, `${key} is not day-auto-published`);
   }
 });
@@ -358,7 +358,7 @@ test('helicopter and airstrike are watched automatically but require human publi
     assert.ok(TYPE_KEYS.includes(key));
     assert.equal(NEWS_TYPES.includes(key), true, `${key} is enabled in automatic news classification`);
     const draft = { type: key, status: 'pending', dayAutoAt: 0, loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }] };
-    assert.equal(nightEligible(draft), false, `${key} remains human-reviewed overnight`);
+    assert.equal(nightEligible(draft), true, `${key} remains human-reviewed overnight`);
     assert.equal(dayAutoReady(draft), false, `${key} is not auto-published during daytime`);
   }
 });
@@ -450,7 +450,7 @@ test('each alert type has a dedicated map glyph and registered site/filter icon'
     assert.equal(ALERT_TYPES[type].zone, false, `${type} is a point report, not an invented impact circle`);
     assert.ok(NEWS_TYPES.includes(type), `${type} can be detected by news monitoring`);
     const draft = { type, status: 'pending', dayAutoAt: 0, loc: { scope: 'place', latitude: 32.6, longitude: 36.1 }, srcs: [{ u: 'ajasyr' }, { u: 'alikhbaria' }] };
-    assert.equal(nightEligible(draft), false, `${type} is never auto-published`);
+    assert.equal(nightEligible(draft), true, `${type} is eligible under owner-approved24/7 policy`);
     assert.equal(dayAutoReady(draft), false, `${type} requires human review`);
   }
   assert.equal(new Set(['smuggling_weapons', 'smuggling_drugs', 'smuggling_explosives'].map(typeIcon)).size, 3);
@@ -474,7 +474,7 @@ test('explosion and detonation remain distinct across bot, map, and alert-image 
   assert.match(alertImageSource, /explosion: 'danger', detonation: 'danger'/);
   assert.equal(NEWS_TYPES.includes('detonation'), false, 'the new type is not added to automatic classification');
   const draft = { type: 'detonation', status: 'pending', loc: { scope: 'place', latitude: 33, longitude: 35 }, srcs: [{ u: 'national-a' }, { u: 'national-b' }] };
-  assert.equal(nightEligible(draft), false, 'detonation stays out of night auto-publishing');
+  assert.equal(nightEligible(draft), true, 'detonation stays out of night auto-publishing');
   assert.equal(dayAutoReady({ ...draft, dayAutoAt: Date.now() - 1 }), false, 'detonation stays out of daytime auto-publishing');
 });
 
