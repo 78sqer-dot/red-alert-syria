@@ -1,0 +1,51 @@
+{
+  "id": "8808dd35-297c-4fd1-a677-ad55b59f7f60",
+  "draftId": "7a9015e0f2",
+  "alertHash": "7eaf52a00fb455dbf290ca77ffbcdb920af916a4fcced8e8397888bf127f42e5",
+  "draftHash": "6e3c901fa3dba052d86015f69e071c7bfc3b5a810583d05d5227974c23fbb411",
+  "imageHash": "b1acc7689bb379026c03049a7f080aa784ecb1817235cf193818a59a441a38bf",
+  "chat_id": "-1004387100492",
+  "message_id": 1660,
+  "caption": "🟢 تنبيه مدني - 🛡️\n\n📍أم الكيف - الحسكة\n\nالعثور على حقل ألغام في قرية أم الكيف بريف تل تمر شمال غربي الحسكة.\n\nتاريخ :  ٢٨ تشرين الثاني\n\nالساعة :  ١٢:٤٩ م",
+  "caption_entities": [
+    {
+      "length": 10,
+      "offset": 3,
+      "type": "bold"
+    },
+    {
+      "length": 17,
+      "offset": 23,
+      "type": "bold"
+    },
+    {
+      "length": 67,
+      "offset": 42,
+      "type": "blockquote"
+    }
+  ],
+  "reply_markup": {
+    "inline_keyboard": [
+      [
+        {
+          "text": "🗺 عرض على الخريطة",
+          "url": "https://red-alert-syria-q6k8.onrender.com/ar/#8808dd35-297c-4fd1-a677-ad55b59f7f60"
+        },
+        {
+          "text": "📨 أرسل بلاغاً",
+          "url": "https://t.me/Rad_Alert_Syria1_bot?start=report"
+        }
+      ],
+      [
+        {
+          "text": "🚀 عزّز القناة",
+          "url": "https://t.me/boost/Red_Alert_Syria"
+        },
+        {
+          "text": "🟢 قناة واتساب",
+          "url": "https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k"
+        }
+      ]
+    ]
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "alert": {
+    "id": "8808dd35-297c-4fd1-a677-ad55b59f7f60",
+    "type": "civil",
+    "title": "تنبيه مدني — أم الكيف",
+    "title_en": "Civil alert — Um Elkeif",
+    "description": "العثور على حقل ألغام في قرية أم الكيف بريف تل تمر شمال غربي الحسكة.",
+    "location": {
+      "latitude": 36.68127,
+      "longitude": 40.32971
+    },
+    "place": {
+      "scope": "place",
+      "place_id": 20004398,
+      "rank": 5,
+      "district": "173812",
+      "name_ar": "أم الكيف",
+      "name_en": "Um Elkeif",
+      "district_ar": "الحسكة",
+      "district_en": "Al-Hasakah",
+      "governorate": "01",
+      "governorate_ar": "الحسكة",
+      "governorate_en": "Al-Hasakah",
+      "latitude": 36.68127,
+      "longitude": 40.32971
+    },
+    "areas": [
+      "أم الكيف",
+      "الحسكة"
+    ],
+    "extra": [],
+    "scope": "place",
+    "timestamp": "2026-11-28T09:49:42.115Z",
+    "expires_at": "2026-11-28T13:49:42.115Z",
+    "source": "news",
+    "meta": {
+      "newsSources": [
+        {
+          "name": "دير الزور 24",
+          "url": "https://t.me/D24net/48610",
+          "timestamp": null
+        }
+      ],
+      "sourceText": "العثور على حقل ألغام في قرية أم الكيف بريف بلدة تل تمر شمال غربي الحسكة."
+    },
+    "is_active": true,
+    "history": [
+      {
+        "at": "2026-11-28T09:49:42.115Z",
+        "kind": "published",
+        "title": "تنبيه مدني — أم الكيف ومنطقة أخرى",
+        "description": "العثور على حقل ألغام في قرية أم الكيف بريف تل تمر شمال غربي الحسكة.",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-28T09:49:50.699Z",
+        "kind": "updated",
+        "title": "تنبيه مدني — أم الكيف ومنطقة أخرى",
+        "description": "العثور على حقل ألغام في قرية أم الكيف بريف تل تمر شمال غربي الحسكة.",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-28T10:48:23.104Z",
+        "kind": "updated",
+        "title": "تنبيه مدني — أم الكيف",
+        "description": "العثور على حقل ألغام في قرية أم الكيف بريف تل تمر شمال غربي الحسكة.",
+        "is_active": true
+      }
+    ],
+    "author": {
+      "id": 8270709633,
+      "name": ".",
+      "via": "news"
+    },
+    "channel_message_id": 1660,
+    "channel_format": 2,
+    "description_en": "A minefield was found in the village of Umm al-Keif in the Tel Tamer countryside, northwest of Hasakah.",
+    "channel_media": "text",
+    "channel_delivery": {
+      "status": "confirmed",
+      "at": "2026-11-28T09:49:59.699Z"
+    },
+    "channel_post_failed": false,
+    "channel_failure": null,
+    "channel_retry_claim": null
+  },
+  "draft": {
+    "id": "7a9015e0f2",
+    "type": "civil",
+    "loc": {
+      "scope": "place",
+      "place_id": 20004398,
+      "rank": 5,
+      "district": "173812",
+      "name_ar": "أم الكيف",
+      "name_en": "Um Elkeif",
+      "district_ar": "الحسكة",
+      "district_en": "Al-Hasakah",
+      "governorate": "01",
+      "governorate_ar": "الحسكة",
+      "governorate_en": "Al-Hasakah",
+      "latitude": 36.68127,
+      "longitude": 40.32971
+    },
+    "extra": [],
+    "headline": "العثور على حقل ألغام في قرية أم الكيف بريف تل تمر شمال غربي الحسكة.",
+    "srcs": [
+      {
+        "u": "D24net",
+        "name": "دير الزور 24",
+        "url": "https://t.me/D24net/48610",
+        "ts": 1795857415000,
+        "local": true
+      }
+    ],
+    "ts": 1795857415000,
+    "created": 1795857591277,
+    "status": "published",
+    "cards": [],
+    "rule": false,
+    "droneRuleVersion": 1,
+    "dronePresence": false,
+    "sourceText": "العثور على حقل ألغام في قرية أم الكيف بريف بلدة تل تمر شمال غربي الحسكة.",
+    "duplicateSources": [
+      {
+        "key": "AlarabyTvSy:https://t.me/AlarabyTvSy/65824",
+        "u": "AlarabyTvSy",
+        "url": "https://t.me/AlarabyTvSy/65824",
+        "ts": 1795858003000
+      },
+      {
+        "key": "zainaldinmaham1:https://t.me/zainaldinmaham1/143885",
+        "u": "zainaldinmaham1",
+        "url": "https://t.me/zainaldinmaham1/143885",
+        "ts": 1795861815000
+      }
+    ],
+    "nativeReview": {
+      "at": 1795859399704,
+      "result": "published"
+    },
+    "alertId": "8808dd35-297c-4fd1-a677-ad55b59f7f60",
+    "postId": 1660,
+    "by": 8270709633,
+    "approvedBy": {
+      "id": 8270709633,
+      "name": ". X",
+      "username": "Sqer78"
+    },
+    "approvedAt": "2026-11-28T09:49:59.704Z",
+    "cardCleanupPending": false,
+    "mediaCards": [],
+    "notices": [],
+    "successCleanupPending": false
+  },
+  "caption": "🟢 تنبيه مدني - 🛡️\n\n📍أم الكيف - الحسكة\n\nالعثور على حقل ألغام في قرية أم الكيف بريف تل تمر شمال غربي الحسكة.\n\nتاريخ :  ٢٨ تشرين الثاني\n\nالساعة :  ١٢:٤٩ م",
+  "caption_entities": [
+    {
+      "length": 10,
+      "offset": 3,
+      "type": "bold"
+    },
+    {
+      "length": 17,
+      "offset": 23,
+      "type": "bold"
+    },
+    {
+      "length": 67,
+      "offset": 42,
+      "type": "blockquote"
+    }
+  ],
+  "reply_markup": {
+    "inline_keyboard": [
+      [
+        {
+          "text": "🗺 عرض على الخريطة",
+          "url": "https://red-alert-syria-q6k8.onrender.com/ar/#8808dd35-297c-4fd1-a677-ad55b59f7f60"
+        },
+        {
+          "text": "📨 أرسل بلاغاً",
+          "url": "https://t.me/Rad_Alert_Syria1_bot?start=report"
+        }
+      ],
+      [
+        {
+          "text": "🚀 عزّز القناة",
+          "url": "https://t.me/boost/Red_Alert_Syria"
+        },
+        {
+          "text": "🟢 قناة واتساب",
+          "url": "https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k"
+        }
+      ]
+    ]
+  },
+  "chat_id": "-1004387100492",
+  "message_id": 1660
+}

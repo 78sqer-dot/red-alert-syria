@@ -1,3 +1,4 @@
+import {repairImage1660Once} from './bot.js';
 import {wireMaintenanceUpdates} from './maintenance-update.js';
 import {runContext1660Correction} from './context-1660-correction.js';
 import { createFajrReminder } from './fajr-reminder.js';
@@ -582,6 +583,12 @@ async function start() {
       catch(error) { console.error('[context-1660-correction] inspection required',error?.message||error); }
     };
     setTimeout(runContext1660,65000).unref();
+    const runImage1660 = async () => {
+      if(store._backupWritesPaused){setTimeout(runImage1660,5000).unref();return;}
+      try{console.log('[image-1660-repair]',JSON.stringify(await repairImage1660Once(bots.admin.api)));}
+      catch(error){console.error('[image-1660-repair] inspection required',error?.message||error);}
+    };
+    setTimeout(runImage1660,85000).unref();
     // Third quote-strip pass (2026-11-25): full-state targeting (the
     // recentAlerts window dropped the ended alerts' records).
     {

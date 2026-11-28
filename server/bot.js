@@ -1,3 +1,4 @@
+import {runImage1660Repair,image1660NeedsInspection} from './image-1660-repair.js';
 import { runStatement1658Correction } from './statement-1658-correction.js';
 import { finalizeConfirmedPrivatePublication } from './private-publication-cleanup.js';
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
@@ -1294,6 +1295,14 @@ export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph =
   return out;
 }
 // Photo edit succeeds before the live record changes. Exact baseline guard makes this one-shot.
+export async function repairImage1660Once(api) {
+ if(!api||!store.backup||!config.telegramBackup||store._backupWritesPaused)return {skipped:true,reason:'not-ready'};
+ const chat=await api.getChat(config.channel);
+ if(String(chat.id)!=='-1004387100492')return {skipped:true,reason:'channel-mismatch'};
+ return runImage1660Repair({store,editExisting:async({chat_id,message_id,png,caption,caption_entities,reply_markup})=>{
+  return api.editMessageMedia(chat_id,message_id,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-1660-map.png'),{caption,caption_entities}),{reply_markup});
+ }});
+}
 export async function correctStatement1658Once(api) {
   if (!api || !config.channel || !store.backup || !config.telegramBackup || store._backupWritesPaused) return { skipped: true, reason: 'not-ready' };
   return runStatement1658Correction({ store, editExisting: async (alert) => {
@@ -1687,6 +1696,8 @@ export async function deleteAlertEverywhere(api, id) {
   return removed;
 }
 export async function refreshChannelPost(api, alert, ended) {
+  // Claimed/uncertain exact media repair must be inspected, never auto-flipped by resync.
+  if (image1660NeedsInspection(store,alert)) { console.warn('[image-1660-repair] channel refresh blocked, inspection required'); return; }
   if (!alert?.channel_message_id) return;
   const editText = () => api.editMessageText(config.channel, alert.channel_message_id, channelPost(alert, { ended }), { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: channelKeyboard(alert) });
   const editCaption = () => api.editMessageCaption(config.channel, alert.channel_message_id, { caption: channelCaption(alert, { ended }), parse_mode: 'HTML', reply_markup: channelKeyboard(alert) });
@@ -1754,6 +1765,7 @@ export async function stripQuoteBlockOnce(api) {
 // (the same trick refreshChannelPost uses) and retries once.
 export const QUOTE_BLOCK_RETRY_IDS = Object.freeze([1591, 1592, 1593]);
 export async function editAlertPostFlipping(api, a) {
+  if(image1660NeedsInspection(store,a)){console.warn('[image-1660-repair] flip blocked, inspection required');return {ok:false,result:'inspection-required'};}
   const opts = { ended: !a.is_active };
   const kinds = ['photo', 'video'].includes(a.channel_media) ? ['caption', 'text'] : ['text', 'caption'];
   let lastErr = null;
