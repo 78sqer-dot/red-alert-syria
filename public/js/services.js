@@ -16,7 +16,7 @@ const S = {
     updated: 'آخر تحديث', noPrices: 'ما في حالياً نشرة أسعار رسمية موثقة.',
     priceNote: 'نعرض فقط نشرة المركزي الرسمية وقرارات المحروقات الحكومية المنشورة. لا نعرض السوق الموازي أو الذهب. الليرة الجديدة = 100 ليرة قديمة.',
     powerEmpty: 'ما في تحديثات كهرباء من مصدر حكومي رسمي حالياً.', powerSource: 'المصدر الحكومي الرسمي', powerCalc: 'حاسبة فاتورة الكهرباء الرسمية', allSyria: 'عموم سوريا', allGovs: 'كل المحافظات',
-    roadsEmpty: 'ما في حالات طرق مسجّلة حالياً.', roadsSub: 'حالات الطرق يلي نشرها فريق الرصد أو وصلتنا ببلاغات وتأكدنا منها، وبتنشال لحالها لما تخلص مدتها.',
+    roadsEmpty: 'لا توجد تحديثات طرق مؤكدة وسارية حالياً. هذا لا يعني أن كل الطرق سالكة.', roadsSub: 'حالات الطرق يلي نشرها فريق الرصد أو وصلتنا ببلاغات وتأكدنا منها، وبتنشال لحالها لما تخلص مدتها.',
     showRoads: 'عرض الطرق على الخريطة', showBorders: 'عرض المعابر على الخريطة', bordersSub: 'الحالة المسجّلة تنتهي بعد 3 أيام بلا تحديث. «غير معروف» لا تعني مفتوحاً أو مغلقاً. معلومات التشغيل المنشورة أدناه مؤرخة ومنفصلة عن الحالة الحالية؛ تحقّق قبل السفر.', bst: { open: 'مفتوح', busy: 'مفتوح مع ازدحام', partial: 'مفتوح جزئياً', closed: 'مغلق', unknown: 'غير معروف' }, updated: 'آخر تحديث', withC: 'مع', crossing: 'معبر', until: 'لحد', reportRoad: 'بلّغ عن طريق',
     road: { closed: 'طريق مسكّر', danger: 'طريق خطر', open: 'طريق سالك', busy: 'زحمة سير' },
     cats: { health: 'مشافي ومراكز صحية', pharmacy: 'صيدليات', fuel: 'كازيات', bakery: 'أفران' },
@@ -48,7 +48,7 @@ const S = {
     updated: 'Updated', noPrices: 'No verified official price bulletin is available right now.',
     priceNote: 'Only Central Bank bulletins and government fuel-price decisions are shown. Parallel-market rates and gold are excluded. 1 new lira = 100 old lira.',
     powerEmpty: 'No electricity updates from an official government source right now.', powerSource: 'Official government source', powerCalc: 'Official electricity bill calculator', allSyria: 'All Syria', allGovs: 'All governorates',
-    roadsEmpty: 'No road statuses right now.', roadsSub: 'Road statuses published by our desk or confirmed from reports; they disappear when their time ends.',
+    roadsEmpty: 'No confirmed, current road updates. This does not mean all roads are clear.', roadsSub: 'Road statuses published by our desk or confirmed from reports; they disappear when their time ends.',
     showRoads: 'Show roads on the map', showBorders: 'Show crossings on the map', bordersSub: 'Recorded statuses expire after 3 days without an update. Unknown means neither open nor closed. Dated operating guidance below is separate from current status; check before travel.', bst: { open: 'Open', busy: 'Open – heavy traffic', partial: 'Partially open', closed: 'Closed', unknown: 'Unknown' }, updated: 'Updated', withC: 'with', crossing: 'Crossing', until: 'until', reportRoad: 'Report a road',
     road: { closed: 'Road closed', danger: 'Dangerous road', open: 'Road open', busy: 'Traffic congestion' },
     cats: { health: 'Hospitals & clinics', pharmacy: 'Pharmacies', fuel: 'Fuel stations', bakery: 'Bakeries' },
@@ -484,6 +484,22 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const g = b.guidance; if (!g) return '';
     return `<p class="svc-note">${esc(LANG === 'ar' ? g.ar : g.en)}<br>${esc(LANG === 'ar' ? 'تاريخ المصدر: ' : 'Source date: ')}<bdi>${esc(g.sourceDate)}</bdi> · ${esc(LANG === 'ar' ? 'مراجعة الدليل: ' : 'Research checked: ')}<bdi>${esc(g.checkedDate)}</bdi><br><a href="${esc(g.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(g.sourceName)}</a></p>`;
   }
+  // Stored update time can be a source time or a manually created record, not a live supply check.
+  function recordedUpdateStamp(ts, lang) {
+    const date = new Date(ts);
+    const valid = ts != null && Number.isFinite(date.getTime());
+    const value = valid ? new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SY' : 'en-GB', { timeZone: 'Asia/Damascus', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date) : (lang === 'ar' ? 'غير متوفر' : 'unavailable');
+    return (lang === 'ar' ? 'تاريخ التحديث المسجّل: ' : 'Recorded update: ') + value;
+  }
+  function directorySnapshotNote(generated, lang, now = Date.now()) {
+    const value = typeof generated === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(generated) ? generated : '';
+    const ms = value ? Date.parse(value + 'T00:00:00Z') : NaN;
+    const valid = Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === value;
+    const days = valid && ms <= now ? Math.floor((now - ms) / 86400000) : null;
+    return lang === 'ar'
+      ? `نسخة دليل الأماكن: ${valid ? value : 'تاريخ غير متوفر'}${days == null ? '' : ` (منذ نحو ${days} يوماً)`}. ليست حالة تشغيل مباشرة؛ قد تتغير المواعيد أو توفر الخدمة. اتصل قبل الزيارة.`
+      : `Directory snapshot: ${valid ? value : 'date unavailable'}${days == null ? '' : ` (about ${days} days old)`}. Not live operating status. Hours and service availability may change. Call before visiting.`;
+  }
   function borderHtml(b) {
     return `<div class="pp-top"><span class="badge live" style="--c:${BD_COLORS[b.status]}">${esc(b.status === 'unknown' ? (LANG === 'ar' ? 'غير مؤكّد حالياً' : 'Not currently confirmed') : (LANG === 'ar' ? 'مسجّل: ' : 'Recorded: ') + L.bst[b.status])}</span>${b.ts && b.status !== 'unknown' ? `<span class="time">${esc(LANG === 'ar' ? 'بلاغ: ' : 'Reported: ')}${esc(borderReportDate(b.ts))}</span>` : ''}</div>
       <p class="pp-title">🛂 ${esc(L.crossing)} ${esc(bdName(b))}</p>
@@ -694,9 +710,9 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   function powerHtml() {
     const items = st.power.filter((p) => st.gov === 'all' || (p.gov || 'all') === st.gov || !p.gov);
     const govs = [...new Map(st.power.filter((p) => p.gov).map((p) => [p.gov, LANG === 'en' ? p.gov_en : p.gov_ar])).entries()];
-    let h = modeBtnWide('power', L.mapPower);
+    let h = `<p class="svc-note" style="margin-top:0">${LANG === 'ar' ? 'أخبار الكهرباء وتحديثاتها، وليست تأكيداً لحالة التغذية الآن.' : 'Electricity news and updates, not confirmation of current supply.'}</p>` + modeBtnWide('power', L.mapPower);
     h += govs.length ? `<div class="sel-wrap svc-sel"><select class="sel" id="svcGov"><option value="all">${esc(L.allGovs)}</option>${govs.map(([c, n]) => `<option value="${esc(c)}" ${st.gov === c ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : '';
-    h += items.length ? items.map((p) => `<article class="svc-item"><div class="svc-it-top"><span class="badge" style="--c:#eab308">${icon('bolt', 13)}${esc(LANG === 'en' ? p.gov_en : p.gov_ar)}</span><span class="time">${esc(when(p.ts))}</span></div><p>${esc(p.text)}</p>${p.source_url ? `<small class="svc-note"><a href="${esc(p.source_url)}" target="_blank" rel="noopener">${esc(L.powerSource)}: ${esc(p.source_name || '')}</a></small>` : ''}</article>`).join('')
+    h += items.length ? items.map((p) => `<article class="svc-item"><div class="svc-it-top"><span class="badge" style="--c:#eab308">${icon('bolt', 13)}${esc(LANG === 'en' ? p.gov_en : p.gov_ar)}</span><span class="time" style="white-space:normal;min-width:0;flex:1;text-align:end;overflow-wrap:anywhere">${esc(recordedUpdateStamp(p.ts, LANG))}</span></div><p>${esc(p.text)}</p>${p.source_url ? `<small class="svc-note"><a href="${esc(p.source_url)}" target="_blank" rel="noopener">${esc(L.powerSource)}: ${esc(p.source_name || '')}</a></small>` : ''}</article>`).join('')
       : `<div class="svc-empty">${esc(L.powerEmpty)}</div>`;
     h += `<a class="btn-sm svc-report" href="https://petde.gov.sy/calc-bill" target="_blank" rel="noopener">${esc(L.powerCalc)}</a>`;
     return h;
@@ -817,6 +833,9 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
   function renderResults(failed) {
     const box = sheet?.querySelector('#svcRes'); if (!box) return;
     if (!st.poi) { box.innerHTML = `<div class="svc-empty">${esc(failed ? L.dataErr : L.loading)}</div>`; return; }
+    let stamp = sheet.querySelector('#poiSnapshot');
+    if (!stamp) { stamp = document.createElement('p'); stamp.className = 'svc-note'; stamp.id = 'poiSnapshot'; box.before(stamp); }
+    stamp.textContent = directorySnapshotNote(st.poiDate, LANG);
     const cats = st.cat === 'all' ? null : new Set(GROUPS[st.cat]);
     const q = norm(st.q);
     let list = st.poi.filter((p) => (!cats || cats.has(p.cat)) && (!q || p.k.includes(q)));

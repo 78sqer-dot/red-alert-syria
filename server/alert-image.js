@@ -1,3 +1,4 @@
+import { optimizePngLossless } from './png-lossless.js';
 // Per-alert map card for the Telegram channel (like redalert.com.lb's channel images):
 // navy header (title + severity + place, logo + site domain), a light street/topographic map
 // zoomed on the affected place with category-coloured impact circles / marker, and a short note footer.
@@ -399,7 +400,7 @@ export async function renderAlertPng(alert, opts = {}) {
     fitTo: { mode: 'width', value: OUT_W },
     font: { fontFiles: FONT_FILES, loadSystemFonts: false, defaultFontFamily: 'Noto Kufi Arabic' },
   });
-  return Buffer.from(r.render().asPng());
+  return optimizePngLossless(Buffer.from(r.render().asPng()));
 }
 
 const illustrationWidthCache = new Map();
