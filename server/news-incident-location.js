@@ -1,6 +1,12 @@
 import {normalizeArabic as N,getGov} from './places.js';
 const key=s=>N(s).replace(/(^| )ال/g,'$1');
 const contains=(s,n)=>(' '+key(s)+' ').includes(' '+key(n)+' ');
+// Positive qualification only: unfamiliar clauses stay unresolved for review.
+const prose=s=>N(s).replace(/[،,:؛.\n]/gu,' ').replace(/\s+/gu,' ').trim();
+const FIRE_PREFIXES=new Set(['حريق','حريق في','اندلاع حريق في منزل','اندلاع حريق في احد المنازل','اظهرت مقاطع فيديو اليوم اندلاع حريق في احد المنازل']);
+const FIRE_CONTINUATIONS=new Set(['','وبينت المشاهد تصاعد الدخان','وتصاعد الدخان واعمده اللهب','وتمكنت الفرق من السيطره',
+ 'وبينت المشاهد تصاعد السنه اللهب واعمده الدخان وافادت مصادر محليه ان فرق الدفاع المدني توجهت للمكان وعملت علي تطويق النيران قبل تمدده الي باقي المنازل المجاوره ومحل تجاري اسفل منه قبل ان تتم السيطره عليه دون تسجيل اصابات']);
+const safeUrbanFire=(text,match)=>FIRE_PREFIXES.has(prose(text.slice(0,match.index)))&&FIRE_CONTINUATIONS.has(prose(text.slice(match.index+match[0].length)));
 // A singular named locality is not its district, a nearby city or two tokens of a compound name.
 export function newsIncidentLocations(source,main,extra=[]) {
  const text=String(source||'');
@@ -15,6 +21,15 @@ export function newsIncidentLocations(source,main,extra=[]) {
  if (/(?:حي|منطقه) الشريعه (?:بمدينه|في مدينه) حماه/u.test(N(text))) {
   const label='حي الشريعة بمدينة حماة';
   return {location:{scope:'governorate',name_ar:label,name_en:'Al-Sharia neighborhood, Hama city',short_ar:label,short_en:'Al-Sharia neighborhood, Hama city',governorate:'10',governorate_ar:'حماة',governorate_en:'Hama'},extra:[]};
+ }
+ // Bind a known neighborhood only when its explicit city matches its governorate
+ // capital and no separate framed incident follows. Never use this for residence.
+ const urban=text.match(/(?:^|[\s،,:؛])(?:في\s+)?ب?حي\s+([\p{L}\s]{2,40}?)\s+في\s+مدينة\s+([\p{L}\s]{2,25}?)(?=[،,:؛.\n]|$)/u);
+ if(urban && main?.scope==='place' && Number.isFinite(main.latitude) && Number.isFinite(main.longitude)
+   && key(main.name_ar)===key('حي '+urban[1].trim())
+   && key(urban[2].trim())===key(getGov(main.governorate)?.ar||'')
+   && safeUrbanFire(text,urban) ) {
+  return {location:{...main},extra:extra.filter(l=>contains(text,l.name_ar))};
  }
  const facility = text.match(/(?:^|[\s،,:؛])معبر\s+([\p{L}\s]{2,45}?)(?=\s+(?:الحدودي|بريف|في|بمحافظة)|[،,:؛.\n]|$)/u);
  const ruralName=String(main?.name_ar||'').replace(/^ريف\s+/,'');
