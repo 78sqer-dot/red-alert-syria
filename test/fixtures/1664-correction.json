@@ -1,0 +1,169 @@
+{
+  "alert": {
+    "id": "f6b6a924-6a82-4efb-b058-9507f162b31c",
+    "type": "political",
+    "title": "تطور سياسي — باب الهوى",
+    "title_en": "Political development — Bab al Hawa",
+    "description": "وزير الصناعة والتجارة الداخلية ومحافظ إدلب يضعان حجر الأساس لمشروع توسعة مدينة باب الهوى الصناعية.",
+    "location": {
+      "latitude": 35.82503,
+      "longitude": 36.28424
+    },
+    "place": {
+      "scope": "place",
+      "place_id": 11554691,
+      "rank": 5,
+      "district": "169022",
+      "name_ar": "باب الهوى",
+      "name_en": "Bab al Hawa",
+      "district_ar": "جسر الشغور",
+      "district_en": "Jisr al-Shughur",
+      "governorate": "12",
+      "governorate_ar": "إدلب",
+      "governorate_en": "Idlib",
+      "latitude": 35.82503,
+      "longitude": 36.28424
+    },
+    "areas": [
+      "باب الهوى",
+      "إدلب"
+    ],
+    "extra": [],
+    "scope": "place",
+    "timestamp": "2026-11-28T12:00:07.215Z",
+    "expires_at": "2026-11-28T18:00:07.215Z",
+    "source": "news",
+    "meta": {
+      "political": {
+        "category": "decision",
+        "sources": [
+          {
+            "name": "شبكة أخبار سوريا الحرة",
+            "url": "https://t.me/ALMHARAR/98996",
+            "timestamp": "2026-11-28T11:53:06.000Z"
+          }
+        ],
+        "sourceTimestamp": "2026-11-28T11:53:06.000Z"
+      },
+      "sourceText": "وزير الصناعة والتجارة الداخلية باسل عبد الحنان ومحافظ إدلب محمد عبد الرحمن يضعان حجر الأساس لمشروع توسعة مدينة باب الهوى الصناعية على مساحة تبلغ 36 هكتاراً.\nالتوسعة تضم أكثر من 122 مقسماً صناعياً وتتراوح مساحة المقسم الواحد بين 1000 و3500 متر مربع إذ جاء المشروع استجابة للطلب المتزايد من الصناعيين على الاستثمار في المدينة الصناعية.\nجرى حفل وضع حجر الأساس بحضور مدير المدن الصناعية في سوريا أحمد كردي وممثلين عن المدن الصناعية في عدرا و الشيخ نجار وشركة إسراء القابضة التركية المنفذة للمشروع إلى جان"
+    },
+    "is_active": true,
+    "history": [
+      {
+        "at": "2026-11-28T12:00:07.215Z",
+        "kind": "published",
+        "title": "تطور سياسي — باب الهوى",
+        "description": "وزير الصناعة والتجارة الداخلية ومحافظ إدلب يضعان حجر الأساس لمشروع توسعة مدينة باب الهوى الصناعية.",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-28T12:00:12.508Z",
+        "kind": "updated",
+        "title": "تطور سياسي — باب الهوى",
+        "description": "وزير الصناعة والتجارة الداخلية ومحافظ إدلب يضعان حجر الأساس لمشروع توسعة مدينة باب الهوى الصناعية.",
+        "is_active": true
+      }
+    ],
+    "author": {
+      "id": 8270709633,
+      "name": ".",
+      "via": "news"
+    },
+    "channel_message_id": 1664,
+    "channel_format": 2,
+    "description_en": "The Minister of Internal Trade and Consumer Protection and the Governor of Idlib lay the foundation stone for the expansion project of the Bab al-Hawa Industrial City.",
+    "channel_media": "photo",
+    "channel_delivery": {
+      "status": "confirmed",
+      "at": "2026-11-28T12:00:17.402Z"
+    },
+    "channel_post_failed": false,
+    "channel_failure": null,
+    "channel_retry_claim": null
+  },
+  "draft": {
+    "id": "75fdeda3e7",
+    "type": "political",
+    "politicalCategory": "decision",
+    "politicalNeedsCategory": false,
+    "loc": {
+      "scope": "place",
+      "place_id": 11554691,
+      "rank": 5,
+      "district": "169022",
+      "name_ar": "باب الهوى",
+      "name_en": "Bab al Hawa",
+      "district_ar": "جسر الشغور",
+      "district_en": "Jisr al-Shughur",
+      "governorate": "12",
+      "governorate_ar": "إدلب",
+      "governorate_en": "Idlib",
+      "latitude": 35.82503,
+      "longitude": 36.28424
+    },
+    "extra": [],
+    "headline": "وزير الصناعة والتجارة الداخلية ومحافظ إدلب يضعان حجر الأساس لمشروع توسعة مدينة باب الهوى الصناعية.",
+    "srcs": [
+      {
+        "u": "ALMHARAR",
+        "name": "شبكة أخبار سوريا الحرة",
+        "url": "https://t.me/ALMHARAR/98996",
+        "ts": 1795866786000,
+        "local": false
+      }
+    ],
+    "ts": 1795866786000,
+    "created": 1795866845519,
+    "status": "published",
+    "cards": [],
+    "rule": false,
+    "droneRuleVersion": 1,
+    "dronePresence": false,
+    "sourceText": "وزير الصناعة والتجارة الداخلية باسل عبد الحنان ومحافظ إدلب محمد عبد الرحمن يضعان حجر الأساس لمشروع توسعة مدينة باب الهوى الصناعية على مساحة تبلغ 36 هكتاراً.\nالتوسعة تضم أكثر من 122 مقسماً صناعياً وتتراوح مساحة المقسم الواحد بين 1000 و3500 متر مربع إذ جاء المشروع استجابة للطلب المتزايد من الصناعيين على الاستثمار في المدينة الصناعية.\nجرى حفل وضع حجر الأساس بحضور مدير المدن الصناعية في سوريا أحمد كردي وممثلين عن المدن الصناعية في عدرا و الشيخ نجار وشركة إسراء القابضة التركية المنفذة للمشروع إلى جانب عدد من الصناعيين السوريين والأتراك.",
+    "nativeReview": {
+      "at": 1795867217405,
+      "result": "published"
+    },
+    "alertId": "f6b6a924-6a82-4efb-b058-9507f162b31c",
+    "postId": 1664,
+    "by": 8270709633,
+    "approvedBy": {
+      "id": 8270709633,
+      "name": ". X",
+      "username": "Sqer78"
+    },
+    "approvedAt": "2026-11-28T12:00:17.405Z",
+    "cardCleanupPending": false,
+    "mediaCards": [],
+    "notices": [],
+    "successCleanupPending": false
+  },
+  "cache": {
+    "id": "f6b6a924-6a82-4efb-b058-9507f162b31c",
+    "type": "political",
+    "politicalCategory": "decision",
+    "ts": 1795867207215,
+    "headline": "تطور سياسي — باب الهوى وزير الصناعة والتجارة الداخلية ومحافظ إدلب يضعان حجر الأساس لمشروع توسعة مدينة باب الهوى الصناعية.",
+    "where": "باب الهوى، إدلب",
+    "geo": {
+      "pts": [
+        {
+          "lat": 35.82503,
+          "lon": 36.28424
+        },
+        {
+          "lat": 35.82503,
+          "lon": 36.28424
+        }
+      ],
+      "dists": [
+        "جسر الشغور"
+      ],
+      "govs": [
+        "ادلب"
+      ],
+      "coarse": false,
+      "none": false
+    }
+  }
+}

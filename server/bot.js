@@ -1,3 +1,4 @@
+import {runPost1664Correction,post1664NeedsInspection} from './post-1664-correction-transaction.js';
 import {runImage1660Repair,image1660NeedsInspection} from './image-1660-repair.js';
 import { runStatement1658Correction } from './statement-1658-correction.js';
 import { finalizeConfirmedPrivatePublication } from './private-publication-cleanup.js';
@@ -1696,6 +1697,7 @@ export async function deleteAlertEverywhere(api, id) {
   return removed;
 }
 export async function refreshChannelPost(api, alert, ended) {
+  if(post1664NeedsInspection(store,alert)){console.warn('[facility-1664] refresh blocked, inspection required');return;}
   // Claimed/uncertain exact media repair must be inspected, never auto-flipped by resync.
   if (image1660NeedsInspection(store,alert)) { console.warn('[image-1660-repair] channel refresh blocked, inspection required'); return; }
   if (!alert?.channel_message_id) return;
@@ -1765,6 +1767,7 @@ export async function stripQuoteBlockOnce(api) {
 // (the same trick refreshChannelPost uses) and retries once.
 export const QUOTE_BLOCK_RETRY_IDS = Object.freeze([1591, 1592, 1593]);
 export async function editAlertPostFlipping(api, a) {
+  if(post1664NeedsInspection(store,a)){console.warn('[facility-1664] flip blocked, inspection required');return {ok:false,result:'inspection-required'};}
   if(image1660NeedsInspection(store,a)){console.warn('[image-1660-repair] flip blocked, inspection required');return {ok:false,result:'inspection-required'};}
   const opts = { ended: !a.is_active };
   const kinds = ['photo', 'video'].includes(a.channel_media) ? ['caption', 'text'] : ['text', 'caption'];
@@ -3615,3 +3618,6 @@ export const REPORT_COMMANDS = {
     { command: 'help', description: 'Help' },
   ],
 };
+
+// Review-only transaction adapter; no startup invocation.
+export async function correctPost1664(api,{readActual}={}){if(!api||!config.channel)return {skipped:true,reason:'not-ready'};return runPost1664Correction({store,readActual,readChannel:()=>api.getChat(config.channel),backupEnabled:config.telegramBackup,editExisting:async({chat_id,message_id,png,caption,caption_entities,reply_markup})=>api.editMessageMedia(chat_id,message_id,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-1664-no-pin.png'),{caption,caption_entities}),{reply_markup})});}

@@ -1,0 +1,162 @@
+{
+  "id": "f6b6a924-6a82-4efb-b058-9507f162b31c",
+  "draftId": "75fdeda3e7",
+  "chat_id": "-1004387100492",
+  "message_id": 1664,
+  "message_date": 1795867217,
+  "beforeMessage": {
+    "chatId": "-1004387100492",
+    "date": 1795867217,
+    "id": 1664,
+    "inlineButtons": [
+      [
+        {
+          "action": {
+            "type": "url",
+            "url": "https://red-alert-syria-q6k8.onrender.com/ar/#f6b6a924-6a82-4efb-b058-9507f162b31c"
+          },
+          "text": "🗺 عرض على الخريطة"
+        },
+        {
+          "action": {
+            "type": "url",
+            "url": "https://t.me/Rad_Alert_Syria1_bot?start=report"
+          },
+          "text": "📨 أرسل بلاغاً"
+        }
+      ],
+      [
+        {
+          "action": {
+            "type": "url",
+            "url": "https://t.me/boost/Red_Alert_Syria"
+          },
+          "text": "🚀 عزّز القناة"
+        },
+        {
+          "action": {
+            "type": "url",
+            "url": "https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k"
+          },
+          "text": "🟢 قناة واتساب"
+        }
+      ]
+    ],
+    "isEdited": false,
+    "photo": true,
+    "text": {
+      "entities": [
+        {
+          "length": 10,
+          "offset": 3,
+          "type": "MessageEntityBold"
+        },
+        {
+          "length": 16,
+          "offset": 22,
+          "type": "MessageEntityBold"
+        },
+        {
+          "length": 98,
+          "offset": 40,
+          "type": "MessageEntityBlockquote"
+        },
+        {
+          "length": 6,
+          "offset": 143,
+          "type": "MessageEntityBold"
+        },
+        {
+          "length": 8,
+          "offset": 164,
+          "type": "MessageEntityBold"
+        },
+        {
+          "length": 6,
+          "offset": 193,
+          "type": "MessageEntityBold"
+        }
+      ],
+      "text": "🟡 تطور سياسي - 📜\n\n📍باب الهوى - إدلب\n\nوزير الصناعة والتجارة الداخلية ومحافظ إدلب يضعان حجر الأساس لمشروع توسعة مدينة باب الهوى الصناعية.\n\n🏛 الفئة: 📜 «قرار»\n\n📅 التاريخ: ٢٨ تشرين الثاني\n\n🕒 الوقت: ٣:٠٠ م"
+    },
+    "photoIdentity": {
+      "id": "5787421225834451585",
+      "date": 1795867217,
+      "sizes": [
+        {
+          "height": 309,
+          "type": "m",
+          "width": 320
+        },
+        {
+          "height": 772,
+          "type": "x",
+          "width": 800
+        },
+        {
+          "height": 1235,
+          "type": "y",
+          "width": 1280
+        }
+      ],
+      "thumbnail": {
+        "dataUri": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDACgcHiMeGSgjISMtKygwPGRBPDc3PHtYXUlkkYCZlo+AjIqgtObDoKrarYqMyP/L2u71////m8H////6/+b9//j/2wBDASstLTw1PHZBQXb4pYyl+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj/wAARCAAnACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCP+zrnYF2pn1zzSf2Xc+o/Otkfep1AGF/Zd1/s/wDfVP8A7NnA+6n4sa2c0dvai4GP/Zs+zAVc+uaK2OKKLgHek6kmkGcZpScUgK+5/NqypyKQ4PT1oz7UkrDuLRRRVCF8v/aNBjyMH88UUUAATAxmgJ70UUALsooooA//2Q==",
+        "height": 772,
+        "width": 800
+      }
+    }
+  },
+  "caption": "🟡 تطور سياسي - 🏛️\n\n📍 الموقع: غير محدد — دون دبوس\n\nوزير الصناعة والتجارة الداخلية ومحافظ إدلب يضعان حجر الأساس لمشروع توسعة مدينة باب الهوى الصناعية.\n\n📅 التاريخ: ٢٨ تشرين الثاني\n\n🕒 الوقت: ٣:٠٠ م",
+  "caption_entities": [
+    {
+      "type": "bold",
+      "offset": 3,
+      "length": 10
+    },
+    {
+      "type": "bold",
+      "offset": 24,
+      "length": 7
+    },
+    {
+      "type": "blockquote",
+      "offset": 53,
+      "length": 98
+    },
+    {
+      "type": "bold",
+      "offset": 156,
+      "length": 8
+    },
+    {
+      "type": "bold",
+      "offset": 185,
+      "length": 6
+    }
+  ],
+  "reply_markup": {
+    "inline_keyboard": [
+      [
+        {
+          "text": "🗺 عرض على الخريطة",
+          "url": "https://red-alert-syria-q6k8.onrender.com/ar/#f6b6a924-6a82-4efb-b058-9507f162b31c"
+        },
+        {
+          "text": "📨 أرسل بلاغاً",
+          "url": "https://t.me/Rad_Alert_Syria1_bot?start=report"
+        }
+      ],
+      [
+        {
+          "text": "🚀 عزّز القناة",
+          "url": "https://t.me/boost/Red_Alert_Syria"
+        },
+        {
+          "text": "🟢 قناة واتساب",
+          "url": "https://whatsapp.com/channel/0029VbEO1eGCBtxLP3jW8e1k"
+        }
+      ]
+    ]
+  },
+  "imageHash": "1f193dc2c534c8c01478eca35a3591bba454d15b9af4f1c91799d12cdce056f9"
+}

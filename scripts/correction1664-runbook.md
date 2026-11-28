@@ -1,0 +1,13 @@
+# Reviewed explicit route, not an approval
+
+1. Deploy reviewed transaction/coordinator only after parent authorization and fresh source/state/head/test gates. This never runs on startup.
+2. Open signed-in Telegram channel, ensure actual1664 loaded. Inspect actual photo/caption/buttons. Run one dry fresh network capture before start; compare exact beforeMessage including original photo ID/sizes/thumbnail bytes. Obtain an ephemeral existing bot-token response file by the established protected read route. Do not print token/key or persist any Telegram user session on server.
+3. Workspace: RAS_TOKEN_RESPONSE_FILE=... node scripts/correction1664-external.mjs start
+4. Workspace: same runner status. Expect awaiting-fresh-message and challenge. No polling loop.
+5. Connected command host: python3 scripts/capture1664.py LEASE TAB /tmp/1664-live.json. It performs authenticated channels.GetMessages through the existing client, rejecting absent/changed capability; no cached message contents are used. Copy with tools workspace put --path /tmp/1664-live.json.
+6. Workspace: same external runner answer /tmp/1664-live.json. This explicitly supplies the mandatory live signed-in read callback, with server-issued nonce and checkedAt. No stored-manifest fallback. Network call started after challenge issuance and under10seconds in runner,15seconds in transaction.
+7. Request status once. A second different challenge follows durable claim. Repeat fresh capture+transfer+answer, never reuse previous snapshot.45second challenge bounds include browser call/transfer latency; observed previous read+execute/transfer was~1second. Fifteen-second evidence age is separate and enforced.
+8. Inspect status outcome once. Any uncertainty/timeout/disconnect aborts rather than retries. Cancel closes a pending read. No further edit unless independent actual-message/state inspection and new explicit reviewed plan.
+9. Verify fresh actual Telegram1664 pixels and exact state/draft/cache/log/markers and API. Compare unchanged1660/holds. Report. Remove ephemeral token/read files and release browser. Endpoints permanently deny start/answer after durable done. Delete coordinator routes in next authorized cleanup deploy, no deployment solely for cosmetic cleanup.
+
+Actual server owns its one live store. Runner imports no Store, starts no bot and writes no backup. It only uses existing protected HTTP identity in X-RAS-News-Key header, never URL. Single session per process, durable marker blocks restarts. Status returns challenge/outcome only, never snapshot/key/token. Client disconnected between requests times out45seconds; abort while delivering a request cancels pending challenge. No automatic bot/session credential bridge.

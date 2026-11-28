@@ -1,3 +1,5 @@
+import {mountPost1664Correction} from './post-1664-coordinator.js';
+import {correctPost1664} from './bot.js';
 import {repairImage1660Once} from './bot.js';
 import {wireMaintenanceUpdates} from './maintenance-update.js';
 import {runContext1660Correction} from './context-1660-correction.js';
@@ -253,6 +255,7 @@ const newsKeyOk = (req) => {
   return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
 };
 app.get('/api/newsdebug', apiLimiter, (req, res) => (newsKeyOk(req) ? res.json(newsDebug()) : res.status(404).end()));
+mountPost1664Correction(app,{auth:req=>{const want=config.botToken?crypto.createHash('sha256').update(config.botToken+':news').digest('hex'):'';const got=String(req.get('X-RAS-News-Key')||'');return !!want&&got.length===want.length&&crypto.timingSafeEqual(Buffer.from(got),Buffer.from(want));},limiter:apiLimiter,ready:()=>!!bots.admin?.api&&!!store.backup&&config.telegramBackup&&!store._backupWritesPaused,finished:()=>store.state.maint?.['facility-1664-2026-11-28']?.state==='done',run:readActual=>correctPost1664(bots.admin?.api,{readActual})});
 app.get('/api/newstest', apiLimiter, async (req, res) => {
   if (!newsKeyOk(req) || !bots.admin) return res.status(404).end();
   const owner = config.ownerIds[0];
