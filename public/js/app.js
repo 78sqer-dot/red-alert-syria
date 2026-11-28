@@ -1,3 +1,4 @@
+import { initFloatingControls, initFloatingNavigation } from './floating-controls.js?v=1';
 // Red Alert Syria — front-end application
 import { createServices, GOV_C } from './services.js?v=41';
 import { ALERT_TYPES, ALERT_GROUPS, TYPE_KEYS, POLITICAL_CATEGORIES, typeOf, alertEmoji, BORDER_REGIONS, FLIGHT_DIRECTIONS, FLIGHT_AIRCRAFT, eventVisual } from '/shared/types.js?v=42';
@@ -1169,6 +1170,8 @@ function bindEvents() {
   $('#btnSettingsM').addEventListener('click', openDrawer);
   $('#drawerClose').addEventListener('click', closeDrawer);
   $('#drawerBackdrop').addEventListener('click', closeDrawer);
+  initFloatingControls(document.querySelector('.map-bottom-controls'));
+  initFloatingNavigation();
   $('#aboutPill').addEventListener('click', openAbout);
   $('#aboutBackdrop').addEventListener('click', closeAbout);
   $('#btnTheme').addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark')));
