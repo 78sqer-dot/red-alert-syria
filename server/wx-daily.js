@@ -10,7 +10,8 @@ import { governorates } from './places.js';
 import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge } from './alert-image.js';
 import { EXTRA_POINTS, HAZARDS } from './weather.js';
-import { officialWeatherMeta, officialWeatherWarnings, DAILY_BULLETIN_INDEX, CAP_FEED_URL } from './weather-official.js';
+import { officialWeatherMeta, officialWeatherWarnings, officialWeatherDebug, DAILY_BULLETIN_INDEX, CAP_FEED_URL } from './weather-official.js';
+import { startOfficialWeatherContinuity } from './weather-continuity.js';
 import { WX_LABEL, wxKind, wxIconSvg } from '../shared/wx-icons.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -344,7 +345,11 @@ export async function publicWeather() {
     points,
   };
 }
-export const weatherNowDebug = () => ({ at: R.at, nextFetchAt: R.nextFetchAt || null, source: R.source, providerError: R.providerError, err: R.err, points: R.data?.length || 0 });
+export const weatherNowDebug = () => {
+  const {health, attemptAt, successAt, failureAt, stale, fetching, ttlMs, lifecycle, feedItems, candidates, sameUrlDocumentRevalidation, cancellationReconciliation} = officialWeatherDebug();
+  return { at: R.at, nextFetchAt: R.nextFetchAt || null, source: R.source, providerError: R.providerError, err: R.err, points: R.data?.length || 0,
+    official: {health, attemptAt, successAt, failureAt, stale, fetching, ttlMs, lifecycle, feedItems, candidates, sameUrlDocumentRevalidation, cancellationReconciliation} };
+};
 
 // ---------------------------------------------------------------- bulletin state
 export const WXB_TIMES = ['07:00', '07:30', '08:00', '08:30', '09:30'];
@@ -502,7 +507,7 @@ let started = false;
 export function startWxBulletin(getApi) {
   if (started) return;
   started = true;
-  officialWeatherWarnings({ waitMs: 0 }); // warm the official CAP cache in the background after boot
+  startOfficialWeatherContinuity(); // one official-only cache lifecycle, no public posts
   const c0 = wxbState().cfg; const p0 = damascusParts();
   if (!c0.last && p0.hm >= c0.time) { c0.last = p0.date; save(false); } // first boot after the time: start tomorrow
   save(false); // persist the one-time switch/migrations right away

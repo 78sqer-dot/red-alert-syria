@@ -7,8 +7,9 @@ export const DAILY_BULLETIN_INDEX = 'https://climweb.med.gov.sy/منتجاتنا
 const UA = 'RedAlertSyria/1.0 (+https://red-alert-syria.onrender.com)';
 const TTL = 20 * 60_000;
 const ERROR_RETRY_TTL = 5 * 60_000;
-const cache = { at: 0, warnings: [], busy: null, errAt: 0, metaAt: Date.now(), feedItems: 0, candidates: 0, parsed: 0, settled: 0, itemErrors: 0, err: '' };
+const cache = { attemptAt: 0, successAt: 0, failureAt: 0, at: 0, warnings: [], busy: null, errAt: 0, metaAt: Date.now(), feedItems: 0, candidates: 0, parsed: 0, settled: 0, itemErrors: 0, err: '' };
 const CAP_CACHE = new Map();
+const FIRST_SEEN = new WeakMap();
 const DAILY_META = { url: DAILY_BULLETIN_INDEX, title: 'النشرة اليومية الصادرة عن المركز الوطني للأرصاد الجوية' };
 
 function decodeXml(s) {
@@ -138,13 +139,14 @@ async function loadCapItem(item) {
   if (CAP_CACHE.has(item.link)) return CAP_CACHE.get(item.link);
   const xml = await get(item.link, 30_000, 1);
   const out = parseOfficialCapAlert(xml, item);
+  if (out && !FIRST_SEEN.has(out)) FIRST_SEEN.set(out, Date.now());
   CAP_CACHE.set(item.link, out);
   if (CAP_CACHE.size > 48) CAP_CACHE.delete(CAP_CACHE.keys().next().value);
   return out;
 }
 function orderedWarnings(list) {
   const now = Date.now();
-  return list.filter((x) => !Number.isFinite(Date.parse(x.expires_at || '')) || Date.parse(x.expires_at) > now)
+  return list.filter((x) => Number.isFinite(Date.parse(x.expires_at || '')) ? Date.parse(x.expires_at) > now : now - (Date.parse(x.at || '') || FIRST_SEEN.get(x) || 0) <= 48 * 60 * 60_000)
     .filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i)
     .sort((a, b) => (b.level || 1) - (a.level || 1) || (Date.parse(a.onset || '') || Infinity) - (Date.parse(b.onset || '') || Infinity) || (b.at || '').localeCompare(a.at || ''));
 }
@@ -154,6 +156,8 @@ export async function officialWeatherWarnings({ force = false, waitMs = 0 } = {}
   if (!force && cache.at && Date.now() - cache.at < TTL) return liveCachedWarnings();
   if (!cache.busy) {
     cache.busy = (async () => {
+      cache.attemptAt = Date.now();
+      const previous = cache.warnings;
       cache.feedItems = 0; cache.candidates = 0; cache.parsed = 0; cache.settled = 0; cache.itemErrors = 0;
       const xml = await get(CAP_FEED_URL, 12_000);
       const cutoff = Date.now() - 7 * 86_400_000;
@@ -171,19 +175,26 @@ export async function officialWeatherWarnings({ force = false, waitMs = 0 } = {}
         cache.settled += 1;
         const current = orderedWarnings(parsed);
         cache.parsed = current.length;
-        if (current.length) cache.warnings = current;
+        // Commit only after the complete pass; never replace a valid cache with partial results.
       }
       const warnings = orderedWarnings(parsed);
-      cache.warnings = warnings;
-      if (cache.itemErrors) { cache.errAt = Date.now(); cache.at = Date.now() - TTL; if (!cache.err) cache.err = `${cache.itemErrors} CAP document(s) could not be read`; }
-      else { cache.at = Date.now(); cache.errAt = 0; cache.err = ''; }
+      cache.warnings = cache.itemErrors ? orderedWarnings([...warnings, ...previous]) : warnings;
+      if (cache.itemErrors) { cache.failureAt = Date.now(); cache.errAt = Date.now(); cache.at = Date.now() - TTL; if (!cache.err) cache.err = `${cache.itemErrors} CAP document(s) could not be read`; }
+      else { cache.successAt = Date.now(); cache.at = Date.now(); cache.errAt = 0; cache.err = ''; }
       return liveCachedWarnings();
-    })().catch((e) => { cache.err = e.message; cache.errAt = Date.now(); cache.at = Date.now() - TTL; return liveCachedWarnings(); }).finally(() => { cache.busy = null; });
+    })().catch((e) => { cache.failureAt = Date.now(); cache.err = e.message; cache.errAt = Date.now(); cache.at = Date.now() - TTL; return liveCachedWarnings(); }).finally(() => { cache.busy = null; });
   }
   if (!waitMs) return liveCachedWarnings();
-  return Promise.race([cache.busy, new Promise((resolve) => setTimeout(() => resolve(liveCachedWarnings()), waitMs))]);
+  let timer;
+  try { return await Promise.race([cache.busy, new Promise((resolve) => { timer = setTimeout(() => resolve(liveCachedWarnings()), waitMs); })]); }
+  finally { clearTimeout(timer); }
 }
 export async function officialWeatherMeta() {
   return { ...DAILY_META, alertsUrl: CAP_FEED_URL, fetchedAt: cache.metaAt };
 }
-export const officialWeatherDebug = () => ({ warningsAt: cache.at || null, warnings: liveCachedWarnings().length, feedItems: cache.feedItems, candidates: cache.candidates, settled: cache.settled, parsed: cache.parsed, itemErrors: cache.itemErrors, metaAt: cache.metaAt || null, retryAfter: cache.errAt ? new Date(cache.errAt + ERROR_RETRY_TTL).toISOString() : null, err: cache.err || '' });
+export const officialWeatherDebug = () => ({
+  attemptAt: cache.attemptAt || null, successAt: cache.successAt || null, failureAt: cache.failureAt || null,
+  fetching: Boolean(cache.busy), stale: !cache.successAt || Date.now() - cache.successAt >= TTL,
+  lifecycle: 'fetch-health-only', sameUrlDocumentRevalidation: false, cancellationReconciliation: false,
+  health: cache.errAt ? (cache.itemErrors ? 'partial' : 'feed-failed') : !cache.successAt ? 'unverified' : Date.now() - cache.successAt >= TTL ? 'stale' : !cache.feedItems || !cache.candidates ? 'ok-empty' : 'ok',
+  ttlMs: TTL, warningsAt: cache.at || null, warnings: liveCachedWarnings().length, feedItems: cache.feedItems, candidates: cache.candidates, settled: cache.settled, parsed: cache.parsed, itemErrors: cache.itemErrors, metaAt: cache.metaAt || null, retryAfter: cache.errAt ? new Date(cache.errAt + ERROR_RETRY_TTL).toISOString() : null, err: cache.err || '' });
