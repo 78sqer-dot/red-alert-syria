@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import sys
 import time
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -37,6 +38,8 @@ ARABIC = re.compile(r"[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]")
 LATIN = re.compile(r"[A-Za-z]")
 
 
+SOURCE_TIMESTAMPS = []
+CACHE_DIR = None
 TILE = None  # (s, w, n, e) set per request
 TILES = [(32.3, 35.6, 34.4, 38.6), (32.3, 38.6, 34.4, 42.5), (34.4, 35.6, 37.4, 38.6), (34.4, 38.6, 37.4, 42.5)]
 def query_for(category, kinds=("node", "way", "relation")):
@@ -59,6 +62,11 @@ def fetch_category(category, kinds=("node", "way", "relation")):
                 payload = json.loads(response.read().decode("utf-8"))
             if "elements" not in payload:
                 raise ValueError("Overpass response has no elements")
+            stamp = (payload.get("osm3s") or {}).get("timestamp_osm_base")
+            if not stamp:
+                raise ValueError("Overpass response lacks source replication timestamp")
+            datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            SOURCE_TIMESTAMPS.append(stamp)
             return payload["elements"]
         except Exception as exc:
             errors.append("{}: {}".format(endpoint, exc))
@@ -130,18 +138,20 @@ def distance_m(a, b):
 
 
 def main():
+    if not CACHE_DIR:
+        raise RuntimeError("Run-isolated cache directory required; legacy undated caches are not trusted")
     rows = []
     # Category-at-a-time downloads keep queries manageable and allow a failed
     # server to be retried against each alternate endpoint.
     for cat_index, category in enumerate(CATEGORIES):
-        cache = "/tmp/svc_cache_{}.json".format(category)
+        cache = str(Path(CACHE_DIR) / "svc_cache_{}.json".format(category))
         if os.path.exists(cache):
             elements = json.load(open(cache))
         else:
             global TILE
             elements = []
             for ti, tile in enumerate(TILES):
-                tcache = "/tmp/svc_cache_{}_{}.json".format(category, ti)
+                tcache = str(Path(CACHE_DIR) / "svc_cache_{}_{}.json".format(category, ti))
                 if os.path.exists(tcache):
                     part = json.load(open(tcache))
                 else:
@@ -194,7 +204,11 @@ def main():
             time.sleep(1)
 
     os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
-    document = {"v": 1, "generated": datetime.date.today().isoformat(),
+    if not SOURCE_TIMESTAMPS:
+        raise RuntimeError("No source timestamp: refusing to relabel cached records as fresh")
+    source_as_of = min(SOURCE_TIMESTAMPS)
+    document = {"v": 1, "generated": source_as_of[:10], "source_as_of": source_as_of,
+                "built_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "src": "© OpenStreetMap contributors (ODbL)", "cats": list(CATEGORIES), "items": rows}
     with open(OUTFILE, "w", encoding="utf-8", newline="") as stream:
         json.dump(document, stream, ensure_ascii=False, separators=(",", ":"))
@@ -209,7 +223,8 @@ if __name__ == "__main__":
         args = parser.parse_args()
         if args.output:
             OUTFILE = str(Path(args.output).expanduser().resolve())
-        main()
+        with tempfile.TemporaryDirectory(prefix="ras-services-run-") as CACHE_DIR:
+            main()
     except Exception as exc:
         print("ERROR: {}".format(exc), file=sys.stderr)
         sys.exit(1)

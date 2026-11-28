@@ -1,0 +1,123 @@
+[
+  {
+    "type": "node",
+    "id": 5101100321,
+    "pos": [
+      35.9293745,
+      36.6291183
+    ],
+    "tags": {
+      "addr:city": "إدلب",
+      "addr:city:ar": "إدلب",
+      "addr:street": "دوار الكرة",
+      "amenity": "hospital",
+      "healthcare": "hospital",
+      "name": "مديرية الصحة",
+      "name:ar": "مديرية الصحة",
+      "name:en": "Health Directorate"
+    }
+  },
+  {
+    "type": "node",
+    "id": 8615761617,
+    "pos": [
+      35.9298207,
+      36.6277731
+    ],
+    "tags": {
+      "addr:city": "إدلب",
+      "addr:city:ar": "إدلب",
+      "addr:street": "دوار الحكمة Wisdom Roundabout St",
+      "amenity": "hospital",
+      "healthcare": "hospital",
+      "internet_access": "wlan",
+      "name": "مستشفى إدلب الجامعي",
+      "name:ar": "مستشفى إدلب الجامعي",
+      "name:en": "Idlib University Mustashfa",
+      "opening_hours": "24/7",
+      "phone": "+352 681 503 260",
+      "website": "https://idlib.university/",
+      "wikidata": "Q110381520",
+      "wikipedia": "ar:مستشفى إدلب الجامعي"
+    }
+  },
+  {
+    "type": "node",
+    "id": 13661084267,
+    "pos": [
+      33.5557412,
+      36.3637548
+    ],
+    "tags": {
+      "amenity": "place_of_worship",
+      "denomination": "sunni",
+      "name": "جامع الزهراء",
+      "name:ar": "جامع فاطمة الزهراء",
+      "name:en": "Mosque of Fatima AlZahraa",
+      "religion": "muslim"
+    }
+  },
+  {
+    "type": "way",
+    "id": 32075972,
+    "tags": {
+      "highway": "residential",
+      "lane_markings": "no",
+      "name": "شارع الشهيد محمد عبد الرحمن",
+      "sidewalk:both": "yes",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "type": "way",
+    "id": 185269702,
+    "tags": {
+      "highway": "tertiary",
+      "name": "شارع حمورابي",
+      "name:ar": "شارع حمورابي",
+      "name:en": "Hammurabi Street",
+      "source": "Bing"
+    }
+  },
+  {
+    "type": "way",
+    "id": 204713045,
+    "tags": {
+      "highway": "residential",
+      "name": "شارع التوافيق",
+      "name:ar": "شارع التوافيق",
+      "name:en": "Al-Tawafiq Street"
+    }
+  },
+  {
+    "type": "way",
+    "id": 490692063,
+    "tags": {
+      "amenity": "place_of_worship",
+      "building": "mosque",
+      "denomination": "sunni",
+      "name": "جامع الزهراء",
+      "name:ar": "جامع فاطمة الزهراء",
+      "name:en": "Mosque of AlZahraa",
+      "religion": "muslim"
+    }
+  },
+  {
+    "type": "way",
+    "id": 492404936,
+    "tags": {
+      "addr:city": "إدلب",
+      "addr:city:ar": "إدلب",
+      "amenity": "hospital",
+      "emergency": "yes",
+      "healthcare": "hospital"
+    }
+  },
+  {
+    "type": "way",
+    "id": 1569101310,
+    "tags": {
+      "amenity": "parking"
+    }
+  }
+]

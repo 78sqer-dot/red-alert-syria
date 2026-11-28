@@ -1,0 +1,919 @@
+{
+  "source_as_of": "2026-11-27T21:21:21Z",
+  "input_sha256": "705ead1557f01de83209d711c552fd9530bf2caa85d6b0207ca7819810d18eea",
+  "contact_policy": "Omit unverified non-Syria/malformed phones; omit both nonempty conflicting merged phone/hours, retain provenance here; retained source values not independently verified.",
+  "contact_audit": [
+    {
+      "object": [
+        "n",
+        603476755
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "6130457",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        1783107759
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "+963 11 5117706;+963 933391041",
+      "callable_value": "+963115117706;+963933391041",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        1819221204
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "+963 944 733 432;+963 11 514 124",
+      "callable_value": "+963944733432;+96311514124",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        4267889689
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "0215224300",
+      "callable_value": "+963215224300",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        4395362890
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+963312004",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        4448732090
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "033-7353653",
+      "callable_value": "+963337353653",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        4462400791
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "+963 958 387 241",
+      "callable_value": "+963958387241",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        4471449859
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "043211407",
+      "callable_value": "+96343211407",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        4534456495
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "00963954259958",
+      "callable_value": "+963954259958",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        4534460790
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "0954259958",
+      "callable_value": "+963954259958",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        4547459091
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "2663073",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        4988049824
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "043535300",
+      "callable_value": "+96343535300",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        5021887953
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0992599594",
+      "callable_value": "+963992599594",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        5083036522
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "96343767012",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        5105433323
+      ],
+      "category": 4,
+      "field": "phone",
+      "source_value": "0114446222",
+      "callable_value": "+963114446222",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        5114032023
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "222229",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        5168477321
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "+963 11 2245109",
+      "callable_value": "+963112245109",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        5224293721
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "041375680",
+      "callable_value": "+96341375680",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        5242040221
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0113112330",
+      "callable_value": "+963113112330",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        5477968121
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "041472690",
+      "callable_value": "+96341472690",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        5497247721
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0312752525",
+      "callable_value": "+963312752525",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "objects": [
+        [
+          "n",
+          5477968121
+        ],
+        [
+          "n",
+          5537982621
+        ]
+      ],
+      "field": "opening_hours",
+      "source_values": [
+        "Sa-Th 18:00-17:00",
+        "Sa-Th 10:00-17:00"
+      ],
+      "reason": "nonempty-merged-conflict",
+      "action": "both-omitted"
+    },
+    {
+      "object": [
+        "n",
+        5817177053
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0332418044",
+      "callable_value": "+963332418044",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        5856786786
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "2273056",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        5984091585
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0933649339",
+      "callable_value": "+963933649339",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        6071050885
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0933335971",
+      "callable_value": "+963933335971",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        6098962785
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0215220767",
+      "callable_value": "+963215220767",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        6112170687
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "2672552",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        6161383486
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0114455058",
+      "callable_value": "+963114455058",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        6166453091
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "252544",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        6247451285
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "446083",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        6422629587
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0332241046",
+      "callable_value": "+963332241046",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        6496429085
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "0941111970",
+      "callable_value": "+963941111970",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        6711920785
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0332331970",
+      "callable_value": "+963332331970",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        6829495996
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0946644112",
+      "callable_value": "+963946644112",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        6854170589
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "2518411",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        6904090885
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "00963052428374",
+      "callable_value": "+963052428374",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        6985266885
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0937542622",
+      "callable_value": "+963937542622",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        7012800085
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0332535203",
+      "callable_value": "+963332535203",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        7035503785
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0212668069",
+      "callable_value": "+963212668069",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        7113750285
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "00963944376717",
+      "callable_value": "+963944376717",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        7215059085
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "+963 16 325 351",
+      "callable_value": "+96316325351",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        7235398785
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "252544",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        7295135086
+      ],
+      "category": 3,
+      "field": "phone",
+      "source_value": "0930524470",
+      "callable_value": "+963930524470",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        7485412785
+      ],
+      "category": 3,
+      "field": "phone",
+      "source_value": "+905377000499",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        7683114185
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0944 397 112",
+      "callable_value": "+963944397112",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        7758130785
+      ],
+      "category": 3,
+      "field": "phone",
+      "source_value": "05551900007",
+      "callable_value": "+9635551900007",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        8024338485
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0933410711",
+      "callable_value": "+963933410711",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        8308735417
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0968805871",
+      "callable_value": "+963968805871",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        8418119217
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "+905350230308",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        8452763918
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "252239",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        8615761617
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+352 681 503 260",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "n",
+        9101633755
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0312128000",
+      "callable_value": "+963312128000",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        11264521270
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0988754382",
+      "callable_value": "+963988754382",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        11646305969
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "00963332536880",
+      "callable_value": "+963332536880",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        11937953369
+      ],
+      "category": 4,
+      "field": "phone",
+      "source_value": "00963997560424",
+      "callable_value": "+963997560424",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        12865901901
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0949117926",
+      "callable_value": "+963949117926",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        13059285502
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0990548570",
+      "callable_value": "+963990548570",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        13452507501
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0187713436",
+      "callable_value": "+963187713436",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        13543047301
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0934593447",
+      "callable_value": "+963934593447",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        13949339101
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0992085675",
+      "callable_value": "+963992085675",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        14054903601
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0990548570",
+      "callable_value": "+963990548570",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        14132297545
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "+963 950 563 389",
+      "callable_value": "+963950563389",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        14237665801
+      ],
+      "category": 2,
+      "field": "phone",
+      "source_value": "0937637936",
+      "callable_value": "+963937637936",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        14405299619
+      ],
+      "category": 4,
+      "field": "phone",
+      "source_value": "+963 959 442 529",
+      "callable_value": "+963959442529",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "n",
+        14416183701
+      ],
+      "category": 1,
+      "field": "phone",
+      "source_value": "0997495908",
+      "callable_value": "+963997495908",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "w",
+        30285235
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+963 11 212 6500",
+      "callable_value": "+963112126500",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "w",
+        30751976
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+963 11 9518",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "w",
+        106775196
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+963 11 5115549;+963 11 5124338;+963 11 5123637;+963 11 5121211;+963 11 5115523",
+      "callable_value": "+963115115549;+963115124338;+963115123637;+963115121211;+963115115523",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "w",
+        374883934
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+963 11 2133000",
+      "callable_value": "+963112133000",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "r",
+        8028775
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+905351048632",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    },
+    {
+      "object": [
+        "w",
+        632583957
+      ],
+      "category": 3,
+      "field": "phone",
+      "source_value": "00963315912212",
+      "callable_value": "+963315912212",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "w",
+        991304332
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+963 933 032 795",
+      "callable_value": "+963933032795",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "w",
+        996948405
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+963 11 3326030",
+      "callable_value": "+963113326030",
+      "reason": "format-normalized",
+      "action": "normalized"
+    },
+    {
+      "object": [
+        "w",
+        1346085504
+      ],
+      "category": 0,
+      "field": "phone",
+      "source_value": "+963 11 9472",
+      "reason": "unverified-nonlocal-or-malformed-phone",
+      "action": "omitted"
+    }
+  ],
+  "converter_sha256": "2ca6688d3bf2a7c49ed2007fea03841ef9a7c772604470cb14261c487ad26d01",
+  "counts": {
+    "nodes": 3577,
+    "ways": 316,
+    "relations": 7,
+    "outside": 21,
+    "invalid_geometry": 0,
+    "duplicate_objects": 0,
+    "near_duplicates": 24
+  },
+  "rows": 3900,
+  "categories": {
+    "hospital": 517,
+    "clinic": 317,
+    "pharmacy": 1964,
+    "fuel": 750,
+    "bakery": 352
+  },
+  "limitations": [
+    "All seven relevant relations in this source were independently audited as multipolygons and materialized; future non-multipolygon relations need explicit handling.",
+    "Bounding-box centres approximate Overpass centres, not entrances.",
+    "Snapshot is OSM data freshness, not live operating status."
+  ]
+}
