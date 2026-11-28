@@ -43,3 +43,17 @@ test('tool and service names remain opaque and visible before selection',()=>{
  assert.ok(css.includes('.map-ctrls .floating-nav > .floating-nav-label,.svc-tabs .floating-nav > .floating-nav-label{max-width:190px;opacity:1;'));
  assert.ok(css.includes('background:rgba(20,31,54,.88)'));
 });
+
+test('service navigation uses equal aligned grid cells with two columns on phones',()=>{
+ const css=readFileSync(new URL('../public/css/app.css',import.meta.url),'utf8').split('/* Service navigation: equal cells')[1];
+ assert.ok(css.includes('grid-template-columns:repeat(4,minmax(0,1fr))'));
+ assert.ok(css.includes('grid-template-columns:repeat(2,minmax(0,1fr))'));
+ assert.ok(css.includes('.svc-tabs .floating-nav,.svc-tabs .floating-nav.on{width:100%;min-width:0;min-height:52px;'));
+});
+
+test('nearby filters and map-layer cards share equal responsive rows',()=>{
+ const css=readFileSync(new URL('../public/css/app.css',import.meta.url),'utf8').split('/* Nearby category filters')[1];
+ assert.ok(css.includes('.svc-chips:has([data-cat]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr))'));
+ assert.ok(css.includes('[data-cat=all]{grid-column:1/-1;}'));
+ assert.ok(css.includes('.svc-mgrid{grid-template-columns:repeat(2,minmax(0,1fr))'));
+});

@@ -1569,3 +1569,17 @@ html:not(.dark) .floating-nav:not(.floating-selected):not(.on):not([aria-expande
 .svc-tab.on .floating-nav-label{animation:none;}
 html:not(.dark) .map-ctrls .floating-nav:not(.floating-selected):not([aria-expanded=true]):not([aria-pressed=true]),html:not(.dark) .svc-tabs .floating-nav:not(.on){background:rgba(255,255,255,.88);color:#334155;}
 .map-ctrl-panel .map-control-actions .ctrl-btn.floating-nav{width:auto;min-width:0;min-height:48px;height:auto;flex:1 1 calc(50% - 7px);padding:8px 12px;justify-content:flex-start;}
+/* Service navigation: equal cells and regular rows instead of staggered pills. */
+.svc-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:1fr;gap:8px;align-items:stretch;}
+.svc-tabs .floating-nav,.svc-tabs .floating-nav.on{width:100%;min-width:0;min-height:52px;height:auto;gap:7px;padding:9px 10px;justify-content:center;}
+.svc-tabs .floating-nav > .floating-nav-label{min-width:0;max-width:100%;white-space:normal;overflow-wrap:break-word;line-height:1.55;text-align:center;}
+@media(max-width:600px){.svc-tabs{grid-template-columns:repeat(2,minmax(0,1fr));}.svc-tabs .floating-nav,.svc-tabs .floating-nav.on{min-height:52px;}}
+/* Nearby category filters and map-layer cards follow the same aligned rows. */
+.svc-pane .svc-chips:has([data-cat]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr;gap:8px;align-items:stretch;}
+.svc-pane .svc-chips [data-cat]{width:100%;min-width:0;min-height:48px;height:auto;display:flex;align-items:center;justify-content:center;padding:8px 10px;white-space:normal;line-height:1.6;text-align:center;}
+.svc-pane .svc-chips [data-cat=all]{grid-column:1/-1;}
+.svc-pane .svc-mgrid{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr;gap:8px;align-items:stretch;}
+.svc-pane .svc-mgrid .svc-mbtn{width:100%;min-width:0;min-height:56px;justify-content:flex-start;padding:10px 12px;line-height:1.6;overflow-wrap:break-word;}
+.svc-pane .svc-mgrid .svc-dot{flex:none;}
+/* A four-row phone grid scrolls with the sheet so it cannot cover its content. */
+@media(max-width:600px){.svc-tabs{position:static;}}
