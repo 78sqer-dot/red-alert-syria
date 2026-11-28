@@ -478,6 +478,7 @@ class Store extends EventEmitter {
       ...(Array.isArray(st.publicationCleanup) ? st.publicationCleanup : []),
       ...(Array.isArray(o.publicationCleanup) ? o.publicationCleanup : []),
     ]);
+    if (o.svc?.officialCapCache?.v===1) (st.svc ||= {}).officialCapCache=structuredClone(o.svc.officialCapCache);
     if (st.news?.coordination || o.news?.coordination) (st.news ||= {}).coordination = mergeCoordination(st.news?.coordination, o.news?.coordination);
     // A deploy can restore before the old process makes its final Fajr claim.
     // Merge those durable claims before starting the replacement scheduler.

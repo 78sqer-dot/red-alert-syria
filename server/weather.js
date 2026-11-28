@@ -285,10 +285,10 @@ export function registerWeatherTools(bot, h) {
     const recent = st.items.slice(-5).reverse().map((i) => `• ${HAZARDS[i.w.hazard].emoji} ${en ? HAZARDS[i.w.hazard].en : HAZARDS[i.w.hazard].ar} — ${esc(en ? dayEn(i.w.day) : dayName(i.w.day))} (${i.w.govs.length} ${en ? (i.w.govs.length === 1 ? 'governorate' : 'governorates') : 'محافظة'})${i.pub ? ' ✅' : i.ignored ? ' ✖️' : ' 📝'}`).join('\n');
     if (en) return `⛈ <b>Weather warnings</b>\n\n⏸ Third-party forecast-based automatic alerts are disabled.\nMap duration: <b>${esc(durationLabel(store.autoDeleteHours, true))}</b>\n\n`
       + 'The weather service panel and morning bulletin now use only official warnings and links from Syria’s National Meteorological Center. Existing published warnings can still be reviewed below.\n\n'
-      + `<b>Latest warnings:</b>\n${recent || '— No warnings right now'}`;
+      + `<b>Latest warnings:</b>\n${recent || '— No locally saved warning cards'}`;
     return `⛈ <b>تحذيرات الطقس</b>\n\n⏸ أوقفنا التنبيهات الآلية المبنية على توقعات خارجية.\nمدة بقاء التحذير المنشور على الخريطة: <b>${esc(durationLabel(store.autoDeleteHours))}</b>\n\n`
       + 'لوحة الطقس والنشرة الصباحية تعرضان الآن التحذيرات والروابط الرسمية للمركز الوطني للأرصاد الجوية فقط. يمكن مراجعة التحذيرات المنشورة سابقاً أدناه.\n\n'
-      + `<b>آخر التحذيرات:</b>\n${recent || '— ما في تحذيرات حالياً'}`;
+      + `<b>آخر التحذيرات:</b>\n${recent || '— لا توجد بطاقات تحذير محفوظة محلياً'}`;
   };
   const mainKb = (ctx) => {
     return new InlineKeyboard().url(T(ctx, '🌐 نشرة المركز الرسمية', '🌐 Official weather bulletin'), 'https://climweb.med.gov.sy/منتجاتنا/النشرة-اليومية/').row()

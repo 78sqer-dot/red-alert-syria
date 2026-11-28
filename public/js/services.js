@@ -1,3 +1,4 @@
+import {officialWarningStatusText,officialWarningEmptyText} from '/shared/official-weather-status.js';
 // Services on the website: 💱 prices · ⚡ electricity · 🛣 road status layer · 🏥 nearby services
 // (hospitals, pharmacies, fuel stations, bakeries from OpenStreetMap) · 📍 better "my location".
 // Everything here is additive: the alert map keeps working even if this module fails.
@@ -689,6 +690,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const dailyUrl = j.official?.url || 'https://climweb.med.gov.sy/منتجاتنا/النشرة-اليومية/';
     const mapUrl = j.official?.mapUrl || 'https://climweb.med.gov.sy/mapviewer';
     h += `<div class="svc-mgrid"><a class="btn-sm" href="${esc(dailyUrl)}" target="_blank" rel="noopener">${esc(L.wxDailyLink)}</a><a class="btn-sm" href="${esc(mapUrl)}" target="_blank" rel="noopener">${esc(L.wxMapLink)}</a></div>`;
+    h += `<p class="svc-note">${esc(officialWarningStatusText(j.official?.availability,LANG))}</p>`;
     if (j.warnings?.length) {
       h += `<div class="dd-sec">${esc(L.wxWarn)}</div>`;
       h += j.warnings.map((w) => {
@@ -698,7 +700,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
         const stamps = [w.at && `${L.wxIssued}: ${when(w.at)}`, w.onset && `${L.wxStarts}: ${when(w.onset)}`, w.expires_at && `${L.wxExpires}: ${when(w.expires_at)}`].filter(Boolean);
         return `<div class="wx-warn" style="--c:${WARN_C(w.level)}">${esc(w.emoji)} <b>${esc(LANG === 'en' ? w.en : w.ar)}</b><small>${esc(label)}${areas ? ` · ${esc(areas)}` : ''}${w.url ? ` · <a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.official ? L.wxSource : L.wxLocalSource)}</a>` : ''}</small>${stamps.length ? `<small>${esc(stamps.join(' · '))}</small>` : ''}${details ? `<small>${esc(details.slice(0, 220))}</small>` : ''}</div>`;
       }).join('');
-    } else h += `<div class="svc-empty">${esc(L.wxNoAlerts)}</div>`;
+    } else h += `<div class="svc-empty">${esc(officialWarningEmptyText(j.official?.availability,LANG))}</div>`;
     const providerUrl = forecastSource.url || 'https://open-meteo.com/';
     const licenceUrl = forecastSource.licenceUrl || 'https://open-meteo.com/en/licence';
     const adapted = forecastSource.adapted ? (LANG === 'en' ? ' (adapted)' : ' (محوّلة للعرض)') : '';

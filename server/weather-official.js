@@ -1,6 +1,10 @@
 // Official Syrian weather products: CAP warnings and the National Meteorological Center's daily bulletin.
 // Public weather panels and bulletins use these government products only; third-party numeric forecasts are excluded.
+import crypto from 'node:crypto';
+import {officialWarningAvailability} from '../shared/official-weather-status.js';
+import {fetchBoundedCap} from './cap-network.js';
 import { governorates } from './places.js';
+import {capKey,reconcileCapMessages} from './cap-lifecycle.js';
 
 export const CAP_FEED_URL = 'https://climweb.med.gov.sy/api/cap/rss.xml';
 export const DAILY_BULLETIN_INDEX = 'https://climweb.med.gov.sy/منتجاتنا/النشرة-اليومية/';
@@ -9,6 +13,31 @@ const TTL = 20 * 60_000;
 const ERROR_RETRY_TTL = 5 * 60_000;
 const cache = { attemptAt: 0, successAt: 0, failureAt: 0, at: 0, warnings: [], busy: null, errAt: 0, metaAt: Date.now(), feedItems: 0, candidates: 0, parsed: 0, settled: 0, itemErrors: 0, err: '' };
 const CAP_CACHE = new Map();
+let persistence=null, restored=false;
+const CAP_SUPPRESSED=new Map();
+const RETAIN_MS=8*86400_000;
+let safetyFloor=Date.now()-48*3600_000,publicationBlocked=false;
+function advanceSafetyFloor(){safetyFloor=Math.max(safetyFloor,Date.now());}
+export function configureOfficialCapPersistence(adapter){persistence=adapter;restored=false;}
+function restoreCapCache(){
+ if(restored||!persistence)return;if(persistence.ready&&!persistence.ready())return;
+ const saved=persistence.load?.();restored=true;
+ if(saved?.v!==1||!Array.isArray(saved.entries))return;
+ if(!Number.isFinite(saved.safetyFloor)){advanceSafetyFloor();return;}
+ safetyFloor=Math.max(safetyFloor,saved.safetyFloor);publicationBlocked=true;
+ if((saved.suppressed||[]).some(([,until])=>until<=Date.now())||saved.entries.some(([,value])=>Date.now()-value.fetchedAt>=RETAIN_MS))advanceSafetyFloor();
+ for(const [key,until]of (saved.suppressed||[]).slice(-512))if(typeof key==='string'&&until>Date.now())CAP_SUPPRESSED.set(key,until);
+ for(const [url,value]of saved.entries.slice(-32))if(officialCapUrl(url)&&value&&Date.now()-value.fetchedAt<RETAIN_MS&&typeof value.xml==='string'&&value.xml.length<=262144){try{const source={link:url,...value.source};CAP_CACHE.set(url,{...value,envelope:{...parseCapEnvelope(value.xml,source),fetchedAt:value.fetchedAt},warning:parseOfficialCapAlert(value.xml,source)});}catch{}}
+}
+async function saveCapCache(blocked=publicationBlocked){if(persistence&&(!persistence.ready||persistence.ready()))await persistence.save?.({v:1,safetyFloor,publicationBlocked:blocked,entries:[...CAP_CACHE.entries()],suppressed:[...CAP_SUPPRESSED]});}
+export function officialCapUrl(value){try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='climweb.med.gov.sy'&&!u.username&&!u.password&&!u.port&&/^\/api\/cap\/.+\.xml$/.test(u.pathname);}catch{return false;}}
+export function parseCapEnvelope(xml,source){
+ const header=/<(?:[A-Za-z0-9_.-]+:)?alert\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9_.-]+:)?alert>/i.exec(xml)?.[1];
+ if(!header)throw Error('invalid CAP document');
+ const references=tag(header,'references').split(/\s+/).filter(Boolean).map(v=>{const [sender,identifier,sent,...extra]=v.split(',');return extra.length?{}:{sender,identifier,sent};});
+ return {sender:tag(header,'sender'),identifier:tag(header,'identifier'),sent:tag(header,'sent'),status:tag(header,'status'),scope:tag(header,'scope'),msgType:tag(header,'msgType')||'Alert',references,documentHash:crypto.createHash('sha256').update(xml).digest('hex'),fetchedAt:Date.now()};
+}
+
 const FIRST_SEEN = new WeakMap();
 const DAILY_META = { url: DAILY_BULLETIN_INDEX, title: 'النشرة اليومية الصادرة عن المركز الوطني للأرصاد الجوية' };
 
@@ -96,7 +125,9 @@ export function parseOfficialCapAlert(xml, source) {
   const headline = correctHeadlineMonth(headlineRaw, onset, expires);
   const sent = tag(header, 'sent') || source.pubDate;
   const now = Date.now(); const expireAt = Date.parse(expires);
-  if (status && !/actual|system/i.test(status)) return null;
+  if (status && !/^Actual$/.test(status)) return null;
+  if(tag(header,'scope')&&tag(header,'scope')!=='Public')return null;
+  if(Number.isFinite(Date.parse(sent))&&Date.parse(sent)>now)return null;
   if (/cancel|ack/i.test(msgType)) return null;
   if (Number.isFinite(expireAt) && expireAt <= now) return null;
   if (!Number.isFinite(expireAt) && Number.isFinite(Date.parse(sent)) && now - Date.parse(sent) > 48 * 60 * 60_000) return null;
@@ -108,7 +139,7 @@ export function parseOfficialCapAlert(xml, source) {
   const enHazard = { storm: 'thunderstorm', rain: 'heavy rain', snow: 'snow', wind: 'strong wind', dust: 'dust', fog: 'fog', heat: 'heat', frost: 'frost' }[h.hazard] || 'weather';
   const govs = findGovs(areas.length ? areas.join(' · ') : [headline, event, description].filter(Boolean).join(' · '));
   const officialUrl = tag(info, 'web');
-  const url = /^https:\/\//i.test(officialUrl) && /climweb\.med\.gov\.sy$/i.test(new URL(officialUrl).hostname) ? officialUrl : source.link;
+  const url = /^https:\/\//i.test(officialUrl) && new URL(officialUrl).hostname==='climweb.med.gov.sy' ? officialUrl : source.link;
   const pub = Date.parse(source.pubDate || '');
   return {
     id: `cap:${tag(header, 'identifier') || source.link}`, official: true, source: 'المركز الوطني للأرصاد الجوية', source_en: 'National Meteorological Center',
@@ -122,27 +153,39 @@ export function parseOfficialCapAlert(xml, source) {
 async function get(url, timeout = 12_000, attempts = 2) {
   let last;
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const ac = new AbortController(); const timer = setTimeout(() => ac.abort(), timeout);
     try {
-      const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/rss+xml, application/xml, text/xml, text/html;q=0.9, */*;q=0.8' }, signal: ac.signal });
-      if (!r.ok) {
-        last = new Error(`HTTP ${r.status}`);
-        if (r.status < 500 && r.status !== 429) { last.noRetry = true; throw last; }
-      } else return await r.text();
+      const {response:r,text:body}=await fetchBoundedCap(url,{timeoutMs:timeout,maxBytes:1048576,headers:{'User-Agent':UA,Accept:'application/rss+xml,application/xml,text/xml'}});
+      if(!r.ok){last=Error('HTTP '+r.status);if(r.status<500&&r.status!==429){last.noRetry=true;throw last;}}else return body;
     } catch (e) { last = e; if (e.noRetry) throw e; }
-    finally { clearTimeout(timer); }
     if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 350));
   }
   throw last || new Error('official weather source unavailable');
 }
-async function loadCapItem(item) {
-  if (CAP_CACHE.has(item.link)) return CAP_CACHE.get(item.link);
-  const xml = await get(item.link, 30_000, 1);
-  const out = parseOfficialCapAlert(xml, item);
-  if (out && !FIRST_SEEN.has(out)) FIRST_SEEN.set(out, Date.now());
-  CAP_CACHE.set(item.link, out);
-  if (CAP_CACHE.size > 48) CAP_CACHE.delete(CAP_CACHE.keys().next().value);
-  return out;
+async function loadCapItem(item){
+ if(!officialCapUrl(item.link))throw Error('unapproved CAP document origin');
+ const old=CAP_CACHE.get(item.link);let url=item.link,response,body;
+ const headers={'User-Agent':UA,Accept:'application/xml,text/xml'};
+ if(old?.etag)headers['If-None-Match']=old.etag;if(old?.modified)headers['If-Modified-Since']=old.modified;
+ for(let redirects=0;redirects<=2;redirects++){
+  const result=await fetchBoundedCap(url,{headers,redirect:'manual',timeoutMs:30000,maxBytes:262144});response=result.response;body=result.text;
+  if([301,302,303,307,308].includes(response.status)){const next=new URL(response.headers?.get('location')||'',url).href;if(!officialCapUrl(next)||redirects===2)throw Error('unapproved CAP redirect');url=next;continue;}break;
+ }
+ let xml;if(response.status===304){if(!old?.xml)throw Error('304 without cached CAP');xml=old.xml;}else{if(!response.ok)throw Error('CAP HTTP '+response.status);xml=body;}
+ const envelope=parseCapEnvelope(xml,item);const warning=parseOfficialCapAlert(xml,item);
+ if(!capKey(envelope)&&envelope.msgType!=='Alert')throw Error('invalid lifecycle identity');
+ envelope.fetchedAt=Date.now();const entry={xml,envelope,warning,source:item,fetchedAt:Date.now(),etag:response.headers?.get('etag')||(response.status===304?old?.etag:null)||null,modified:response.headers?.get('last-modified')||(response.status===304?old?.modified:null)||null};
+ CAP_CACHE.set(item.link,entry);if(warning)FIRST_SEEN.set(warning,Date.now());return entry;
+}
+function reconciledWarnings(){
+ const entries=[...CAP_CACHE.values()];for(const [key,until]of CAP_SUPPRESSED)if(until<=Date.now()){advanceSafetyFloor();CAP_SUPPRESSED.delete(key);}
+ const lifecycle=reconcileCapMessages(entries.map(x=>x.envelope),{suppressed:[...CAP_SUPPRESSED.keys()]});
+ for(const key of lifecycle.suppressed){const original=entries.find(x=>capKey(x.envelope)===key);if(!CAP_SUPPRESSED.has(key))CAP_SUPPRESSED.set(key,Math.max(Date.now()+RETAIN_MS,(Date.parse(original?.warning?.expires_at)||0)+86400_000));}
+ if(CAP_SUPPRESSED.size>512){advanceSafetyFloor();const sorted=[...CAP_SUPPRESSED].sort((a,b)=>a[1]-b[1]);for(const [key]of sorted.slice(0,CAP_SUPPRESSED.size-512))CAP_SUPPRESSED.delete(key);}
+ cache.lifecycleErrors=lifecycle.diagnostics.length+entries.filter(x=>!capKey(x.envelope)||!x.envelope.scope||!['Alert','Update','Cancel','Ack','Error'].includes(x.envelope.msgType)||!['Actual','Exercise','System','Test','Draft'].includes(x.envelope.status)).length;
+ cache.floorOmissions=lifecycle.active.filter(x=>Date.parse(x.sent)<=safetyFloor).length;
+ const active=new Set(lifecycle.active.filter(x=>Date.parse(x.sent)>safetyFloor).map(capKey));
+ if(cache.lifecycleErrors)return [];
+ return entries.filter(x=>x.warning&&capKey(x.envelope)&&active.has(capKey(x.envelope))&&!entries.some(y=>y!==x&&capKey(y.envelope)===capKey(x.envelope)&&y.fetchedAt>x.fetchedAt)).map(x=>x.warning);
 }
 function orderedWarnings(list) {
   const now = Date.now();
@@ -150,39 +193,47 @@ function orderedWarnings(list) {
     .filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i)
     .sort((a, b) => (b.level || 1) - (a.level || 1) || (Date.parse(a.onset || '') || Infinity) - (Date.parse(b.onset || '') || Infinity) || (b.at || '').localeCompare(a.at || ''));
 }
-const liveCachedWarnings = () => orderedWarnings(cache.warnings);
+const liveCachedWarnings = () => publicationBlocked?[]:orderedWarnings(cache.warnings);
 export async function officialWeatherWarnings({ force = false, waitMs = 0 } = {}) {
+  if(persistence?.ready&&!persistence.ready())return liveCachedWarnings();
+  restoreCapCache();
+  if(!cache.warnings.length&&CAP_CACHE.size)cache.warnings=orderedWarnings(reconciledWarnings());
   if (!force && cache.errAt && Date.now() - cache.errAt < ERROR_RETRY_TTL) return liveCachedWarnings();
   if (!force && cache.at && Date.now() - cache.at < TTL) return liveCachedWarnings();
   if (!cache.busy) {
     cache.busy = (async () => {
       cache.attemptAt = Date.now();
-      const previous = cache.warnings;
+      // Previous valid envelopes remain in CAP_CACHE on transient failures.
       cache.feedItems = 0; cache.candidates = 0; cache.parsed = 0; cache.settled = 0; cache.itemErrors = 0;
       const xml = await get(CAP_FEED_URL, 12_000);
       const cutoff = Date.now() - 7 * 86_400_000;
       const items = feedItems(xml);
       cache.feedItems = items.length;
-      const candidates = items.filter((x) => /\/api\/cap\/.*\.xml(?:\?|$)/i.test(x.link)
-        && /(تحذير|تنبيه|طقس|جوي|امطار|ثلوج|رياح|عاصفه|غبار|البحر)/i.test(`${x.title} ${x.description}`)
+      const candidates = items.filter((x) => officialCapUrl(x.link)
         && (!Date.parse(x.pubDate) || Date.parse(x.pubDate) >= cutoff))
         .sort((a, b) => (Date.parse(b.pubDate) || 0) - (Date.parse(a.pubDate) || 0)).slice(0, 8);
       cache.candidates = candidates.length;
       const parsed = [];
       for (const item of candidates) {
-        try { const warning = await loadCapItem(item); if (warning) parsed.push(warning); }
+        try { const entry = await loadCapItem(item); if (entry.warning) parsed.push(entry.warning); }
         catch (e) { cache.itemErrors += 1; cache.err = e.message; }
         cache.settled += 1;
         const current = orderedWarnings(parsed);
         cache.parsed = current.length;
         // Commit only after the complete pass; never replace a valid cache with partial results.
       }
-      const warnings = orderedWarnings(parsed);
-      cache.warnings = cache.itemErrors ? orderedWarnings([...warnings, ...previous]) : warnings;
+      // Keep lifecycle envelopes beyond feed disappearance and across partial failures.
+      // Reconcile before projection, so old warnings cannot revive after Cancel.
+      for(const [url,entry]of CAP_CACHE)if(Date.now()-entry.fetchedAt>=RETAIN_MS){advanceSafetyFloor();CAP_CACHE.delete(url);}
+      if(CAP_CACHE.size>32){advanceSafetyFloor();const sorted=[...CAP_CACHE].sort((a,b)=>a[1].fetchedAt-b[1].fetchedAt);for(const [url]of sorted.slice(0,CAP_CACHE.size-32))CAP_CACHE.delete(url);}
+      const nextWarnings=orderedWarnings(reconciledWarnings());
+      const nextBlocked=cache.itemErrors>0;publicationBlocked=true;
+      await saveCapCache(nextBlocked);
+      cache.warnings=nextWarnings;publicationBlocked=nextBlocked;
       if (cache.itemErrors) { cache.failureAt = Date.now(); cache.errAt = Date.now(); cache.at = Date.now() - TTL; if (!cache.err) cache.err = `${cache.itemErrors} CAP document(s) could not be read`; }
       else { cache.successAt = Date.now(); cache.at = Date.now(); cache.errAt = 0; cache.err = ''; }
       return liveCachedWarnings();
-    })().catch((e) => { cache.failureAt = Date.now(); cache.err = e.message; cache.errAt = Date.now(); cache.at = Date.now() - TTL; return liveCachedWarnings(); }).finally(() => { cache.busy = null; });
+    })().catch((e) => { publicationBlocked=true;cache.failureAt = Date.now(); cache.err = e.message; cache.errAt = Date.now(); cache.at = Date.now() - TTL; return liveCachedWarnings(); }).finally(() => { cache.busy = null; });
   }
   if (!waitMs) return liveCachedWarnings();
   let timer;
@@ -190,11 +241,12 @@ export async function officialWeatherWarnings({ force = false, waitMs = 0 } = {}
   finally { clearTimeout(timer); }
 }
 export async function officialWeatherMeta() {
-  return { ...DAILY_META, alertsUrl: CAP_FEED_URL, fetchedAt: cache.metaAt };
+  return { ...DAILY_META, alertsUrl: CAP_FEED_URL, fetchedAt: cache.metaAt, availability:officialWarningAvailability(officialWeatherDebug()) };
 }
 export const officialWeatherDebug = () => ({
+  persistenceReady:!persistence?.ready||persistence.ready(),floorOmissions:cache.floorOmissions||0,
   attemptAt: cache.attemptAt || null, successAt: cache.successAt || null, failureAt: cache.failureAt || null,
   fetching: Boolean(cache.busy), stale: !cache.successAt || Date.now() - cache.successAt >= TTL,
-  lifecycle: 'fetch-health-only', sameUrlDocumentRevalidation: false, cancellationReconciliation: false,
-  health: cache.errAt ? (cache.itemErrors ? 'partial' : 'feed-failed') : !cache.successAt ? 'unverified' : Date.now() - cache.successAt >= TTL ? 'stale' : !cache.feedItems || !cache.candidates ? 'ok-empty' : 'ok',
+  lifecycle: 'exact-reference-reconciliation', sameUrlDocumentRevalidation: true, cancellationReconciliation: true, lifecycleErrors:cache.lifecycleErrors||0,safetyFloor:new Date(safetyFloor).toISOString(),publicationBlocked,
+  health: cache.errAt ? (cache.itemErrors ? 'partial' : 'feed-failed') : !cache.successAt ? 'unverified' : Date.now() - cache.successAt >= TTL ? 'stale' : !cache.feedItems || !cache.candidates ? 'ok-empty' : cache.lifecycleErrors ? 'lifecycle-partial' : 'ok',
   ttlMs: TTL, warningsAt: cache.at || null, warnings: liveCachedWarnings().length, feedItems: cache.feedItems, candidates: cache.candidates, settled: cache.settled, parsed: cache.parsed, itemErrors: cache.itemErrors, metaAt: cache.metaAt || null, retryAfter: cache.errAt ? new Date(cache.errAt + ERROR_RETRY_TTL).toISOString() : null, err: cache.err || '' });

@@ -1,16 +1,17 @@
+import {officialWarningStatusText,officialWarningEmptyText} from '../shared/official-weather-status.js';
 // 🌤 Official weather warnings + daily morning weather bulletin.
 //  - publicWeather(): official CAP warnings plus Open-Meteo model points (MET Norway fallback) when the user opens the weather map.
 //  - Model data is clearly labeled and never converted into official alerts or channel posts.
 //  - Morning bulletin: a branded image + short caption in the channel (default 08:00 Damascus), its own
 //    post (the prices bulletin stays separate). On/off, time, preview and "post now" in the owner menu.
 import { InlineKeyboard, InputFile } from 'grammy';
-import { config } from './config.js';
+import { config, DEFAULT_PUBLIC_URL } from './config.js';
 import { store } from './store.js';
 import { governorates } from './places.js';
 import { damascusParts } from './stats-image.js';
 import { svgToPng, channelBadge } from './alert-image.js';
 import { EXTRA_POINTS, HAZARDS } from './weather.js';
-import { officialWeatherMeta, officialWeatherWarnings, officialWeatherDebug, DAILY_BULLETIN_INDEX, CAP_FEED_URL } from './weather-official.js';
+import { officialWeatherMeta, officialWeatherWarnings, officialWeatherDebug, configureOfficialCapPersistence, DAILY_BULLETIN_INDEX, CAP_FEED_URL } from './weather-official.js';
 import { startOfficialWeatherContinuity } from './weather-continuity.js';
 import { WX_LABEL, wxKind, wxIconSvg } from '../shared/wx-icons.js';
 import fs from 'node:fs';
@@ -25,7 +26,7 @@ const LOGO = (() => {
   } catch { return ''; }
 })();
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const siteUrl = () => (config.publicUrl || 'https://red-alert-syria.onrender.com').replace(/\/$/, '');
+const siteUrl = () => (config.publicUrl || DEFAULT_PUBLIC_URL).replace(/\/$/, '');
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const AR_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const TTL = 30 * 60_000;
@@ -340,7 +341,7 @@ export async function publicWeather() {
       ...(R.source === MET_NORWAY.name ? MET_NORWAY : OPEN_METEO),
       updatedAt: R.at || null,
     },
-    official: { ...official, warningSource: 'المركز الوطني للأرصاد الجوية / وزارة الطوارئ وإدارة الكوارث', mapUrl: 'https://climweb.med.gov.sy/mapviewer' },
+    official: { ...official, availability:(await officialWeatherMeta()).availability, warningSource: 'المركز الوطني للأرصاد الجوية / وزارة الطوارئ وإدارة الكوارث', mapUrl: 'https://climweb.med.gov.sy/mapviewer' },
     warnings: warnings.filter((w) => w.official),
     points,
   };
@@ -378,7 +379,7 @@ function text(x, y, s, { size = 24, weight = 400, fill = '#e5e7eb', anchor = 'en
   return `<text x="${x}" y="${y}" font-family="${family}, Noto Sans" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}"${opacity < 1 ? ` opacity="${opacity}"` : ''}>${esc(s)}</text>`;
 }
 const HZ_KIND = { rain: 'rain', snow: 'snow', wind: 'wind', storm: 'storm', heat: 'sun', frost: 'snow', dust: 'dust', fog: 'fog' };
-export function wxBulletinSvg(pts, warns, now = Date.now()) {
+export function wxBulletinSvg(pts, warns, now = Date.now(), official = null) {
   const date = damascusParts(now).date;
   const W = 1080; const P = 48; const RX = W - P;
   const o = [];
@@ -412,11 +413,13 @@ export function wxBulletinSvg(pts, warns, now = Date.now()) {
     o.push(text(RX - 80, y + 47, line.length > 58 ? line.slice(0, 57) + '…' : line, { size: 26, weight: 700, fill: '#ffffff' }));
     y += 86;
   }
-  if (!wl.length) {
-    o.push(`<rect x="${P}" y="${y}" width="${W - 2 * P}" height="72" rx="18" fill="#111827" stroke="#334155"/>`);
-    o.push(text(RX - 24, y + 45, 'لا توجد تنبيهات رسمية نشطة ظاهرة في موجز المركز عند آخر تحقق', { size: 22, weight: 600, fill: '#cbd5e1' }));
-    y += 86;
-  }
+  const availabilityText=officialWarningStatusText(official?.availability);
+  const statusLines=[];let statusLine='';
+  for(const word of availabilityText.split(/\s+/)){if((statusLine+' '+word).trim().length>58){statusLines.push(statusLine);statusLine=word;}else statusLine=(statusLine+' '+word).trim();}if(statusLine)statusLines.push(statusLine);
+  const statusHeight=30+statusLines.length*34;
+  o.push(`<rect x="${P}" y="${y}" width="${W-2*P}" height="${statusHeight}" rx="18" fill="#111827" stroke="#64748b"/>`);
+  statusLines.forEach((line,i)=>o.push(text(RX-24,y+34+i*34,line,{size:22,weight:600,fill:'#e2e8f0'})));
+  y+=statusHeight+16;
   y += 6;
   const byGov = new Map(pts.filter((p) => p.main).map((p) => [p.gov, p]));
   const gap = 16; const ch = 132;
@@ -456,7 +459,7 @@ export function wxBulletinSvg(pts, warns, now = Date.now()) {
   const fy = H - 40;
   o.push(text(RX, fy - 52, 'المصدر: المركز الوطني للأرصاد الجوية · موجز التحذيرات الحكومي الرسمي', { size: 17, weight: 500, fill: '#6b7280' }));
   o.push(`<rect x="${P}" y="${fy - 32}" width="${W - 2 * P}" height="1" fill="#1f2937"/>`);
-  o.push(text(RX, fy + 6, 'red-alert-syria.onrender.com', { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
+  o.push(text(RX, fy + 6, new URL(siteUrl()).host, { size: 21, weight: 700, fill: '#cbd5e1', family: 'Noto Sans' }));
   o.push(channelBadge(P, fy - 40 + 14, { h: 40, dark: true }));
   o.push('</svg>');
   return o.join('\n').replaceAll('__H__', String(H));
@@ -465,7 +468,8 @@ export function wxBulletinSvg(pts, warns, now = Date.now()) {
 // ---------------------------------------------------------------- caption
 export function wxBulletinCaption(pts, warns, now = Date.now(), official = null) {
   const L = [`🌤 <b>نشرة الطقس — ${dayLabel(now)}</b>`, ''];
-  if (!warns.length) L.push('لا توجد تنبيهات رسمية نشطة ظاهرة في موجز المركز عند آخر تحقق.');
+  L.push(officialWarningStatusText(official?.availability));
+  if (!warns.length && official?.availability?.state==='bounded') L.push(officialWarningEmptyText(official?.availability));
   for (const w of warns.slice(0, 2)) {
     const names = w.govs.map((c) => govOf(c)?.ar).filter(Boolean);
     L.push('', `⚠️ <b>${esc(w.ar)}</b> ${w.emoji}${names.length ? ` — ${esc(names.slice(0, 5).join('، '))}${names.length > 5 ? ' وغيرها' : ''}` : ''}`);
@@ -490,7 +494,8 @@ export async function renderWxBulletin(now = Date.now()) {
   const r = await readyData();
   if (!r.ok) return r;
   const [warns, official] = await Promise.all([officialWeatherWarnings({ waitMs: 45_000 }), officialWeatherMeta()]);
-  return { ok: true, png: svgToPng(wxBulletinSvg(r.pts, warns, now), 1080), caption: wxBulletinCaption(r.pts, warns, now, official) };
+  official.availability=(await officialWeatherMeta()).availability;
+  return { ok: true, png: svgToPng(wxBulletinSvg(r.pts, warns, now, official), 1080), caption: wxBulletinCaption(r.pts, warns, now, official) };
 }
 export async function postWxBulletin(api, { chatId = config.channel, test = false, en = false } = {}) {
   const r = await renderWxBulletin();
@@ -507,6 +512,7 @@ let started = false;
 export function startWxBulletin(getApi) {
   if (started) return;
   started = true;
+  configureOfficialCapPersistence({ready:()=>!store._backupWritesPaused,load:()=>store.state.svc?.officialCapCache,save:async value=>{(store.state.svc||={}).officialCapCache=value;store.persist();if(store.backup&&config.telegramBackup&&!await store.flushBackup(true))throw Error('CAP backup unverified');}});
   startOfficialWeatherContinuity(); // one official-only cache lifecycle, no public posts
   const c0 = wxbState().cfg; const p0 = damascusParts();
   if (!c0.last && p0.hm >= c0.time) { c0.last = p0.date; save(false); } // first boot after the time: start tomorrow
