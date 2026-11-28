@@ -1,3 +1,4 @@
+import {rewritePrivacyDecision} from './rewrite-privacy.js';
 import {choosePoliticalCategory,unsupportedDecision} from './facility-decision-review.js';
 import { releasePreSendLocationClaim } from './pre-send-location-recovery.js';
 import { deletePrivatePublicationCard, retryPrivatePublicationCleanup } from './private-publication-cleanup.js';
@@ -2040,10 +2041,13 @@ export function registerNewsTools(bot, h) {
       await toast(ctx, '');
       return showRewritePreview(ctx, d, lang);
     }
+    if (!R.rewriteImpl && !rewritePrivacyDecision({dataClass:'real-news',providerTier:'unknown'}).allowed) {
+      return toast(ctx,t(ctx,'توقفت المعاينة الخارجية لحماية بيانات المصدر حتى مراجعة خصوصية المزوّد؛ بقيت المسودة كما هي.','External rewrite is held until provider privacy is reviewed; the draft is unchanged.'),true);
+    }
     if (!R.rewriteImpl && !process.env.NEWS_REWRITE_GEMINI_API_KEY) {
       return toast(ctx, t(ctx,
-        'إعادة الصياغة غير مفعّلة بعد: يلزم مفتاح Google AI Studio مجاني منفصل في NEWS_REWRITE_GEMINI_API_KEY، مع إيقاف الفوترة.',
-        'Rewrite is not configured: add a separate free Google AI Studio key as NEWS_REWRITE_GEMINI_API_KEY with billing disabled.'), true);
+        'إعادة الصياغة الخارجية غير مهيأة؛ لم يتغير النص ولم تُرسل بيانات.',
+        'External rewrite is not configured; no text changed or data was sent.'), true);
     }
     if (d.aiRewriteBusy) return toast(ctx, t(ctx, 'إعادة الصياغة قيد التنفيذ', 'Rewrite is already running'));
     d.aiRewriteBusy = true;
@@ -2051,7 +2055,7 @@ export function registerNewsTools(bot, h) {
     try {
       let text = String(R.rewriteImpl
         ? await R.rewriteImpl(sourceText, { mode })
-        : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: d.srcs?.[0]?.name || '', mode }));
+        : await rewriteArabicNews(sourceText, { key: process.env.NEWS_REWRITE_GEMINI_API_KEY, sourceName: '', mode, dataClass:'real-news',providerTier:'unknown' }));
       const editorialReviewReason = mode === 'news' ? null : privateEditorialOutputReviewReason(sourceText, text);
       if (editorialReviewReason) {
         const error = new Error(editorialReviewReason);

@@ -122,7 +122,7 @@ test('explicit opinion rewrite is labeled, sharp toward government targets, and 
   let request;
   const output = 'خفض الدعم يحمّل الأسر أعباء إضافية وفق الأرقام الواردة في المصدر.';
   const result = await rewriteArabicNews('أعلنت الحكومة الانتقالية خفض الدعم، وتضمن البيان تقديراً لزيادة كلفة المعيشة.', {
-    key: 'dedicated-free-key', mode: 'opinion',
+    key: 'dedicated-free-key',dataClass:'synthetic-nonpersonal', mode: 'opinion',
     fetchImpl: async (url, options) => {
       request = { url: String(url), options };
       return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: output }] } }] }) };
@@ -163,8 +163,8 @@ test('private critique and satire work on unrelated reports without inventing go
   assert.ok(keywordTypes(accident).includes('accident'), 'the traffic incident is a monitored news type');
   assert.equal(rewriteSourceReviewReason(accident), null,
     'a sufficiently detailed non-political source is eligible for a private preview');
-  const opinion = await rewriteArabicNews(accident, { key: 'dedicated-free-key', mode: 'opinion', fetchImpl });
-  const satire = await rewriteArabicNews(accident, { key: 'dedicated-free-key', mode: 'satire', fetchImpl });
+  const opinion = await rewriteArabicNews(accident, { key: 'dedicated-free-key',dataClass:'synthetic-nonpersonal', mode: 'opinion', fetchImpl });
+  const satire = await rewriteArabicNews(accident, { key: 'dedicated-free-key',dataClass:'synthetic-nonpersonal', mode: 'satire', fetchImpl });
   assert.match(opinion, /^رأي\/تحليل:/);
   assert.match(satire, /^محاكاة ساخرة خيالية \(ليست خبراً\):/);
   assert.match(satire, /لوحة الطريق/);
@@ -182,11 +182,11 @@ test('private critique and satire work on unrelated reports without inventing go
   const unsafeNoTarget = 'رأي/تحليل: سياسة الحكومة تسببت بالحادث.';
   const unsafeNamedTarget = 'رأي/تحليل: تسببت الوزارة بالحادث.';
   await assert.rejects(rewriteArabicNews(accident, {
-    key: 'dedicated-free-key', mode: 'opinion',
+    key: 'dedicated-free-key',dataClass:'synthetic-nonpersonal', mode: 'opinion',
     fetchImpl: async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: unsafeNoTarget }] } }] }) }),
   }), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
   await assert.rejects(rewriteArabicNews(ministryCondolence, {
-    key: 'dedicated-free-key', mode: 'opinion',
+    key: 'dedicated-free-key',dataClass:'synthetic-nonpersonal', mode: 'opinion',
     fetchImpl: async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: unsafeNamedTarget }] } }] }) }),
   }), (error) => error.code === 'REWRITE_NOT_APPLICABLE');
   assert.equal(requests, 2, 'safe private previews reach the provider; unsafe target/causality claims are stopped before being returned');
@@ -219,7 +219,7 @@ test('professional rewrite uses only the fixed fast free-tier model and returns 
   const text = 'قالت مصادر محلية إن اشتباكات اندلعت قرب حارم في ريف إدلب مساء اليوم.';
   const output = 'أفادت مصادر محلية باندلاع اشتباكات قرب حارم بريف إدلب مساء اليوم.';
   const result = await rewriteArabicNews(text, {
-    key: 'dedicated-free-key',
+    key: 'dedicated-free-key',dataClass:'synthetic-nonpersonal',
     fetchImpl: async (url, options) => {
       request = { url: String(url), options };
       return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: output }] } }] }) };

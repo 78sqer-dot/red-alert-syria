@@ -1864,3 +1864,13 @@ test('ministry-condolence source enables owner-only opinion and satire without c
     for (const draft of drafts) delete newsState().drafts[draft.id];
   }
 });
+
+test('temporary rewrite privacy hold keeps three buttons and unchanged draft with no provider or publish',async(t)=>{
+ const id='synthetic_privacy_hold';const oldRewrite=newsMonitorTest.R.rewriteImpl;newsMonitorTest.R.rewriteImpl=null;
+ const draft={id,type:'attack',status:'pending',headline:'تمرين اصطناعي لاختبار الواجهة',sourceText:'هذا نص اصطناعي غير شخصي لاختبار الحماية فقط وليس خبراً فعلياً للنشر.',loc:{scope:'country',name_ar:'سوريا'},extra:[],srcs:[],cards:[],created:Date.now()};newsState().drafts[id]=draft;
+ const before=JSON.stringify(draft);const previousFetch=global.fetch;let providerCalls=0;global.fetch=async()=>{providerCalls++;throw Error('network forbidden for synthetic hold');};
+ t.after(()=>{global.fetch=previousFetch;newsMonitorTest.R.rewriteImpl=oldRewrite;delete newsState().drafts[id];});
+ const keyboard=newsMonitorTest.cardKb(draft,'ar',ownerId).inline_keyboard.flat();for(const prefix of ['rw','op','sa'])assert.ok(keyboard.some(b=>b.callback_data===`nw:${prefix}:${id}`));
+ for(const mode of ['rw','op','sa']){const start=calls.length;await tap(`nw:${mode}:${id}`,owner,bot,745);assert.equal(JSON.stringify(draft),before);const response=calls.slice(start).find(c=>c.method==='answerCallbackQuery');assert.match(response?.payload?.text||'',/توقفت المعاينة الخارجية/);assert.equal(calls.slice(start).some(c=>c.method==='sendMessage'&&c.chatId===process.env.CHANNEL_ID),false);}
+ assert.equal(providerCalls,0);
+});

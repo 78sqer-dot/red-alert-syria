@@ -1,3 +1,4 @@
+import {assertRewritePrivacy} from './rewrite-privacy.js';
 // Turns news posts into alert candidates: a cheap keyword pre-filter (no AI cost for weather/sports/
 // politics unless enabled by keywords), then one Gemini call per batch that says, for every post, whether it reports a NEW concrete
 // event inside Syria, its type, the place(s) and a short neutral headline, and whether it is the same
@@ -521,9 +522,10 @@ export function finalizeRewriteOutput(raw, mode = 'news', sourceName = '') {
   if (!output || output.length > 280) throw new Error('Rewrite exceeded the safe length limit');
   return output;
 }
-export async function rewriteArabicNews(source, { key, sourceName = '', mode = 'news', timeoutMs = 10_000, fetchImpl = fetch } = {}) {
+export async function rewriteArabicNews(source, { key, sourceName = '', mode = 'news', dataClass='real-news', providerTier='unknown', timeoutMs = 10_000, fetchImpl = fetch } = {}) {
   if (!key) throw new Error('NEWS_REWRITE_GEMINI_API_KEY is not configured');
   if (!['news', 'opinion', 'satire'].includes(mode)) throw new Error('Unsupported rewrite mode');
+  assertRewritePrivacy({dataClass,providerTier});
   const input = String(source || '').trim().slice(0, 1200);
   if (!input) throw new Error('No source text to rewrite');
   const reviewReason = mode === 'news' ? null : rewriteSourceReviewReason(input);
