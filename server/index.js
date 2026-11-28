@@ -15,7 +15,7 @@ import { store, publicAlert } from './store.js';
 import { startNewsMonitor, stopNewsMonitor, newsDebug, sendTestDraft } from './news-monitor.js';
 import { startJobsMonitor, stopJobsMonitor, publicJobs } from './jobs.js';
 import { startArmyMonitor, stopArmyMonitor, publicArmy } from './army.js';
-import { createBot, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, correctSalihiyaRoundaboutOnce, correctRaqadWadiOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, stripQuoteBlockRetry, stripQuoteBlockFinal, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
+import { createBot, correctStatement1658Once, correctRojPhotoOnce, correctMineDiscoveryOnce, correctNewLocalityPostsOnce, correctSalihiyaRoundaboutOnce, correctRaqadWadiOnce, imageTest, resyncChannelPosts, stripQuoteBlockOnce, stripQuoteBlockRetry, stripQuoteBlockFinal, retypeAlerts, startDailySummary, telegramBackupAdapter, BOT_COMMANDS, REPORT_COMMANDS, botInfo, runtimeHooks, fetchAlertMediaFile } from './bot.js';
 import { applyProject } from './config.js';
 import { governorates, searchFollowPlaces } from './places.js';
 import { mountSeo, homeJsonLd, verifyMetaTags, umamiScriptTag, notFoundPage } from './seo.js';
@@ -549,6 +549,7 @@ async function start() {
     const runOwnerPostCorrections = async () => {
       if (store._backupWritesPaused) { setTimeout(runOwnerPostCorrections, 5000).unref(); return; }
       try {
+        console.log('[statement-1658-correction]', JSON.stringify(await correctStatement1658Once(bots.admin.api)));
         const roj = await correctRojPhotoOnce(bots.admin.api);
         const mine = await correctMineDiscoveryOnce(bots.admin.api);
         const localities = await correctNewLocalityPostsOnce(bots.admin.api);

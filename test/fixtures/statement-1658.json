@@ -1,0 +1,122 @@
+{
+  "alert": {
+    "id": "124cf7d4-0dc6-4f04-9940-01cd45c3b7f9",
+    "type": "clashes",
+    "title": "اشتباكات مسلحة — السويداء",
+    "title_en": "Armed clashes — As-Suwayda",
+    "description": "قيادة قوات الحرس الوطني تصدر بياناً تتهم فيه قوات حكومة دمشق بتصعيد الخروقات واستهداف نقاط دفاعية غربي السويداء.",
+    "location": {
+      "latitude": 32.70896,
+      "longitude": 36.56951
+    },
+    "place": {
+      "scope": "place",
+      "place_id": 172408,
+      "rank": 1,
+      "district": "172409",
+      "name_ar": "السويداء",
+      "name_en": "As-Suwayda",
+      "district_ar": "السويداء",
+      "district_en": "As-Suwayda",
+      "governorate": "05",
+      "governorate_ar": "السويداء",
+      "governorate_en": "As-Suwayda",
+      "latitude": 32.70896,
+      "longitude": 36.56951
+    },
+    "areas": [
+      "السويداء"
+    ],
+    "extra": [],
+    "scope": "place",
+    "timestamp": "2026-11-28T06:51:17.901Z",
+    "expires_at": "2026-11-28T10:51:17.901Z",
+    "source": "news",
+    "meta": {
+      "newsSources": [
+        {
+          "name": "وكالة هاوار للأنباء",
+          "url": "https://t.me/HawarNews/86522",
+          "timestamp": null
+        }
+      ],
+      "sourceText": "🔴قيادة الحرس الوطني تصدر بياناً حول الاشتباكات الأخيرة غربي السويداء\n🔵أصدرت قيادة قوات الحرس الوطني، اليوم، بياناً قالت فيه إن \"قوات حكومة دمشق صعّدت خروقاتها ليل أمس وفجر اليوم، مستهدفةً عدداً من النقاط الدفاعية على المحاور الغربية للمدينة برمايات قنص مباشرة، ما أدى إلى وقوع إصابة في صفوف قواتنا\".\n🌐عرض المزيد\n🔔وكالة أنباء هاوار ANHA\n🦋موقعنا على بلوسكاي\n📱 موقعنا على X\n📱 لحظة بلحظة عبر الواتس اب"
+    },
+    "is_active": true,
+    "history": [
+      {
+        "at": "2026-11-28T06:51:17.901Z",
+        "kind": "published",
+        "title": "اشتباكات مسلحة — السويداء",
+        "description": "قيادة قوات الحرس الوطني تصدر بياناً تتهم فيه قوات حكومة دمشق بتصعيد الخروقات واستهداف نقاط دفاعية غربي السويداء.",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-28T06:51:22.293Z",
+        "kind": "updated",
+        "title": "اشتباكات مسلحة — السويداء",
+        "description": "قيادة قوات الحرس الوطني تصدر بياناً تتهم فيه قوات حكومة دمشق بتصعيد الخروقات واستهداف نقاط دفاعية غربي السويداء.",
+        "is_active": true
+      }
+    ],
+    "channel_message_id": 1658,
+    "channel_format": 2,
+    "description_en": "The National Guard leadership issued a statement accusing the Damascus government forces of escalating violations and targeting defensive points in the western Sweida countryside.",
+    "channel_media": "photo",
+    "channel_delivery": {
+      "status": "confirmed",
+      "at": "2026-11-28T06:51:23.398Z"
+    },
+    "channel_post_failed": false,
+    "channel_failure": null,
+    "channel_retry_claim": null
+  },
+  "draft": {
+    "id": "167d753de7",
+    "type": "clashes",
+    "loc": {
+      "scope": "place",
+      "place_id": 172408,
+      "rank": 1,
+      "district": "172409",
+      "name_ar": "السويداء",
+      "name_en": "As-Suwayda",
+      "district_ar": "السويداء",
+      "district_en": "As-Suwayda",
+      "governorate": "05",
+      "governorate_ar": "السويداء",
+      "governorate_en": "As-Suwayda",
+      "latitude": 32.70896,
+      "longitude": 36.56951
+    },
+    "extra": [],
+    "headline": "قيادة قوات الحرس الوطني تصدر بياناً تتهم فيه قوات حكومة دمشق بتصعيد الخروقات واستهداف نقاط دفاعية غربي السويداء.",
+    "srcs": [
+      {
+        "u": "HawarNews",
+        "name": "وكالة هاوار للأنباء",
+        "url": "https://t.me/HawarNews/86522",
+        "ts": 1795848127000,
+        "local": true
+      }
+    ],
+    "ts": 1795848127000,
+    "created": 1795848163072,
+    "status": "published",
+    "cards": [],
+    "rule": false,
+    "droneRuleVersion": 1,
+    "dronePresence": false,
+    "sourceText": "🔴قيادة الحرس الوطني تصدر بياناً حول الاشتباكات الأخيرة غربي السويداء\n🔵أصدرت قيادة قوات الحرس الوطني، اليوم، بياناً قالت فيه إن \"قوات حكومة دمشق صعّدت خروقاتها ليل أمس وفجر اليوم، مستهدفةً عدداً من النقاط الدفاعية على المحاور الغربية للمدينة برمايات قنص مباشرة، ما أدى إلى وقوع إصابة في صفوف قواتنا\".\n🌐عرض المزيد\n🔔وكالة أنباء هاوار ANHA\n🦋موقعنا على بلوسكاي\n📱 موقعنا على X\n📱 لحظة بلحظة عبر الواتس اب",
+    "nativeReview": {
+      "at": 1795848683494,
+      "result": "published"
+    },
+    "alertId": "124cf7d4-0dc6-4f04-9940-01cd45c3b7f9",
+    "postId": 1658,
+    "cardCleanupPending": false,
+    "mediaCards": [],
+    "notices": [],
+    "successCleanupPending": false
+  }
+}

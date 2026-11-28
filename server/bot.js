@@ -1,3 +1,4 @@
+import { runStatement1658Correction } from './statement-1658-correction.js';
 import { finalizeConfirmedPrivatePublication } from './private-publication-cleanup.js';
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
 import { ensureDraftCardLocation, ensureBuiltAlertLocation, MissingCardLocationError, LOCATION_TEXT_CONFLICT_REASON } from './publish-location-guard.js';
@@ -1293,6 +1294,15 @@ export async function retypeAlerts(api, ids, type, { gapMs = 4000, markerGlyph =
   return out;
 }
 // Photo edit succeeds before the live record changes. Exact baseline guard makes this one-shot.
+export async function correctStatement1658Once(api) {
+  if (!api || !config.channel || !store.backup || !config.telegramBackup || store._backupWritesPaused) return { skipped: true, reason: 'not-ready' };
+  return runStatement1658Correction({ store, editExisting: async (alert) => {
+    const png = await withDeadline(alertImage(alert, 'ar'), 30000);
+    await api.editMessageMedia(config.channel, 1658,
+      InputMediaBuilder.photo(new InputFile(png, 'red-alert-syria-corrected-1658.png'), { caption: channelCaption(alert, { ended: !alert.is_active }), parse_mode: 'HTML' }),
+      { reply_markup: channelKeyboard(alert) });
+  } });
+}
 export async function correctNewLocalityPostsOnce(api) {
   const results=[];
   for (const [id,post,draftId,url] of [
