@@ -26,3 +26,14 @@ test('floating navigation keeps active tools readable and hidden responsive butt
  assert.ok(module.includes(".svc-tab"));assert.ok(module.includes(".map-tool-grid .map-btn"));
  assert.ok(module.includes("button.setAttribute('aria-label', label)"));
 });
+
+test('selected floating controls follow map red tokens, not the mock purple-blue palette',()=>{
+ const css=readFileSync(new URL('../public/css/app.css',import.meta.url),'utf8').split('/* Approved concept 3:')[1];
+ assert.ok(css.includes('linear-gradient(135deg,var(--red),var(--red-strong))'));
+ assert.doesNotMatch(css,/#7c5cff|#4f8cff|#9b86ff|#a78bfa/);
+});
+test('bottom map controls stay round with hidden visual labels after owner follow-up',()=>{
+ const css=readFileSync(new URL('../public/css/app.css',import.meta.url),'utf8').split('/* Bottom-map controls remain circles,')[1];
+ assert.ok(css.includes('width:52px!important;min-width:52px!important;height:52px!important;padding:0!important;gap:0;border-radius:50%!important;'));
+ assert.ok(css.includes('.floating-control-label{display:none!important;}'));
+});
