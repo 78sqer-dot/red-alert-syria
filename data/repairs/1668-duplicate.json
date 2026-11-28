@@ -1,0 +1,290 @@
+{
+  "alert": {
+    "id": "2ca6698e-66c7-415f-898f-2e98f18d5de3",
+    "type": "targeted_strike",
+    "title": "استهداف — حماة",
+    "title_en": "Targeted strike — Hamah",
+    "description": "مقتل متهمين باستهداف دوريات الجمارك خلال عملية أمنية في حماة.",
+    "location": {
+      "latitude": 35.13179,
+      "longitude": 36.75783
+    },
+    "place": {
+      "scope": "place",
+      "place_id": 170017,
+      "rank": 1,
+      "district": "170016",
+      "name_ar": "حماة",
+      "name_en": "Hamah",
+      "district_ar": "حماة",
+      "district_en": "Hama",
+      "governorate": "10",
+      "governorate_ar": "حماة",
+      "governorate_en": "Hama",
+      "latitude": 35.13179,
+      "longitude": 36.75783
+    },
+    "areas": [
+      "حماة"
+    ],
+    "extra": [],
+    "scope": "place",
+    "timestamp": "2026-11-28T16:39:12.461Z",
+    "expires_at": "2026-11-28T18:39:12.461Z",
+    "source": "news",
+    "meta": {
+      "newsSources": [
+        {
+          "name": "عنب بلدي",
+          "url": "https://t.me/enabbaladi/94037",
+          "timestamp": null
+        }
+      ],
+      "sourceText": "حماة.. عملية أمنية تقتل متهمين باستهداف دوريات للجمارك"
+    },
+    "is_active": true,
+    "history": [
+      {
+        "at": "2026-11-28T16:39:12.461Z",
+        "kind": "published",
+        "title": "استهداف — حماة",
+        "description": "مقتل متهمين باستهداف دوريات الجمارك خلال عملية أمنية في حماة.",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-28T16:39:15.463Z",
+        "kind": "updated",
+        "title": "استهداف — حماة",
+        "description": "مقتل متهمين باستهداف دوريات الجمارك خلال عملية أمنية في حماة.",
+        "is_active": true
+      }
+    ],
+    "author": {
+      "id": 0,
+      "name": "رصد تلقائي",
+      "via": "news-day-fallback"
+    },
+    "channel_message_id": 1668,
+    "channel_format": 2,
+    "description_en": "Two suspects accused of targeting customs patrols were killed during a security operation in Hama.",
+    "channel_media": "photo",
+    "channel_delivery": {
+      "status": "confirmed",
+      "at": "2026-11-28T16:39:22.024Z"
+    },
+    "channel_post_failed": false,
+    "channel_failure": null,
+    "channel_retry_claim": null
+  },
+  "draft": {
+    "id": "73afcdb127",
+    "type": "targeted_strike",
+    "loc": {
+      "scope": "place",
+      "place_id": 170017,
+      "rank": 1,
+      "district": "170016",
+      "name_ar": "حماة",
+      "name_en": "Hamah",
+      "district_ar": "حماة",
+      "district_en": "Hama",
+      "governorate": "10",
+      "governorate_ar": "حماة",
+      "governorate_en": "Hama",
+      "latitude": 35.13179,
+      "longitude": 36.75783
+    },
+    "extra": [],
+    "headline": "مقتل متهمين باستهداف دوريات الجمارك خلال عملية أمنية في حماة.",
+    "srcs": [
+      {
+        "u": "enabbaladi",
+        "name": "عنب بلدي",
+        "url": "https://t.me/enabbaladi/94037",
+        "ts": 1795883880000,
+        "local": false
+      }
+    ],
+    "ts": 1795883880000,
+    "created": 1795883944455,
+    "status": "published",
+    "cards": [],
+    "rule": false,
+    "droneRuleVersion": 1,
+    "dronePresence": false,
+    "sourceText": "حماة.. عملية أمنية تقتل متهمين باستهداف دوريات للجمارك",
+    "dayAutoAt": 1795883944455,
+    "autoMode": "day",
+    "nativeReview": {
+      "at": 1795883962032,
+      "result": "published"
+    },
+    "auto": true,
+    "autoAt": 1795883962032,
+    "alertId": "2ca6698e-66c7-415f-898f-2e98f18d5de3",
+    "postId": 1668,
+    "cardCleanupPending": false,
+    "mediaCards": []
+  },
+  "canonical": {
+    "id": "8e85c97c-e32c-4886-989e-e044db1939c6",
+    "type": "targeted_strike",
+    "title": "استهداف — الربيعة بريف حماة",
+    "title_en": "Targeted strike — Al-Rabia, rural Hama",
+    "description": "تصحيح للموقع: أفادت الإخبارية السورية نقلاً عن قوى الأمن الداخلي بمقتل نصر زهرة وإبراهيم الضاهر خلال عملية أمنية في قرية الربيعة بريف حماة. وتتهم قوى الأمن الداخلي زهرة باستهداف دوريات الأمن والجمارك في طرطوس، وهي مكان الاعتداءات المنسوبة إليه لا موقع العملية بحسب هذا التحديث. وكان الخبر السابق، استناداً إلى تقرير أقدم، قد وضع العملية في محافظة طرطوس.",
+    "location": null,
+    "place": {
+      "scope": "country",
+      "name_ar": "الربيعة بريف حماة",
+      "name_en": "Al-Rabia, rural Hama"
+    },
+    "areas": [
+      "الربيعة",
+      "حماة"
+    ],
+    "extra": [],
+    "scope": "country",
+    "timestamp": "2026-11-28T15:04:42.655Z",
+    "expires_at": "2026-11-28T17:04:42.655Z",
+    "source": "news",
+    "meta": {
+      "newsSources": [
+        {
+          "name": "زمان الوصل",
+          "url": "https://t.me/ZAMANALWSLnews/17542",
+          "timestamp": null
+        }
+      ],
+      "sourceText": "عملية أمنية في طرطوس تنتهي بمقتل متورط باستهداف دوريات الجمارك والأمن\nأسفرت عملية أمنية في محافظة طرطوس عن تحييد المدعو نصر زهرة، الذي تتهمه وزارة الداخلية بالتورط في استهداف دوريات الجمارك والأمن في المحافظة.",
+      "sourceConflictReview": {
+        "status": "owner-approved",
+        "priorSource": "https://t.me/s/ZAMANALWSLnews/17542",
+        "laterSources": [
+          "https://t.me/s/AlekhbariahSY/242500",
+          "https://t.me/s/ALMHARAR/99002"
+        ],
+        "reason": "alleged prior attacks in Tartous are distinct from rural-Hama operation location",
+        "precisePointVerified": false
+      },
+      "correction1665": {
+        "approvalReference": "wamid.HBgLOTYxODE5OTQ4OTMVAgASGCBBQ0VCOEIyQUIyRDc5RjUyQjNDMkU3RjFDMTYyQjc5RgA=",
+        "prior": {
+          "id": "8e85c97c-e32c-4886-989e-e044db1939c6",
+          "type": "targeted_strike",
+          "title": "استهداف — طرطوس",
+          "title_en": "Targeted strike — Tartus",
+          "description": "قتل شخص متورط باستهداف دوريات الجمارك والأمن، يدعى نصر زهرة، إثر عملية أمنية في محافظة طرطوس، وفقاً لوزارة الداخلية.",
+          "location": {
+            "latitude": 34.88902,
+            "longitude": 35.88659
+          },
+          "place": {
+            "scope": "governorate",
+            "name_ar": "طرطوس",
+            "name_en": "Tartus",
+            "governorate": "14",
+            "governorate_ar": "طرطوس",
+            "governorate_en": "Tartus",
+            "latitude": 34.88902,
+            "longitude": 35.88659
+          },
+          "areas": [
+            "طرطوس"
+          ],
+          "extra": [],
+          "scope": "governorate",
+          "timestamp": "2026-11-28T15:04:42.655Z",
+          "expires_at": "2026-11-28T17:04:42.655Z",
+          "source": "news",
+          "meta": {
+            "newsSources": [
+              {
+                "name": "زمان الوصل",
+                "url": "https://t.me/ZAMANALWSLnews/17542",
+                "timestamp": null
+              }
+            ],
+            "sourceText": "عملية أمنية في طرطوس تنتهي بمقتل متورط باستهداف دوريات الجمارك والأمن\nأسفرت عملية أمنية في محافظة طرطوس عن تحييد المدعو نصر زهرة، الذي تتهمه وزارة الداخلية بالتورط في استهداف دوريات الجمارك والأمن في المحافظة."
+          },
+          "is_active": true,
+          "history": [
+            {
+              "at": "2026-11-28T15:04:42.655Z",
+              "kind": "published",
+              "title": "استهداف — طرطوس",
+              "description": "قتل شخص متورط باستهداف دوريات الجمارك والأمن، يدعى نصر زهرة، إثر عملية أمنية في محافظة طرطوس، وفقاً لوزارة الداخلية.",
+              "is_active": true
+            },
+            {
+              "at": "2026-11-28T15:04:46.946Z",
+              "kind": "updated",
+              "title": "استهداف — طرطوس",
+              "description": "قتل شخص متورط باستهداف دوريات الجمارك والأمن، يدعى نصر زهرة، إثر عملية أمنية في محافظة طرطوس، وفقاً لوزارة الداخلية.",
+              "is_active": true
+            }
+          ],
+          "author": {
+            "id": 8270709633,
+            "name": "."
+          },
+          "channel_message_id": 1665,
+          "channel_format": 2,
+          "description_en": "A person involved in targeting customs and security patrols, named Nasr Zahra, was killed following a security operation in Tartus Governorate, according to the Ministry of Interior.",
+          "channel_media": "photo",
+          "channel_delivery": {
+            "status": "confirmed",
+            "at": "2026-11-28T15:04:52.848Z"
+          },
+          "channel_post_failed": false,
+          "channel_failure": null,
+          "channel_retry_claim": null
+        }
+      },
+      "approvedPublicCorrection": {
+        "version": 1,
+        "fingerprint": "07a044710f8bdda28560c65320924dffb80c4657f0626cc9d4aab33c51000839",
+        "approvalReference": "wamid.HBgLOTYxODE5OTQ4OTMVAgASGCBBQ0VCOEIyQUIyRDc5RjUyQjNDMkU3RjFDMTYyQjc5RgA="
+      }
+    },
+    "is_active": true,
+    "history": [
+      {
+        "at": "2026-11-28T15:04:42.655Z",
+        "kind": "published",
+        "title": "استهداف — طرطوس",
+        "description": "قتل شخص متورط باستهداف دوريات الجمارك والأمن، يدعى نصر زهرة، إثر عملية أمنية في محافظة طرطوس، وفقاً لوزارة الداخلية.",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-28T15:04:46.946Z",
+        "kind": "updated",
+        "title": "استهداف — طرطوس",
+        "description": "قتل شخص متورط باستهداف دوريات الجمارك والأمن، يدعى نصر زهرة، إثر عملية أمنية في محافظة طرطوس، وفقاً لوزارة الداخلية.",
+        "is_active": true
+      },
+      {
+        "at": "2026-11-28T16:01:00.581Z",
+        "kind": "updated",
+        "title": "استهداف — الربيعة بريف حماة",
+        "description": "تصحيح للموقع: أفادت الإخبارية السورية نقلاً عن قوى الأمن الداخلي بمقتل نصر زهرة وإبراهيم الضاهر خلال عملية أمنية في قرية الربيعة بريف حماة. وتتهم قوى الأمن الداخلي زهرة باستهداف دوريات الأمن والجمارك في طرطوس، وهي مكان الاعتداءات المنسوبة إليه لا موقع العملية بحسب هذا التحديث. وكان الخبر السابق، استناداً إلى تقرير أقدم، قد وضع العملية في محافظة طرطوس.",
+        "is_active": true
+      }
+    ],
+    "author": {
+      "id": 8270709633,
+      "name": "."
+    },
+    "channel_message_id": 1665,
+    "channel_format": 2,
+    "description_en": "Location correction: Syrian Al-Ekhbariya, citing Internal Security Forces, reported that Nasr Zahra and Ibrahim al-Daher were killed during a security operation in Al-Rabia village, rural Hama. Internal Security Forces accuse Zahra of targeting security and customs patrols in Tartous. Under this update, Tartous is the site of those alleged attacks, not the operation. The previous report, based on an earlier source, placed the operation in Tartous Governorate.",
+    "channel_media": "photo",
+    "channel_delivery": {
+      "status": "confirmed",
+      "at": "2026-11-28T15:04:52.848Z"
+    },
+    "channel_post_failed": false,
+    "channel_failure": null,
+    "channel_retry_claim": null,
+    "zones": []
+  }
+}

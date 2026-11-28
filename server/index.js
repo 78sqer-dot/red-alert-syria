@@ -1,5 +1,4 @@
-import {mountPost1665Correction} from './post-1665-coordinator.js';
-import {run1665,KEY1665} from './post-1665-correction.js';
+import {removeDuplicate1668} from './remove-duplicate-1668.js';
 import {InputFile,InputMediaBuilder} from 'grammy';
 import {repairImage1660Once} from './bot.js';
 import {wireMaintenanceUpdates} from './maintenance-update.js';
@@ -256,7 +255,7 @@ const newsKeyOk = (req) => {
   return Boolean(want && key.length === want.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want)));
 };
 app.get('/api/newsdebug', apiLimiter, (req, res) => (newsKeyOk(req) ? res.json(newsDebug()) : res.status(404).end()));
-mountPost1665Correction(app,{auth:newsKeyOk,limiter:apiLimiter,ready:()=>!!bots.admin,finished:()=>store.state.maint?.[KEY1665]?.state==='done',run:readActual=>run1665({store,readActual,readChannel:()=>bots.admin.api.getChat(config.channel),backupEnabled:config.telegramBackup,editExisting:({chat_id,message_id,png,caption,reply_markup})=>bots.admin.api.editMessageMedia(chat_id,message_id,InputMediaBuilder.photo(new InputFile(png,'red-alert-syria-1665-corrected.png'),{caption}),{reply_markup})})});
+app.post('/api/remove-duplicate1668',apiLimiter,async(req,res)=>{if(!newsKeyOk(req)||!bots.admin)return res.status(404).end();res.setHeader('Cache-Control','no-store');try{res.json(await removeDuplicate1668({store,api:bots.admin.api,channel:config.channel,backupEnabled:config.telegramBackup}));}catch{res.status(500).json({state:'inspection-required'});}});
 app.get('/api/newstest', apiLimiter, async (req, res) => {
   if (!newsKeyOk(req) || !bots.admin) return res.status(404).end();
   const owner = config.ownerIds[0];
