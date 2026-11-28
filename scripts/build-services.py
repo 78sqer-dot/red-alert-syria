@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Build a compact Syria services dataset from OpenStreetMap via Overpass."""
+import argparse
 import datetime
 import json
 import math
 import os
+from pathlib import Path
 import re
 import sys
 import time
@@ -18,7 +20,9 @@ ENDPOINTS = (
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 )
 USER_AGENT = "RedAlertSyria/1.0"
-OUTFILE = "/workspace/red-alert-syria/public/data/services.json"
+ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = ROOT / "public" / "data"
+OUTFILE = str(DATA_DIR / "services.json")
 CATEGORIES = ("hospital", "clinic", "pharmacy", "fuel", "bakery")
 # Alternatives deliberately grouped into one Overpass query per category, limiting
 # response size while preserving category-specific interpretation.
@@ -74,7 +78,7 @@ def in_syria(pos):
     """point-in-polygon against public/data/syria-border.geojson (lat, lon)"""
     global _BORDER
     if _BORDER is None:
-        gj = json.load(open(os.path.join(os.path.dirname(OUTFILE), "syria-border.geojson")))
+        gj = json.load(open(DATA_DIR / "syria-border.geojson"))
         polys = []
         for f in gj.get("features", [gj]):
             g = f.get("geometry", f)
@@ -200,6 +204,11 @@ def main():
 
 if __name__ == "__main__":
     try:
+        parser = argparse.ArgumentParser(description=__doc__)
+        parser.add_argument("--output", help="Write a staged candidate here; default is this checkout's public/data/services.json")
+        args = parser.parse_args()
+        if args.output:
+            OUTFILE = str(Path(args.output).expanduser().resolve())
         main()
     except Exception as exc:
         print("ERROR: {}".format(exc), file=sys.stderr)

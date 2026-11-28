@@ -106,26 +106,41 @@ const ST_WORDS = [
   ['partial', ['جزئي', 'للمغادرين فقط', 'للقادمين فقط', 'باتجاه واحد', 'للشاحنات فقط', 'للمسافرين فقط']],
   ['open', ['افتتاح', 'اعاده فتح', 'اعاده افتتاح', 'استئناف', 'عوده الحركه', 'فتح معبر', 'مفتوح', 'reopen']],
 ];
-/** which crossing a post talks about and the status it suggests (null if not about a crossing) */
+// The approval card carries only one unconditional status. Decline ambiguous,
+// future, negated or scoped reports rather than discard their meaning on approval.
+const BORDER_UNSUPPORTED = /(?:^| )و?(?:لا|لم|لن|ليس|ليست|غير|نفي|نفت|ينفي|نفيا|اشاعه|شايعه|سيتم|سيغلق|سيفتح|سيعاد|ستغلق|ستفتح|سوف|غدا|لاحقا|قريبا|اعتبارا|ابتداء|مرتقب|مقرر|المقرر|متوقع|المتوقع|مخطط|اذا|حالما|سابقا|سابق|امس|فقط|حصرا|باستثناء|باستثناءات|عدا|جزيي|جزييا|للمغادرين|للقادمين|للمسافرين|للشاحنات|للبضايع|للسيارات|للمشاه|المسافرين|الشاحنات|البضايع|الركاب|المغادرين|القادمين|دخول|خروج|الدخول|الخروج|باتجاه|اتجاه|واحد|الساعه|ساعات|ساعه)(?: |$)/;
+const hasPhrase = (text, phrase) => [` ${phrase} `, ` و${phrase} `].some((p) => (` ${text} `).includes(p));
+function crossingMentions(text, qualified = false) {
+  return CROSSINGS.filter((c) => [...new Set([c.ar, c.other, ...c.kw])].some((k) => {
+    const name = N(k).replace(/^معبر /, '');
+    return name.length >= 3 && (qualified
+      ? ['معبر ', 'منفذ ', 'معبري ', 'المعبر '].some((pre) => hasPhrase(text, N(pre + name)))
+      : hasPhrase(text, name));
+  }));
+}
+/** A conservative single-crossing suggestion only, never an automatic update. */
 export function matchBorderNews(text) {
-  const t = N(text || '');
-  if (!/معبر|منفذ/.test(t)) return null;
-  let hit = null; let at = Infinity;
-  for (const c of CROSSINGS) {
-    for (const k of new Set([c.ar, c.other, ...c.kw])) {
-      const nk = N(k).replace(/^معبر /, '');
-      for (const pre of ['معبر ', 'منفذ ', 'معبري ', 'المعبر ']) {
-        const i = t.indexOf(N(pre + nk));
-        if (nk.length >= 3 && i >= 0 && i < at) { hit = c; at = i; }
-      }
+  const raw = String(text || '');
+  const whole = N(raw);
+  const mentions = crossingMentions(whole);
+  if (mentions.length !== 1 || BORDER_UNSUPPORTED.test(whole)) return null;
+  const hit = mentions[0];
+  const statuses = new Set();
+  // Split before Arabic normalization removes sentence boundaries. Bare newline
+  // continuations are deliberately not joined: absent a status, no suggestion.
+  for (const part of raw.split(/[.!?؟؛;،,\n\r]+/u)) {
+    const clause = N(part);
+    if (!crossingMentions(clause, true).some((c) => c.id === hit.id)) continue;
+    if (/ابواب مغلق|باب مغلق/.test(clause)) return null;
+    for (const [st, words] of ST_WORDS) {
+      if (words.some((w) => hasPhrase(clause, N(w)))) statuses.add(st);
     }
   }
-  if (!hit) return null;
-  let st = null;
-  for (const [s, words] of ST_WORDS) if (words.some((w) => t.includes(N(w)))) { st = s; break; }
-  if (!st) return null;
-  return { id: hit.id, st };
+  // partial has no supported direction/passenger/freight payload in this card.
+  if (statuses.size !== 1 || statuses.has('partial')) return null;
+  return { id: hit.id, st: [...statuses][0] };
 }
+
 const R = { H: null };
 export function onBorderNews(it) {
   const s = bstate();
