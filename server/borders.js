@@ -2,6 +2,7 @@
 // from the publishing bot (optionally posted to the channel) and suggestions from the news monitor
 // (owner card, never auto-published). Shown on the website (services panel tab + map layer).
 import crypto from 'node:crypto';
+import { BORDER_GUIDANCE } from '../shared/border-guidance.js';
 import { InlineKeyboard, InputFile } from 'grammy';
 import { config } from './config.js';
 import { store } from './store.js';
@@ -63,10 +64,14 @@ export function publicBorders(now = Date.now()) {
   const b = bstate().borders;
   return CROSSINGS.map((c) => {
     const s = b[c.id];
-    const fresh = s && now - s.ts < STALE_MS;
+    // Known imported suggestions confused a northern namesake with Tanf,
+    // freight suspension with total closure, and a retrospective with a new event.
+    // Preserve raw history; do not present those exact records as fresh incidents.
+    const superseded = s?.st === 'closed' && ({tanf:1795720075860,semalka:1795725174691,rasalain:1795781543427})[c.id] === s.ts;
+    const fresh = s && !superseded && now - s.ts < STALE_MS;
     return { id: c.id, country: c.country, country_ar: COUNTRIES[c.country].ar, country_en: COUNTRIES[c.country].en,
       name_ar: c.ar, other_ar: c.other, name_en: c.en, lat: c.lat, lon: c.lon,
-      status: fresh ? s.st : 'unknown', note: fresh ? s.note || '' : '', ts: s?.ts || null };
+      status: fresh ? s.st : 'unknown', note: fresh ? s.note || '' : '', ts: s?.ts || null, guidance: BORDER_GUIDANCE[c.id] || null, recordedStatus: superseded ? s.st : null, statusIssue: superseded ? 'unsupported-scope-or-event' : null };
   });
 }
 const emit = () => store.emit?.('borders', publicBorders());

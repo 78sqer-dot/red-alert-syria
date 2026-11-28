@@ -17,7 +17,7 @@ const S = {
     priceNote: 'نعرض فقط نشرة المركزي الرسمية وقرارات المحروقات الحكومية المنشورة. لا نعرض السوق الموازي أو الذهب. الليرة الجديدة = 100 ليرة قديمة.',
     powerEmpty: 'ما في تحديثات كهرباء من مصدر حكومي رسمي حالياً.', powerSource: 'المصدر الحكومي الرسمي', powerCalc: 'حاسبة فاتورة الكهرباء الرسمية', allSyria: 'عموم سوريا', allGovs: 'كل المحافظات',
     roadsEmpty: 'ما في حالات طرق مسجّلة حالياً.', roadsSub: 'حالات الطرق يلي نشرها فريق الرصد أو وصلتنا ببلاغات وتأكدنا منها، وبتنشال لحالها لما تخلص مدتها.',
-    showRoads: 'عرض الطرق على الخريطة', showBorders: 'عرض المعابر على الخريطة', bordersSub: 'حالة المعابر الحدودية الرئيسية مع دول الجوار، يحدّثها فريق الرصد. الحالة اللي صار لها أكتر من 3 أيام بلا تحديث بتظهر «غير معروف».', bst: { open: 'مفتوح', busy: 'مفتوح مع ازدحام', partial: 'مفتوح جزئياً', closed: 'مغلق', unknown: 'غير معروف' }, updated: 'آخر تحديث', withC: 'مع', crossing: 'معبر', until: 'لحد', reportRoad: 'بلّغ عن طريق',
+    showRoads: 'عرض الطرق على الخريطة', showBorders: 'عرض المعابر على الخريطة', bordersSub: 'الحالة المسجّلة تنتهي بعد 3 أيام بلا تحديث. «غير معروف» لا تعني مفتوحاً أو مغلقاً. معلومات التشغيل المنشورة أدناه مؤرخة ومنفصلة عن الحالة الحالية؛ تحقّق قبل السفر.', bst: { open: 'مفتوح', busy: 'مفتوح مع ازدحام', partial: 'مفتوح جزئياً', closed: 'مغلق', unknown: 'غير معروف' }, updated: 'آخر تحديث', withC: 'مع', crossing: 'معبر', until: 'لحد', reportRoad: 'بلّغ عن طريق',
     road: { closed: 'طريق مسكّر', danger: 'طريق خطر', open: 'طريق سالك', busy: 'زحمة سير' },
     cats: { health: 'مشافي ومراكز صحية', pharmacy: 'صيدليات', fuel: 'كازيات', bakery: 'أفران' },
     cat1: { hospital: 'مشفى', clinic: 'مركز صحي', pharmacy: 'صيدلية', fuel: 'كازية', bakery: 'فرن' },
@@ -49,7 +49,7 @@ const S = {
     priceNote: 'Only Central Bank bulletins and government fuel-price decisions are shown. Parallel-market rates and gold are excluded. 1 new lira = 100 old lira.',
     powerEmpty: 'No electricity updates from an official government source right now.', powerSource: 'Official government source', powerCalc: 'Official electricity bill calculator', allSyria: 'All Syria', allGovs: 'All governorates',
     roadsEmpty: 'No road statuses right now.', roadsSub: 'Road statuses published by our desk or confirmed from reports; they disappear when their time ends.',
-    showRoads: 'Show roads on the map', showBorders: 'Show crossings on the map', bordersSub: 'Status of the main border crossings with neighbouring countries, updated by our desk. A status not updated for 3 days shows as “unknown”.', bst: { open: 'Open', busy: 'Open – heavy traffic', partial: 'Partially open', closed: 'Closed', unknown: 'Unknown' }, updated: 'Updated', withC: 'with', crossing: 'Crossing', until: 'until', reportRoad: 'Report a road',
+    showRoads: 'Show roads on the map', showBorders: 'Show crossings on the map', bordersSub: 'Recorded statuses expire after 3 days without an update. Unknown means neither open nor closed. Dated operating guidance below is separate from current status; check before travel.', bst: { open: 'Open', busy: 'Open – heavy traffic', partial: 'Partially open', closed: 'Closed', unknown: 'Unknown' }, updated: 'Updated', withC: 'with', crossing: 'Crossing', until: 'until', reportRoad: 'Report a road',
     road: { closed: 'Road closed', danger: 'Dangerous road', open: 'Road open', busy: 'Traffic congestion' },
     cats: { health: 'Hospitals & clinics', pharmacy: 'Pharmacies', fuel: 'Fuel stations', bakery: 'Bakeries' },
     cat1: { hospital: 'Hospital', clinic: 'Clinic', pharmacy: 'Pharmacy', fuel: 'Fuel station', bakery: 'Bakery' },
@@ -477,11 +477,18 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
       ${r.note ? `<p class="pp-desc">${esc(r.note)}</p>` : ''}
       <p class="pp-areas">⏳ ${esc(L.until)} ${esc(fmtH.format(new Date(r.expires)))}</p>`;
   }
+  function borderReportDate(ts) {
+    return new Intl.DateTimeFormat(LANG === 'ar' ? 'ar-SY' : 'en-GB', {timeZone:'Asia/Damascus',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(ts));
+  }
+  function borderGuidanceHtml(b) {
+    const g = b.guidance; if (!g) return '';
+    return `<p class="svc-note">${esc(LANG === 'ar' ? g.ar : g.en)}<br>${esc(LANG === 'ar' ? 'تاريخ المصدر: ' : 'Source date: ')}<bdi>${esc(g.sourceDate)}</bdi> · ${esc(LANG === 'ar' ? 'مراجعة الدليل: ' : 'Research checked: ')}<bdi>${esc(g.checkedDate)}</bdi><br><a href="${esc(g.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(g.sourceName)}</a></p>`;
+  }
   function borderHtml(b) {
-    return `<div class="pp-top"><span class="badge live" style="--c:${BD_COLORS[b.status]}">${esc(L.bst[b.status])}</span>${b.ts && b.status !== 'unknown' ? `<span class="time">${esc(when(b.ts))}</span>` : ''}</div>
+    return `<div class="pp-top"><span class="badge live" style="--c:${BD_COLORS[b.status]}">${esc(b.status === 'unknown' ? (LANG === 'ar' ? 'غير مؤكّد حالياً' : 'Not currently confirmed') : (LANG === 'ar' ? 'مسجّل: ' : 'Recorded: ') + L.bst[b.status])}</span>${b.ts && b.status !== 'unknown' ? `<span class="time">${esc(LANG === 'ar' ? 'بلاغ: ' : 'Reported: ')}${esc(borderReportDate(b.ts))}</span>` : ''}</div>
       <p class="pp-title">🛂 ${esc(L.crossing)} ${esc(bdName(b))}</p>
       <p class="pp-areas">${esc(L.withC)} ${esc(LANG === 'en' ? b.country_en : b.country_ar)}${LANG === 'ar' && b.other_ar ? ` (${esc(b.other_ar)})` : ''}</p>
-      ${b.note ? `<p class="pp-desc">${esc(b.note)}</p>` : ''}`;
+      ${b.note ? `<p class="pp-desc">${esc(b.note)}</p>` : ''}${borderGuidanceHtml(b)}`;
   }
   function powerPopHtml(g) {
     const top = g.items[0] || (g.nat ? st.power.find((p) => !p.gov) : null);
@@ -707,7 +714,7 @@ export function createServices({ LANG, esc, icon, toast, openModal, closeModal, 
     const groups = [...new Map(st.borders.map((b) => [b.country, LANG === 'en' ? b.country_en : b.country_ar])).entries()];
     for (const [c, cname] of groups) {
       h += `<div class="dd-sec">${esc(cname)}</div><div class="bd-list">`;
-      h += st.borders.filter((b) => b.country === c).map((b) => `<button class="bd-row" data-bd="${esc(b.id)}"><i class="svc-dot" style="--c:${BD_COLORS[b.status]}"></i><span class="bd-main"><b>${esc(bdName(b))}</b>${b.note ? `<small>${esc(b.note)}</small>` : ''}</span><span class="bd-st" style="--c:${BD_COLORS[b.status]}">${esc(L.bst[b.status])}${b.ts && b.status !== 'unknown' ? `<small>${esc(when(b.ts))}</small>` : ''}</span></button>`).join('');
+      h += st.borders.filter((b) => b.country === c).map((b) => `<button class="bd-row" data-bd="${esc(b.id)}"><i class="svc-dot" style="--c:${BD_COLORS[b.status]}"></i><span class="bd-main"><b>${esc(bdName(b))}</b>${b.note ? `<small>${esc(b.note)}</small>` : ''}</span><span class="bd-st" style="--c:${BD_COLORS[b.status]}">${esc(b.status === 'unknown' ? (LANG === 'ar' ? 'غير مؤكّد حالياً' : 'Not currently confirmed') : (LANG === 'ar' ? 'مسجّل: ' : 'Recorded: ') + L.bst[b.status])}${b.ts && b.status !== 'unknown' ? `<small>${esc(LANG === 'ar' ? 'بلاغ: ' : 'Reported: ')}${esc(borderReportDate(b.ts))}</small>` : ''}</span></button>${borderGuidanceHtml(b)}`).join('');
       h += '</div>';
     }
     if (!st.borders.length) h += `<div class="svc-empty">${esc(L.loading)}</div>`;

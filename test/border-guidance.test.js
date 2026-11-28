@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {store} from '../server/store.js';import {publicBorders} from '../server/borders.js';import {BORDER_GUIDANCE} from '../shared/border-guidance.js';
+test('dated guidance covers all crossings without inventing incident timestamps',()=>{
+ const old=store.state;try{store.state={svc:{borders:{}}};const rows=publicBorders();assert.equal(rows.length,18);for(const b of rows){assert.equal(b.status,'unknown');assert.equal(b.ts,null);assert.match(b.guidance.sourceDate,/^2026-\d\d(?:-\d\d)?$/);assert.equal(b.guidance.checkedDate,'2026-11-28');assert.match(b.guidance.sourceUrl,/^https:\/\//);}assert.match(BORDER_GUIDANCE.talkalakh.en,/pedestrians only/);assert.match(BORDER_GUIDANCE.semalka.en,/trade is suspended/);}finally{store.state=old;}
+});
+test('exact mis-scoped historical records are unconfirmed without modifying raw history or future editor decisions',()=>{
+ const old=store.state;try{const now=1795857000000;store.state={svc:{borders:{tanf:{st:'closed',ts:1795720075860},semalka:{st:'closed',ts:1795725174691},rasalain:{st:'closed',ts:1795781543427},nasib:{st:'open',ts:now-1000}}}};const before=JSON.stringify(store.state.svc.borders);const rows=publicBorders(now);for(const id of ['tanf','semalka','rasalain']){const b=rows.find(x=>x.id===id);assert.equal(b.status,'unknown');assert.equal(b.recordedStatus,'closed');assert.equal(b.statusIssue,'unsupported-scope-or-event');}assert.equal(rows.find(x=>x.id==='nasib').status,'open');assert.equal(JSON.stringify(store.state.svc.borders),before);store.state.svc.borders.tanf.ts=now;assert.equal(publicBorders(now).find(x=>x.id==='tanf').status,'closed');}finally{store.state=old;}
+});
