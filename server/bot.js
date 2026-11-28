@@ -1,3 +1,4 @@
+import { approvedPublicCorrection } from './approved-public-correction.js';
 import {runPost1664Correction,post1664NeedsInspection} from './post-1664-correction-transaction.js';
 import {runImage1660Repair,image1660NeedsInspection} from './image-1660-repair.js';
 import { runStatement1658Correction } from './statement-1658-correction.js';
@@ -270,6 +271,8 @@ export function channelPost(alert, { ended = false } = {}) {
   // alert's own instant, whichever field the caller's object shape carries.
   const postTimeIso = alert.timestamp || (Number.isFinite(alert.ts) ? new Date(alert.ts).toISOString() : alert.created_at || alert.created || undefined);
   assertPublicCopySafe(alert?.title, alert?.title_en, alert?.description, alert?.description_en, alert?.meta?.channelTitle);
+  const approvedCorrection = approvedPublicCorrection(alert);
+  if (alert.meta?.approvedPublicCorrection && !approvedCorrection) throw new Error('invalid-approved-channel-correction');
   const t = typeOf(alert.type);
   let title = alert.meta?.channelTitle || (TITLES[alert.type] || {}).ar || t.ar;
   if (alert.type === 'military_incursion') {
@@ -294,9 +297,9 @@ export function channelPost(alert, { ended = false } = {}) {
   const preserveStoryAttribution = alert.source === 'news' || ['political', 'breaking'].includes(alert.type);
   const privateSources = [...(Array.isArray(alert.meta?.newsSources) ? alert.meta.newsSources : []), ...(Array.isArray(alert.meta?.political?.sources) ? alert.meta.political.sources : [])];
   const privateSourceNames = privateSources.flatMap((source) => [source?.name, source?.u]).filter(Boolean);
-  title = (preserveStoryAttribution ? cleanAttributedNewsText : cleanAlertText)(title, privateSourceNames) || title;
+  title = approvedCorrection ? approvedCorrection.title : (preserveStoryAttribution ? cleanAttributedNewsText : cleanAlertText)(title, privateSourceNames) || title;
   const sections = [`${ended ? '✅ انتهى · ' : ''}${dot}<b>${esc(title)}</b>${emoji ? ` - ${emoji}` : ''}`];
-  const desc = preserveStoryAttribution
+  const desc = approvedCorrection ? approvedCorrection.description : preserveStoryAttribution
     ? cleanAttributedNewsText(alert.description || '', privateSourceNames)
     : cleanAlertText(alert.description || '');
 
@@ -1149,6 +1152,7 @@ const visibleLen = (html) => html.replace(/<[^>]+>/g, '').replace(/&(lt|gt|amp|q
 function channelCaption(alert, opts) {
   let s = channelPost(alert, opts);
   if (visibleLen(s) <= CAPTION_MAX) return s;
+  if (approvedPublicCorrection(alert)) throw new Error('approved-channel-caption-too-long');
   const desc = String(alert.description || alert.title || '');
   for (let keep = desc.length - (visibleLen(s) - CAPTION_MAX) - 4; keep > 0; keep -= 40) {
     s = channelPost({ ...alert, description: desc.slice(0, keep).trimEnd() + '…' }, opts);
