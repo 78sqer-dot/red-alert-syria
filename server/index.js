@@ -1,3 +1,5 @@
+import {wireMaintenanceUpdates} from './maintenance-update.js';
+import {runContext1660Correction} from './context-1660-correction.js';
 import { createFajrReminder } from './fajr-reminder.js';
 import { FAJR_REMINDER_TEXT } from './fajr-reminder-text.js';
 import { transferCounters } from './transfer-counters.js';
@@ -330,6 +332,7 @@ store.on('update', (a) => {
   broadcast('update', a);
   if (a.updates?.at(-1)?.kind === 'updated') sendPush(store, a, 'update').catch((e) => console.warn('[push] update failed:', e.message));
 });
+wireMaintenanceUpdates(store,broadcast);
 store.on('remove', (a) => broadcast('remove', a));
 store.on('roads', (r) => broadcast('roads', r)); // 🛣 road status layer
 store.on('power', (p) => broadcast('power', p));
@@ -573,6 +576,12 @@ async function start() {
       catch (error) { console.error('[private-review-recovery] inspection required', error?.message || error); }
     };
     setTimeout(runPrivateReviewRecovery, 45000).unref();
+    const runContext1660 = async () => {
+      if (store._backupWritesPaused) { setTimeout(runContext1660,5000).unref(); return; }
+      try { console.log('[context-1660-correction]',JSON.stringify(await runContext1660Correction({store}))); }
+      catch(error) { console.error('[context-1660-correction] inspection required',error?.message||error); }
+    };
+    setTimeout(runContext1660,65000).unref();
     // Third quote-strip pass (2026-11-25): full-state targeting (the
     // recentAlerts window dropped the ended alerts' records).
     {

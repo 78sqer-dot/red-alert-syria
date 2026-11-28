@@ -19,7 +19,13 @@ export function newsIncidentLocations(source,main,extra=[]) {
  const facility = text.match(/(?:^|[\s،,:؛])معبر\s+([\p{L}\s]{2,45}?)(?=\s+(?:الحدودي|بريف|في|بمحافظة)|[،,:؛.\n]|$)/u);
  const ruralName=String(main?.name_ar||'').replace(/^ريف\s+/,'');
  const rural = ruralName && new RegExp('(?:^| )ب?ريف (?:مدينه |بلده |قريه )?'+N(ruralName)+'(?: |$)').test(N(text));
- const matches=rural ? ['ريف '+ruralName] : facility ? ['معبر '+facility[1].trim()] : [...text.matchAll(/(?:^|[\s،,:؛])(?:[وفبلك]?(?:بلدة|قرية|قريتي|قريتين|بلدتي|بلدتين|مخيم|مدينة|منطقة|منطقه|حي))\s+["«]?([\p{L}\s]{2,65}?)(?=["»،,:؛.\n]|\s+(?:بريف|ريف|شرقي|غربي|شمالي|جنوبي|شرق|غرب|شمال|جنوب|التابعة|التابعه|بمحافظة|بمحافظه|في محافظة|في محافظه)|$)/gu)].map(m=>m[1].trim());
+ const matches=rural ? ['ريف '+ruralName] : facility ? ['معبر '+facility[1].trim()] : [...text.matchAll(/(?:^|[\s،,:؛])(?:[وفبلك]?(?:بلدة|قرية|قريتي|قريتين|بلدتي|بلدتين|مخيم|مدينة|منطقة|منطقه|حي))\s+["«]?([\p{L}\s]{2,65}?)(?=["»،,:؛.\n]|\s+(?:أسفر|وانفجار|بريف|ريف|في ريف|بمنطقة|بمنطقه|في منطقة|في منطقه|شرقي|غربي|شمالي|جنوبي|شرق|غرب|شمال|جنوب|التابعة|التابعه|بمحافظة|بمحافظه|في محافظة|في محافظه)|$)/gu)].filter(m=>{
+  // A town frame nested in a countryside/administrative phrase is context,
+  // not a second incident. Sentence-separated incidents remain independent.
+  const prefix=N(text.slice(0,m.index).split(/[،,:؛.\n]/u).pop());
+  const nestedArea=/^بمنطق[ةه] /u.test(m[0].trim()) && !/(?:^| )وانفجار (?:اخر|ثان)(?: |$)/u.test(prefix) && /(?:^| )(?:ب?قريه|ب?بلده) /.test(prefix);
+  return !nestedArea && !/(?:^| )(?:ب?ريف|بمنطقه|في منطقه|لناحيه|ناحيه)$/.test(prefix);
+ }).map(m=>m[1].trim());
  const names=[...new Set(matches.map(key))];
  const candidates=[main,...extra].filter(Boolean);
  // Preserve a supported multi-location report. If any framed name is unresolved,

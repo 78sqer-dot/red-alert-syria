@@ -39,3 +39,32 @@ test('countryside of a named city never uses its city-center incident pin',()=>{
   const r=newsIncidentLocations(source,town,[]);assert.equal(r.location.name_ar,'ريف خان شيخون');assert.equal(r.location.latitude,undefined);assert.equal(r.location.short_ar,'ريف خان شيخون - إدلب');
  }
 });
+
+test('1660: town inside village countryside context is not a second incident',()=>{
+ const village=locationFrom({placeId:20004398}),town=locationFrom({placeId:163434});
+ for(const context of ['بريف بلدة تل تمر','في ريف بلدة تل تمر','بمنطقة تل تمر','بمنطقة بلدة تل تمر','التابعة لناحية تل تمر']){
+  const source='العثور على حقل ألغام في قرية أم الكيف '+context+' شمال غربي الحسكة.';
+  const r=newsIncidentLocations(source,village,[town]);
+  assert.equal(r.location.place_id,20004398,context);assert.deepEqual(r.extra,[],context);
+ }
+});
+
+test('a separate incident in another town survives countryside context',()=>{
+ const village=locationFrom({placeId:20004398}),town=locationFrom({placeId:163434});
+ const source='العثور على حقل ألغام في قرية أم الكيف بريف الحسكة، وانفجار آخر في بلدة تل تمر.';
+ const r=newsIncidentLocations(source,village,[town]);assert.equal(r.location.place_id,20004398);assert.equal(r.extra[0].place_id,163434);
+});
+test('second sentence region-frame incident retains its separate town',()=>{
+ const village=locationFrom({placeId:20004398}),town=locationFrom({placeId:163434});
+ for(const delimiter of ['. ','؛ ','\n']){
+  const source='انفجار لغم في قرية أم الكيف'+delimiter+'انفجار آخر بمنطقة تل تمر.';
+  const r=newsIncidentLocations(source,village,[town]);assert.equal(r.extra.length,1,JSON.stringify(delimiter));assert.equal(r.extra[0].place_id,163434);
+ }
+});
+
+test('reviewer exact second incident retains village and town, including narrative tail',()=>{
+ const village=locationFrom({placeId:20004398}),town=locationFrom({placeId:163434});
+ for(const source of ['انفجار لغم في قرية أم الكيف أسفر عن قتلى. وانفجار ثان بمنطقة تل تمر.','انفجار في قرية أم الكيف وانفجار آخر بمنطقة تل تمر.']){
+  const r=newsIncidentLocations(source,village,[town]);assert.equal(r.location.place_id,20004398);assert.equal(r.extra[0]?.place_id,163434);
+ }
+});
