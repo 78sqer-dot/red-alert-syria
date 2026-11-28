@@ -228,7 +228,7 @@ function cardHtml(a, fresh) {
     ${distChip(a)}
     ${descOf(a) ? `<p class="card-desc">${esc(descOf(a))}</p>` : ''}
     <div class="card-foot"><div class="tags">${tagsOf(a).map((x) => `<span>${esc(x)}</span>`).join('')}</div><span class="card-state${a.is_active ? '' : ' off'}">${esc(a.is_active ? T.active : T.ended)}</span>
-      <div class="card-actions">${hasLoc ? `<button class="ic-btn" data-act="map" title="${esc(T.showOnMap)}">${icon('map', 16)}</button>` : ''}<button class="ic-btn" data-act="share" title="${esc(T.share)}">${icon('share', 16)}</button></div>
+      <div class="card-actions">${hasLoc ? `<button class="ic-btn" data-act="map" title="${esc(T.showOnMap)}" aria-label="${esc(T.showOnMap)}">${icon('map', 16)}<span class="card-action-label">${esc(T.showOnMap)}</span></button>` : ''}<button class="ic-btn" data-act="share" title="${esc(T.share)}" aria-label="${esc(T.share)}">${icon('share', 16)}<span class="card-action-label">${esc(T.share)}</span></button></div>
     </div></article>`;
 }
 let freshIds = new Set();
@@ -591,7 +591,7 @@ function toggleDropdown(btnSel, panelSel, render) {
   if (open) {
     render();
     const tools = $('#mapCtrlPanel');
-    if (PHONE.matches && tools) { tools.hidden = true; $('#mapControlsToggle').setAttribute('aria-expanded', 'false'); }
+    if (PHONE.matches && tools) { document.body.classList.remove('tools-fan-open'); tools.hidden = true; $('#mapControlsToggle').setAttribute('aria-expanded', 'false'); }
   }
   placeDropdown(p, open);
   p.hidden = !open;
@@ -1137,6 +1137,7 @@ function bindEvents() {
   const setMapControlsOpen = (open) => {
     mapCtrlPanel.hidden = !open;
     mapCtrlToggle.setAttribute('aria-expanded', String(open));
+    document.body.classList.toggle('tools-fan-open', open);
   };
   mapCtrlToggle.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1144,7 +1145,7 @@ function bindEvents() {
     setMapControlsOpen(mapCtrlPanel.hidden);
   });
   mapCtrlPanel.addEventListener('click', (e) => {
-    if (e.target.closest('[data-dd-close]')) { e.preventDefault(); closeDropdowns(); return; }
+    if (e.target.closest('[data-dd-close]')) { e.preventDefault(); closeDropdowns(); setMapControlsOpen(true); return; }
     if (e.target.closest('.map-control-action')) setMapControlsOpen(false);
   });
   document.addEventListener('click', (e) => {
@@ -1154,6 +1155,7 @@ function bindEvents() {
     if (!e.target.closest?.('[data-dd-close]')) return;
     e.preventDefault();
     closeDropdowns();
+    setMapControlsOpen(true);
   });
   const restoreMapTools = () => {
     let reopen = false;
@@ -1172,6 +1174,8 @@ function bindEvents() {
   $('#drawerBackdrop').addEventListener('click', closeDrawer);
   initFloatingControls(document.querySelector('.map-bottom-controls'));
   initFloatingNavigation();
+  const notifFanLabel = $('#btnNotifications .floating-nav-label');
+  if (notifFanLabel) notifFanLabel.textContent = LANG === 'ar' ? 'التنبيهات' : 'Alerts';
   $('#aboutPill').addEventListener('click', openAbout);
   $('#aboutBackdrop').addEventListener('click', closeAbout);
   $('#btnTheme').addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark')));
@@ -1188,6 +1192,7 @@ function bindEvents() {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (!$('#siteShare').hidden) { $('#siteShare').hidden=true; return; }
     if (!$('#filterPanel').hidden || !$('#layersPanel').hidden) { closeDropdowns(); return; }
     if (!mapCtrlPanel.hidden) { setMapControlsOpen(false); return; }
     if (!$('#tour').hidden) return endTour();
@@ -1353,13 +1358,10 @@ function bindEvents() {
   $('#shareSite').addEventListener('click', async (e) => {
     e.stopPropagation();
     setMapControlsOpen(false);
-    if (navigator.share && isMobile()) {
-      try { await navigator.share({ title: T.siteName, text: T.shareMapText, url: siteUrl() }); return; } catch (err) { if (err && err.name === 'AbortError') return; }
-    }
     const box = $('#siteShare');
     if (!box.hidden) { box.hidden = true; return; }
     const u = siteUrl();
-    box.innerHTML = `<div class="ss-head"><b>${esc(T.shareMap)}</b><span>${esc(T.shareMapSub)}</span></div>
+    box.innerHTML = `<button class="share-fan-close" type="button" aria-label="${esc(T.close)}">${icon('x',24)}</button><div class="ss-head"><b>${esc(T.shareMap)}</b><span>${esc(T.shareMapSub)}</span></div>
       <div class="share-menu">
         <a class="wa" href="https://wa.me/?text=${encodeURIComponent(T.shareMapText + '\n' + u)}" target="_blank" rel="noopener noreferrer">${icon('whatsapp', 17)}${esc(T.whatsapp)}</a>
         <a class="tg" href="https://t.me/share/url?url=${encodeURIComponent(u)}&text=${encodeURIComponent(T.shareMapText)}" target="_blank" rel="noopener noreferrer">${icon('telegram', 17)}${esc(T.telegram)}</a>
@@ -1370,10 +1372,14 @@ function bindEvents() {
   });
   $('#siteShare').addEventListener('click', (e) => {
     e.stopPropagation();
-    if (e.target.closest('[data-act="copy-site"]')) copy(siteUrl());
+    if (e.target.id === 'siteShare' || e.target.closest('.share-fan-close')) { $('#siteShare').hidden = true; return; }
+    if (e.target.closest('[data-act="copy-site"]')) { copy(siteUrl()); $('#siteShare').hidden=true; }
     else if (e.target.closest('a')) setTimeout(() => { $('#siteShare').hidden = true; }, 300);
   });
   document.addEventListener('click', () => { const b = $('#siteShare'); if (b && !b.hidden) b.hidden = true; });
+  $('#btnNearbyFan').querySelector('.floating-nav-label,.nearby-fan-label').textContent = LANG === 'ar' ? 'قريب مني' : 'Near me';
+  $('#btnNearbyFan').setAttribute('aria-label', LANG === 'ar' ? 'قريب مني' : 'Near me');
+  $('#btnNearbyFan').addEventListener('click', () => { setMapControlsOpen(false); svc?.open('nearby'); });
   $('#zoomIn').addEventListener('click', () => { setMapControlsOpen(false); amap && amap.zoomIn(); });
   $('#zoomOut').addEventListener('click', () => { setMapControlsOpen(false); amap && amap.zoomOut(); });
   $('#resetView').addEventListener('click', () => { setMapControlsOpen(false); amap && amap.fitSyria(); });
@@ -1732,7 +1738,7 @@ async function boot() {
   };
   $('#btnInstallApp').addEventListener('click', async () => {
     closeDropdowns(); closeDrawer(); svc?.close?.();
-    $('#mapCtrlPanel').hidden = true; $('#mapControlsToggle').setAttribute('aria-expanded','false');
+    document.body.classList.remove('tools-fan-open'); $('#mapCtrlPanel').hidden = true; $('#mapControlsToggle').setAttribute('aria-expanded','false');
     if (installMode() === 'prompt') {
       const result = await promptInstall();
       if (result === 'accepted') toast(T.instDone);

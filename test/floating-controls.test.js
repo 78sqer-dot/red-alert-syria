@@ -57,3 +57,35 @@ test('nearby filters and map-layer cards share equal responsive rows',()=>{
  assert.ok(css.includes('[data-cat=all]{grid-column:1/-1;}'));
  assert.ok(css.includes('.svc-mgrid{grid-template-columns:repeat(2,minmax(0,1fr))'));
 });
+
+test('phone header places every available action in stable equal grid cells',()=>{
+ const css=readFileSync(new URL('../public/css/app.css',import.meta.url),'utf8').split('/* Keep every phone header action')[1];
+ assert.ok(css.includes('grid-template-columns:repeat(7,minmax(0,1fr))'));
+ for(const id of ['btnTheme','btnTelegram','btnContact','listFab','btnLang','btnRefresh','btnInstallApp'])assert.ok(css.includes(`#${id}`));
+ assert.ok(css.includes('.tb-btn:not(.lang-btn) .lbl'));
+ assert.ok(css.includes('#btnContact:not([hidden]){display:inline-flex!important;}'));
+});
+test('mobile alerts use full width and keep labeled map and share actions',()=>{
+ const css=readFileSync(new URL('../public/css/app.css',import.meta.url),'utf8');
+ const app=readFileSync(new URL('../public/js/app.js',import.meta.url),'utf8');
+ assert.ok(css.includes('.app .sidebar,.app.detail-open .sidebar{width:100%;max-width:100vw;}'));
+ assert.ok(app.includes('class="card-action-label">${esc(T.showOnMap)}'));
+ assert.ok(app.includes('class="card-action-label">${esc(T.share)}'));
+ assert.ok(css.includes('#viewList .card-actions{grid-column:1/-1;display:grid;'));
+});
+test('official weather source links wrap without a fixed button height',()=>{
+ const css=readFileSync(new URL('../public/css/app.css',import.meta.url),'utf8');
+ assert.ok(css.includes('.svc-pane .svc-mgrid > a.btn-sm{display:flex;'));
+ assert.ok(css.includes('min-height:58px;height:auto;'));
+ assert.ok(css.includes('.svc-mgrid:has(>a.btn-sm){grid-template-columns:minmax(0,1fr);}'));
+});
+test('selected radial tools preserve original actions and keep sharing inside tools',()=>{
+ const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
+ const app=readFileSync(new URL('../public/js/app.js',import.meta.url),'utf8');
+ const panel=html.split('id="mapCtrlPanel"')[1].split('id="siteShare"')[0];
+ for(const id of ['btnFilter','btnLayers','btnSvc','btnNotifications','btnNearbyFan','shareSite','zoomIn','zoomOut','locateMe'])assert.ok(panel.includes(`id="${id}"`));
+ assert.ok(app.includes("svc?.open('nearby')"));
+ assert.ok(app.includes("document.body.classList.toggle('tools-fan-open', open)"));
+ assert.ok(app.includes("e.target.id === 'siteShare'"));
+ assert.ok(app.includes('share-fan-close'));
+});
