@@ -66,7 +66,12 @@ const bareToken = (w) => stripAlWord(stripClitic(w));
  * «مدينة X»), not as its countryside («ريف X») or as a province reference
  * («محافظة X») — only the city framing may bind the city place. */
 function govMentionedAsCity(text, gov) {
-  const tokens = normalizeArabic(text).split(/\s+/).filter(Boolean);
+  const normalized = normalizeArabic(text);
+  const name = normalizeArabic(gov.ar);
+  // An abbreviated source title must not override explicit province wording
+  // in the same report. A separately explicit city frame remains meaningful.
+  if (normalized.includes(`محافظه ${name}`) && !normalized.includes(`مدينه ${name}`)) return false;
+  const tokens = normalized.split(/\s+/).filter(Boolean);
   const forms = [...new Set([normalizeArabic(gov.ar), normalizeArabic(gov.ar).split(' ').map(stripAlWord).join(' ')])]
     .map((f) => f.split(' ').filter(Boolean));
   for (const words of forms) {
@@ -254,6 +259,13 @@ export function ensureDraftCardLocation(d) {
   // of Hasakah, not a guess) — or HOLD. Genuine governorate-wide news (no
   // unresolved named place) keeps passing as before.
   const loc0 = d.location || d.loc || null;
+  if (loc0?.place_id != null && resolved.placeId == null) {
+    const p = getPlace(loc0.place_id);
+    const g = p && governorates.find((g) => g.code === p.gov && normalizeArabic(g.ar) === normalizeArabic(p.ar));
+    const texts = draftTexts(d);
+    if (g && texts.some((t) => normalizeArabic(t).includes(`محافظه ${normalizeArabic(g.ar)}`))
+      && !texts.some((t) => govMentionedAsCity(t, g))) return { action: 'held', reason: LOCATION_TEXT_CONFLICT_REASON };
+  }
   if (loc0 && loc0.scope === 'governorate' && !hasAreas(d)) {
     if (resolved.placeId != null) {
       const loc = locationFrom({ placeId: resolved.placeId });

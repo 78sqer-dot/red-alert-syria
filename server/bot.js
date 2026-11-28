@@ -1007,6 +1007,7 @@ function detailsExample(ctx, d) {
 }
 
 async function afterLocation(ctx, d) {
+  if (d.locationOnlyEdit) { delete d.locationOnlyEdit; return showPreview(ctx, d); }
   if (d.mode === 'active_edit') return showActiveEditForm(ctx, d);
   if (d.type === 'breaking' || d.details) return showPreview(ctx, d);
   d.step = 'details';
@@ -2058,6 +2059,7 @@ const OH = {
   mapUrl: (id, lang) => mapUrl(id, lang),
   // open a ready draft (news monitor "✏️ edit first") in this user's normal publishing preview
   loadDraft: (ctx, d) => { const x = { ...d, mode: 'publish', created: Date.now(), msgId: null }; sessions.set(sk(ctx), x); return showPreview(ctx, x); },
+  loadDraftLocation: (ctx, d) => { const x = { ...d, mode: 'publish', step: 'gov', locationOnlyEdit: true, created: Date.now(), msgId: null }; sessions.set(sk(ctx), x); return askLocation(ctx, x); },
   loadPublishedDraft: (ctx, d, id) => {
     const x = { ...d, mode: 'edit_published', publishedAlertId: id, created: Date.now(), msgId: null };
     sessions.set(sk(ctx), x);

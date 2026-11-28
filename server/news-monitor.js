@@ -719,6 +719,7 @@ export function cardKb(d, lang = 'ar', chatId = null) {
   const kb = new InlineKeyboard()
     .text(tr(lang, '✅ نشر', '✅ Publish'), 'nw:p:' + d.id).text(tr(lang, '❌ تجاهل', '❌ Ignore'), 'nw:x:' + d.id).row()
     .text(tr(lang, '🏷 تغيير نوع هذا الخبر', '🏷 Change this story’s type'), 'nw:t:' + d.id).text(tr(lang, '✏️ تعديل قبل النشر', '✏️ Edit first'), 'nw:e:' + d.id).row()
+    .text(tr(lang, '📍 تحديد الموقع', '📍 Select location'), 'nw:l:' + d.id).row()
     .text(tr(lang, '🪄 صياغة صحفية', '🪄 Rewrite professionally'), 'nw:rw:' + d.id)
     .text(tr(lang, '🔎 تحقق من سجل القناة', '🔎 Check channel records'), 'nw:c:' + d.id);
   if (ownerIdsU().includes(Number(chatId)) && NEWS_TYPES.includes(d.type)) kb.row()
@@ -2206,12 +2207,12 @@ export function registerNewsTools(bot, h) {
     await toast(ctx, '');
     return h.loadPublishedDraft(ctx, toBotDraft(latest), d.alertId);
   });
-  bot.callbackQuery(/^nw:(p|x|t|b|e):(\w+)$/, async (ctx) => {
+  bot.callbackQuery(/^nw:(p|x|t|b|e|l):(\w+)$/, async (ctx) => {
     if (!staff(ctx)) return toast(ctx, '');
     const [, act, id] = ctx.match;
     const d = await findDraft(id);
     if (!d) return vanish(ctx, t(ctx, 'هذه المسودة لم تعد متاحة', 'This draft is no longer available'));
-    if (d.test && (act === 'p' || act === 'e')) {
+    if (d.test && (act === 'p' || act === 'e' || act === 'l')) {
       d.status = 'ignored'; await closeCards(d, cur(ctx), true); await unlinkCapturedMedia(d.sourceMedia); save();
       await vanish(ctx, t(ctx, '🧪 تجربة فقط — لم يُنشر شيء. الأزرار تعمل ✅', '🧪 Test only — nothing was published. Buttons work ✅'));
       forgetCurrentCard(d, ctx); save();
@@ -2226,7 +2227,7 @@ export function registerNewsTools(bot, h) {
       forgetCurrentCard(d, ctx); save();
       return;
     }
-    if ((act === 'p' || act === 'e') && publicDraftCopyIssue(d)) {
+    if ((act === 'p' || act === 'e' || act === 'l') && publicDraftCopyIssue(d)) {
       d.editorialHold = true;
       d.editorialHoldReason = 'private-editorial-copy-not-public';
       d.editorialHoldAt = Date.now();
@@ -2251,13 +2252,13 @@ export function registerNewsTools(bot, h) {
     if (d.type === 'political' && !POLITICAL_CATEGORIES[d.politicalCategory] && (act === 'p' || act === 'e')) {
       return toast(ctx, t(ctx, 'اختر فئة سياسية صالحة قبل النشر أو التعديل', 'Choose a valid political category before publishing or editing'), true);
     }
-    if (act === 'e') {
+    if (act === 'e' || act === 'l') {
       d.status = 'editing'; d.by = ctx.from.id; save();
       await toast(ctx, '');
       const c = cur(ctx);
       await closeCards(d, c);
       if (c) setKeep('admin', c[0], c[1], false);
-      return h.loadDraft(ctx, toBotDraft(d));
+      return act === 'l' ? h.loadDraftLocation(ctx, toBotDraft(d)) : h.loadDraft(ctx, toBotDraft(d));
     }
     // Last-moment duplicate check also covers incidents that arrived on separate queue paths.
     const duplicate = knownDuplicateDraft(d);
