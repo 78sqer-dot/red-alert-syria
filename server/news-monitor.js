@@ -1,3 +1,4 @@
+import { releasePreSendLocationClaim } from './pre-send-location-recovery.js';
 import { deletePrivatePublicationCard, retryPrivatePublicationCleanup } from './private-publication-cleanup.js';
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
 import { ensureDraftCardLocation } from './publish-location-guard.js';
@@ -697,7 +698,9 @@ export function cardText(d, lang = 'ar') {
   // NO quote block in the draft card either: cancelled by the owner
   // 2026-11-25 together with the channel-post block («بدي بس نص الخبر»).
   if (d.editorialHold) {
-    const reason = d.editorialHoldReason === 'private-editorial-copy-not-public'
+    const reason = ['missing-location', 'location-text-conflict'].includes(d.editorialHoldReason)
+      ? tr(lang, 'لم يبدأ الإرسال: تعذّر تثبيت موقع مطابق لمكان الحادث. راجع الموقع والمصدر قبل النشر.', 'Sending did not start: a location matching the incident could not be confirmed. Review location and source before publishing.')
+      : d.editorialHoldReason === 'private-editorial-copy-not-public'
       ? tr(lang, 'النص يتضمن مادة رأي/سخرية خاصة أو تشخيصاً داخلياً، لذلك لم يُدرج في الخبر العام.', 'The text contains private opinion/satire or an internal diagnostic, so it was excluded from public news.')
       : d.editorialHoldReason === 'owner-private-editorial-note'
         ? tr(lang, 'المسودة موقوفة للمراجعة اليدوية؛ لم يُنشر شيء تلقائياً.', 'The draft is held for human review; nothing was auto-published.')
@@ -2267,10 +2270,12 @@ export function registerNewsTools(bot, h) {
       if (e?.name === 'MissingCardLocationError') {
         // The guard stopped the publish before anything was sent: release
         // the claim cleanly — this is NOT an uncertain send.
-        d.status = 'pending';
-        delete d.nativeReview;
-        save();
-        return toast(ctx, t(ctx, '⚠️ توقّف النشر: راجع موقع الخبر أولاً.', '⚠️ Publishing stopped: review the alert location first.'), true);
+        const recovered = await releasePreSendLocationClaim({ draft: d, error: e, persist: save,
+          flush: async () => !store.backup || !config.telegramBackup || await store.flushBackup(true),
+          restore: async () => ctx.editMessageText(cardText(d, h.langOf(ctx)), { parse_mode: 'HTML', reply_markup: cardKb(d, h.langOf(ctx), ctx.from.id), link_preview_options: { is_disabled: true } }) });
+        return toast(ctx, recovered.ok
+          ? t(ctx, '⚠️ لم يبدأ الإرسال: راجع موقع الخبر. أُعيدت أدوات المراجعة.', '⚠️ Sending did not start: review the location. Review controls restored.')
+          : t(ctx, '⚠️ توقف الإرسال قبل النشر؛ تعذّر تأكيد استعادة أدوات المراجعة. لا تكرر المحاولة.', '⚠️ Sending stopped before publication; review controls could not be confirmed. Do not retry.'), true);
       }
       await uncertainPublication(d);
       console.error('[news] publish failed', e.description || e.message);
