@@ -1,3 +1,4 @@
+import {choosePoliticalCategory,unsupportedDecision} from './facility-decision-review.js';
 import { releasePreSendLocationClaim } from './pre-send-location-recovery.js';
 import { deletePrivatePublicationCard, retryPrivatePublicationCleanup } from './private-publication-cleanup.js';
 import {newsIncidentLocations,assertNewsLanguageCopy} from './news-incident-location.js';
@@ -472,6 +473,7 @@ function editorialGate(d) {
   for (const word of evaluative) {
     if (editorialHas(headline, word) && (!editorialHas(source, word) || !attributionCue.test(headline))) return fail('unsupported-evaluation');
   }
+  if (unsupportedDecision(d)) return fail('unsupported-decision');
   return { ok: true, reason: null };
 }
 /** Daytime uses the same AI and source-confidence gate as overnight auto-publishing. */
@@ -1433,7 +1435,7 @@ async function handleResult(it, r, known, pmap) {
   const tidy = (x) => cleanAttributedNewsText(String(x || '').replace(/[\u0000-\u001F]/g, ' ')).replace(/\s+/g, ' ').trim();
   const headline = (tidy(r.headline) || tidy(it.text.split('\n')[0])).slice(0, 240);
   const politicalCategory = r.type === 'political'
-    ? (inferPoliticalCategory(it.text) || (POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null))
+    ? choosePoliticalCategory(it.text,inferPoliticalCategory(it.text),POLITICAL_CATEGORIES[r.political_category] ? r.political_category : null)
     : null;
   const cand = { type: r.type, politicalCategory, ts: it.ts, headline, geo: geoOf(locs), text: it.text, where: whereOf(locs) };
   if (target && !sameIncident(cand, target)) {
@@ -2245,6 +2247,7 @@ export function registerNewsTools(bot, h) {
       return;
     }
     if (act === 'p' && d.aiRewritePreview?.applied && ['opinion', 'satire'].includes(d.aiRewritePreview.mode) && !ownerIdsU().includes(Number(ctx.from.id))) return toast(ctx, t(ctx, 'نشر مادة الرأي/السخرية يحتاج موافقتك كمالك', 'Only the owner may publish opinion/satire'), true);
+    if(act==='p' && unsupportedDecision(d))return toast(ctx,t(ctx,'صياغة المصدر لا تثبت قراراً. راجع الفئة قبل النشر.','The source does not establish a decision. Review the category before publishing.'),true);
     if (d.type === 'political' && !POLITICAL_CATEGORIES[d.politicalCategory] && (act === 'p' || act === 'e')) {
       return toast(ctx, t(ctx, 'اختر فئة سياسية صالحة قبل النشر أو التعديل', 'Choose a valid political category before publishing or editing'), true);
     }

@@ -1,3 +1,4 @@
+import {unsupportedFacilitySettlement} from './facility-decision-review.js';
 // Publish-path location guard (owner order 2026-11-24, restored + adapted
 // 2026-11-25 after the live جدوعة / رجم العجوز failure).
 //
@@ -239,6 +240,7 @@ export function resolveDraftPlaceId(d) {
  * {action: 'exempt'|'present'|'bound'|'held', ...}; 'held' carries the
  * recorded reason and means: do not publish. */
 export function ensureDraftCardLocation(d) {
+  if (unsupportedFacilitySettlement(d)) return {action:'held',reason:'facility-settlement-conflict'};
   if (!cardLocationGuardApplies(d)) return { action: 'exempt' };
   const resolved = resolveDraftPlace(d);
   if (resolved.conflict) return { action: 'held', reason: LOCATION_TEXT_CONFLICT_REASON };
