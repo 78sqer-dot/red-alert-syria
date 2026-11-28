@@ -308,6 +308,11 @@ export function ensureDraftCardLocation(d) {
 export function ensureBuiltAlertLocation(input, src = {}) {
   if (!input || typeof input !== 'object') return { action: 'exempt' };
   const hasCoords = Number.isFinite(input.location?.latitude) && Number.isFinite(input.location?.longitude);
+  // Preserve an unresolved locality label produced by the incident parser.
+  // A free-text hit elsewhere (for example a nationality) cannot replace it.
+  const label = input.location?.name_ar;
+  const unresolvedLabel = !hasCoords && input.location?.scope === 'governorate' && label
+    && !governorates.some((g) => normalizeArabic(g.ar) === normalizeArabic(label));
   const view = {
     type: input.type,
     location: hasCoords ? input.location : null,
@@ -322,6 +327,17 @@ export function ensureBuiltAlertLocation(input, src = {}) {
     aerialMode: input.meta?.aerialMode || src.aerialMode || null,
     flightTarget: input.meta?.flightTarget || src.flightTarget || null,
   };
+  if (unresolvedLabel && cardLocationGuardApplies(view)) {
+    // Retain the existing explicitly named parent-city fallback for urban
+    // features, never for an unresolved standalone village.
+    const resolved = resolveDraftPlace(view);
+    const parent = getPlace(resolved.placeId);
+    const parentGov = parent && governorates.find((g) => g.code === parent.gov && normalizeArabic(g.ar) === normalizeArabic(parent.ar));
+    const texts = draftTexts(view);
+    const urbanParent = parentGov && texts.some((text) => districtFramedNames(text).size > 0)
+      && texts.some((text) => govMentionedAsCity(text, parentGov));
+    if (!urbanParent) return { action: 'held', reason: MISSING_CARD_LOCATION_REASON };
+  }
   const r = ensureDraftCardLocation(view);
   if (r.action === 'bound') { input.location = view.location; input.place = view.location; }
   if (r.action === 'held' && r.reason === LOCATION_TEXT_CONFLICT_REASON) {

@@ -19,11 +19,13 @@ export function newsIncidentLocations(source,main,extra=[]) {
  const facility = text.match(/(?:^|[\s،,:؛])معبر\s+([\p{L}\s]{2,45}?)(?=\s+(?:الحدودي|بريف|في|بمحافظة)|[،,:؛.\n]|$)/u);
  const ruralName=String(main?.name_ar||'').replace(/^ريف\s+/,'');
  const rural = ruralName && new RegExp('(?:^| )ب?ريف (?:مدينه |بلده |قريه )?'+N(ruralName)+'(?: |$)').test(N(text));
- const matches=rural ? ['ريف '+ruralName] : facility ? ['معبر '+facility[1].trim()] : [...text.matchAll(/(?:^|[\s،,:؛])(?:بلدة|قرية|مخيم|مدينة|منطقة|منطقه|حي)\s+["«]?([\p{L}\s]{2,65}?)(?=["»،,:؛.\n]|\s+(?:بريف|ريف|شرقي|غربي|شمالي|جنوبي|شرق|غرب|شمال|جنوب|التابعة|التابعه|بمحافظة|بمحافظه|في محافظة|في محافظه)|$)/gu)].map(m=>m[1].trim());
+ const matches=rural ? ['ريف '+ruralName] : facility ? ['معبر '+facility[1].trim()] : [...text.matchAll(/(?:^|[\s،,:؛])(?:[وفبلك]?(?:بلدة|قرية|قريتي|قريتين|بلدتي|بلدتين|مخيم|مدينة|منطقة|منطقه|حي))\s+["«]?([\p{L}\s]{2,65}?)(?=["»،,:؛.\n]|\s+(?:بريف|ريف|شرقي|غربي|شمالي|جنوبي|شرق|غرب|شمال|جنوب|التابعة|التابعه|بمحافظة|بمحافظه|في محافظة|في محافظه)|$)/gu)].map(m=>m[1].trim());
  const names=[...new Set(matches.map(key))];
- if(names.length!==1)return {location:main,extra:extra.filter(l=>contains(text,l.name_ar)&&!new RegExp('(?:التابعه|اداريا|ناحيه)\\s+(?:لناحيه\\s+)?'+N(l.name_ar)).test(N(text)))};
- const label=matches[0];
  const candidates=[main,...extra].filter(Boolean);
+ // Preserve a supported multi-location report. If any framed name is unresolved,
+ // retain all labels without borrowing an incidental candidate's coordinates.
+ if(!names.length || (names.length>1 && names.every(n=>candidates.some(l=>key(l.name_ar)===n))))return {location:main,extra:extra.filter(l=>contains(text,l.name_ar)&&!new RegExp('(?:التابعه|اداريا|ناحيه)\\s+(?:لناحيه\\s+)?'+N(l.name_ar)).test(N(text)))};
+ const label=matches.join(' / ');
  const exact=candidates.find(l=>key(l.name_ar)===key(label));
  if(exact)return {location:{...exact,short_ar:[exact.name_ar,exact.governorate_ar].filter((x,i,a)=>x&&a.indexOf(x)===i).join(' - '),short_en:[exact.name_en,exact.governorate_en].filter((x,i,a)=>x&&a.indexOf(x)===i).join(' - ')},extra:[]};
  // The named locality is missing in our gazetteer. Keep its name, never borrow a partial match's coordinates.

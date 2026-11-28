@@ -251,6 +251,12 @@ export function resolvePlace({ name, gov } = {}) {
 }
 // generic words that are also village names somewhere: never matched from free text
 const GENERIC = new Set(['الشرقي', 'الغربي', 'الشمالي', 'الجنوبي', 'المدينه', 'البلده', 'القريه', 'الطريق', 'المركز', 'الحاجز', 'السوق', 'المشفي', 'المستشفي', 'الجسر', 'الدوار', 'المنطقه', 'الريف', 'الحدود', 'مدينه', 'بلده', 'قريه', 'منطقه', 'سوق', 'جسر', 'دوار', 'مشفي', 'مستشفي', 'مركز', 'طريق', 'حاجز', 'ريف', 'حدود', 'عسكري', 'الاحد', 'الاثنين', 'الثلاثاء', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'اليوم', 'مساء', 'صباح', 'عنصر', 'عناصر', 'الامن', 'قوات', 'الجيش', 'الاحتلال', 'مسلحين', 'مدنيين', 'اصابه', 'مقتل', 'حادث', 'سير', 'هجوم', 'قصف', 'انفجار'].map(N));
+// A nationality attached to a vehicle/person is not a geographic mention.
+// Keep real homonymous villages available when explicitly named as places.
+const NATIONALITY_WORDS = new Set(['تركية', 'تركي', 'روسية', 'روسي', 'أمريكية', 'أمريكي', 'إسرائيلية', 'إسرائيلي', 'إيرانية', 'إيراني', 'سورية', 'سوري'].map(N));
+const NATIONALITY_SUBJECTS = new Set(['مدرعة', 'مدرعات', 'آلية', 'آليات', 'دبابة', 'دبابات', 'طائرة', 'طائرات', 'مروحية', 'مروحيات', 'دورية', 'دوريات', 'قوات', 'جندي', 'جنود', 'عسكري', 'عسكريين', 'رتل', 'سيارة', 'سيارات', 'جرافة', 'جرافات', 'عربة', 'عربات', 'شاحنة', 'شاحنات', 'جرار', 'جرارات', 'مسيرة', 'مسيرات'].map(N));
+const NATIONALITY_MODIFIERS = new Set(['مسيرة', 'مسيرات', 'عسكرية', 'عسكري', 'حربية', 'حربي', 'مدنية', 'مدني', 'مصفحة', 'مصفح'].map(N));
+const nounForms = (word) => { const bare = word.replace(/^[وفبلك](?=\S{3})/, ''); return [word, bare, stripAl(word), stripAl(bare)]; };
 /** exact names of villages/towns of one governorate that appear as words in the text (most specific first) */
 export function scanTextPlaces(text, govCode, max = 3) {
   if (!govCode) return [];
@@ -268,6 +274,13 @@ export function scanTextPlaces(text, govCode, max = 3) {
         if (hits.length) break;
       }
       if (!hits.length) continue;
+      const adjective = stripAl(raw);
+      const previous = words[i - 1] || '';
+      // Look across at most two recognized modifiers, never arbitrary text or a place frame.
+      let subjectIndex = i - 1;
+      for (let n = 0; n < 2 && subjectIndex > 0 && nounForms(words[subjectIndex]).some((w) => NATIONALITY_MODIFIERS.has(w)); n++) subjectIndex--;
+      const subjects = [...nounForms(previous), ...nounForms(words[subjectIndex] || '')];
+      if (len === 1 && NATIONALITY_WORDS.has(adjective) && subjects.some((word) => NATIONALITY_SUBJECTS.has(word))) continue;
       if (!out.includes(hits[0].id)) out.push(hits[0].id);
       i += len - 1; break;
     }
